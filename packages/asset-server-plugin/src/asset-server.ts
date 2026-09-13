@@ -85,6 +85,7 @@ export class AssetServer {
                 params = await this.getImageTransformParameters(req);
             } catch (e: any) {
                 Logger.error(e.message, loggerCtx);
+                res.setHeader('Cache-Control', 'private, no-store');
                 res.status(400).send('Invalid parameters');
                 return;
             }
@@ -98,7 +99,7 @@ export class AssetServer {
                 res.contentType(mimeType);
                 res.setHeader('X-Content-Type-Options', 'nosniff');
                 res.setHeader('content-security-policy', "default-src 'self'");
-                res.setHeader('Cache-Control', this.cacheHeader);
+                if (!res.hasHeader('Cache-Control')) res.setHeader('Cache-Control', this.cacheHeader);
                 res.send(file);
             } catch (e: any) {
                 const err = new Error('File not found');
@@ -142,10 +143,12 @@ export class AssetServer {
                         res.set('Content-Type', mimeType);
                         res.setHeader('X-Content-Type-Options', 'nosniff');
                         res.setHeader('content-security-policy', "default-src 'self'");
+                        if (!res.hasHeader('Cache-Control')) res.setHeader('Cache-Control', this.cacheHeader);
                         res.send(imageBuffer);
                         return;
                     } catch (e: any) {
                         Logger.error(e.message, loggerCtx, e.stack);
+                        res.setHeader('Cache-Control', 'private, no-store');
                         res.status(500).send('An error occurred when generating the image');
                         return;
                     }

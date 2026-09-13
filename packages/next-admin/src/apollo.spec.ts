@@ -2,9 +2,13 @@ import { gql } from '@apollo/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     channelRequestContext,
+    clearAuthSession,
     client,
+    getActiveChannelToken,
     getLocalizedAdminApiUrl,
     openAdminOrderEvents,
+    prepareAuthSession,
+    setInitialActiveChannel,
     uploadAdminFiles,
 } from './apollo';
 
@@ -19,8 +23,14 @@ function storage(values: Record<string, string> = {}) {
 
 const request = vi.fn<typeof fetch>();
 beforeEach(() => {
-    vi.stubGlobal('localStorage', storage({ 'vendure-active-channel-token': 'store-a' }));
-    vi.stubGlobal('sessionStorage', storage({ 'vendure-auth-token': 'test-session' }));
+    vi.stubGlobal('localStorage', storage({ 'vendure-active-channel-token': 'legacy-shared-store' }));
+    vi.stubGlobal(
+        'sessionStorage',
+        storage({
+            'vendure-auth-token': 'test-session',
+            'vendure-active-channel-token': 'store-a',
+        }),
+    );
     vi.stubGlobal('fetch', request);
     request.mockReset();
 });
@@ -80,7 +90,7 @@ describe('admin channel request routing', () => {
     });
 
     it('refuses to upload without a selected store instead of falling back to the default', async () => {
-        localStorage.removeItem('vendure-active-channel-token');
+        sessionStorage.removeItem('vendure-active-channel-token');
         await expect(
             uploadAdminFiles('mutation Upload { createAssets { id } }', [], () => ({})),
         ).rejects.toThrow('请先选择店铺');
@@ -100,7 +110,7 @@ describe('admin channel request routing', () => {
             'vendure-token': 'store-shared',
             authorization: 'Bearer test-session',
         });
-        expect(localStorage.getItem('vendure-active-channel-token')).toBe('store-a');
+        expect(sessionStorage.getItem('vendure-active-channel-token')).toBe('store-a');
     });
 
     it('uses explicit store context without changing the globally selected store', async () => {
@@ -120,7 +130,7 @@ describe('admin channel request routing', () => {
             'vendure-token': 'store-b',
             authorization: 'Bearer test-session',
         });
-        expect(localStorage.getItem('vendure-active-channel-token')).toBe('store-a');
+        expect(sessionStorage.getItem('vendure-active-channel-token')).toBe('store-a');
     });
 
     it('keeps ordinary requests scoped to the current store', async () => {
@@ -136,6 +146,30 @@ describe('admin channel request routing', () => {
             fetchPolicy: 'no-cache',
         });
         expect(request.mock.calls[0][1]?.headers).toMatchObject({ 'vendure-token': 'store-a' });
+    });
+
+    it('keeps the active store scoped to the current browser tab', () => {
+        expect(getActiveChannelToken()).toBe('store-a');
+        expect(localStorage.getItem('vendure-active-channel-token')).toBe('legacy-shared-store');
+
+        setInitialActiveChannel('store-b');
+
+        expect(getActiveChannelToken()).toBe('store-b');
+        expect(sessionStorage.getItem('vendure-active-channel-token')).toBe('store-b');
+        expect(localStorage.getItem('vendure-active-channel-token')).toBe('legacy-shared-store');
+    });
+
+    it('clears tab-scoped and legacy shared selections when authentication changes', () => {
+        prepareAuthSession(false);
+        expect(sessionStorage.getItem('vendure-active-channel-token')).toBeNull();
+        expect(localStorage.getItem('vendure-active-channel-token')).toBeNull();
+
+        setInitialActiveChannel('store-b');
+        localStorage.setItem('vendure-active-channel-token', 'legacy-store');
+        clearAuthSession();
+
+        expect(sessionStorage.getItem('vendure-active-channel-token')).toBeNull();
+        expect(localStorage.getItem('vendure-active-channel-token')).toBeNull();
     });
 });
 

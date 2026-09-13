@@ -77,6 +77,7 @@ export class ImageProviderClient {
         rawModelId: string,
         systemPrompt: string,
         userPrompt: string,
+        references: NonNullable<ProviderGenerationInput['references']> = [],
     ): Promise<ProviderPromptResult> {
         const configuredModelId = rawModelId.trim();
         if (!credential.enabled || !configuredModelId) {
@@ -91,7 +92,23 @@ export class ImageProviderClient {
                 apiKey,
                 {
                     systemInstruction: { parts: [{ text: systemPrompt }] },
-                    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+                    contents: [
+                        {
+                            role: 'user',
+                            parts: [
+                                { text: userPrompt },
+                                ...references.flatMap((reference, index) => [
+                                    { text: `Reference image ${index + 1} (图${index + 1})` },
+                                    {
+                                        inlineData: {
+                                            mimeType: reference.mimeType,
+                                            data: reference.bytes.toString('base64'),
+                                        },
+                                    },
+                                ]),
+                            ],
+                        },
+                    ],
                     generationConfig: {
                         temperature: 0.2,
                         responseMimeType: 'application/json',
@@ -102,7 +119,9 @@ export class ImageProviderClient {
                 MAX_PROMPT_RESPONSE_BYTES,
             );
             const geminiContent = geminiResponseText(geminiResponse);
-            if (!geminiContent) throw new DefinitiveImageProviderError('Gemini 提示词模型未返回文本');
+            if (!geminiContent) {
+                throw new DefinitiveImageProviderError('Gemini 提示词模型未返回文本', geminiTelemetry);
+            }
             return { text: geminiContent, telemetry: geminiTelemetry };
         }
         const { payload: openAiResponse, telemetry: openAiTelemetry } = await this.transport.requestJson(
@@ -114,7 +133,23 @@ export class ImageProviderClient {
                 response_format: { type: 'json_object' },
                 messages: [
                     { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userPrompt },
+                    {
+                        role: 'user',
+                        content: references.length
+                            ? [
+                                  { type: 'text', text: userPrompt },
+                                  ...references.flatMap((reference, index) => [
+                                      { type: 'text', text: `Reference image ${index + 1} (图${index + 1})` },
+                                      {
+                                          type: 'image_url',
+                                          image_url: {
+                                              url: `data:${reference.mimeType};base64,${reference.bytes.toString('base64')}`,
+                                          },
+                                      },
+                                  ]),
+                              ]
+                            : userPrompt,
+                    },
                 ],
             },
             `prompt-${randomUUID()}`,
@@ -123,7 +158,7 @@ export class ImageProviderClient {
         );
         const openAiContent = objectAt(openAiResponse, ['choices', 0, 'message', 'content']);
         if (typeof openAiContent !== 'string' || !openAiContent.trim()) {
-            throw new DefinitiveImageProviderError('提示词优化模型未返回文本');
+            throw new DefinitiveImageProviderError('提示词优化模型未返回文本', openAiTelemetry);
         }
         return { text: openAiContent, telemetry: openAiTelemetry };
     }

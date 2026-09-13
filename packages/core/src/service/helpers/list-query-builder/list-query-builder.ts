@@ -480,7 +480,48 @@ export class ListQueryBuilder implements OnApplicationBootstrap {
         // Helper to escape identifiers for the current database driver (handles PostgreSQL quoting)
         const escapeId = (name: string) => mainQb.connection.driver.escape(name);
         const escapeTablePath = (path: string) =>
-            path.split('.').map(segment => mainQb.connection.driver.escape(segment)).join('.');
+            path
+                .split('.')
+                .map(segment => mainQb.connection.driver.escape(segment))
+                .join('.');
+
+        // Nested paths such as Product.variants.collections.id need every relation joined
+        // inside each EXISTS, so separate AND conditions may match different variants.
+        if (pathParts.length > 2) {
+            const rootAlias = `${aliasBase}_root`;
+            const subQuery = mainQb.subQuery().select('1').from(entity, rootAlias);
+            let relatedAlias = rootAlias;
+            let relatedMetadata = metadata;
+            for (const [index, part] of pathParts.slice(0, -1).entries()) {
+                const nestedRelation = relatedMetadata.findRelationWithPropertyPath(part);
+                if (!nestedRelation) return null;
+                const nextAlias = `${aliasBase}_${index}`;
+                subQuery.innerJoin(`${relatedAlias}.${nestedRelation.propertyPath}`, nextAlias);
+                relatedAlias = nextAlias;
+                relatedMetadata = nestedRelation.inverseEntityMetadata;
+            }
+            const column = relatedMetadata.findColumnWithPropertyPath(pathParts[pathParts.length - 1]);
+            if (!column) return null;
+            subQuery
+                .where(
+                    metadata.primaryColumns
+                        .map(
+                            primaryColumn =>
+                                `${escapeId(rootAlias)}.${escapeId(primaryColumn.databaseName)} = ${escapeId(mainQb.alias)}.${escapeId(primaryColumn.databaseName)}`,
+                        )
+                        .join(' AND '),
+                )
+                .andWhere(
+                    this.buildWhereConditionClause(
+                        relatedAlias,
+                        column.databaseName,
+                        comparisonOperator,
+                        newParamKey,
+                        escapeId,
+                    ),
+                );
+            return { clause: `EXISTS ${subQuery.getQuery()}`, parameters };
+        }
 
         let existsQuery: string;
 

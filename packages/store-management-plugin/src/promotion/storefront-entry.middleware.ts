@@ -13,7 +13,7 @@ export class StorefrontEntryMiddleware implements NestMiddleware {
             return;
         }
         const request = await this.accessService.resolveRequest(req);
-        if (request && this.accessService.hasValidEntryCookie(req, request)) {
+        if (request) {
             next();
             return;
         }
@@ -21,8 +21,8 @@ export class StorefrontEntryMiddleware implements NestMiddleware {
         res.status(403).json({
             errors: [
                 {
-                    message: '请先从推广页进入主网站',
-                    extensions: { code: 'STOREFRONT_ENTRY_REQUIRED' },
+                    message: '未找到该店铺',
+                    extensions: { code: 'STOREFRONT_NOT_FOUND' },
                 },
             ],
         });

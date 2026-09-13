@@ -11,18 +11,23 @@ import { useStorefrontPublicData } from './useStorefrontPublicData';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-it('keeps guest and signed-in copy separate and hides cached products after logout', async () => {
-    let signedIn = false;
+it('loads public content and products without a customer and preserves them across sign-in changes', async () => {
     const content = { blocks: [], flashSales: [], systemAnnouncements: [], settings: {} };
+    let finishContent: () => void = () => {
+        throw new Error('Content fixture is not initialized');
+    };
+    const pendingContent = new Promise<typeof content>(resolve => {
+        finishContent = () => resolve(content);
+    });
     const api = {
         storefrontConfig: vi.fn(() =>
             Promise.resolve({
-                description: signedIn ? 'Private sales copy' : 'Public identity',
+                description: 'Public store',
             }),
         ),
-        storefrontContent: vi.fn(() => Promise.resolve(content)),
+        storefrontContent: vi.fn(() => pendingContent),
         storefrontAccountContent: vi.fn(() => Promise.resolve(content)),
-        products: vi.fn(() => Promise.resolve([{ id: '1', name: 'Private catalog item' }])),
+        products: vi.fn(() => Promise.resolve([{ id: '1', name: 'Published product' }])),
         collections: vi.fn(() => Promise.resolve([])),
         activeStoreCommerceMode: vi.fn(() => Promise.resolve('RETAIL')),
     };
@@ -36,17 +41,17 @@ it('keeps guest and signed-in copy separate and hides cached products after logo
             language: 'zh',
             vendureLanguageCode: 'zh_Hans',
             storefrontContextResolved: true,
-            catalogAccessGranted: authorized,
+            customerAuthenticated: authorized,
         });
         return (
             <div>
+                {data.loading ? 'Waiting for hero metadata' : 'Ready'}
                 {data.configQuery.data?.description}
                 {data.products.map(product => product.name).join(',')}
             </div>
         );
     }
     async function render(authorized: boolean, expected: string) {
-        signedIn = authorized;
         await act(async () => {
             root.render(
                 <QueryClientProvider client={client}>
@@ -58,12 +63,22 @@ it('keeps guest and signed-in copy separate and hides cached products after logo
         await act(async () => vi.waitFor(() => expect(element.textContent).toContain(expected)));
     }
     try {
-        await render(false, 'Public identity');
-        expect(api.products).not.toHaveBeenCalled();
-        await render(true, 'Private sales copy');
-        expect(element.textContent).toContain('Private catalog item');
-        await render(false, 'Public identity');
-        expect(element.textContent).not.toContain('Private');
+        await render(false, 'Published product');
+        expect(element.textContent).toContain('Waiting for hero metadata');
+        await act(async () => {
+            finishContent();
+            await pendingContent;
+        });
+        await act(async () => vi.waitFor(() => expect(element.textContent).toContain('Ready')));
+        expect(api.products).toHaveBeenCalledTimes(1);
+        expect(api.storefrontContent).toHaveBeenCalledTimes(1);
+        expect(api.storefrontAccountContent).not.toHaveBeenCalled();
+        expect(api.collections).toHaveBeenCalledTimes(1);
+        expect(api.activeStoreCommerceMode).toHaveBeenCalledTimes(1);
+        await render(true, 'Published product');
+        await render(false, 'Published product');
+        expect(element.textContent).toContain('Public store');
+        expect(api.products).toHaveBeenCalledTimes(1);
     } finally {
         act(() => root.unmount());
         client.clear();

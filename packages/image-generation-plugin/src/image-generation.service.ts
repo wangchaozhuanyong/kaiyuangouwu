@@ -51,7 +51,11 @@ import {
     supportsGenerationLock,
     uniqueReferenceAssetIds,
 } from './image-generation-helpers';
-import { deriveImageJobSettlement, hasStaleImageOutput } from './image-generation-state';
+import {
+    deriveImageJobSettlement,
+    hasStaleImageOutput,
+    imageDispatchReadyAt,
+} from './image-generation-state';
 import { ImageGenerationUsageQuery } from './image-generation-usage-query';
 import { isImageResolution, resolutionPrice, supportsNativeResolution } from './image-resolution';
 import { ImageUsageQuotaService } from './image-usage-quota.service';
@@ -63,7 +67,7 @@ import {
     type PromptOutputLanguage,
 } from './prompt/prompt-rules.service';
 import { ImagePrivateStorageService, UploadedImageFile } from './storage/image-private-storage.service';
-import { CreateImageGenerationInput, ImageAiUsageRecordListInput, ImageProviderScope } from './types';
+import { CreateImageGenerationInput, ImageAiUsageRecordListInput, OptimizeImagePromptInput } from './types';
 
 @Injectable()
 export class ImageGenerationService {
@@ -100,7 +104,7 @@ export class ImageGenerationService {
         });
         if (existing) {
             this.assertSameCreateRequest(existing, normalized);
-            return this.jobView(existing, customer.id);
+            return this.jobView(ctx, existing, customer.id);
         }
         if (!(await this.configService.shopConfig(ctx)).enabled) {
             throw new UserInputError('当前店铺的 AI 图片工坊不可用');
@@ -227,6 +231,10 @@ export class ImageGenerationService {
                             ...promptSpec,
                             referenceAssetIds: normalized.referenceAssetIds.map(String),
                             referenceInstruction: normalized.referenceInstruction || null,
+                            inputSnapshot: {
+                                version: 1,
+                                optimizedPrompt: normalized.optimizedPrompt || null,
+                            },
                         } as unknown as Record<string, any>,
                         promptSkillHash: this.rules.sourceHash,
                         referenceMode: normalized.referenceMode,
@@ -330,7 +338,7 @@ export class ImageGenerationService {
                             outputId: output.id,
                             state: 'PENDING',
                             attemptCount: 0,
-                            nextAttemptAt: new Date(),
+                            nextAttemptAt: imageDispatchReadyAt(),
                             dispatchedAt: null,
                             lastError: null,
                         }),
@@ -351,7 +359,7 @@ export class ImageGenerationService {
             });
             if (!raced) throw error;
             this.assertSameCreateRequest(raced, normalized);
-            return this.jobView(raced, customer.id);
+            return this.jobView(ctx, raced, customer.id);
         }
 
         if (this.enqueueOutput) {
@@ -430,7 +438,7 @@ export class ImageGenerationService {
                 Math.min(MAX_REFERENCE_BYTES, remainingBytes),
             );
         });
-        return this.assetView(asset, customer.id);
+        return this.assetView(ctx, asset, customer.id);
     }
 
     async findMine(ctx: RequestContext, id: ID) {
@@ -457,14 +465,19 @@ export class ImageGenerationService {
             });
             if (!job) throw new UserInputError('找不到生图任务');
         }
-        return this.jobView(job, customer.id);
+        return this.jobView(ctx, job, customer.id);
     }
 
-    async findMineList(ctx: RequestContext, skip = 0, take = 20) {
+    async findMineList(ctx: RequestContext, skip = 0, take = 20, states?: string[]) {
         const customer = await this.activeCustomer(ctx);
         const repository = this.connection.getRepository(ctx, ImageGenerationJob);
         const options = {
-            where: { channelId: ctx.channelId, customerId: customer.id, customerDeletedAt: IsNull() },
+            where: {
+                channelId: ctx.channelId,
+                customerId: customer.id,
+                customerDeletedAt: IsNull(),
+                ...(states?.length ? { state: In(states) } : {}),
+            },
             relations: { outputs: { asset: true }, referenceAsset: true },
             order: { createdAt: 'DESC', id: 'DESC', outputs: { outputIndex: 'ASC' } },
             skip: Math.max(0, Math.floor(skip || 0)),
@@ -476,7 +489,10 @@ export class ImageGenerationService {
             await this.reconcileStaleOutputs(ctx, cutoff);
             [items, totalItems] = await repository.findAndCount(options);
         }
-        return { items: items.map(job => this.jobView(job, customer.id)), totalItems };
+        return {
+            items: await Promise.all(items.map(job => this.jobView(ctx, job, customer.id))),
+            totalItems,
+        };
     }
 
     async cancelQueued(ctx: RequestContext, id: ID) {
@@ -586,7 +602,10 @@ export class ImageGenerationService {
                 skip: Math.max(0, Math.floor(skip || 0)),
                 take: Math.min(100, Math.max(1, Math.floor(take || 50))),
             });
-        return { items: items.map(job => this.jobView(job, job.customerId)), totalItems };
+        return {
+            items: await Promise.all(items.map(job => this.jobView(ctx, job, job.customerId))),
+            totalItems,
+        };
     }
 
     async adminUsageRecords(ctx: RequestContext, input: ImageAiUsageRecordListInput = {}) {
@@ -620,7 +639,7 @@ export class ImageGenerationService {
             .getRepository(ctx, ImageGenerationJob)
             .update({ id: job.id }, { customerDeletedAt: job.customerDeletedAt });
         for (const referenceAssetId of storedReferenceAssetIds(job)) {
-            await this.storage.deleteOwned(ctx, referenceAssetId, customer.id);
+            await this.storage.releaseReference(ctx, referenceAssetId, customer.id);
         }
         return true;
     }
@@ -720,15 +739,19 @@ export class ImageGenerationService {
         if (!output.job.providerIdempotencySupportedSnapshot)
             throw new UserInputError('该模型未确认支持中转站幂等，不能安全人工重试');
         if (!this.enqueueOutput) throw new UserInputError('生图任务队列尚未就绪');
-        const credential = output.job.providerCredentialCodeSnapshot
-            ? await this.configService.credentialByCode(ctx, output.job.providerCredentialCodeSnapshot)
-            : await this.configService.requireCredential(
-                  ctx,
-                  output.job.providerScopeSnapshot as ImageProviderScope,
-                  output.job.modelConfigId,
-                  'IMAGE',
-              );
+        if (!output.job.providerCredentialCodeSnapshot || !output.job.providerCredentialFingerprint)
+            throw new UserInputError('原任务账号快照不完整，不能安全重试');
+        const credential = await this.configService.credentialByCode(
+            ctx,
+            output.job.providerCredentialCodeSnapshot,
+        );
         if (!credential) throw new UserInputError('原任务使用的 Key 已归档，不能安全重试');
+        if (
+            !credential.enabled ||
+            credential.healthStatus !== 'HEALTHY' ||
+            (credential.cooldownUntil?.getTime() ?? 0) > Date.now()
+        )
+            throw new UserInputError('原任务账号暂不可用，请等待恢复后再试');
         const currentFingerprint = this.configService.credentialFingerprint(credential);
         if (
             output.job.providerCredentialFingerprint &&
@@ -742,20 +765,20 @@ export class ImageGenerationService {
                 state: 'QUEUED',
                 unknownAt: null,
                 errorMessage: '管理员确认后使用相同幂等键重试',
-                failureCode: null,
+                failureCode: 'UNKNOWN_RETRY',
             },
         );
         if (transition.affected !== 1) throw new UserInputError('该输出状态已变更，请刷新后重试');
         output.state = 'QUEUED';
         output.unknownAt = null;
         output.errorMessage = '管理员确认后使用相同幂等键重试';
-        output.failureCode = null;
+        output.failureCode = 'UNKNOWN_RETRY';
         await this.connection.getRepository(ctx, ImageGenerationDispatch).upsert(
             {
                 outputId: output.id,
                 state: 'PENDING',
                 attemptCount: 0,
-                nextAttemptAt: new Date(),
+                nextAttemptAt: imageDispatchReadyAt(),
                 dispatchedAt: null,
                 queueTaskId: null,
                 processingStage: null,
@@ -778,17 +801,29 @@ export class ImageGenerationService {
     }
 
     async adminRefundOutput(ctx: RequestContext, outputId: ID, reason: string) {
-        const output = await this.connection.getRepository(ctx, ImageGenerationOutput).findOne({
-            where: { id: outputId },
-            relations: { job: true },
-        });
-        if (!output || output.job.channelId.toString() !== ctx.channelId.toString())
-            throw new UserInputError('找不到该生图输出');
-        if (output.state !== 'SUCCEEDED' || !output.walletSettled || output.refundedAt)
-            throw new UserInputError('该图片不能重复退款');
         const note = reason.trim();
         if (!note || note.length > 300) throw new UserInputError('退款原因不能为空且不能超过 300 个字符');
-        await this.connection.withTransaction(ctx, async txCtx => {
+        const refundedOutput = await this.connection.withTransaction(ctx, async txCtx => {
+            const outputQuery = this.connection
+                .getRepository(txCtx, ImageGenerationOutput)
+                .createQueryBuilder('output')
+                .where('output.id = :id', { id: outputId });
+            if (supportsGenerationLock(this.connection.rawConnection.options.type))
+                outputQuery.setLock('pessimistic_write');
+            const output = await outputQuery.getOne();
+            if (!output) throw new UserInputError('找不到该生图输出');
+            const jobQuery = this.connection
+                .getRepository(txCtx, ImageGenerationJob)
+                .createQueryBuilder('job')
+                .where('job.id = :id', { id: output.jobId })
+                .andWhere('job.channelId = :channelId', { channelId: txCtx.channelId });
+            if (supportsGenerationLock(this.connection.rawConnection.options.type))
+                jobQuery.setLock('pessimistic_write');
+            const job = await jobQuery.getOne();
+            if (!job) throw new UserInputError('找不到该生图输出');
+            output.job = job;
+            if (output.state !== 'SUCCEEDED' || !output.walletSettled || output.refundedAt)
+                throw new UserInputError('该图片不能重复退款');
             if (output.billingMode === 'FREE') {
                 if (!output.job.quotaEventId) throw new UserInputError('该图片缺少免费额度记录');
                 await this.quota.refundConsumed(txCtx, output.job.quotaEventId, 1);
@@ -810,9 +845,10 @@ export class ImageGenerationService {
             }
             output.refundedAt = new Date();
             await this.connection.getRepository(txCtx, ImageGenerationOutput).save(output, { reload: false });
+            return output;
         });
-        await this.refreshJob(ctx, output.jobId);
-        return output;
+        await this.refreshJob(ctx, refundedOutput.jobId);
+        return refundedOutput;
     }
 
     async failQueuedOutput(
@@ -979,8 +1015,27 @@ export class ImageGenerationService {
         return new Date(Date.now() - IMAGE_UNKNOWN_MAX_AGE_MS);
     }
 
-    private validateCreateInput(
-        input: CreateImageGenerationInput,
+    previewImageGenerationPrompt(ctx: RequestContext, input: OptimizeImagePromptInput) {
+        const normalized = this.validatePromptInput(input, promptLanguageFromLanguageCode(ctx.languageCode));
+        const spec = this.rules.fallbackSpec(
+            normalized.prompt,
+            normalized.referenceMode,
+            normalized.promptLanguage,
+        );
+        const compiled = this.compileFinalPrompt(normalized, spec, false);
+        return { length: compiled.length, limit: 8000, valid: compiled.length <= 8000 };
+    }
+
+    private validatePromptInput(
+        input: Pick<
+            CreateImageGenerationInput,
+            | 'prompt'
+            | 'optimizedPrompt'
+            | 'referenceMode'
+            | 'referenceAssetId'
+            | 'referenceAssetIds'
+            | 'referenceInstruction'
+        >,
         fallbackLanguage: PromptOutputLanguage = 'en',
     ) {
         const prompt = input.prompt.trim();
@@ -988,19 +1043,6 @@ export class ImageGenerationService {
             throw new UserInputError(`原始描述必须为 1 至 ${MAX_PROMPT_LENGTH} 个字符`);
         const optimizedPrompt = input.optimizedPrompt?.trim() ?? '';
         if (optimizedPrompt.length > 8_000) throw new UserInputError('优化后的提示词不能超过 8000 个字符');
-        if (!supportedAspectRatios.includes(input.aspectRatio as (typeof supportedAspectRatios)[number]))
-            throw new UserInputError('图片比例无效');
-        const resolution = String(input.resolution).toUpperCase();
-        if (!isImageResolution(resolution)) throw new UserInputError('图片清晰度无效');
-        if (!Number.isInteger(input.quantity) || input.quantity < 1 || input.quantity > MAX_GENERATION_COUNT)
-            throw new UserInputError('每次只能生成 1 至 4 张图片');
-        if (!Number.isSafeInteger(input.expectedUnitPrice) || input.expectedUnitPrice < 0)
-            throw new UserInputError('预期价格无效');
-        if (!Number.isSafeInteger(input.expectedChargeAmount) || input.expectedChargeAmount < 0)
-            throw new UserInputError('预期结算金额无效');
-        if (!input.termsAccepted) throw new UserInputError('请先同意 AI 图片服务条款');
-        const idempotencyKey = input.idempotencyKey.trim();
-        if (!/^[a-zA-Z0-9._:-]{8,64}$/u.test(idempotencyKey)) throw new UserInputError('请求幂等键无效');
         const referenceAssetIds = uniqueReferenceAssetIds(input);
         if (referenceAssetIds.length > MAX_REFERENCE_IMAGES_PER_JOB) {
             throw new UserInputError(`每次最多可以使用 ${MAX_REFERENCE_IMAGES_PER_JOB} 张参考图`);
@@ -1015,17 +1057,35 @@ export class ImageGenerationService {
         }
         const promptLanguage = detectPromptLanguage(prompt, fallbackLanguage);
         return {
-            ...input,
             prompt,
             optimizedPrompt,
-            idempotencyKey,
             referenceAssetId: referenceAssetIds[0] ?? null,
             referenceAssetIds,
             referenceInstruction,
             referenceMode,
-            resolution,
             promptLanguage,
         };
+    }
+
+    private validateCreateInput(
+        input: CreateImageGenerationInput,
+        fallbackLanguage: PromptOutputLanguage = 'en',
+    ) {
+        const content = this.validatePromptInput(input, fallbackLanguage);
+        if (!supportedAspectRatios.includes(input.aspectRatio as (typeof supportedAspectRatios)[number]))
+            throw new UserInputError('图片比例无效');
+        const resolution = String(input.resolution).toUpperCase();
+        if (!isImageResolution(resolution)) throw new UserInputError('图片清晰度无效');
+        if (!Number.isInteger(input.quantity) || input.quantity < 1 || input.quantity > MAX_GENERATION_COUNT)
+            throw new UserInputError('每次只能生成 1 至 4 张图片');
+        if (!Number.isSafeInteger(input.expectedUnitPrice) || input.expectedUnitPrice < 0)
+            throw new UserInputError('预期价格无效');
+        if (!Number.isSafeInteger(input.expectedChargeAmount) || input.expectedChargeAmount < 0)
+            throw new UserInputError('预期结算金额无效');
+        if (!input.termsAccepted) throw new UserInputError('请先同意 AI 图片服务条款');
+        const idempotencyKey = input.idempotencyKey.trim();
+        if (!/^[a-zA-Z0-9._:-]{8,64}$/u.test(idempotencyKey)) throw new UserInputError('请求幂等键无效');
+        return { ...input, ...content, idempotencyKey, resolution };
     }
 
     private assertSameCreateRequest(
@@ -1059,8 +1119,9 @@ export class ImageGenerationService {
     }
 
     private compileFinalPrompt(
-        input: ReturnType<ImageGenerationService['validateCreateInput']>,
+        input: ReturnType<ImageGenerationService['validatePromptInput']>,
         promptSpec: ReturnType<PromptRulesService['fallbackSpec']>,
+        enforceLimit = true,
     ): string {
         const base = input.optimizedPrompt || this.rules.render(promptSpec, input.promptLanguage);
         const referenceInstruction = referenceModeInstruction(input.referenceMode, input.promptLanguage);
@@ -1079,7 +1140,8 @@ export class ImageGenerationService {
                 : '',
         ].filter(Boolean);
         const finalPrompt = referenceLines.length ? `${base}\n${referenceLines.join('\n')}` : base;
-        if (finalPrompt.length > 8_000) throw new UserInputError('最终提示词超过 8000 个字符');
+        if (enforceLimit && finalPrompt.length > 8_000)
+            throw new UserInputError('最终提示词超过 8000 个字符');
         return finalPrompt;
     }
 
@@ -1121,6 +1183,7 @@ export class ImageGenerationService {
 
     async refreshJob(ctx: RequestContext, jobId: ID): Promise<void> {
         let terminalReferenceAssetIds: string[] = [];
+        let terminalCustomerId: ID | undefined;
         await this.connection.withTransaction(ctx, async txCtx => {
             const repository = this.connection.getRepository(txCtx, ImageGenerationJob);
             if (supportsGenerationLock(this.connection.rawConnection.options.type)) {
@@ -1167,12 +1230,21 @@ export class ImageGenerationService {
             job.completedAt = settlement.terminal ? (job.completedAt ?? new Date()) : null;
             await repository.save(job, { reload: false });
             terminalReferenceAssetIds = settlement.terminal ? storedReferenceAssetIds(job) : [];
+            terminalCustomerId = job.customerId;
         });
         if (!terminalReferenceAssetIds.length) return;
         await this.connection.withTransaction(ctx, async txCtx => {
+            const customerQuery = this.connection
+                .getRepository(txCtx, Customer)
+                .createQueryBuilder('customer')
+                .where('customer.id = :id', { id: terminalCustomerId });
+            if (supportsGenerationLock(this.connection.rawConnection.options.type))
+                customerQuery.setLock('pessimistic_write');
+            await customerQuery.getOne();
             const activeJobs = await this.connection.getRepository(txCtx, ImageGenerationJob).find({
                 where: {
                     channelId: txCtx.channelId,
+                    customerId: terminalCustomerId,
                     state: In(['QUEUED', 'RUNNING', 'UNKNOWN']),
                 },
                 select: { id: true, referenceAssetId: true, promptSpec: true },
@@ -1185,27 +1257,60 @@ export class ImageGenerationService {
         });
     }
 
-    jobView(job: ImageGenerationJob, customerId: ID) {
+    async releaseReference(ctx: RequestContext, assetId: ID) {
+        const customer = await this.activeCustomer(ctx);
+        return this.storage.releaseReference(ctx, assetId, customer.id);
+    }
+
+    async jobView(ctx: RequestContext, job: ImageGenerationJob, customerId: ID) {
+        const referenceAssetIds = storedReferenceAssetIds(job);
+        const assets = referenceAssetIds.length
+            ? await this.connection.getRepository(ctx, ImagePrivateAsset).find({
+                  where: {
+                      id: In(referenceAssetIds),
+                      channelId: ctx.channelId,
+                      customerId,
+                      kind: 'REFERENCE',
+                      deletedAt: IsNull(),
+                  },
+              })
+            : [];
+        const byId = new Map(assets.map(asset => [String(asset.id), asset]));
         const outputs = job.outputs ?? [];
         return {
             ...job,
+            referenceAssetIds,
+            referenceAssets: referenceAssetIds.map(id => {
+                const asset = byId.get(id);
+                return asset && asset.expiresAt.getTime() > Date.now()
+                    ? this.assetView(ctx, asset, customerId)
+                    : null;
+            }),
+            referenceInstruction: job.promptSpec?.referenceInstruction ?? null,
+            optimizedPrompt:
+                job.promptSpec?.inputSnapshot?.version === 1
+                    ? job.promptSpec.inputSnapshot.optimizedPrompt
+                    : null,
+            inputSnapshotVersion: job.promptSpec?.inputSnapshot?.version ?? null,
             errorMessage:
                 outputs.map(publicOutputError).find((message): message is string => Boolean(message)) ?? null,
-            referenceAsset: job.referenceAsset ? this.assetView(job.referenceAsset, customerId) : null,
+            referenceAsset: job.referenceAsset ? this.assetView(ctx, job.referenceAsset, customerId) : null,
             outputs: outputs.map(output => ({
                 ...output,
                 providerRequestId: null,
                 errorMessage: publicOutputError(output),
                 width: output.asset?.width ?? null,
                 height: output.asset?.height ?? null,
-                imageUrl: output.asset ? this.storage.signedUrl(output.asset, customerId) : null,
-                downloadUrl: output.asset ? this.storage.signedUrl(output.asset, customerId, true) : null,
+                imageUrl: output.asset ? this.storage.signedUrl(ctx, output.asset, customerId) : null,
+                downloadUrl: output.asset
+                    ? this.storage.signedUrl(ctx, output.asset, customerId, true)
+                    : null,
             })),
         };
     }
 
-    private assetView(asset: ImagePrivateAsset, customerId: ID) {
-        return { ...asset, previewUrl: this.storage.signedUrl(asset, customerId) };
+    private assetView(ctx: RequestContext, asset: ImagePrivateAsset, customerId: ID) {
+        return { ...asset, previewUrl: this.storage.signedUrl(ctx, asset, customerId) };
     }
 
     private async activeCustomer(ctx: RequestContext): Promise<Customer> {

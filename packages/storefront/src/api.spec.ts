@@ -232,6 +232,23 @@ describe('ShopApi storefront mutations', () => {
         });
     });
 
+    it('previews final image prompt length without calling the optimization mutation', async () => {
+        const budget = { length: 8050, limit: 8000, valid: false };
+        const fetchMock = mockGraphQlResponse({ previewImageGenerationPrompt: budget });
+        const input = {
+            prompt: '袋装咖啡',
+            optimizedPrompt: '完整草稿',
+            referenceMode: 'PRODUCT' as const,
+            referenceAssetIds: ['ref-1'],
+            referenceInstruction: '保留包装',
+        };
+        await expect(new ShopApi(market).previewImageGenerationPrompt(input)).resolves.toEqual(budget);
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1]));
+        expect(request.variables.input).toEqual(input);
+        expect(request.query).toContain('query PreviewImageGenerationPrompt');
+        expect(request.query).not.toContain('mutation');
+    });
+
     it('loads the AI studio wallet in the active settlement currency', async () => {
         const myrMarket = { ...market, currencyCode: 'MYR' };
         const wallet = { availableBalance: 612, currencyCode: 'MYR' };
@@ -273,6 +290,23 @@ describe('ShopApi storefront mutations', () => {
             query: string;
         };
         expect(optimizeRequest.query).toContain('optimizerModelId');
+    });
+
+    it('passes numbered reference assets and specific requirements to prompt optimization', async () => {
+        const fetchMock = mockGraphQlResponse({ optimizeImagePrompt: { optimizedPrompt: '袋装咖啡商品图' } });
+        await new ShopApi(market).optimizeImagePrompt('把图1女人手里的咖啡做成商品图', 'PRODUCT', {
+            referenceAssetIds: ['reference-2', 'reference-1'],
+            referenceInstruction: '保留袋装包装，使用图2背景',
+            idempotencyKey: 'prompt-reference-test',
+        });
+        const body = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1]));
+        expect(body.variables.input).toEqual({
+            prompt: '把图1女人手里的咖啡做成商品图',
+            referenceMode: 'PRODUCT',
+            referenceAssetIds: ['reference-2', 'reference-1'],
+            referenceInstruction: '保留袋装包装，使用图2背景',
+            idempotencyKey: 'prompt-reference-test',
+        });
     });
 
     it('passes the selected image ratio, quantity, and resolution to generation unchanged', async () => {

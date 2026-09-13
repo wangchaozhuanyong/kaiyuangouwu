@@ -9,12 +9,15 @@ import {
     extractStorefrontAssetUrl,
     verifyDashboardAssets,
     verifyProductionRelease,
+    verifyStorefrontAssets,
 } from '../../../deploy/verify-production-release.mjs';
 
 async function startFixtureServer({
     requirePromotionCookie = false,
     redirectStorefrontToPromo = false,
-    anonymousCatalogPublic = false,
+    extraEntryScript = '',
+    assetCacheControl = 'public, max-age=31536000, immutable',
+    assetContentType = 'text/css',
 } = {}) {
     const server = createServer((request, response) => {
         const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
@@ -39,31 +42,8 @@ async function startFixtureServer({
                 );
                 return;
             }
-            let body = '';
-            request.on('data', chunk => {
-                body += chunk;
-            });
-            request.on('end', () => {
-                response.writeHead(200, { 'content-type': 'application/json' });
-                if (body.includes('PrivateCatalogProbe')) {
-                    response.end(
-                        JSON.stringify(
-                            anonymousCatalogPublic
-                                ? {
-                                      data: {
-                                          products: {
-                                              totalItems: 1,
-                                              items: [{ id: '1', name: 'Private fixture' }],
-                                          },
-                                      },
-                                  }
-                                : { data: null, errors: [{ extensions: { code: 'FORBIDDEN' } }] },
-                        ),
-                    );
-                    return;
-                }
-                response.end('{"data":{"__typename":"Query","activeChannel":{"code":"fixture-store"}}}');
-            });
+            response.writeHead(200, { 'content-type': 'application/json' });
+            response.end('{"data":{"__typename":"Query","activeChannel":{"code":"fixture-store"}}}');
             return;
         }
         if (request.method === 'GET' && requestUrl.pathname === '/promo') {
@@ -71,11 +51,6 @@ async function startFixtureServer({
             response.end(
                 '<form action="/promo/enter"><input value="signed&amp;ticket" name="ticket"></form>',
             );
-            return;
-        }
-        if (request.method === 'GET' && requestUrl.pathname === '/sitemap.xml') {
-            response.writeHead(200, { 'content-type': 'application/xml' });
-            response.end(`<urlset><url><loc>http://${request.headers.host}/promo</loc></url></urlset>`);
             return;
         }
         if (request.method === 'POST' && requestUrl.pathname === '/promo/enter') {
@@ -105,12 +80,21 @@ async function startFixtureServer({
                 return;
             }
             response.writeHead(200, { 'content-type': 'text/html' });
-            response.end('<html><head><link href="/assets/index-test.css" rel="stylesheet"></head></html>');
+            response.end(
+                '<html><head><link href="/assets/index-test.css" rel="stylesheet">' +
+                    extraEntryScript +
+                    '</head></html>',
+            );
             return;
         }
         if (request.method === 'GET' && requestUrl.pathname === '/assets/index-test.css') {
-            response.writeHead(200, { 'content-type': 'text/css' });
+            response.writeHead(200, { 'content-type': assetContentType, 'cache-control': assetCacheControl });
             response.end('body{}');
+            return;
+        }
+        if (request.method === 'GET' && requestUrl.pathname === '/storefront/restore-logo.js') {
+            response.writeHead(401, { 'content-type': 'text/html', 'cache-control': 'private, no-store' });
+            response.end('<h1>Unauthorized</h1>');
             return;
         }
         if (request.method === 'GET' && requestUrl.pathname === '/dashboard/') {
@@ -155,19 +139,6 @@ async function startFixtureServer({
     };
 }
 
-test('rejects a release which exposes product data to an anonymous request', async t => {
-    const fixture = await startFixtureServer({ anonymousCatalogPublic: true });
-    t.after(fixture.close);
-    await assert.rejects(
-        verifyProductionRelease({
-            storefrontUrl: fixture.origin,
-            dashboardUrl: `${fixture.origin}/dashboard/`,
-            timeoutMs: 1_000,
-        }),
-        /anonymous product access was not denied/,
-    );
-});
-
 test('verifies the direct storefront, optional promotion entry and production public surfaces', async t => {
     const fixture = await startFixtureServer();
     t.after(fixture.close);
@@ -183,13 +154,10 @@ test('verifies the direct storefront, optional promotion entry and production pu
         'public health',
         'dashboard health',
         'public Shop API',
-        'anonymous catalog denial',
         'expected Channel',
         'direct storefront',
         'optional promotion page',
         'optional promotion entry',
-        'promotion cookie cannot unlock catalog',
-        'catalog links absent from sitemap',
         'storefront build asset',
         'dashboard asset graph',
         'public Admin API denial',
@@ -260,6 +228,71 @@ test('rejects a main storefront that still redirects to the promotion page', asy
         }),
         /Direct storefront: expected HTTP 200, received 302/u,
     );
+});
+
+test('rejects private or non-reusable storefront build assets', async t => {
+    for (const policy of [
+        'private, no-store',
+        'public, max-age=31536000, immutable, no-cache',
+        'public, max-age=0, immutable',
+    ]) {
+        await t.test(policy, async subtest => {
+            const fixture = await startFixtureServer({ assetCacheControl: policy });
+            subtest.after(fixture.close);
+            await assert.rejects(
+                verifyStorefrontAssets({ storefrontUrl: fixture.origin }),
+                /expected public immutable caching/u,
+            );
+        });
+    }
+});
+
+test('checks a failed secondary script even when the first CSS asset succeeds', async t => {
+    const fixture = await startFixtureServer({
+        extraEntryScript: '<script src="/storefront/restore-logo.js"></script>',
+    });
+    t.after(fixture.close);
+    await assert.rejects(
+        verifyProductionRelease({
+            storefrontUrl: fixture.origin,
+            dashboardUrl: `${fixture.origin}/dashboard/`,
+        }),
+        /Storefront asset \/storefront\/restore-logo.js: expected HTTP 200, received 401/u,
+    );
+});
+
+test('rejects HTML fallback responses masquerading as successful CSS', async t => {
+    const fixture = await startFixtureServer({ assetContentType: 'text/html' });
+    t.after(fixture.close);
+    await assert.rejects(
+        verifyStorefrontAssets({ storefrontUrl: fixture.origin }),
+        /unexpected content-type text\/html/u,
+    );
+});
+
+test('verifies scripts outside assets and deduplicates modulepreload references', async () => {
+    const paths = [];
+    const html =
+        '<script nomodule src="/legacy-browser-guard.js"></script>' +
+        '<script type="module" src="/assets/main-12345678.js"></script>' +
+        '<link rel="modulepreload" href="/assets/main-12345678.js">' +
+        '<link rel="icon" href="/favicon.png">';
+    await verifyStorefrontAssets({
+        storefrontUrl: 'https://store.example.com',
+        html,
+        fetchImpl: async url => {
+            paths.push(url.pathname);
+            return new Response('export {};', {
+                headers: {
+                    'content-type': 'application/javascript',
+                    'cache-control': url.pathname.startsWith('/assets/')
+                        ? 'public, max-age=31536000, immutable'
+                        : 'public, max-age=300',
+                },
+            });
+        },
+    });
+    assert.deepEqual(paths, ['/legacy-browser-guard.js', '/assets/main-12345678.js']);
 });
 
 test('extracts tickets and same-origin build assets without depending on attribute order', () => {

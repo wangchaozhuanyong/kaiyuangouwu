@@ -10,6 +10,11 @@ function inlineStylesheet(url: URL, ancestors = new Set<string>()): string {
 }
 
 export function readStorefrontStylesheet(additionalStylePaths: string[] = []): string {
-    const paths = ['./styles.css', './styles/desktop-layout.css', ...additionalStylePaths];
+    const paths = [
+        './styles/commerce-surfaces.css',
+        './styles.css',
+        './styles/desktop-layout.css',
+        ...additionalStylePaths,
+    ];
     return paths.map(relativePath => inlineStylesheet(new URL(relativePath, import.meta.url))).join('\n');
 }

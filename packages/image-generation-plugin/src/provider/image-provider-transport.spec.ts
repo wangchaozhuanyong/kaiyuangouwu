@@ -141,7 +141,7 @@ describe('Pinned provider TLS identity', () => {
             ['-c', 'cat | openssl req -new -x509 -key /dev/stdin -subj /CN=provider-tls.invalid -days 1'],
             { input: key, stdio: ['pipe', 'pipe', 'ignore'] },
         );
-        let servername: string | false | undefined;
+        let servername: string | false | null | undefined;
         const server = https.createServer({ key, cert }, (request, response) => {
             servername = (request.socket as TLSSocket).servername;
             response.end('trusted-fixture');

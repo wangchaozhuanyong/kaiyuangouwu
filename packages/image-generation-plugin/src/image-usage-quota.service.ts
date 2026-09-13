@@ -139,7 +139,7 @@ export class ImageUsageQuotaService {
         event.consumedAmount -= amount;
         event.releasedAmount += amount;
         event.releasedAt = new Date();
-        event.state = event.releasedAmount === event.amount ? 'RELEASED' : 'PARTIALLY_SETTLED';
+        event.state = event.releasedAmount === event.amount ? 'RELEASED' : 'PARTIAL';
         await bucketRepository.save(bucket, { reload: false });
         return eventRepository.save(event);
     }
@@ -185,7 +185,7 @@ export class ImageUsageQuotaService {
                 ? 'CONSUMED'
                 : event.releasedAmount === event.amount
                   ? 'RELEASED'
-                  : 'PARTIALLY_SETTLED';
+                  : 'PARTIAL';
         await bucketRepository.save(bucket, { reload: false });
         return eventRepository.save(event);
     }

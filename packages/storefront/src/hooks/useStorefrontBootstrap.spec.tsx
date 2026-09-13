@@ -76,7 +76,7 @@ describe('storefront bootstrap boundaries', () => {
                 storefrontQueryKeys.market(marketForStorefrontConfig(config)),
                 'zh_Hans',
             ),
-            'account',
+            'public',
         ];
         render();
         expect(client.getQueryData(key)).toEqual(config);
@@ -93,7 +93,7 @@ describe('storefront bootstrap boundaries', () => {
                 storefrontQueryKeys.market(marketForStorefrontConfig(config)),
                 'zh_Hans',
             ),
-            'account',
+            'public',
         ];
         const newer = { ...config, description: 'Newer response' };
         client.setQueryData(key, newer, { updatedAt: dataUpdatedAt + 1000 });

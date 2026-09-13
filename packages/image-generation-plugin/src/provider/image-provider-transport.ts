@@ -71,7 +71,7 @@ export class ImageProviderTransport {
             timeoutMs,
             timeoutMessage,
         );
-        const details = responseErrorDetails(response);
+        let details = responseErrorDetails(response);
         let text: string;
         try {
             text = await readResponseText(
@@ -82,6 +82,11 @@ export class ImageProviderTransport {
             );
         } catch (error) {
             throw withProviderTelemetry(error, details);
+        }
+        try {
+            details = responseTelemetry(response, JSON.parse(text));
+        } catch {
+            /* Preserve header evidence for non-JSON errors. */
         }
         if (response.status === 429) throw new RetryableImageProviderError('中转站限流，请稍后重试', details);
         if (response.status >= 300 && response.status < 400) {

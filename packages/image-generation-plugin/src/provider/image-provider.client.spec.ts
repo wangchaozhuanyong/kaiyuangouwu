@@ -4,6 +4,7 @@ import { IMAGE_GENERATION_DELIVERY_TIMEOUT_MS } from '../constants';
 import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
 import { type ImageProviderCipherService } from '../security/image-provider-cipher.service';
 
+import { responseTelemetry } from './image-provider-telemetry';
 import {
     AmbiguousImageProviderError,
     DefinitiveImageProviderError,
@@ -101,6 +102,163 @@ describe('ImageProviderClient', () => {
                 generationConfig: expect.objectContaining({ responseMimeType: 'application/json' }),
             }),
         );
+    });
+
+    it.each(['OPENAI', 'GEMINI'] as const)(
+        'keeps charged response telemetry when the %s prompt optimizer returns no text',
+        async scope => {
+            const usage = { total_tokens: 42, total_cost: 0.015, currency: 'USD' };
+            vi.stubGlobal(
+                'fetch',
+                vi.fn().mockResolvedValue(
+                    new Response(
+                        JSON.stringify(
+                            scope === 'GEMINI'
+                                ? {
+                                      responseId: 'empty-prompt-response',
+                                      candidates: [{ content: { parts: [{ text: '   ' }] } }],
+                                      usageMetadata: usage,
+                                  }
+                                : {
+                                      id: 'empty-prompt-response',
+                                      choices: [{ message: { content: null } }],
+                                      usage,
+                                  },
+                        ),
+                        { status: 200 },
+                    ),
+                ),
+            );
+            const client = new ImageProviderClient(cipher, safeUrls);
+
+            await expect(
+                client.optimizePrompt(
+                    new ImageProviderCredential({ ...credential, scope }),
+                    'vision-model',
+                    'Return JSON',
+                    'Extract the bag from the reference',
+                ),
+            ).rejects.toMatchObject({
+                name: 'DefinitiveImageProviderError',
+                details: {
+                    httpStatus: 200,
+                    providerRequestId: 'empty-prompt-response',
+                    reportedCostEvidence: { amount: 0.015, currency: 'USD', field: 'usage.total_cost' },
+                    usage: { total_tokens: 42, total_cost: 0.015 },
+                },
+            });
+        },
+    );
+
+    it.each(['OPENAI', 'GEMINI'] as const)(
+        'sends numbered reference images to the %s prompt optimizer',
+        async scope => {
+            const fetchMock = vi.fn().mockResolvedValue(
+                new Response(
+                    JSON.stringify(
+                        scope === 'GEMINI'
+                            ? {
+                                  candidates: [{ content: { parts: [{ text: '{"subject":"袋装咖啡"}' }] } }],
+                              }
+                            : { choices: [{ message: { content: '{"subject":"袋装咖啡"}' } }] },
+                    ),
+                    { status: 200 },
+                ),
+            );
+            vi.stubGlobal('fetch', fetchMock);
+            const client = new ImageProviderClient(cipher, safeUrls);
+            const references = [
+                { bytes: Buffer.from('woman-holding-coffee-bag'), mimeType: 'image/png' },
+                { bytes: Buffer.from('studio-background'), mimeType: 'image/jpeg' },
+            ];
+
+            await client.optimizePrompt(
+                new ImageProviderCredential({ ...credential, scope }),
+                'vision-model',
+                'Return JSON',
+                '把图1女人手里的咖啡做成商品图，使用图2背景',
+                references,
+            );
+
+            const body = parseJsonRequestBody(fetchMock.mock.calls[0][1] as RequestInit);
+            const labels = ['Reference image 1 (图1)', 'Reference image 2 (图2)'];
+            if (scope === 'GEMINI') {
+                expect(body).toMatchObject({
+                    contents: [
+                        {
+                            role: 'user',
+                            parts: [
+                                { text: '把图1女人手里的咖啡做成商品图，使用图2背景' },
+                                { text: labels[0] },
+                                {
+                                    inlineData: {
+                                        mimeType: 'image/png',
+                                        data: references[0].bytes.toString('base64'),
+                                    },
+                                },
+                                { text: labels[1] },
+                                {
+                                    inlineData: {
+                                        mimeType: 'image/jpeg',
+                                        data: references[1].bytes.toString('base64'),
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                });
+            } else {
+                expect(body).toMatchObject({
+                    messages: [
+                        { role: 'system', content: 'Return JSON' },
+                        {
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: '把图1女人手里的咖啡做成商品图，使用图2背景' },
+                                { type: 'text', text: labels[0] },
+                                {
+                                    type: 'image_url',
+                                    image_url: {
+                                        url: `data:image/png;base64,${references[0].bytes.toString('base64')}`,
+                                    },
+                                },
+                                { type: 'text', text: labels[1] },
+                                {
+                                    type: 'image_url',
+                                    image_url: {
+                                        url: `data:image/jpeg;base64,${references[1].bytes.toString('base64')}`,
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                });
+            }
+        },
+    );
+
+    it('keeps text-only OpenAI prompt requests compatible', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    choices: [{ message: { content: '{"subject":"袋装咖啡"}' } }],
+                }),
+                { status: 200 },
+            ),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+        await new ImageProviderClient(cipher, safeUrls).optimizePrompt(
+            credential,
+            'text-model',
+            'Return JSON',
+            '袋装咖啡商品图',
+        );
+        expect(parseJsonRequestBody(fetchMock.mock.calls[0][1] as RequestInit)).toMatchObject({
+            messages: [
+                { role: 'system', content: 'Return JSON' },
+                { role: 'user', content: '袋装咖啡商品图' },
+            ],
+        });
     });
 
     it('uses the Responses image tool with separate orchestration and image models', async () => {
@@ -257,8 +415,9 @@ describe('ImageProviderClient', () => {
             expect.objectContaining({
                 httpStatus: 200,
                 providerRequestId: 'cost-request-1',
-                actualCostMicrounits: 4_672,
-                costCurrency: 'USD',
+                headerRequestId: 'header-request-1',
+                modelResponseId: 'cost-request-1',
+                reportedCostEvidence: { amount: 0.004672, currency: null, field: 'usage.total_cost' },
                 usage: { total_tokens: 321, total_cost: 0.004672 },
             }),
         );
@@ -294,8 +453,7 @@ describe('ImageProviderClient', () => {
             expect((error as DefinitiveImageProviderError).details).toEqual(
                 expect.objectContaining({
                     providerRequestId: 'charged-invalid-image',
-                    actualCostMicrounits: 150_000,
-                    costCurrency: 'USD',
+                    reportedCostEvidence: { amount: 0.15, currency: null, field: 'usage.total_cost' },
                 }),
             );
         }
@@ -675,6 +833,8 @@ describe('ImageProviderClient', () => {
             expect((error as DefinitiveImageProviderError).details).toEqual({
                 httpStatus: 200,
                 providerRequestId: 'malformed-sse',
+                headerRequestId: 'malformed-sse',
+                headerRequestIdSource: 'x-request-id',
             });
         }
     });
@@ -819,3 +979,39 @@ function parseJsonRequestBody(init: RequestInit): unknown {
     }
     return JSON.parse(init.body);
 }
+
+describe('provider audit evidence boundaries', () => {
+    it('keeps the final cumulative stream snapshot without summing or mixing earlier frames', () => {
+        const telemetry = responseTelemetry(new Response('', { headers: { 'x-request-id': 'gateway-id' } }), [
+            {
+                responseId: 'model-id',
+                usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 8, totalTokenCount: 18 },
+            },
+            {
+                responseId: 'model-id',
+                usageMetadata: {
+                    promptTokenCount: 10,
+                    candidatesTokenCount: 20,
+                    thoughtsTokenCount: 5,
+                    totalTokenCount: 35,
+                },
+            },
+        ]);
+        expect(telemetry).toMatchObject({
+            headerRequestId: 'gateway-id',
+            modelResponseId: 'model-id',
+            usage: { totalTokenCount: 35, thoughtsTokenCount: 5 },
+        });
+    });
+    it('does not classify a header-only request as a model response', () => {
+        const telemetry = responseTelemetry(new Response('', { headers: { 'request-id': 'gateway' } }), {});
+        expect(telemetry.headerRequestId).toBe('gateway');
+        expect(telemetry.modelResponseId).toBeUndefined();
+    });
+    it('does not turn unverified cost or missing currency into an actual USD charge', () => {
+        const telemetry = responseTelemetry(new Response(''), { usage: { total_cost: 0.1 } });
+        expect(telemetry.actualCostMicrounits).toBeUndefined();
+        expect(telemetry.costCurrency).toBeUndefined();
+        expect(telemetry.reportedCostEvidence).toMatchObject({ amount: 0.1, currency: null });
+    });
+});

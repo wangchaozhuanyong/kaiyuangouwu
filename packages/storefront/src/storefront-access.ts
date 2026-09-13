@@ -1,5 +1,17 @@
 import type { RouteName } from './storefront-router';
 
+const browsingRoutes = new Set<RouteName>([
+    'home',
+    'category',
+    'product',
+    'search',
+    'services',
+    'flash-sale',
+    'recommendations',
+    'announcements',
+    'not-found',
+]);
+
 const accountRoutes = new Set<RouteName>([
     'login',
     'register',
@@ -11,5 +23,9 @@ const accountRoutes = new Set<RouteName>([
 ]);
 
 export function isPublicStorefrontRoute(route: RouteName): boolean {
-    return accountRoutes.has(route);
+    return browsingRoutes.has(route) || accountRoutes.has(route);
+}
+
+export function isBrowsingStorefrontRoute(route: RouteName): boolean {
+    return browsingRoutes.has(route);
 }

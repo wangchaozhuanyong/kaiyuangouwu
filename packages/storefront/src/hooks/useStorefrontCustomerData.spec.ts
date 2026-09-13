@@ -33,7 +33,7 @@ describe('customer query boundaries', () => {
             language: 'zh',
             vendureLanguageCode: 'zh_Hans',
             storefrontContextResolved,
-            catalogAccessGranted: Boolean(customer),
+            customerAuthenticated: Boolean(customer),
         });
 
     it('waits for account resolution before querying claimable campaigns', () => {

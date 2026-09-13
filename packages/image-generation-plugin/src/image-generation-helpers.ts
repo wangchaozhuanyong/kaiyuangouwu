@@ -171,7 +171,9 @@ export function quotaTypeZh(value: string): string {
     );
 }
 
-export function uniqueReferenceAssetIds(input: CreateImageGenerationInput): ID[] {
+export function uniqueReferenceAssetIds(
+    input: Pick<CreateImageGenerationInput, 'referenceAssetId' | 'referenceAssetIds'>,
+): ID[] {
     const unique = new Map<string, ID>();
     for (const id of [...(input.referenceAssetIds ?? []), input.referenceAssetId]) {
         if (id === null || id === undefined || !String(id).trim()) continue;

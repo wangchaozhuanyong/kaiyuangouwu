@@ -5,9 +5,10 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import {
-    LEGACY_PUBLIC_QUERY_CACHE_KEYS,
-    PUBLIC_QUERY_CACHE_KEY,
+    persistPublicQueryCache,
+    restorePublicQueryCache,
     storefrontQueryClient,
+    watchPublicQueryCache,
 } from './query-client';
 import { router } from './router';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
@@ -27,11 +28,25 @@ if (!rootElement) {
 }
 
 try {
-    // Catalog responses are private. Do not restore or persist the old guest
-    // catalog cache, including responses saved before the access-policy change.
-    for (const key of [PUBLIC_QUERY_CACHE_KEY, ...LEGACY_PUBLIC_QUERY_CACHE_KEYS]) {
-        sessionStorage.removeItem(key);
+    // Restore the cached brand within the CSP-approved module entry, without a
+    // separate parser-blocking script or an inline-script CSP exception.
+    const cachedLogoUrl = sessionStorage.getItem('__storefront_logo_url__');
+    if (cachedLogoUrl) {
+        for (const icon of document.querySelectorAll<HTMLLinkElement>(
+            'link[rel="icon"], link[rel="apple-touch-icon"]',
+        )) {
+            icon.href = cachedLogoUrl;
+        }
     }
+    restorePublicQueryCache(storefrontQueryClient);
+    watchPublicQueryCache(storefrontQueryClient);
+    window.addEventListener('pagehide', () => {
+        try {
+            persistPublicQueryCache(storefrontQueryClient);
+        } catch {
+            // Browsing remains available when session storage is full or disabled.
+        }
+    });
 } catch {
     // sessionStorage can be disabled without preventing the storefront from starting.
 }

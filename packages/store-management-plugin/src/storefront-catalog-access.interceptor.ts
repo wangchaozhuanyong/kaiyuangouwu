@@ -1,9 +1,22 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
 import { ForbiddenError, internal_getRequestContext, parseContext } from '@vendure/core';
 
-// This is an allow-list of account bootstrap operations, not a list of known
-// catalog queries. New Shop API fields stay private until explicitly reviewed.
+// Public browsing and account bootstrap are explicit. Customer data, mutations
+// and new Shop API fields still require their existing authorization.
 const publicQueries = new Set([
+    'products',
+    'product',
+    'search',
+    'collections',
+    'collection',
+    'storefrontCatalog',
+    'storefrontProductSales',
+    'storefrontProductReviews',
+    'activeStorefrontFlashSales',
+    'activeStorefrontCoupons',
+    'activeSystemAnnouncements',
+    'storefrontContentSettings',
+    'activeStoreCommerceMode',
     'me',
     'activeCustomer',
     'myCustomerAvatar',
@@ -40,7 +53,7 @@ export class StorefrontCatalogAccessInterceptor implements NestInterceptor {
         const ctx = internal_getRequestContext(parsed.req, context);
         if (ctx.apiType !== 'shop') return next.handle();
 
-        // Responses may contain authenticated catalog data; never permit a
+        // Responses may contain customer data; never permit a
         // shared proxy/browser response cache to serve them to another visitor.
         parsed.res.setHeader('Cache-Control', 'private, no-store');
         parsed.res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');

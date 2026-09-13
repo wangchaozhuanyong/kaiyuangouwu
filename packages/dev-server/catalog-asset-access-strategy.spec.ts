@@ -1,11 +1,24 @@
 import { PresetOnlyStrategy } from '@vendure/asset-server-plugin';
-import { ConfigService, SessionService } from '@vendure/core';
+import {
+    Collection,
+    ConfigService,
+    Product,
+    ProductVariant,
+    SessionService,
+    TransactionalConnection,
+} from '@vendure/core';
 import {
     StorefrontPromotionAccessService,
     StorefrontPromotionService,
 } from '@vendure/store-management-plugin';
 import { StorefrontContentService } from '@vendure/storefront-content-plugin';
 import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@vendure/store-management-plugin', async () => ({
+    ...(await import('../store-management-plugin/src/promotion/promotion-public-assets')),
+    StorefrontPromotionAccessService: class {},
+    StorefrontPromotionService: class {},
+}));
 
 import {
     CatalogAssetAccessStrategy,
@@ -27,18 +40,63 @@ function harness(userId?: string) {
         [StorefrontContentService, { findPublished }],
         [StorefrontPromotionService, { renderPublished }],
     ]);
+    const repositories = new Map(
+        [Product, ProductVariant, Collection].map(entity => [
+            entity,
+            { findOne: vi.fn().mockResolvedValue(null) },
+        ]),
+    );
+    instances.set(TransactionalConnection, {
+        getRepository: (_ctx: unknown, entity: unknown) => repositories.get(entity as typeof Product),
+    });
+    const headers = { setHeader: vi.fn() };
     const strategy = new CatalogAssetAccessStrategy();
     strategy.init({ get: (type: unknown) => instances.get(type) } as never);
     const read = (path: string) =>
         strategy.getImageTransformParameters({
-            req: { path, session: { token: 'fixture-session' }, get: vi.fn(), res: { setHeader: vi.fn() } },
+            req: { path, session: { token: 'fixture-session' }, get: vi.fn(), res: headers },
             input: { preset: 'thumbnail' },
             availablePresets: [],
         } as never);
-    return { read, renderPublished, findPublished, ctx };
+    return { read, renderPublished, findPublished, ctx, repositories, headers };
 }
 
 describe('catalog media boundary', () => {
+    it.each([Product, ProductVariant, Collection])(
+        'allows images used by visible catalog entities',
+        async entity => {
+            const test = harness();
+            const repository = test.repositories.get(entity);
+            if (!repository) throw new Error('Missing fixture repository');
+            repository.findOne.mockResolvedValue({ id: 'visible-entity' });
+            await expect(test.read('/preview/published.jpg')).resolves.toEqual({ preset: 'thumbnail' });
+            expect(test.headers.setHeader).toHaveBeenCalledWith(
+                'Cache-Control',
+                'private, max-age=300, must-revalidate',
+            );
+            const where = repository.findOne.mock.calls[0][0].where;
+            expect(where).toHaveLength(4);
+            for (const filter of where) {
+                expect(filter.channels).toEqual({ id: 'shop-a' });
+                if (entity === Collection) expect(filter.isPrivate).toBe(false);
+                else {
+                    expect(filter.enabled).toBe(true);
+                    expect(filter.deletedAt.type).toBe('isNull');
+                }
+                if (entity === ProductVariant) {
+                    expect(filter.product).toMatchObject({ enabled: true, channels: { id: 'shop-a' } });
+                }
+            }
+        },
+    );
+    it('only enables browser caching after a published image has been matched', async () => {
+        const test = harness();
+        await expect(test.read('/preview/unpublished.jpg')).rejects.toThrow('Asset access denied');
+        expect(test.headers.setHeader).not.toHaveBeenCalledWith(
+            'Cache-Control',
+            'private, max-age=300, must-revalidate',
+        );
+    });
     it('authorizes catalog media before applying the image preset', () => {
         const strategies = createCatalogImageTransformStrategies(false);
         expect(strategies).toHaveLength(2);
@@ -69,7 +127,7 @@ describe('catalog media boundary', () => {
                 { imageUrl: '/assets/source/register.svg', items: [] },
             ]);
             await expect(test.read(path)).resolves.toEqual({ preset: 'thumbnail' });
-            expect(test.findPublished).toHaveBeenCalledWith(test.ctx, true, 'zh_Hans');
+            expect(test.findPublished).toHaveBeenCalledWith(test.ctx, false, 'zh_Hans');
             expect(test.renderPublished).not.toHaveBeenCalled();
         },
     );
@@ -97,10 +155,30 @@ describe('catalog media boundary', () => {
         test.findPublished.mockResolvedValue([]);
         await expect(test.read('/preview/shop-a.jpg')).rejects.toThrow('Asset access denied');
     });
-    it('allows catalog media after authentication without loading public content', async () => {
+    it('preserves authenticated access to non-public media without making it cacheable', async () => {
         const test = harness('customer-a');
         await expect(test.read('/preview/private-product.jpg')).resolves.toEqual({ preset: 'thumbnail' });
-        expect(test.renderPublished).not.toHaveBeenCalled();
-        expect(test.findPublished).not.toHaveBeenCalled();
+        expect(test.headers.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
+        expect(test.headers.setHeader).not.toHaveBeenCalledWith(
+            'Cache-Control',
+            'private, max-age=300, must-revalidate',
+        );
+    });
+    it('keeps authenticated media available on a public lookup failure while rejecting guests', async () => {
+        for (const customerId of [undefined, 'customer-a']) {
+            const test = harness(customerId);
+            test.findPublished.mockRejectedValue(new Error('Publication lookup unavailable'));
+            if (customerId) {
+                await expect(test.read('/preview/private.jpg')).resolves.toEqual({ preset: 'thumbnail' });
+            } else {
+                await expect(test.read('/preview/private.jpg')).rejects.toThrow(
+                    'Publication lookup unavailable',
+                );
+            }
+            expect(test.headers.setHeader).not.toHaveBeenCalledWith(
+                'Cache-Control',
+                'private, max-age=300, must-revalidate',
+            );
+        }
     });
 });

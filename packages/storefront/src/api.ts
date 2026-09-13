@@ -17,7 +17,6 @@ import type {
     ImageModelQuotaStatus,
     ImageModelRecommendation,
     ImagePrivateAssetView,
-    ImagePromptOptimizationResult,
     ImagePromptQuotaStatus,
     ImageReferenceMode,
     ImageStudioConfig,
@@ -286,6 +285,9 @@ export class ShopApi {
         return this.imageStudioApi.imageStudioConfig(signal);
     }
 
+    previewImageGenerationPrompt: ImageStudioApi['previewImageGenerationPrompt'] = (...args) =>
+        this.imageStudioApi.previewImageGenerationPrompt(...args);
+
     async imageStudioBalance(signal?: AbortSignal): Promise<number> {
         return this.imageStudioApi.imageStudioBalance(signal);
     }
@@ -302,13 +304,8 @@ export class ShopApi {
         return this.imageStudioApi.imageModelQuotaStatus(signal);
     }
 
-    async optimizeImagePrompt(
-        prompt: string,
-        referenceMode: ImageReferenceMode,
-        quote?: { expectedPrice?: number | null; currencyCode?: string | null; idempotencyKey?: string },
-    ): Promise<ImagePromptOptimizationResult> {
-        return this.imageStudioApi.optimizeImagePrompt(prompt, referenceMode, quote);
-    }
+    optimizeImagePrompt: ImageStudioApi['optimizeImagePrompt'] = (...args) =>
+        this.imageStudioApi.optimizeImagePrompt(...args);
 
     async recommendImageModel(
         prompt: string,
@@ -329,9 +326,10 @@ export class ShopApi {
         return this.imageStudioApi.myImageGenerationJob(id, signal);
     }
 
-    async myImageGenerationJobs(skip = 0, take = 20, signal?: AbortSignal) {
-        return this.imageStudioApi.myImageGenerationJobs(skip, take, signal);
-    }
+    myImageGenerationJobs: ImageStudioApi['myImageGenerationJobs'] = (...args) =>
+        this.imageStudioApi.myImageGenerationJobs(...args);
+    releaseImageReference: ImageStudioApi['releaseImageReference'] = (...args) =>
+        this.imageStudioApi.releaseImageReference(...args);
 
     async cancelQueuedImageGeneration(id: string): Promise<ImageGenerationJob> {
         return this.imageStudioApi.cancelQueuedImageGeneration(id);

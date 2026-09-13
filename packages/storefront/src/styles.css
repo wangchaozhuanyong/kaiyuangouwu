@@ -1,7 +1,4 @@
 @import 'tailwindcss';
-@import './styles/home-showcase.css';
-@import './styles/ai-product-covers.css';
-@import './styles/cart-layout.css';
 @import './styles/account-security.css';
 @import './styles/logistics.css';
 @import './styles/auth-flow.css';
@@ -294,8 +291,13 @@ img {
 }
 
 .safe-image {
-    opacity: 0;
+    /* Let the browser paint cached and progressively decoded images immediately. */
+    opacity: 1;
     transition: transform 220ms ease;
+}
+
+.safe-image-frame.has-placeholder .safe-image:not(.is-loaded) {
+    opacity: 0;
 }
 
 .safe-image-frame.has-placeholder .safe-image {
@@ -309,6 +311,7 @@ img {
 }
 
 .safe-image-frame.is-priority .safe-image {
+    opacity: 1;
     transition: none;
 }
 

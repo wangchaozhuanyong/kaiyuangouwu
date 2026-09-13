@@ -2,6 +2,7 @@ import { lazyRouteComponent } from '@tanstack/react-router';
 
 import { CartPageContext } from '../storefront-page-contexts';
 
+import '../commerce-styles';
 import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
 
 const CartPage = lazyRouteComponent(() => import('../pages/cart-page'), 'CartPage');

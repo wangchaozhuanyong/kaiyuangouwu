@@ -38,6 +38,12 @@ export class StorefrontPromotionController {
         @Body('destination') destination?: string,
     ): Promise<void> {
         const request = await this.accessService.resolveRequest(req);
+        if (request && (!destination || destination === 'home')) {
+            // The published homepage is public, including from an old promotion tab.
+            res.setHeader('Cache-Control', 'no-store');
+            res.redirect(303, '/');
+            return;
+        }
         if (!request || !ticket || !this.accessService.validateEntryTicket(ticket, request)) {
             res.setHeader('Cache-Control', 'no-store');
             res.redirect(303, '/promo');

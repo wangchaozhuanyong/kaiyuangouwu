@@ -116,6 +116,18 @@ describe('ImagePrivateStorageService reference lifecycle', () => {
         expect(save).toHaveBeenCalledWith(asset, { reload: false });
     });
 
+    it('uses the locked reference state instead of an older database snapshot', async () => {
+        const previous = referenceAsset(new Date(Date.now() + DAY_MS));
+        const current = referenceAsset(previous.expiresAt);
+        current.deletedAt = new Date();
+        const { service, save, findOne } = storageWith(previous, current);
+        await expect(service.retainReferenceWhileActive(context(), previous.id)).rejects.toBeInstanceOf(
+            UserInputError,
+        );
+        expect(findOne).not.toHaveBeenCalled();
+        expect(save).not.toHaveBeenCalled();
+    });
+
     it('shortens a completed task reference to twenty-four hours', async () => {
         const now = new Date('2026-08-27T12:00:00.000Z');
         vi.useFakeTimers();
@@ -215,22 +227,33 @@ function referenceAsset(expiresAt: Date): ImagePrivateAsset {
 }
 
 function context(): RequestContext {
-    return { channelId: 1 } as RequestContext;
+    return {
+        channelId: 1,
+        req: { headers: { host: 'shop-a.test' } },
+    } as unknown as RequestContext;
 }
 
-function storageWith(asset: ImagePrivateAsset) {
+function storageWith(asset: ImagePrivateAsset, lockedAsset?: ImagePrivateAsset) {
     const save = vi.fn().mockResolvedValue(asset);
+    const lockedQuery = {
+        setLock: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        andWhere: vi.fn().mockReturnThis(),
+        getOne: vi.fn().mockResolvedValue(lockedAsset),
+    };
     const repository = {
+        createQueryBuilder: vi.fn(() => lockedQuery),
         findOne: vi.fn().mockResolvedValue(asset),
         save,
     };
     const connection = {
         getRepository: vi.fn(() => repository),
-        rawConnection: { options: { type: 'sqljs' } },
+        rawConnection: { options: { type: lockedAsset ? 'mysql' : 'sqljs' } },
     } as unknown as TransactionalConnection;
     return {
         service: new ImagePrivateStorageService(connection, { production: false }),
         save,
+        findOne: repository.findOne,
     };
 }
 
@@ -272,7 +295,14 @@ function objectFixture(failSave = false) {
         ),
     };
     const service = new ImagePrivateStorageService(
-        { getRepository: () => repository, rawConnection: { getRepository: () => repository } } as any,
+        {
+            getRepository: () => repository,
+            rawConnection: {
+                options: { type: 'sqljs' },
+                getRepository: () => repository,
+                transaction: (work: any) => work({ getRepository: () => repository }),
+            },
+        } as any,
         { production: false, storageRoot: '/unused-legacy-images', blobStore },
     );
     return { service, blobStore, objects, records, repository };
@@ -299,6 +329,7 @@ describe('private object storage ownership and lifecycle', () => {
             andWhere: () => query,
             take: () => query,
             getMany: () => Promise.resolve([asset]),
+            getOne: () => Promise.resolve(asset),
         };
         const remove = vi.fn().mockResolvedValue(asset);
         Object.assign(repository, {
@@ -319,12 +350,13 @@ describe('private object storage ownership and lifecycle', () => {
         expect(asset.storageKey).toMatch(/^private\/v1\/reference\//);
         expect(objects.size).toBe(1);
         expect((await service.read(asset)).length).toBe(asset.byteSize);
-        expect(service.signedUrl(asset, 11)).toBeNull();
+        expect(service.signedUrl(context(), asset, 11)).toBeNull();
         const token = signedToken(service, asset);
-        expect((await service.authorize(token))?.asset.id).toBe(asset.id);
-        expect(await service.authorize(token + 'x')).toBeUndefined();
+        expect((await service.authorize(token, 'shop-a.test'))?.asset.id).toBe(asset.id);
+        expect(await service.authorize(token, 'shop-b.test')).toBeUndefined();
+        expect(await service.authorize(token + 'x', 'shop-a.test')).toBeUndefined();
         records.set(String(asset.id), new ImagePrivateAsset({ ...asset, channelId: 999 }));
-        expect(await service.authorize(token)).toBeUndefined();
+        expect(await service.authorize(token, 'shop-a.test')).toBeUndefined();
     });
 
     it('revokes a deleted asset even when physical deletion temporarily fails', async () => {
@@ -337,7 +369,7 @@ describe('private object storage ownership and lifecycle', () => {
         expect(await service.deleteOwned(context(), asset.id, 10)).toBe(true);
         expect(objects.size).toBe(1);
         expect(asset.providerMetadata).toEqual({ storageDeletionPending: true });
-        expect(await service.authorize(token)).toBeUndefined();
+        expect(await service.authorize(token, 'shop-a.test')).toBeUndefined();
         await expect(service.read(asset)).rejects.toThrow('图片已删除或过期');
     });
 
@@ -355,12 +387,12 @@ describe('private object storage ownership and lifecycle', () => {
         await expect(service.read(asset)).rejects.toThrow('图片完整性校验失败');
         vi.useFakeTimers();
         vi.setSystemTime(Date.now() + 301_000);
-        expect(await service.authorize(token)).toBeUndefined();
+        expect(await service.authorize(token, 'shop-a.test')).toBeUndefined();
     });
 });
 
 function signedToken(service: ImagePrivateStorageService, asset: ImagePrivateAsset): string {
-    const token = service.signedUrl(asset, 10)?.split('/').pop();
+    const token = service.signedUrl(context(), asset, 10)?.split('/').pop();
     if (!token) throw new Error('Expected an authorized test link');
     return token;
 }

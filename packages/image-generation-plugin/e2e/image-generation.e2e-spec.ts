@@ -3,28 +3,53 @@ import {
     ContentTranslationPlugin,
     type ContentTranslationProvider,
 } from '@vendure/content-translation-plugin';
-import { Channel, Customer, mergeConfig, RequestContext, TransactionalConnection } from '@vendure/core';
-import { ReferralWallet, ReferralWalletUsage, StoreManagementPlugin } from '@vendure/store-management-plugin';
+import {
+    Channel,
+    ConfigService,
+    Customer,
+    mergeConfig,
+    RequestContext,
+    RequestContextService,
+    TransactionalConnection,
+} from '@vendure/core';
+import {
+    ReferralWallet,
+    ReferralWalletSpendService,
+    ReferralWalletUsage,
+    StoreManagementPlugin,
+} from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment } from '@vendure/testing';
 import gql from 'graphql-tag';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { createReadStream, mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
-import { MoreThanOrEqual } from 'typeorm';
+import { IsNull, MoreThan, MoreThanOrEqual } from 'typeorm';
+import { SqljsDriver } from 'typeorm/driver/sqljs/SqljsDriver';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
+import { ImageGenerationConfig } from '../src/entities/image-generation-config.entity';
 import { ImageGenerationCostEvent } from '../src/entities/image-generation-cost-event.entity';
 import { ImageGenerationDispatch } from '../src/entities/image-generation-dispatch.entity';
 import { ImageGenerationJob } from '../src/entities/image-generation-job.entity';
 import { ImageGenerationOutput } from '../src/entities/image-generation-output.entity';
+import { ImageModelConfig } from '../src/entities/image-model-config.entity';
 import { ImagePrivateAsset } from '../src/entities/image-private-asset.entity';
+import { ImagePromptOptimization } from '../src/entities/image-prompt-optimization.entity';
+import { ImageUsageQuotaBucket } from '../src/entities/image-usage-quota-bucket.entity';
+import { ImageUsageQuotaEvent } from '../src/entities/image-usage-quota-event.entity';
 import { ImageGenerationQueueService } from '../src/image-generation-queue.service';
 import { ImageGenerationPlugin } from '../src/image-generation.plugin';
+import { ImageUsageQuotaService } from '../src/image-usage-quota.service';
+import { ImagePromptEngineService } from '../src/prompt/image-prompt-engine.service';
+import { PromptRulesService } from '../src/prompt/prompt-rules.service';
+import { AmbiguousImageProviderError } from '../src/provider/image-provider-errors';
+import { ImageProviderClient } from '../src/provider/image-provider.client';
 import { ImagePrivateStorageService } from '../src/storage/image-private-storage.service';
 
 // Provider requests now use the pinned transport rather than global fetch.
@@ -78,7 +103,10 @@ const config = mergeConfig(testConfig(), {
 
 const { server, adminClient, shopClient } = createTestEnvironment(config);
 let providerFailure = false;
+let promptCallCount = 0;
+let promptFixtureSubject = '白色保温杯';
 let providerSawReference = false;
+let promptProviderUserContent: unknown;
 const providerAuthorizations = new Map<string, string | null>();
 
 const SAVE_CREDENTIAL = gql`
@@ -280,6 +308,7 @@ const CREATE = gql`
             freeQuantityCaptured
             outputs {
                 id
+                outputIndex
                 state
             }
         }
@@ -312,6 +341,7 @@ const MY_JOB = gql`
             freeQuantityCaptured
             outputs {
                 id
+                outputIndex
                 state
                 attemptCount
                 imageUrl
@@ -352,6 +382,7 @@ const COST_SUMMARY = gql`
                 missingCostCount
                 grossRevenue
                 actualCost
+                knownCost
                 costCurrency
             }
         }
@@ -387,6 +418,22 @@ const USAGE_RECORD_DETAIL = gql`
             inputPrompt
             outputPrompt
             providerRequestIds
+            record {
+                costCompleteness
+                missingCostCount
+                costBreakdown {
+                    amount
+                    currency
+                }
+            }
+            attempts {
+                callId
+                headerRequestId
+                modelResponseId
+                attemptNumber
+                outcome
+                costSource
+            }
             timeline {
                 stage
                 status
@@ -770,7 +817,9 @@ describe('AI image generation full flow', () => {
         }
 
         const firstToken = succeeded.myImageGenerationJob.outputs[0].imageUrl.split('/').at(-1);
-        const authorized = await server.app.get(ImagePrivateStorageService).authorize(firstToken);
+        const authorized = await server.app
+            .get(ImagePrivateStorageService)
+            .authorize(firstToken, `localhost:${config.apiOptions.port}`);
         expect(authorized?.asset.mimeType).toBe('image/png');
         expect(authorized?.download).toBe(false);
 
@@ -898,6 +947,25 @@ describe('AI image generation full flow', () => {
         });
         expect(reference.previewUrl).toMatch(/^\/image-generation\/private\//u);
 
+        // Reference IDs must survive GraphQL decoding and reach the optimizer as image bytes.
+        const referenceOptimization = (
+            await shopClient.query(OPTIMIZE, {
+                input: {
+                    prompt: '把图1女人手里的咖啡做成商品图',
+                    referenceMode: 'PRODUCT',
+                    referenceAssetIds: [reference.id],
+                    referenceInstruction: '保留商品包装，去掉人物',
+                    idempotencyKey: 'e2e-prompt-reference-0001',
+                },
+            })
+        ).optimizeImagePrompt;
+        expect(referenceOptimization.source).toBe('MODEL');
+        expect(promptProviderUserContent).toEqual([
+            { type: 'text', text: expect.stringContaining('保留商品包装，去掉人物') },
+            { type: 'text', text: 'Reference image 1 (图1)' },
+            { type: 'image_url', image_url: { url: expect.stringMatching(/^data:image\/png;base64,/u) } },
+        ]);
+
         const referenceCreated = (
             await shopClient.query(CREATE, {
                 input: {
@@ -1008,22 +1076,13 @@ describe('AI image generation full flow', () => {
             expect.arrayContaining([
                 expect.objectContaining({
                     modelCode: 'OPENAI_HIGH_QUALITY',
-                    attempts: 4,
+                    attempts: 6,
                     successes: 4,
-                    failures: 0,
-                    missingCostCount: 0,
-                    grossRevenue: 375,
-                    actualCost: 0.018688,
-                    costCurrency: 'USD',
-                }),
-                expect.objectContaining({
-                    modelCode: 'OPENAI_HIGH_QUALITY',
-                    attempts: 2,
-                    successes: 0,
                     failures: 2,
-                    missingCostCount: 2,
-                    grossRevenue: 0,
+                    missingCostCount: 6,
+                    grossRevenue: 375,
                     actualCost: 0,
+                    knownCost: null,
                     costCurrency: 'UNKNOWN',
                 }),
             ]),
@@ -1062,7 +1121,53 @@ describe('AI image generation full flow', () => {
                 id: freeSuccess.id,
             })
         ).imageAiUsageRecord;
+        const promptUsage = usageRecords.items.find(
+            (item: { recordType: string }) => item.recordType === 'PROMPT_OPTIMIZATION',
+        );
+        const promptDetail = (
+            await adminClient.query(USAGE_RECORD_DETAIL, {
+                recordType: 'PROMPT_OPTIMIZATION',
+                id: promptUsage.id,
+            })
+        ).imageAiUsageRecord;
+        expect(promptDetail.attempts).toHaveLength(1);
+        expect(promptDetail.attempts[0].callId).toEqual(expect.any(String));
+        const promptRepository = connection.rawConnection.getRepository(ImagePromptOptimization);
+        const originalPrompt = await promptRepository.findOneByOrFail({
+            id: server.app.get(ConfigService).entityOptions.entityIdStrategy.decodeId(promptUsage.id),
+        });
+        try {
+            await promptRepository.update(originalPrompt.id, {
+                attemptLedgerVersion: null,
+                upstreamCallCount: 0,
+            });
+            const missing = (
+                await adminClient.query(USAGE_RECORDS, {
+                    input: { recordType: 'PROMPT_OPTIMIZATION', missingCostOnly: true, take: 100 },
+                })
+            ).imageAiUsageRecords;
+            expect(missing.items.map((item: { id: string }) => String(item.id))).toContain(
+                String(promptUsage.id),
+            );
+        } finally {
+            await promptRepository.update(originalPrompt.id, {
+                attemptLedgerVersion: originalPrompt.attemptLedgerVersion,
+                upstreamCallCount: originalPrompt.upstreamCallCount,
+            });
+        }
         expect(usageDetail.inputPrompt).toBe('失败释放后再次使用免费额度');
+        expect(usageDetail.record.costCompleteness).toBe('UNKNOWN');
+        expect(usageDetail.attempts).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    callId: expect.any(String),
+                    headerRequestId: 'gateway-e2e-request',
+                    modelResponseId: 'image-e2e-provider-request',
+                    outcome: 'SUCCEEDED',
+                    costSource: 'UNVERIFIED',
+                }),
+            ]),
+        );
         expect(usageDetail.timeline).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({ stage: '额度预占' }),
@@ -1117,10 +1222,10 @@ describe('AI image generation full flow', () => {
             authorizedAsOwnerOnly: true,
         });
         const storage = server.app.get(ImagePrivateStorageService);
-        expect(storage.signedUrl(asset, 999999)).toBeNull();
+        expect(storage.signedUrl(ctx, asset, 999999)).toBeNull();
         expect(await storage.deleteOwned(ctx, asset.id, 999999)).toBe(false);
         expect(await storage.deleteOwned(otherChannel, asset.id, asset.customerId)).toBe(false);
-        const url = `http://127.0.0.1:${config.apiOptions.port}${reference.previewUrl}`;
+        const url = `http://localhost:${config.apiOptions.port}${reference.previewUrl}`;
         const response = await originalFetch(url);
         expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toContain('image/png');
@@ -1135,6 +1240,673 @@ describe('AI image generation full flow', () => {
         expect(await storage.deleteOwned(ctx, asset.id, asset.customerId)).toBe(true);
         expect((await originalFetch(url)).status).toBe(404);
     });
+    // Audit 06/08/09: reference lifetime and replay use the actual GraphQL/storage path.
+    it('protects shared references, returns the replay snapshot and releases unused uploads', async () => {
+        const connection = server.app.get(TransactionalConnection);
+        await connection.rawConnection
+            .getRepository(ImageModelConfig)
+            .update(
+                { code: 'OPENAI_HIGH_QUALITY' },
+                { dailyFreeImageUnlimited: true, dailyFreeImageLimit: 0 },
+            );
+        const upload = await shopClient.fileUploadMutation({
+            mutation: UPLOAD_REFERENCE,
+            filePaths: [referenceFixture],
+            mapVariables: () => ({ file: null }),
+        });
+        const reference = upload.uploadImageReference;
+        const input = {
+            modelCode: 'OPENAI_HIGH_QUALITY',
+            prompt: '参考图商品',
+            optimizedPrompt: '保留参考图的商品包装',
+            referenceMode: 'PRODUCT',
+            referenceAssetIds: [reference.id],
+            referenceInstruction: '保持包装',
+            aspectRatio: '1:1',
+            resolution: '1K',
+            quantity: 1,
+            expectedUnitPrice: 100,
+            expectedChargeAmount: 0,
+            currencyCode: 'USD',
+            termsAccepted: true,
+        };
+        const a = (
+            await shopClient.query(CREATE, { input: { ...input, idempotencyKey: 'e2e-shared-reference-a' } })
+        ).createImageGeneration;
+        await waitForJob(a.id, ['SUCCEEDED']);
+        const queue = server.app.get(ImageGenerationQueueService);
+        const pause = vi.spyOn(queue, 'dispatchOutput').mockResolvedValueOnce(undefined);
+        const b = (
+            await shopClient.query(CREATE, { input: { ...input, idempotencyKey: 'e2e-shared-reference-b' } })
+        ).createImageGeneration;
+        pause.mockRestore();
+        await shopClient.query(
+            gql`
+                mutation Delete($id: ID!) {
+                    deleteMyImageGenerationJob(id: $id)
+                }
+            `,
+            { id: a.id },
+        );
+        expect(
+            (
+                await shopClient.query(
+                    gql`
+                        mutation Release($id: ID!) {
+                            releaseImageReference(id: $id)
+                        }
+                    `,
+                    { id: reference.id },
+                )
+            ).releaseImageReference,
+        ).toBe(false);
+        await waitForJob(b.id, ['SUCCEEDED']);
+        const replay = (
+            await shopClient.query(
+                gql`
+                    query Replay($id: ID!) {
+                        myImageGenerationJob(id: $id) {
+                            referenceAssetIds
+                            referenceAssets {
+                                id
+                                previewUrl
+                            }
+                            referenceInstruction
+                            optimizedPrompt
+                            inputSnapshotVersion
+                        }
+                    }
+                `,
+                { id: b.id },
+            )
+        ).myImageGenerationJob;
+        expect(replay).toMatchObject({
+            referenceAssetIds: [reference.id],
+            referenceInstruction: '保持包装',
+            optimizedPrompt: '保留参考图的商品包装',
+            inputSnapshotVersion: 1,
+        });
+        expect(replay.referenceAssets[0].previewUrl).toBeTruthy();
+        const unused = (
+            await shopClient.fileUploadMutation({
+                mutation: UPLOAD_REFERENCE,
+                filePaths: [referenceFixture],
+                mapVariables: () => ({ file: null }),
+            })
+        ).uploadImageReference;
+        expect(
+            (
+                await shopClient.query(
+                    gql`
+                        mutation Release($id: ID!) {
+                            releaseImageReference(id: $id)
+                        }
+                    `,
+                    { id: unused.id },
+                )
+            ).releaseImageReference,
+        ).toBe(true);
+        expect(
+            (
+                await shopClient.query(
+                    gql`
+                        mutation Release($id: ID!) {
+                            releaseImageReference(id: $id)
+                        }
+                    `,
+                    { id: unused.id },
+                )
+            ).releaseImageReference,
+        ).toBe(true);
+    }, 30_000);
+
+    it.runIf(config.dbConnectionOptions.type === 'mysql')(
+        'dispatches immediately across MySQL second rounding and preserves future retry deadlines',
+        async () => {
+            const queue = server.app.get(ImageGenerationQueueService);
+            const connection = server.app.get(TransactionalConnection);
+            const dispatches = connection.rawConnection.getRepository(ImageGenerationDispatch);
+            const dispatchOutput = queue.dispatchOutput.bind(queue);
+            const pause = vi.spyOn(queue, 'dispatchOutput').mockResolvedValue(undefined);
+            const jobIds: string[] = [];
+            const second = Math.floor(Date.now() / 1000) * 1000;
+            try {
+                vi.useFakeTimers({ toFake: ['Date'] });
+                for (const milliseconds of [100, 900]) {
+                    vi.setSystemTime(second + milliseconds);
+                    const idempotencyKey = `e2e-dispatch-second-rounding-${milliseconds}`;
+                    const jobId = (
+                        await shopClient.query(CREATE, {
+                            input: {
+                                modelCode: 'OPENAI_HIGH_QUALITY',
+                                prompt: '即时队列派发回归',
+                                aspectRatio: '1:1',
+                                resolution: '1K',
+                                quantity: 1,
+                                expectedUnitPrice: 100,
+                                expectedChargeAmount: 0,
+                                currencyCode: 'USD',
+                                termsAccepted: true,
+                                idempotencyKey,
+                            },
+                        })
+                    ).createImageGeneration.id;
+                    jobIds.push(jobId);
+                    const persisted = await connection.rawConnection
+                        .getRepository(ImageGenerationJob)
+                        .findOneByOrFail({ idempotencyKey });
+                    const output = await connection.rawConnection
+                        .getRepository(ImageGenerationOutput)
+                        .findOneByOrFail({ jobId: persisted.id });
+                    const pending = await dispatches.findOneByOrFail({ outputId: output.id });
+                    expect(pending.nextAttemptAt.getTime()).toBeLessThanOrEqual(Date.now());
+
+                    // Re-entering dispatch must not override a persisted retry delay.
+                    const future = new Date(second + 60_000);
+                    await dispatches.update(pending.id, { nextAttemptAt: future, attemptCount: 2 });
+                    await dispatchOutput(output.id);
+                    const retry = await dispatches.findOneByOrFail({ outputId: output.id });
+                    expect(retry.state).toBe('PENDING');
+                    expect(retry.attemptCount).toBe(2);
+                    expect(retry.nextAttemptAt).toEqual(future);
+                    expect(retry.queueTaskId).toBeNull();
+
+                    await dispatches.update(pending.id, { nextAttemptAt: pending.nextAttemptAt });
+                    await dispatchOutput(output.id);
+                    const dispatched = await dispatches.findOneByOrFail({ outputId: output.id });
+                    expect(dispatched.state).toBe('DISPATCHED');
+                    expect(dispatched.queueTaskId).toBeTruthy();
+                }
+            } finally {
+                vi.useRealTimers();
+                pause.mockRestore();
+            }
+            for (const jobId of jobIds) await waitForJob(jobId, ['SUCCEEDED']);
+        },
+        30_000,
+    );
+
+    // Audit 05/07: distinct HTTP requests and real MySQL connections exercise row locks.
+    it.runIf(config.dbConnectionOptions.type === 'mysql')(
+        'serializes refund and optimization requests across database connections',
+        async () => {
+            const connection = server.app.get(TransactionalConnection);
+            await connection.rawConnection
+                .getRepository(ImageGenerationConfig)
+                .createQueryBuilder()
+                .update()
+                .set({
+                    promptRateLimitPerMinute: 100,
+                    promptDailyFreeUnlimited: true,
+                    promptDailyFreeLimit: 0,
+                })
+                .execute();
+            const before = promptCallCount;
+            const input = {
+                prompt: '并发描述优化',
+                referenceMode: 'NONE',
+                idempotencyKey: 'e2e-concurrent-prompt',
+            };
+            const optimizations = await Promise.allSettled([
+                shopClient.query(OPTIMIZE, { input }),
+                shopClient.query(OPTIMIZE, { input }),
+            ]);
+            expect(optimizations.some(result => result.status === 'fulfilled')).toBe(true);
+            expect(promptCallCount - before).toBe(1);
+            expect(
+                await connection.rawConnection
+                    .getRepository(ImagePromptOptimization)
+                    .count({ where: { idempotencyKey: input.idempotencyKey } }),
+            ).toBe(1);
+            const created = (
+                await shopClient.query(CREATE, {
+                    input: {
+                        modelCode: 'OPENAI_HIGH_QUALITY',
+                        prompt: '并发退款三张免费商品图',
+                        referenceMode: 'NONE',
+                        aspectRatio: '1:1',
+                        resolution: '1K',
+                        quantity: 3,
+                        expectedUnitPrice: 100,
+                        expectedChargeAmount: 0,
+                        currencyCode: 'USD',
+                        termsAccepted: true,
+                        idempotencyKey: 'e2e-concurrent-refund',
+                    },
+                })
+            ).createImageGeneration;
+            const completed = (await waitForJob(created.id, ['SUCCEEDED'])).myImageGenerationJob;
+            const refunds = await Promise.allSettled([
+                adminClient.query(REFUND_OUTPUT, { outputId: completed.outputs[0].id }),
+                adminClient.query(REFUND_OUTPUT, { outputId: completed.outputs[0].id }),
+            ]);
+            expect(refunds.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+            const job = await connection.rawConnection
+                .getRepository(ImageGenerationJob)
+                .findOneByOrFail({ idempotencyKey: 'e2e-concurrent-refund' });
+            if (!job.quotaEventId) throw new Error('Missing quota event');
+            const event = await connection.rawConnection
+                .getRepository(ImageUsageQuotaEvent)
+                .findOneByOrFail({ id: job.quotaEventId });
+            expect(event.consumedAmount).toBe(2);
+            expect(event.releasedAmount).toBe(1);
+            await Promise.all([
+                adminClient.query(REFUND_OUTPUT, { outputId: completed.outputs[1].id }),
+                adminClient.query(REFUND_OUTPUT, { outputId: completed.outputs[2].id }),
+            ]);
+            const fullyRefunded = await connection.rawConnection
+                .getRepository(ImageUsageQuotaEvent)
+                .findOneByOrFail({ id: job.quotaEventId });
+            expect(fullyRefunded.consumedAmount).toBe(0);
+            expect(fullyRefunded.releasedAmount).toBe(3);
+            expect(
+                (
+                    await connection.rawConnection
+                        .getRepository(ImageGenerationJob)
+                        .findOneByOrFail({ id: job.id })
+                ).freeQuantityCaptured,
+            ).toBe(0);
+        },
+        30_000,
+    );
+
+    it.each(['PAID', 'FREE'])(
+        'recovers a live optimization and persists late provider cost with no recapture (%s)',
+        async billingMode => {
+            const connection = server.app.get(TransactionalConnection);
+            const engine = server.app.get(ImagePromptEngineService);
+            const rules = server.app.get(PromptRulesService);
+            const customer = await connection.rawConnection
+                .getRepository(Customer)
+                .findOneByOrFail({ emailAddress: 'image-e2e@example.com' });
+            const reference = await connection.rawConnection.getRepository(ImagePrivateAsset).findOneOrFail({
+                where: {
+                    customerId: customer.id,
+                    kind: 'REFERENCE',
+                    deletedAt: IsNull(),
+                    expiresAt: MoreThan(new Date()),
+                },
+            });
+            await connection.rawConnection.getRepository(ImageGenerationConfig).update(
+                { channelId: reference.channelId },
+                {
+                    promptRateLimitPerMinute: 100,
+                    promptDailyFreeUnlimited: billingMode === 'FREE',
+                    promptDailyFreeLimit: 0,
+                    paidPromptOptimizationEnabled: true,
+                    paidPromptOptimizationPrice: 50,
+                    paidPromptOptimizationCurrencyCode: CurrencyCode.USD,
+                },
+            );
+            const input = {
+                prompt: 'Create a product image of the item in image 1',
+                referenceMode: 'PRODUCT',
+                referenceInstruction: 'Keep the coffee bag packaging and remove the person.',
+                referenceAssetIds: [String(reference.id)],
+                expectedPrice: 50,
+                currencyCode: 'USD',
+                idempotencyKey: `e2e-late-prompt-${billingMode}`,
+            };
+            const reply = deferred<any>();
+            const started = deferred<void>();
+            const provider = vi
+                .spyOn(server.app.get(ImageProviderClient), 'optimizePrompt')
+                .mockImplementationOnce(() => {
+                    started.resolve();
+                    return reply.promise;
+                });
+            const execution = shopClient.query(OPTIMIZE, { input });
+            try {
+                await Promise.race([
+                    started.promise,
+                    execution.then(() => {
+                        throw new Error('Provider gate was bypassed');
+                    }),
+                ]);
+                const repository = connection.rawConnection.getRepository(ImagePromptOptimization);
+                const pending = await repository.findOneByOrFail({ idempotencyKey: input.idempotencyKey });
+                const recovered = await Promise.all([
+                    engine.recoverPendingOptimizations(new Date(Date.now() + 10000)),
+                    engine.recoverPendingOptimizations(new Date(Date.now() + 10000)),
+                ]);
+                expect(recovered.reduce((sum, count) => sum + count, 0)).toBe(1);
+                const fallback = await repository.findOneByOrFail({ id: pending.id });
+                expect(fallback.optimizedPrompt).toBe(pending.optimizedPrompt);
+                expect(fallback.optimizedPrompt).toContain(input.referenceInstruction);
+                expect(fallback.optimizedPrompt).toContain('Subject:');
+                reply.resolve({
+                    text: JSON.stringify(rules.fallbackSpec('Coffee bag', 'PRODUCT', 'en')),
+                    telemetry: {
+                        actualCostMicrounits: 137,
+                        costCurrency: 'USD',
+                        usage: { input_tokens: 4, output_tokens: 6 },
+                    },
+                });
+                await execution;
+                const finished = await repository.findOneByOrFail({ id: pending.id });
+                expect(finished).toMatchObject({
+                    source: 'FALLBACK',
+                    billingMode: billingMode === 'PAID' ? 'REFUNDED' : 'RELEASED',
+                    chargedAmount: 0,
+                    actualCostMicrounits: 137,
+                    costCurrency: 'USD',
+                    upstreamCallCount: 1,
+                    inputTokens: 4,
+                    outputTokens: 6,
+                });
+                expect(finished.optimizedPrompt).toBe(pending.optimizedPrompt);
+                if (billingMode === 'PAID') {
+                    if (!finished.walletUsageId) throw new Error('Missing wallet reservation');
+                    const usage = await connection.rawConnection
+                        .getRepository(ReferralWalletUsage)
+                        .findOneByOrFail({ id: finished.walletUsageId });
+                    expect(usage.capturedAmount).toBe(0);
+                    expect(usage.releasedAmount).toBe(50);
+                } else {
+                    if (!finished.quotaEventId) throw new Error('Missing quota reservation');
+                    const quota = await connection.rawConnection
+                        .getRepository(ImageUsageQuotaEvent)
+                        .findOneByOrFail({ id: finished.quotaEventId });
+                    expect(quota.consumedAmount).toBe(0);
+                    expect(quota.releasedAmount).toBe(1);
+                }
+                await shopClient.query(OPTIMIZE, { input });
+                expect(provider).toHaveBeenCalledTimes(1);
+                expect((await repository.findOneByOrFail({ id: pending.id })).actualCostMicrounits).toBe(137);
+            } finally {
+                reply.resolve({ text: '{}' });
+                await execution.catch(() => undefined);
+                provider.mockRestore();
+            }
+        },
+    );
+
+    it('previews the same final prompt budget before any generation reservation', async () => {
+        const connection = server.app.get(TransactionalConnection);
+        const jobs = connection.rawConnection.getRepository(ImageGenerationJob);
+        const quotas = connection.rawConnection.getRepository(ImageUsageQuotaEvent);
+        const before = { jobs: await jobs.count(), quotas: await quotas.count(), calls: promptCallCount };
+        const input = {
+            prompt: '袋装咖啡',
+            optimizedPrompt: '袋'.repeat(7900),
+            referenceMode: 'PRODUCT',
+            referenceAssetIds: ['1', '2'],
+            referenceInstruction: '保留包装'.repeat(50),
+        };
+        const { previewImageGenerationPrompt: budget } = await shopClient.query(
+            gql`
+                query Budget($input: OptimizeImagePromptInput!) {
+                    previewImageGenerationPrompt(input: $input) {
+                        length
+                        limit
+                        valid
+                    }
+                }
+            `,
+            { input },
+        );
+        expect(budget.length).toBeGreaterThan(8000);
+        expect(budget.valid).toBe(false);
+        expect(await jobs.count()).toBe(before.jobs);
+        expect(await quotas.count()).toBe(before.quotas);
+        expect(promptCallCount).toBe(before.calls);
+        const shortInput = {
+            prompt: '袋装咖啡',
+            optimizedPrompt: '白底袋装咖啡商品图',
+            referenceMode: 'NONE',
+        };
+        const { previewImageGenerationPrompt: valid } = await shopClient.query(
+            gql`
+                query Budget($input: OptimizeImagePromptInput!) {
+                    previewImageGenerationPrompt(input: $input) {
+                        length
+                        limit
+                        valid
+                    }
+                }
+            `,
+            { input: shortInput },
+        );
+        const created = (
+            await shopClient.query(CREATE, {
+                input: {
+                    ...shortInput,
+                    modelCode: 'OPENAI_HIGH_QUALITY',
+                    aspectRatio: '1:1',
+                    resolution: '1K',
+                    quantity: 1,
+                    expectedUnitPrice: 100,
+                    expectedChargeAmount: 0,
+                    currencyCode: 'USD',
+                    termsAccepted: true,
+                    idempotencyKey: 'e2e-preview-budget',
+                },
+            })
+        ).createImageGeneration;
+        const persisted = await jobs.findOneByOrFail({ idempotencyKey: 'e2e-preview-budget' });
+        expect(persisted.finalPrompt.length).toBe(valid.length);
+        await waitForJob(created.id, ['SUCCEEDED']);
+    });
+
+    it.runIf(config.dbConnectionOptions.type === 'mysql')(
+        'does not purge a reference retained by an uncommitted generation',
+        async () => {
+            const connection = server.app.get(TransactionalConnection);
+            const storage = server.app.get(ImagePrivateStorageService);
+            const customer = await connection.rawConnection
+                .getRepository(Customer)
+                .findOneByOrFail({ emailAddress: 'image-e2e@example.com' });
+            const channel = await connection.rawConnection
+                .getRepository(Channel)
+                .findOneByOrFail({ code: '__default_channel__' });
+            const ctx = await server.app
+                .get(RequestContextService)
+                .create({ apiType: 'shop', channelOrToken: channel });
+            const asset = await storage.storeReference(ctx, customer.id, {
+                filename: 'concurrent.png',
+                mimetype: 'image/png',
+                createReadStream: () => createReadStream(referenceFixture),
+            });
+            const repository = connection.rawConnection.getRepository(ImagePrivateAsset);
+            const expiry = Date.now() + 3000;
+            await repository.update(asset.id, {
+                expiresAt: new Date(expiry),
+                createdAt: new Date(Date.now() - 120000),
+            });
+            const storedExpiry = (await repository.findOneByOrFail({ id: asset.id })).expiresAt.getTime();
+            const held = deferred<void>();
+            const commit = deferred<void>();
+            const selected = deferred<void>();
+            const retain = storage.retainReferenceWhileActive.bind(storage);
+            const retainSpy = vi
+                .spyOn(storage, 'retainReferenceWhileActive')
+                .mockImplementation(async (tx, id) => {
+                    await retain(tx, id);
+                    if (String(id) === String(asset.id)) {
+                        held.resolve();
+                        await commit.promise;
+                    }
+                });
+            const queryBuilder = repository.createQueryBuilder.bind(repository);
+            const querySpy = vi.spyOn(repository, 'createQueryBuilder').mockImplementation((...args) => {
+                const query = queryBuilder(...args);
+                const getMany = query.getMany.bind(query);
+                query.getMany = async () => {
+                    const found = await getMany();
+                    if (found.some(item => String(item.id) === String(asset.id))) selected.resolve();
+                    return found;
+                };
+                return query;
+            });
+            const creation = shopClient.query(CREATE, {
+                input: {
+                    modelCode: 'OPENAI_HIGH_QUALITY',
+                    prompt: '保留参考图的袋装商品',
+                    referenceMode: 'PRODUCT',
+                    referenceAssetIds: [String(asset.id)],
+                    aspectRatio: '1:1',
+                    resolution: '1K',
+                    quantity: 1,
+                    expectedUnitPrice: 100,
+                    expectedChargeAmount: 0,
+                    currencyCode: 'USD',
+                    termsAccepted: true,
+                    idempotencyKey: 'e2e-expiry-create-race',
+                },
+            });
+            let cleanup: Promise<number> | undefined;
+            try {
+                await Promise.race([
+                    held.promise,
+                    creation.then(() => {
+                        throw new Error('Missing retention gate');
+                    }),
+                ]);
+                await vi.waitFor(() => expect(Date.now()).toBeGreaterThanOrEqual(storedExpiry), {
+                    timeout: 5000,
+                    interval: 30,
+                });
+                const beforeSweep = await repository.findOneByOrFail({ id: asset.id });
+                expect(beforeSweep.expiresAt.getTime()).toBeLessThanOrEqual(Date.now());
+                cleanup = storage.purgeExpired();
+                await Promise.race([
+                    selected.promise,
+                    cleanup.then(() => {
+                        throw new Error('Cleanup did not select the expiring reference');
+                    }),
+                ]);
+                commit.resolve();
+                const created = (await creation).createImageGeneration;
+                await cleanup;
+                await waitForJob(created.id, ['SUCCEEDED']);
+                const retained = await repository.findOneByOrFail({ id: asset.id });
+                expect(retained.deletedAt).toBeNull();
+                expect(retained.expiresAt.getTime()).toBeGreaterThan(Date.now());
+                expect((await storage.read(retained)).length).toBeGreaterThan(0);
+            } finally {
+                commit.resolve();
+                await creation.catch(() => undefined);
+                await cleanup?.catch(() => undefined);
+                retainSpy.mockRestore();
+                querySpy.mockRestore();
+            }
+        },
+        20000,
+    );
+
+    // Audit 03: a channel administrator cannot change platform-wide prompt rules.
+    it('denies global skill activation to a channel image administrator', async () => {
+        const role = (
+            await adminClient.query(gql`
+                mutation {
+                    createRole(
+                        input: {
+                            code: "image-store-admin"
+                            description: "Image audit fixture"
+                            permissions: [ReadImageGeneration, UpdateImageGeneration]
+                        }
+                    ) {
+                        id
+                    }
+                }
+            `)
+        ).createRole;
+        await adminClient.query(
+            gql`
+                mutation Admin($role: ID!) {
+                    createAdministrator(
+                        input: {
+                            firstName: "Image"
+                            lastName: "Audit"
+                            emailAddress: "image-admin-e2e@example.com"
+                            password: "ImageAdminFixture123!"
+                            roleIds: [$role]
+                        }
+                    ) {
+                        id
+                    }
+                }
+            `,
+            { role: role.id },
+        );
+        const releases = (
+            await adminClient.query(gql`
+                query {
+                    imagePromptSkillReleases {
+                        id
+                    }
+                }
+            `)
+        ).imagePromptSkillReleases;
+        const configs = server.app
+            .get(TransactionalConnection)
+            .rawConnection.getRepository(ImageGenerationConfig);
+        const current = await configs.findOneByOrFail({ defaultModelCode: 'OPENAI_HIGH_QUALITY' });
+        const configInput = {
+            enabled: current.enabled,
+            promptOptimizationEnabled: current.promptOptimizationEnabled,
+            promptRateLimitPerMinute: current.promptRateLimitPerMinute,
+            promptDailyFreeLimit: current.promptDailyFreeLimit,
+            promptDailyFreeUnlimited: current.promptDailyFreeUnlimited,
+            paidPromptOptimizationEnabled: current.paidPromptOptimizationEnabled,
+            paidPromptOptimizationPrice: current.paidPromptOptimizationPrice,
+            paidPromptOptimizationCurrencyCode: current.paidPromptOptimizationCurrencyCode,
+            defaultModelCode: current.defaultModelCode,
+            termsVersion: current.termsVersion,
+            termsZh: current.termsZh,
+            termsEn: current.termsEn,
+        };
+        await adminClient.asUserWithCredentials('image-admin-e2e@example.com', 'ImageAdminFixture123!');
+        try {
+            await adminClient.query(SAVE_CONFIG, {
+                input: { ...configInput, termsVersion: 'e2e-store-admin-edit' },
+            });
+            expect((await configs.findOneByOrFail({ id: current.id })).termsVersion).toBe(
+                'e2e-store-admin-edit',
+            );
+            const visible = await adminClient.query(gql`
+                query {
+                    imagePromptSkillReleases {
+                        id
+                    }
+                }
+            `);
+            expect(visible.imagePromptSkillReleases).toEqual(
+                expect.arrayContaining([expect.objectContaining({ id: releases[0].id })]),
+            );
+            await expect(
+                adminClient.query(
+                    gql`
+                        mutation Activate($id: ID!) {
+                            activateImagePromptSkillRelease(id: $id) {
+                                id
+                            }
+                        }
+                    `,
+                    { id: releases[0].id },
+                ),
+            ).rejects.toThrow();
+        } finally {
+            await adminClient.asSuperAdmin();
+            await adminClient.query(SAVE_CONFIG, { input: configInput });
+        }
+        const activated = await adminClient.query(
+            gql`
+                mutation Activate($id: ID!) {
+                    activateImagePromptSkillRelease(id: $id) {
+                        id
+                        status
+                    }
+                }
+            `,
+            { id: releases[0].id },
+        );
+        expect(activated.activateImagePromptSkillRelease).toEqual({
+            id: releases[0].id,
+            status: 'ACTIVE',
+        });
+    });
+
     it.runIf(config.dbConnectionOptions.type === 'mysql')(
         'serializes competing uploads at the minute quota using real database locks',
         async () => {
@@ -1165,7 +1937,490 @@ describe('AI image generation full flow', () => {
             expect(await repository.count({ where })).toBe(5);
         },
     );
+    // Audit 05: roll back after the money/quota write, then race independent refund requests.
+    it.each(['PAID', 'MIXED', 'FREE'])(
+        'rolls back and serializes refunds without duplicating cash or quota (%s)',
+        async mode => {
+            const connection = server.app.get(TransactionalConnection);
+            const customer = await connection.rawConnection
+                .getRepository(Customer)
+                .findOneByOrFail({ emailAddress: 'image-e2e@example.com' });
+            const modelRepository = connection.rawConnection.getRepository(ImageModelConfig);
+            const model = await modelRepository.findOneByOrFail({ code: 'OPENAI_HIGH_QUALITY' });
+            const restore = {
+                freeImageEnabled: model.freeImageEnabled,
+                dailyFreeImageUnlimited: model.dailyFreeImageUnlimited,
+                dailyFreeImageLimit: model.dailyFreeImageLimit,
+                dailyGenerationSafetyLimit: model.dailyGenerationSafetyLimit,
+            };
+            const bucket = await connection.rawConnection.getRepository(ImageUsageQuotaBucket).findOne({
+                where: {
+                    customerId: customer.id,
+                    channelId: model.channelId,
+                    quotaType: 'IMAGE_DAILY_FREE',
+                    modelCode: model.code,
+                    windowEndsAt: MoreThan(new Date()),
+                },
+            });
+            await modelRepository.update(
+                { id: model.id },
+                {
+                    freeImageEnabled: mode !== 'PAID',
+                    dailyFreeImageUnlimited: mode === 'FREE',
+                    dailyFreeImageLimit:
+                        mode === 'FREE' ? 0 : (bucket?.consumed ?? 0) + (bucket?.reserved ?? 0) + 1,
+                    dailyGenerationSafetyLimit: 100,
+                },
+            );
+            const encodedCustomer = (
+                await adminClient.query(FIND_CUSTOMER, {
+                    email: 'image-e2e@example.com',
+                })
+            ).customers.items[0].id;
+            await adminClient.query(ADJUST_BALANCE, { customerId: encodedCustomer, amount: 1000 });
+            const wallets = connection.rawConnection.getRepository(ReferralWallet);
+            const before = await wallets.findOneByOrFail({
+                customerId: customer.id,
+                currencyCode: CurrencyCode.USD,
+            });
+            const key = `e2e-refund-matrix-${mode}`;
+            const charge = mode === 'FREE' ? 0 : mode === 'MIXED' ? 200 : 300;
+            try {
+                const created = (
+                    await shopClient.query(CREATE, {
+                        input: {
+                            modelCode: model.code,
+                            prompt: `Refund matrix ${mode}`,
+                            referenceMode: 'NONE',
+                            aspectRatio: '1:1',
+                            resolution: '1K',
+                            quantity: 3,
+                            expectedUnitPrice: 100,
+                            expectedChargeAmount: charge,
+                            currencyCode: 'USD',
+                            termsAccepted: true,
+                            idempotencyKey: key,
+                        },
+                    })
+                ).createImageGeneration;
+                const completed = (await waitForJob(created.id, ['SUCCEEDED'])).myImageGenerationJob;
+                const jobs = connection.rawConnection.getRepository(ImageGenerationJob);
+                const job = await jobs.findOneByOrFail({ idempotencyKey: key });
+                const outputs = connection.rawConnection.getRepository(ImageGenerationOutput);
+                const persisted = await outputs.find({
+                    where: { jobId: job.id },
+                    order: { outputIndex: 'ASC' },
+                });
+                expect(persisted.filter(output => output.billingMode === 'FREE')).toHaveLength(
+                    mode === 'FREE' ? 3 : mode === 'MIXED' ? 1 : 0,
+                );
+                expect((await wallets.findOneByOrFail({ id: before.id })).availableBalance).toBe(
+                    before.availableBalance - charge,
+                );
+                const target = persisted.find(output => output.billingMode === 'PAID') ?? persisted[0];
+                const targetId = completed.outputs.find(
+                    (output: any) => output.outputIndex === target.outputIndex,
+                ).id;
+                const refundOwner =
+                    target.billingMode === 'FREE'
+                        ? server.app.get(ImageUsageQuotaService)
+                        : server.app.get(ReferralWalletSpendService);
+                const method = target.billingMode === 'FREE' ? 'refundConsumed' : 'refundCaptured';
+                const original = (refundOwner as any)[method].bind(refundOwner);
+                const rollback = vi
+                    .spyOn(
+                        refundOwner as unknown as Record<string, (...args: any[]) => Promise<unknown>>,
+                        method,
+                    )
+                    .mockImplementationOnce(async (...args: any[]) => {
+                        await original(...args);
+                        throw new Error('e2e rollback after refund write');
+                    });
+                try {
+                    await expect(adminClient.query(REFUND_OUTPUT, { outputId: targetId })).rejects.toThrow(
+                        'e2e rollback',
+                    );
+                } finally {
+                    rollback.mockRestore();
+                }
+                expect((await outputs.findOneByOrFail({ id: target.id })).refundedAt).toBeNull();
+                expect((await wallets.findOneByOrFail({ id: before.id })).availableBalance).toBe(
+                    before.availableBalance - charge,
+                );
+                if (job.quotaEventId) {
+                    expect(
+                        (
+                            await connection.rawConnection
+                                .getRepository(ImageUsageQuotaEvent)
+                                .findOneByOrFail({ id: job.quotaEventId })
+                        ).consumedAmount,
+                    ).toBe(job.freeQuantityReserved);
+                }
+                const raced = await Promise.allSettled([
+                    adminClient.query(REFUND_OUTPUT, { outputId: targetId }),
+                    adminClient.query(REFUND_OUTPUT, { outputId: targetId }),
+                ]);
+                expect(raced.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+                await Promise.all(
+                    completed.outputs
+                        .filter((output: any) => output.id !== targetId)
+                        .map((output: any) => adminClient.query(REFUND_OUTPUT, { outputId: output.id })),
+                );
+                expect(
+                    (await outputs.find({ where: { jobId: job.id } })).every(output => output.refundedAt),
+                ).toBe(true);
+                expect(await wallets.findOneByOrFail({ id: before.id })).toMatchObject({
+                    availableBalance: before.availableBalance,
+                    reservedBalance: 0,
+                });
+                expect(await jobs.findOneByOrFail({ id: job.id })).toMatchObject({
+                    capturedAmount: 0,
+                    freeQuantityCaptured: 0,
+                });
+                if (job.walletUsageId) {
+                    expect(
+                        await connection.rawConnection
+                            .getRepository(ReferralWalletUsage)
+                            .findOneByOrFail({ id: job.walletUsageId }),
+                    ).toMatchObject({ capturedAmount: 0, releasedAmount: charge });
+                }
+                if (job.quotaEventId) {
+                    expect(
+                        await connection.rawConnection
+                            .getRepository(ImageUsageQuotaEvent)
+                            .findOneByOrFail({ id: job.quotaEventId }),
+                    ).toMatchObject({ consumedAmount: 0, releasedAmount: job.freeQuantityReserved });
+                }
+            } finally {
+                await modelRepository.update({ id: model.id }, restore);
+            }
+        },
+        30_000,
+    );
+    it('serializes UNKNOWN retries for two outputs without changing either provider identity', async () => {
+        const connection = server.app.get(TransactionalConnection);
+        const modelRepository = connection.rawConnection.getRepository(ImageModelConfig);
+        const model = await modelRepository.findOneByOrFail({ code: 'OPENAI_HIGH_QUALITY' });
+        await modelRepository.update(
+            { id: model.id },
+            {
+                supportsIdempotency: true,
+                unitPrice: 100,
+                freeImageEnabled: false,
+                dailyFreeImageUnlimited: false,
+                dailyFreeImageLimit: 0,
+                dailyGenerationSafetyLimit: 100,
+            },
+        );
+        const calls: Array<{ code: string; key: string; protocol: string }> = [];
+        let unknown = true;
+        const provider = vi
+            .spyOn(server.app.get(ImageProviderClient), 'generate')
+            .mockImplementation((credential, protocol, input) => {
+                calls.push({ code: credential.code, key: input.idempotencyKey, protocol });
+                if (unknown)
+                    return Promise.reject(
+                        new AmbiguousImageProviderError('e2e provider result unknown', {
+                            retryAfterSeconds: 0,
+                        }),
+                    );
+                return Promise.resolve({
+                    bytes: Buffer.from(generatedPngBase64, 'base64'),
+                    mimeType: 'image/png',
+                });
+            });
+        const retry = gql`
+            mutation RetryUnknown($outputId: ID!) {
+                retryUnknownImageOutput(outputId: $outputId) {
+                    id
+                    state
+                }
+            }
+        `;
+        try {
+            const created = (
+                await shopClient.query(CREATE, {
+                    input: {
+                        modelCode: model.code,
+                        prompt: 'UNKNOWN multi-output identity',
+                        referenceMode: 'NONE',
+                        aspectRatio: '1:1',
+                        resolution: '1K',
+                        quantity: 2,
+                        expectedUnitPrice: 100,
+                        expectedChargeAmount: 200,
+                        currencyCode: 'USD',
+                        termsAccepted: true,
+                        idempotencyKey: 'e2e-unknown-multi-output',
+                    },
+                })
+            ).createImageGeneration;
+            let pending = (await waitForJob(created.id, ['UNKNOWN'])).myImageGenerationJob;
+            await vi.waitFor(
+                async () => {
+                    pending = (await shopClient.query(MY_JOB, { id: created.id })).myImageGenerationJob;
+                    expect(pending.outputs.map((output: any) => output.state)).toEqual([
+                        'UNKNOWN',
+                        'UNKNOWN',
+                    ]);
+                },
+                { timeout: 5000, interval: 50 },
+            );
+            const repository = connection.rawConnection.getRepository(ImageGenerationJob);
+            const before = await repository.findOneByOrFail({ idempotencyKey: 'e2e-unknown-multi-output' });
+            unknown = false;
+            const attempts = await Promise.allSettled(
+                pending.outputs.flatMap((output: any) => [
+                    adminClient.query(retry, { outputId: output.id }),
+                    adminClient.query(retry, { outputId: output.id }),
+                ]),
+            );
+            expect(attempts.filter(result => result.status === 'fulfilled')).toHaveLength(2);
+            const completed = (await waitForJob(created.id, ['SUCCEEDED'])).myImageGenerationJob;
+            expect(completed.capturedAmount).toBe(200);
+            const after = await repository.findOneByOrFail({ id: before.id });
+            expect(after.providerCredentialCodeSnapshot).toBe(before.providerCredentialCodeSnapshot);
+            expect(after.providerCredentialFingerprint).toBe(before.providerCredentialFingerprint);
+            expect(calls).toHaveLength(4);
+            for (const first of calls.slice(0, 2)) {
+                const attemptsForKey = calls.filter(call => call.key === first.key);
+                expect(attemptsForKey).toHaveLength(2);
+                expect(attemptsForKey[1]).toEqual(first);
+            }
+            expect(new Set(calls.map(call => call.code))).toEqual(
+                new Set([before.providerCredentialCodeSnapshot]),
+            );
+        } finally {
+            provider.mockRestore();
+        }
+    }, 30_000);
+
+    // Optional cross-package acceptance uses the storefront's existing Playwright/Vite dependencies.
+    it.runIf(process.env.E2E_IMAGE_STUDIO_BROWSER === '1')(
+        'completes browser upload, optimization, generation, private download and replay against real APIs',
+        async () => {
+            await adminClient.asSuperAdmin();
+            const credentials = { email: 'browser-image-e2e@example.com', password: randomUUID() };
+            await shopClient.query(REGISTER, {
+                input: {
+                    emailAddress: credentials.email,
+                    password: credentials.password,
+                    firstName: 'Browser',
+                    lastName: 'Fixture',
+                },
+            });
+            const customerId = (await adminClient.query(FIND_CUSTOMER, { email: credentials.email }))
+                .customers.items[0].id;
+            await adminClient.query(ADJUST_BALANCE, { customerId, amount: 1000 });
+            const connection = server.app.get(TransactionalConnection);
+            const model = await connection.rawConnection
+                .getRepository(ImageModelConfig)
+                .findOneByOrFail({ code: 'OPENAI_HIGH_QUALITY' });
+            await connection.rawConnection.getRepository(ImageModelConfig).update(
+                { id: model.id },
+                {
+                    freeImageEnabled: false,
+                    dailyFreeImageUnlimited: false,
+                    dailyFreeImageLimit: 0,
+                    dailyGenerationSafetyLimit: 100,
+                },
+            );
+            await connection.rawConnection.getRepository(ImageGenerationConfig).update(
+                { channelId: model.channelId },
+                {
+                    promptDailyFreeUnlimited: false,
+                    promptDailyFreeLimit: 0,
+                    paidPromptOptimizationEnabled: true,
+                    paidPromptOptimizationPrice: 50,
+                    paidPromptOptimizationCurrencyCode: CurrencyCode.USD,
+                },
+            );
+            await connection.rawConnection
+                .getRepository(ImageModelConfig)
+                .update({ id: model.id }, { unitPrice: 100 });
+            promptFixtureSubject = '袋装咖啡包装';
+            const runnerUrl = new URL('../../storefront/e2e/ai-image-studio/verify.mjs', import.meta.url);
+            const { verifyImageStudioApi } = await import(runnerUrl.href);
+            const result = await verifyImageStudioApi({
+                backendOrigin: `http://127.0.0.1:${config.apiOptions.port}`,
+                credentials,
+                referencePath: referenceFixture,
+                outputDirectory: path.resolve(__dirname, '../../../reports/ai-image-studio-audit-20260913'),
+            });
+            const customer = await connection.rawConnection
+                .getRepository(Customer)
+                .findOneByOrFail({ emailAddress: credentials.email });
+            const jobs = await connection.rawConnection.getRepository(ImageGenerationJob).find({
+                where: { customerId: customer.id },
+                relations: { outputs: true },
+                order: { createdAt: 'ASC' },
+            });
+            expect(jobs).toHaveLength(2);
+            expect(jobs.every(job => job.state === 'SUCCEEDED' && job.capturedAmount === 100)).toBe(true);
+            expect(jobs.every(job => job.referenceAssetId && job.referenceMode === 'PRODUCT')).toBe(true);
+            expect(String(jobs[0].referenceAssetId)).toBe(String(jobs[1].referenceAssetId));
+            expect(jobs[1].finalPrompt).toContain('背景改为浅灰色');
+            const optimization = await connection.rawConnection
+                .getRepository(ImagePromptOptimization)
+                .findOneByOrFail({ customerId: customer.id });
+            expect(optimization).toMatchObject({ billingMode: 'PAID', chargedAmount: 50, source: 'MODEL' });
+            expect(
+                await connection.rawConnection
+                    .getRepository(ReferralWallet)
+                    .findOneByOrFail({ customerId: customer.id, currencyCode: CurrencyCode.USD }),
+            ).toMatchObject({ availableBalance: 750, reservedBalance: 0 });
+            expect((await sharp(result.downloadPath).metadata()).format).toBe('png');
+            expect(providerSawReference).toBe(true);
+        },
+        120_000,
+    );
+    it('recovers a committed image after the server restarts with pending cost bookkeeping', async () => {
+        const connection = server.app.get(TransactionalConnection);
+        const queue = server.app.get(ImageGenerationQueueService);
+        const model = await connection.rawConnection
+            .getRepository(ImageModelConfig)
+            .findOneByOrFail({ code: 'OPENAI_HIGH_QUALITY' });
+        await connection.rawConnection.getRepository(ImageModelConfig).update(
+            { id: model.id },
+            {
+                unitPrice: 100,
+                freeImageEnabled: false,
+                dailyFreeImageUnlimited: false,
+                dailyFreeImageLimit: 0,
+                dailyGenerationSafetyLimit: 100,
+            },
+        );
+        const originalRecordCost = (queue as any).recordCost.bind(queue);
+        const costFailure = vi
+            .spyOn(queue as unknown as { recordCost: (...args: any[]) => Promise<unknown> }, 'recordCost')
+            .mockImplementation(async (...args: any[]) => {
+                if (args[2] === 'UNKNOWN') return await originalRecordCost(...args);
+                throw new Error('e2e cost storage unavailable before restart');
+            });
+        const generate = vi.spyOn(server.app.get(ImageProviderClient), 'generate');
+        try {
+            const created = (
+                await shopClient.query(CREATE, {
+                    input: {
+                        modelCode: model.code,
+                        prompt: 'Recover committed image after restart',
+                        referenceMode: 'NONE',
+                        aspectRatio: '1:1',
+                        resolution: '1K',
+                        quantity: 1,
+                        expectedUnitPrice: 100,
+                        expectedChargeAmount: 100,
+                        currencyCode: 'USD',
+                        termsAccepted: true,
+                        idempotencyKey: 'e2e-restart-cost-recovery',
+                    },
+                })
+            ).createImageGeneration;
+            const completed = (await waitForJob(created.id, ['SUCCEEDED'])).myImageGenerationJob;
+            expect(generate).toHaveBeenCalledTimes(1);
+            const job = await connection.rawConnection
+                .getRepository(ImageGenerationJob)
+                .findOneByOrFail({ idempotencyKey: 'e2e-restart-cost-recovery' });
+            const output = await connection.rawConnection
+                .getRepository(ImageGenerationOutput)
+                .findOneByOrFail({ jobId: job.id });
+            const dispatches = connection.rawConnection.getRepository(ImageGenerationDispatch);
+            await vi.waitFor(async () => {
+                const dispatch = await dispatches.findOneByOrFail({ outputId: output.id });
+                expect(dispatch).toMatchObject({ state: 'DISPATCHED', processingStage: 'SETTLED' });
+                expect(dispatch.lastError).toContain('e2e cost storage unavailable');
+            });
+            const pendingCosts = await connection.rawConnection
+                .getRepository(ImageGenerationCostEvent)
+                .find({ where: { outputIdSnapshot: String(output.id) } });
+            if (config.dbConnectionOptions.type === 'mysql') {
+                expect(pendingCosts).toHaveLength(1);
+                expect(pendingCosts[0]).toMatchObject({
+                    outcome: 'UNKNOWN',
+                    providerStage: 'REQUEST_STARTED',
+                });
+            } else {
+                expect(pendingCosts).toHaveLength(0);
+            }
+            const beforeWallet = await connection.rawConnection
+                .getRepository(ReferralWallet)
+                .findOneByOrFail({ customerId: job.customerId, currencyCode: CurrencyCode.USD });
+            const downloadUrl = new URL(
+                completed.outputs[0].downloadUrl,
+                `http://localhost:${config.apiOptions.port}`,
+            );
+            const response = await originalFetch(downloadUrl);
+            expect(response.status).toBe(200);
+            const bytes = Buffer.from(await response.arrayBuffer());
+            await dispatches.update({ outputId: output.id }, { heartbeatAt: new Date(Date.now() - 180_000) });
+            if (connection.rawConnection.driver instanceof SqljsDriver) {
+                const restartDatabasePath = path.join(storageRoot, 'restart-recovery.sqlite');
+                writeFileSync(restartDatabasePath, connection.rawConnection.driver.export());
+                config.dbConnectionOptions = {
+                    ...config.dbConnectionOptions,
+                    type: 'sqljs',
+                    database: undefined,
+                    location: restartDatabasePath,
+                    autoSave: false,
+                };
+            }
+            await server.destroy();
+            costFailure.mockRestore();
+            generate.mockRestore();
+            await server.bootstrap();
+            const recoveredQueue = server.app.get(ImageGenerationQueueService);
+            const recoveredConnection = server.app.get(TransactionalConnection);
+            expect(recoveredQueue).not.toBe(queue);
+            expect(recoveredConnection.rawConnection).not.toBe(connection.rawConnection);
+            const unexpectedGenerate = vi.spyOn(server.app.get(ImageProviderClient), 'generate');
+            try {
+                await recoveredQueue.reconcileUnknown();
+                await recoveredQueue.reconcileUnknown();
+                expect(unexpectedGenerate).not.toHaveBeenCalled();
+                const recoveredOutput = await recoveredConnection.rawConnection
+                    .getRepository(ImageGenerationOutput)
+                    .findOneByOrFail({ id: output.id });
+                expect(recoveredOutput).toMatchObject({
+                    state: 'SUCCEEDED',
+                    walletSettled: true,
+                    chargeAmount: 100,
+                    assetId: output.assetId,
+                });
+                expect(
+                    await recoveredConnection.rawConnection
+                        .getRepository(ImageGenerationDispatch)
+                        .findOneByOrFail({ outputId: output.id }),
+                ).toMatchObject({ state: 'COMPLETED', lastError: null });
+                const costs = await recoveredConnection.rawConnection
+                    .getRepository(ImageGenerationCostEvent)
+                    .find({ where: { outputIdSnapshot: String(output.id) } });
+                expect(costs).toHaveLength(1);
+                expect(costs[0].outcome).toBe('SUCCEEDED');
+                expect(
+                    await recoveredConnection.rawConnection
+                        .getRepository(ReferralWallet)
+                        .findOneByOrFail({ id: beforeWallet.id }),
+                ).toMatchObject({ availableBalance: beforeWallet.availableBalance, reservedBalance: 0 });
+                const restoredFile = await originalFetch(downloadUrl);
+                expect(restoredFile.status).toBe(200);
+                expect(Buffer.from(await restoredFile.arrayBuffer()).equals(bytes)).toBe(true);
+            } finally {
+                unexpectedGenerate.mockRestore();
+            }
+        } finally {
+            costFailure.mockRestore();
+            generate.mockRestore();
+        }
+    }, 60_000);
 });
+
+function deferred<T>() {
+    let finish: (value: T) => void = () => undefined;
+    const promise = new Promise<T>(resolve => {
+        finish = resolve;
+    });
+    return { promise, resolve: (value: T) => finish(value) };
+}
 
 async function waitForJob(id: string, terminalStates: string[]) {
     const deadline = Date.now() + 12_000;
@@ -1191,6 +2446,12 @@ async function providerFetch(input: string | URL | Request, init?: RequestInit):
         });
     }
     if (url.pathname.endsWith('/chat/completions')) {
+        promptCallCount += 1;
+        if (typeof init?.body !== 'string') throw new Error('Expected a JSON prompt request');
+        const request = JSON.parse(init.body) as {
+            messages: Array<{ role: string; content: unknown }>;
+        };
+        promptProviderUserContent = request.messages.find(message => message.role === 'user')?.content;
         return new Response(
             JSON.stringify({
                 choices: [
@@ -1198,16 +2459,18 @@ async function providerFetch(input: string | URL | Request, init?: RequestInit):
                         message: {
                             content: JSON.stringify({
                                 useCase: 'product-photo',
-                                subject: '白色保温杯',
+                                subject: promptFixtureSubject,
                                 scene: '浅色电商摄影棚',
                                 composition: '居中主体，留有呼吸感',
                                 lighting: '柔和侧光',
                                 camera: '50mm product photography',
                                 style: '高级电商摄影',
                                 colors: ['白色', '浅灰'],
-                                materials: ['金属'],
+                                materials: [promptFixtureSubject === '白色保温杯' ? '金属' : '包装袋材质'],
                                 exactText: [],
-                                preserve: ['保温杯外形'],
+                                preserve: [
+                                    promptFixtureSubject === '白色保温杯' ? '保温杯外形' : '咖啡袋包装外形',
+                                ],
                                 avoid: ['畸变', '多余商标'],
                                 referenceMode: 'NONE',
                             }),
@@ -1215,7 +2478,10 @@ async function providerFetch(input: string | URL | Request, init?: RequestInit):
                     },
                 ],
             }),
-            { status: 200, headers: { 'content-type': 'application/json' } },
+            {
+                status: 200,
+                headers: { 'content-type': 'application/json', 'x-request-id': 'gateway-e2e-request' },
+            },
         );
     }
     if (providerFailure) {
@@ -1243,7 +2509,10 @@ async function providerFetch(input: string | URL | Request, init?: RequestInit):
                 output: [{ type: 'image_generation_call', result: generatedPngBase64 }],
                 usage: { total_cost: 0.004672, output_images: 1 },
             }),
-            { status: 200, headers: { 'content-type': 'application/json' } },
+            {
+                status: 200,
+                headers: { 'content-type': 'application/json', 'x-request-id': 'gateway-e2e-request' },
+            },
         );
     }
     return new Response(
@@ -1255,6 +2524,9 @@ async function providerFetch(input: string | URL | Request, init?: RequestInit):
                 },
             ],
         }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
+        {
+            status: 200,
+            headers: { 'content-type': 'application/json', 'x-request-id': 'gateway-e2e-request' },
+        },
     );
 }

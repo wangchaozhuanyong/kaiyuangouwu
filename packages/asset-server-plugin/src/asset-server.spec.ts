@@ -84,6 +84,26 @@ describe('SVG asset responses', () => {
         },
     );
 
+    it('preserves the access strategy cache policy for generated and cached images', async () => {
+        await storage.writeFileFromBuffer('source/public.svg', source);
+        const policy = 'private, max-age=300, must-revalidate';
+        const origin = await start([
+            {
+                getImageTransformParameters: ({ req, input }) => {
+                    req.res?.setHeader('Cache-Control', policy);
+                    return input;
+                },
+            },
+            new PresetOnlyStrategy({ defaultPreset: 'bounded' }),
+        ]);
+        for (let request = 0; request < 2; request++) {
+            const response = await fetch(`${origin}/source/public.svg`);
+            expect(response.status).toBe(200);
+            expect(response.headers.get('cache-control')).toBe(policy);
+            await response.arrayBuffer();
+        }
+    });
+
     it('does not reuse a legacy raster cache entry with an SVG extension', async () => {
         await storage.writeFileFromBuffer('source/icon.svg', source);
         const legacySuffix = createHash('md5').update('_transform_w96_h96_mresize').digest('hex');

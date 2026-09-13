@@ -27,7 +27,6 @@ import { ShopApi, ShopApiTimeoutError } from '../api';
 import { isInputMethodKey } from '../input-method';
 import { formatDisplayMoney } from '../money-display';
 import { PageSkeleton } from '../route-loading';
-import { storefrontErrorMessage } from '../storefront-errors';
 import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
 import { SafeImage } from '../storefront-ui/product-display';
 import {
@@ -36,6 +35,8 @@ import {
     ImageGenerationOutput,
     ImageModelQuotaStatus,
     ImagePrivateAssetView,
+    ImagePromptBudget,
+    ImagePromptOptimizationResult,
     ImagePromptQuotaStatus,
     ImageReferenceMode,
     ImageResolution,
@@ -44,7 +45,6 @@ import {
     StorefrontLanguage,
 } from '../types';
 
-import { ImageStudioDesktopSettings } from './ai-image-studio-desktop-settings';
 import {
     formatImageDimensions,
     generationOutputAspectRatio,
@@ -84,6 +84,26 @@ function formatBillingMoney(value: number, currencyCode: string, locale: string)
     }).format(value / 100);
 }
 
+function usablePromptQuota(quota: ImagePromptQuotaStatus | null, walletLoaded: boolean) {
+    return quota && (quota.daily.unlimited || quota.daily.remaining > 0 || walletLoaded) ? quota : null;
+}
+
+function optimizationBillingMessage(
+    result: ImagePromptOptimizationResult,
+    isZh: boolean,
+    locale: string,
+): string {
+    if (result.chargedAmount > 0) {
+        const amount = formatBillingMoney(result.chargedAmount, result.currencyCode, locale);
+        return isZh ? `本次费用 ${amount}` : `Charged ${amount}`;
+    }
+    if (result.billingMode === 'REFUNDED')
+        return isZh ? '预冻结金额已退回，本次未扣费' : 'Reserved balance released. No charge.';
+    if (result.billingMode === 'RELEASED')
+        return isZh ? '免费额度已释放，本次未扣费' : 'Free quota released. No charge.';
+    return isZh ? '本次免费，未扣费' : 'Free of charge.';
+}
+
 const aspectRatios = ['1:1', '3:4', '4:3', '9:16', '16:9'];
 const referenceImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const referenceImageMaxBytes = 10 * 1024 * 1024;
@@ -93,7 +113,7 @@ const terminalStates = new Set(['PARTIAL_SUCCESS', 'SUCCEEDED', 'FAILED', 'CANCE
 const successStates = new Set(['PARTIAL_SUCCESS', 'SUCCEEDED']);
 const failedStates = new Set(['FAILED', 'CANCELLED']);
 
-type AiStudioSetting = 'MODEL' | 'ASPECT_RATIO' | 'QUANTITY' | 'RESOLUTION';
+type AiStudioSetting = 'ASPECT_RATIO' | 'QUANTITY' | 'RESOLUTION';
 type HistoryFilter = 'ALL' | 'SUCCESS' | 'PROCESSING' | 'FAILED';
 type ReferenceUploadItem = {
     id: string;
@@ -113,6 +133,12 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const [promptQuota, setPromptQuota] = useState<ImagePromptQuotaStatus | null>(null);
     const [modelQuotas, setModelQuotas] = useState<ImageModelQuotaStatus[]>([]);
     const [jobs, setJobs] = useState<ImageGenerationJob[]>([]);
+    const [historyIds, setHistoryIds] = useState<string[]>([]);
+    const [historyTotal, setHistoryTotal] = useState(0);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyError, setHistoryError] = useState('');
+    const historyLimit = useRef(20);
+    const historyEpoch = useRef(0);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
     const [refreshWarning, setRefreshWarning] = useState('');
@@ -132,7 +158,6 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const [referenceInstruction, setReferenceInstruction] = useState('');
     const [referenceSettingsOpen, setReferenceSettingsOpen] = useState(false);
     const [referenceError, setReferenceError] = useState('');
-    const promptInputRef = useRef<HTMLTextAreaElement>(null);
     const referenceInputRef = useRef<HTMLInputElement>(null);
     const localReferencePreviewUrlsRef = useRef(new Set<string>());
     const [activeSetting, setActiveSetting] = useState<AiStudioSetting | null>(null);
@@ -142,14 +167,84 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
     const [pendingDeleteJobId, setPendingDeleteJobId] = useState<string | null>(null);
     const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
-    const [busy, setBusy] = useState<'OPTIMIZE' | 'GENERATE' | ''>('');
+    const [busy, setBusy] = useState<'OPTIMIZE' | 'GENERATE' | 'RESTORE' | ''>('');
     const [actionError, setActionError] = useState('');
+    const [promptBudget, setPromptBudget] = useState<{
+        key: string;
+        value?: ImagePromptBudget;
+        error?: string;
+    } | null>(null);
+    const [budgetRetry, setBudgetRetry] = useState(0);
     const pollStartedAt = useRef(Date.now());
     const loadEpoch = useRef(0);
     const settlementEpoch = useRef(0);
     const jobsRef = useRef<ImageGenerationJob[]>([]);
     const optimizeRequestRef = useRef<StableImageStudioRequest | null>(null);
     const generateRequestRef = useRef<StableImageStudioRequest | null>(null);
+    const editorFingerprint = useRef('');
+    editorFingerprint.current = JSON.stringify([
+        prompt,
+        optimized,
+        originalPrompt,
+        modelCode,
+        referenceItems.map(item => [item.id, item.asset?.id, item.state]),
+        referenceMode,
+        referenceInstruction,
+    ]);
+    const loadHistory = useCallback(
+        async (more = false) => {
+            if (!customer) return;
+            const epoch = ++historyEpoch.current;
+            const limit = historyLimit.current + (more ? 20 : 0);
+            setHistoryLoading(true);
+            setHistoryError('');
+            const states =
+                historyFilter === 'SUCCESS'
+                    ? [...successStates]
+                    : historyFilter === 'PROCESSING'
+                      ? [...activeStates]
+                      : historyFilter === 'FAILED'
+                        ? [...failedStates]
+                        : undefined;
+            try {
+                // Reload the visible prefix so inserts/deletes cannot shift offset pages past unseen jobs.
+                const items: ImageGenerationJob[] = [];
+                let total = 0;
+                for (let skip = 0; skip < limit; skip += 50) {
+                    const result = await api.myImageGenerationJobs(
+                        skip,
+                        Math.min(50, limit - skip),
+                        undefined,
+                        states,
+                    );
+                    if (epoch !== historyEpoch.current) return;
+                    items.push(...result.items);
+                    total = result.totalItems;
+                    if (items.length >= total) break;
+                }
+                historyLimit.current = limit;
+                setHistoryTotal(total);
+                setHistoryIds([...new Set(items.map(item => item.id))]);
+                setJobs(current => [
+                    ...new Map([...current, ...items].map(item => [item.id, item])).values(),
+                ]);
+            } catch (error) {
+                if (epoch === historyEpoch.current) setHistoryError(errorMessage(error));
+            } finally {
+                if (epoch === historyEpoch.current) setHistoryLoading(false);
+            }
+        },
+        [api, customer, historyFilter],
+    );
+    useEffect(() => {
+        historyLimit.current = 20;
+        setHistoryIds([]);
+        setHistoryTotal(0);
+        void loadHistory();
+        return () => {
+            historyEpoch.current += 1;
+        };
+    }, [loadHistory, market.code, market.currencyCode, isZh]);
 
     const revokeReferencePreview = useCallback((url: string) => {
         if (!url || !localReferencePreviewUrlsRef.current.has(url)) return;
@@ -169,10 +264,8 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             const studioConfig = await api.imageStudioConfig();
             if (epoch !== loadEpoch.current) return;
             setConfig(studioConfig);
-            setModelCode(current =>
-                studioConfig.models.some(model => model.code === current)
-                    ? current
-                    : studioConfig.defaultModelCode || studioConfig.models[0]?.code || '',
+            setModelCode(
+                current => current || studioConfig.defaultModelCode || studioConfig.models[0]?.code || '',
             );
             if (!customer) {
                 setBalance(0);
@@ -182,9 +275,8 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 setModelQuotas([]);
                 return;
             }
-            const [wallet, history, loadedPromptQuota, loadedModelQuotas] = await Promise.allSettled([
+            const [wallet, loadedPromptQuota, loadedModelQuotas] = await Promise.allSettled([
                 api.imageStudioWallet(),
-                api.myImageGenerationJobs(0, 20),
                 api.imagePromptQuotaStatus(),
                 api.imageModelQuotaStatus(),
             ]);
@@ -193,22 +285,22 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 setBalance(wallet.value.availableBalance);
                 setWalletCurrencyCode(wallet.value.currencyCode);
             }
-            if (history.status === 'fulfilled') setJobs(history.value.items);
-            if (loadedPromptQuota.status === 'fulfilled') setPromptQuota(loadedPromptQuota.value);
+            setPromptQuota(
+                usablePromptQuota(
+                    loadedPromptQuota.status === 'fulfilled' ? loadedPromptQuota.value : null,
+                    wallet.status === 'fulfilled',
+                ),
+            );
             if (loadedModelQuotas.status === 'fulfilled') setModelQuotas(loadedModelQuotas.value);
-            if (
-                [wallet, history, loadedPromptQuota, loadedModelQuotas].some(
-                    result => result.status === 'rejected',
-                )
-            ) {
+            if ([wallet, loadedPromptQuota, loadedModelQuotas].some(result => result.status === 'rejected')) {
                 setRefreshWarning(
                     isZh
-                        ? '部分数据刷新失败，已保留现有内容并将在后台重试。'
-                        : 'Some data could not be refreshed. Existing data is preserved.',
+                        ? '部分数据刷新失败，已保留现有内容，请点击“刷新”重试。'
+                        : 'Some data could not be refreshed. Existing data is preserved. Select Refresh to retry.',
                 );
             }
         } catch (error) {
-            if (epoch === loadEpoch.current) setLoadError(storefrontErrorMessage(error, isZh ? 'zh' : 'en'));
+            if (epoch === loadEpoch.current) setLoadError(errorMessage(error));
         } finally {
             if (epoch === loadEpoch.current) setLoading(false);
         }
@@ -220,6 +312,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
 
     const refreshActiveJobs = useCallback(async () => {
         if (!customer) return;
+        const epoch = settlementEpoch.current;
         const activeIds = jobsRef.current.filter(job => activeStates.has(job.state)).map(job => job.id);
         if (!activeIds.length) return;
         const [jobResults, wallet, loadedPromptQuota, loadedModelQuotas] = await Promise.allSettled([
@@ -228,6 +321,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             api.imagePromptQuotaStatus(),
             api.imageModelQuotaStatus(),
         ]);
+        if (epoch !== settlementEpoch.current) return;
         let partialFailure = false;
         if (jobResults.status === 'fulfilled') {
             const refreshed = new Map<string, ImageGenerationJob>();
@@ -235,6 +329,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 if (result.status === 'fulfilled') refreshed.set(result.value.id, result.value);
                 else partialFailure = true;
             }
+            if ([...refreshed.values()].some(job => terminalStates.has(job.state))) void loadHistory();
             if (refreshed.size) {
                 setJobs(current => current.map(job => refreshed.get(job.id) ?? job));
             }
@@ -243,8 +338,13 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             setBalance(wallet.value.availableBalance);
             setWalletCurrencyCode(wallet.value.currencyCode);
         } else partialFailure = true;
-        if (loadedPromptQuota.status === 'fulfilled') setPromptQuota(loadedPromptQuota.value);
-        else partialFailure = true;
+        setPromptQuota(
+            usablePromptQuota(
+                loadedPromptQuota.status === 'fulfilled' ? loadedPromptQuota.value : null,
+                wallet.status === 'fulfilled',
+            ),
+        );
+        if (loadedPromptQuota.status === 'rejected') partialFailure = true;
         if (loadedModelQuotas.status === 'fulfilled') setModelQuotas(loadedModelQuotas.value);
         else partialFailure = true;
         setRefreshWarning(
@@ -254,7 +354,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                     : 'Refresh failed; retrying without clearing current data.'
                 : '',
         );
-    }, [api, customer, isZh]);
+    }, [api, customer, isZh, loadHistory]);
 
     useEffect(() => {
         settlementEpoch.current += 1;
@@ -265,6 +365,8 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         setPromptQuota(null);
         setModelQuotas([]);
         setLastOptimizerModelId(null);
+        setJobs([]);
+        setSelectedJobId(null);
         setBusy('');
         setActionError('');
         setRefreshWarning('');
@@ -287,7 +389,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         setReferenceSettingsOpen(false);
         setReferenceError('');
         if (referenceInputRef.current) referenceInputRef.current.value = '';
-    }, [clearReferencePreviews, customer?.id]);
+    }, [clearReferencePreviews, customer?.id, market.code]);
     useEffect(() => () => clearReferencePreviews(), [clearReferencePreviews]);
     const hasActiveJobs = jobs.some(job => activeStates.has(job.state));
     useEffect(() => {
@@ -308,10 +410,39 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         };
     }, [hasActiveJobs, refreshActiveJobs]);
 
-    const selectedModel = config?.models.find(model => model.code === modelCode) ?? config?.models[0];
+    const selectedModel = config?.models.find(model => model.code === modelCode);
     const referenceAssets = referenceItems.flatMap(item => (item.asset ? [item.asset] : []));
     const referenceBusy = referenceItems.some(item => item.state === 'UPLOADING');
     const referenceHasFailure = referenceItems.some(item => item.state === 'FAILED');
+    const budgetInput = {
+        prompt: optimized ? originalPrompt : prompt,
+        optimizedPrompt: optimized ? prompt : null,
+        referenceMode,
+        referenceAssetIds: referenceAssets.map(asset => asset.id),
+        referenceInstruction: referenceInstruction.trim() || null,
+    };
+    const budgetKey = JSON.stringify([customer?.id, market.code, market.currencyCode, language, budgetInput]);
+    useEffect(() => {
+        if (!customer || !config?.enabled || !prompt.trim() || referenceBusy || referenceHasFailure) return;
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => {
+            void api.previewImageGenerationPrompt(budgetInput, controller.signal).then(
+                value => {
+                    if (!controller.signal.aborted) setPromptBudget({ key: budgetKey, value });
+                },
+                error => {
+                    if (!controller.signal.aborted)
+                        setPromptBudget({ key: budgetKey, error: errorMessage(error) });
+                },
+            );
+        }, 180);
+        return () => {
+            window.clearTimeout(timer);
+            controller.abort();
+        };
+    }, [api, budgetKey, budgetRetry, config?.enabled, referenceBusy, referenceHasFailure]);
+    const currentBudget = promptBudget?.key === budgetKey ? promptBudget : null;
+    const budgetReady = currentBudget?.value?.valid === true;
     const optimizerModelIds =
         lastOptimizerModelId !== null
             ? [lastOptimizerModelId || (isZh ? '本地规则' : 'Local rules')]
@@ -319,14 +450,9 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const optimizerModelLabel = optimizerModelIds.map(value => value.replace(/^models\//iu, '')).join(' / ');
     const pricedResolutionOptions =
         selectedModel?.resolutionOptions.filter(option => option.unitPrice > 0) ?? [];
-    const selectedResolutionOption =
-        pricedResolutionOptions.find(
-            option => option.resolution === resolution && option.supportedAspectRatios.includes(aspectRatio),
-        ) ?? pricedResolutionOptions.find(option => option.supportedAspectRatios.includes(aspectRatio));
-    const effectiveResolution = selectedResolutionOption?.resolution;
-    useEffect(() => {
-        if (effectiveResolution && effectiveResolution !== resolution) setResolution(effectiveResolution);
-    }, [effectiveResolution, resolution]);
+    const selectedResolutionOption = pricedResolutionOptions.find(
+        option => option.resolution === resolution && option.supportedAspectRatios.includes(aspectRatio),
+    );
     const selectedQuota = modelQuotas.find(item => item.modelCode === selectedModel?.code);
     const freeRemaining = selectedQuota?.free.unlimited
         ? quantity
@@ -344,6 +470,8 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         selectedModel &&
         selectedResolutionOption &&
         prompt.trim() &&
+        prompt.length <= (optimized ? 8000 : 2000) &&
+        budgetReady &&
         termsAccepted &&
         quoteCurrencyReady &&
         balance >= estimatedPrice &&
@@ -368,19 +496,35 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     };
     const filteredJobs = useMemo(
         () =>
-            jobs.filter(job => {
-                if (historyFilter === 'SUCCESS') return successStates.has(job.state);
-                if (historyFilter === 'PROCESSING') return activeStates.has(job.state);
-                if (historyFilter === 'FAILED') return failedStates.has(job.state);
-                return true;
-            }),
-        [historyFilter, jobs],
+            historyIds
+                .map(id => jobs.find(job => job.id === id))
+                .filter((job): job is ImageGenerationJob => Boolean(job))
+                .filter(job => {
+                    if (historyFilter === 'SUCCESS') return successStates.has(job.state);
+                    if (historyFilter === 'PROCESSING') return activeStates.has(job.state);
+                    if (historyFilter === 'FAILED') return failedStates.has(job.state);
+                    return true;
+                }),
+        [historyFilter, historyIds, jobs],
     );
     const selectedJob = jobs.find(job => job.id === selectedJobId) ?? null;
 
+    const paidOptimization = Boolean(
+        promptQuota && !promptQuota.daily.unlimited && promptQuota.daily.remaining <= 0,
+    );
+    const optimizationReady = Boolean(
+        promptQuota &&
+        (!paidOptimization ||
+            (promptQuota.paidEnabled &&
+                promptQuota.paidPrice > 0 &&
+                promptQuota.currencyCode === walletCurrencyCode &&
+                balance >= promptQuota.paidPrice)),
+    );
     const optimizePrompt = async () => {
-        if (!prompt.trim() || busy) return;
+        if (!prompt.trim() || busy || referenceBusy || referenceHasFailure || !optimizationReady) return;
         const epoch = settlementEpoch.current;
+        const inputVersion = editorFingerprint.current;
+        const sourcePrompt = optimized ? originalPrompt : prompt;
         setBusy('OPTIMIZE');
         setActionError('');
         try {
@@ -388,41 +532,77 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 promptQuota && !promptQuota.daily.unlimited && promptQuota.daily.remaining <= 0,
             );
             const fingerprint = JSON.stringify({
-                prompt: prompt.trim(),
+                prompt: sourcePrompt.trim(),
+                optimizedPrompt: optimized ? prompt : null,
                 referenceMode,
+                referenceAssetIds: referenceAssets.map(asset => asset.id),
+                referenceInstruction: referenceInstruction.trim() || null,
                 expectedPrice: paidPrompt ? promptQuota?.paidPrice : null,
                 currencyCode: paidPrompt ? promptQuota?.currencyCode : null,
             });
             const idempotencyKey = stableRequestId(optimizeRequestRef, fingerprint);
-            const result = await api.optimizeImagePrompt(prompt, referenceMode, {
+            const result = await api.optimizeImagePrompt(sourcePrompt, referenceMode, {
+                optimizedPrompt: optimized ? prompt : null,
+                referenceAssetIds: referenceAssets.map(asset => asset.id),
+                referenceInstruction: referenceInstruction.trim() || null,
                 expectedPrice: paidPrompt ? promptQuota?.paidPrice : null,
                 currencyCode: paidPrompt ? promptQuota?.currencyCode : null,
                 idempotencyKey,
             });
             if (epoch !== settlementEpoch.current) return;
             optimizeRequestRef.current = null;
-            setOriginalPrompt(prompt);
+            const wallet = await api.imageStudioWallet().catch(() => null);
+            if (epoch !== settlementEpoch.current) return;
+            setPromptQuota(usablePromptQuota(result.promptQuota, wallet !== null));
+            if (wallet) {
+                setBalance(wallet.availableBalance);
+                setWalletCurrencyCode(wallet.currencyCode);
+            } else
+                setRefreshWarning(
+                    isZh ? '余额刷新失败，请刷新后核对' : 'Balance refresh failed. Please refresh.',
+                );
+            const billingMessage = optimizationBillingMessage(result, isZh, market.locale);
+            if (inputVersion !== editorFingerprint.current) {
+                onNotify(
+                    isZh
+                        ? `优化已完成，保留你后续编辑的内容；${billingMessage}`
+                        : `Optimization finished. Your newer edits were preserved. ${billingMessage}`,
+                );
+                return;
+            }
+            setOriginalPrompt(sourcePrompt);
             setPrompt(result.optimizedPrompt);
             setOptimized(true);
             setOptimizationReason(result.recommendationReason);
             setLastOptimizerModelId(result.optimizerModelId ?? '');
-            setPromptQuota(result.promptQuota);
             onNotify(
-                isZh
-                    ? `优化完成，今日免费剩余 ${quotaRemainingLabel(result.promptQuota.daily)} 次，本分钟剩余 ${result.promptQuota.minute.remaining}/${result.promptQuota.minute.limit} 次`
-                    : 'Prompt optimized',
+                result.source === 'FALLBACK'
+                    ? isZh
+                        ? referenceAssets.length
+                            ? `未能完成参考图识别，已按原始要求和本地规则整理，请核对描述后再生图；${billingMessage}`
+                            : `智能优化暂不可用，已按本地规则整理，请核对描述后再生图；${billingMessage}`
+                        : `AI optimization was unavailable. Review the locally prepared prompt before generating. ${billingMessage}`
+                    : isZh
+                      ? `优化完成，${billingMessage}；今日免费剩余 ${quotaRemainingLabel(result.promptQuota.daily)} 次`
+                      : `Prompt optimized · ${billingMessage}`,
             );
             if (config?.models.some(model => model.code === result.recommendedModelCode)) {
                 selectModel(result.recommendedModelCode);
             }
         } catch (error) {
-            if (epoch === settlementEpoch.current) setActionError(actionErrorMessage(error, isZh));
+            if (epoch === settlementEpoch.current) {
+                setActionError(actionErrorMessage(error, isZh));
+                setPromptQuota(null);
+                await load();
+            }
         } finally {
             if (epoch === settlementEpoch.current) setBusy('');
         }
     };
 
-    const uploadReferences = async (files: File[]) => {
+    const uploadReferences = async (files: File[], replaceId?: string) => {
+        if (busy || referenceBusy) return;
+        const epoch = settlementEpoch.current;
         if (!termsAccepted) {
             setReferenceError(
                 isZh ? '请先阅读并同意 AI 图片服务条款，再添加参考图。' : 'Accept the AI image terms first.',
@@ -430,7 +610,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             if (referenceInputRef.current) referenceInputRef.current.value = '';
             return;
         }
-        const availableSlots = Math.max(0, referenceImageLimit - referenceItems.length);
+        const availableSlots = replaceId ? 1 : Math.max(0, referenceImageLimit - referenceItems.length);
         if (!availableSlots) {
             setReferenceError(
                 isZh
@@ -464,7 +644,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 {
                     file,
                     item: {
-                        id: requestId(),
+                        id: replaceId ?? requestId(),
                         fileName: file.name,
                         previewUrl,
                         asset: null,
@@ -488,11 +668,16 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             return;
         }
         setActionError('');
-        setReferenceItems(current => [...current, ...pendingItems]);
+        setReferenceItems(current =>
+            replaceId
+                ? current.map(item => (item.id === replaceId ? pendingItems[0] : item))
+                : [...current, ...pendingItems],
+        );
         const results = await Promise.all(
             pendingUploads.map(async ({ file, item }) => {
                 try {
                     const uploaded = await api.uploadImageReference(file, termsAccepted);
+                    if (epoch !== settlementEpoch.current) return false;
                     setReferenceItems(current =>
                         current.map(currentItem =>
                             currentItem.id === item.id
@@ -502,7 +687,8 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                     );
                     return true;
                 } catch (error) {
-                    const message = storefrontErrorMessage(error, isZh ? 'zh' : 'en');
+                    if (epoch !== settlementEpoch.current) return false;
+                    const message = errorMessage(error);
                     setReferenceItems(current =>
                         current.map(currentItem =>
                             currentItem.id === item.id
@@ -514,6 +700,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 }
             }),
         );
+        if (epoch !== settlementEpoch.current) return;
         const uploadedCount = results.filter(Boolean).length;
         if (uploadedCount) {
             setReferenceMode(current => (current === 'NONE' ? 'PRODUCT' : current));
@@ -531,8 +718,25 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         if (referenceInputRef.current) referenceInputRef.current.value = '';
     };
 
-    const removeReference = (id: string) => {
+    const removeReference = async (id: string) => {
+        if (busy || referenceBusy) return;
+        const epoch = settlementEpoch.current;
         const target = referenceItems.find(item => item.id === id);
+        if (target?.asset) {
+            try {
+                const released = await api.releaseImageReference(target.asset.id);
+                if (epoch !== settlementEpoch.current) return;
+                if (!released)
+                    onNotify(
+                        isZh
+                            ? '已从编辑器移除；历史任务仍在使用这张参考图，将按保留期限清理'
+                            : 'Removed from the editor. History still uses this reference until expiry.',
+                    );
+            } catch (error) {
+                if (epoch === settlementEpoch.current) setReferenceError(errorMessage(error));
+                return;
+            }
+        }
         if (target) revokeReferencePreview(target.previewUrl);
         setReferenceItems(current => {
             const next = current.filter(item => item.id !== id);
@@ -577,6 +781,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             generateRequestRef.current = null;
             pollStartedAt.current = Date.now();
             setJobs(current => [job, ...current.filter(item => item.id !== job.id)]);
+            void loadHistory();
             setBalance(value => Math.max(0, value - job.reservedAmount));
             const [nextPromptQuota, nextModelQuotas, nextWallet] = await Promise.allSettled([
                 api.imagePromptQuotaStatus(),
@@ -608,9 +813,9 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const cancel = async (id: string) => {
         try {
             await api.cancelQueuedImageGeneration(id);
-            await load();
+            await Promise.all([load(), loadHistory()]);
         } catch (error) {
-            setActionError(storefrontErrorMessage(error, isZh ? 'zh' : 'en'));
+            setActionError(errorMessage(error));
         }
     };
     const deleteJob = async () => {
@@ -621,26 +826,118 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             await api.deleteMyImageGenerationJob(id);
             setPendingDeleteJobId(null);
             if (selectedJobId === id) setSelectedJobId(null);
-            await load();
+            setJobs(current => current.filter(job => job.id !== id));
+            await Promise.all([load(), loadHistory()]);
         } catch (error) {
-            setActionError(storefrontErrorMessage(error, isZh ? 'zh' : 'en'));
+            setActionError(errorMessage(error));
         } finally {
             setDeletingJobId(null);
         }
     };
-    const regenerate = (job: ImageGenerationJob) => {
-        setPrompt(job.originalPrompt);
-        setOriginalPrompt('');
-        setOptimized(false);
-        setOptimizationReason('');
-        selectModel(job.modelCodeSnapshot);
-        setAspectRatio(job.aspectRatio);
-        setResolution(job.resolution);
-        setQuantity(job.quantity);
-        if (window.matchMedia('(min-width: 1024px)').matches) {
-            promptInputRef.current?.focus();
-        } else {
+    const refreshDetail = async (id: string) => {
+        const epoch = settlementEpoch.current;
+        const result = await api.myImageGenerationJob(id);
+        if (epoch !== settlementEpoch.current)
+            throw new Error(isZh ? '登录或店铺已变化，请重新打开' : 'Session changed. Open this item again.');
+        setJobs(current => [...current.filter(item => item.id !== id), result]);
+        return result;
+    };
+    const regenerate = async (previous: ImageGenerationJob) => {
+        if (busy || referenceBusy) return;
+        setBusy('RESTORE');
+        const epoch = settlementEpoch.current;
+        try {
+            const job = await refreshDetail(previous.id);
+            if (epoch !== settlementEpoch.current) return;
+            const ids = job.referenceAssetIds ?? (job.referenceAsset ? [job.referenceAsset.id] : []);
+            const references = job.referenceAssets ?? (job.referenceAsset ? [job.referenceAsset] : []);
+            const replaced = referenceAssets.filter(asset => !ids.includes(asset.id));
+            const releases = await Promise.allSettled(
+                replaced.map(asset => api.releaseImageReference(asset.id)),
+            );
+            if (epoch !== settlementEpoch.current) return;
+            if (releases.some(result => result.status === 'rejected')) {
+                const released = new Set(
+                    replaced
+                        .filter((_asset, index) => releases[index].status === 'fulfilled')
+                        .map(asset => asset.id),
+                );
+                for (const item of referenceItems)
+                    if (item.asset && released.has(item.asset.id)) revokeReferencePreview(item.previewUrl);
+                setReferenceItems(current =>
+                    current.filter(item => !item.asset || !released.has(item.asset.id)),
+                );
+                throw new Error(
+                    isZh
+                        ? '部分旧参考图释放失败，请重试再次创作'
+                        : 'Some old references could not be released. Retry recreating this image.',
+                );
+            }
+            clearReferencePreviews();
+            setReferenceItems(
+                ids.map((id, index) => {
+                    const asset = references[index] ?? null;
+                    return {
+                        id,
+                        asset,
+                        fileName: asset?.originalName ?? `图${index + 1}`,
+                        previewUrl: asset?.previewUrl ?? '',
+                        state: asset ? 'SUCCEEDED' : 'FAILED',
+                        error: asset
+                            ? ''
+                            : isZh
+                              ? '原参考图已过期或删除，请按原编号补充'
+                              : 'Reference expired or deleted. Replace it in this position.',
+                    };
+                }),
+            );
+            setReferenceMode(job.referenceMode);
+            setReferenceInstruction(job.referenceInstruction ?? '');
+            setPrompt(job.optimizedPrompt || job.originalPrompt);
+            setOriginalPrompt(job.originalPrompt);
+            setOptimized(Boolean(job.optimizedPrompt));
+            setOptimizationReason('');
+            setModelCode(job.modelCodeSnapshot);
+            setAspectRatio(job.aspectRatio);
+            setResolution(job.resolution);
+            setQuantity(job.quantity);
+            setReferenceError(
+                references.some(asset => !asset)
+                    ? isZh
+                        ? '参考图不完整，请按原顺序重新上传后生成'
+                        : 'Restore missing references in their original order.'
+                    : '',
+            );
+            const restoredModel = config?.models.find(model => model.code === job.modelCodeSnapshot);
+            setActionError(
+                !restoredModel
+                    ? isZh
+                        ? '原模型不可用，请重新选择模型并核对当前价格'
+                        : 'Original model unavailable. Select a model and check the current price.'
+                    : !restoredModel.resolutionOptions.some(
+                            option =>
+                                option.unitPrice > 0 &&
+                                option.resolution === job.resolution &&
+                                option.supportedAspectRatios.includes(job.aspectRatio),
+                        )
+                      ? isZh
+                          ? '原尺寸不可用，请重新选择比例和清晰度并核对当前价格'
+                          : 'Original size unavailable. Select an aspect ratio and resolution and check the current price.'
+                      : '',
+            );
+            if (!job.inputSnapshotVersion)
+                onNotify(
+                    isZh
+                        ? '旧记录已恢复原始描述，请核对参考图和描述后再生成'
+                        : 'Original description restored. Review this legacy job before generating.',
+                );
+            optimizeRequestRef.current = null;
+            generateRequestRef.current = null;
             window.scrollTo({ top: 0, behavior: 'smooth' });
+        } catch (error) {
+            if (epoch === settlementEpoch.current) setActionError(errorMessage(error));
+        } finally {
+            if (epoch === settlementEpoch.current) setBusy('');
         }
     };
 
@@ -679,29 +976,20 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         market.locale,
     )}`;
     const settingSheetTitle =
-        activeSetting === 'MODEL'
+        activeSetting === 'ASPECT_RATIO'
             ? isZh
-                ? '模型选择'
-                : 'Choose model'
-            : activeSetting === 'ASPECT_RATIO'
+                ? '选择图片比例'
+                : 'Choose aspect ratio'
+            : activeSetting === 'QUANTITY'
               ? isZh
-                  ? '选择图片比例'
-                  : 'Choose aspect ratio'
-              : activeSetting === 'QUANTITY'
-                ? isZh
-                    ? '选择生成张数'
-                    : 'Choose quantity'
-                : isZh
-                  ? '选择清晰度'
-                  : 'Choose resolution';
+                  ? '选择生成张数'
+                  : 'Choose quantity'
+              : isZh
+                ? '选择清晰度'
+                : 'Choose resolution';
 
     return (
-        <Subpage
-            title={isZh ? 'AI 图片工坊' : 'AI Image Studio'}
-            language={language}
-            onBack={onBack}
-            className="ai-studio-page"
-        >
+        <Subpage title={isZh ? 'AI 图片工坊' : 'AI Image Studio'} language={language} onBack={onBack}>
             {loading ? (
                 <PageSkeleton label={isZh ? '正在加载图片工坊' : 'Loading image studio'} />
             ) : loadError ? (
@@ -736,510 +1024,579 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 />
             ) : (
                 <div className="ai-studio-shell">
-                    <div className="ai-studio-workspace-sidebar">
-                        <div className="ai-studio-sidebar-scroll">
-                            <section className="ai-studio-composer">
-                                <div className="ai-studio-desktop-heading">
-                                    <h2>{isZh ? '创作' : 'Create'}</h2>
-                                    <span>{isZh ? '文字描述 · 参考图' : 'Prompt · References'}</span>
-                                </div>
-                                <div className="ai-studio-prompt-wrap">
-                                    <textarea
-                                        ref={promptInputRef}
-                                        id="ai-studio-prompt"
-                                        aria-label={isZh ? '图片描述' : 'Image description'}
-                                        maxLength={optimized ? 8000 : 2000}
-                                        rows={4}
-                                        value={prompt}
-                                        onChange={event => {
-                                            setPrompt(event.target.value);
-                                            if (optimized) setOptimized(false);
-                                        }}
-                                        placeholder={
-                                            isZh
-                                                ? '例如：一只白色保温杯放在浅色木桌上，晨光从左侧照入，干净高级的电商摄影…'
-                                                : 'Example: A white insulated bottle on a light wood table, soft morning light from the left, clean premium ecommerce photography…'
-                                        }
-                                    />
-                                    <div className="ai-studio-prompt-tools">
-                                        <span>
-                                            {prompt.length}/{optimized ? 8000 : 2000}
-                                        </span>
-                                        <div className="ai-studio-prompt-actions">
-                                            {optimizerModelLabel ? (
-                                                <span
-                                                    className="ai-studio-optimizer-model"
-                                                    title={optimizerModelIds.join(' / ')}
-                                                    aria-label={`${isZh ? '优化模型' : 'Optimizer model'}：${optimizerModelIds.join(' / ')}`}
-                                                >
-                                                    <span>{isZh ? '优化模型' : 'Optimizer'}</span>
-                                                    <strong>{optimizerModelLabel}</strong>
-                                                </span>
-                                            ) : null}
+                    <section className="ai-studio-composer">
+                        <div className="ai-studio-prompt-wrap">
+                            <textarea
+                                maxLength={optimized ? 8000 : 2000}
+                                disabled={busy === 'RESTORE'}
+                                rows={4}
+                                value={prompt}
+                                onChange={event => {
+                                    setPrompt(event.target.value);
+                                }}
+                                placeholder={
+                                    isZh
+                                        ? '例如：一只白色保温杯放在浅色木桌上，晨光从左侧照入，干净高级的电商摄影…'
+                                        : 'Example: A white insulated bottle on a light wood table, soft morning light from the left, clean premium ecommerce photography…'
+                                }
+                            />
+                            {prompt.trim() ? (
+                                <div
+                                    className={
+                                        currentBudget?.error || currentBudget?.value?.valid === false
+                                            ? 'ai-studio-error'
+                                            : 'ai-studio-prompt-budget'
+                                    }
+                                    role="status"
+                                >
+                                    {currentBudget?.error ? (
+                                        <>
+                                            <span>
+                                                {isZh ? '字数检查失败：' : 'Length check failed: '}
+                                                {currentBudget.error}
+                                            </span>
                                             <button
                                                 type="button"
-                                                disabled={
-                                                    !config.promptOptimizationEnabled ||
-                                                    !prompt.trim() ||
-                                                    Boolean(busy) ||
-                                                    Boolean(
-                                                        promptQuota &&
-                                                        !promptQuota.daily.unlimited &&
-                                                        promptQuota.daily.remaining <= 0 &&
-                                                        !promptQuota.paidEnabled,
-                                                    )
-                                                }
-                                                onClick={() => void optimizePrompt()}
-                                            >
-                                                {busy === 'OPTIMIZE' ? (
-                                                    <LoaderCircle className="spin" />
-                                                ) : (
-                                                    <Sparkles />
-                                                )}
-                                                {isZh ? '智能优化' : 'Improve prompt'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div
-                                    className={`ai-studio-reference${referenceItems.length ? ' has-reference' : ''}`}
-                                    aria-label={isZh ? '参考图' : 'Reference images'}
-                                >
-                                    {referenceItems.length ? (
-                                        <div className="ai-studio-reference-list" aria-live="polite">
-                                            {referenceItems.map((item, index) => (
-                                                <div
-                                                    key={item.id}
-                                                    className={`ai-studio-reference-card is-${item.state.toLowerCase()}`}
-                                                >
-                                                    <div className="ai-studio-reference-preview">
-                                                        <img src={item.previewUrl} alt={item.fileName} />
-                                                        <span
-                                                            className="ai-studio-reference-index"
-                                                            aria-hidden="true"
-                                                        >
-                                                            {index + 1}
-                                                        </span>
-                                                        {item.state === 'UPLOADING' ? (
-                                                            <span
-                                                                className="ai-studio-reference-preview-loading"
-                                                                aria-hidden="true"
-                                                            >
-                                                                <LoaderCircle className="spin" />
-                                                            </span>
-                                                        ) : null}
-                                                    </div>
-                                                    <div className="ai-studio-reference-meta">
-                                                        <span
-                                                            className={
-                                                                item.state === 'SUCCEEDED'
-                                                                    ? 'is-success'
-                                                                    : item.state === 'FAILED'
-                                                                      ? 'is-error'
-                                                                      : 'is-uploading'
-                                                            }
-                                                        >
-                                                            {item.state === 'UPLOADING' ? (
-                                                                <LoaderCircle
-                                                                    className="spin"
-                                                                    aria-hidden="true"
-                                                                />
-                                                            ) : item.state === 'SUCCEEDED' ? (
-                                                                <CheckCircle2 aria-hidden="true" />
-                                                            ) : (
-                                                                <CircleAlert aria-hidden="true" />
-                                                            )}
-                                                            {item.state === 'UPLOADING'
-                                                                ? isZh
-                                                                    ? '正在上传'
-                                                                    : 'Uploading'
-                                                                : item.state === 'SUCCEEDED'
-                                                                  ? isZh
-                                                                      ? '上传成功'
-                                                                      : 'Upload complete'
-                                                                  : isZh
-                                                                    ? '上传失败'
-                                                                    : 'Upload failed'}
-                                                        </span>
-                                                        <strong
-                                                            title={item.asset?.originalName || item.fileName}
-                                                        >
-                                                            {item.asset?.originalName || item.fileName}
-                                                        </strong>
-                                                        <small title={item.error || undefined}>
-                                                            {item.asset
-                                                                ? `${formatReferenceSize(item.asset.byteSize)} · ${item.asset.width} × ${item.asset.height}`
-                                                                : item.error ||
-                                                                  (isZh
-                                                                      ? '正在安全处理图片…'
-                                                                      : 'Processing image securely…')}
-                                                        </small>
-                                                    </div>
-                                                    <div className="ai-studio-reference-actions">
-                                                        <button
-                                                            type="button"
-                                                            aria-label={
-                                                                isZh
-                                                                    ? `移除第 ${index + 1} 张参考图`
-                                                                    : `Remove reference image ${index + 1}`
-                                                            }
-                                                            onClick={() => removeReference(item.id)}
-                                                        >
-                                                            <Trash2 aria-hidden="true" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : null}
-                                    {referenceItems.length < referenceImageLimit ? (
-                                        <label
-                                            className={`ai-studio-reference-add${referenceItems.length ? ' is-compact' : ''}`}
-                                        >
-                                            <span className="ai-studio-reference-add-icon" aria-hidden="true">
-                                                <ImagePlus />
-                                            </span>
-                                            <span className="ai-studio-reference-add-copy">
-                                                <strong>
-                                                    {referenceItems.length
-                                                        ? isZh
-                                                            ? `继续添加（${referenceItems.length}/${referenceImageLimit}）`
-                                                            : `Add more (${referenceItems.length}/${referenceImageLimit})`
-                                                        : isZh
-                                                          ? '添加参考图'
-                                                          : 'Add reference images'}
-                                                </strong>
-                                                <small>
-                                                    {isZh
-                                                        ? `可选 · 最多 ${referenceImageLimit} 张，单张最大 10MB`
-                                                        : `Optional · up to ${referenceImageLimit} images, 10MB each`}
-                                                </small>
-                                            </span>
-                                            <input
-                                                ref={referenceInputRef}
-                                                type="file"
-                                                multiple
-                                                accept="image/png,image/jpeg,image/webp"
-                                                onChange={event => {
-                                                    const files = Array.from(event.target.files ?? []);
-                                                    if (files.length) void uploadReferences(files);
+                                                onClick={() => {
+                                                    setPromptBudget(null);
+                                                    setBudgetRetry(value => value + 1);
                                                 }}
-                                            />
-                                        </label>
-                                    ) : null}
-                                    {referenceAssets.length ? (
-                                        <button
-                                            type="button"
-                                            className="ai-studio-reference-mode"
-                                            aria-haspopup="dialog"
-                                            aria-expanded={referenceSettingsOpen}
-                                            onClick={() => setReferenceSettingsOpen(true)}
-                                        >
-                                            <span>{isZh ? '参考图要求' : 'Reference instructions'}</span>
-                                            <strong>
-                                                {referenceInstruction.trim() ||
-                                                    referenceModeLabel(referenceMode, isZh)}
-                                            </strong>
-                                            <ChevronDown aria-hidden="true" />
-                                        </button>
-                                    ) : null}
-                                    {referenceError ? (
-                                        <div className="ai-studio-reference-error" role="alert">
-                                            <CircleAlert aria-hidden="true" />
-                                            <span>{referenceError}</span>
-                                        </div>
-                                    ) : null}
-                                </div>
-                                {optimized ? (
-                                    <div className="ai-studio-optimized">
-                                        <CheckCircle2 />
-                                        <span>
-                                            {isZh ? `已优化：${optimizationReason}` : optimizationReason}
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setPrompt(originalPrompt);
-                                                setOptimized(false);
-                                            }}
-                                        >
-                                            {isZh ? '恢复原文' : 'Undo'}
-                                        </button>
-                                    </div>
-                                ) : null}
-                            </section>
-
-                            <aside
-                                className="ai-studio-controls"
-                                aria-label={isZh ? '生成参数与结算' : 'Generation settings and checkout'}
-                            >
-                                <section className="ai-studio-options">
-                                    <ImageStudioDesktopSettings
-                                        isZh={isZh}
-                                        models={config.models}
-                                        selectedModel={selectedModel}
-                                        aspectRatios={aspectRatios}
-                                        aspectRatio={aspectRatio}
-                                        resolution={resolution}
-                                        quantity={quantity}
-                                        maxQuantity={config.maxQuantity}
-                                        formatPrice={amount =>
-                                            formatDisplayMoney(amount, billingCurrencyCode, market.locale)
-                                        }
-                                        onModelChange={selectModel}
-                                        onAspectRatioChange={selectAspectRatio}
-                                        onResolutionChange={selectResolution}
-                                        onQuantityChange={setQuantity}
-                                    />
-                                    <div className="ai-studio-option-row">
-                                        <SettingTrigger
-                                            className="ai-studio-model-trigger"
-                                            label={isZh ? '模型选择' : 'Model'}
-                                            value={
-                                                selectedModel?.officialModelId ||
-                                                (isZh ? '请选择模型' : 'Choose model')
-                                            }
-                                            expanded={activeSetting === 'MODEL'}
-                                            onClick={() => setActiveSetting('MODEL')}
-                                        />
-                                        <SettingTrigger
-                                            label={isZh ? '图片比例' : 'Aspect ratio'}
-                                            value={aspectRatio}
-                                            onClick={() => setActiveSetting('ASPECT_RATIO')}
-                                        />
-                                        <SettingTrigger
-                                            label={isZh ? '生成张数' : 'Quantity'}
-                                            value={String(quantity)}
-                                            onClick={() => setActiveSetting('QUANTITY')}
-                                        />
-                                        <SettingTrigger
-                                            label={isZh ? '清晰度' : 'Resolution'}
-                                            value={selectedResolutionLabel}
-                                            onClick={() => setActiveSetting('RESOLUTION')}
-                                        />
-                                    </div>
-                                </section>
-                            </aside>
-                        </div>
-                        <div className="ai-studio-sidebar-footer">
-                            <section className="ai-studio-checkout">
-                                <div className="ai-studio-settlement">
-                                    <div className="ai-studio-settlement-summary">
-                                        <div className="ai-studio-settlement-amount">
-                                            <small>{isZh ? '返利可用余额' : 'Available rewards'}</small>
-                                            <strong className="is-balance">
-                                                {formatDisplayMoney(
-                                                    balance,
-                                                    billingCurrencyCode,
-                                                    market.locale,
-                                                )}
-                                            </strong>
-                                        </div>
-                                        <div className="ai-studio-settlement-amount" aria-live="polite">
-                                            <small>{isZh ? '预计冻结金额' : 'Estimated hold'}</small>
-                                            <strong>
-                                                {formatDisplayMoney(
-                                                    estimatedPrice,
-                                                    billingCurrencyCode,
-                                                    market.locale,
-                                                )}
-                                            </strong>
-                                        </div>
-                                        <div className="ai-studio-settlement-refund">
-                                            <RotateCcw aria-hidden="true" />
-                                            <div>
-                                                <strong>
-                                                    {isZh
-                                                        ? '按成功图片结算'
-                                                        : 'Charged for successful images'}
-                                                </strong>
-                                                <span>
-                                                    {isZh
-                                                        ? `免费 ${freeRemaining} 张 + 付费 ${paidQuantity} 张；仅成功图片结算，失败自动释放${displayCurrencyCode === 'USDT' ? `；USDT 仅供估算展示，实际按 ${billingCurrencyCode} 结算` : ''}`
-                                                        : `${freeRemaining} free + ${paidQuantity} paid; only successful images are charged${displayCurrencyCode === 'USDT' ? `; USDT is an estimate and settles in ${billingCurrencyCode}` : ''}`}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                {actionError ? (
-                                    <div className="ai-studio-error">
-                                        <CircleAlert />
-                                        {actionError}
-                                    </div>
-                                ) : null}
-                                {refreshWarning ? (
-                                    <div className="ai-studio-error" role="status">
-                                        <RefreshCw aria-hidden="true" />
-                                        {refreshWarning}
-                                    </div>
-                                ) : null}
-                                {balance < estimatedPrice ? (
-                                    <div className="ai-studio-low-balance" role="alert">
-                                        <CircleAlert aria-hidden="true" />
+                                            >
+                                                {isZh ? '重试字数检查' : 'Retry length check'}
+                                            </button>
+                                        </>
+                                    ) : currentBudget?.value ? (
                                         <span>
                                             {isZh
-                                                ? '返利可用余额不足，请先通过邀请返利获得余额。'
-                                                : 'Not enough referral balance.'}
+                                                ? '生成描述（含参考要求）'
+                                                : 'Final description including reference requirements'}{' '}
+                                            {currentBudget.value.length}/{currentBudget.value.limit}
+                                            {!currentBudget.value.valid
+                                                ? isZh
+                                                    ? '，请缩短后再生成'
+                                                    : '. Shorten before generating.'
+                                                : ''}
                                         </span>
-                                    </div>
-                                ) : null}
-                                {selectedQuota && selectedQuota.safety.remaining < quantity ? (
-                                    <p className="ai-studio-low-balance">
-                                        {isZh
-                                            ? '今天的生图安全额度不足，请降低张数或明天再试。'
-                                            : 'Daily safety limit reached.'}
-                                    </p>
-                                ) : null}
-                                <label className="ai-studio-terms-row">
+                                    ) : (
+                                        <span>
+                                            {isZh
+                                                ? '正在检查生成描述长度…'
+                                                : 'Checking final description length…'}
+                                        </span>
+                                    )}
+                                </div>
+                            ) : null}
+                            <div className="ai-studio-prompt-tools">
+                                <span>
+                                    {prompt.length}/{optimized ? 8000 : 2000}
+                                </span>
+                                <div className="ai-studio-prompt-actions">
+                                    {optimizerModelLabel ? (
+                                        <span
+                                            className="ai-studio-optimizer-model"
+                                            title={optimizerModelIds.join(' / ')}
+                                            aria-label={`${isZh ? '优化模型' : 'Optimizer model'}：${optimizerModelIds.join(' / ')}`}
+                                        >
+                                            <span>{isZh ? '优化模型' : 'Optimizer'}</span>
+                                            <strong>{optimizerModelLabel}</strong>
+                                        </span>
+                                    ) : null}
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            !config.promptOptimizationEnabled ||
+                                            !optimizationReady ||
+                                            prompt.length > (optimized ? 8000 : 2000) ||
+                                            !prompt.trim() ||
+                                            referenceBusy ||
+                                            referenceHasFailure ||
+                                            Boolean(busy) ||
+                                            Boolean(
+                                                promptQuota &&
+                                                !promptQuota.daily.unlimited &&
+                                                promptQuota.daily.remaining <= 0 &&
+                                                !promptQuota.paidEnabled,
+                                            )
+                                        }
+                                        onClick={() => void optimizePrompt()}
+                                    >
+                                        {busy === 'OPTIMIZE' ? (
+                                            <LoaderCircle className="spin" />
+                                        ) : (
+                                            <Sparkles />
+                                        )}
+                                        {!promptQuota
+                                            ? isZh
+                                                ? '费用待更新'
+                                                : 'Pricing unavailable'
+                                            : paidOptimization
+                                              ? `${isZh ? '付费优化' : 'Paid optimization'} · ${formatBillingMoney(promptQuota.paidPrice, promptQuota.currencyCode, market.locale)}/${isZh ? '次' : 'request'}`
+                                              : `${isZh ? '免费优化' : 'Free optimization'} · ${quotaRemainingLabel(promptQuota.daily)}`}
+                                    </button>
+                                </div>
+                            </div>
+                            {paidOptimization &&
+                            promptQuota &&
+                            promptQuota.currencyCode === walletCurrencyCode &&
+                            balance < promptQuota.paidPrice ? (
+                                <div className="ai-studio-error" role="status">
+                                    {isZh
+                                        ? '余额不足，无法付费优化。'
+                                        : 'Insufficient balance for paid optimization.'}
+                                </div>
+                            ) : null}
+                        </div>
+                        <div
+                            className={`ai-studio-reference${referenceItems.length ? ' has-reference' : ''}`}
+                            aria-label={isZh ? '参考图' : 'Reference images'}
+                        >
+                            {referenceItems.length ? (
+                                <div className="ai-studio-reference-list" aria-live="polite">
+                                    {referenceItems.map((item, index) => (
+                                        <div
+                                            key={item.id}
+                                            className={`ai-studio-reference-card is-${item.state.toLowerCase()}`}
+                                        >
+                                            <div className="ai-studio-reference-preview">
+                                                {item.previewUrl ? (
+                                                    <img src={item.previewUrl} alt={item.fileName} />
+                                                ) : (
+                                                    <ImagePlus aria-hidden="true" />
+                                                )}
+                                                <span
+                                                    className="ai-studio-reference-index"
+                                                    aria-hidden="true"
+                                                >
+                                                    {index + 1}
+                                                </span>
+                                                {item.state === 'UPLOADING' ? (
+                                                    <span
+                                                        className="ai-studio-reference-preview-loading"
+                                                        aria-hidden="true"
+                                                    >
+                                                        <LoaderCircle className="spin" />
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            <div className="ai-studio-reference-meta">
+                                                <span
+                                                    className={
+                                                        item.state === 'SUCCEEDED'
+                                                            ? 'is-success'
+                                                            : item.state === 'FAILED'
+                                                              ? 'is-error'
+                                                              : 'is-uploading'
+                                                    }
+                                                >
+                                                    {item.state === 'UPLOADING' ? (
+                                                        <LoaderCircle className="spin" aria-hidden="true" />
+                                                    ) : item.state === 'SUCCEEDED' ? (
+                                                        <CheckCircle2 aria-hidden="true" />
+                                                    ) : (
+                                                        <CircleAlert aria-hidden="true" />
+                                                    )}
+                                                    {item.state === 'UPLOADING'
+                                                        ? isZh
+                                                            ? '正在上传'
+                                                            : 'Uploading'
+                                                        : item.state === 'SUCCEEDED'
+                                                          ? isZh
+                                                              ? '上传成功'
+                                                              : 'Upload complete'
+                                                          : isZh
+                                                            ? '上传失败'
+                                                            : 'Upload failed'}
+                                                </span>
+                                                <strong title={item.asset?.originalName || item.fileName}>
+                                                    {item.asset?.originalName || item.fileName}
+                                                </strong>
+                                                {item.state === 'FAILED' ? (
+                                                    <label>
+                                                        {isZh
+                                                            ? `替换图${index + 1}`
+                                                            : `Replace image ${index + 1}`}
+                                                        <input
+                                                            type="file"
+                                                            aria-label={
+                                                                isZh
+                                                                    ? `替换图${index + 1}`
+                                                                    : `Replace image ${index + 1}`
+                                                            }
+                                                            accept="image/png,image/jpeg,image/webp"
+                                                            disabled={Boolean(busy) || referenceBusy}
+                                                            onChange={event => {
+                                                                const file = event.target.files?.[0];
+                                                                if (file)
+                                                                    void uploadReferences([file], item.id);
+                                                            }}
+                                                        />
+                                                    </label>
+                                                ) : null}
+                                                <small title={item.error || undefined}>
+                                                    {item.asset
+                                                        ? `${formatReferenceSize(item.asset.byteSize)} · ${item.asset.width} × ${item.asset.height}`
+                                                        : item.error ||
+                                                          (isZh
+                                                              ? '正在安全处理图片…'
+                                                              : 'Processing image securely…')}
+                                                </small>
+                                            </div>
+                                            <div className="ai-studio-reference-actions">
+                                                <button
+                                                    type="button"
+                                                    aria-label={
+                                                        isZh
+                                                            ? `移除第 ${index + 1} 张参考图`
+                                                            : `Remove reference image ${index + 1}`
+                                                    }
+                                                    disabled={Boolean(busy) || referenceBusy}
+                                                    onClick={() => void removeReference(item.id)}
+                                                >
+                                                    <Trash2 aria-hidden="true" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : null}
+                            {referenceItems.length < referenceImageLimit ? (
+                                <label
+                                    className={`ai-studio-reference-add${referenceItems.length ? ' is-compact' : ''}`}
+                                >
+                                    <span className="ai-studio-reference-add-icon" aria-hidden="true">
+                                        <ImagePlus />
+                                    </span>
+                                    <span className="ai-studio-reference-add-copy">
+                                        <strong>
+                                            {referenceItems.length
+                                                ? isZh
+                                                    ? `继续添加（${referenceItems.length}/${referenceImageLimit}）`
+                                                    : `Add more (${referenceItems.length}/${referenceImageLimit})`
+                                                : isZh
+                                                  ? '添加参考图'
+                                                  : 'Add reference images'}
+                                        </strong>
+                                        <small>
+                                            {isZh
+                                                ? `可选 · 最多 ${referenceImageLimit} 张，单张最大 10MB`
+                                                : `Optional · up to ${referenceImageLimit} images, 10MB each`}
+                                        </small>
+                                    </span>
                                     <input
-                                        type="checkbox"
-                                        checked={termsAccepted}
-                                        onChange={event => setTermsAccepted(event.target.checked)}
+                                        ref={referenceInputRef}
+                                        type="file"
+                                        multiple
+                                        disabled={Boolean(busy) || referenceBusy}
+                                        accept="image/png,image/jpeg,image/webp"
+                                        onChange={event => {
+                                            const files = Array.from(event.target.files ?? []);
+                                            if (files.length) void uploadReferences(files);
+                                        }}
                                     />
-                                    <span>
-                                        {isZh ? '我已阅读并同意' : 'I have read and accept'}{' '}
+                                </label>
+                            ) : null}
+                            {referenceAssets.length ? (
+                                <button
+                                    type="button"
+                                    className="ai-studio-reference-mode"
+                                    aria-haspopup="dialog"
+                                    aria-expanded={referenceSettingsOpen}
+                                    onClick={() => setReferenceSettingsOpen(true)}
+                                >
+                                    <span>{isZh ? '参考图要求' : 'Reference instructions'}</span>
+                                    <strong>
+                                        {referenceInstruction.trim() ||
+                                            referenceModeLabel(referenceMode, isZh)}
+                                    </strong>
+                                    <ChevronDown aria-hidden="true" />
+                                </button>
+                            ) : null}
+                            {referenceError ? (
+                                <div className="ai-studio-reference-error" role="alert">
+                                    <CircleAlert aria-hidden="true" />
+                                    <span>{referenceError}</span>
+                                </div>
+                            ) : null}
+                        </div>
+                        {optimized ? (
+                            <div className="ai-studio-optimized">
+                                <CheckCircle2 />
+                                <span>{isZh ? `已优化：${optimizationReason}` : optimizationReason}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setPrompt(originalPrompt);
+                                        setOptimized(false);
+                                    }}
+                                >
+                                    {isZh ? '恢复原文' : 'Undo'}
+                                </button>
+                            </div>
+                        ) : null}
+                    </section>
+
+                    <aside
+                        className="ai-studio-controls"
+                        aria-label={isZh ? '生成参数与结算' : 'Generation settings and checkout'}
+                    >
+                        <section className="ai-studio-options">
+                            <h3>{isZh ? '选择生成方案' : 'Choose a generation option'}</h3>
+                            <div
+                                className="ai-studio-model-grid"
+                                role="radiogroup"
+                                aria-label={isZh ? '生成方案' : 'Generation option'}
+                            >
+                                {config.models.map(model => {
+                                    const selected = model.code === selectedModel?.code;
+                                    const option =
+                                        model.resolutionOptions.find(
+                                            item =>
+                                                item.resolution === resolution &&
+                                                item.supportedAspectRatios.includes(aspectRatio),
+                                        ) ??
+                                        model.resolutionOptions.find(item =>
+                                            item.supportedAspectRatios.includes(aspectRatio),
+                                        );
+                                    const modelName = model.officialModelId;
+                                    return (
                                         <button
                                             type="button"
-                                            onClick={event => {
-                                                event.preventDefault();
-                                                setTermsInfoOpen(true);
-                                            }}
+                                            key={model.code}
+                                            className={selected ? 'is-selected' : ''}
+                                            role="radio"
+                                            aria-checked={selected}
+                                            aria-label={`${modelName}，${formatDisplayMoney(option?.unitPrice ?? 0, model.currencyCode, market.locale)}${isZh ? '每张' : ' per image'}`}
+                                            onClick={() => selectModel(model.code)}
                                         >
-                                            {isZh ? 'AI 图片服务条款' : 'AI image terms'}
+                                            <span className="ai-studio-radio-mark" aria-hidden="true">
+                                                {selected ? <Check /> : null}
+                                            </span>
+                                            <span className="ai-studio-model-description">{modelName}</span>
+                                            <strong>
+                                                {formatDisplayMoney(
+                                                    option?.unitPrice ?? 0,
+                                                    model.currencyCode,
+                                                    market.locale,
+                                                )}
+                                                {isZh ? ' / 张' : ' / image'}
+                                            </strong>
                                         </button>
-                                    </span>
-                                </label>
-                            </section>
+                                    );
+                                })}
+                            </div>
+                            <div className="ai-studio-option-row">
+                                <SettingTrigger
+                                    label={isZh ? '图片比例' : 'Aspect ratio'}
+                                    value={aspectRatio}
+                                    onClick={() => setActiveSetting('ASPECT_RATIO')}
+                                />
+                                <SettingTrigger
+                                    label={isZh ? '生成张数' : 'Quantity'}
+                                    value={String(quantity)}
+                                    onClick={() => setActiveSetting('QUANTITY')}
+                                />
+                                <SettingTrigger
+                                    label={isZh ? '清晰度' : 'Resolution'}
+                                    value={selectedResolutionLabel}
+                                    onClick={() => setActiveSetting('RESOLUTION')}
+                                />
+                            </div>
+                        </section>
 
-                            <div className="ai-studio-fixed-generate">
-                                <button
-                                    className="ai-studio-generate-button"
-                                    type="button"
-                                    disabled={!canGenerate}
-                                    onClick={() => void generate()}
-                                >
-                                    {busy === 'GENERATE' ? (
-                                        <LoaderCircle className="spin" />
-                                    ) : (
-                                        <WandSparkles />
-                                    )}
-                                    {isZh ? '开始生成' : 'Generate'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <section className="ai-studio-history">
-                        <div className="ai-studio-results-toolbar">
-                            <div className="ai-studio-history-heading">
-                                <div>
-                                    <h3>
-                                        <span className="ai-studio-mobile-copy">
-                                            {isZh ? '我的生成记录' : 'My generations'}
-                                        </span>
-                                        <span className="ai-studio-desktop-copy">
-                                            {isZh ? '生成结果' : 'Generations'}
-                                        </span>
-                                    </h3>
-                                    <button
-                                        type="button"
-                                        className="ai-studio-history-info"
-                                        aria-label={
-                                            isZh ? '查看生成记录说明' : 'View generation history details'
-                                        }
-                                        onClick={() => setHistoryInfoOpen(true)}
-                                    >
-                                        <Info />
-                                    </button>
-                                </div>
-                                <button type="button" onClick={() => void load()}>
-                                    <RefreshCw />
-                                    {isZh ? '刷新' : 'Refresh'}
-                                </button>
-                            </div>
-                            <div className="ai-studio-history-filters" role="tablist">
-                                {(
-                                    [
-                                        ['ALL', isZh ? '全部' : 'All'],
-                                        ['SUCCESS', isZh ? '已完成' : 'Completed'],
-                                        ['PROCESSING', isZh ? '生成中' : 'Processing'],
-                                        ['FAILED', isZh ? '失败' : 'Failed'],
-                                    ] as Array<[HistoryFilter, string]>
-                                ).map(([value, label]) => (
-                                    <button
-                                        type="button"
-                                        key={value}
-                                        role="tab"
-                                        aria-selected={historyFilter === value}
-                                        className={historyFilter === value ? 'is-active' : ''}
-                                        onClick={() => setHistoryFilter(value)}
-                                    >
-                                        {label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="ai-studio-results-list">
-                            {filteredJobs.length ? (
-                                filteredJobs.map(job => (
-                                    <GenerationCard
-                                        key={job.id}
-                                        job={job}
-                                        language={language}
-                                        locale={market.locale}
-                                        onCancel={() => void cancel(job.id)}
-                                        onDeleteJob={() => setPendingDeleteJobId(job.id)}
-                                        onRegenerate={() => regenerate(job)}
-                                        onRefresh={() => void load()}
-                                        onView={() => setSelectedJobId(job.id)}
-                                    />
-                                ))
-                            ) : (
-                                <div className="ai-studio-empty">
-                                    <span className="ai-studio-mobile-copy">
-                                        {jobs.length
-                                            ? isZh
-                                                ? '当前筛选下暂无记录。'
-                                                : 'No records match this filter.'
-                                            : isZh
-                                              ? '还没有生成记录，从上方输入一句描述开始。'
-                                              : 'No generations yet. Start with a prompt above.'}
-                                    </span>
-                                    <div className="ai-studio-desktop-empty">
-                                        <div className="ai-studio-empty-canvas" aria-hidden="true">
-                                            <ImagePlus />
+                        <section className="ai-studio-checkout">
+                            <div className="ai-studio-settlement">
+                                <div className="ai-studio-settlement-summary">
+                                    <div className="ai-studio-settlement-amount">
+                                        <small>{isZh ? '返利可用余额' : 'Available rewards'}</small>
+                                        <strong className="is-balance">
+                                            {formatDisplayMoney(balance, billingCurrencyCode, market.locale)}
+                                        </strong>
+                                    </div>
+                                    <div className="ai-studio-settlement-amount" aria-live="polite">
+                                        <small>{isZh ? '预计冻结金额' : 'Estimated hold'}</small>
+                                        <strong>
+                                            {formatDisplayMoney(
+                                                estimatedPrice,
+                                                billingCurrencyCode,
+                                                market.locale,
+                                            )}
+                                        </strong>
+                                    </div>
+                                    <div className="ai-studio-settlement-refund">
+                                        <RotateCcw aria-hidden="true" />
+                                        <div>
+                                            <strong>
+                                                {isZh ? '按成功图片结算' : 'Charged for successful images'}
+                                            </strong>
+                                            <span>
+                                                {isZh
+                                                    ? `免费 ${freeRemaining} 张 + 付费 ${paidQuantity} 张；仅成功图片结算，失败自动释放${displayCurrencyCode === 'USDT' ? `；USDT 仅供估算展示，实际按 ${billingCurrencyCode} 结算` : ''}`
+                                                    : `${freeRemaining} free + ${paidQuantity} paid; only successful images are charged${displayCurrencyCode === 'USDT' ? `; USDT is an estimate and settles in ${billingCurrencyCode}` : ''}`}
+                                            </span>
                                         </div>
-                                        <h4>
-                                            {jobs.length
-                                                ? isZh
-                                                    ? '当前筛选下暂无记录'
-                                                    : 'No matching generations'
-                                                : isZh
-                                                  ? '让想法成为画面'
-                                                  : 'Bring your ideas to life'}
-                                        </h4>
-                                        <p>
-                                            {jobs.length
-                                                ? isZh
-                                                    ? '切换上方筛选，查看其他生成记录。'
-                                                    : 'Try another filter to see your generations.'
-                                                : isZh
-                                                  ? '在左侧填写描述并开始生成，完成的图片会显示在这里。'
-                                                  : 'Enter a prompt on the left and generate. Your images will appear here.'}
-                                        </p>
-                                        {!jobs.length ? (
-                                            <button
-                                                type="button"
-                                                onClick={() => promptInputRef.current?.focus()}
-                                            >
-                                                {isZh ? '开始填写描述' : 'Write a prompt'}
-                                            </button>
-                                        ) : null}
                                     </div>
                                 </div>
-                            )}
+                            </div>
+                            {actionError ? (
+                                <div className="ai-studio-error">
+                                    <CircleAlert />
+                                    {actionError}
+                                </div>
+                            ) : null}
+                            {refreshWarning ? (
+                                <div className="ai-studio-error" role="status">
+                                    <RefreshCw aria-hidden="true" />
+                                    {refreshWarning}
+                                </div>
+                            ) : null}
+                            {balance < estimatedPrice ? (
+                                <div className="ai-studio-low-balance" role="alert">
+                                    <CircleAlert aria-hidden="true" />
+                                    <span>
+                                        {isZh
+                                            ? '返利可用余额不足，请先通过邀请返利获得余额。'
+                                            : 'Not enough referral balance.'}
+                                    </span>
+                                </div>
+                            ) : null}
+                            {selectedQuota && selectedQuota.safety.remaining < quantity ? (
+                                <p className="ai-studio-low-balance">
+                                    {isZh
+                                        ? '今天的生图安全额度不足，请降低张数或明天再试。'
+                                        : 'Daily safety limit reached.'}
+                                </p>
+                            ) : null}
+                            <label className="ai-studio-terms-row">
+                                <input
+                                    type="checkbox"
+                                    checked={termsAccepted}
+                                    onChange={event => setTermsAccepted(event.target.checked)}
+                                />
+                                <span>
+                                    {isZh ? '我已阅读并同意' : 'I have read and accept'}{' '}
+                                    <button
+                                        type="button"
+                                        onClick={event => {
+                                            event.preventDefault();
+                                            setTermsInfoOpen(true);
+                                        }}
+                                    >
+                                        {isZh ? 'AI 图片服务条款' : 'AI image terms'}
+                                    </button>
+                                </span>
+                            </label>
+                        </section>
+
+                        <div className="ai-studio-fixed-generate">
+                            <button
+                                className="ai-studio-generate-button"
+                                type="button"
+                                disabled={!canGenerate}
+                                onClick={() => void generate()}
+                            >
+                                {busy === 'GENERATE' ? <LoaderCircle className="spin" /> : <WandSparkles />}
+                                {isZh ? '开始生成' : 'Generate'}
+                            </button>
                         </div>
+                    </aside>
+
+                    <section className="ai-studio-history">
+                        <div className="ai-studio-history-heading">
+                            <div>
+                                <h3>{isZh ? '我的生成记录' : 'My generations'}</h3>
+                                <button
+                                    type="button"
+                                    className="ai-studio-history-info"
+                                    aria-label={isZh ? '查看生成记录说明' : 'View generation history details'}
+                                    onClick={() => setHistoryInfoOpen(true)}
+                                >
+                                    <Info />
+                                </button>
+                            </div>
+                            <button type="button" onClick={() => void load()}>
+                                <RefreshCw />
+                                {isZh ? '刷新' : 'Refresh'}
+                            </button>
+                        </div>
+                        <div className="ai-studio-history-filters" role="tablist">
+                            {(
+                                [
+                                    ['ALL', isZh ? '全部' : 'All'],
+                                    ['SUCCESS', isZh ? '已完成' : 'Completed'],
+                                    ['PROCESSING', isZh ? '生成中' : 'Processing'],
+                                    ['FAILED', isZh ? '失败' : 'Failed'],
+                                ] as Array<[HistoryFilter, string]>
+                            ).map(([value, label]) => (
+                                <button
+                                    type="button"
+                                    key={value}
+                                    role="tab"
+                                    aria-selected={historyFilter === value}
+                                    className={historyFilter === value ? 'is-active' : ''}
+                                    onClick={() => setHistoryFilter(value)}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                        {filteredJobs.length ? (
+                            filteredJobs.map(job => (
+                                <GenerationCard
+                                    key={job.id}
+                                    job={job}
+                                    language={language}
+                                    locale={market.locale}
+                                    onCancel={() => void cancel(job.id)}
+                                    onDeleteJob={() => setPendingDeleteJobId(job.id)}
+                                    onRegenerate={() => void regenerate(job)}
+                                    onRefresh={() => {
+                                        void load();
+                                        void loadHistory();
+                                    }}
+                                    onView={() => {
+                                        setSelectedJobId(job.id);
+                                        void refreshDetail(job.id).catch(error =>
+                                            onNotify(errorMessage(error)),
+                                        );
+                                    }}
+                                />
+                            ))
+                        ) : (
+                            <div className="ai-studio-empty">
+                                {jobs.length
+                                    ? isZh
+                                        ? '当前筛选下暂无记录。'
+                                        : 'No records match this filter.'
+                                    : isZh
+                                      ? '还没有生成记录，从上方输入一句描述开始。'
+                                      : 'No generations yet. Start with a prompt above.'}
+                            </div>
+                        )}
+                        {historyError ? (
+                            <p role="alert">
+                                {historyError}
+                                <button type="button" onClick={() => void loadHistory()}>
+                                    {isZh ? '重试' : 'Retry'}
+                                </button>
+                            </p>
+                        ) : null}
+                        {historyLoading || historyIds.length < historyTotal ? (
+                            <button
+                                type="button"
+                                disabled={historyLoading}
+                                onClick={() => void loadHistory(true)}
+                            >
+                                {historyLoading
+                                    ? isZh
+                                        ? '加载中…'
+                                        : 'Loading…'
+                                    : isZh
+                                      ? `加载更多（已加载 ${historyIds.length}/${historyTotal}）`
+                                      : `Load more (${historyIds.length}/${historyTotal})`}
+                            </button>
+                        ) : historyIds.length ? (
+                            <p>{isZh ? '已显示全部记录' : 'All records loaded'}</p>
+                        ) : null}
                     </section>
 
                     {activeSetting ? (
@@ -1247,26 +1604,13 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                             title={settingSheetTitle}
                             language={language}
                             onClose={() => setActiveSetting(null)}
-                            className={`ai-studio-bottom-sheet${activeSetting === 'MODEL' ? ' ai-studio-model-sheet' : ''}`}
+                            className="ai-studio-bottom-sheet"
                         >
                             <div
                                 className="ai-studio-setting-sheet"
                                 role="radiogroup"
                                 aria-label={settingSheetTitle}
                             >
-                                {activeSetting === 'MODEL'
-                                    ? config.models.map(model => (
-                                          <SheetOption
-                                              key={model.code}
-                                              selected={model.code === selectedModel?.code}
-                                              label={model.officialModelId}
-                                              onClick={() => {
-                                                  selectModel(model.code);
-                                                  setActiveSetting(null);
-                                              }}
-                                          />
-                                      ))
-                                    : null}
                                 {activeSetting === 'ASPECT_RATIO'
                                     ? aspectRatios.map(value => (
                                           <SheetOption
@@ -1446,6 +1790,8 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                             className="ai-studio-bottom-sheet ai-studio-history-detail-sheet"
                         >
                             <GenerationDetail
+                                key={`${customer?.id}:${market.code}:${selectedJob.id}`}
+                                refreshJob={() => refreshDetail(selectedJob.id)}
                                 job={selectedJob}
                                 language={language}
                                 locale={market.locale}
@@ -1587,14 +1933,7 @@ function GenerationCard({
                     </div>
                 ) : job.errorMessage ? (
                     <span className="ai-generation-error-copy">
-                        {storefrontErrorMessage(
-                            {
-                                errorCode:
-                                    job.outputs.find(output => output.failureCode)?.failureCode ?? undefined,
-                                message: job.errorMessage ?? undefined,
-                            },
-                            isZh ? 'zh' : 'en',
-                        )}
+                        {job.errorMessage}
                         {failureSuggestion(job.outputs.find(output => output.failureCode)?.failureCode, isZh)}
                     </span>
                 ) : null}
@@ -1661,11 +2000,13 @@ function GenerationCard({
 }
 
 function GenerationDetail({
+    refreshJob,
     job,
     language,
     locale,
     onNotify,
 }: Readonly<{
+    refreshJob(): Promise<ImageGenerationJob>;
     job: ImageGenerationJob;
     language: StorefrontLanguage;
     locale: string;
@@ -1674,19 +2015,47 @@ function GenerationDetail({
     const isZh = language === 'zh';
     const [previewOutput, setPreviewOutput] = useState<ImageGenerationOutput | null>(null);
     const [downloadingOutputId, setDownloadingOutputId] = useState<string | null>(null);
+    const downloadController = useRef<AbortController | null>(null);
+    useEffect(() => () => downloadController.current?.abort(), []);
     const downloadOutput = async (output: ImageGenerationOutput) => {
-        const source = output.downloadUrl ?? output.imageUrl;
-        if (!source || downloadingOutputId) return;
+        if (downloadingOutputId) return;
+        const controller = new AbortController();
+        downloadController.current = controller;
         setDownloadingOutputId(output.id);
         try {
-            await saveGeneratedImage(source, `ai-image-${job.id}-${output.outputIndex + 1}`);
+            for (let attempt = 0; attempt < 2; attempt++) {
+                const current = (await refreshJob()).outputs.find(item => item.id === output.id);
+                const source = current?.downloadUrl ?? current?.imageUrl;
+                if (!source) throw new Error('Image unavailable');
+                try {
+                    await saveGeneratedImage(
+                        source,
+                        `ai-image-${job.id}-${output.outputIndex + 1}`,
+                        controller.signal,
+                    );
+                    break;
+                } catch (error) {
+                    if (attempt > 0 || ![401, 403, 404].includes((error as { status?: number }).status ?? 0))
+                        throw error;
+                }
+            }
             onNotify(isZh ? '图片已保存' : 'Image saved');
         } catch {
+            if (controller.signal.aborted) return;
             onNotify(
                 isZh ? '下载失败，请刷新页面后重试' : 'Download failed. Refresh the page and try again.',
             );
         } finally {
             setDownloadingOutputId(null);
+        }
+    };
+    const preview = async (output: ImageGenerationOutput) => {
+        try {
+            const current = (await refreshJob()).outputs.find(item => item.id === output.id);
+            if (!current?.imageUrl) throw new Error(isZh ? '图片已删除或过期' : 'Image deleted or expired');
+            setPreviewOutput(current);
+        } catch (error) {
+            onNotify(errorMessage(error));
         }
     };
     const settlementLabel =
@@ -1765,7 +2134,7 @@ function GenerationDetail({
                                             ? `全屏查看第 ${output.outputIndex + 1} 张图片`
                                             : `View image ${output.outputIndex + 1} fullscreen`
                                     }
-                                    onClick={() => setPreviewOutput(output)}
+                                    onClick={() => void preview(output)}
                                 >
                                     <SafeImage
                                         src={output.imageUrl}
@@ -1795,13 +2164,7 @@ function GenerationDetail({
                                     <span>{stateLabel(output.state, isZh)}</span>
                                     {output.errorMessage ? (
                                         <small>
-                                            {storefrontErrorMessage(
-                                                {
-                                                    errorCode: output.failureCode ?? undefined,
-                                                    message: output.errorMessage ?? undefined,
-                                                },
-                                                isZh ? 'zh' : 'en',
-                                            )}
+                                            {output.errorMessage}
                                             {failureSuggestion(output.failureCode, isZh)}
                                         </small>
                                     ) : null}
@@ -1809,7 +2172,7 @@ function GenerationDetail({
                             )}
                             <div className="ai-generation-output-actions">
                                 {output.imageUrl ? (
-                                    <button type="button" onClick={() => setPreviewOutput(output)}>
+                                    <button type="button" onClick={() => void preview(output)}>
                                         <Eye />
                                         {isZh ? '查看' : 'View'}
                                     </button>
@@ -2088,18 +2451,10 @@ function referenceModeLabel(mode: ImageReferenceMode, isZh: boolean): string {
 function SettingTrigger({
     label,
     value,
-    className,
-    expanded,
     onClick,
-}: Readonly<{ label: string; value: string; className?: string; expanded?: boolean; onClick(): void }>) {
+}: Readonly<{ label: string; value: string; onClick(): void }>) {
     return (
-        <button
-            type="button"
-            className={`ai-studio-setting-trigger${className ? ` ${className}` : ''}`}
-            aria-haspopup="dialog"
-            aria-expanded={expanded}
-            onClick={onClick}
-        >
+        <button type="button" className="ai-studio-setting-trigger" onClick={onClick}>
             <span>{label}</span>
             <strong>{value}</strong>
             <ChevronDown aria-hidden="true" />
@@ -2146,10 +2501,14 @@ function formatGenerationElapsed(totalSeconds: number, isZh: boolean): string {
     return isZh ? `${minutes} 分 ${seconds} 秒` : `${minutes}m ${seconds}s`;
 }
 
-async function saveGeneratedImage(url: string, fileNameBase: string): Promise<void> {
-    const response = await fetch(url, { credentials: 'include' });
-    if (!response.ok) throw new Error(`Image download failed (${response.status})`);
+async function saveGeneratedImage(url: string, fileNameBase: string, signal?: AbortSignal): Promise<void> {
+    const response = await fetch(url, { credentials: 'include', signal });
+    if (!response.ok)
+        throw Object.assign(new Error(`Image download failed (${response.status})`), {
+            status: response.status,
+        });
     const blob = await response.blob();
+    signal?.throwIfAborted();
     if (!blob.size) throw new Error('The generated image is empty');
     const extension =
         {
@@ -2224,7 +2583,7 @@ function actionErrorMessage(error: unknown, isZh: boolean): string {
             ? '提交结果暂时无法确认。请保持当前参数后重试，系统会复用同一请求，不会重复创建任务。'
             : 'The result is temporarily unknown. Retry with the same settings to reuse this request.';
     }
-    return storefrontErrorMessage(error, isZh ? 'zh' : 'en');
+    return errorMessage(error);
 }
 function failureSuggestion(failureCode: string | null | undefined, isZh: boolean): string {
     if (!failureCode) return '';
@@ -2238,4 +2597,7 @@ function failureSuggestion(failureCode: string | null | undefined, isZh: boolean
         return isZh ? ' 可降低清晰度或更换画幅后重试。' : ' Try a lower resolution or another aspect ratio.';
     }
     return isZh ? ' 可稍后重新创作。' : ' You can retry this generation later.';
+}
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }

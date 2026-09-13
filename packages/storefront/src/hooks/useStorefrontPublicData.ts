@@ -21,13 +21,12 @@ export function useStorefrontPublicData({
     language,
     vendureLanguageCode,
     storefrontContextResolved,
-    catalogAccessGranted,
 }: StorefrontQueryContext) {
     const text = uiCopy[language];
     const productsQuery = useQuery({
         queryKey: storefrontQueryKeys.products(storefrontQueryKeys.market(market), vendureLanguageCode, 12),
         queryFn: ({ signal }) => api.products(12, signal),
-        enabled: storefrontContextResolved && catalogAccessGranted,
+        enabled: storefrontContextResolved,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
@@ -36,7 +35,7 @@ export function useStorefrontPublicData({
     const collectionsQuery = useQuery({
         queryKey: storefrontQueryKeys.collections(storefrontQueryKeys.market(market), vendureLanguageCode),
         queryFn: ({ signal }) => api.collections(signal),
-        enabled: storefrontContextResolved && catalogAccessGranted,
+        enabled: storefrontContextResolved,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
@@ -45,7 +44,7 @@ export function useStorefrontPublicData({
     const configQuery = useQuery({
         queryKey: [
             ...storefrontQueryKeys.config(storefrontQueryKeys.market(market), vendureLanguageCode),
-            catalogAccessGranted ? 'authenticated' : 'account',
+            'public',
         ],
         queryFn: ({ signal }) => api.storefrontConfig(signal),
         staleTime: PUBLIC_QUERY_STALE_TIME,
@@ -55,10 +54,9 @@ export function useStorefrontPublicData({
     const contentQuery = useQuery({
         queryKey: [
             ...storefrontQueryKeys.content(storefrontQueryKeys.market(market), vendureLanguageCode),
-            catalogAccessGranted ? 'authenticated' : 'account',
+            'public',
         ],
-        queryFn: ({ signal }) =>
-            catalogAccessGranted ? api.storefrontContent(signal) : api.storefrontAccountContent(signal),
+        queryFn: ({ signal }) => api.storefrontContent(signal),
         enabled: storefrontContextResolved,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
@@ -68,17 +66,17 @@ export function useStorefrontPublicData({
     const commerceModeQuery = useQuery({
         queryKey: storefrontQueryKeys.commerceMode(storefrontQueryKeys.market(market)),
         queryFn: ({ signal }) => api.activeStoreCommerceMode(signal),
-        enabled: storefrontContextResolved && catalogAccessGranted,
+        enabled: storefrontContextResolved,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
     });
 
-    const rawProducts = catalogAccessGranted ? (productsQuery.data ?? []) : [];
+    const rawProducts = productsQuery.data ?? [];
 
     const products = rawProducts;
 
-    const collections = catalogAccessGranted ? (collectionsQuery.data ?? []) : [];
+    const collections = collectionsQuery.data ?? [];
 
     const contentBlocks = contentQuery.data?.blocks ?? [];
 
@@ -96,7 +94,7 @@ export function useStorefrontPublicData({
 
     const managedContentProductsQuery = useProductsByIdsQuery({
         api,
-        productIds: catalogAccessGranted ? managedContentProductIds : [],
+        productIds: managedContentProductIds,
         market,
         language,
     });
@@ -116,11 +114,14 @@ export function useStorefrontPublicData({
 
     const configuredBlockTypes = contentQuery.data?.settings?.configuredBlockTypes ?? [];
 
-    const criticalPublicQueries = [productsQuery, collectionsQuery, configQuery];
+    const criticalPublicQueries = [productsQuery, collectionsQuery, configQuery, contentQuery];
 
     const loading =
-        rawProducts.length === 0 &&
-        criticalPublicQueries.some(query => query.isLoading && query.data === undefined && !products.length);
+        (contentQuery.isPending && !contentQuery.isPaused && !configQuery.isError) ||
+        (rawProducts.length === 0 &&
+            criticalPublicQueries.some(
+                query => query.isLoading && query.data === undefined && !products.length,
+            ));
 
     const publicPaused = criticalPublicQueries.some(
         query => query.isPaused && query.data === undefined && !products.length,

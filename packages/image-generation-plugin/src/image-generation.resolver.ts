@@ -36,6 +36,12 @@ export class ImageGenerationShopResolver {
 
     @Query()
     @Allow(Permission.Authenticated)
+    previewImageGenerationPrompt(@Ctx() ctx: RequestContext, @Args('input') input: OptimizeImagePromptInput) {
+        return this.generations.previewImageGenerationPrompt(ctx, input);
+    }
+
+    @Query()
+    @Allow(Permission.Authenticated)
     imageStudioBalance(@Ctx() ctx: RequestContext) {
         return this.generations.walletBalance(ctx);
     }
@@ -76,8 +82,9 @@ export class ImageGenerationShopResolver {
         @Ctx() ctx: RequestContext,
         @Args('skip') skip?: number,
         @Args('take') take?: number,
+        @Args('states') states?: string[],
     ) {
-        return this.generations.findMineList(ctx, skip, take);
+        return this.generations.findMineList(ctx, skip, take, states);
     }
 
     @Mutation()
@@ -94,6 +101,12 @@ export class ImageGenerationShopResolver {
         @Args('termsAccepted') termsAccepted: boolean,
     ) {
         return this.generations.uploadReference(ctx, file, termsAccepted);
+    }
+
+    @Mutation()
+    @Allow(Permission.Authenticated)
+    releaseImageReference(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.generations.releaseReference(ctx, id);
     }
 
     @Mutation()
@@ -293,7 +306,7 @@ export class ImageGenerationAdminResolver {
     }
 
     @Mutation()
-    @Allow(manageImageGenerationPermission.Update)
+    @Allow(Permission.SuperAdmin)
     activateImagePromptSkillRelease(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.configService.activateSkillRelease(ctx, id);
     }

@@ -207,6 +207,7 @@ export const imageGenerationOperationsQuery = gql`
                 missingCostCount
                 grossRevenue
                 actualCost
+                knownCost
                 averageLatencyMs
             }
         }
@@ -272,6 +273,7 @@ export const imageGenerationOperationsQuery = gql`
                 credentialLast4Snapshot
                 credentialSelectionReason
                 upstreamCallCount
+                attemptLedgerVersion
                 latencyMs
                 errorMessage
                 customer {
@@ -305,6 +307,12 @@ const usageRecordFields = gql`
         actualCostMicrounits
         costCurrency
         missingCost
+        costCompleteness
+        missingCostCount
+        costBreakdown {
+            currency
+            amount
+        }
         errorMessage
         customer {
             id
@@ -338,6 +346,26 @@ export const imageAiUsageRecordDetailQuery = gql`
             outputPrompt
             totalTokens
             providerRequestIds
+            attempts {
+                callId
+                attemptNumber
+                stage
+                outcome
+                modelId
+                credentialNameSnapshot
+                createdAt
+                headerRequestId
+                headerRequestIdSource
+                modelResponseId
+                providerRequestId
+                httpStatus
+                latencyMs
+                actualCostMicrounits
+                costCurrency
+                costSource
+                matchingStatus
+                reportedCostEvidence
+            }
             outputs {
                 id
                 state
@@ -628,6 +656,9 @@ export interface ImageAiUsageRecord {
     actualCostMicrounits?: number | null;
     costCurrency?: string | null;
     missingCost: boolean;
+    costCompleteness: string;
+    missingCostCount: number;
+    costBreakdown: Array<{ currency: string; amount: number }>;
     errorMessage?: string | null;
     customer: { id: string; firstName: string; lastName: string; emailAddress: string };
 }
@@ -643,6 +674,26 @@ export interface ImageAiUsageRecordDetailQueryResult {
         outputPrompt?: string | null;
         totalTokens?: number | null;
         providerRequestIds: string[];
+        attempts: Array<{
+            callId: string | null;
+            attemptNumber: number;
+            stage: string;
+            outcome: string;
+            modelId: string;
+            credentialNameSnapshot: string;
+            createdAt: string;
+            headerRequestId: string | null;
+            headerRequestIdSource: string | null;
+            modelResponseId: string | null;
+            providerRequestId: string | null;
+            httpStatus: number | null;
+            latencyMs: number;
+            actualCostMicrounits: number | null;
+            costCurrency: string | null;
+            costSource: string;
+            matchingStatus: string;
+            reportedCostEvidence: { amount: number; currency: string | null; field: string } | null;
+        }>;
         outputs: Array<{
             id: string;
             state: string;
@@ -689,6 +740,7 @@ export interface ImageAdminOperationsQueryResult {
             missingCostCount: number;
             grossRevenue: number;
             actualCost: number;
+            knownCost: number | null;
             averageLatencyMs: number;
         }>;
     };
@@ -747,6 +799,7 @@ export interface ImageAdminOperationsQueryResult {
             credentialLast4Snapshot: string;
             credentialSelectionReason?: string | null;
             upstreamCallCount: number;
+            attemptLedgerVersion: number | null;
             latencyMs: number;
             errorMessage?: string | null;
             customer: { id: string; firstName: string; lastName: string; emailAddress: string };

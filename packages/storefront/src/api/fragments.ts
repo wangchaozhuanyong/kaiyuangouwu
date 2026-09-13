@@ -199,6 +199,8 @@ export const imageGenerationJobFields = `
     errorMessage
     completedAt
     referenceAsset { id originalName mimeType byteSize width height expiresAt previewUrl }
+    referenceAssetIds referenceInstruction optimizedPrompt inputSnapshotVersion
+    referenceAssets { id originalName mimeType byteSize width height expiresAt previewUrl }
     outputs { id outputIndex state attemptCount errorMessage failureCode completedAt refundedAt billingMode chargeAmount width height imageUrl downloadUrl }
 `;
 

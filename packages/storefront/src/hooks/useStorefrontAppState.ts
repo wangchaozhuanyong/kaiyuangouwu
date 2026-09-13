@@ -71,7 +71,7 @@ export function useStorefrontAppState() {
         cartState,
         api,
         queryContext,
-        catalogAccessGranted,
+        customerAuthenticated,
         legalIdentity,
         refetchStorefront,
         toggleLanguage,
@@ -152,7 +152,7 @@ export function useStorefrontAppState() {
     }, [cartState.confirmed, queryClient, market.code, market.currencyCode, vendureLanguageCode]);
 
     useEffect(() => {
-        if (!storefrontContextResolved || !catalogAccessGranted) return;
+        if (!storefrontContextResolved || !customerAuthenticated) return;
         const controller = new AbortController();
         void api.watchRealtime(event => {
             void invalidateStorefrontRealtimeQueries(queryClient, event, {
@@ -164,7 +164,7 @@ export function useStorefrontAppState() {
         return () => controller.abort();
     }, [
         api,
-        catalogAccessGranted,
+        customerAuthenticated,
         customer?.id,
         market,
         queryClient,
@@ -479,9 +479,9 @@ export function useStorefrontAppState() {
 
     useStorefrontMetadata({
         isZh,
-        route: catalogAccessGranted ? route : { name: 'login' },
-        selectedProduct: catalogAccessGranted ? selectedProduct : null,
-        storefrontDescription: catalogAccessGranted ? storefrontDescription : '',
+        route,
+        selectedProduct,
+        storefrontDescription,
         storefrontName,
         logoUrl,
     });

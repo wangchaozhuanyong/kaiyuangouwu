@@ -5,16 +5,16 @@ import { notNullOrUndefined } from '@vendure/common/lib/shared-utils';
 import { createErrorResultGuard, createTestEnvironment, ErrorResultGuard } from '@vendure/testing';
 import path from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type {
-    productVariantFragment,
-    productWithOptionsFragment,
-    productWithVariantsFragment,
-} from './graphql/fragments-admin';
-import type { ResultOf, VariablesOf } from './graphql/graphql-admin';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
 
+import {
+    type productVariantFragment,
+    type productWithOptionsFragment,
+    type productWithVariantsFragment,
+} from './graphql/fragments-admin';
+import { type ResultOf, type VariablesOf } from './graphql/graphql-admin';
 import {
     addOptionGroupToProductDocument,
     createProductDocument,
@@ -23,6 +23,7 @@ import {
     deleteProductDocument,
     deleteProductVariantDocument,
     getAssetListDocument,
+    getCollectionsDocument,
     getOptionGroupDocument,
     getProductListDocument,
     getProductSimpleDocument,
@@ -81,6 +82,43 @@ describe('Product resolver', () => {
     });
 
     describe('products list query', () => {
+        // Production acceptance: the Admin category filter traverses Product -> variants -> collections.
+        it('filters products by collection membership through the Admin API', async () => {
+            const { collections } = await adminClient.query(getCollectionsDocument);
+            const plants = collections.items.find(collection => collection.name === 'Plants');
+            expect(plants).toBeDefined();
+
+            const { products } = await adminClient.query(getProductListDocument, {
+                options: {
+                    filter: { collectionId: { eq: plants!.id } },
+                    sort: { updatedAt: SortOrder.DESC },
+                    take: 20,
+                },
+            });
+            expect(products.items.map(product => product.name).sort()).toEqual([
+                'Bonsai Tree',
+                'Orchid',
+                'Spiky Cactus',
+            ]);
+            expect(products.totalItems).toBe(3);
+
+            const page = await adminClient.query(getProductListDocument, {
+                options: {
+                    filter: { collectionId: { eq: plants!.id } },
+                    sort: { name: SortOrder.ASC },
+                    skip: 1,
+                    take: 1,
+                },
+            });
+            expect(page.products.items.map(product => product.name)).toEqual(['Orchid']);
+            expect(page.products.totalItems).toBe(3);
+
+            const empty = await adminClient.query(getProductListDocument, {
+                options: { filter: { collectionId: { eq: plants!.id }, name: { contains: 'Camera' } } },
+            });
+            expect(empty.products).toEqual({ items: [], totalItems: 0 });
+        });
+
         it('returns all products when no options passed', async () => {
             const result = await adminClient.query(getProductListDocument, {});
 
@@ -363,8 +401,8 @@ describe('Product resolver', () => {
                     },
                 });
                 translatedProduct = result.createProduct;
-                const en = translatedProduct.translations.find(t => t.languageCode === LanguageCode.en);
-                const de = translatedProduct.translations.find(t => t.languageCode === LanguageCode.de);
+                const en = translatedProduct.translations.find(t => t.languageCode === 'en');
+                const de = translatedProduct.translations.find(t => t.languageCode === 'de');
                 expect(en).toBeDefined();
                 expect(de).toBeDefined();
                 en_translation = en as typeof en_translation;
@@ -969,12 +1007,8 @@ describe('Product resolver', () => {
                 },
             });
             expect(result.updateProduct.translations.length).toBe(2);
-            const deTranslation = result.updateProduct.translations.find(
-                t => t.languageCode === LanguageCode.de,
-            );
-            const enTranslation = result.updateProduct.translations.find(
-                t => t.languageCode === LanguageCode.en,
-            );
+            const deTranslation = result.updateProduct.translations.find(t => t.languageCode === 'de');
+            const enTranslation = result.updateProduct.translations.find(t => t.languageCode === 'en');
             expect(deTranslation).toBeDefined();
             expect(enTranslation).toBeDefined();
             expect(deTranslation?.name).toBe('de Mashed Potato');
@@ -1477,7 +1511,7 @@ describe('Product resolver', () => {
                     variantToModify = firstVariant as typeof variantToModify;
                     initialOptionIds = variantToModify.options.map(o => o.id);
                 });
-                it('assert initial state', async () => {
+                it('assert initial state', () => {
                     expect(variantToModify.options.map(o => o.code)).toEqual([
                         'group2-option-2',
                         'group3-option-1',

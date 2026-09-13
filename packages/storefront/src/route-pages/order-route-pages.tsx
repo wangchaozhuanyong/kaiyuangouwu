@@ -12,6 +12,7 @@ import { PageSkeleton } from '../route-loading';
 import { AuthPageBoundary, EmptyState, Subpage } from '../storefront-ui/page-shell';
 import { ActiveCustomer } from '../types';
 
+import '../commerce-styles';
 import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
 
 export function OrdersRoutePage() {

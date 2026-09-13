@@ -4,6 +4,7 @@ import { BusinessServicesPageContext, SupportPageContext } from '../storefront-p
 import { FlashSalePage, RecommendationPage } from '../storefront-ui/content-ui';
 import { Product } from '../types';
 
+import '../commerce-styles';
 import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
 
 const ReviewCenterPage = lazyRouteComponent(() => import('../review-pages'), 'ReviewCenterPage');
