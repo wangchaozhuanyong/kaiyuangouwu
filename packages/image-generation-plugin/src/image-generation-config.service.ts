@@ -2,7 +2,7 @@ import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import { isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
 import { ContentTranslationService } from '@vendure/content-translation-plugin';
-import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
+import { Permission, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { createHash, randomUUID } from 'node:crypto';
 import { In, IsNull, MoreThanOrEqual } from 'typeorm';
 
@@ -820,6 +820,8 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
     }
 
     async activateSkillRelease(ctx: RequestContext, id: string | number): Promise<ImagePromptSkillRelease> {
+        if (!ctx.userHasPermissions([Permission.SuperAdmin]))
+            throw new UserInputError('仅平台超级管理员可以激活全局提示词规则');
         const release = await this.connection.withTransaction(ctx, async txCtx => {
             const repository = this.connection.getRepository(txCtx, ImagePromptSkillRelease);
             const selected = await repository.findOne({ where: { id } });

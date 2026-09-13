@@ -2,11 +2,12 @@
 /* Semantic tokens ensure seamless light/oriental theme adaptability */
 
 @keyframes shimmer {
-    from {
-        background-position: 100% 0;
+    0%,
+    100% {
+        opacity: 0.6;
     }
-    to {
-        background-position: 0 0;
+    50% {
+        opacity: 1;
     }
 }
 

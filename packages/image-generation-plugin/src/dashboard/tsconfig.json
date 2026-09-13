@@ -1,0 +1,9 @@
+{
+    "extends": "../../../dashboard/tsconfig.json",
+    "include": [
+        "./image-generation-pages.tsx",
+        "./image-generation-operations-query.spec.ts",
+        "./provider-attempt-details.tsx",
+        "../../../dashboard/src/vite-env.d.ts"
+    ]
+}

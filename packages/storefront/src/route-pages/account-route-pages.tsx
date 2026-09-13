@@ -10,6 +10,7 @@ import {
     ReferralPageContext,
 } from '../storefront-page-contexts';
 
+import '../commerce-styles';
 import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
 
 const AccountPage = lazyRouteComponent(() => import('../pages/account-page'), 'AccountPage');

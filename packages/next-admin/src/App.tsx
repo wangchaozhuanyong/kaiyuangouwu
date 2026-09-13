@@ -100,11 +100,11 @@ function AuthenticatedShell() {
     const loading = authQuery.loading;
     const error = authQuery.error;
 
-    // 会话恢复时需要先将唯一可用 Channel 写入请求上下文，再挂载业务页面。
+    // 会话恢复时先明确选取一个可访问 Channel，再挂载业务页面。
     /* oxlint-disable react/set-state-in-effect */
     useEffect(() => {
         if (!data?.me || channelReady) return;
-        if (data.me.channels.length === 1) setInitialActiveChannel(data.me.channels[0].token);
+        if (data.me.channels.length > 0) setInitialActiveChannel(data.me.channels[0].token);
         setChannelReady(true);
     }, [channelReady, data?.me]);
     /* oxlint-enable react/set-state-in-effect */

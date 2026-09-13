@@ -8,6 +8,7 @@ import {
     RequestContextService,
     TransactionalConnection,
 } from '@vendure/core';
+import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import { In, LessThan, LessThanOrEqual } from 'typeorm';
 
@@ -26,15 +27,17 @@ import { ImageGenerationOutput } from './entities/image-generation-output.entity
 import { ImageGenerationRuntimeStatus } from './entities/image-generation-runtime-status.entity';
 import { ImagePrivateAsset } from './entities/image-private-asset.entity';
 import { ImageProviderCredential } from './entities/image-provider-credential.entity';
-import { ImageGenerationConfigService, providerScopeForModel } from './image-generation-config.service';
+import { ImageGenerationConfigService } from './image-generation-config.service';
 import { classifyImageGenerationFailure, safeDiagnosticMessage } from './image-generation-failure';
 import {
     decideImageOutputFailure,
+    imageDispatchReadyAt,
     imageOutboxRetryDelayMs,
     interruptedImageStageAction,
     preserveProviderCostTelemetry,
 } from './image-generation-state';
 import { ImageGenerationService } from './image-generation.service';
+import { traceValues } from './prompt/image-prompt-attempt';
 import {
     DefinitiveImageProviderError,
     ImageProviderClient,
@@ -172,7 +175,7 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                     outputId,
                     state: 'PENDING',
                     attemptCount: 0,
-                    nextAttemptAt: new Date(),
+                    nextAttemptAt: imageDispatchReadyAt(),
                     dispatchedAt: null,
                     queueTaskId: null,
                     processingStage: null,
@@ -239,7 +242,7 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                         outputId: output.id,
                         state: 'PENDING',
                         attemptCount: 0,
-                        nextAttemptAt: new Date(),
+                        nextAttemptAt: imageDispatchReadyAt(),
                         dispatchedAt: null,
                         queueTaskId: null,
                         processingStage: null,
@@ -254,7 +257,7 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
             { state: 'DISPATCHING', updatedAt: LessThan(new Date(Date.now() - 60_000)) },
             {
                 state: 'PENDING',
-                nextAttemptAt: new Date(),
+                nextAttemptAt: imageDispatchReadyAt(),
                 lastError: '入队进程中断，已安排自动重试',
             },
         );
@@ -273,7 +276,7 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                 { id: dispatch.id, state: 'DISPATCHED' },
                 {
                     state: 'PENDING',
-                    nextAttemptAt: new Date(),
+                    nextAttemptAt: imageDispatchReadyAt(),
                     queueTaskId: null,
                     lastError: '队列任务超过 2 分钟未被领取，已安排重新入队',
                 },
@@ -335,7 +338,7 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
         );
         if (claim.affected !== 1) {
             const current = await rawRepository.findOne({ where: { id: jobQueueItem.data.outputId as ID } });
-            if (current && current.state !== 'QUEUED' && current.state !== 'RUNNING') {
+            if (current && !['QUEUED', 'RUNNING', 'SUCCEEDED'].includes(current.state)) {
                 await this.completeDispatch(current.id);
             }
             return { outputId: jobQueueItem.data.outputId, state: current?.state ?? 'MISSING' };
@@ -364,12 +367,6 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
         let providerStartedAt = Date.now();
         let selectedCredential: ImageProviderCredential | null = null;
         try {
-            const providerScope =
-                (output.job.providerScopeSnapshot as ImageProviderScope | undefined) ??
-                providerScopeForModel(
-                    output.job.protocolSnapshot as ImageProviderProtocol,
-                    output.job.providerModelIdSnapshot,
-                );
             selectedCredential = output.job.providerCredentialCodeSnapshot
                 ? await this.configService.credentialByCode(ctx, output.job.providerCredentialCodeSnapshot)
                 : null;
@@ -378,23 +375,9 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                 selectedCredential.healthStatus !== 'HEALTHY' ||
                 (selectedCredential.cooldownUntil?.getTime() ?? 0) > Date.now()
             ) {
-                const route = await this.configService.routeCredential(
-                    ctx,
-                    providerScope,
-                    output.job.modelConfigId,
-                    'IMAGE',
-                );
-                selectedCredential = route.credential;
-                Object.assign(output.job, {
-                    providerCredentialCodeSnapshot: route.credential.code,
-                    providerCredentialNameSnapshot: route.credential.name,
-                    providerCredentialLast4Snapshot: route.credential.apiKeyLast4,
-                    providerCredentialFingerprint: this.configService.credentialFingerprint(route.credential),
-                    providerSelectionReason: route.selectionReason,
-                });
-                await this.connection.getRepository(ctx, ImageGenerationJob).save(output.job, {
-                    reload: false,
-                });
+                // Routing is frozen when the job is created. Changing a shared job snapshot
+                // here also changes the identity of sibling outputs and UNKNOWN retries.
+                throw new DefinitiveImageProviderError('原任务账号暂不可用，请等待恢复后再试');
             }
             const credential = selectedCredential;
             const currentFingerprint = this.configService.credentialFingerprint(credential);
@@ -432,6 +415,19 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                     mimeType: asset.mimeType,
                 })),
             );
+            providerTelemetry = { callId: randomUUID() };
+            providerStartedAt = Date.now();
+            // Persist the attempt before dispatch. Missing completion remains UNKNOWN.
+            await this.recordCost(
+                ctx,
+                output,
+                'UNKNOWN',
+                providerStartedAt,
+                providerTelemetry,
+                undefined,
+                null,
+                'REQUEST_STARTED',
+            );
             providerStage = 'REQUEST_STARTED';
             await this.updateDispatchStage(output.id, providerStage);
             providerStartedAt = Date.now();
@@ -448,7 +444,8 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                 },
             );
             providerStage = 'RESPONSE_RECEIVED';
-            providerTelemetry = result.telemetry;
+            providerTelemetry = { ...result.telemetry, callId: providerTelemetry.callId };
+            result.telemetry = providerTelemetry;
             output.providerRequestId =
                 result.providerRequestId ?? result.telemetry?.providerRequestId ?? null;
             await this.connection
@@ -458,12 +455,12 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
             storedAsset = await this.storage.storeGenerated(
                 ctx,
                 output.job.customerId,
-                result,
+                { ...result, metadata: { ...result.metadata, settlementTelemetry: result.telemetry } },
                 `ai-${String(output.job.id)}-${output.outputIndex + 1}.png`,
                 output.job.resolution,
             );
-            await this.updateDispatchStage(output.id, 'ASSET_STORED', storedAsset.id);
             providerStage = 'ASSET_STORED';
+            await this.updateDispatchStage(output.id, 'ASSET_STORED', storedAsset.id);
             const generatedAsset = storedAsset;
             const settled = await this.generations.settleSuccessfulOutput(
                 ctx,
@@ -494,6 +491,39 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
             }
             await this.completeDispatch(output.id);
         } catch (error) {
+            // Once an asset exists, settlement may already have committed even when the
+            // caller saw a database error. Preserve it and let the outbox finish locally.
+            if (storedAsset) {
+                await this.updateDispatchStage(
+                    output.id,
+                    providerStage === 'SETTLED' ? 'SETTLED' : 'ASSET_STORED',
+                    storedAsset.id,
+                ).catch(() => undefined);
+                await this.connection
+                    .getRepository(ctx, ImageGenerationDispatch)
+                    .update({ outputId: output.id }, { lastError: safeDiagnosticMessage(error) })
+                    .catch(() => undefined);
+                Logger.warn(
+                    `settlement ${String(output.id)}: ${safeDiagnosticMessage(error)}`,
+                    IMAGE_GENERATION_LOGGER_CTX,
+                );
+                await this.generations.refreshJob(ctx, output.jobId).catch(() => undefined);
+                return { outputId: String(output.id), state: output.state };
+            }
+            if (output.failureCode === 'UNKNOWN_RETRY' && providerStage === 'CLAIMED') {
+                await this.connection.getRepository(ctx, ImageGenerationOutput).update(
+                    { id: output.id, state: 'RUNNING', walletSettled: false },
+                    {
+                        state: 'UNKNOWN',
+                        unknownAt: new Date(),
+                        failureCode: 'UNKNOWN_RESULT',
+                        errorMessage: '原任务账号或参考图不可用，保留待核对状态',
+                    },
+                );
+                await this.completeDispatch(output.id);
+                await this.generations.refreshJob(ctx, output.jobId);
+                return { outputId: String(output.id), state: 'UNKNOWN' };
+            }
             const errorTelemetry = providerErrorDetails(error);
             const auditStage: ImageGenerationProcessingStage =
                 providerStage === 'REQUEST_STARTED' &&
@@ -503,10 +533,6 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                     ? 'RESPONSE_RECEIVED'
                     : providerStage;
             const classified = classifyImageGenerationFailure(error, auditStage);
-            if (storedAsset && providerStage !== 'ASSET_STORED') {
-                await this.storage.deleteOwned(ctx, storedAsset.id, output.job.customerId).catch(() => false);
-                storedAsset = undefined;
-            }
             const failureDetails = classified.telemetry;
             const affectsCredentialHealth = classified.affectsCredentialHealth;
             const affectsModelHealth = classified.affectsModelHealth;
@@ -646,8 +672,9 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                 `${String(output.id)} stage=${auditStage} code=${classified.code} type=${diagnosticErrorType(error)}: ${classified.rawMessage}`,
                 IMAGE_GENERATION_LOGGER_CTX,
             );
+        } finally {
+            clearInterval(taskHeartbeat);
         }
-        if (taskHeartbeat) clearInterval(taskHeartbeat);
         await this.generations.refreshJob(ctx, output.jobId);
         return { outputId: String(output.id), state: output.state };
     }
@@ -721,7 +748,7 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                         { id: dispatch.id, state: 'DISPATCHED' },
                         {
                             state: 'PENDING',
-                            nextAttemptAt: new Date(),
+                            nextAttemptAt: imageDispatchReadyAt(),
                             queueTaskId: null,
                             processingStage: null,
                             heartbeatAt: null,
@@ -774,7 +801,10 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                         output,
                         'SUCCEEDED',
                         Date.now(),
-                        { providerRequestId: output.providerRequestId ?? undefined },
+                        {
+                            ...asset.providerMetadata?.settlementTelemetry,
+                            providerRequestId: output.providerRequestId ?? undefined,
+                        },
                         undefined,
                         null,
                         'ASSET_STORED',
@@ -795,25 +825,35 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                 continue;
             }
             if (recoveryAction === 'COMPLETE') {
-                if (dispatch.processingStage === 'ASSET_STORED' && output.state === 'SUCCEEDED') {
-                    const ctx = await this.requestContextService.create({
-                        apiType: 'admin',
-                        channelOrToken: output.job.channel,
-                    });
-                    await this.recordCost(
-                        ctx,
-                        output,
-                        'SUCCEEDED',
-                        Date.now(),
-                        { providerRequestId: output.providerRequestId ?? undefined },
-                        undefined,
-                        null,
-                        'ASSET_STORED',
+                try {
+                    if (output.state === 'SUCCEEDED') {
+                        const ctx = await this.requestContextService.create({
+                            apiType: 'admin',
+                            channelOrToken: output.job.channel,
+                        });
+                        await this.recordCost(
+                            ctx,
+                            output,
+                            'SUCCEEDED',
+                            Date.now(),
+                            {
+                                ...dispatch.stagedAsset?.providerMetadata?.settlementTelemetry,
+                                providerRequestId: output.providerRequestId ?? undefined,
+                            },
+                            undefined,
+                            null,
+                            'ASSET_STORED',
+                        );
+                        await this.generations.refreshJob(ctx, output.jobId);
+                    }
+                    await this.completeDispatch(output.id);
+                    handled += 1;
+                } catch (error) {
+                    await dispatchRepository.update(
+                        { id: dispatch.id },
+                        { heartbeatAt: new Date(), lastError: safeDiagnosticMessage(error) },
                     );
-                    await this.generations.refreshJob(ctx, output.jobId);
                 }
-                await this.completeDispatch(output.id);
-                handled += 1;
             }
         }
         return handled;
@@ -866,6 +906,7 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
             saleUnitPriceSnapshot: output.chargeAmount,
             saleCurrencyCode: output.job.currencyCode,
             outcome,
+            ...traceValues({ ...details, ...telemetry }),
             httpStatus: telemetry?.httpStatus ?? details.httpStatus ?? null,
             providerRequestId:
                 (telemetry?.providerRequestId ?? details.providerRequestId)?.slice(0, 200) ?? null,
@@ -889,6 +930,7 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                 `cost ${String(output.id)}#${output.attemptCount}: ${safeError(costError)}`,
                 IMAGE_GENERATION_LOGGER_CTX,
             );
+            throw costError;
         });
     }
 }

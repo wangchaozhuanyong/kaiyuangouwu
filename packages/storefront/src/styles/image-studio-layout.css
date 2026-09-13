@@ -68,6 +68,8 @@
 }
 
 .ai-studio-prompt-tools button {
+    flex-shrink: 0;
+    white-space: nowrap;
     min-height: 32px;
     padding: 5px 8px;
     border: 0;
@@ -717,6 +719,7 @@
 .sheet-layer:has(.ai-studio-bottom-sheet) {
     width: 100vw;
     left: 0;
+    transform: none;
     align-items: flex-end;
     justify-content: center;
 }

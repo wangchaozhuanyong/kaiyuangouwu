@@ -142,7 +142,28 @@ describe('StorefrontPromotionController', () => {
         expect(unsafeResponse.redirect).toHaveBeenCalledWith(303, '/');
     });
 
-    it('returns invalid promotion entries to a fresh promotion page without a text download', async () => {
+    it.each([undefined, 'home'])('always sends the public homepage entry to / (%s)', async destination => {
+        const accessService = {
+            resolveRequest: vi.fn(() => Promise.resolve({ host: 'shop.example.com' })),
+            validateEntryTicket: vi.fn(() => false),
+            createEntryCookie: vi.fn(),
+        };
+        const controller = new StorefrontPromotionController(
+            accessService as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+        for (const ticket of [undefined, 'expired-ticket']) {
+            const response = responseMock();
+            await controller.enter({} as Request, response as unknown as Response, ticket, destination);
+            expect(response.redirect).toHaveBeenCalledWith(303, '/');
+            expect(response.setHeader).not.toHaveBeenCalledWith('Set-Cookie', expect.anything());
+        }
+        expect(accessService.validateEntryTicket).not.toHaveBeenCalled();
+    });
+
+    it('returns invalid non-home promotion entries to a fresh promotion page without a text download', async () => {
         const request = { host: 'shop.example.com' };
         const accessService = {
             resolveRequest: vi.fn(() => Promise.resolve(request)),
@@ -157,7 +178,12 @@ describe('StorefrontPromotionController', () => {
         );
         const response = responseMock();
 
-        await controller.enter({} as Request, response as unknown as Response, 'expired-ticket');
+        await controller.enter(
+            {} as Request,
+            response as unknown as Response,
+            'expired-ticket',
+            'product:42',
+        );
 
         expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
         expect(response.redirect).toHaveBeenCalledWith(303, '/promo');

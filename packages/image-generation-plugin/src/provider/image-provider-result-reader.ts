@@ -23,13 +23,14 @@ export class ImageProviderResultReader {
         requestTelemetry: ProviderTelemetry = {},
     ): Promise<ProviderGenerationResult> {
         try {
-            const providerRequestId =
+            const modelResponseId =
+                requestTelemetry.modelResponseId ??
                 stringAt(response, ['id']) ??
                 stringAt(response, ['responseId']) ??
                 findStringByKey(response, new Set(['responseId', 'requestId']), value =>
                     Boolean(value.trim()),
-                ) ??
-                requestTelemetry.providerRequestId;
+                );
+            const providerRequestId = requestTelemetry.providerRequestId ?? modelResponseId;
             const revisedPrompt = stringAt(response, ['data', 0, 'revised_prompt']);
             const inlineImage =
                 structuredInlineImage(response) ??
@@ -47,7 +48,7 @@ export class ImageProviderResultReader {
                     providerRequestId,
                     revisedPrompt,
                     metadata: safeProviderMetadata(providerRequestId, revisedPrompt, mimeType, 'inline'),
-                    telemetry: { ...requestTelemetry, providerRequestId },
+                    telemetry: { ...requestTelemetry, providerRequestId, modelResponseId },
                 };
             }
             const imageUrl = findRemoteImageUrl(response);
@@ -65,7 +66,7 @@ export class ImageProviderResultReader {
                     downloaded.mimeType,
                     'remote-url',
                 ),
-                telemetry: { ...requestTelemetry, providerRequestId },
+                telemetry: { ...requestTelemetry, providerRequestId, modelResponseId },
             };
         } catch (error) {
             throw withImageProcessingTelemetry(error, requestTelemetry);

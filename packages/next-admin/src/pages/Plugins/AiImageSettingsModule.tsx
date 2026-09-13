@@ -37,6 +37,7 @@ import {
     type ImageModelRecord,
     type ImageProviderProtocol,
 } from '../../graphql/plugins.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getStatusLabel } from '../../utils/status-labels';
@@ -64,6 +65,8 @@ const JOB_STATE_OPTIONS: Array<[JobStateFilter, string]> = [
 ];
 
 export function AiImageSettingsModule() {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canActivateSkill = hasAnyPermission(['SuperAdmin']);
     const [tab, setTab] = useUrlTab<StudioTab>(AI_STUDIO_TABS, 'config');
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
@@ -117,7 +120,7 @@ export function AiImageSettingsModule() {
         }
     };
     const executeActivateSkill = async () => {
-        if (!activateRelease) return;
+        if (!activateRelease || !canActivateSkill) return;
         try {
             await activateSkill({ variables: { id: activateRelease.id } });
             showNotice(`提示词规则包 v${activateRelease.version} 已激活`);
@@ -224,6 +227,7 @@ export function AiImageSettingsModule() {
                     />
                 ) : (
                     <SkillPanel
+                        canActivate={canActivateSkill}
                         releases={query.data?.imagePromptSkillReleases ?? []}
                         activeHash={config?.activeSkillHash ?? ''}
                         onActivate={release =>
@@ -1399,12 +1403,14 @@ function JobOutputsDialog({
 }
 
 function SkillPanel({
+    canActivate,
     releases,
     activeHash,
     onActivate,
 }: {
     releases: ImageGenerationAdminResult['imagePromptSkillReleases'];
     activeHash: string;
+    canActivate: boolean;
     onActivate: (release: ImageGenerationAdminResult['imagePromptSkillReleases'][number]) => void;
 }) {
     if (!releases.length)
@@ -1456,6 +1462,8 @@ function SkillPanel({
                             {!active && (
                                 <button
                                     type="button"
+                                    disabled={!canActivate}
+                                    title={canActivate ? undefined : '仅平台超级管理员可以激活全局规则'}
                                     onClick={() => onActivate(release)}
                                     className="self-start rounded-lg bg-blue-600 px-3 py-2 text-[11px] font-bold text-white"
                                 >

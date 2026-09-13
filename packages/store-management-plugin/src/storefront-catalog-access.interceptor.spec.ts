@@ -26,7 +26,7 @@ function invoke(field: string, parent = 'Query', userId?: string, apiType = 'sho
     return { run, next };
 }
 
-describe('private storefront catalog', () => {
+describe('public storefront browsing boundary', () => {
     it.each([
         'products',
         'product',
@@ -39,22 +39,41 @@ describe('private storefront catalog', () => {
         'activeStorefrontCoupons',
         'activeSystemAnnouncements',
         'storefrontContentSettings',
-        'futureCatalogExport',
-    ])('rejects anonymous %s, including requests with an entry cookie', field => {
+        'storefrontProductReviews',
+        'activeStoreCommerceMode',
+    ])('allows anonymous public browsing: %s', field => {
         const { run, next } = invoke(field);
-        expect(run).toThrow();
-        expect(next.handle).not.toHaveBeenCalled();
+        expect(run).not.toThrow();
+        expect(next.handle).toHaveBeenCalled();
     });
+    it.each([
+        'futureCatalogExport',
+        'activeOrder',
+        'order',
+        'myStorefrontReviews',
+        'myAfterSalesRequests',
+        'myAvailableCoupons',
+        'imageStudioWallet',
+        'myImageGenerationJobs',
+        'previewImageGenerationPrompt',
+    ])('keeps private and unreviewed queries protected: %s', field => expect(invoke(field).run).toThrow());
+    it.each(['addItemToOrder', 'setCustomerAvatar', 'createAfterSalesRequest', 'createImageGeneration'])(
+        'does not make customer mutations public: %s',
+        field => expect(invoke(field, 'Mutation').run).toThrow(),
+    );
     it('does not treat a mutation name used as a query alias as account access', () => {
-        const { run } = invoke('products');
+        const { run } = invoke('futureCatalogExport');
         Object.assign(parsed.info, { path: { key: 'login' }, operation: { name: { value: 'Login' } } });
         expect(run).toThrow();
         expect(invoke('login', 'Query').run).toThrow();
     });
-    it.each(['activeCustomer', 'storefrontBranding', 'storefrontContent', 'activeChannel'])(
-        'preserves public account bootstrap: %s',
-        field => expect(invoke(field).run).not.toThrow(),
-    );
+    it.each([
+        'activeCustomer',
+        'storefrontBranding',
+        'storefrontContent',
+        'activeChannel',
+        'imageStudioConfig',
+    ])('preserves public account bootstrap: %s', field => expect(invoke(field).run).not.toThrow());
     it.each(['login', 'registerCustomerAccount', 'requestPasswordReset', 'resetPassword'])(
         'preserves account mutation: %s',
         field => expect(invoke(field, 'Mutation').run).not.toThrow(),

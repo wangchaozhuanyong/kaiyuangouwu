@@ -23,6 +23,12 @@ export interface ImageOutputActivitySnapshot {
 }
 
 export interface ProviderCostTelemetrySnapshot {
+    callId?: string | null;
+    headerRequestId?: string | null;
+    headerRequestIdSource?: string | null;
+    modelResponseId?: string | null;
+    costSource?: string | null;
+    reportedCostEvidence?: unknown;
     httpStatus?: number | null;
     providerRequestId?: string | null;
     latencyMs: number;
@@ -63,6 +69,12 @@ export function interruptedImageStageAction(
     return 'IGNORE';
 }
 
+// MySQL DATETIME can round milliseconds into the next second. Immediate work
+// must remain due after storage; future retry deadlines retain their own delay.
+export function imageDispatchReadyAt(): Date {
+    return new Date(Math.floor(Date.now() / 1000) * 1000);
+}
+
 export function imageOutboxRetryDelayMs(httpStatus?: number, retryAfterSeconds?: number): number {
     if (httpStatus === 401 || httpStatus === 403) return 0;
     return Math.min(300_000, Math.max(1, retryAfterSeconds ?? 60) * 1_000);
@@ -72,13 +84,27 @@ export function preserveProviderCostTelemetry<T extends ProviderCostTelemetrySna
     existing: T,
     incoming: T,
 ): T {
+    const hasCostPair = (value: T) => value.actualCostMicrounits != null && value.costCurrency != null;
+    const cost = hasCostPair(incoming)
+        ? incoming
+        : hasCostPair(existing)
+          ? existing
+          : incoming.actualCostMicrounits != null || incoming.costCurrency != null
+            ? incoming
+            : existing;
     return {
         ...incoming,
+        callId: existing.callId ?? incoming.callId,
+        headerRequestId: incoming.headerRequestId ?? existing.headerRequestId,
+        headerRequestIdSource: incoming.headerRequestIdSource ?? existing.headerRequestIdSource,
+        modelResponseId: incoming.modelResponseId ?? existing.modelResponseId,
+        costSource: cost.costSource,
+        reportedCostEvidence: incoming.reportedCostEvidence ?? existing.reportedCostEvidence,
         httpStatus: incoming.httpStatus ?? existing.httpStatus,
         providerRequestId: incoming.providerRequestId ?? existing.providerRequestId,
         latencyMs: Math.max(existing.latencyMs, incoming.latencyMs),
-        actualCostMicrounits: incoming.actualCostMicrounits ?? existing.actualCostMicrounits,
-        costCurrency: incoming.costCurrency ?? existing.costCurrency,
+        actualCostMicrounits: cost.actualCostMicrounits,
+        costCurrency: cost.costCurrency,
         usage: incoming.usage ?? existing.usage,
     };
 }

@@ -2,6 +2,7 @@ import { LazyCheckoutPage, LazyOrderConfirmationPage, LazyPaymentPage } from '..
 import { AuthPageBoundary } from '../storefront-ui/page-shell';
 import { Order, StorefrontCart, StorefrontCheckoutSession } from '../types';
 
+import '../commerce-styles';
 import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
 
 function CheckoutRoutePage({ mode }: { mode?: 'purchase' }) {

@@ -16,7 +16,7 @@ afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
 });
 
-async function renderCatalog() {
+async function renderCatalog({ empty = false, initialEntry = '/' } = {}) {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const rootCollection = {
         __typename: 'Collection',
@@ -32,6 +32,11 @@ async function renderCatalog() {
             operation =>
                 new Observable(observer => {
                     if (operation.operationName === 'GetProducts') {
+                        if (empty) {
+                            observer.next({ data: { products: { totalItems: 0, items: [] } } });
+                            observer.complete();
+                            return;
+                        }
                         observer.next({
                             data: {
                                 products: {
@@ -172,7 +177,7 @@ async function renderCatalog() {
     await act(async () => {
         root.render(
             <ApolloProvider client={client}>
-                <MemoryRouter>
+                <MemoryRouter initialEntries={[initialEntry]}>
                     <FeatureHelpProvider>
                         <CatalogModule />
                     </FeatureHelpProvider>
@@ -199,4 +204,16 @@ describe('CatalogModule category columns', () => {
         expect(cells).toContain('正品烟草');
         expect(cells).toContain('香烟');
     });
+});
+
+describe('CatalogModule filtered empty results', () => {
+    it.each(['/?status=disabled', '/?status=enabled', '/?category=tobacco'])(
+        'does not describe the whole store as empty for %s',
+        async initialEntry => {
+            const container = await renderCatalog({ empty: true, initialEntry });
+
+            expect(container.textContent).toContain('当前筛选条件下暂无商品');
+            expect(container.textContent).not.toContain('当前暂无商品。');
+        },
+    );
 });

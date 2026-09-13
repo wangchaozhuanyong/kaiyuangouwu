@@ -509,6 +509,7 @@ export function CatalogModule() {
                                     {getCatalogEmptyStateDescription({
                                         channelCode: activeChannel?.code,
                                         searchTerm,
+                                        hasFilters: statusFilter !== 'ALL' || Boolean(categoryId),
                                     })}
                                 </p>
                                 <div className="mt-2 flex flex-wrap justify-center gap-2">

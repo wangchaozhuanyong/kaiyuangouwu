@@ -34,7 +34,7 @@ export const getServerHealthUrl = () => {
 
 const getAuthToken = () => sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY);
 
-export const getActiveChannelToken = () => localStorage.getItem(ACTIVE_CHANNEL_TOKEN_KEY);
+export const getActiveChannelToken = () => sessionStorage.getItem(ACTIVE_CHANNEL_TOKEN_KEY);
 
 export const hasActiveChannelSelection = () => Boolean(getActiveChannelToken());
 
@@ -44,7 +44,7 @@ export const channelRequestContext = (channelToken: string) => {
 };
 
 export const setInitialActiveChannel = (channelToken: string) => {
-    if (channelToken.trim()) localStorage.setItem(ACTIVE_CHANNEL_TOKEN_KEY, channelToken);
+    if (channelToken.trim()) sessionStorage.setItem(ACTIVE_CHANNEL_TOKEN_KEY, channelToken);
 };
 
 const persistAuthToken = (token: string) => {
@@ -62,6 +62,7 @@ export const prepareAuthSession = (rememberMe: boolean) => {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(ACTIVE_CHANNEL_TOKEN_KEY);
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    sessionStorage.removeItem(ACTIVE_CHANNEL_TOKEN_KEY);
     sessionStorage.setItem(AUTH_PERSISTENCE_KEY, rememberMe ? 'local' : 'session');
 };
 
@@ -69,6 +70,7 @@ export const clearAuthSession = () => {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(ACTIVE_CHANNEL_TOKEN_KEY);
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    sessionStorage.removeItem(ACTIVE_CHANNEL_TOKEN_KEY);
     sessionStorage.removeItem(AUTH_PERSISTENCE_KEY);
 };
 

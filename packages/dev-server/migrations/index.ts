@@ -108,6 +108,7 @@ import { SeedCheckoutProvinces1788742800000 } from './1788742800000-seed-checkou
 import { AlignCheckoutProvinceCountries1788746400000 } from './1788746400000-align-checkout-province-countries';
 import { AddIcloudRelayTables1788750000000 } from './1788750000000-add-icloud-relay-tables';
 import { AlignIcloudRelaySchema1788751000000 } from './1788751000000-align-icloud-relay-schema';
+import { AddImageProviderAttemptLedger1789272000000 } from './1789272000000-add-image-provider-attempt-ledger';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -220,4 +221,5 @@ export const devServerMigrations = [
     AlignCheckoutProvinceCountries1788746400000,
     AddIcloudRelayTables1788750000000,
     AlignIcloudRelaySchema1788751000000,
+    AddImageProviderAttemptLedger1789272000000,
 ];

@@ -381,7 +381,12 @@ function SafeImageSource({
                 .decode()
                 .catch(() => undefined)
                 .then(() => {
-                    if (!cancelled && imageRef.current === imageElement) {
+                    if (
+                        !cancelled &&
+                        imageRef.current === imageElement &&
+                        imageElement.complete &&
+                        imageElement.naturalWidth > 0
+                    ) {
                         markImageDecoded(effectiveSrc);
                         setLoaded(true);
                     }
@@ -419,17 +424,13 @@ function SafeImageSource({
             alt={alt}
             onLoad={event => {
                 const imageElement = event.currentTarget;
+                if (!imageElement.complete || imageElement.naturalWidth === 0) return;
                 markImageDecoded(effectiveSrc);
-                void imageElement
-                    .decode()
-                    .catch(() => undefined)
-                    .then(() => {
-                        if (imageRef.current !== imageElement) return;
-                        setLoaded(true);
-                        onLoad?.(event);
-                    });
+                setLoaded(true);
+                onLoad?.(event);
             }}
             onError={() => {
+                setLoaded(false);
                 if (responsiveSource) {
                     setUseResponsiveSource(false);
                     return;

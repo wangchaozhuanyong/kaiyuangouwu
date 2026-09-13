@@ -1,6 +1,12 @@
 import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
-import { processCustomerImage, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
+import {
+    Customer,
+    processCustomerImage,
+    RequestContext,
+    TransactionalConnection,
+    UserInputError,
+} from '@vendure/core';
 import { fileTypeFromBuffer } from 'file-type';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -10,7 +16,9 @@ import sharp from 'sharp';
 import { In, IsNull, LessThan, Not } from 'typeorm';
 
 import { IMAGE_GENERATION_OPTIONS, MAX_REFERENCE_BYTES, MAX_REFERENCE_PIXELS } from '../constants';
+import { ImageGenerationJob } from '../entities/image-generation-job.entity';
 import { ImagePrivateAsset } from '../entities/image-private-asset.entity';
+import { storedReferenceAssetIds } from '../image-generation-helpers';
 import {
     ImageGenerationPluginOptions,
     ImageResolution,
@@ -112,8 +120,17 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
         return bytes;
     }
 
-    signedUrl(asset: ImagePrivateAsset, customerId: ID, download = false): string | null {
+    signedUrl(
+        ctx: RequestContext,
+        asset: ImagePrivateAsset,
+        customerId: ID,
+        download = false,
+    ): string | null {
+        const host = normalizePrivateImageHost(
+            ctx.req?.headers?.['x-forwarded-host'] ?? ctx.req?.headers?.host,
+        );
         if (
+            !host ||
             asset.deletedAt ||
             asset.expiresAt.getTime() <= Date.now() ||
             String(asset.customerId) !== String(customerId)
@@ -123,6 +140,7 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
             assetId: String(asset.id),
             customerId: String(customerId),
             channelId: String(asset.channelId),
+            host,
             expiresAt: Math.floor(Date.now() / 1000) + LINK_TTL_SECONDS,
             download,
         };
@@ -132,6 +150,7 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
 
     async authorize(
         token: string,
+        requestHost: unknown,
     ): Promise<{ asset: ImagePrivateAsset; path?: string; download: boolean } | undefined> {
         if (token.length > 2048) return;
         const [encoded, suppliedSignature, extra] = token.split('.');
@@ -145,6 +164,7 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
                 assetId?: string;
                 customerId?: string;
                 channelId?: string;
+                host?: string;
                 expiresAt?: number;
                 download?: boolean;
             };
@@ -152,6 +172,9 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
                 !payload.assetId ||
                 !payload.customerId ||
                 !payload.channelId ||
+                !payload.host ||
+                normalizePrivateImageHost(requestHost) !== payload.host ||
+                normalizePrivateImageHost(payload.host) !== payload.host ||
                 !Number.isInteger(payload.expiresAt) ||
                 (payload.expiresAt ?? 0) <= Date.now() / 1000
             )
@@ -196,6 +219,46 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
         return true;
     }
 
+    async releaseReference(ctx: RequestContext, assetId: ID, customerId: ID): Promise<boolean> {
+        const released = await this.connection.withTransaction(ctx, async txCtx => {
+            // Creation/upload use the same customer lock, before reading reference assets.
+            const customerQuery = this.connection
+                .getRepository(txCtx, Customer)
+                .createQueryBuilder('customer')
+                .where('customer.id = :id', { id: customerId });
+            if (supportsPrivateAssetLock(this.connection.rawConnection.options.type))
+                customerQuery.setLock('pessimistic_write');
+            await customerQuery.getOne();
+            const repository = this.connection.getRepository(txCtx, ImagePrivateAsset);
+            const asset = await repository.findOne({
+                where: { id: assetId, channelId: txCtx.channelId, customerId, kind: 'REFERENCE' },
+            });
+            if (!asset || asset.deletedAt) return null;
+            const jobs = await this.connection.getRepository(txCtx, ImageGenerationJob).find({
+                where: { channelId: txCtx.channelId, customerId, customerDeletedAt: IsNull() },
+                select: { id: true, referenceAssetId: true, promptSpec: true },
+            });
+            if (jobs.some(job => storedReferenceAssetIds(job).includes(String(assetId)))) return false;
+            asset.deletedAt = new Date();
+            asset.originalName = 'deleted';
+            asset.providerMetadata = { storageDeletionPending: true };
+            await repository.save(asset, { reload: false });
+            return asset;
+        });
+        if (released === false) return false;
+        if (released) {
+            // Physical deletion follows the committed tombstone; cleanup retries failures.
+            await this.removeFile(released.storageKey)
+                .then(async () => {
+                    await this.connection
+                        .getRepository(ctx, ImagePrivateAsset)
+                        .update({ id: released.id }, { providerMetadata: null });
+                })
+                .catch(() => undefined);
+        }
+        return true;
+    }
+
     async expireReferenceAfterTerminal(ctx: RequestContext, assetId: ID): Promise<void> {
         const repository = this.connection.getRepository(ctx, ImagePrivateAsset);
         const asset = await repository.findOne({
@@ -211,16 +274,19 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
 
     async retainReferenceWhileActive(ctx: RequestContext, assetId: ID): Promise<void> {
         const repository = this.connection.getRepository(ctx, ImagePrivateAsset);
-        if (supportsPrivateAssetLock(this.connection.rawConnection.options.type)) {
-            await repository
-                .createQueryBuilder('asset')
-                .setLock('pessimistic_write')
-                .where('asset.id = :id', { id: assetId })
-                .getOne();
-        }
-        const asset = await repository.findOne({
-            where: { id: assetId, channelId: ctx.channelId, kind: 'REFERENCE' },
-        });
+        // Use the locking read itself: a later snapshot read can still see a
+        // pre-deletion version under MySQL REPEATABLE READ.
+        const asset = supportsPrivateAssetLock(this.connection.rawConnection.options.type)
+            ? await repository
+                  .createQueryBuilder('asset')
+                  .setLock('pessimistic_write')
+                  .where('asset.id = :id', { id: assetId })
+                  .andWhere('asset.channelId = :channelId', { channelId: ctx.channelId })
+                  .andWhere('asset.kind = :kind', { kind: 'REFERENCE' })
+                  .getOne()
+            : await repository.findOne({
+                  where: { id: assetId, channelId: ctx.channelId, kind: 'REFERENCE' },
+              });
         if (!asset || asset.deletedAt || asset.expiresAt.getTime() <= Date.now()) {
             throw new UserInputError('参考图不存在或已过期');
         }
@@ -254,6 +320,23 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
             .getMany();
         let removed = 0;
         for (const asset of expired) {
+            const claimed = await this.connection.rawConnection.transaction(async manager => {
+                const query = manager
+                    .getRepository(ImagePrivateAsset)
+                    .createQueryBuilder('asset')
+                    .where('asset.id = :id', { id: asset.id });
+                if (supportsPrivateAssetLock(this.connection.rawConnection.options.type))
+                    query.setLock('pessimistic_write');
+                const current = await query.getOne();
+                // A task may have retained this reference since the sweep selected it.
+                if (!current || (!current.deletedAt && current.expiresAt.getTime() > Date.now()))
+                    return false;
+                current.deletedAt ??= new Date();
+                current.providerMetadata = { storageDeletionPending: true };
+                await manager.getRepository(ImagePrivateAsset).save(current, { reload: false });
+                return true;
+            });
+            if (!claimed) continue;
             if (
                 await this.removeFile(asset.storageKey).then(
                     () => true,
@@ -479,6 +562,21 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
                 removed += 1;
         }
         return removed;
+    }
+}
+
+export function normalizePrivateImageHost(input: unknown): string | undefined {
+    const first = Array.isArray(input) ? input[0] : input;
+    if (typeof first !== 'string') return;
+    const value = first.split(',')[0]?.trim().toLowerCase();
+    if (!value || /[\\/@?#]/u.test(value)) return;
+    try {
+        const parsed = new URL(`http://${value}`);
+        if (parsed.pathname !== '/' || parsed.search || parsed.hash || parsed.username || parsed.password)
+            return;
+        return parsed.host.toLowerCase();
+    } catch {
+        return;
     }
 }
 

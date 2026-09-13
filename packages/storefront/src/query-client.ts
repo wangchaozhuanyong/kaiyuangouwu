@@ -6,13 +6,14 @@ export const PUBLIC_QUERY_STALE_TIME = 60_000;
 export const ROUTE_QUERY_STALE_TIME = 60_000;
 export const PUBLIC_QUERY_GC_TIME = 30 * 60_000;
 export const PUBLIC_QUERY_CACHE_MAX_AGE = 5 * 60_000;
-export const PUBLIC_QUERY_CACHE_KEY = 'vendure-storefront-public-query-cache:v5';
+export const PUBLIC_QUERY_CACHE_KEY = 'vendure-storefront-public-query-cache:v6';
 export const LEGACY_PUBLIC_QUERY_CACHE_KEYS = [
+    'vendure-storefront-public-query-cache:v5',
     'vendure-storefront-public-query-cache:v4',
     'vendure-storefront-public-query-cache:v3',
     'vendure-storefront-public-query-cache:v2',
 ] as const;
-const PUBLIC_QUERY_CACHE_VERSION = 5;
+const PUBLIC_QUERY_CACHE_VERSION = 6;
 
 export function storefrontQueryRetry(failureCount: number, error: unknown): boolean {
     return !(error instanceof ShopApiTimeoutError) && failureCount < 1;
@@ -54,8 +55,22 @@ export function storefrontRefetchPolicy(_query: { meta?: Record<string, unknown>
     return true;
 }
 
-function isStorefrontConfigQuery(queryKey: QueryKey): boolean {
-    return queryKey[0] === 'storefront' && queryKey[3] === 'config';
+const reusablePublicQueries = new Set([
+    'content',
+    'collections',
+    'products',
+    'product',
+    'products-by-ids',
+    'catalog',
+    'product-reviews',
+    'home-best-seller-sales',
+]);
+
+function isReusablePublicQuery(queryKey: QueryKey): boolean {
+    return (
+        queryKey[0] === 'storefront' &&
+        (queryKey[2] === 'commerce-mode' || reusablePublicQueries.has(String(queryKey[3])))
+    );
 }
 
 export function persistPublicQueryCache(
@@ -67,7 +82,7 @@ export function persistPublicQueryCache(
         shouldDehydrateQuery: query =>
             query.state.status === 'success' &&
             query.meta?.persistPublic === true &&
-            !isStorefrontConfigQuery(query.queryKey),
+            isReusablePublicQuery(query.queryKey),
     });
     const payload: PersistedPublicQueryCache = {
         version: PUBLIC_QUERY_CACHE_VERSION,
@@ -100,7 +115,7 @@ export function restorePublicQueryCache(
         // Always load configuration from the Shop API so cleared copy cannot return on reload.
         hydrate(client, {
             ...payload.state,
-            queries: payload.state.queries.filter(query => !isStorefrontConfigQuery(query.queryKey)),
+            queries: payload.state.queries.filter(query => isReusablePublicQuery(query.queryKey)),
         });
         return true;
     } catch {
@@ -115,9 +130,20 @@ export function watchPublicQueryCache(
 ): () => void {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = client.getQueryCache().subscribe(event => {
-        if (event?.query.meta?.persistPublic !== true) return;
+        if (event.query.meta?.persistPublic !== true || !isReusablePublicQuery(event.query.queryKey)) {
+            return;
+        }
+        // Observer bookkeeping happens on navigation and renders even when the
+        // cached data is unchanged. Only persist changes to restorable state.
+        const changed =
+            event.type === 'removed' ||
+            (event.type === 'added' && event.query.state.status === 'success') ||
+            (event.type === 'updated' &&
+                ['success', 'error', 'invalidate', 'setState'].includes(event.action.type));
+        if (!changed) return;
         if (timer) clearTimeout(timer);
         timer = setTimeout(() => {
+            timer = undefined;
             try {
                 persistPublicQueryCache(client, storage);
             } catch {

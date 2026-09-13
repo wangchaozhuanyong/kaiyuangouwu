@@ -174,4 +174,13 @@ describe('interrupted image generation recovery', () => {
             usage: { images: 1 },
         });
     });
+
+    it('does not relabel a saved charge with the currency of an incomplete later observation', () => {
+        expect(
+            preserveProviderCostTelemetry(
+                { latencyMs: 20, actualCostMicrounits: 100, costCurrency: 'USD' },
+                { latencyMs: 30, actualCostMicrounits: null, costCurrency: 'CNY' },
+            ),
+        ).toMatchObject({ actualCostMicrounits: 100, costCurrency: 'USD', latencyMs: 30 });
+    });
 });

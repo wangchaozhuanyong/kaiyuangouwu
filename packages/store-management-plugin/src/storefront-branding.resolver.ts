@@ -29,10 +29,7 @@ export class StorefrontBrandingShopResolver {
     @Query()
     @Allow(Permission.Public)
     async storefrontBranding(@Ctx() ctx: RequestContext) {
-        const branding = await this.loadBranding(ctx);
-        // Free-form store descriptions can name catalog items. Public account
-        // pages need the configured identity, not the private sales copy.
-        return ctx.activeUserId ? branding : { ...branding, description: '', tagline: '' };
+        return this.loadBranding(ctx);
     }
 
     async loadBranding(ctx: RequestContext) {

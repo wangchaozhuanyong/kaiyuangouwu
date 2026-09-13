@@ -159,8 +159,11 @@ export interface CreateImageGenerationInput {
 }
 
 export interface OptimizeImagePromptInput {
+    optimizedPrompt?: string | null;
     prompt: string;
     referenceMode?: ImageReferenceMode | null;
+    referenceAssetIds?: ID[] | null;
+    referenceInstruction?: string | null;
     expectedPrice?: number | null;
     currencyCode?: CurrencyCode | null;
     idempotencyKey?: string | null;
@@ -208,6 +211,12 @@ export interface ProviderGenerationResult {
 export interface ProviderTelemetry {
     httpStatus?: number;
     providerRequestId?: string;
+    callId?: string;
+    headerRequestId?: string;
+    headerRequestIdSource?: string;
+    modelResponseId?: string;
+    costSource?: string;
+    reportedCostEvidence?: { amount: number; currency: string | null; field: string };
     actualCostMicrounits?: number;
     costCurrency?: string;
     usage?: Record<string, any>;

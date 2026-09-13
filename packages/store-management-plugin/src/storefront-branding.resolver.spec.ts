@@ -13,7 +13,7 @@ function createResolver(profile: Record<string, unknown> | null) {
 }
 
 describe('StorefrontBrandingShopResolver', () => {
-    it('keeps store identity public and requires sign-in for the sales description', async () => {
+    it('returns published store branding to guests and signed-in visitors alike', async () => {
         const resolver = createResolver({
             descriptionZh: 'AI 软件商城',
             descriptionEn: 'AI software store',
@@ -30,7 +30,7 @@ describe('StorefrontBrandingShopResolver', () => {
 
         await expect(resolver.storefrontBranding(ctx)).resolves.toMatchObject({
             name: '软件商城',
-            description: '',
+            description: 'AI 软件商城',
             tagline: '',
         });
         await expect(

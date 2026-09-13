@@ -1,19 +1,20 @@
-import { dehydrate } from '@tanstack/react-query';
-import { describe, expect, it } from 'vitest';
+import { dehydrate, QueryObserver } from '@tanstack/react-query';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ShopApiTimeoutError } from './api';
 import {
+    createStorefrontQueryClient,
     LEGACY_PUBLIC_QUERY_CACHE_KEYS,
+    persistPublicQueryCache,
     PUBLIC_QUERY_CACHE_KEY,
     PUBLIC_QUERY_CACHE_MAX_AGE,
-    ROUTE_QUERY_STALE_TIME,
-    createStorefrontQueryClient,
-    persistPublicQueryCache,
     publicQueryMeta,
     restorePublicQueryCache,
+    ROUTE_QUERY_STALE_TIME,
     storefrontQueryKeys,
     storefrontQueryRetry,
     storefrontRefetchPolicy,
+    watchPublicQueryCache,
 } from './query-client';
 
 function memoryStorage() {
@@ -25,6 +26,65 @@ function memoryStorage() {
         values,
     };
 }
+
+describe('public cache persistence work', () => {
+    it('does not serialize unchanged data when pages attach and detach query observers', async () => {
+        const client = createStorefrontQueryClient();
+        const options = {
+            queryKey: storefrontQueryKeys.product('my:MYR', 'en', '1'),
+            queryFn: () => ({ id: '1', name: 'Cached product' }),
+            staleTime: Infinity,
+            meta: publicQueryMeta(),
+        };
+        await client.fetchQuery(options);
+        const storage = { setItem: vi.fn() };
+        vi.useFakeTimers();
+        const stop = watchPublicQueryCache(client, storage);
+        try {
+            for (let index = 0; index < 3; index += 1) {
+                const observer = new QueryObserver(client, options);
+                const detach = observer.subscribe(() => undefined);
+                observer.setOptions({ ...options, enabled: false });
+                detach();
+                await vi.advanceTimersByTimeAsync(150);
+            }
+            expect(storage.setItem).not.toHaveBeenCalled();
+        } finally {
+            stop();
+            client.clear();
+            vi.useRealTimers();
+        }
+    });
+
+    it('batches data changes, persists removals, and cancels pending work on unsubscribe', async () => {
+        const client = createStorefrontQueryClient();
+        const key = storefrontQueryKeys.product('my:MYR', 'en', '1');
+        await client.fetchQuery({ queryKey: key, queryFn: () => ({ id: '1' }), meta: publicQueryMeta() });
+        const storage = memoryStorage();
+        const writes = vi.spyOn(storage, 'setItem');
+        vi.useFakeTimers();
+        const stop = watchPublicQueryCache(client, storage);
+        try {
+            client.setQueryData(key, { id: '1', name: 'First update' });
+            client.setQueryData(key, { id: '1', name: 'Latest update' });
+            await vi.advanceTimersByTimeAsync(150);
+            expect(writes).toHaveBeenCalledTimes(1);
+            expect(storage.values.get(PUBLIC_QUERY_CACHE_KEY)).toContain('Latest update');
+            client.removeQueries({ queryKey: key });
+            await vi.advanceTimersByTimeAsync(150);
+            expect(writes).toHaveBeenCalledTimes(2);
+            expect(storage.values.get(PUBLIC_QUERY_CACHE_KEY)).not.toContain('Latest update');
+            await client.fetchQuery({ queryKey: key, queryFn: () => ({ id: '1' }), meta: publicQueryMeta() });
+            stop();
+            await vi.advanceTimersByTimeAsync(150);
+            expect(writes).toHaveBeenCalledTimes(2);
+        } finally {
+            stop();
+            client.clear();
+            vi.useRealTimers();
+        }
+    });
+});
 
 describe('public React Query session cache', () => {
     it('respects stale time when the page mounts or regains focus', () => {
@@ -159,6 +219,7 @@ describe('public React Query session cache', () => {
         await client.fetchQuery({
             queryKey: ['storefront', 'cn', 'zh', 'private', 'customer'],
             queryFn: () => ({ emailAddress: 'private@example.com' }),
+            meta: publicQueryMeta(),
         });
         await client.fetchQuery({
             queryKey: storefrontQueryKeys.couponCampaigns('cn', 'zh', 'customer-1'),
@@ -231,7 +292,7 @@ describe('public React Query session cache', () => {
         storage.setItem(
             PUBLIC_QUERY_CACHE_KEY,
             JSON.stringify({
-                version: 5,
+                version: 6,
                 savedAt: Date.now(),
                 state: dehydrate(source),
             }),

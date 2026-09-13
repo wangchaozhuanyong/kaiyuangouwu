@@ -4,6 +4,7 @@ import type {
     ImageModelQuotaStatus,
     ImageModelRecommendation,
     ImagePrivateAssetView,
+    ImagePromptBudget,
     ImagePromptOptimizationResult,
     ImagePromptQuotaStatus,
     ImageReferenceMode,
@@ -22,6 +23,23 @@ import {
 } from './helpers';
 
 export class ImageStudioApi extends BaseDomainApi {
+    async previewImageGenerationPrompt(
+        input: Pick<
+            CreateImageGenerationInput,
+            'prompt' | 'optimizedPrompt' | 'referenceMode' | 'referenceAssetIds' | 'referenceInstruction'
+        >,
+        signal?: AbortSignal,
+    ): Promise<ImagePromptBudget> {
+        const result = await this.request<{ previewImageGenerationPrompt: ImagePromptBudget }>(
+            `query PreviewImageGenerationPrompt($input: OptimizeImagePromptInput!) {
+                previewImageGenerationPrompt(input: $input) { length limit valid }
+            }`,
+            { input },
+            signal,
+        );
+        return result.previewImageGenerationPrompt;
+    }
+
     async imageStudioConfig(signal?: AbortSignal): Promise<ImageStudioConfig> {
         const result = await this.request<{ imageStudioConfig: ImageStudioConfig }>(
             `
@@ -103,7 +121,14 @@ export class ImageStudioApi extends BaseDomainApi {
     async optimizeImagePrompt(
         prompt: string,
         referenceMode: ImageReferenceMode,
-        quote?: { expectedPrice?: number | null; currencyCode?: string | null; idempotencyKey?: string },
+        quote?: {
+            optimizedPrompt?: string | null;
+            expectedPrice?: number | null;
+            currencyCode?: string | null;
+            idempotencyKey?: string;
+            referenceAssetIds?: string[];
+            referenceInstruction?: string | null;
+        },
     ): Promise<ImagePromptOptimizationResult> {
         const result = await this.request<{ optimizeImagePrompt: ImagePromptOptimizationResult }>(
             `
@@ -211,14 +236,14 @@ export class ImageStudioApi extends BaseDomainApi {
         return result.myImageGenerationJob;
     }
 
-    async myImageGenerationJobs(skip = 0, take = 20, signal?: AbortSignal) {
+    async myImageGenerationJobs(skip = 0, take = 20, signal?: AbortSignal, states?: string[]) {
         const result = await this.request<{
             myImageGenerationJobs: { items: ImageGenerationJob[]; totalItems: number };
         }>(
-            `query MyImageGenerationJobs($skip: Int, $take: Int) {
-                myImageGenerationJobs(skip: $skip, take: $take) { totalItems items { ${imageGenerationJobFields} } }
+            `query MyImageGenerationJobs($skip: Int, $take: Int, $states: [ImageGenerationState!]) {
+                myImageGenerationJobs(skip: $skip, take: $take, states: $states) { totalItems items { ${imageGenerationJobFields} } }
             }`,
-            { skip, take },
+            { skip, take, ...(states ? { states } : {}) },
             signal,
             15_000,
         );
@@ -239,6 +264,14 @@ export class ImageStudioApi extends BaseDomainApi {
             { outputId },
         );
         return result.deleteMyGeneratedImage;
+    }
+
+    async releaseImageReference(id: string): Promise<boolean> {
+        const result = await this.request<{ releaseImageReference: boolean }>(
+            `mutation ReleaseImageReference($id: ID!) { releaseImageReference(id: $id) }`,
+            { id },
+        );
+        return result.releaseImageReference;
     }
 
     async deleteMyImageGenerationJob(id: string): Promise<boolean> {

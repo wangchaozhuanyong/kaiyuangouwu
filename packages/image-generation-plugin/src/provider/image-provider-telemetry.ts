@@ -56,42 +56,67 @@ export function withImageProcessingTelemetry(
 
 export function responseErrorDetails(response: Response): ImageProviderErrorDetails {
     const retryAfter = Number(response.headers.get('retry-after'));
+    const headerRequestIdSource = ['x-request-id', 'request-id', 'x-goog-request-id'].find(name =>
+        response.headers.get(name)?.trim(),
+    );
+    const headerRequestId = headerRequestIdSource
+        ? response.headers.get(headerRequestIdSource)?.trim().slice(0, 200)
+        : undefined;
     return {
         httpStatus: response.status,
-        providerRequestId:
-            response.headers.get('x-request-id') ??
-            response.headers.get('request-id') ??
-            response.headers.get('x-goog-request-id') ??
-            undefined,
+        providerRequestId: headerRequestId,
+        headerRequestId,
+        headerRequestIdSource,
         ...(Number.isFinite(retryAfter) && retryAfter > 0 ? { retryAfterSeconds: retryAfter } : {}),
     };
 }
 
 export function responseTelemetry(response: Response, payload: unknown): ProviderTelemetry {
-    const headerRequestId = responseErrorDetails(response).providerRequestId;
-    const providerRequestId =
-        stringAt(payload, ['id']) ??
-        stringAt(payload, ['responseId']) ??
-        findStringByKey(payload, new Set(['responseId', 'requestId']), value => Boolean(value.trim())) ??
-        headerRequestId;
-    const usageSource = findObjectByKey(payload, new Set(['usage', 'usageMetadata', 'billing'])) ?? undefined;
+    const details = responseErrorDetails(response);
+    // Gemini stream events contain cumulative usage snapshots. Read the last
+    // snapshot as a whole; adding frames (or mixing their fields) overcounts.
+    const events = Array.isArray(payload) ? [...payload].reverse() : [payload];
+    const modelResponseId = events
+        .map(
+            event =>
+                stringAt(event, ['id']) ??
+                stringAt(event, ['responseId']) ??
+                findStringByKey(event, new Set(['responseId', 'requestId']), value => Boolean(value.trim())),
+        )
+        .find(Boolean)
+        ?.slice(0, 200);
+    const usageSource = events
+        .map(event => findObjectByKey(event, new Set(['usage', 'usageMetadata', 'billing'])))
+        .find(Boolean);
     const usage = usageSource ? sanitizeUsage(usageSource) : undefined;
-    const costValue =
-        numericValue(objectAt(usageSource, ['total_cost'])) ??
-        numericValue(objectAt(usageSource, ['totalCost'])) ??
-        numericValue(objectAt(usageSource, ['cost'])) ??
-        numericValue(findValueByKey(payload, new Set(['actual_cost', 'actualCost', 'total_cost'])));
-    const currency =
-        stringAt(usageSource, ['currency']) ??
-        stringAt(payload, ['currency']) ??
-        (costValue == null ? undefined : 'USD');
+    const costEvidence = [
+        ...['total_cost', 'totalCost', 'cost'].map(key => ({
+            field: `usage.${key}`,
+            value: numericValue(objectAt(usageSource, [key])),
+        })),
+        ...['actual_cost', 'actualCost', 'total_cost'].map(key => ({
+            field: `response.**.${key}`,
+            value: numericValue(findValueByKey(payload, new Set([key]))),
+        })),
+    ].find(candidate => candidate.value != null);
+    const costValue = costEvidence?.value;
+    const currency = stringAt(usageSource, ['currency']) ?? stringAt(payload, ['currency']);
+    const normalizedCurrency = currency && /^[A-Za-z]{3}$/u.test(currency) ? currency.toUpperCase() : null;
     return {
-        httpStatus: response.status,
-        providerRequestId,
+        ...details,
+        providerRequestId: modelResponseId ?? details.providerRequestId,
+        modelResponseId,
+        // A generic gateway cost field is not a verified user charge. Retain
+        // the report for reconciliation without inventing its currency/source.
         ...(costValue != null && costValue >= 0 && costValue <= 2_000
-            ? { actualCostMicrounits: Math.round(costValue * 1_000_000) }
+            ? {
+                  reportedCostEvidence: {
+                      amount: costValue,
+                      currency: normalizedCurrency,
+                      field: costEvidence?.field ?? 'response',
+                  },
+              }
             : {}),
-        ...(currency && /^[A-Za-z]{3}$/u.test(currency) ? { costCurrency: currency.toUpperCase() } : {}),
         ...(usage && Object.keys(usage).length ? { usage } : {}),
     };
 }

@@ -12,7 +12,7 @@ import { DesktopHeader } from './components/common/desktop-header';
 import { DesktopLayoutContext, useDesktopViewport } from './desktop-layout';
 import { type useStorefrontAppState } from './hooks/useStorefrontAppState';
 import { RouteTransitionLoader } from './route-loading';
-import { isPublicStorefrontRoute } from './storefront-access';
+import { isBrowsingStorefrontRoute, isPublicStorefrontRoute } from './storefront-access';
 import { StorefrontContext } from './StorefrontContext';
 import { StorefrontUpdatePrompt } from './StorefrontUpdatePrompt';
 
@@ -41,6 +41,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     const protectedRoute = !isPublicStorefrontRoute(displayedRoute.name);
     const waitingForAccount = !customer && customerLoadState !== 'ready';
     const accountFailed = customerLoadState === 'error' || customerLoadState === 'paused';
+    const showNavigation = isBrowsingStorefrontRoute(displayedRoute.name) || Boolean(customer);
 
     return (
         <StorefrontContext.Provider value={storefrontContextValue}>
@@ -60,7 +61,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                 : 'You are offline. Some actions may fail.'}
                         </div>
                     )}
-                    {desktop && customer && (
+                    {desktop && showNavigation && (
                         <DesktopHeader
                             navigationBlock={navigationBlock}
                             cartQuantity={cart?.totalQuantity ?? 0}
@@ -111,14 +112,16 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                         </div>
                     </div>
                 </div>
-                {!desktop && customer && shouldShowBottomNavigation(displayedRoute.name, navigationBlock) && (
-                    <BottomNavigation
-                        activeRoute={displayedRoute.name}
-                        cartQuantity={cart?.totalQuantity ?? 0}
-                        language={language}
-                        navigationBlock={navigationBlock}
-                    />
-                )}
+                {!desktop &&
+                    showNavigation &&
+                    shouldShowBottomNavigation(displayedRoute.name, navigationBlock) && (
+                        <BottomNavigation
+                            activeRoute={displayedRoute.name}
+                            cartQuantity={cart?.totalQuantity ?? 0}
+                            language={language}
+                            navigationBlock={navigationBlock}
+                        />
+                    )}
                 {toast && (
                     <div
                         className={clsx(

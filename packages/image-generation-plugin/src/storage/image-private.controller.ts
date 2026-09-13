@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Res } from '@nestjs/common';
+import { Controller, Get, Param, Req, Res } from '@nestjs/common';
 
 import { ImagePrivateStorageService } from './image-private-storage.service';
 
@@ -7,8 +7,11 @@ export class ImagePrivateController {
     constructor(private readonly storage: ImagePrivateStorageService) {}
 
     @Get(':token')
-    async serve(@Param('token') token: string, @Res() response: any): Promise<void> {
-        const authorized = await this.storage.authorize(token);
+    async serve(@Param('token') token: string, @Req() request: any, @Res() response: any): Promise<void> {
+        const authorized = await this.storage.authorize(
+            token,
+            request.headers?.['x-forwarded-host'] ?? request.headers?.host,
+        );
         if (!authorized) {
             response.status(404).send('Image link is invalid or expired');
             return;

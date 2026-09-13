@@ -13,7 +13,7 @@ export function useStorefrontCustomerData({
     language,
     vendureLanguageCode,
     storefrontContextResolved,
-    catalogAccessGranted,
+    customerAuthenticated,
 }: StorefrontQueryContext) {
     const text = uiCopy[language];
     const cartQueryKey = storefrontQueryKeys.cart(storefrontQueryKeys.market(market), vendureLanguageCode);
@@ -26,7 +26,7 @@ export function useStorefrontCustomerData({
     const cartQuery = useQuery({
         queryKey: cartQueryKey,
         queryFn: ({ signal }) => api.cart(signal),
-        enabled: storefrontContextResolved && catalogAccessGranted,
+        enabled: storefrontContextResolved && customerAuthenticated,
         staleTime: 0,
     });
 
@@ -124,9 +124,7 @@ export function useStorefrontCustomerData({
               : text.loadError;
 
     const couponCampaignsLoading =
-        customerQuery.data === undefined
-            ? !customerQuery.isError
-            : couponCampaignsQuery.isPending && couponCampaignsQuery.data === undefined;
+        Boolean(customer) && couponCampaignsQuery.isPending && couponCampaignsQuery.data === undefined;
 
     const couponCampaignsError =
         customerQuery.data === undefined && customerQuery.isError

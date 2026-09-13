@@ -1062,6 +1062,8 @@ function AuthLayout({
                     <SafeImage
                         src={authOriginalImageUrl(managedHeroSrc)}
                         fallbackSrc={managedHeroSrc}
+                        imageKind="detail"
+                        sizes="(min-width: 1024px) 640px, 100vw"
                         alt=""
                         loading="eager"
                         decoding="async"

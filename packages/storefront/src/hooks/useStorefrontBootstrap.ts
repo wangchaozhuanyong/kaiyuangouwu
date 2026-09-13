@@ -106,14 +106,14 @@ export function useStorefrontBootstrap() {
         enabled: storefrontContextResolved,
         staleTime: 0,
     });
-    const catalogAccessGranted = Boolean(accountQuery.data);
+    const customerAuthenticated = Boolean(accountQuery.data);
     const queryContext = {
         api,
         market,
         language,
         vendureLanguageCode,
         storefrontContextResolved,
-        catalogAccessGranted,
+        customerAuthenticated,
     };
     const visualConfig = useStorefrontVisualPreset(
         api,
@@ -200,7 +200,7 @@ export function useStorefrontBootstrap() {
                         storefrontQueryKeys.market(nextMarket),
                         vendureLanguageCode,
                     ),
-                    catalogAccessGranted ? 'authenticated' : 'account',
+                    'public',
                 ];
                 const nextConfigState = queryClient.getQueryState(nextConfigKey);
                 // Copy the response age as well as its data, and preserve a newer destination value.
@@ -241,7 +241,7 @@ export function useStorefrontBootstrap() {
         setStorefrontDescription(config.description?.trim() ?? '');
         setStorefrontTagline(config.tagline?.trim() ?? '');
     }, [
-        catalogAccessGranted,
+        customerAuthenticated,
         configQuery.data,
         configQuery.dataUpdatedAt,
         language,
@@ -303,7 +303,7 @@ export function useStorefrontBootstrap() {
         cartState,
         api,
         queryContext,
-        catalogAccessGranted,
+        customerAuthenticated,
         legalIdentity,
         refetchStorefront,
         toggleLanguage,

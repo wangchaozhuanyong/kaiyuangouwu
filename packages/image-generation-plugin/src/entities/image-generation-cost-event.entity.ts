@@ -63,6 +63,24 @@ export class ImageGenerationCostEvent extends VendureEntity {
     @Column({ type: 'varchar', length: 200, nullable: true })
     providerRequestId: string | null;
 
+    @Column({ type: 'varchar', length: 36, nullable: true })
+    callId: string | null;
+
+    @Column({ type: 'varchar', length: 200, nullable: true })
+    headerRequestId: string | null;
+
+    @Column({ type: 'varchar', length: 48, nullable: true })
+    headerRequestIdSource: string | null;
+
+    @Column({ type: 'varchar', length: 200, nullable: true })
+    modelResponseId: string | null;
+
+    @Column({ type: 'varchar', length: 32, nullable: true })
+    costSource: string | null;
+
+    @Column({ type: 'simple-json', nullable: true })
+    reportedCostEvidence: { amount: number; currency: string | null; field: string } | null;
+
     @Column('int')
     latencyMs: number;
 

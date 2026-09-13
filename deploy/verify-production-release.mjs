@@ -73,6 +73,81 @@ export function extractStorefrontAssetUrl(html, storefrontUrl) {
     throw new Error('Authenticated storefront HTML does not reference a same-origin JS or CSS asset');
 }
 
+export function extractStorefrontAssetUrls(html, storefrontUrl) {
+    const origin = new URL(storefrontUrl).origin;
+    const urls = new Map();
+    for (const match of html.matchAll(/<(?:link|script)\b[^>]*>/giu)) {
+        const tag = match[0];
+        const script = /^<script\b/iu.test(tag);
+        const rel = (readHtmlAttribute(tag, 'rel') ?? '').toLowerCase();
+        const as = (readHtmlAttribute(tag, 'as') ?? '').toLowerCase();
+        if (
+            !script &&
+            rel !== 'stylesheet' &&
+            rel !== 'modulepreload' &&
+            !(rel === 'preload' && ['script', 'style'].includes(as))
+        )
+            continue;
+        const reference = readHtmlAttribute(tag, script ? 'src' : 'href');
+        if (!reference) continue;
+        const url = new URL(reference, storefrontUrl);
+        if (url.origin === origin) urls.set(url.href, url);
+    }
+    if (!urls.size) throw new Error('Storefront HTML does not reference same-origin entry assets');
+    return [...urls.values()];
+}
+
+// Check all entry dependencies, including non-module compatibility scripts.
+// A single successful bundle request cannot detect another script returning HTML/401.
+export async function verifyStorefrontAssets({
+    storefrontUrl,
+    html,
+    fetchImpl = globalThis.fetch,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+}) {
+    const storefront = normalizeStorefrontUrl(storefrontUrl);
+    if (html === undefined) {
+        const response = await fetchWithTimeout(fetchImpl, storefront, { redirect: 'manual' }, timeoutMs);
+        expectStatus(response, 200, 'Direct storefront');
+        html = await response.text();
+    }
+    // Retain the existing requirement for an actual application build asset.
+    extractStorefrontAssetUrl(html, storefront);
+    const urls = extractStorefrontAssetUrls(html, storefront);
+    for (const url of urls) {
+        const response = await fetchWithTimeout(fetchImpl, url, { redirect: 'manual' }, timeoutMs);
+        try {
+            expectStatus(response, 200, `Storefront asset ${url.pathname}`);
+            const contentType = response.headers.get('content-type') ?? '';
+            const expected = url.pathname.endsWith('.css') ? /text\/css/iu : /javascript|ecmascript/iu;
+            if (!expected.test(contentType)) {
+                throw new Error(
+                    `Storefront asset ${url.pathname}: unexpected content-type ${contentType || '(missing)'}`,
+                );
+            }
+            if (url.pathname.startsWith('/assets/')) {
+                const policy = (response.headers.get('cache-control') ?? '').toLowerCase();
+                const directives = policy.split(',').map(value => value.trim());
+                const maxAge = policy.match(/(?:^|,)\s*max-age\s*=\s*"?(\d+)"?(?:\s*,|\s*$)/u);
+                if (
+                    directives.some(value => /^(?:private|no-store|no-cache)(?:=|$)/u.test(value)) ||
+                    !directives.includes('public') ||
+                    !directives.includes('immutable') ||
+                    !maxAge ||
+                    Number(maxAge[1]) <= 0
+                ) {
+                    throw new Error(
+                        `Storefront asset ${url.pathname}: expected public immutable caching, received ${policy || '(missing)'}`,
+                    );
+                }
+            }
+        } finally {
+            await response.body?.cancel();
+        }
+    }
+    return urls.map(url => url.pathname);
+}
+
 export function extractDashboardAssetUrls(html, dashboardUrl) {
     const dashboard = normalizeDashboardUrl(dashboardUrl);
     const urls = [];
@@ -235,35 +310,6 @@ function shopApiRequest(cookie) {
     };
 }
 
-async function verifyAnonymousCatalogDenied(fetchImpl, shopApiUrl, timeoutMs, cookie) {
-    const response = await fetchWithTimeout(
-        fetchImpl,
-        shopApiUrl,
-        {
-            method: 'POST',
-            redirect: 'manual',
-            headers: {
-                'content-type': 'application/json',
-                ...(cookie ? { cookie } : {}),
-            },
-            body: JSON.stringify({
-                query: 'query PrivateCatalogProbe { products(options: { take: 1 }) { totalItems items { id name } } }',
-            }),
-        },
-        timeoutMs,
-    );
-    if (![200, 401, 403].includes(response.status)) {
-        throw new Error(`Private catalog probe: unexpected HTTP ${response.status}`);
-    }
-    const body = await readJson(response, 'Private catalog probe');
-    if (
-        body?.data?.products != null ||
-        !body?.errors?.some(error => error?.extensions?.code === 'FORBIDDEN')
-    ) {
-        throw new Error('Private catalog probe: anonymous product access was not denied');
-    }
-}
-
 export async function verifyProductionRelease({
     storefrontUrl,
     dashboardUrl,
@@ -314,8 +360,6 @@ export async function verifyProductionRelease({
         throw new Error('Public Shop API: GraphQL probe did not return Query');
     }
     checks.push('public Shop API');
-    await verifyAnonymousCatalogDenied(fetchImpl, shopApiUrl, timeoutMs);
-    checks.push('anonymous catalog denial');
     if (expectedChannelCode) {
         if (publicShopBody?.data?.activeChannel?.code !== expectedChannelCode) {
             throw new Error(
@@ -333,7 +377,7 @@ export async function verifyProductionRelease({
     );
     expectStatus(storefrontResponse, 200, 'Direct storefront');
     const storefrontHtml = await storefrontResponse.text();
-    const assetUrl = extractStorefrontAssetUrl(storefrontHtml, storefront);
+    extractStorefrontAssetUrl(storefrontHtml, storefront);
     checks.push('direct storefront');
 
     const promotionUrl = new URL('/promo', storefront);
@@ -363,31 +407,10 @@ export async function verifyProductionRelease({
     if (enterResponse.headers.get('location') !== '/') {
         throw new Error('Promotion entry submission: expected redirect location /');
     }
-    const entryCookie = extractEntryCookie(enterResponse.headers);
+    extractEntryCookie(enterResponse.headers);
     checks.push('optional promotion entry');
-    await verifyAnonymousCatalogDenied(fetchImpl, shopApiUrl, timeoutMs, entryCookie);
-    checks.push('promotion cookie cannot unlock catalog');
 
-    const sitemapResponse = await fetchWithTimeout(
-        fetchImpl,
-        new URL('/sitemap.xml', storefront),
-        {
-            redirect: 'manual',
-            headers: { 'cache-control': 'no-cache' },
-        },
-        timeoutMs,
-    );
-    expectStatus(sitemapResponse, 200, 'Public sitemap');
-    const sitemap = await sitemapResponse.text();
-    const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => match[1]);
-    if (locations.length !== 1 || locations[0] !== new URL('/promo', storefront).href) {
-        throw new Error('Public sitemap: expected only the promotion page');
-    }
-    checks.push('catalog links absent from sitemap');
-
-    const assetResponse = await fetchWithTimeout(fetchImpl, assetUrl, { redirect: 'manual' }, timeoutMs);
-    expectStatus(assetResponse, 200, 'Storefront build asset');
-    await assetResponse.body?.cancel();
+    await verifyStorefrontAssets({ storefrontUrl: storefront, html: storefrontHtml, fetchImpl, timeoutMs });
     checks.push('storefront build asset');
 
     await verifyDashboardAssets({ dashboardUrl: dashboard, fetchImpl, timeoutMs, releaseId });

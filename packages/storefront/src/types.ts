@@ -985,6 +985,11 @@ export interface ImageGenerationJob {
     promptSkillHash: string;
     referenceMode: ImageReferenceMode;
     referenceAsset?: ImagePrivateAssetView | null;
+    referenceAssetIds?: string[];
+    referenceAssets?: Array<ImagePrivateAssetView | null>;
+    referenceInstruction?: string | null;
+    optimizedPrompt?: string | null;
+    inputSnapshotVersion?: number | null;
     aspectRatio: string;
     resolution: ImageResolution;
     quantity: number;
@@ -1001,6 +1006,12 @@ export interface ImageGenerationJob {
     errorMessage?: string | null;
     completedAt?: string | null;
     outputs: ImageGenerationOutput[];
+}
+
+export interface ImagePromptBudget {
+    length: number;
+    limit: number;
+    valid: boolean;
 }
 
 export interface ImagePromptOptimizationResult {

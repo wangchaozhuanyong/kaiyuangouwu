@@ -128,6 +128,11 @@ const commonTypes = gql`
         promptSkillHash: String!
         referenceMode: ImageReferenceMode!
         referenceAsset: ImagePrivateAssetView
+        referenceAssetIds: [ID!]!
+        referenceAssets: [ImagePrivateAssetView]!
+        referenceInstruction: String
+        optimizedPrompt: String
+        inputSnapshotVersion: Int
         aspectRatio: String!
         resolution: String!
         quantity: Int!
@@ -149,6 +154,12 @@ const commonTypes = gql`
     type ImageGenerationJobList implements PaginatedList {
         items: [ImageGenerationJob!]!
         totalItems: Int!
+    }
+
+    type ImagePromptBudget {
+        length: Int!
+        limit: Int!
+        valid: Boolean!
     }
 
     type ImagePromptOptimizationResult {
@@ -182,8 +193,11 @@ const commonTypes = gql`
     }
 
     input OptimizeImagePromptInput {
+        optimizedPrompt: String
         prompt: String!
         referenceMode: ImageReferenceMode
+        referenceAssetIds: [ID!]
+        referenceInstruction: String
         expectedPrice: Money
         currencyCode: CurrencyCode
         idempotencyKey: String
@@ -266,6 +280,7 @@ export const shopApiExtensions = gql`
     }
 
     extend type Query {
+        previewImageGenerationPrompt(input: OptimizeImagePromptInput!): ImagePromptBudget!
         imageStudioConfig: ImageStudioConfig!
         imageStudioBalance: Money!
         imageStudioWallet: ImageStudioWallet!
@@ -273,12 +288,13 @@ export const shopApiExtensions = gql`
         imageModelQuotaStatus: [ImageModelQuotaStatus!]!
         recommendImageModel(input: OptimizeImagePromptInput!): ImageModelRecommendation!
         myImageGenerationJob(id: ID!): ImageGenerationJob!
-        myImageGenerationJobs(skip: Int, take: Int): ImageGenerationJobList!
+        myImageGenerationJobs(skip: Int, take: Int, states: [ImageGenerationState!]): ImageGenerationJobList!
     }
 
     extend type Mutation {
         optimizeImagePrompt(input: OptimizeImagePromptInput!): ImagePromptOptimizationResult!
         uploadImageReference(file: Upload!, termsAccepted: Boolean!): ImagePrivateAssetView!
+        releaseImageReference(id: ID!): Boolean!
         createImageGeneration(input: CreateImageGenerationInput!): ImageGenerationJob!
         cancelQueuedImageGeneration(id: ID!): ImageGenerationJob!
         deleteMyGeneratedImage(outputId: ID!): Boolean!
@@ -390,6 +406,7 @@ export const adminApiExtensions = gql`
         missingCostCount: Int!
         grossRevenue: Money!
         actualCost: Float!
+        knownCost: Float
         averageLatencyMs: Int!
     }
 
@@ -470,6 +487,7 @@ export const adminApiExtensions = gql`
         credentialLast4Snapshot: String!
         credentialSelectionReason: String
         upstreamCallCount: Int!
+        attemptLedgerVersion: Int
         latencyMs: Int!
         errorMessage: String
     }
@@ -514,6 +532,9 @@ export const adminApiExtensions = gql`
         actualCostMicrounits: Int
         costCurrency: String
         missingCost: Boolean!
+        costCompleteness: String!
+        missingCostCount: Int!
+        costBreakdown: [ImageProviderCostAmount!]!
         errorMessage: String
     }
 
@@ -544,7 +565,34 @@ export const adminApiExtensions = gql`
         keyLast4: String
     }
 
+    type ImageProviderCostAmount {
+        currency: String!
+        amount: Float!
+    }
+
+    type ImageProviderAttemptAudit {
+        callId: String
+        attemptNumber: Int!
+        stage: String!
+        outcome: String!
+        modelId: String!
+        credentialNameSnapshot: String!
+        createdAt: DateTime!
+        headerRequestId: String
+        headerRequestIdSource: String
+        modelResponseId: String
+        providerRequestId: String
+        httpStatus: Int
+        latencyMs: Int!
+        actualCostMicrounits: Int
+        costCurrency: String
+        costSource: String!
+        matchingStatus: String!
+        reportedCostEvidence: JSON
+    }
+
     type ImageAiUsageRecordDetail {
+        attempts: [ImageProviderAttemptAudit!]!
         record: ImageAiUsageRecord!
         inputPrompt: String!
         outputPrompt: String

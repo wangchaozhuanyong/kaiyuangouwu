@@ -6,6 +6,7 @@ import { In, IsNull, MoreThanOrEqual, Not } from 'typeorm';
 import { ImageGenerationCostEvent } from './entities/image-generation-cost-event.entity';
 import { ImageGenerationJob } from './entities/image-generation-job.entity';
 import { ImageGenerationOutput } from './entities/image-generation-output.entity';
+import { ImagePromptOptimizationAttempt } from './entities/image-prompt-optimization-attempt.entity';
 import { ImagePromptOptimization } from './entities/image-prompt-optimization.entity';
 import { ImageUsageQuotaBucket } from './entities/image-usage-quota-bucket.entity';
 import { ImageUsageQuotaEvent } from './entities/image-usage-quota-event.entity';
@@ -20,6 +21,7 @@ import {
     usageOutcomeZh,
     type UsageTimelineItem,
 } from './image-generation-helpers';
+import { summarizeProviderCosts } from './image-provider-cost-summary';
 import { ImageAiUsageRecordListInput } from './types';
 export class ImageGenerationUsageQuery {
     constructor(private readonly connection: TransactionalConnection) {}
@@ -63,7 +65,7 @@ export class ImageGenerationUsageQuery {
                     .createQueryBuilder('cost')
                     .select('DISTINCT cost.jobIdSnapshot', 'jobId')
                     .where('cost.channelId = :channelId', { channelId: ctx.channelId })
-                    .andWhere('cost.actualCostMicrounits IS NULL')
+                    .andWhere('(cost.actualCostMicrounits IS NULL OR cost.costCurrency IS NULL)')
                     .limit(50_000)
                     .getRawMany();
                 const missingIds = rawMissing.map(row => String(row.jobId));
@@ -96,9 +98,10 @@ export class ImageGenerationUsageQuery {
             } else if (options.state) query.andWhere('1 = 0');
             if (options.failuresOnly) query.andWhere('prompt.errorMessage IS NOT NULL');
             if (options.missingCostOnly) {
-                query
-                    .andWhere('prompt.upstreamCallCount > 0')
-                    .andWhere('prompt.actualCostMicrounits IS NULL');
+                query.andWhere(
+                    "(prompt.attemptLedgerVersion IS NULL OR prompt.source = 'PENDING' OR " +
+                        '(prompt.upstreamCallCount > 0 AND (prompt.actualCostMicrounits IS NULL OR prompt.costCurrency IS NULL)))',
+                );
             }
             [promptItems, promptTotal] = await query
                 .orderBy('prompt.createdAt', 'DESC')
@@ -119,6 +122,16 @@ export class ImageGenerationUsageQuery {
               })
             : [];
         const costsByJob = groupBy(costEvents, event => event.jobIdSnapshot);
+        const promptAttempts = promptItems.length
+            ? await this.connection.getRepository(ctx, ImagePromptOptimizationAttempt).find({
+                  where: {
+                      channelId: ctx.channelId,
+                      optimizationIdSnapshot: In(promptItems.map(item => String(item.id))),
+                  },
+                  order: { attemptNumber: 'ASC' },
+              })
+            : [];
+        const attemptsByPrompt = groupBy(promptAttempts, attempt => attempt.optimizationIdSnapshot);
         const refundsByJob = new Map<string, { amount: number; count: number }>();
         for (const output of refundedOutputs) {
             const key = String(output.jobId);
@@ -135,7 +148,9 @@ export class ImageGenerationUsageQuery {
                     refundsByJob.get(String(job.id)),
                 ),
             ),
-            ...promptItems.map(prompt => this.promptUsageRecord(prompt)),
+            ...promptItems.map(prompt =>
+                this.promptUsageRecord(prompt, attemptsByPrompt.get(String(prompt.id)) ?? []),
+            ),
         ]
             .sort((left, right) => {
                 const created = right.createdAt.getTime() - left.createdAt.getTime();
@@ -218,7 +233,7 @@ export class ImageGenerationUsageQuery {
             } else if (event.outcome === 'RETRY') item.retries += 1;
             else if (event.outcome === 'UNKNOWN') item.unknowns += 1;
             else item.failures += 1;
-            if (event.actualCostMicrounits == null) item.missingCostCount += 1;
+            if (event.actualCostMicrounits == null || !event.costCurrency) item.missingCostCount += 1;
             else item.actualCostMicrounits += event.actualCostMicrounits;
             grouped.set(key, item);
         }
@@ -229,6 +244,8 @@ export class ImageGenerationUsageQuery {
             items: [...grouped.values()].map(item => ({
                 ...item,
                 actualCost: item.actualCostMicrounits / 1_000_000,
+                knownCost:
+                    item.missingCostCount === item.attempts ? null : item.actualCostMicrounits / 1_000_000,
                 averageLatencyMs: item.attempts ? Math.round(item.latencyTotal / item.attempts) : 0,
             })),
         };
@@ -239,8 +256,6 @@ export class ImageGenerationUsageQuery {
         costs: ImageGenerationCostEvent[],
         refundInfo?: { amount: number; count: number },
     ) {
-        const knownCost = costs.reduce((sum, event) => sum + (event.actualCostMicrounits ?? 0), 0);
-        const costCurrencies = [...new Set(costs.map(event => event.costCurrency).filter(Boolean))];
         const billingMode = refundInfo
             ? 'REFUNDED'
             : job.freeQuantityReserved > 0 && job.paidQuantityReserved > 0
@@ -265,14 +280,15 @@ export class ImageGenerationUsageQuery {
             chargedAmount: job.capturedAmount,
             refundedAmount: refundInfo?.amount ?? 0,
             currencyCode: job.currencyCode,
-            actualCostMicrounits: costs.some(event => event.actualCostMicrounits != null) ? knownCost : null,
-            costCurrency: costCurrencies.length === 1 ? costCurrencies[0] : null,
-            missingCost: costs.some(event => event.actualCostMicrounits == null),
+            ...summarizeProviderCosts(costs, costs.length > 0 && !['QUEUED', 'RUNNING'].includes(job.state)),
             errorMessage: job.errorMessage ?? costs.find(event => event.errorMessage)?.errorMessage ?? null,
         };
     }
 
-    private promptUsageRecord(prompt: ImagePromptOptimization) {
+    private promptUsageRecord(
+        prompt: ImagePromptOptimization,
+        attempts: ImagePromptOptimizationAttempt[] = [],
+    ) {
         const state = prompt.source === 'PENDING' ? 'PENDING' : prompt.errorMessage ? 'FAILED' : 'SUCCEEDED';
         return {
             id: prompt.id,
@@ -291,9 +307,12 @@ export class ImageGenerationUsageQuery {
             chargedAmount: prompt.chargedAmount,
             refundedAmount: prompt.billingMode === 'REFUNDED' ? prompt.chargedAmount : 0,
             currencyCode: prompt.currencyCode,
-            actualCostMicrounits: prompt.actualCostMicrounits,
-            costCurrency: prompt.costCurrency,
-            missingCost: prompt.upstreamCallCount > 0 && prompt.actualCostMicrounits == null,
+            ...summarizeProviderCosts(
+                prompt.attemptLedgerVersion === 1 ? attempts : [prompt],
+                prompt.attemptLedgerVersion === 1 &&
+                    prompt.source !== 'PENDING' &&
+                    attempts.length >= prompt.upstreamCallCount,
+            ),
             errorMessage: prompt.errorMessage,
         };
     }
@@ -392,6 +411,13 @@ export class ImageGenerationUsageQuery {
         }
         return {
             record: this.imageUsageRecord(job, costs),
+            attempts: costs.map(cost =>
+                attemptAudit({
+                    ...cost,
+                    modelId: cost.modelCodeSnapshot,
+                    stage: cost.providerStage ?? 'LEGACY',
+                }),
+            ),
             inputPrompt: job.originalPrompt,
             outputPrompt: job.finalPrompt,
             totalTokens: null,
@@ -415,6 +441,10 @@ export class ImageGenerationUsageQuery {
             relations: { customer: true },
         });
         if (!prompt) throw new UserInputError('找不到该提示词使用记录');
+        const attempts = await this.connection.getRepository(ctx, ImagePromptOptimizationAttempt).find({
+            where: { channelId: ctx.channelId, optimizationIdSnapshot: String(prompt.id) },
+            order: { attemptNumber: 'ASC' },
+        });
         const wallet = prompt.walletUsageId
             ? await this.connection.getRepository(ctx, ReferralWalletUsage).findOne({
                   where: { id: prompt.walletUsageId, channelId: ctx.channelId },
@@ -465,11 +495,19 @@ export class ImageGenerationUsageQuery {
             keyLast4: prompt.credentialLast4Snapshot || null,
         });
         return {
-            record: this.promptUsageRecord(prompt),
+            record: this.promptUsageRecord(prompt, attempts),
+            attempts: attempts.map(attemptAudit),
             inputPrompt: prompt.inputPrompt,
             outputPrompt: prompt.optimizedPrompt,
             totalTokens: prompt.totalTokens,
-            providerRequestIds: prompt.providerRequestId ? [prompt.providerRequestId] : [],
+            providerRequestIds: [
+                ...new Set(
+                    [
+                        prompt.providerRequestId,
+                        ...attempts.flatMap(attempt => [attempt.headerRequestId, attempt.modelResponseId]),
+                    ].filter((value): value is string => Boolean(value)),
+                ),
+            ],
             outputs: [],
             timeline: sortUsageTimeline(timeline),
         };
@@ -533,4 +571,26 @@ export class ImageGenerationUsageQuery {
         }
         return timeline;
     }
+}
+
+function attemptAudit(attempt: {
+    callId?: string | null;
+    attemptNumber: number;
+    stage: string;
+    outcome: string;
+    modelId: string;
+    credentialNameSnapshot: string;
+    headerRequestId?: string | null;
+    headerRequestIdSource?: string | null;
+    modelResponseId?: string | null;
+    providerRequestId?: string | null;
+    costSource?: string | null;
+    actualCostMicrounits?: number | null;
+    costCurrency?: string | null;
+    latencyMs: number;
+    reportedCostEvidence?: unknown;
+    httpStatus?: number | null;
+    createdAt: Date;
+}) {
+    return { ...attempt, costSource: attempt.costSource ?? 'UNVERIFIED', matchingStatus: 'UNRECONCILED' };
 }

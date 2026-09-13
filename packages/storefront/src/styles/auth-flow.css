@@ -472,6 +472,7 @@
 /* Skeleton loading styles have been extracted to dedicated styles/skeletons.css */
 
 @media (prefers-reduced-motion: reduce) {
+    .page-skeleton--route > *,
     .review-center-loading span,
     .product-review-loading span,
     .storefront-update-prompt,
@@ -1014,11 +1015,12 @@
 }
 
 @keyframes shimmer {
-    from {
-        background-position: 100% 0;
+    0%,
+    100% {
+        opacity: 0.6;
     }
-    to {
-        background-position: 0 0;
+    50% {
+        opacity: 1;
     }
 }
 

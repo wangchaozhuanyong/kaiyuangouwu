@@ -1,5 +1,7 @@
 import { ReactNode, Suspense } from 'react';
+import { preload } from 'react-dom';
 
+import { authOriginalImageUrl } from '../../../storefront-content-plugin/src/shared/auth-visual';
 import { findAuthVisualContent } from '../auth-visual';
 import {
     LazyForgotPasswordPage,
@@ -8,18 +10,47 @@ import {
     LazyResetPasswordPage,
     LazyVerifyAccountPage,
 } from '../lazy-storefront-pages';
+import { responsiveImageSources } from '../responsive-image';
 import { PageSkeleton } from '../route-loading';
 import { AuthPageBoundary } from '../storefront-ui/page-shell';
 
 import { registerRoutePreload, useRouteRuntime as useRuntime } from './shared';
 
-function AuthRouteBoundary({ children }: { children: ReactNode }) {
+function AuthRouteBoundary({
+    children,
+    heroVariant,
+}: {
+    children: ReactNode;
+    heroVariant?: 'login' | 'register';
+}) {
     const runtime = useRuntime();
+    const content = heroVariant ? findAuthVisualContent(runtime.contentBlocks, heroVariant) : undefined;
+    if (content?.imageUrl) {
+        const source = authOriginalImageUrl(content.imageUrl);
+        const responsive = responsiveImageSources(source, 'detail');
+        preload(responsive?.fallbackSrc ?? source, {
+            as: 'image',
+            fetchPriority: 'high',
+            imageSrcSet: responsive?.webpSrcSet,
+            imageSizes: '(min-width: 1024px) 640px, 100vw',
+        });
+    }
+    const pendingContent =
+        heroVariant && runtime.contentQuery?.isPending && !runtime.error && !runtime.contentError;
+    const placeholder = (
+        <main
+            className={`page subpage auth-page auth-page-managed auth-page-${heroVariant ?? 'login'}`}
+            aria-busy="true"
+        >
+            <section className="auth-hero auth-hero-managed" aria-hidden="true" />
+            <section className="login-content">
+                <PageSkeleton label={runtime.language === 'zh' ? '正在加载' : 'Loading'} />
+            </section>
+        </main>
+    );
     return (
         <AuthPageBoundary language={runtime.language} onBack={runtime.goBack}>
-            <Suspense fallback={<PageSkeleton label={runtime.language === 'zh' ? '正在加载' : 'Loading'} />}>
-                {children}
-            </Suspense>
+            <Suspense fallback={placeholder}>{pendingContent ? placeholder : children}</Suspense>
         </AuthPageBoundary>
     );
 }
@@ -27,7 +58,7 @@ function AuthRouteBoundary({ children }: { children: ReactNode }) {
 export function LoginRoutePage() {
     const runtime = useRuntime();
     return (
-        <AuthRouteBoundary>
+        <AuthRouteBoundary heroVariant="login">
             <LazyLoginPage
                 returnTo={runtime.route.returnTo}
                 returnVariantId={runtime.route.id}
@@ -37,7 +68,7 @@ export function LoginRoutePage() {
                 storefrontName={runtime.storefrontName}
                 legalContent={runtime.legalContent}
                 authVisualContent={findAuthVisualContent(runtime.contentBlocks, 'login')}
-                onBack={runtime.customer ? runtime.goBack : () => window.location.assign('/promo')}
+                onBack={runtime.goBack}
                 onSuccess={runtime.completeAuthentication}
                 onContentTarget={runtime.openContentTarget}
             />
@@ -48,7 +79,7 @@ export function LoginRoutePage() {
 export function RegisterRoutePage() {
     const runtime = useRuntime();
     return (
-        <AuthRouteBoundary>
+        <AuthRouteBoundary heroVariant="register">
             <LazyRegisterPage
                 returnTo={runtime.route.returnTo}
                 returnVariantId={runtime.route.id}
@@ -87,7 +118,7 @@ export function VerifyAccountRoutePage() {
 export function ForgotPasswordRoutePage() {
     const runtime = useRuntime();
     return (
-        <AuthRouteBoundary>
+        <AuthRouteBoundary heroVariant="login">
             <LazyForgotPasswordPage
                 returnTo={runtime.route.returnTo}
                 returnVariantId={runtime.route.id}

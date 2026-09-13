@@ -1,11 +1,16 @@
-import type { ID } from '@vendure/common/lib/shared-types';
+import { type ID } from '@vendure/common/lib/shared-types';
 import { UserInputError } from '@vendure/core';
-import type { ReferralWalletUsage } from '@vendure/store-management-plugin';
+import { type ReferralWalletUsage } from '@vendure/store-management-plugin';
 import { Brackets, type ObjectLiteral, type SelectQueryBuilder } from 'typeorm';
-import type { ImageGenerationJob } from './entities/image-generation-job.entity';
-import type { ImageGenerationOutput } from './entities/image-generation-output.entity';
-import type { PromptOutputLanguage } from './prompt/prompt-rules.service';
-import type { CreateImageGenerationInput, ImageAiUsageRecordListInput, ImageReferenceMode } from './types';
+
+import { type ImageGenerationJob } from './entities/image-generation-job.entity';
+import { type ImageGenerationOutput } from './entities/image-generation-output.entity';
+import { type PromptOutputLanguage } from './prompt/prompt-rules.service';
+import {
+    type CreateImageGenerationInput,
+    type ImageAiUsageRecordListInput,
+    type ImageReferenceMode,
+} from './types';
 
 export type UsageTimelineItem = {
     at: Date;
@@ -171,7 +176,9 @@ export function quotaTypeZh(value: string): string {
     );
 }
 
-export function uniqueReferenceAssetIds(input: CreateImageGenerationInput): ID[] {
+export function uniqueReferenceAssetIds(
+    input: Pick<CreateImageGenerationInput, 'referenceAssetId' | 'referenceAssetIds'>,
+): ID[] {
     const unique = new Map<string, ID>();
     for (const id of [...(input.referenceAssetIds ?? []), input.referenceAssetId]) {
         if (id === null || id === undefined || !String(id).trim()) continue;

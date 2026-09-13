@@ -12,6 +12,7 @@ import {
 import { EmptyState, Subpage } from '../storefront-ui/page-shell';
 import { CollectionSummary, FulfillmentType, Product, ProductVariant } from '../types';
 
+import '../commerce-styles';
 import { registerRoutePreload, useRouteRuntime as useRuntime } from './shared';
 
 const HomePage = lazyRouteComponent(() => import('../pages/home-page'), 'HomePage');

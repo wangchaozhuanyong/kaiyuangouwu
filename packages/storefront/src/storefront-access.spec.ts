@@ -4,6 +4,22 @@ import { isPublicStorefrontRoute } from './storefront-access';
 
 describe('storefront account boundary', () => {
     it.each([
+        'account',
+        'orders',
+        'order-detail',
+        'checkout',
+        'payment',
+        'cart',
+        'addresses',
+        'account-security',
+        'notifications',
+        'reviews',
+        'image-studio',
+        'referral',
+    ] as const)('keeps customer data and actions protected: %s', route =>
+        expect(isPublicStorefrontRoute(route)).toBe(false),
+    );
+    it.each([
         'home',
         'product',
         'category',
@@ -11,9 +27,9 @@ describe('storefront account boundary', () => {
         'flash-sale',
         'recommendations',
         'announcements',
-    ] as const)('requires an authenticated account before rendering %s', route =>
-        expect(isPublicStorefrontRoute(route)).toBe(false),
-    );
+        'services',
+        'not-found',
+    ] as const)('allows public browsing of %s', route => expect(isPublicStorefrontRoute(route)).toBe(true));
     it.each([
         'login',
         'register',

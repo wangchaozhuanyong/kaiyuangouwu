@@ -96,6 +96,7 @@ import {
     testImageProviderMutation,
 } from './image-generation.graphql';
 import { imageProtocolOption, imageProtocolOptionsForModel } from './image-protocol-options';
+import { ProviderAttemptDetails } from './provider-attempt-details';
 export { reconcileImageAdminConfig, toLocalDayBoundary } from '../image-generation-dashboard.helpers';
 
 export const imageGenerationSettingsRoute: DashboardRouteDefinition = {
@@ -141,6 +142,7 @@ function ImageGenerationSettingsPage() {
     const { activeChannel } = useChannel();
     const { hasPermissions } = usePermissions();
     const canUpdate = hasPermissions(['UpdateImageGeneration']);
+    const canActivateSkill = hasPermissions(['SuperAdmin']);
     const [activeTab, setActiveTab] = useState('base');
     const [historyView, setHistoryView] = useState<'usage' | 'prompts' | 'generation'>('usage');
     const query = useImageAdminQuery(activeChannel?.id, activeTab === 'jobs' && historyView === 'generation');
@@ -1019,7 +1021,10 @@ function ImageGenerationSettingsPage() {
                                                     {item.saleCurrencyCode}
                                                 </td>
                                                 <td>
-                                                    {item.actualCost.toFixed(6)} {item.costCurrency}
+                                                    {item.knownCost == null
+                                                        ? '待核对'
+                                                        : item.knownCost.toFixed(6)}{' '}
+                                                    {item.costCurrency}
                                                 </td>
                                                 <td>
                                                     {item.missingCostCount}
@@ -1236,7 +1241,7 @@ function ImageGenerationSettingsPage() {
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
-                                                    disabled={activateSkill.isPending}
+                                                    disabled={activateSkill.isPending || !canActivateSkill}
                                                     onClick={() => activateSkill.mutate(release.id)}
                                                 >
                                                     设为当前版本
@@ -1516,12 +1521,17 @@ function ImageGenerationSettingsPage() {
                                                         {item.currencyCode}
                                                     </td>
                                                     <td>
-                                                        {item.actualCostMicrounits == null
-                                                            ? '缺失'
-                                                            : `${(item.actualCostMicrounits / 1_000_000).toFixed(6)} ${item.costCurrency ?? ''}`}
+                                                        {item.costBreakdown?.length
+                                                            ? item.costBreakdown
+                                                                  .map(
+                                                                      cost =>
+                                                                          `${cost.amount.toFixed(6)} ${cost.currency}`,
+                                                                  )
+                                                                  .join(' / ')
+                                                            : '待核对'}
                                                         {item.missingCost ? (
                                                             <div className="text-xs text-destructive">
-                                                                存在缺失成本
+                                                                费用尚未完整核实
                                                             </div>
                                                         ) : null}
                                                     </td>
@@ -1639,6 +1649,9 @@ function ImageGenerationSettingsPage() {
                                                             </div>
                                                         </div>
                                                     </div>
+                                                    <ProviderAttemptDetails
+                                                        detail={usageDetailQuery.data.imageAiUsageRecord}
+                                                    />
                                                     <div className="text-sm text-muted-foreground">
                                                         Token：
                                                         {usageDetailQuery.data.imageAiUsageRecord
@@ -1770,7 +1783,11 @@ function ImageGenerationSettingsPage() {
                                                             : ''}
                                                     </div>
                                                     <div className="text-xs text-muted-foreground">
-                                                        调用 {item.upstreamCallCount} 次 · {item.latencyMs}ms
+                                                        {item.attemptLedgerVersion == null &&
+                                                        item.upstreamCallCount === 0
+                                                            ? '历史调用次数未记录'
+                                                            : `调用 ${item.upstreamCallCount} 次`}{' '}
+                                                        · {item.latencyMs}ms
                                                     </div>
                                                     {item.errorMessage ? (
                                                         <div className="text-xs text-destructive">

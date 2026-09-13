@@ -895,7 +895,7 @@ export function HomePage() {
             )}
 
             {loading ? (
-                <PageSkeleton label={isZh ? '正在加载首页' : 'Loading home page'} />
+                <PageSkeleton variant="home" label={isZh ? '正在加载首页' : 'Loading home page'} />
             ) : error ? (
                 <EmptyState
                     icon={<WifiOff />}
