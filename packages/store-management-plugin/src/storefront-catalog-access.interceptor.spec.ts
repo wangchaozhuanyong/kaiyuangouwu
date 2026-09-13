@@ -53,8 +53,11 @@ describe('public storefront browsing boundary', () => {
         'myStorefrontReviews',
         'myAfterSalesRequests',
         'myAvailableCoupons',
+        'imageStudioWallet',
+        'myImageGenerationJobs',
+        'previewImageGenerationPrompt',
     ])('keeps private and unreviewed queries protected: %s', field => expect(invoke(field).run).toThrow());
-    it.each(['addItemToOrder', 'setCustomerAvatar', 'createAfterSalesRequest', 'createImageGenerationJob'])(
+    it.each(['addItemToOrder', 'setCustomerAvatar', 'createAfterSalesRequest', 'createImageGeneration'])(
         'does not make customer mutations public: %s',
         field => expect(invoke(field, 'Mutation').run).toThrow(),
     );
@@ -64,10 +67,13 @@ describe('public storefront browsing boundary', () => {
         expect(run).toThrow();
         expect(invoke('login', 'Query').run).toThrow();
     });
-    it.each(['activeCustomer', 'storefrontBranding', 'storefrontContent', 'activeChannel'])(
-        'preserves public account bootstrap: %s',
-        field => expect(invoke(field).run).not.toThrow(),
-    );
+    it.each([
+        'activeCustomer',
+        'storefrontBranding',
+        'storefrontContent',
+        'activeChannel',
+        'imageStudioConfig',
+    ])('preserves public account bootstrap: %s', field => expect(invoke(field).run).not.toThrow());
     it.each(['login', 'registerCustomerAccount', 'requestPasswordReset', 'resetPassword'])(
         'preserves account mutation: %s',
         field => expect(invoke(field, 'Mutation').run).not.toThrow(),

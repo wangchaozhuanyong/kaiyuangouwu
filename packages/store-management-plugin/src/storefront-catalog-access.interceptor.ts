@@ -17,6 +17,7 @@ const publicQueries = new Set([
     'activeSystemAnnouncements',
     'storefrontContentSettings',
     'activeStoreCommerceMode',
+    'imageStudioConfig',
     'me',
     'activeCustomer',
     'myCustomerAvatar',
