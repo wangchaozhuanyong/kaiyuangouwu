@@ -153,3 +153,15 @@ mutation UpdateIcloudVirtualEmail($input: UpdateIcloudVirtualEmailInput!) {
         ...IcloudVirtualEmailFields
     }
 }
+
+mutation ReconcileIcloudMailHistory($primaryAccountId: ID!, $dryRun: Boolean! = true) {
+    reconcileIcloudMailHistory(primaryAccountId: $primaryAccountId, dryRun: $dryRun) {
+        scannedCount
+        matchedCount
+        updatedCount
+        unmatchedCount
+        ambiguousCount
+        unresolvedCount
+        skippedCount
+    }
+}

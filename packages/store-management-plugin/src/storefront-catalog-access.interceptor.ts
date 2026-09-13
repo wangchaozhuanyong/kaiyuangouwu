@@ -18,6 +18,8 @@ const publicQueries = new Set([
     'storefrontContentSettings',
     'activeStoreCommerceMode',
     'imageStudioConfig',
+    // The mail service authorizes each read with its query code and expiry.
+    'icloudQueryMails',
     'me',
     'activeCustomer',
     'myCustomerAvatar',

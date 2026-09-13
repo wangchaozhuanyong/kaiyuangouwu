@@ -576,7 +576,10 @@ export const PORTAL_HTML = `<!DOCTYPE html>
             align-items: flex-start;
             margin-bottom: 12px;
         }
+        .summary-header > div { min-width: 0; flex: 1; }
         .summary-email {
+            flex-wrap: wrap;
+            overflow-wrap: anywhere;
             font-size: 16px;
             font-weight: 700;
             color: var(--text);
@@ -585,6 +588,7 @@ export const PORTAL_HTML = `<!DOCTYPE html>
             gap: 8px;
         }
         .code-type-pill {
+            white-space: nowrap;
             font-size: 11px;
             padding: 2px 8px;
             border-radius: 9999px;
@@ -593,6 +597,8 @@ export const PORTAL_HTML = `<!DOCTYPE html>
         .pill-buyer { background: #dbeafe; color: #1e40af; }
         .pill-master { background: #fef3c7; color: #92400e; }
         .refresh-now-btn {
+            flex-shrink: 0;
+            white-space: nowrap;
             background: var(--primary-light);
             color: var(--primary);
             border: 1px solid var(--primary-border);
@@ -608,6 +614,8 @@ export const PORTAL_HTML = `<!DOCTYPE html>
         }
         .refresh-now-btn:hover { background: #dbeafe; }
         .summary-stats {
+            flex-wrap: wrap;
+            row-gap: 8px;
             display: flex;
             gap: 16px;
             font-size: 13px;
@@ -865,7 +873,7 @@ export const PORTAL_HTML = `<!DOCTYPE html>
             </a>
             <div class="nav-status">
                 <span class="status-dot"></span>
-                <span>服务运行中</span>
+                <span>邮件查询服务</span>
             </div>
         </div>
     </header>
@@ -954,6 +962,8 @@ export const PORTAL_HTML = `<!DOCTYPE html>
                 </div>
             </div>
 
+            <div id="refreshStatus" class="toast-msg error" role="status" aria-live="polite" style="display: none;"></div>
+
             <!-- Filter bar for master queries -->
             <div class="filter-wrapper" id="filterWrapper">
                 <select id="filterSelect" class="filter-select">
@@ -979,7 +989,7 @@ export const PORTAL_HTML = `<!DOCTYPE html>
                 </div>
                 <div class="faq-item">
                     <div class="faq-q">2. 验证码多久能收到？</div>
-                    <div class="faq-a">平台与 iCloud 邮件服务器保持实时互联，第三方服务发送验证码后，通常在 5 ~ 30 秒内送达。您可以开启上方的“自动刷新”或点击“立即刷新”。</div>
+                    <div class="faq-a">系统定时同步 iCloud 收件箱，显示时间取决于邮件送达和同步进度。您可以开启“自动刷新”或点击“立即刷新”。</div>
                 </div>
                 <div class="faq-item">
                     <div class="faq-q">3. 没收到邮件怎么办？</div>

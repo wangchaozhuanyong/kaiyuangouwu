@@ -28,12 +28,14 @@ import {
     ICLOUD_PRIMARY_ACCOUNTS_QUERY,
     ICLOUD_RECEIVED_MAILS_QUERY,
     ICLOUD_VIRTUAL_EMAILS_QUERY,
+    RECONCILE_ICLOUD_MAIL_HISTORY_MUTATION,
     RESET_ICLOUD_MASTER_CODE_MUTATION,
     RESET_ICLOUD_VIRTUAL_EMAIL_CODE_MUTATION,
     SYNC_ICLOUD_ACCOUNT_MUTATION,
     TEST_ICLOUD_CONNECTION_MUTATION,
     UPDATE_ICLOUD_PRIMARY_ACCOUNT_MUTATION,
     UPDATE_ICLOUD_VIRTUAL_EMAIL_MUTATION,
+    type IcloudMailHistoryResult,
     type IcloudPrimaryAccount,
     type IcloudReceivedMail,
     type IcloudVirtualEmail,
@@ -85,6 +87,45 @@ export function IcloudRelayModule() {
     const [updateVirtual, updateVirtualState] = useMutation(UPDATE_ICLOUD_VIRTUAL_EMAIL_MUTATION);
     const [deleteVirtual] = useMutation(DELETE_ICLOUD_VIRTUAL_EMAIL_MUTATION);
     const [resetVirtualCode] = useMutation(RESET_ICLOUD_VIRTUAL_EMAIL_CODE_MUTATION);
+
+    const [reconcileHistory, historyState] = useMutation(RECONCILE_ICLOUD_MAIL_HISTORY_MUTATION);
+    const historyPending = useRef(false);
+    const [historyDialog, setHistoryDialog] = useState<{
+        id: string;
+        email: string;
+        result: IcloudMailHistoryResult;
+        applied: boolean;
+    } | null>(null);
+
+    const handleHistory = async (id: string, email: string, dryRun: boolean) => {
+        if (historyPending.current) return;
+        historyPending.current = true;
+        setError('');
+        setNotice(dryRun ? '正在检查历史邮件归属…' : '正在修复匹配记录…');
+        try {
+            const response = await reconcileHistory({ variables: { primaryAccountId: id, dryRun } });
+            const result = response.data?.reconcileIcloudMailHistory;
+            if (!result) throw new Error('未收到历史邮件检查结果，请重新检查');
+            setHistoryDialog({ id, email, result, applied: !dryRun });
+            setNotice(
+                dryRun
+                    ? '检查完成，尚未修改邮件归属。'
+                    : `修复完成，已关联 ${result.updatedCount} 封历史邮件。`,
+            );
+            if (!dryRun) await refreshData(true);
+        } catch (e) {
+            setNotice('');
+            setError(
+                toUserFacingError(
+                    e,
+                    '历史邮件处理未完成，请重新检查后核对结果；已成功关联的记录不会重复处理。',
+                ),
+            );
+            if (!dryRun) setHistoryDialog(null);
+        } finally {
+            historyPending.current = false;
+        }
+    };
 
     // Dialog States
     const [primaryDialog, setPrimaryDialogState] = useState<{
@@ -764,6 +805,22 @@ export function IcloudRelayModule() {
                                                             <button
                                                                 type="button"
                                                                 onClick={() =>
+                                                                    handleHistory(
+                                                                        account.id,
+                                                                        account.email,
+                                                                        true,
+                                                                    )
+                                                                }
+                                                                disabled={historyState.loading}
+                                                                className="rounded border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
+                                                            >
+                                                                {historyState.loading
+                                                                    ? '处理中…'
+                                                                    : '检查历史邮件'}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
                                                                     handleResetMasterCode(
                                                                         account.id,
                                                                         account.email,
@@ -1353,6 +1410,63 @@ export function IcloudRelayModule() {
                             >
                                 {batchCreateState.loading ? '导入中…' : '开始导入'}
                             </button>
+                        </div>
+                    </div>
+                </AdminModal>
+            )}
+
+            {historyDialog && (
+                <AdminModal
+                    title={historyDialog.applied ? '历史邮件修复结果' : '历史邮件检查结果'}
+                    description={historyDialog.email}
+                    onClose={() => {
+                        if (!historyPending.current) setHistoryDialog(null);
+                    }}
+                >
+                    <div className="space-y-4 pt-4 text-sm">
+                        <p>仅处理本主邮箱内未分配、且收件地址唯一匹配的邮件。</p>
+                        <dl className="grid grid-cols-2 gap-3">
+                            {(
+                                [
+                                    ['扫描邮件', historyDialog.result.scannedCount],
+                                    ['可匹配', historyDialog.result.matchedCount],
+                                    ['已修复', historyDialog.result.updatedCount],
+                                    ['未匹配', historyDialog.result.unmatchedCount],
+                                    ['匹配冲突', historyDialog.result.ambiguousCount],
+                                    ['原始信息未核实', historyDialog.result.unresolvedCount],
+                                    ['记录变化已跳过', historyDialog.result.skippedCount],
+                                ] as const
+                            ).map(([label, count]) => (
+                                <div key={label}>
+                                    <dt className="text-slate-500">{label}</dt>
+                                    <dd className="font-semibold">{count} 封</dd>
+                                </div>
+                            ))}
+                        </dl>
+                        <p className="text-xs text-slate-500">
+                            无法核实或存在冲突的邮件将保持未分配。执行时会重新核对，实际修复数量可能变化。
+                        </p>
+                        <div className="flex flex-wrap justify-end gap-2">
+                            <button
+                                type="button"
+                                disabled={historyState.loading}
+                                onClick={() => setHistoryDialog(null)}
+                                className="rounded border px-3 py-2"
+                            >
+                                关闭
+                            </button>
+                            {!historyDialog.applied && (
+                                <button
+                                    type="button"
+                                    disabled={historyState.loading || historyDialog.result.matchedCount === 0}
+                                    onClick={() =>
+                                        handleHistory(historyDialog.id, historyDialog.email, false)
+                                    }
+                                    className="rounded bg-blue-600 px-3 py-2 font-semibold text-white disabled:opacity-50"
+                                >
+                                    {historyState.loading ? '正在修复…' : '修复匹配记录'}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </AdminModal>

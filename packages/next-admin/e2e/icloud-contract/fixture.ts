@@ -60,6 +60,7 @@ export function createIcloudContractFixture() {
         pending: undefined as Promise<void> | undefined,
         failure: '',
         queryFailure: '',
+        historyRepaired: false,
         batchResult: { createdCount: 1, skippedCount: 0, errors: [] as string[] },
     };
     const rootValue = {
@@ -78,6 +79,30 @@ export function createIcloudContractFixture() {
             return state.primary;
         },
         batchCreateIcloudVirtualEmails: () => state.batchResult,
+        reconcileIcloudMailHistory: ({
+            primaryAccountId,
+            dryRun = true,
+        }: {
+            primaryAccountId: string;
+            dryRun?: boolean;
+        }) => {
+            if (primaryAccountId !== state.primary.id) throw new Error('Unknown primary mailbox');
+            if (state.failure) throw new Error(state.failure);
+            const count = state.historyRepaired ? 0 : 7;
+            if (!dryRun) {
+                state.historyRepaired = true;
+                state.virtual = { ...state.virtual, mailCount: 7 };
+            }
+            return {
+                scannedCount: count + 2,
+                matchedCount: count,
+                updatedCount: dryRun ? 0 : count,
+                unmatchedCount: 1,
+                ambiguousCount: 1,
+                unresolvedCount: 0,
+                skippedCount: 0,
+            };
+        },
     };
     const client = new ApolloClient({
         cache: new InMemoryCache(),
@@ -89,7 +114,11 @@ export function createIcloudContractFixture() {
                         variables: operation.variables,
                     });
                     void (async () => {
-                        if (operation.operationName?.startsWith('Update')) await state.pending;
+                        if (
+                            operation.operationName?.startsWith('Update') ||
+                            operation.operationName === 'ReconcileIcloudMailHistory'
+                        )
+                            await state.pending;
                         if (operation.operationName?.startsWith('Icloud') && state.queryFailure)
                             throw new Error(state.queryFailure);
                         const result = await graphql({

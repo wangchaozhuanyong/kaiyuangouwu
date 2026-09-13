@@ -2,6 +2,7 @@ import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendure/core';
 
 import { IcloudAdminService } from '../services/icloud-admin.service';
+import { IcloudMailHistoryService } from '../services/icloud-mail-history.service';
 import {
     BatchCreateVirtualEmailsInput,
     CreatePrimaryAccountInput,
@@ -12,7 +13,20 @@ import {
 
 @Resolver()
 export class IcloudAdminResolver {
-    constructor(private readonly adminService: IcloudAdminService) {}
+    constructor(
+        private readonly adminService: IcloudAdminService,
+        private readonly mailHistory: IcloudMailHistoryService,
+    ) {}
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    reconcileIcloudMailHistory(
+        @Ctx() ctx: RequestContext,
+        @Args('primaryAccountId') primaryAccountId: ID,
+        @Args('dryRun') dryRun = true,
+    ) {
+        return this.mailHistory.reconcile(ctx, primaryAccountId, dryRun);
+    }
 
     // ==========================================
     // Primary Account Queries
@@ -116,14 +130,12 @@ export class IcloudAdminResolver {
     // ==========================================
 
     @Mutation()
-    @Transaction()
     @Allow(Permission.SuperAdmin)
     createIcloudVirtualEmail(@Ctx() ctx: RequestContext, @Args('input') input: CreateVirtualEmailInput) {
         return this.adminService.createVirtualEmail(ctx, input);
     }
 
     @Mutation()
-    @Transaction()
     @Allow(Permission.SuperAdmin)
     batchCreateIcloudVirtualEmails(
         @Ctx() ctx: RequestContext,

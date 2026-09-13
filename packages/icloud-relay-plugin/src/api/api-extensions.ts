@@ -75,6 +75,16 @@ export const adminApiExtensions = gql`
         message: String!
     }
 
+    type IcloudMailHistoryResult {
+        scannedCount: Int!
+        matchedCount: Int!
+        updatedCount: Int!
+        unmatchedCount: Int!
+        ambiguousCount: Int!
+        unresolvedCount: Int!
+        skippedCount: Int!
+    }
+
     type IcloudSyncResult {
         success: Boolean!
         syncedCount: Int!
@@ -146,6 +156,7 @@ export const adminApiExtensions = gql`
     }
 
     extend type Mutation {
+        reconcileIcloudMailHistory(primaryAccountId: ID!, dryRun: Boolean! = true): IcloudMailHistoryResult!
         createIcloudPrimaryAccount(input: CreateIcloudPrimaryAccountInput!): IcloudPrimaryAccountView!
         updateIcloudPrimaryAccount(input: UpdateIcloudPrimaryAccountInput!): IcloudPrimaryAccountView!
         deleteIcloudPrimaryAccount(id: ID!): Boolean!

@@ -14,6 +14,7 @@ export enum IcloudVirtualEmailStatus {
 
 export enum IcloudAuditResult {
     SUCCESS = 'SUCCESS',
+    DISABLED = 'DISABLED',
     EXPIRED = 'EXPIRED',
     INVALID_CODE = 'INVALID_CODE',
     RATE_LIMITED = 'RATE_LIMITED',

@@ -8,6 +8,7 @@ export {
     IcloudPrimaryAccountsDocument as ICLOUD_PRIMARY_ACCOUNTS_QUERY,
     IcloudReceivedMailsDocument as ICLOUD_RECEIVED_MAILS_QUERY,
     IcloudVirtualEmailsDocument as ICLOUD_VIRTUAL_EMAILS_QUERY,
+    ReconcileIcloudMailHistoryDocument as RECONCILE_ICLOUD_MAIL_HISTORY_MUTATION,
     ResetIcloudMasterCodeDocument as RESET_ICLOUD_MASTER_CODE_MUTATION,
     ResetIcloudVirtualEmailCodeDocument as RESET_ICLOUD_VIRTUAL_EMAIL_CODE_MUTATION,
     SyncIcloudAccountDocument as SYNC_ICLOUD_ACCOUNT_MUTATION,
@@ -18,6 +19,7 @@ export {
 
 export type {
     IcloudAccountStatus,
+    IcloudMailHistoryResult,
     IcloudPrimaryAccountFieldsFragment as IcloudPrimaryAccount,
     IcloudPrimaryAccountsQuery as IcloudPrimaryAccountsResult,
     IcloudReceivedMailFieldsFragment as IcloudReceivedMail,

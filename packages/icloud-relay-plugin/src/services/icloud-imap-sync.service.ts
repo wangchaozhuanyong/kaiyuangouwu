@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Logger, RequestContext, TransactionalConnection } from '@vendure/core';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
-import { IsNull, LessThan, Or } from 'typeorm';
+import { LessThan } from 'typeorm';
 
 import { loggerCtx } from '../constants';
 import { IcloudPrimaryAccount } from '../entities/icloud-primary-account.entity';
@@ -11,7 +11,9 @@ import { IcloudVirtualEmail } from '../entities/icloud-virtual-email.entity';
 import { IcloudAccountStatus } from '../types';
 
 import { IcloudCipherService } from './icloud-cipher.service';
+import { extractMailRecipients, matchMailRecipient, RECIPIENT_HEADERS } from './icloud-mail-recipients';
 import { IcloudMailSanitizerService } from './icloud-mail-sanitizer.service';
+import { lockMailAccount, refreshMailCounts } from './icloud-mail-storage';
 import { IcloudOtpExtractorService } from './icloud-otp-extractor.service';
 
 export interface TestConnectionResult {
@@ -93,8 +95,6 @@ export class IcloudImapSyncService {
         });
 
         const primaryAccountRepo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
-        const virtualEmailRepo = this.connection.getRepository(ctx, IcloudVirtualEmail);
-        const receivedMailRepo = this.connection.getRepository(ctx, IcloudReceivedMail);
 
         let syncedCount = 0;
 
@@ -103,27 +103,17 @@ export class IcloudImapSyncService {
             const lock = await client.getMailboxLock('INBOX');
 
             try {
-                // Fetch all virtual emails belonging to this primary account
-                const virtualEmails = await virtualEmailRepo.find({
-                    where: { primaryAccountId: account.id },
-                });
-                const virtualEmailMap = new Map<string, IcloudVirtualEmail>();
-                for (const v of virtualEmails) {
-                    virtualEmailMap.set(v.aliasEmail.toLowerCase().trim(), v);
-                }
-
-                // Search query: if lastSyncedUid > 0, fetch UID (lastSyncedUid + 1):*
-                // Otherwise fetch the latest 50 messages
-                let searchCriteria: any = '1:*';
-                if (account.lastSyncedUid > 0) {
-                    searchCriteria = { uid: `${account.lastSyncedUid + 1}:*` };
-                }
+                const range = account.lastSyncedUid > 0 ? `${account.lastSyncedUid + 1}:*` : '1:*';
 
                 const messagesToProcess: Array<{ uid: number; source: Buffer }> = [];
-                for await (const message of client.fetch(searchCriteria, {
-                    source: true,
-                    uid: true,
-                })) {
+                for await (const message of client.fetch(
+                    range,
+                    {
+                        source: true,
+                        uid: true,
+                    },
+                    { uid: true },
+                )) {
                     if (message.uid <= account.lastSyncedUid) {
                         continue;
                     }
@@ -141,27 +131,7 @@ export class IcloudImapSyncService {
                         const messageId =
                             parsed.messageId || `<icloud-${account.id}-${item.uid}-${Date.now()}@relay>`;
 
-                        // Check if mail already exists in DB
-                        const existing = await receivedMailRepo.findOne({
-                            where: { primaryAccountId: account.id, messageId },
-                        });
-                        if (existing) {
-                            continue;
-                        }
-
-                        // Multi-level recipient sniffing
-                        const recipientCandidates = this.extractRecipientCandidates(parsed);
-
-                        // Find matching virtual email
-                        let matchedVirtualEmail: IcloudVirtualEmail | null = null;
-                        for (const candidate of recipientCandidates) {
-                            const found = virtualEmailMap.get(candidate);
-                            if (found) {
-                                matchedVirtualEmail = found;
-                                break;
-                            }
-                        }
-
+                        const recipientCandidates = extractMailRecipients(parsed);
                         // Subject & Body extraction
                         const subject = parsed.subject || '(无主题)';
                         const bodyText = parsed.text || '';
@@ -175,37 +145,46 @@ export class IcloudImapSyncService {
                         const fromAddress = parsed.from?.value?.[0]?.address || 'unknown@sender.com';
                         const fromName = parsed.from?.value?.[0]?.name || '';
 
-                        const newMail = new IcloudReceivedMail({
-                            primaryAccountId: account.id,
-                            virtualEmailId: matchedVirtualEmail?.id || null,
-                            messageId,
-                            imapUid: item.uid,
-                            fromAddress,
-                            fromName,
-                            toAddressesJson: JSON.stringify(recipientCandidates),
-                            subject,
-                            bodyHtml: sanitizedHtml,
-                            bodyText,
-                            extractedCode,
-                            receivedAt,
-                            isRead: false,
-                            isStarred: false,
+                        const inserted = await this.connection.withTransaction(ctx, async transactionCtx => {
+                            await lockMailAccount(transactionCtx, this.connection, account.id);
+                            const mails = this.connection.getRepository(transactionCtx, IcloudReceivedMail);
+                            if (await mails.findOne({ where: { primaryAccountId: account.id, messageId } }))
+                                return false;
+                            const virtuals = await this.connection
+                                .getRepository(transactionCtx, IcloudVirtualEmail)
+                                .find({
+                                    where: { primaryAccountId: account.id },
+                                });
+                            const matchedVirtualEmail = matchMailRecipient(
+                                recipientCandidates,
+                                virtuals,
+                                account.id,
+                            ).match;
+                            const newMail = new IcloudReceivedMail({
+                                primaryAccountId: account.id,
+                                virtualEmailId: matchedVirtualEmail?.id || null,
+                                messageId,
+                                imapUid: item.uid,
+                                fromAddress,
+                                fromName,
+                                toAddressesJson: JSON.stringify(recipientCandidates),
+                                subject,
+                                bodyHtml: sanitizedHtml,
+                                bodyText,
+                                extractedCode,
+                                receivedAt,
+                                isRead: false,
+                                isStarred: false,
+                            });
+
+                            await mails.save(newMail);
+                            if (matchedVirtualEmail)
+                                await refreshMailCounts(transactionCtx, this.connection, account.id, [
+                                    matchedVirtualEmail.id,
+                                ]);
+                            return true;
                         });
-
-                        await receivedMailRepo.save(newMail);
-                        syncedCount++;
-
-                        // Update virtual email counter
-                        if (matchedVirtualEmail) {
-                            await virtualEmailRepo.increment({ id: matchedVirtualEmail.id }, 'mailCount', 1);
-                            await virtualEmailRepo.update(
-                                {
-                                    id: matchedVirtualEmail.id,
-                                    lastMailReceivedAt: Or(IsNull(), LessThan(receivedAt)),
-                                },
-                                { lastMailReceivedAt: receivedAt },
-                            );
-                        }
+                        if (inserted) syncedCount++;
                     } catch (parseErr: any) {
                         Logger.error(`Failed to parse email UID ${item.uid}: ${parseErr.message}`, loggerCtx);
                     }
@@ -252,79 +231,48 @@ export class IcloudImapSyncService {
         }
     }
 
-    /**
-     * Multi-level header resolution algorithm:
-     * 1. Check To addresses
-     * 2. Check Cc addresses
-     * 3. Check Delivered-To, X-Original-To, Envelope-To
-     * 4. Check Apple-specific relay headers
-     * 5. Scan Received headers for 'for <...>'
-     */
-    private extractRecipientCandidates(parsed: any): string[] {
-        const candidates = new Set<string>();
-
-        const addCandidate = (addr: string | undefined | null) => {
-            if (!addr) return;
-            const cleaned = addr.toLowerCase().trim();
-            if (cleaned.includes('@')) {
-                candidates.add(cleaned);
-            }
-        };
-
-        // 1. To addresses
-        if (parsed.to) {
-            const list = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-            for (const item of list) {
-                if (item.value) {
-                    for (const v of item.value) {
-                        addCandidate(v.address);
-                    }
+    /** Read only the original recipient headers. A reused UID must never reassign a different message. */
+    async readRecipientHeaders(
+        account: IcloudPrimaryAccount,
+        mails: IcloudReceivedMail[],
+    ): Promise<Map<string, string[]>> {
+        const recovered = new Map<string, string[]>();
+        const password = this.cipher.decrypt(account.encryptedAppPassword);
+        if (!password) return recovered;
+        const client = new ImapFlow({
+            host: account.imapHost || 'imap.mail.me.com',
+            port: account.imapPort || 993,
+            secure: true,
+            auth: { user: account.email, pass: password },
+            logger: false,
+            connectionTimeout: 10000,
+            greetingTimeout: 10000,
+            socketTimeout: 15000,
+        });
+        try {
+            await client.connect();
+            const lock = await client.getMailboxLock('INBOX', { readOnly: true });
+            try {
+                for (const mail of mails) {
+                    if (mail.imapUid <= 0 || !mail.messageId) continue;
+                    const message = await client.fetchOne(
+                        String(mail.imapUid),
+                        { uid: true, headers: RECIPIENT_HEADERS },
+                        { uid: true },
+                    );
+                    if (!message || message.uid !== mail.imapUid || !message.headers) continue;
+                    const parsed = await simpleParser(message.headers);
+                    if (!parsed.messageId || parsed.messageId.trim() !== mail.messageId.trim()) continue;
+                    recovered.set(String(mail.id), extractMailRecipients(parsed));
                 }
+            } finally {
+                lock.release();
             }
+        } catch {
+            // Missing/unverifiable headers remain unresolved; never publish IMAP credentials or raw errors.
+        } finally {
+            await client.logout().catch(() => client.close());
         }
-
-        // 2. Cc addresses
-        if (parsed.cc) {
-            const list = Array.isArray(parsed.cc) ? parsed.cc : [parsed.cc];
-            for (const item of list) {
-                if (item.value) {
-                    for (const v of item.value) {
-                        addCandidate(v.address);
-                    }
-                }
-            }
-        }
-
-        // 3. Headers inspection
-        const headers = parsed.headers;
-        if (headers) {
-            const deliveredTo = headers.get('delivered-to');
-            if (typeof deliveredTo === 'string') addCandidate(deliveredTo);
-
-            const xOriginalTo = headers.get('x-original-to');
-            if (typeof xOriginalTo === 'string') addCandidate(xOriginalTo);
-
-            const envelopeTo = headers.get('envelope-to');
-            if (typeof envelopeTo === 'string') addCandidate(envelopeTo);
-
-            const appleAlias = headers.get('x-apple-alias-address');
-            if (typeof appleAlias === 'string') addCandidate(appleAlias);
-
-            // 4. Scan Received headers
-            const receivedHeaders = headers.get('received');
-            if (receivedHeaders) {
-                const lines = Array.isArray(receivedHeaders) ? receivedHeaders : [receivedHeaders];
-                for (const line of lines) {
-                    if (typeof line === 'string') {
-                        const match = line.match(/for\s+<([^>]+)>/i);
-                        if (match && match[1]) {
-                            addCandidate(match[1]);
-                        }
-                    }
-                }
-            }
-        }
-
-        return Array.from(candidates);
+        return recovered;
     }
 }

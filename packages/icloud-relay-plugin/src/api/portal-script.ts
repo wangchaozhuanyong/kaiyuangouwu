@@ -334,6 +334,46 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
         }
     };
 
+    // Distinguish transport/API failures from query-code validation results.
+    function mailServiceError(accessDenied) {
+        const error = new Error(accessDenied
+            ? '邮件查询暂时无法访问，请稍后重试或联系客服。'
+            : '邮件服务暂时不可用，请稍后重试。');
+        error.isMailServiceError = true;
+        return error;
+    }
+
+    async function readMailQueryResponse(res) {
+        if (!res.ok) throw mailServiceError(res.status === 401 || res.status === 403);
+        let json;
+        try {
+            json = await res.json();
+        } catch (err) {
+            throw mailServiceError(false);
+        }
+        if (json?.errors?.length) {
+            const accessDenied = json.errors.some(error =>
+                error.extensions?.code === 'FORBIDDEN' || error.extensions?.code === 'UNAUTHENTICATED');
+            throw mailServiceError(accessDenied);
+        }
+        const data = json?.data?.icloudQueryMails;
+        if (!data || typeof data.success !== 'boolean') throw mailServiceError(false);
+        return data;
+    }
+
+    function queryErrorMessage(error) {
+        return error?.isMailServiceError
+            ? error.message
+            : '网络连接失败，请检查网络后重试。';
+    }
+
+    function setRefreshMessage(message) {
+        const status = document.getElementById('refreshStatus');
+        if (!status) return;
+        status.textContent = message;
+        status.style.display = message ? 'flex' : 'none';
+    }
+
     // ====== Query Execution ======
     window.doQuery = async function(customCode) {
         const input = document.getElementById('codeInput');
@@ -376,6 +416,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
         currentQueryCode = code;
         allMails = [];
         virtualEmailsList = [];
+        setRefreshMessage('');
         document.getElementById('filterSelect').value = '';
         document.getElementById('queryCard').style.display = 'block';
         document.getElementById('resultSection').style.display = 'none';
@@ -411,41 +452,14 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
                 })
             });
 
-            const json = await res.json();
+            const data = await readMailQueryResponse(res);
             if (activeRequest !== request || request.signal.aborted) return;
-            const data = json.data?.icloudQueryMails;
 
-            if (!data || !data.success) {
-                const serverMsg = data?.message || '无效的查询码，请核对后重试';
-                const isExpired = serverMsg.includes('过期') || serverMsg.includes('失效');
-
-                if (isExpired) {
-                    showMsg(
-                        '该查询码的使用期限已截止，无法继续接收新邮件。如需继续使用，请联系客服续期或更换新账号。',
-                        'warning',
-                        {
-                            title: '⏳ 查询码使用期限已届满',
-                            isHtml: false,
-                            actions: '<a href="/support" class="msg-action-btn btn-secondary" target="_blank">联系客服续期</a>' +
-                                     '<button type="button" class="msg-action-btn btn-secondary" data-action="clear">查询其他卡密</button>'
-                        }
-                    );
-                } else {
-                    showMsg(
-                        '云端系统中未检索到查询码 <code>' + escapeHtml(code) + '</code>。<br>' +
-                        '① 若刚完成卡密购买，云端数据同步通常需 10~30 秒，建议稍等片刻后点击重新查询；<br>' +
-                        '② 请核对复制的卡密是否多选或漏选了字符；<br>' +
-                        '③ 如确认无误仍无法查询，请点击下方联系客服协助核验。',
-                        'error',
-                        {
-                            title: '❌ 未找到匹配的邮件查询码',
-                            isHtml: true,
-                            actions: '<button type="button" class="msg-action-btn btn-secondary" data-action="retry">🔄 重新查询</button>' +
-                                     '<button type="button" class="msg-action-btn btn-secondary" data-action="clear">清空重输</button>' +
-                                     '<a href="/support" class="msg-action-btn btn-link" target="_blank">联系在线客服 →</a>'
-                        }
-                    );
-                }
+            if (!data.success) {
+                showMsg(data.message || '邮件查询未成功，请稍后重试。', 'error', {
+                    title: '查询未完成',
+                    actions: '<button type="button" class="msg-action-btn btn-secondary" data-action="retry">🔄 重新查询</button>'
+                });
                 return;
             }
 
@@ -465,10 +479,10 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
         } catch (err) {
             if (activeRequest !== request || request.signal.aborted) return;
             showMsg(
-                '无法连接到邮件服务接口，可能是网络波动或Wi-Fi断连。请检查网络状态后点击重试。',
+                queryErrorMessage(err),
                 'error',
                 {
-                    title: '📡 网络连接请求失败',
+                    title: '查询未完成',
                     isHtml: false,
                     actions: '<button type="button" class="msg-action-btn btn-secondary" data-action="retry">🔄 立即重试</button>'
                 }
@@ -513,16 +527,21 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
                     variables: { code }
                 })
             });
-            const json = await res.json();
+            const data = await readMailQueryResponse(res);
             if (activeRequest !== request || request.signal.aborted) return;
-            const data = json.data?.icloudQueryMails;
-            if (data && data.success) {
+            if (data.success) {
                 allMails = data.items || [];
                 virtualEmailsList = data.virtualEmailsList || [];
+                setRefreshMessage('');
                 showResults(data);
+            } else {
+                stopAutoRefresh();
+                setRefreshMessage(data.message || '邮件查询未成功，请稍后重试。');
             }
-        } catch (e) {
-            // Ignore background refresh errors
+        } catch (err) {
+            if (activeRequest !== request || request.signal.aborted) return;
+            stopAutoRefresh();
+            setRefreshMessage(queryErrorMessage(err) + ' 当前保留上次查询结果。');
         } finally {
             if (activeRequest === request) {
                 activeRequest = null;
@@ -552,7 +571,9 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 
         const totalMailCount = document.getElementById('totalMailCount');
         if (totalMailCount) {
-            totalMailCount.textContent = '共 ' + (data.totalEmails || 0) + ' 封邮件';
+            totalMailCount.textContent = data.targetType === 'PRIMARY'
+                ? '共 ' + (data.totalEmails || 0) + ' 封邮件'
+                : '最近 ' + (data.totalEmails || 0) + ' 封邮件，最多显示 5 封';
         }
 
         const remainingDaysBox = document.getElementById('remainingDaysBox');
@@ -602,8 +623,8 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
             list.innerHTML =
                 '<div class="empty-mail-box">' +
                 '<div class="empty-icon">📭</div>' +
-                '<div class="empty-title">暂未收到任何邮件</div>' +
-                '<div class="empty-desc">虚拟邮箱已处于实时监听状态，第三方发送验证码后通常在 5 ~ 30 秒内送达</div>' +
+                '<div class="empty-title">暂未查询到此邮箱的邮件</div>' +
+                '<div class="empty-desc">请稍后刷新；如确认邮箱已有邮件，请联系商家核对同步与邮件归属。</div>' +
                 '<div style="display:flex; justify-content:center; gap:10px; margin-top:16px; flex-wrap:wrap;">' +
                 '<button type="button" class="refresh-now-btn" id="emptyRefreshBtn" style="margin:0;">🔄 检查新邮件</button>' +
                 '<button type="button" class="empty-autorefresh-btn" id="emptyAutoRefreshBtn">⚡ 开启自动刷新</button>' +
@@ -740,6 +761,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
         currentQueryCode = '';
         allMails = [];
         virtualEmailsList = [];
+        setRefreshMessage('');
 
         document.getElementById('queryCard').style.display = 'block';
         document.getElementById('resultSection').style.display = 'none';
