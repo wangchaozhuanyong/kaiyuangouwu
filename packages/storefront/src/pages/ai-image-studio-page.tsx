@@ -45,6 +45,7 @@ import {
     StorefrontLanguage,
 } from '../types';
 
+import { ImageStudioDesktopSettings } from './ai-image-studio-desktop-settings';
 import {
     formatImageDimensions,
     generationOutputAspectRatio,
@@ -1340,6 +1341,23 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                         aria-label={isZh ? '生成参数与结算' : 'Generation settings and checkout'}
                     >
                         <section className="ai-studio-options">
+                            <ImageStudioDesktopSettings
+                                isZh={isZh}
+                                models={config.models}
+                                selectedModel={selectedModel}
+                                aspectRatios={aspectRatios}
+                                aspectRatio={aspectRatio}
+                                resolution={resolution}
+                                quantity={quantity}
+                                maxQuantity={config.maxQuantity}
+                                formatPrice={amount =>
+                                    formatDisplayMoney(amount, billingCurrencyCode, market.locale)
+                                }
+                                onModelChange={selectModel}
+                                onAspectRatioChange={selectAspectRatio}
+                                onResolutionChange={selectResolution}
+                                onQuantityChange={setQuantity}
+                            />
                             <h3>{isZh ? '选择生成方案' : 'Choose a generation option'}</h3>
                             <div
                                 className="ai-studio-model-grid"
