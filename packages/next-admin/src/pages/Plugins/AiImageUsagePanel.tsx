@@ -41,7 +41,7 @@ export function ImageUsageCost({ record }: { record: ImageAiUsageRecord }) {
                 </div>
             ))}
             {record.missingCostCount > 0 && (
-                <div className="text-amber-700">{record.missingCostCount} 次费用缺失</div>
+                <div className="text-amber-700">{record.missingCostCount} 项费用缺失</div>
             )}
         </div>
     );
@@ -57,7 +57,9 @@ export function AiImageUsagePanel() {
         variables: {
             input: { skip: page * pageSize, take: pageSize, recordType: recordType || null, missingCostOnly },
         },
-        fetchPolicy: 'network-only',
+        // Both business tables expose numeric IDs under the same GraphQL type.
+        // Fresh audit reads must not merge them in Apollo's id-based cache.
+        fetchPolicy: 'no-cache',
         notifyOnNetworkStatusChange: true,
     });
     const records = query.data?.imageAiUsageRecords.items ?? [];
@@ -117,7 +119,7 @@ export function AiImageUsagePanel() {
                     <table className="w-full min-w-[780px] text-left text-sm">
                         <thead className="bg-slate-50 text-xs text-slate-500">
                             <tr>
-                                {['记录 / 时间', '模型 / 状态', '客户收费', '供应商费用', '操作'].map(
+                                {['记录 / 时间', '方案 / 状态', '客户收费', '供应商费用', '操作'].map(
                                     label => (
                                         <th key={label} scope="col" className="p-3">
                                             {label}
@@ -142,7 +144,10 @@ export function AiImageUsagePanel() {
                                         </div>
                                     </td>
                                     <td className="p-3">
-                                        <div>{record.modelCode || '未记录'}</div>
+                                        <div>
+                                            {record.recordType === 'PROMPT_OPTIMIZATION' ? '推荐方案：' : ''}
+                                            {record.modelCode || '未记录'}
+                                        </div>
                                         <div className="mt-1 text-xs">
                                             {outcomeLabels[record.state] ?? record.state}
                                         </div>
@@ -214,7 +219,9 @@ export function AiImageUsagePanel() {
 function ImageUsageDetail({ record, onClose }: { record: ImageAiUsageRecord; onClose: () => void }) {
     const query = useQuery<ImageAiUsageRecordDetailQueryResult>(IMAGE_AI_USAGE_DETAIL_QUERY, {
         variables: { recordType: record.recordType, id: record.id },
-        fetchPolicy: 'network-only',
+        // Both business tables expose numeric IDs under the same GraphQL type.
+        // Fresh audit reads must not merge them in Apollo's id-based cache.
+        fetchPolicy: 'no-cache',
     });
     const detail = query.data?.imageAiUsageRecord;
     return (

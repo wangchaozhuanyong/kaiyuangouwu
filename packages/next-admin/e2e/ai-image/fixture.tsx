@@ -217,9 +217,33 @@ const client = new ApolloClient({
                                 imagePromptSkillReleases: [],
                             };
                         } else if (name === 'NextAdminImageAiUsageRecords') {
-                            data = { imageAiUsageRecords: { items: [usageRecord], totalItems: 1 } };
+                            data = {
+                                imageAiUsageRecords: {
+                                    items: [
+                                        {
+                                            ...usageRecord,
+                                            recordType: 'IMAGE_GENERATION',
+                                            modelCode: 'image-model',
+                                        },
+                                        usageRecord,
+                                    ],
+                                    totalItems: 2,
+                                },
+                            };
                         } else if (name === 'NextAdminImageAiUsageRecordDetail') {
-                            data = { imageAiUsageRecord: usageDetail };
+                            data = {
+                                imageAiUsageRecord: {
+                                    ...usageDetail,
+                                    record: {
+                                        ...usageRecord,
+                                        recordType: operation.variables.recordType,
+                                        modelCode:
+                                            operation.variables.recordType === 'IMAGE_GENERATION'
+                                                ? 'image-model'
+                                                : usageRecord.modelCode,
+                                    },
+                                },
+                            };
                         } else if (name === 'NextAdminSaveImageGenerationConfig') {
                             config = { ...config, ...operation.variables.input };
                             data = { saveImageGenerationConfig: config };
