@@ -407,7 +407,8 @@ export async function verifyProductionRelease({
     if (enterResponse.headers.get('location') !== '/') {
         throw new Error('Promotion entry submission: expected redirect location /');
     }
-    extractEntryCookie(enterResponse.headers);
+    // Returning to the public homepage no longer issues a promotion entry cookie.
+    // Account authorization remains separate from this optional navigation path.
     checks.push('optional promotion entry');
 
     await verifyStorefrontAssets({ storefrontUrl: storefront, html: storefrontHtml, fetchImpl, timeoutMs });
