@@ -141,6 +141,8 @@
     }
 
     .ai-studio-options > .ai-studio-option-row,
+    .ai-studio-options > .ai-studio-model-grid,
+    .ai-studio-options > h3,
     .ai-studio-mobile-copy {
         display: none;
     }
