@@ -133,6 +133,67 @@ Object.assign(window, {
     },
 });
 
+const usageRecord = {
+    __typename: 'ImageAiUsageRecord',
+    id: '12',
+    recordType: 'PROMPT_OPTIMIZATION',
+    createdAt: '2026-09-13T12:00:00Z',
+    channelId: 'channel-1',
+    modelCode: 'gpt',
+    credentialCode: 'gpt',
+    credentialName: '主用',
+    credentialLast4: '',
+    state: 'SUCCEEDED',
+    billingMode: 'FREE',
+    freeQuantity: 1,
+    paidQuantity: 0,
+    chargedAmount: 0,
+    refundedAmount: 0,
+    currencyCode: 'CNY',
+    actualCostMicrounits: null,
+    costCurrency: null,
+    missingCost: true,
+    costCompleteness: 'PARTIAL',
+    missingCostCount: 1,
+    costBreakdown: [
+        { currency: 'USD', amount: 0.00123 },
+        { currency: 'EUR', amount: 0.002 },
+    ],
+    errorMessage: null,
+    customer: { id: '1', firstName: '本地', lastName: '测试', emailAddress: 'fixture@example.invalid' },
+};
+const usageDetail = {
+    record: usageRecord,
+    inputPrompt: '本地费用展示验证',
+    outputPrompt: null,
+    totalTokens: 100,
+    providerRequestIds: ['legacy-example'],
+    outputs: [],
+    timeline: [],
+    attempts: [
+        {
+            callId: 'local-call-example',
+            attemptNumber: 1,
+            stage: 'INITIAL',
+            outcome: 'SUCCEEDED',
+            modelId: 'gpt',
+            credentialNameSnapshot: '主用',
+            createdAt: usageRecord.createdAt,
+            headerRequestId: 'header-request-example',
+            headerRequestIdSource: 'x-request-id',
+            modelResponseId: 'model-response-example',
+            providerRequestId: 'legacy-example',
+            httpStatus: 200,
+            latencyMs: 100,
+            actualCostMicrounits: null,
+            costCurrency: null,
+            costSource: 'UNVERIFIED',
+            matchingStatus: 'UNRECONCILED',
+            reportedCostEvidence: null,
+        },
+    ],
+};
+
 const client = new ApolloClient({
     cache: new InMemoryCache(),
     link: new ApolloLink(
@@ -155,6 +216,10 @@ const client = new ApolloClient({
                                 imageGenerationJobs: { totalItems: 0, items: [] },
                                 imagePromptSkillReleases: [],
                             };
+                        } else if (name === 'NextAdminImageAiUsageRecords') {
+                            data = { imageAiUsageRecords: { items: [usageRecord], totalItems: 1 } };
+                        } else if (name === 'NextAdminImageAiUsageRecordDetail') {
+                            data = { imageAiUsageRecord: usageDetail };
                         } else if (name === 'NextAdminSaveImageGenerationConfig') {
                             config = { ...config, ...operation.variables.input };
                             data = { saveImageGenerationConfig: config };
