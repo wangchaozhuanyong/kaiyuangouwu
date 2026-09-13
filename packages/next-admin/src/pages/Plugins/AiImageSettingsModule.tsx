@@ -43,10 +43,11 @@ import { useUrlTab } from '../../hooks/use-url-tab';
 import { getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, formatMoney, majorInputToMoney, moneyToMajorInput } from '../Sales/sales-utils';
+import { AiImageUsagePanel } from './AiImageUsagePanel';
 import { buildImageGenerationConfigInput, buildImageModelInput } from './ai-image-settings-input';
 
-type StudioTab = 'CONFIG' | 'JOBS' | 'SKILLS';
-const AI_STUDIO_TABS = { config: 'CONFIG', jobs: 'JOBS', skills: 'SKILLS' } as const;
+type StudioTab = 'CONFIG' | 'JOBS' | 'SKILLS' | 'USAGE';
+const AI_STUDIO_TABS = { config: 'CONFIG', jobs: 'JOBS', skills: 'SKILLS', usage: 'USAGE' } as const;
 type OutputAction =
     { kind: 'RETRY'; jobId: string; outputId: string } | { kind: 'REFUND'; jobId: string; outputId: string };
 type JobStateFilter =
@@ -142,7 +143,7 @@ export function AiImageSettingsModule() {
                             <FeatureHelpButton topic="plugins.ai-settings" title="AI 图片工坊管理" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            店铺开关、模型定价、服务协议、生图任务和提示词规则包
+                            店铺配置、生图任务、供应商费用和提示词规则包
                         </p>
                     </div>
                     <button
@@ -172,6 +173,12 @@ export function AiImageSettingsModule() {
                         badge={unknownCount ? `${unknownCount} 本页待确认` : undefined}
                     />
                     <Tab
+                        active={tab === 'USAGE'}
+                        onClick={() => setTab('USAGE')}
+                        icon={CircleDollarSign}
+                        label="使用记录与费用"
+                    />
+                    <Tab
                         active={tab === 'SKILLS'}
                         onClick={() => setTab('SKILLS')}
                         icon={ShieldCheck}
@@ -190,7 +197,9 @@ export function AiImageSettingsModule() {
                         {actionError}
                     </Message>
                 )}
-                {query.loading && !query.data ? (
+                {tab === 'USAGE' ? (
+                    <AiImageUsagePanel />
+                ) : query.loading && !query.data ? (
                     <LoadingState />
                 ) : query.error ? (
                     <ErrorState
