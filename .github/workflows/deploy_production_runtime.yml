@@ -251,7 +251,7 @@ jobs:
                           f"VENDURE_REVIEWED_REFERRAL_POSTERS={quote('REFERRAL_POSTERS')}",
                       ]) + ' /bin/bash "$deploy_script" ' + ' '.join([
                           quote('TARGET_SHA'), quote('ARTIFACT_NAME'), quote('ARTIFACT_S3_PREFIX')
-                      ]),
+                      ]) + ' 2>&1 | tail -c 12000',
                   ]) + '\nVENDURE_DEPLOY_SCRIPT'
                   payload = json.dumps({'commands': [command], 'executionTimeout': ['3600']})
                   assert len(payload.encode('utf-8')) <= 80_000, 'Fixed deployment SSM payload exceeds the safe request limit'
@@ -352,3 +352,13 @@ jobs:
                     echo "- Status: \`$status\`"
                   } >> "$GITHUB_STEP_SUMMARY"
                   test "$status" = Success
+                  AFFECTED_CHECKS="$RELEASE_AFFECTED_CHECKS" node deploy/acceptance-receipt.mjs \
+                    extract "$SSM_RESULT" "$RUNNER_TEMP/acceptance-receipt.json"
+
+            - name: Preserve server acceptance receipt
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+              with:
+                  name: production-acceptance-${{ inputs.target_sha }}
+                  path: ${{ runner.temp }}/acceptance-receipt.json
+                  if-no-files-found: error
+                  retention-days: 7

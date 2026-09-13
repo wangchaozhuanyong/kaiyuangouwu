@@ -12,6 +12,13 @@ export const isDocumentation = file =>
     /^(docs\/|\.github\/ISSUE_TEMPLATE\/)/u.test(file) ||
     /(^|\/)(README[^/]*|CHANGELOG[^/]*|AGENTS)\.md$/u.test(file);
 
+// These files run in CI, not in the serving processes. They still require
+// control checks, but must not turn a later CSS release into a runtime release.
+export const isAutomationOnly = file =>
+    file.startsWith('.github/') ||
+    /^scripts\/(ci-|release-|lint-check\.mjs$)/u.test(file) ||
+    /^(deploy\/|packages\/dev-server\/scripts\/).*\.spec\.mjs$/u.test(file);
+
 export function packageInventory(root = process.cwd()) {
     return readdirSync(resolve(root, 'packages'), { withFileTypes: true })
         .filter(entry => entry.isDirectory())
@@ -35,6 +42,7 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
         assert.ok(file && !file.startsWith('/') && !file.split('/').includes('..'), 'Invalid changed path');
     }
     const executable = files.filter(file => !isDocumentation(file));
+    const deployable = executable.filter(file => !isAutomationOnly(file));
     const changedPackages = sorted(
         executable.flatMap(file =>
             file.startsWith('packages/dev-server/scripts/')
@@ -76,8 +84,8 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
         }
     } while (added);
     const frontendOnly =
-        executable.length > 0 &&
-        executable.every(
+        deployable.length > 0 &&
+        deployable.every(
             file =>
                 STATIC_APPS.some(app => file.startsWith(`packages/${app}/`)) &&
                 !/(^|\/)(package\.json|[^/]*config\.[^/]+|\.env[^/]*)$/u.test(file) &&
@@ -132,7 +140,7 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
                   ),
               ])
         : [];
-    const lane = !executable.length ? 'none' : frontendOnly && !full ? 'frontend' : 'runtime';
+    const lane = !deployable.length && !full ? 'none' : frontendOnly && !full ? 'frontend' : 'runtime';
     return {
         version: 1,
         files,
@@ -167,7 +175,9 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
         reasons: [
             !executable.length
                 ? 'Only documentation changed; no website deployment.'
-                : `Changed packages: ${changedPackages.join(', ') || 'repository/deployment controls'}.`,
+                : !deployable.length
+                  ? 'Only CI automation or test controls changed; validate controls without deploying the website.'
+                  : `Changed packages: ${changedPackages.join(', ') || 'repository/deployment controls'}.`,
             full
                 ? 'The complete suite was explicitly requested.'
                 : 'Checks are limited to affected packages and dependencies.',

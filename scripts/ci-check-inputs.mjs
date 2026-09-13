@@ -84,7 +84,7 @@ export function requiredJobs(check, full = false) {
     return jobsForFlag[check.kind];
 }
 
-function dependencies(names, inventory) {
+export function dependencies(names, inventory) {
     const byName = new Map(inventory.map(pkg => [pkg.name, pkg]));
     const selected = new Set(names);
     for (const name of selected) {
@@ -165,13 +165,17 @@ export function checkFingerprint(ref, check, inventory, reader, fullFrontend = f
     if (check.flags?.includes('translation')) names = [...names, 'storefront-content-plugin', 'dev-server'];
     if (check.flags?.includes('storefrontIntegration'))
         names = [...names, 'storefront', 'store-management-plugin', 'dev-server'];
+    // Codegen bootstraps core + AdminUiPlugin, reads legacy Admin documents and
+    // runs scripts/codegen. Deployment tests and unrelated applications are not inputs.
+    if (check.kind === 'codegen') names = ['core', 'common', 'admin-ui', 'admin-ui-plugin'];
     const prefixes = dependencies(names, inventory).map(name => `packages/${name}/`);
     const entries = reader
         .entries(ref)
         .filter(({ path }) => {
             if (isDocumentation(path)) return false;
             if (
-                ['backend', 'frontend'].includes(check.kind) &&
+                ['backend', 'frontend', 'quality'].includes(check.kind) &&
+                path !== check.file &&
                 /^packages\/dev-server\/scripts\/.*\.spec\.mjs$/u.test(path)
             )
                 return false;
@@ -184,9 +188,17 @@ export function checkFingerprint(ref, check, inventory, reader, fullFrontend = f
             if (check.kind === 'dependencies')
                 return /(^|\/)package\.json$|production-runtime-audit/u.test(path);
             if (check.kind === 'codegen')
-                return /^(packages\/|scripts\/codegen\/|\.github\/workflows\/codegen\.yml)/u.test(path);
+                return (
+                    prefixes.some(prefix => path.startsWith(prefix)) ||
+                    /^(scripts\/codegen\/|\.github\/workflows\/codegen\.yml$|schema-(admin|shop)\.json$)/u.test(
+                        path,
+                    )
+                );
             if (check.kind === 'publishing')
                 return /publishing|sync-|storefront-content-plugin\/|store-management-plugin\//u.test(path);
+            // .mjs lint explicitly disables type checking in .eslintrc.js.
+            if (check.kind === 'quality' && check.file.endsWith('.mjs'))
+                return path === check.file || /eslint|prettier|^scripts\/lint-check\.mjs$/u.test(path);
             if (prefixes.some(prefix => path.startsWith(prefix))) return true;
             if (check.kind === 'quality')
                 return path === check.file || /eslint|prettier|^scripts\/lint-check\.mjs$/u.test(path);

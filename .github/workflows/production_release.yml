@@ -270,7 +270,7 @@ jobs:
             id-token: write
 
     acceptance:
-        name: verify all stores and affected public functions
+        name: verify committed store acceptance receipt
         if: always() && !cancelled() && needs.build.result == 'success' && needs.deploy.result == 'success' && needs.postflight.result == 'success'
         needs:
             - build
@@ -296,36 +296,14 @@ jobs:
               with:
                   node-version: '24.19.0'
 
-            - name: Download the verified release plan
-              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+            - name: Download the committed server acceptance receipt
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
               with:
-                  name: production-runtime-${{ inputs.target_sha || github.sha }}
+                  name: production-acceptance-${{ inputs.target_sha || github.sha }}
                   path: artifacts
 
-            - name: Validate affected acceptance plan
-              run: |
-                  set -Eeuo pipefail
-                  [[ "$(git rev-parse HEAD^{commit})" == "$TARGET_SHA" ]]
-                  jq -e --argjson expected "$AFFECTED_CHECKS" --arg runId "$GITHUB_RUN_ID" --arg sha "$TARGET_SHA" '
-                    .format == 2 and
-                    .sourceRunId == $runId and
-                    .targetSha == $sha and
-                    .affectedChecks == $expected and
-                    (.affectedChecks | index("all-store-basics") != null)
-                  ' artifacts/release-plan.json >/dev/null
-
-            - name: Verify every configured storefront and the canonical Dashboard
-              run: |
-                  node deploy/verify-production-storefronts.mjs \
-                    --mode release \
-                    --release-id "$TARGET_SHA"
-
-            - name: Verify affected realtime delivery
-              if: contains(needs.build.outputs.affected_checks, 'storefront-realtime')
-              run: |
-                  node deploy/verify-production-storefronts.mjs \
-                    --mode realtime \
-                    --release-id "$TARGET_SHA"
+            - name: Verify the one completed acceptance pass
+              run: node deploy/acceptance-receipt.mjs verify artifacts/acceptance-receipt.json
 
             - name: Record acceptance evidence
               run: |
@@ -374,7 +352,8 @@ jobs:
 
     recovery:
         name: explain release failure and bounded recovery
-        needs: [lock, preflight, route, checks, ready, frontend, build, deploy, postflight, acceptance, complete]
+        needs:
+            [lock, preflight, route, checks, ready, frontend, build, deploy, postflight, acceptance, complete]
         if: always() && contains(needs.*.result, 'failure')
         runs-on: ubuntu-24.04
         permissions:

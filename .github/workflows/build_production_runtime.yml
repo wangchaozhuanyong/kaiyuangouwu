@@ -302,6 +302,7 @@ jobs:
               run: node deploy/build-artifact.mjs restore "$RUNNER_TEMP/compiled-input" "$CI_RUN_ID"
 
             - name: Build production bundles
+              id: bundles
               if: steps.compiled.outputs.restored != 'true'
               env:
                   NODE_ENV: production
@@ -343,7 +344,19 @@ jobs:
                   DB_PASSWORD: build-check-password
                   DB_NAME: build-check
                   DB_SYNCHRONIZE: 'false'
-              run: bun run build
+              run: |
+                  bun run build
+                  CI_PLAN='{"full":true}' node deploy/build-artifact.mjs pack "$RUNNER_TEMP/compiled-output"
+
+            - name: Preserve verified production compilation for follow-up releases
+              if: steps.compiled.outputs.restored != 'true'
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+              with:
+                  name: ${{ steps.bundles.outputs.name }}
+                  path: ${{ runner.temp }}/compiled-output/
+                  if-no-files-found: error
+                  retention-days: 7
+                  compression-level: 0
 
             - name: Validate prompt Skill release
               run: bun run --cwd packages/image-generation-plugin test:skill

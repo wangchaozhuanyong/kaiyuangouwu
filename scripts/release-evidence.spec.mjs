@@ -425,6 +425,82 @@ test('deployment control test changes do not invalidate dev-server business chec
     );
 });
 
+test('promotion verifier fixture changes reuse codegen and typed business lint but still check the fixture', () => {
+    const file = 'packages/dev-server/scripts/production-release-smoke.spec.mjs';
+    const { reader } = inputFixture({ [file]: 'public entry needs no cookie' });
+    for (const check of [
+        { id: 'codegen', kind: 'codegen', packages: [] },
+        {
+            id: 'quality:service',
+            kind: 'quality',
+            packages: ['dev-server'],
+            file: 'packages/dev-server/catalog-asset-access-strategy.ts',
+        },
+    ])
+        assert.equal(
+            checkFingerprint(sourceSha, check, inputInventory, reader),
+            checkFingerprint(targetSha, check, inputInventory, reader),
+            check.id,
+        );
+    const fixture = { id: `quality:${file}`, kind: 'quality', packages: ['dev-server'], file };
+    assert.notEqual(
+        checkFingerprint(sourceSha, fixture, inputInventory, reader),
+        checkFingerprint(targetSha, fixture, inputInventory, reader),
+    );
+});
+
+test('codegen invalidates its real schema, bootstrap, documents, generator and toolchain inputs', () => {
+    const check = { id: 'codegen', kind: 'codegen', packages: [] };
+    for (const file of [
+        'packages/core/src/api/schema/admin-api/catalog.graphql',
+        'packages/common/src/index.ts',
+        'packages/admin-ui/src/lib/core/src/data/definitions/products.ts',
+        'packages/admin-ui-plugin/src/plugin.ts',
+        'scripts/codegen/download-introspection-schema.ts',
+        '.github/workflows/codegen.yml',
+        'bun.lock',
+    ]) {
+        const { reader } = inputFixture({ [file]: 'changed' });
+        assert.notEqual(
+            checkFingerprint(sourceSha, check, inputInventory, reader),
+            checkFingerprint(targetSha, check, inputInventory, reader),
+            file,
+        );
+    }
+});
+
+test('typed lint retains type dependencies while untyped mjs lint only follows its file and lint configuration', () => {
+    const typed = {
+        id: 'quality:typed',
+        kind: 'quality',
+        file: 'packages/core/src/service.ts',
+        packages: ['core'],
+    };
+    const untyped = {
+        id: 'quality:script',
+        kind: 'quality',
+        file: 'packages/core/scripts/check.mjs',
+        packages: ['core'],
+    };
+    const { reader } = inputFixture({ 'packages/common/src/index.ts': 'changed type' });
+    assert.notEqual(
+        checkFingerprint(sourceSha, typed, inputInventory, reader),
+        checkFingerprint(targetSha, typed, inputInventory, reader),
+    );
+    assert.equal(
+        checkFingerprint(sourceSha, untyped, inputInventory, reader),
+        checkFingerprint(targetSha, untyped, inputInventory, reader),
+    );
+    for (const path of ['.eslintrc.js', '.prettierrc', 'scripts/lint-check.mjs', untyped.file]) {
+        const { reader: changedReader } = inputFixture({ [path]: 'changed' });
+        assert.notEqual(
+            checkFingerprint(sourceSha, untyped, inputInventory, changedReader),
+            checkFingerprint(targetSha, untyped, inputInventory, changedReader),
+            path,
+        );
+    }
+});
+
 test('a full frontend proof matches the build and unit jobs it actually executed', async () => {
     const fixture = coverageFixture({
         targetProof: false,

@@ -711,7 +711,15 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(releaseWorkflow, /operation: preflight-release/u);
     assert.match(releaseWorkflow, /operation: postflight-release/u);
     assert.match(releaseWorkflow, /base_sha: \$\{\{ needs\.preflight\.outputs\.deployed_sha \}\}/u);
-    assert.match(releaseWorkflow, /verify all stores and affected public functions/u);
+    assert.match(releaseWorkflow, /verify committed store acceptance receipt/u);
+    const acceptanceJob = releaseWorkflow.split('    acceptance:')[1].split('    complete:')[0];
+    assert.match(acceptanceJob, /acceptance-receipt\.mjs verify/u);
+    assert.doesNotMatch(acceptanceJob, /verify-production-storefronts\.mjs|production-runtime-/u);
+    assert.match(workflow, /acceptance-receipt\.mjs/u);
+    assert.match(workflow, /production-acceptance-/u);
+    // SSM returns only the start of long output; keep the final committed receipt within its limit.
+    assert.match(workflow, /2>&1 \| tail -c 12000/u);
+
     assert.ok(
         releaseWorkflow.indexOf('needs: preflight') < releaseWorkflow.indexOf('needs: build'),
         'release must run preflight, build and deploy in order',
