@@ -8,6 +8,7 @@ import qqIcon from '../assets/support/qq.svg';
 import telegramIcon from '../assets/support/telegram.svg';
 import wechatIcon from '../assets/support/wechat.svg';
 import whatsappIcon from '../assets/support/whatsapp.svg';
+import { SafeImage } from '../safe-image';
 import { SupportPageContext } from '../storefront-page-contexts';
 import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
 import {
@@ -132,7 +133,7 @@ export function SupportContent({
                         const rowContent = (
                             <>
                                 <span className="support-channel-icon" aria-hidden="true">
-                                    <img src={icon} alt="" />
+                                    <SafeImage src={icon} alt="" />
                                 </span>
                                 <span className="support-channel-copy">
                                     <strong>{channel.item.label}</strong>

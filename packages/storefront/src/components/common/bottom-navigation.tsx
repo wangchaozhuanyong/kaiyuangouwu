@@ -21,6 +21,7 @@ import { ComponentType, CSSProperties } from 'react';
 import { twMerge } from 'tailwind-merge';
 
 import { preloadStorefrontRouteComponent } from '../../route-component-preload';
+import { SafeImage } from '../../safe-image';
 import { rootPages, RouteName } from '../../storefront-router';
 import { StorefrontContentBlock, StorefrontLanguage } from '../../types';
 
@@ -220,7 +221,7 @@ export function BottomNavigation({
                     >
                         <span className="relative flex h-[24px] w-[26px] items-center justify-center">
                             {item.iconUrl ? (
-                                <img
+                                <SafeImage
                                     className={cn(
                                         'size-6 object-contain transition-transform duration-200',
                                         isActive && 'scale-[1.15] drop-shadow-sm',

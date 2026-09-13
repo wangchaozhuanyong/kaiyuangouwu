@@ -1,5 +1,6 @@
 import { ChevronRight, Headphones, Package, Truck, UserRound } from 'lucide-react';
 
+import { SafeImage } from '../safe-image';
 import { RouteState } from '../storefront-router';
 import { orderStateLabel } from '../storefront-ui/order-ui';
 import { LegalFooter } from '../storefront-ui/page-shell';
@@ -13,6 +14,7 @@ interface DesktopAccountPageProps extends Omit<
     AccountPageProps,
     'api' | 'logoUrl' | 'accountHeroImageUrl' | 'onLogout'
 > {
+    pending: boolean;
     counts: CustomerOrderCounts | undefined;
     countsError: boolean;
     onRetryCounts: () => void;
@@ -23,6 +25,7 @@ interface DesktopAccountPageProps extends Omit<
 }
 
 export function DesktopAccountPage({
+    pending,
     customer,
     products,
     market,
@@ -58,7 +61,7 @@ export function DesktopAccountPage({
         ),
     );
     return (
-        <main className="page desktop-account-page">
+        <main className="page desktop-account-page" data-page-pending={pending ? 'query' : undefined}>
             <div className="desktop-account-heading">
                 <h1>{isZh ? '账户概览' : 'Account overview'}</h1>
                 <button onClick={() => navigate({ name: 'home' })} type="button">
@@ -70,7 +73,7 @@ export function DesktopAccountPage({
                 <div className="desktop-member-identity">
                     <span className="desktop-member-avatar">
                         {customer?.avatar?.preview ? (
-                            <img src={customer.avatar.preview} alt="" />
+                            <SafeImage src={customer.avatar.preview} alt="" />
                         ) : (
                             <UserRound aria-hidden="true" />
                         )}

@@ -423,7 +423,7 @@ export function InlineError({
 
 export function ListSkeleton({ label = 'Loading' }: { label?: string }) {
     return (
-        <div className="list-skeleton" role="status" aria-label={label}>
+        <div data-page-pending="data" className="list-skeleton" role="status" aria-label={label}>
             {[0, 1, 2, 3].map(item => (
                 <span key={item}>
                     <i />

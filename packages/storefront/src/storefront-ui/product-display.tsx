@@ -11,11 +11,13 @@ import {
     TicketPercent,
     Zap,
 } from 'lucide-react';
-import { ImgHTMLAttributes, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode } from 'react';
 
+import { decodeImageElement } from '../image-readiness';
 import { formatDisplayMoney } from '../money-display';
 import { productImage } from '../product-media';
-import { responsiveImageSources, StorefrontImageKind, storefrontPlaceholderUrl } from '../responsive-image';
+import { imageSources, StorefrontImageKind } from '../responsive-image';
+import { SafeImage } from '../safe-image';
 import { CollectionSummary, OrderSummary, Product, ProductVariant } from '../types';
 
 export { productImage } from '../product-media';
@@ -267,22 +269,22 @@ export function scheduleIdleWork(work: () => void): void {
     }
 }
 
-export function prefetchStorefrontImage(src: string, imageKind: StorefrontImageKind): void {
+export function prefetchStorefrontImage(src: string, imageKind: StorefrontImageKind, sizes?: string): void {
     if (!shouldPrefetchMedia()) return;
-    void decodeStorefrontImage(src, imageKind).catch(() => undefined);
+    void decodeStorefrontImage(src, imageKind, sizes).catch(() => undefined);
 }
 
-export async function decodeStorefrontImage(src: string, imageKind: StorefrontImageKind): Promise<void> {
-    const responsiveSource = responsiveImageSources(src, imageKind);
+export async function decodeStorefrontImage(
+    src: string,
+    imageKind: StorefrontImageKind,
+    sizes?: string,
+): Promise<void> {
+    const sources = imageSources(src, imageKind, sizes);
     const image = new Image();
-    if (responsiveSource) {
-        image.srcset = responsiveSource.webpSrcSet;
-        image.sizes = responsiveSource.sizes;
-        image.src = responsiveSource.fallbackSrc;
-    } else {
-        image.src = src;
-    }
-    await image.decode();
+    if (sources.srcSet) image.srcset = sources.srcSet;
+    if (sources.sizes) image.sizes = sources.sizes;
+    image.src = sources.src;
+    await decodeImageElement(image);
 }
 
 export function prefetchProductAsset(product: Product): void {
@@ -314,159 +316,7 @@ export function ProductVariantImage({ variant, alt }: { variant: ProductVariant;
     );
 }
 
-type SafeImageProps = {
-    src: string;
-    fallbackSrc?: string;
-    placeholderSrc?: string;
-    alt: string;
-    imageKind?: StorefrontImageKind;
-} & Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt' | 'onError'>;
-
-export function SafeImage(props: SafeImageProps) {
-    const sourceIdentity = [props.src, props.fallbackSrc ?? '', props.imageKind ?? ''].join('\u0000');
-    return <SafeImageSource key={sourceIdentity} {...props} />;
-}
-
-const decodedImageUrls = new Set<string>();
-
-export function isImageAlreadyDecoded(src?: string | null, fallbackSrc?: string | null): boolean {
-    if (typeof window === 'undefined') return false;
-    if (src && decodedImageUrls.has(src)) return true;
-    if (fallbackSrc && decodedImageUrls.has(fallbackSrc)) return true;
-    return false;
-}
-
-export function markImageDecoded(url?: string | null): void {
-    if (url) decodedImageUrls.add(url);
-}
-
-function SafeImageSource({
-    src,
-    fallbackSrc,
-    placeholderSrc,
-    alt,
-    imageKind,
-    onLoad,
-    className,
-    ...imageProps
-}: SafeImageProps) {
-    const [currentSrc, setCurrentSrc] = useState(src);
-    const [failed, setFailed] = useState(false);
-    const [useResponsiveSource, setUseResponsiveSource] = useState(true);
-    const responsiveSource = useMemo(
-        () => (imageKind && useResponsiveSource ? responsiveImageSources(currentSrc, imageKind) : null),
-        [currentSrc, imageKind, useResponsiveSource],
-    );
-    const effectiveSrc = responsiveSource?.fallbackSrc ?? currentSrc;
-    const [loaded, setLoaded] = useState(() => isImageAlreadyDecoded(effectiveSrc, src));
-    const imageRef = useRef<HTMLImageElement>(null);
-
-    const effectivePlaceholderSrc =
-        (placeholderSrc && imageKind
-            ? (storefrontPlaceholderUrl(placeholderSrc, imageKind) ?? placeholderSrc)
-            : placeholderSrc) ?? (imageKind === 'hero' ? responsiveSource?.placeholderSrc : undefined);
-    const highPriority = imageProps.fetchPriority === 'high';
-
-    useEffect(() => {
-        const imageElement = imageRef.current;
-        if (!imageElement) return;
-        if (imageElement.complete && imageElement.naturalWidth > 0) {
-            markImageDecoded(effectiveSrc);
-            setLoaded(true);
-            return;
-        }
-        let cancelled = false;
-        if (typeof imageElement.decode === 'function') {
-            void imageElement
-                .decode()
-                .catch(() => undefined)
-                .then(() => {
-                    if (
-                        !cancelled &&
-                        imageRef.current === imageElement &&
-                        imageElement.complete &&
-                        imageElement.naturalWidth > 0
-                    ) {
-                        markImageDecoded(effectiveSrc);
-                        setLoaded(true);
-                    }
-                });
-        }
-        return () => {
-            cancelled = true;
-        };
-    }, [effectiveSrc, responsiveSource]);
-
-    if (failed) {
-        return (
-            <span
-                className="image-placeholder"
-                role={alt ? 'img' : undefined}
-                aria-label={alt || undefined}
-                aria-hidden={alt ? undefined : true}
-            >
-                <Package aria-hidden="true" />
-            </span>
-        );
-    }
-
-    const image = (
-        <img
-            {...imageProps}
-            ref={imageRef}
-            src={effectiveSrc}
-            srcSet={responsiveSource?.fallbackSrcSet ?? imageProps.srcSet}
-            sizes={imageProps.sizes ?? responsiveSource?.sizes}
-            width={imageProps.width ?? responsiveSource?.width}
-            height={imageProps.height ?? responsiveSource?.height}
-            decoding={imageProps.decoding ?? 'async'}
-            className={`safe-image${loaded ? ' is-loaded' : ''}${className ? ` ${className}` : ''}`}
-            alt={alt}
-            onLoad={event => {
-                const imageElement = event.currentTarget;
-                if (!imageElement.complete || imageElement.naturalWidth === 0) return;
-                markImageDecoded(effectiveSrc);
-                setLoaded(true);
-                onLoad?.(event);
-            }}
-            onError={() => {
-                setLoaded(false);
-                if (responsiveSource) {
-                    setUseResponsiveSource(false);
-                    return;
-                }
-                if (fallbackSrc && currentSrc !== fallbackSrc) {
-                    setCurrentSrc(fallbackSrc);
-                    setUseResponsiveSource(true);
-                } else {
-                    setFailed(true);
-                }
-            }}
-        />
-    );
-
-    const frameClassName = `responsive-picture safe-image-frame${loaded ? ' is-loaded' : ''}${
-        highPriority ? ' is-priority' : ''
-    }${effectivePlaceholderSrc ? ' has-placeholder' : ''}`;
-    const frameStyle = effectivePlaceholderSrc
-        ? { backgroundImage: `url(${JSON.stringify(effectivePlaceholderSrc)})` }
-        : undefined;
-
-    return responsiveSource ? (
-        <picture className={frameClassName} style={frameStyle}>
-            <source
-                type="image/webp"
-                srcSet={responsiveSource.webpSrcSet}
-                sizes={imageProps.sizes ?? responsiveSource.sizes}
-            />
-            {image}
-        </picture>
-    ) : (
-        <span className={frameClassName} style={frameStyle}>
-            {image}
-        </span>
-    );
-}
+export { SafeImage } from '../safe-image';
 
 export function OrderImage({ order }: { order: OrderSummary }) {
     const variant = order.lines[0]?.productVariant;

@@ -121,13 +121,19 @@ export function PageSkeleton({
     const ariaLabel = label === 'Loading' ? loadingPageLabel(language) : label;
     if (root) {
         return (
-            <main className={className} role="status" aria-label={ariaLabel} aria-busy="true">
+            <main
+                data-page-pending="data"
+                className={className}
+                role="status"
+                aria-label={ariaLabel}
+                aria-busy="true"
+            >
                 {content}
             </main>
         );
     }
     return (
-        <div className={className} role="status" aria-label={ariaLabel}>
+        <div data-page-pending="data" className={className} role="status" aria-label={ariaLabel}>
             {content}
         </div>
     );
@@ -148,6 +154,7 @@ export function RouteTransitionLoader({
 
     return (
         <div
+            data-page-pending="module"
             className="route-transition"
             role="status"
             aria-label={loadingPageLabel(language)}

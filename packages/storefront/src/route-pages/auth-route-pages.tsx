@@ -10,8 +10,7 @@ import {
     LazyResetPasswordPage,
     LazyVerifyAccountPage,
 } from '../lazy-storefront-pages';
-import { responsiveImageSources } from '../responsive-image';
-import { PageSkeleton } from '../route-loading';
+import { imageSources } from '../responsive-image';
 import { AuthPageBoundary } from '../storefront-ui/page-shell';
 
 import { registerRoutePreload, useRouteRuntime as useRuntime } from './shared';
@@ -27,27 +26,17 @@ function AuthRouteBoundary({
     const content = heroVariant ? findAuthVisualContent(runtime.contentBlocks, heroVariant) : undefined;
     if (content?.imageUrl) {
         const source = authOriginalImageUrl(content.imageUrl);
-        const responsive = responsiveImageSources(source, 'detail');
-        preload(responsive?.fallbackSrc ?? source, {
+        const responsive = imageSources(source, 'detail', '(min-width: 1024px) 640px, 100vw');
+        preload(responsive.src, {
             as: 'image',
             fetchPriority: 'high',
-            imageSrcSet: responsive?.webpSrcSet,
-            imageSizes: '(min-width: 1024px) 640px, 100vw',
+            imageSrcSet: responsive.srcSet,
+            imageSizes: responsive.sizes,
         });
     }
     const pendingContent =
         heroVariant && runtime.contentQuery?.isPending && !runtime.error && !runtime.contentError;
-    const placeholder = (
-        <main
-            className={`page subpage auth-page auth-page-managed auth-page-${heroVariant ?? 'login'}`}
-            aria-busy="true"
-        >
-            <section className="auth-hero auth-hero-managed" aria-hidden="true" />
-            <section className="login-content">
-                <PageSkeleton label={runtime.language === 'zh' ? '正在加载' : 'Loading'} />
-            </section>
-        </main>
-    );
+    const placeholder = <span data-page-pending="module" />;
     return (
         <AuthPageBoundary language={runtime.language} onBack={runtime.goBack}>
             <Suspense fallback={placeholder}>{pendingContent ? placeholder : children}</Suspense>

@@ -2,6 +2,8 @@ import { useNavigate, useRouter, useRouterState } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { categoryTargetSelection } from '../category-navigation';
+import { preloadStorefrontRouteComponent } from '../route-component-preload';
+import { preloadRouteMedia } from '../route-media-preload';
 import {
     routeFromHash,
     routeFromRouterLocation,
@@ -10,11 +12,55 @@ import {
     RouteState,
     SortMode,
 } from '../storefront-router';
-import { FulfillmentType, StorefrontContentTargetType, type CollectionSummary } from '../types';
-export function useStorefrontNavigation({ collections }: { collections: CollectionSummary[] }) {
+import {
+    FulfillmentType,
+    StorefrontContentTargetType,
+    type CollectionSummary,
+    type Product,
+    type StorefrontContentBlock,
+} from '../types';
+export function useStorefrontNavigation({
+    collections,
+    contentBlocks = [],
+    products = [],
+}: {
+    collections: CollectionSummary[];
+    contentBlocks?: StorefrontContentBlock[];
+    products?: Product[];
+}) {
     const router = useRouter();
 
     const tanstackNavigate = useNavigate();
+    const mediaContext = useRef({ contentBlocks, products });
+    mediaContext.current = { contentBlocks, products };
+    useEffect(() => {
+        const prepare = (next: RouteState) => {
+            void preloadStorefrontRouteComponent(next.name);
+            preloadRouteMedia(next, mediaContext.current.contentBlocks, mediaContext.current.products);
+        };
+        const unsubscribe = router.subscribe('onBeforeNavigate', event => {
+            prepare(routeFromRouterLocation(event.toLocation.pathname, event.toLocation.search));
+        });
+        const onIntent = (event: Event) => {
+            const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null;
+            if (!(anchor instanceof HTMLAnchorElement) || anchor.origin !== window.location.origin) return;
+            prepare(
+                routeFromRouterLocation(
+                    anchor.pathname,
+                    Object.fromEntries(new URLSearchParams(anchor.search)),
+                ),
+            );
+        };
+        document.addEventListener('pointerover', onIntent);
+        document.addEventListener('focusin', onIntent);
+        document.addEventListener('pointerdown', onIntent);
+        return () => {
+            unsubscribe();
+            document.removeEventListener('pointerover', onIntent);
+            document.removeEventListener('focusin', onIntent);
+            document.removeEventListener('pointerdown', onIntent);
+        };
+    }, [router]);
 
     const routerLocation = useRouterState({ select: state => state.location });
 

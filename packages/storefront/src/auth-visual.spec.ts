@@ -83,6 +83,21 @@ describe('managed auth visuals', () => {
         expect(authVisualOverlayColor(undefined)).toBe('#070B14');
     });
 
+    it('omits disabled and blank benefit items without restoring default tags', () => {
+        const content = block('AUTH_LOGIN');
+        content.ctaLabel = '';
+        content.items = content.items.map((item, index) => ({
+            ...item,
+            enabled: index !== 0,
+            label: index === 0 ? 'Disabled' : '   ',
+        }));
+        expect(resolveAuthVisualMessage(content, 'login', 'zh')).toMatchObject({
+            eyebrow: '',
+            tags: [],
+            benefits: [],
+        });
+    });
+
     it('preserves intentionally empty fields and every configured item', () => {
         const content: StorefrontContentBlock = {
             ...block('AUTH_LOGIN'),

@@ -11,6 +11,7 @@ import { useStorefrontNavigation } from './useStorefrontNavigation';
 const router = vi.hoisted(() => ({
     navigate: vi.fn(),
     back: vi.fn(),
+    subscribe: vi.fn(() => vi.fn()),
     state: {
         location: { pathname: '/category', search: {}, searchStr: '' },
         resolvedLocation: { pathname: '/category', search: {}, searchStr: '' },
@@ -19,7 +20,7 @@ const router = vi.hoisted(() => ({
 }));
 vi.mock('@tanstack/react-router', () => ({
     useNavigate: () => router.navigate,
-    useRouter: () => ({ history: { back: router.back } }),
+    useRouter: () => ({ history: { back: router.back }, subscribe: router.subscribe }),
     useRouterState: ({ select }: { select: (state: typeof router.state) => unknown }) => select(router.state),
 }));
 
