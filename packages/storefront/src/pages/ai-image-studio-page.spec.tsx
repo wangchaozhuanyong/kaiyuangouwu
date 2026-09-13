@@ -3,9 +3,14 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ActiveCustomer, ImageGenerationJob, ImageStudioConfig, MarketConfig } from '../types';
 
 import { ShopApi } from '../api';
+import {
+    type ActiveCustomer,
+    type ImageGenerationJob,
+    type ImageStudioConfig,
+    type MarketConfig,
+} from '../types';
 
 import { AiImageStudioPage } from './ai-image-studio-page';
 

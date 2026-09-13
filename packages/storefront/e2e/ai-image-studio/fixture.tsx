@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { ActiveCustomer, MarketConfig } from '../../src/types';
 
 import { ShopApi } from '../../src/api';
 import { AiImageStudioPage } from '../../src/pages/ai-image-studio-page';
 import '../../src/styles.css';
 import '../../src/styles/desktop-layout.css';
 import '../../src/styles/visual-presets.css';
+import { type ActiveCustomer, type MarketConfig } from '../../src/types';
 
 // Only the surrounding shell is a fixture. Authentication and all studio methods use ShopApi.
 const bootstrap = (window as unknown as { studioBootstrap: { email: string; password: string } })
