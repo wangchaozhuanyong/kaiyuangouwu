@@ -2679,17 +2679,18 @@ describe('AI image generation full flow', () => {
         const prototype = Object.getPrototypeOf(connection.rawConnection.getRepository(ImageGenerationJob));
         const save = prototype.save;
         let pending = true;
-        return vi.spyOn(prototype, 'save').mockImplementation(async function (this: any, ...args: any[]) {
-            const result = await save.apply(this, args);
-            if (
-                pending &&
-                this.metadata.target === ImageGenerationJob &&
-                String(args[0]?.id) === String(jobId)
-            ) {
-                pending = false;
-                throw new Error('closure rollback after parent settlement write');
-            }
-            return result;
+        return vi.spyOn(prototype, 'save').mockImplementation(function (this: any, ...args: any[]) {
+            return save.apply(this, args).then((result: any) => {
+                if (
+                    pending &&
+                    this.metadata.target === ImageGenerationJob &&
+                    String(args[0]?.id) === String(jobId)
+                ) {
+                    pending = false;
+                    throw new Error('closure rollback after parent settlement write');
+                }
+                return result;
+            });
         });
     }
 
