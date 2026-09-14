@@ -1,3 +1,4 @@
+/* eslint-disable import/order -- The repository import organizer keeps type-only relative imports after React. */
 import { useEffect, useRef, useState } from 'react';
 import type { ActiveCustomer, StorefrontLanguage } from '../../types';
 

@@ -1,3 +1,4 @@
+/* eslint-disable import/order -- The repository import organizer keeps this type-only relative import last. */
 import { DeepPartial } from '@vendure/common/lib/shared-types';
 import { VendureEntity } from '@vendure/core';
 import { Column, Entity, Index } from 'typeorm';

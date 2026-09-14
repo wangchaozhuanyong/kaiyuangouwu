@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+/* eslint-disable import/order -- The repository import organizer keeps type-only relative imports after libraries. */
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

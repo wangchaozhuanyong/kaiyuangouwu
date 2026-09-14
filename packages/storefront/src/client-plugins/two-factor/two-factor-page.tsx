@@ -1,4 +1,4 @@
-/* eslint-disable max-len -- Bilingual customer-facing copy is intentionally kept next to the UI. */
+/* eslint-disable import/order, max-len -- Bilingual copy and organizer-owned type imports are intentional. */
 import {
     Check,
     ChevronDown,
