@@ -650,7 +650,13 @@ export function useProductEditorSave({
                                         ...(original?.enabled !== v.enabled ? { enabled: v.enabled } : {}),
                                         price: Math.round(parseFloat(v.price) * 100),
                                         ...variantFulfillmentInput(v, effectiveFulfillmentType),
-                                        optionIds: v.optionIds,
+                                        ...(!original ||
+                                        !sameValue(
+                                            sortedIds(v.optionIds),
+                                            sortedIds(original.options.map(option => option.id)),
+                                        )
+                                            ? { optionIds: v.optionIds }
+                                            : {}),
                                         translations: [
                                             {
                                                 languageCode: SOURCE_LANGUAGE_CODE,

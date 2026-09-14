@@ -53,19 +53,18 @@ import type {
 import { type StorefrontVisualPresetConfig } from '../../storefront-content-plugin/src/visual-presets';
 
 import { AccountApi } from './api/account';
+import { AuthTokenState } from './api/auth-token-state';
 import { CartCheckoutApi } from './api/cart-checkout';
 import { CatalogApi } from './api/catalog';
 import { ContentReviewsApi } from './api/content-reviews';
 import {
     API_URL,
-    AUTH_TOKEN_HEADER,
     authTokenStorageKey,
     calculateStorefrontRealtimeRetry,
     createRequestSignal,
     ErrorResult,
     isStorefrontQuery,
     parseShopApiResponse,
-    readSessionAuthToken,
     SEND_CLIENT_CHANNEL_TOKEN,
     SHOP_API_QUERY_TIMEOUT_MS,
     ShopApiError,
@@ -75,6 +74,7 @@ import {
 import { ImageStudioApi } from './api/image-studio';
 import { RealtimeApi } from './api/realtime';
 import { ReferralsApi } from './api/referrals';
+import { publishAuthSessionChange } from './auth-session-sync';
 import { StorefrontRealtimeEvent } from './realtime-updates';
 
 export {
@@ -86,8 +86,7 @@ export {
 };
 
 export class ShopApi {
-    private readonly authTokenStorageKey: string | null;
-    private authToken: string | null;
+    private readonly authTokens: AuthTokenState;
     private storefrontCatalogAvailable: boolean | null = null;
     private readonly contentReviewsApi: ContentReviewsApi;
     private readonly catalogApi: CatalogApi;
@@ -101,15 +100,15 @@ export class ShopApi {
         private readonly market: MarketConfig,
         private readonly languageCode: VendureLanguageCode = market.defaultLanguageCode,
     ) {
-        this.authTokenStorageKey = authTokenStorageKey(market.code);
-        this.authToken = readSessionAuthToken(this.authTokenStorageKey);
+        this.authTokens = new AuthTokenState(authTokenStorageKey(market.code));
         const ctx: ShopApiContext = {
             market: this.market,
             languageCode: this.languageCode,
-            getAuthToken: () => this.authToken,
-            captureAuthToken: res => this.captureAuthToken(res),
-            clearAuthToken: () => this.clearAuthToken(),
+            getAuthToken: () => this.authTokens.value,
+            createAuthTokenCapture: () => this.authTokens.createCapture(),
+            clearAuthToken: () => this.authTokens.clear(),
             request: (q, v, s, t, r) => this.request(q, v, s, t, r),
+            authenticationRequest: (q, v) => this.request(q, v, undefined, undefined, false, true),
             assertCart: res => this.assertCart(res),
             assertCheckoutSession: res => this.assertCheckoutSession(res),
             assertOrder: res => this.assertOrder(res),
@@ -254,7 +253,8 @@ export class ShopApi {
     }
 
     async login(emailAddress: string, password: string): Promise<void> {
-        return this.accountApi.login(emailAddress, password);
+        await this.accountApi.login(emailAddress, password);
+        this.publishCookieAuthenticationChange();
     }
 
     async referralProgram(signal?: AbortSignal): Promise<ReferralProgram> {
@@ -356,7 +356,8 @@ export class ShopApi {
     }
 
     async verifyCustomerAccount(token: string, password?: string): Promise<void> {
-        return this.accountApi.verifyCustomerAccount(token, password);
+        await this.accountApi.verifyCustomerAccount(token, password);
+        this.publishCookieAuthenticationChange();
     }
 
     async requestPasswordReset(emailAddress: string): Promise<void> {
@@ -364,12 +365,14 @@ export class ShopApi {
     }
 
     async resetPassword(token: string, password: string): Promise<void> {
-        return this.accountApi.resetPassword(token, password);
+        await this.accountApi.resetPassword(token, password);
+        this.publishCookieAuthenticationChange();
     }
 
     async logout(): Promise<void> {
         this.cartCheckoutApi.controller?.reset();
-        return this.accountApi.logout();
+        await this.accountApi.logout();
+        this.publishCookieAuthenticationChange();
     }
 
     async createAddress(input: CustomerAddressInput): Promise<CustomerAddress> {
@@ -553,7 +556,9 @@ export class ShopApi {
         signal?: AbortSignal,
         timeoutMs?: number,
         resultUnknownOnTimeout = false,
+        authenticates = false,
     ): Promise<T> {
+        const captureAuthToken = this.authTokens.createCapture(authenticates);
         const headers: Record<string, string> = {
             'content-type': 'application/json',
             'language-code': this.languageCode,
@@ -561,8 +566,8 @@ export class ShopApi {
         if (SEND_CLIENT_CHANNEL_TOKEN) {
             headers['vendure-token'] = this.market.code;
         }
-        if (this.authToken) {
-            headers.authorization = `Bearer ${this.authToken}`;
+        if (this.authTokens.value) {
+            headers.authorization = `Bearer ${this.authTokens.value}`;
         }
         const languageSeparator = API_URL.includes('?') ? '&' : '?';
         const requestUrl =
@@ -581,7 +586,7 @@ export class ShopApi {
                 body: JSON.stringify({ query, variables }),
                 signal: timeout.signal,
             });
-            this.captureAuthToken(response);
+            captureAuthToken(response);
             rawBody = await response.text();
         } catch (error) {
             if (timeout.didTimeout()) {
@@ -599,26 +604,8 @@ export class ShopApi {
         return parseShopApiResponse<T>(rawBody, response.status, response.ok);
     }
 
-    private captureAuthToken(response: Response): void {
-        const authToken = response.headers.get(AUTH_TOKEN_HEADER)?.trim();
-        if (!authToken) return;
-        this.authToken = authToken;
-        if (!this.authTokenStorageKey) return;
-        try {
-            sessionStorage.setItem(this.authTokenStorageKey, authToken);
-        } catch {
-            // The in-memory token still preserves the session for this page lifetime.
-        }
-    }
-
-    private clearAuthToken(): void {
-        this.authToken = null;
-        if (!this.authTokenStorageKey) return;
-        try {
-            sessionStorage.removeItem(this.authTokenStorageKey);
-        } catch {
-            // Storage can be unavailable in privacy-restricted browser contexts.
-        }
+    private publishCookieAuthenticationChange(): void {
+        if (this.authTokens.usesCookieAuthentication) publishAuthSessionChange(this.market.code);
     }
 
     private assertCart(result: StorefrontCart & ErrorResult): StorefrontCart {

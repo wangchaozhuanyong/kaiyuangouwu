@@ -115,6 +115,7 @@ describe('store USDT setup helpers', () => {
 
     it('replaces payment codes and USDT intent enums with Chinese business labels', () => {
         expect(storePaymentMethodLabel('usdt-trc20')).toBe('USDT 链上支付（TRC20）');
+        expect(storePaymentMethodLabel('referral-balance')).toBe('返利余额抵扣');
         expect(storePaymentMethodLabel('production-coupon-atomicity-test')).toBe('内部测试支付');
         expect(storePaymentMethodLabel('provider-specific-code')).toBe('其他支付方式');
         expect(storePaymentMethodLabel('微信支付')).toBe('微信支付');

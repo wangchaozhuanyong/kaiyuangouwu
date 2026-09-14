@@ -16,7 +16,7 @@ afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
 });
 
-async function renderCatalog({ empty = false, initialEntry = '/' } = {}) {
+async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 'meiyijia' } = {}) {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const rootCollection = {
         __typename: 'Collection',
@@ -119,7 +119,7 @@ async function renderCatalog({ empty = false, initialEntry = '/' } = {}) {
                             data: {
                                 activeChannel: {
                                     id: 'channel-1',
-                                    code: 'meiyijia',
+                                    code: channelCode,
                                     token: 'meiyijia',
                                     defaultCurrencyCode: 'MYR',
                                 },
@@ -128,7 +128,7 @@ async function renderCatalog({ empty = false, initialEntry = '/' } = {}) {
                                     items: [
                                         {
                                             id: 'channel-1',
-                                            code: 'meiyijia',
+                                            code: channelCode,
                                             token: 'meiyijia',
                                             defaultCurrencyCode: 'MYR',
                                         },
@@ -190,6 +190,22 @@ async function renderCatalog({ empty = false, initialEntry = '/' } = {}) {
 }
 
 describe('CatalogModule category columns', () => {
+    it('describes soft deletion accurately and disables background search during password confirmation', async () => {
+        const container = await renderCatalog();
+        await act(async () => container.querySelector<HTMLButtonElement>('[title="删除商品"]')!.click());
+        const dialog = container.querySelector('[role="alertdialog"]');
+        expect(dialog?.textContent).toContain('标记删除');
+        expect(dialog?.textContent).toContain('所有已分配店铺');
+        expect(dialog?.textContent).not.toContain('从数据库中彻底移除');
+        expect(container.querySelector<HTMLInputElement>('[aria-label="搜索商品"]')?.disabled).toBe(true);
+        await act(async () =>
+            [...dialog!.querySelectorAll('button')]
+                .find(button => button.textContent?.trim() === '取消')!
+                .click(),
+        );
+        expect(container.querySelector<HTMLInputElement>('[aria-label="搜索商品"]')?.disabled).toBe(false);
+    });
+
     it('renders separate first-level and second-level category statistics', async () => {
         const container = await renderCatalog();
         const headers = Array.from(container.querySelectorAll('thead th')).map(header =>
@@ -207,6 +223,15 @@ describe('CatalogModule category columns', () => {
 });
 
 describe('CatalogModule filtered empty results', () => {
+    it('describes the default store as an independent store instead of an aggregate catalog', async () => {
+        const container = await renderCatalog({ channelCode: '__default_channel__' });
+
+        expect(container.textContent).toContain('当前数据范围：默认店铺');
+        expect(container.textContent).toContain('仅显示分配到当前店铺的商品、库存和价格');
+        expect(container.textContent).not.toContain('总目录');
+        expect(container.textContent).not.toContain('汇总全部商品');
+    });
+
     it.each(['/?status=disabled', '/?status=enabled', '/?category=tobacco'])(
         'does not describe the whole store as empty for %s',
         async initialEntry => {

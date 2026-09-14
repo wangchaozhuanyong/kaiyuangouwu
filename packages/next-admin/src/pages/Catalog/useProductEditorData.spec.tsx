@@ -1,7 +1,13 @@
 import { parse, type DocumentNode } from 'graphql';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { GET_ASSETS, GET_COLLECTIONS, GET_FACETS, GET_OPTION_GROUPS } from '../../graphql/catalog.graphql';
+import {
+    GET_ASSETS,
+    GET_COLLECTIONS,
+    GET_FACETS,
+    GET_OPTION_GROUPS,
+    GET_PRODUCT_DETAIL,
+} from '../../graphql/catalog.graphql';
 import { SYSTEM_IMPORT_OPTION_GROUP_CODE_PREFIX } from './catalog-option-groups';
 import { useProductEditorData } from './useProductEditorData';
 
@@ -10,11 +16,11 @@ vi.mock('@apollo/client/react', () => ({ useQuery: queries }));
 
 type Input = Parameters<typeof useProductEditorData>[0];
 
-function Probe({ sizes }: { sizes: [number, number, number] }) {
-    useProductEditorData({
-        productId: undefined,
-        isCreateMode: true,
-        productDetailDocument: parse('query EditorProduct { __typename }'),
+function Probe({ sizes, productId }: { sizes: [number, number, number]; productId?: string }) {
+    const result = useProductEditorData({
+        productId,
+        isCreateMode: !productId,
+        productDetailDocument: productId ? GET_PRODUCT_DETAIL : parse('query EditorProduct { __typename }'),
         facetPage: 2,
         facetPageSize: sizes[0],
         deferredFacetSearch: '标签',
@@ -27,7 +33,7 @@ function Probe({ sizes }: { sizes: [number, number, number] }) {
         isAssetPickerOpen: true,
         setErrorMessage: vi.fn(),
     } satisfies Input);
-    return null;
+    return <output>{result.productData?.product?.channels.map(channel => channel.id).join(',')}</output>;
 }
 
 function optionsFor(document: DocumentNode) {
@@ -53,4 +59,54 @@ describe('product editor pagination across the extracted data hook', () => {
             expect(optionsFor(GET_COLLECTIONS)).toMatchObject({ skip: 0, take: 100, topLevelOnly: true });
         },
     );
+
+    it('shows only the permission-filtered assignment view for the current product', () => {
+        queries.mockImplementation((query: DocumentNode) => ({
+            loading: false,
+            refetch: vi.fn(),
+            ...(query === GET_PRODUCT_DETAIL
+                ? {
+                      data: {
+                          product: { id: '27', channels: [{ id: '16', code: 'sim-a' }] },
+                          catalogProductChannelAssignments: {
+                              items: [
+                                  {
+                                      id: '27',
+                                      channels: [
+                                          { id: '16', code: 'sim-a' },
+                                          { id: '17', code: 'sim-b' },
+                                      ],
+                                  },
+                              ],
+                          },
+                      },
+                  }
+                : {}),
+        }));
+        expect(renderToStaticMarkup(<Probe sizes={[20, 20, 20]} productId="27" />)).toContain('16,17');
+        expect(queries.mock.calls.find(([query]) => query === GET_PRODUCT_DETAIL)?.[1].variables).toEqual({
+            id: '27',
+            assignmentId: '27',
+        });
+    });
+
+    it('does not substitute a different product assignment', () => {
+        queries.mockImplementation((query: DocumentNode) => ({
+            loading: false,
+            refetch: vi.fn(),
+            ...(query === GET_PRODUCT_DETAIL
+                ? {
+                      data: {
+                          product: { id: '27', channels: [{ id: '16', code: 'sim-a' }] },
+                          catalogProductChannelAssignments: {
+                              items: [{ id: '28', channels: [{ id: '17', code: 'sim-b' }] }],
+                          },
+                      },
+                  }
+                : {}),
+        }));
+        expect(renderToStaticMarkup(<Probe sizes={[20, 20, 20]} productId="27" />)).toBe(
+            '<output>16</output>',
+        );
+    });
 });

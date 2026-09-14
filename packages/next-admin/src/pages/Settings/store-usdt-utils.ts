@@ -14,6 +14,7 @@ const TEST_PAYMENT_METHOD_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|sandbox|test)(
 const PAYMENT_METHOD_LABELS: Readonly<Record<string, string>> = {
     [USDT_PAYMENT_METHOD_CODE]: 'USDT 链上支付（TRC20）',
     'standard-payment': '本地测试支付',
+    'referral-balance': '返利余额抵扣',
     'bank-transfer': '银行转账',
     card: '银行卡支付',
     'credit-card': '银行卡支付',

@@ -23,12 +23,16 @@ export abstract class BaseDomainApi {
         return this.ctx.getAuthToken();
     }
 
-    protected captureAuthToken(response: Response): void {
-        this.ctx.captureAuthToken(response);
+    protected createAuthTokenCapture(): (response: Response) => void {
+        return this.ctx.createAuthTokenCapture();
     }
 
     protected clearAuthToken(): void {
         this.ctx.clearAuthToken();
+    }
+
+    protected authenticationRequest<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+        return this.ctx.authenticationRequest<T>(query, variables);
     }
 
     protected request<T>(

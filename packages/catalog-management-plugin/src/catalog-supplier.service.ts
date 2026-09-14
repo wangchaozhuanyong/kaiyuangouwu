@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import { ProductVariant, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
+import { translateEntity } from '@vendure/core/dist/service/helpers/utils/translate-entity';
 import { createHash } from 'node:crypto';
 import { Brackets, In } from 'typeorm';
 
@@ -206,15 +207,31 @@ export class CatalogSupplierService {
                 skip: Math.max(0, skip),
                 take: Math.min(Math.max(1, take), 200),
             });
+        const languages: [RequestContext['languageCode'], RequestContext['languageCode']] = [
+            ctx.languageCode,
+            ctx.channel.defaultLanguageCode,
+        ];
         return {
-            items: items.map(item => ({
-                id: String(item.variantId),
-                sku: item.variant.sku,
-                name: item.variant.name,
-                productId: String(item.variant.productId),
-                productName: item.variant.product?.name ?? item.variant.name,
-                enabled: item.variant.enabled,
-            })),
+            items: items.map(item => {
+                const variant = item.variant;
+                const name =
+                    (variant.translations?.length
+                        ? translateEntity(variant, languages).name
+                        : variant.name) || variant.sku;
+                const product = variant.product;
+                const productName =
+                    (product?.translations?.length
+                        ? translateEntity(product, languages).name
+                        : product?.name) || name;
+                return {
+                    id: String(item.variantId),
+                    sku: variant.sku,
+                    name,
+                    productId: String(variant.productId),
+                    productName,
+                    enabled: variant.enabled,
+                };
+            }),
             totalItems,
         };
     }

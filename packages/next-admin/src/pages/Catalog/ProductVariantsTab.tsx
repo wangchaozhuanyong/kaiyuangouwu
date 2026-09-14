@@ -115,7 +115,7 @@ export function ProductVariantsTab() {
                     <div className="flex flex-wrap gap-2">
                         {catalogChannelsData?.channels.items.map(channel => {
                             const isActiveChannel = channel.id === catalogChannelsData.activeChannel.id;
-                            const isSelected = selectedChannelIds.includes(channel.id) || isActiveChannel;
+                            const isSelected = selectedChannelIds.includes(channel.id);
                             return (
                                 <label
                                     key={channel.id}

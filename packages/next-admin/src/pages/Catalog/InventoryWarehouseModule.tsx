@@ -60,7 +60,20 @@ const INVENTORY_TABS = {
     lots: 'LOTS',
     warehouses: 'WAREHOUSES',
 } as const;
-type StockStatus = 'NORMAL' | 'LOW_STOCK' | 'OUT_OF_STOCK';
+type StockStatus = 'NORMAL' | 'LOW_STOCK' | 'OUT_OF_STOCK' | 'NOT_TRACKED';
+
+// oxlint-disable-next-line react/only-export-components -- exported for focused regression tests
+export function inventoryStockStatus(
+    trackInventory: 'TRUE' | 'FALSE' | 'INHERIT',
+    globalTrackInventory: boolean,
+    available: number,
+    threshold: number,
+): StockStatus {
+    if (trackInventory === 'FALSE' || (trackInventory === 'INHERIT' && !globalTrackInventory)) {
+        return 'NOT_TRACKED';
+    }
+    return available <= 0 ? 'OUT_OF_STOCK' : available <= threshold ? 'LOW_STOCK' : 'NORMAL';
+}
 
 interface StockLocationItem {
     id: string;
@@ -90,6 +103,7 @@ interface ProductVariantItem {
     enabled: boolean;
     price: number;
     currencyCode: string;
+    trackInventory: 'TRUE' | 'FALSE' | 'INHERIT';
     outOfStockThreshold: number;
     useGlobalOutOfStockThreshold: boolean;
     product: { id: string; name: string };
@@ -99,7 +113,7 @@ interface ProductVariantItem {
 
 interface InventoryData {
     productVariants: { items: ProductVariantItem[]; totalItems: number };
-    globalSettings: { outOfStockThreshold: number };
+    globalSettings: { outOfStockThreshold: number; trackInventory: boolean };
 }
 
 interface StockLocationsData {
@@ -298,6 +312,7 @@ export function InventoryWarehouseModule() {
     const variants = data?.productVariants.items ?? EMPTY_VARIANTS;
     const locations = locationData?.stockLocations.items ?? EMPTY_LOCATIONS;
     const globalThreshold = data?.globalSettings.outOfStockThreshold ?? 0;
+    const globalTrackInventory = data?.globalSettings.trackInventory ?? true;
     const totalVariants = data?.productVariants.totalItems ?? 0;
     const totalPages = Math.max(1, Math.ceil(totalVariants / pageSize));
     const refetchAll = async () => {
@@ -318,8 +333,12 @@ export function InventoryWarehouseModule() {
                     : variant.outOfStockThreshold;
                 return variant.stockLevels.map(level => {
                     const available = Math.max(0, level.stockOnHand - level.stockAllocated);
-                    const status: StockStatus =
-                        available <= 0 ? 'OUT_OF_STOCK' : available <= threshold ? 'LOW_STOCK' : 'NORMAL';
+                    const status = inventoryStockStatus(
+                        variant.trackInventory,
+                        globalTrackInventory,
+                        available,
+                        threshold,
+                    );
                     return {
                         id: variant.id + ':' + level.stockLocationId,
                         variantId: variant.id,
@@ -336,7 +355,7 @@ export function InventoryWarehouseModule() {
                     };
                 });
             }),
-        [globalThreshold, variants],
+        [globalThreshold, globalTrackInventory, variants],
     );
 
     const movementLogs = useMemo<MovementRow[]>(
@@ -1272,13 +1291,21 @@ export function InventoryWarehouseModule() {
                                                     {stock.stockAllocated}
                                                 </td>
                                                 <td className="h-[52px] px-3 py-0 font-mono text-xs font-bold text-emerald-600">
-                                                    {stock.stockAvailable}
+                                                    {stock.status === 'NOT_TRACKED'
+                                                        ? '—'
+                                                        : stock.stockAvailable}
                                                 </td>
                                                 <td className="h-[52px] px-3 py-0 font-mono text-slate-500">
-                                                    {stock.safetyThreshold}
+                                                    {stock.status === 'NOT_TRACKED'
+                                                        ? '—'
+                                                        : stock.safetyThreshold}
                                                 </td>
                                                 <td className="h-[52px] whitespace-nowrap px-3 py-0">
-                                                    {stock.status === 'NORMAL' ? (
+                                                    {stock.status === 'NOT_TRACKED' ? (
+                                                        <span className="rounded bg-slate-100 px-2 py-0.5 font-bold text-slate-600">
+                                                            不跟踪仓库库存
+                                                        </span>
+                                                    ) : stock.status === 'NORMAL' ? (
                                                         <span className="rounded bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">
                                                             充足
                                                         </span>
@@ -1817,8 +1844,13 @@ export function InventoryWarehouseModule() {
                     draft={lotDraft}
                     variants={lotVariants}
                     saving={saveInventoryLotState.loading}
+                    error={actionError}
                     onChange={setLotDraft}
-                    onClose={() => !saveInventoryLotState.loading && setLotDraft(null)}
+                    onClose={() => {
+                        if (saveInventoryLotState.loading) return;
+                        setLotDraft(null);
+                        setActionError('');
+                    }}
                     onSave={() => void saveLot()}
                 />
             )}
@@ -1875,10 +1907,11 @@ function InventoryPagination({
     );
 }
 
-function InventoryLotDialog({
+export function InventoryLotDialog({
     draft,
     variants,
     saving,
+    error,
     onChange,
     onClose,
     onSave,
@@ -1886,6 +1919,7 @@ function InventoryLotDialog({
     draft: InventoryLotDraft;
     variants: CatalogExportRowRecord[];
     saving: boolean;
+    error?: string;
     onChange: (draft: InventoryLotDraft) => void;
     onClose: () => void;
     onSave: () => void;
@@ -1985,6 +2019,11 @@ function InventoryLotDialog({
                         onChange={purchaseCost => update({ purchaseCost })}
                     />
                 </div>
+                {error && (
+                    <div role="alert" className="rounded-lg bg-rose-50 p-3 text-rose-700">
+                        {error}
+                    </div>
+                )}
                 <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
                     <button
                         type="button"

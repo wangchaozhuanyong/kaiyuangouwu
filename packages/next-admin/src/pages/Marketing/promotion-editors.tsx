@@ -498,6 +498,7 @@ export function GrantCouponDialog({
     onError: (message: string) => void;
 }) {
     const [search, setSearch] = useState('');
+    const [dialogError, setDialogError] = useState('');
     const deferredSearch = useDeferredValue(search.trim());
     const filter = deferredSearch
         ? {
@@ -526,20 +527,28 @@ export function GrantCouponDialog({
     });
     const [grant, state] = useMutation(GRANT_STORE_COUPON_MUTATION);
     const submit = async (customerId: string) => {
+        setDialogError('');
         try {
             await grant({ variables: { campaignId: coupon.id, customerId } });
             await onSaved();
         } catch (error) {
-            onError(errorText(error));
+            const message = errorText(error);
+            setDialogError(message);
+            onError(message);
         }
     };
     return (
         <Modal
             title={`指定发券：${coupon.name}`}
-            description="选择客户后立即发放到其账户；同一客户的领取上限仍由后端校验。"
+            description="选择客户后立即发放到其账户。管理员可重复发放给同一客户，仍受活动发放总量、状态和领取时间限制；使用次数限制不变。"
             onClose={onClose}
             width="max-w-lg"
         >
+            {dialogError && (
+                <p role="alert" className="mb-3 text-xs text-rose-600">
+                    {dialogError}
+                </p>
+            )}
             <div className="relative">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                 <input

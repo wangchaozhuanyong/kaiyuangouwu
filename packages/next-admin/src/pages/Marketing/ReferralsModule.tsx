@@ -37,15 +37,7 @@ import {
     WithdrawalsPanel,
 } from './ReferralPanels';
 import { ReferralHeading, errorText, programDraft, programDraftError } from './referral-ui';
-import { ProgramDraft, ReferralTab, ReportKey, WithdrawalAction } from './referrals-types';
-
-const REFERRAL_TABS = {
-    settings: 'SETTINGS',
-    promoters: 'PROMOTERS',
-    rewards: 'REWARDS',
-    ledger: 'LEDGER',
-    withdrawals: 'WITHDRAWALS',
-} as const;
+import { ProgramDraft, REFERRAL_TABS, ReferralTab, ReportKey, WithdrawalAction } from './referrals-types';
 
 export function ReferralsModule() {
     const [params] = useSearchParams();
@@ -276,6 +268,8 @@ function ReferralManagement() {
                                 <div className="relative max-w-md">
                                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                                     <input
+                                        type="search"
+                                        autoComplete="off"
                                         value={search}
                                         onChange={event => setSearch(event.target.value)}
                                         aria-label="搜索分销流水"
@@ -366,6 +360,7 @@ function ReferralManagement() {
                     onClose={() => setWithdrawalAction(null)}
                     onSaved={async message => {
                         setWithdrawalAction(null);
+                        setActionError('');
                         setNotice(message);
                         await reports.refetch();
                     }}
@@ -379,6 +374,7 @@ function ReferralManagement() {
                     onClose={() => setFinancialDialog(null)}
                     onSaved={async message => {
                         setFinancialDialog(null);
+                        setActionError('');
                         setNotice(message);
                         await reports.refetch();
                     }}

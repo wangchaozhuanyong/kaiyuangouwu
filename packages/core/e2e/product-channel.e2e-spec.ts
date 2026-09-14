@@ -246,7 +246,7 @@ describe('ChannelAware Products and ProductVariants', () => {
             const removed = await adminClient.query(removeProductFromChannelDocument, {
                 input: { productIds: [product1.id], channelId: 'T_1' },
             });
-            expect(Object.values(removed)[0][0].channels.map(c => c.id)).not.toContain('T_1');
+            expect(Object.values(removed)[0]).toEqual([]);
             await adminClient.query(assignProductToChannelDocument, {
                 input: { productIds: [product1.id], channelId: 'T_1' },
             });
@@ -419,8 +419,8 @@ describe('ChannelAware Products and ProductVariants', () => {
             });
             productGuard.assertSuccess(check);
 
-            // from the default channel, all channels are visible
-            expect(check.channels.map(c => c.id).sort()).toEqual(['T_1', 'T_3']);
+            // Product reads are scoped to the active store, including the default store.
+            expect(check.channels.map(c => c.id).sort()).toEqual(['T_1']);
             expect(check.variants[0].channels.map(c => c.id).sort()).toEqual(['T_1', 'T_3']);
             expect(check.variants[1].channels.map(c => c.id).sort()).toEqual(['T_1']);
         });
@@ -446,7 +446,7 @@ describe('ChannelAware Products and ProductVariants', () => {
             const removed = await adminClient.query(removeProductVariantFromChannelDocument, {
                 input: { productVariantIds: [product1.variants[0].id], channelId: 'T_1' },
             });
-            expect(Object.values(removed)[0][0].channels.map(c => c.id)).not.toContain('T_1');
+            expect(Object.values(removed)[0]).toEqual([]);
             await adminClient.query(assignProductVariantToChannelDocument, {
                 input: { productVariantIds: [product1.variants[0].id], channelId: 'T_1' },
             });
@@ -481,7 +481,11 @@ describe('ChannelAware Products and ProductVariants', () => {
                 id: product1.id,
             });
             productGuard.assertSuccess(product);
-            expect(product.channels.map(c => c.id).sort()).toEqual(['T_1', 'T_3']);
+            expect(product.channels.map(c => c.id).sort()).toEqual(['T_1']);
+            adminClient.setChannelToken(THIRD_CHANNEL_TOKEN);
+            const third = await adminClient.query(getProductWithVariantsDocument, { id: product1.id });
+            expect(third.product?.variants.map(variant => variant.id)).toEqual([product1.variants[0].id]);
+            adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
         });
 
         it('removes ProductVariant and Product from Channel', async () => {
@@ -510,6 +514,44 @@ describe('ChannelAware Products and ProductVariants', () => {
     describe('creating Product in sub-channel', () => {
         let createdProduct: ResultOf<typeof createProductDocument>['createProduct'];
         let createdVariant: FragmentOf<typeof productVariantFragment>;
+
+        async function expectCatalogVisibility(visible: boolean) {
+            const result = await adminClient.query(
+                gql`
+                    query StoreCatalog($productId: ID!, $variantId: ID!) {
+                        product(id: $productId) {
+                            id
+                        }
+                        productVariant(id: $variantId) {
+                            id
+                        }
+                        products(options: { filter: { slug: { eq: "channel-product" } } }) {
+                            totalItems
+                            items {
+                                id
+                            }
+                        }
+                        productVariants(options: { filter: { sku: { eq: "PV1" } } }) {
+                            totalItems
+                            items {
+                                id
+                            }
+                        }
+                    }
+                `,
+                { productId: createdProduct.id, variantId: createdVariant.id },
+            );
+            expect(result.product).toEqual(visible ? { id: createdProduct.id } : null);
+            expect(result.productVariant).toEqual(visible ? { id: createdVariant.id } : null);
+            expect(result.products).toEqual({
+                totalItems: visible ? 1 : 0,
+                items: visible ? [{ id: createdProduct.id }] : [],
+            });
+            expect(result.productVariants).toEqual({
+                totalItems: visible ? 1 : 0,
+                items: visible ? [{ id: createdVariant.id }] : [],
+            });
+        }
 
         it('creates a Product in sub-channel', async () => {
             adminClient.setChannelToken(SECOND_CHANNEL_TOKEN);
@@ -548,14 +590,51 @@ describe('ChannelAware Products and ProductVariants', () => {
 
             adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
 
-            const { product } = await adminClient.query(getProductWithVariantsDocument, {
-                id: createProduct.id,
-            });
-            productGuard.assertSuccess(product);
+            // Even a SuperAdmin sees only this store's explicitly assigned products and SKUs.
+            await expectCatalogVisibility(false);
+            adminClient.setChannelToken(SECOND_CHANNEL_TOKEN);
+            await expectCatalogVisibility(true);
+            adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+        });
 
-            // The aggregate can read the product without assigning it to the default storefront.
-            expect(product.channels.map(c => c.id).sort()).toEqual(['T_2']);
-            expect(product.variants[0].channels.map(c => c.id).sort()).toEqual(['T_2']);
+        it('shows the product in the default store only after explicit sharing, then hides it on removal', async () => {
+            adminClient.setChannelToken(SECOND_CHANNEL_TOKEN);
+            await adminClient.query(assignProductToChannelDocument, {
+                input: { productIds: [createdProduct.id], channelId: 'T_1' },
+            });
+            adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+            await expectCatalogVisibility(true);
+
+            await adminClient.query(removeProductFromChannelDocument, {
+                input: { productIds: [createdProduct.id], channelId: 'T_1' },
+            });
+            await expectCatalogVisibility(false);
+            adminClient.setChannelToken(SECOND_CHANNEL_TOKEN);
+            await expectCatalogVisibility(true);
+            adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+        });
+
+        it('keeps a product created in the default store out of other stores', async () => {
+            adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+            const { createProduct } = await adminClient.query(createProductDocument, {
+                input: {
+                    translations: [
+                        {
+                            languageCode: LanguageCode.en,
+                            name: 'Default store only',
+                            slug: 'default-store-only',
+                            description: '',
+                        },
+                    ],
+                },
+            });
+            expect(createProduct.channels.map(channel => channel.id)).toEqual(['T_1']);
+            const own = await adminClient.query(getProductWithVariantsDocument, { id: createProduct.id });
+            expect(own.product?.id).toBe(createProduct.id);
+            adminClient.setChannelToken(SECOND_CHANNEL_TOKEN);
+            const other = await adminClient.query(getProductWithVariantsDocument, { id: createProduct.id });
+            expect(other.product).toBeNull();
+            adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
         });
     });
 

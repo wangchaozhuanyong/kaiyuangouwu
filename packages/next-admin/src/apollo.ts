@@ -187,8 +187,14 @@ const authLink = setContext((_, { headers }) => {
 export const client = new ApolloClient({
     link: ApolloLink.from([authLink, adminMutationFeedbackLink, sensitiveActionPasswordLink, httpLink]),
     cache: new InMemoryCache({
-        possibleTypes: CUSTOM_FIELD_POSSIBLE_TYPES,
+        possibleTypes: {
+            ...CUSTOM_FIELD_POSSIBLE_TYPES,
+            StockMovement: ['StockAdjustment', 'Allocation', 'Sale', 'Cancellation', 'Return', 'Release'],
+        },
         typePolicies: {
+            StorePaymentDetail: {
+                keyFields: ['id', 'channelId'],
+            },
             Product: {
                 keyFields: ['id'],
             },

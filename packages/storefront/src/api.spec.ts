@@ -28,6 +28,257 @@ function jsonRequestBody(init?: RequestInit): string {
     return init.body;
 }
 
+// Issue 42: token writes must follow session transitions, not network completion order.
+describe('ShopApi session response ordering', () => {
+    const guestData = { storefrontContent: [] };
+    const authCases = [
+        {
+            name: 'login',
+            field: 'login',
+            run: (api: ShopApi) => api.login('fixture@example.test', 'mock-only'),
+        },
+        {
+            name: 'verification',
+            field: 'verifyCustomerAccount',
+            run: (api: ShopApi) => api.verifyCustomerAccount('mock-only'),
+        },
+        {
+            name: 'reset',
+            field: 'resetPassword',
+            run: (api: ShopApi) => api.resetPassword('mock-only', 'mock-only'),
+        },
+    ];
+    function response(data: Record<string, unknown>, token?: string) {
+        return new Response(JSON.stringify({ data }), {
+            headers: token ? { 'vendure-auth-token': token } : {},
+        });
+    }
+    function pending() {
+        let resolve!: (value: Response) => void;
+        const promise = new Promise<Response>(finish => (resolve = finish));
+        return { promise, resolve };
+    }
+    function installFetch() {
+        const fetchMock = vi.fn<typeof fetch>();
+        vi.stubGlobal('fetch', fetchMock);
+        return fetchMock;
+    }
+    async function expectNextToken(api: ShopApi, fetchMock: ReturnType<typeof installFetch>, token?: string) {
+        fetchMock.mockResolvedValueOnce(response(guestData));
+        await api.storefrontContent();
+        const headers = fetchMock.mock.lastCall?.[1]?.headers;
+        if (token) expect(headers).toMatchObject({ authorization: `Bearer ${token}` });
+        else expect(headers).not.toHaveProperty('authorization');
+    }
+
+    it.each(authCases)(
+        'keeps the new $name session when an earlier guest response arrives last',
+        async ({ field, run }) => {
+            const earlier = pending();
+            const fetchMock = installFetch()
+                .mockReturnValueOnce(earlier.promise)
+                .mockResolvedValueOnce(
+                    response({ [field]: { __typename: 'CurrentUser', id: '1' } }, 'new-session'),
+                );
+            const api = new ShopApi(market);
+            const oldRequest = api.storefrontContent();
+            await run(api);
+            earlier.resolve(response(guestData, 'old-guest'));
+            await oldRequest;
+            await expectNextToken(api, fetchMock, 'new-session');
+        },
+    );
+
+    it.each(authCases)(
+        'accepts $name even if a later guest request returns first',
+        async ({ field, run }) => {
+            const authResponse = pending();
+            const fetchMock = installFetch()
+                .mockReturnValueOnce(authResponse.promise)
+                .mockResolvedValueOnce(response(guestData, 'intermediate-guest'));
+            const api = new ShopApi(market);
+            const authentication = run(api);
+            await api.storefrontContent();
+            authResponse.resolve(
+                response({ [field]: { __typename: 'CurrentUser', id: '1' } }, 'new-session'),
+            );
+            await authentication;
+            await expectNextToken(api, fetchMock, 'new-session');
+        },
+    );
+
+    it('ignores a guest request started during login but returned after login', async () => {
+        const authResponse = pending();
+        const guestResponse = pending();
+        const fetchMock = installFetch()
+            .mockReturnValueOnce(authResponse.promise)
+            .mockReturnValueOnce(guestResponse.promise);
+        const api = new ShopApi(market);
+        const login = api.login('fixture@example.test', 'mock-only');
+        const guest = api.storefrontContent();
+        authResponse.resolve(response({ login: { __typename: 'CurrentUser', id: '1' } }, 'new-session'));
+        await login;
+        guestResponse.resolve(response(guestData, 'late-guest'));
+        await guest;
+        await expectNextToken(api, fetchMock, 'new-session');
+    });
+
+    it('does not let an older ordinary response replace a newer captured token', async () => {
+        const earlier = pending();
+        const fetchMock = installFetch()
+            .mockReturnValueOnce(earlier.promise)
+            .mockResolvedValueOnce(response(guestData, 'new-guest'));
+        const api = new ShopApi(market);
+        const oldRequest = api.storefrontContent();
+        await api.storefrontContent();
+        earlier.resolve(response(guestData, 'old-guest'));
+        await oldRequest;
+        await expectNextToken(api, fetchMock, 'new-guest');
+    });
+
+    it('does not invalidate pending token capture merely because a newer response has no token', async () => {
+        const earlier = pending();
+        const fetchMock = installFetch()
+            .mockReturnValueOnce(earlier.promise)
+            .mockResolvedValueOnce(response(guestData));
+        const api = new ShopApi(market);
+        const request = api.storefrontContent();
+        await api.storefrontContent();
+        earlier.resolve(response(guestData, 'valid-guest'));
+        await request;
+        await expectNextToken(api, fetchMock, 'valid-guest');
+    });
+
+    it('does not restore a cleared session even when logout started with no token', async () => {
+        const earlier = pending();
+        const fetchMock = installFetch()
+            .mockReturnValueOnce(earlier.promise)
+            .mockResolvedValueOnce(response({ logout: { success: true } }));
+        const api = new ShopApi(market);
+        const oldRequest = api.storefrontContent();
+        await api.logout();
+        earlier.resolve(response(guestData, 'old-session'));
+        await oldRequest;
+        await expectNextToken(api, fetchMock);
+        fetchMock.mockResolvedValueOnce(response(guestData, 'fresh-guest'));
+        await api.storefrontContent();
+        await expectNextToken(api, fetchMock, 'fresh-guest');
+    });
+
+    it('does not restore an in-flight login response after logout', async () => {
+        const earlier = pending();
+        const fetchMock = installFetch()
+            .mockReturnValueOnce(earlier.promise)
+            .mockResolvedValueOnce(response({ logout: { success: true } }));
+        const api = new ShopApi(market);
+        const login = api.login('fixture@example.test', 'mock-only');
+        await api.logout();
+        earlier.resolve(response({ login: { __typename: 'CurrentUser', id: '1' } }, 'old-login'));
+        await login;
+        await expectNextToken(api, fetchMock);
+    });
+
+    it('allows a new login after logout while rejecting a response from the previous session', async () => {
+        const earlier = pending();
+        const fetchMock = installFetch()
+            .mockResolvedValueOnce(
+                response({ login: { __typename: 'CurrentUser', id: '1' } }, 'first-session'),
+            )
+            .mockReturnValueOnce(earlier.promise)
+            .mockResolvedValueOnce(response({ logout: { success: true } }))
+            .mockResolvedValueOnce(
+                response({ login: { __typename: 'CurrentUser', id: '2' } }, 'second-session'),
+            );
+        const api = new ShopApi(market);
+        await api.login('fixture@example.test', 'mock-only');
+        const oldRequest = api.storefrontContent();
+        await api.logout();
+        await api.login('second@example.test', 'mock-only');
+        earlier.resolve(response(guestData, 'first-session'));
+        await oldRequest;
+        await expectNextToken(api, fetchMock, 'second-session');
+    });
+
+    it('keeps the existing token on failed login and failed logout without a replacement token', async () => {
+        const fetchMock = installFetch()
+            .mockResolvedValueOnce(
+                response({ login: { __typename: 'CurrentUser', id: '1' } }, 'existing-session'),
+            )
+            .mockResolvedValueOnce(
+                response({
+                    login: {
+                        __typename: 'InvalidCredentialsError',
+                        errorCode: 'INVALID_CREDENTIALS',
+                        message: 'Invalid',
+                    },
+                }),
+            )
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ errors: [{ message: 'Network unavailable' }] })),
+            );
+        const api = new ShopApi(market);
+        await api.login('fixture@example.test', 'mock-only');
+        await expect(api.login('fixture@example.test', 'mock-invalid')).rejects.toThrow('Invalid');
+        await expect(api.logout()).rejects.toThrow('Network unavailable');
+        await expectNextToken(api, fetchMock, 'existing-session');
+    });
+
+    it.each([true, false])(
+        'keeps the latest overlapping login intent (earlier returns first: %s)',
+        async earlierFirst => {
+            const earlier = pending();
+            const later = pending();
+            const fetchMock = installFetch()
+                .mockReturnValueOnce(earlier.promise)
+                .mockReturnValueOnce(later.promise);
+            const api = new ShopApi(market);
+            const firstLogin = api.login('first@example.test', 'mock-only');
+            const secondLogin = api.login('second@example.test', 'mock-only');
+            const firstResponse = response({ login: { __typename: 'CurrentUser', id: '1' } }, 'old-login');
+            const secondResponse = response({ login: { __typename: 'CurrentUser', id: '2' } }, 'new-login');
+            if (earlierFirst) {
+                earlier.resolve(firstResponse);
+                await firstLogin;
+                later.resolve(secondResponse);
+            } else {
+                later.resolve(secondResponse);
+                await secondLogin;
+                earlier.resolve(firstResponse);
+            }
+            await Promise.all([firstLogin, secondLogin]);
+            await expectNextToken(api, fetchMock, 'new-login');
+        },
+    );
+
+    it.each([
+        {
+            name: 'avatar',
+            field: 'setCustomerAvatar',
+            run: (api: ShopApi, file: File) => api.uploadCustomerAvatar(file),
+        },
+        {
+            name: 'image reference',
+            field: 'uploadImageReference',
+            run: (api: ShopApi, file: File) => api.uploadImageReference(file, true),
+        },
+    ])('does not restore the session from a late $name upload', async ({ field, run }) => {
+        const earlier = pending();
+        const fetchMock = installFetch()
+            .mockResolvedValueOnce(
+                response({ login: { __typename: 'CurrentUser', id: '1' } }, 'existing-session'),
+            )
+            .mockReturnValueOnce(earlier.promise)
+            .mockResolvedValueOnce(response({ logout: { success: true } }));
+        const api = new ShopApi(market);
+        await api.login('fixture@example.test', 'mock-only');
+        const upload = run(api, new File(['fixture'], 'fixture.png', { type: 'image/png' }));
+        await api.logout();
+        earlier.resolve(response({ [field]: { id: '1' } }, 'old-session'));
+        await upload;
+        await expectNextToken(api, fetchMock);
+    });
+});
+
 afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();

@@ -11,7 +11,7 @@ import './extensions/installed-extensions';
 import { InitialPasswordChangeModule } from './pages/Auth/InitialPasswordChangeModule';
 import { LoginModule } from './pages/Auth/LoginModule';
 import { routeModuleLoaders } from './route-modules';
-import { isAuthenticationRequiredError } from './utils/authentication-error';
+import { isMissingAdminSession } from './utils/authentication-error';
 import { toUserFacingError } from './utils/user-facing-error';
 
 const AppShell = lazy(() => import('./layouts/AppShell').then(module => ({ default: module.AppShell })));
@@ -77,6 +77,14 @@ const GET_ADMIN_BOOTSTRAP = gql`
     }
 `;
 
+const GET_ADMIN_SESSION = gql`
+    query GetAdminSession {
+        me {
+            id
+        }
+    }
+`;
+
 interface AdminBootstrapData {
     me: {
         id: string;
@@ -99,6 +107,13 @@ function AuthenticatedShell() {
     const data = authQuery.data;
     const loading = authQuery.loading;
     const error = authQuery.error;
+    // A protected bootstrap field can fail for either expired authentication or
+    // missing permission. Recheck identity without the protected bootstrap fields.
+    const sessionQuery = useQuery<{ me: { id: string } | null }>(GET_ADMIN_SESSION, {
+        skip: !error,
+        fetchPolicy: 'network-only',
+        errorPolicy: 'all',
+    });
 
     // 会话恢复时先明确选取一个可访问 Channel，再挂载业务页面。
     /* oxlint-disable react/set-state-in-effect */
@@ -109,7 +124,7 @@ function AuthenticatedShell() {
     }, [channelReady, data?.me]);
     /* oxlint-enable react/set-state-in-effect */
 
-    if (loading) {
+    if (loading || (error && sessionQuery.loading)) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-medium text-slate-500">
                 正在验证管理员会话...
@@ -117,7 +132,10 @@ function AuthenticatedShell() {
         );
     }
 
-    if (isAuthenticationRequiredError(authQuery.error)) {
+    if (
+        (!error && data?.me === null) ||
+        (error && isMissingAdminSession(sessionQuery.data, sessionQuery.error))
+    ) {
         return <SessionExpiredRedirect />;
     }
 
@@ -134,7 +152,7 @@ function AuthenticatedShell() {
                     </p>
                     <button
                         type="button"
-                        onClick={() => void authQuery.refetch()}
+                        onClick={() => void Promise.allSettled([authQuery.refetch(), sessionQuery.refetch()])}
                         className="mt-5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
                     >
                         重新验证

@@ -1141,7 +1141,7 @@ export function OrderEditor() {
                                         </div>
                                     ))}
                                     <div className="mt-3 flex justify-between border-t border-white/10 pt-3 text-sm font-semibold">
-                                        <span>实付合计</span>
+                                        <span>订单合计</span>
                                         <span className="font-mono text-lg tabular-nums">
                                             {formatMoney(order.totalWithTax, order.currencyCode)}
                                         </span>

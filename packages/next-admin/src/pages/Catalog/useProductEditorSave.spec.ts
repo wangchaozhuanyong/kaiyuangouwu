@@ -180,6 +180,31 @@ describe('product save orchestration', () => {
         expect(input.controls.setSaving).toHaveBeenLastCalledWith(false);
     });
 
+    it.each<[string[]]>([[[]], [['option-a', 'option-b']]])(
+        'omits unchanged SKU option assignments %j',
+        async options => {
+            const input = fixture();
+            input.data.productData!.product!.variants[0].options = options.map(id => ({ id }));
+            input.draft.variants[0].optionIds = [...options].reverse();
+            await useProductEditorSave(input).handleSave();
+            const saved = mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)!.mock.calls[0][0].variables.input[0];
+            expect(saved.price).toBe(1050);
+            expect(saved).not.toHaveProperty('optionIds');
+        },
+    );
+
+    it.each<[string[]]>([[['option-b']], [[]]])(
+        'preserves deliberate SKU option changes %j',
+        async options => {
+            const input = fixture();
+            input.data.productData!.product!.variants[0].options = [{ id: 'option-a' }];
+            input.draft.variants[0].optionIds = options;
+            await useProductEditorSave(input).handleSave();
+            const saved = mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)!.mock.calls[0][0].variables.input[0];
+            expect(saved.optionIds).toEqual(options);
+        },
+    );
+
     it('saves only product assets when untouched legacy SKU prices are blank', async () => {
         const input = fixture();
         input.baselineDraft = {

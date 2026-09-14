@@ -130,10 +130,16 @@ export class AssetServer {
                     try {
                         const parameters = await this.getImageTransformParameters(req);
                         const image = await transformImage(file, parameters);
-                        const imageBuffer = await image.toBuffer();
+                        let imageBuffer = await image.toBuffer();
                         const cachedFileName = this.getFileNameFromParameters(req.path, parameters);
                         if (!req.query.cache || req.query.cache === 'true') {
                             await this.assetStorageStrategy.writeFileFromBuffer(cachedFileName, imageBuffer);
+                            if (cachedFileName.startsWith('avatars/v2/')) {
+                                // Avatar storage normalizes bytes again; serve the persisted result
+                                // so the first response and subsequent cache hits are identical.
+                                imageBuffer =
+                                    await this.assetStorageStrategy.readFileToBuffer(cachedFileName);
+                            }
                             Logger.debug(`Saved cached asset: ${cachedFileName}`, loggerCtx);
                         }
                         let mimeType = this.getMimeType(cachedFileName);
@@ -267,6 +273,14 @@ export class AssetServer {
         const decodedReqPath = this.sanitizeFilePath(filePath);
         if (imageParamsString !== '') {
             const imageParamHash = this.md5(imageParamsString);
+            // Avatar derivatives must stay with the isolated avatar storage strategy.
+            if (decodedReqPath.startsWith('avatars/v2/')) {
+                return path.join(
+                    'avatars/v2',
+                    this.cacheDir,
+                    this.addSuffix(decodedReqPath.slice('avatars/v2/'.length), imageParamHash, imageFormat),
+                );
+            }
             return path.join(this.cacheDir, this.addSuffix(decodedReqPath, imageParamHash, imageFormat));
         } else {
             return decodedReqPath;
@@ -279,7 +293,9 @@ export class AssetServer {
     private sanitizeFilePath(filePath: string): string {
         let decodedPath: string;
         try {
-            decodedPath = decodeURIComponent(filePath);
+            // Express paths start with "/", while avatar storage keys are namespace-relative.
+            // Keep ordinary/S3 asset identifiers unchanged.
+            decodedPath = decodeURIComponent(filePath).replace(/^\/(?=avatars\/v2\/)/, '');
         } catch (e: any) {
             Logger.error((e.message as string) + ': ' + filePath, loggerCtx);
             return '';
