@@ -81,7 +81,7 @@ function fixture() {
         },
     };
     const query: any = {};
-    for (const methodName of ['leftJoinAndSelect', 'leftJoin', 'where', 'addSelect'])
+    for (const methodName of ['leftJoinAndSelect', 'leftJoin', 'innerJoin', 'where', 'andWhere', 'addSelect'])
         query[methodName] = () => query;
     query.getOne = vi.fn().mockResolvedValue(user);
     const savePassword = vi.fn().mockResolvedValue(method);
