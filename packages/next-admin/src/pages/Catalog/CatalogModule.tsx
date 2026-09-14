@@ -368,11 +368,7 @@ export function CatalogModule() {
                     <span>
                         当前数据范围：<strong>{activeChannelLabel}</strong>
                     </span>
-                    <span className="text-[11px] text-blue-700">
-                        {activeChannel && isDefaultChannelCode(activeChannel.code)
-                            ? '后台总目录汇总全部商品；商城只展示明确分配到该店铺的商品'
-                            : '当前商店的商品、库存和价格'}
-                    </span>
+                    <span className="text-[11px] text-blue-700">仅显示分配到当前店铺的商品、库存和价格</span>
                 </div>
                 {notification && (
                     <div

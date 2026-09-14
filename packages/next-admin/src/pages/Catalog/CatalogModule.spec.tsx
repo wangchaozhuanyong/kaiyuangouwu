@@ -16,7 +16,7 @@ afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
 });
 
-async function renderCatalog({ empty = false, initialEntry = '/' } = {}) {
+async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 'meiyijia' } = {}) {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const rootCollection = {
         __typename: 'Collection',
@@ -119,7 +119,7 @@ async function renderCatalog({ empty = false, initialEntry = '/' } = {}) {
                             data: {
                                 activeChannel: {
                                     id: 'channel-1',
-                                    code: 'meiyijia',
+                                    code: channelCode,
                                     token: 'meiyijia',
                                     defaultCurrencyCode: 'MYR',
                                 },
@@ -128,7 +128,7 @@ async function renderCatalog({ empty = false, initialEntry = '/' } = {}) {
                                     items: [
                                         {
                                             id: 'channel-1',
-                                            code: 'meiyijia',
+                                            code: channelCode,
                                             token: 'meiyijia',
                                             defaultCurrencyCode: 'MYR',
                                         },
@@ -223,6 +223,15 @@ describe('CatalogModule category columns', () => {
 });
 
 describe('CatalogModule filtered empty results', () => {
+    it('describes the default store as an independent store instead of an aggregate catalog', async () => {
+        const container = await renderCatalog({ channelCode: '__default_channel__' });
+
+        expect(container.textContent).toContain('当前数据范围：默认店铺');
+        expect(container.textContent).toContain('仅显示分配到当前店铺的商品、库存和价格');
+        expect(container.textContent).not.toContain('总目录');
+        expect(container.textContent).not.toContain('汇总全部商品');
+    });
+
     it.each(['/?status=disabled', '/?status=enabled', '/?category=tobacco'])(
         'does not describe the whole store as empty for %s',
         async initialEntry => {

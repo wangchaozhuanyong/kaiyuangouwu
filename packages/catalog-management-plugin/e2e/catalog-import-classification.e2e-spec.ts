@@ -73,6 +73,7 @@ const { server, adminClient, shopClient } = createTestEnvironment(config);
 let ctx: RequestContext;
 let imports: CatalogImportService;
 let connection: TransactionalConnection;
+let adminUser: User;
 let physicalId: string;
 
 async function importCsv(csv: string, importContext = ctx, previewOnly = false) {
@@ -136,10 +137,16 @@ describe('catalog import persisted type, hierarchy and rollback', () => {
             customerCount: 0,
         });
         await adminClient.asSuperAdmin();
+        connection = server.app.get(TransactionalConnection);
+        const credentials = config.authOptions.superadminCredentials;
+        if (!credentials) throw new Error('Missing test administrator configuration');
+        adminUser = await connection.rawConnection.getRepository(User).findOneOrFail({
+            where: { identifier: credentials.identifier },
+            relations: { roles: { channels: true } },
+        });
         ctx = await server.app
             .get(RequestContextService)
-            .create({ apiType: 'admin', languageCode: LanguageCode.en });
-        connection = server.app.get(TransactionalConnection);
+            .create({ apiType: 'admin', user: adminUser, languageCode: LanguageCode.en });
         imports = server.app.get(CatalogImportService);
         imports.registerEnqueuer(() => Promise.resolve());
     }, 120000);
@@ -308,8 +315,13 @@ describe('catalog import persisted type, hierarchy and rollback', () => {
         for (const role of [await roles.getSuperAdminRole(ctx), await roles.getCustomerRole(ctx)]) {
             for (const channel of [a, b]) await roles.assignRoleToChannel(ctx, role.id, channel.id);
         }
+        adminUser = await connection.rawConnection.getRepository(User).findOneOrFail({
+            where: { id: adminUser.id },
+            relations: { roles: { channels: true } },
+        });
         const aCtx = await server.app.get(RequestContextService).create({
             apiType: 'admin',
+            user: adminUser,
             channelOrToken: a,
             languageCode: ctx.languageCode,
         });
@@ -346,11 +358,37 @@ describe('catalog import persisted type, hierarchy and rollback', () => {
                 ).toContain('A 店商品');
                 client.setChannelToken(b.token);
                 expect((await client.query(query)).products.totalItems).toBe(0);
-                // The owner retains the aggregate catalog; a storefront only sees explicit sales assignments.
+                // The default store is independent in both Admin API and Shop API.
                 client.setChannelToken(ctx.channel.token);
-                expect((await client.query(query)).products.totalItems).toBe(
-                    client === adminClient ? before + 1 : before,
-                );
+                expect((await client.query(query)).products.totalItems).toBe(before);
+            }
+            const operationsQuery = gql`
+                query StoreCatalogOperations {
+                    catalogProductChannelAssignments {
+                        items {
+                            name
+                        }
+                    }
+                    catalogExportRows {
+                        items {
+                            sku
+                        }
+                    }
+                }
+            `;
+            for (const channel of [ctx.channel, a]) {
+                adminClient.setChannelToken(channel.token);
+                const result = await adminClient.query(operationsQuery);
+                expect(
+                    result.catalogProductChannelAssignments.items.some(
+                        (item: { name: string }) => item.name === 'A 店商品',
+                    ),
+                ).toBe(channel === a);
+                expect(
+                    result.catalogExportRows.items.some(
+                        (item: { sku: string }) => item.sku === 'STORE-A-001',
+                    ),
+                ).toBe(channel === a);
             }
         } finally {
             adminClient.setChannelToken(ctx.channel.token);
@@ -363,9 +401,10 @@ describe('catalog import persisted type, hierarchy and rollback', () => {
         const variants = server.app.get(ProductVariantService);
         const credentials = config.authOptions.superadminCredentials;
         if (!credentials) throw new Error('Missing test administrator configuration');
-        const user = await connection.rawConnection
-            .getRepository(User)
-            .findOneOrFail({ where: { identifier: credentials.identifier } });
+        const user = await connection.rawConnection.getRepository(User).findOneOrFail({
+            where: { identifier: credentials.identifier },
+            relations: { roles: { channels: true } },
+        });
         const aCtx = await server.app.get(RequestContextService).create({
             apiType: 'admin',
             user,
@@ -438,7 +477,7 @@ describe('catalog import persisted type, hierarchy and rollback', () => {
             await reindex(ctx);
             await shop(false);
             await adminClient.asSuperAdmin();
-            const aggregate = await adminClient.query(
+            const defaultStore = await adminClient.query(
                 gql`
                     query ($id: ID!) {
                         product(id: $id) {
@@ -457,11 +496,7 @@ describe('catalog import persisted type, hierarchy and rollback', () => {
                 `,
                 { id: `T_${product.id}` },
             );
-            expect(aggregate.product.id).toBe(`T_${product.id}`);
-            expect(aggregate.product.channels.map((channel: { id: string }) => channel.id)).toEqual([
-                `T_${aCtx.channelId}`,
-            ]);
-            expect(aggregate.product.variants).toHaveLength(1);
+            expect(defaultStore.product).toBeNull();
             await products.assignProductsToChannel(aCtx, {
                 productIds: [product.id],
                 channelId: ctx.channelId,
