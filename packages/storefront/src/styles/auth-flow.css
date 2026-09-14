@@ -1210,7 +1210,6 @@
     }
 }
 
-
 /* ==========================================================================
    Unified Auth Layout & Theme Rules (Consolidated from legacy overrides)
    ========================================================================== */
@@ -2202,9 +2201,87 @@
     background: var(--auth-hero-overlay-color);
 }
 
-/* Mobile authentication flow approved in the interactive design review. */
+/* Sign-in and registration share one compact form hierarchy. */
 .auth-route-tabs {
-    display: none;
+    min-height: 52px;
+    margin-bottom: 22px;
+    padding: 4px;
+    border: 1px solid #e2e9f3;
+    border-radius: 14px;
+    background: #f3f6fa;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.auth-route-tabs > button {
+    min-height: 42px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #667085;
+    font-size: 14px;
+    font-weight: var(--font-weight-semibold);
+    transition:
+        background 160ms ease,
+        color 160ms ease,
+        box-shadow 160ms ease;
+}
+
+.auth-route-tabs > button[aria-current='page'] {
+    background: #ffffff;
+    color: var(--auth-ink);
+    box-shadow: 0 3px 12px rgb(15 32 61 / 10%);
+}
+
+.auth-route-tabs > button:focus-visible {
+    outline: 2px solid rgb(23 105 232 / 35%);
+    outline-offset: 2px;
+}
+
+.auth-account-form {
+    margin-top: 0;
+    display: grid;
+    gap: 14px;
+}
+
+.auth-account-form .auth-field,
+.auth-page-register .login-content .auth-account-form .auth-field {
+    margin-bottom: 0;
+}
+
+.auth-account-form .auth-input-shell {
+    min-height: 52px;
+}
+
+.auth-account-form input {
+    min-height: 50px;
+}
+
+.auth-field-action-row {
+    min-height: 30px;
+    margin-top: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.auth-field-action-row .auth-inline-link {
+    min-height: 30px;
+    margin: 0;
+}
+
+.auth-account-form .auth-password-hint {
+    margin: -3px 2px 1px;
+}
+
+.auth-account-form .wide-action {
+    margin-top: 2px;
+}
+
+.auth-page-register .auth-account-form {
+    gap: 12px;
 }
 
 .auth-page .auth-hero-header {
@@ -2255,42 +2332,7 @@
     }
 
     .auth-route-tabs {
-        min-height: 54px;
-        margin-bottom: 24px;
-        padding: 4px;
-        border: 1px solid #e2e9f3;
-        border-radius: 14px;
-        background: #f3f6fa;
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 4px;
-    }
-
-    .auth-route-tabs > button {
-        min-height: 44px;
-        padding: 0 14px;
-        border: 0;
-        border-radius: 10px;
-        background: transparent;
-        color: #667085;
-        font-size: 14px;
-        font-weight: var(--font-weight-semibold);
-    }
-
-    .auth-route-tabs > button[aria-current='page'] {
-        background: #ffffff;
-        color: var(--auth-ink);
-        box-shadow: 0 3px 12px rgb(15 32 61 / 10%);
-    }
-
-    .auth-route-tabs > button:focus-visible {
-        outline: 2px solid rgb(23 105 232 / 35%);
-        outline-offset: 2px;
-    }
-
-    .auth-page-login .auth-switch,
-    .auth-page-register .auth-switch {
-        display: none;
+        margin-bottom: 20px;
     }
 }
 

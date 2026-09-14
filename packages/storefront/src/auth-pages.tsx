@@ -209,16 +209,18 @@ export function LoginPage({
                 onLogin={() => navigateTo({ name: 'login' })}
                 onRegister={() => navigateTo({ name: 'register' })}
             />
-            <header className={`auth-form-heading auth-form-heading-${language}`}>
-                <h1>{isZh ? '欢迎回来' : 'Welcome back'}</h1>
-                <p>{isZh ? '登录后管理你的账户与订单' : 'Sign in to manage your account and orders'}</p>
-            </header>
-            <form aria-label={isZh ? '登录表单' : 'Sign-in form'} onSubmit={event => void submit(event)}>
+            <h1 className="visually-hidden">{isZh ? '登录' : 'Sign in'}</h1>
+            <form
+                className="auth-account-form"
+                aria-label={isZh ? '登录表单' : 'Sign-in form'}
+                onSubmit={event => void submit(event)}
+            >
                 <Field
                     name="emailAddress"
                     label={isZh ? '电子邮箱' : 'Email address'}
                     type="email"
                     autoComplete="email"
+                    showLabel={false}
                 />
                 <Field
                     name="password"
@@ -227,6 +229,7 @@ export function LoginPage({
                     autoComplete="current-password"
                     revealPassword
                     language={language}
+                    showLabel={false}
                     labelAction={
                         <button
                             className="auth-inline-link"
@@ -248,11 +251,6 @@ export function LoginPage({
                     busy={isZh ? '登录中' : 'Signing in'}
                 />
             </form>
-            <AuthSwitch
-                prompt={isZh ? '还没有账户？' : 'New here?'}
-                action={isZh ? '注册账户' : 'Create account'}
-                onClick={() => navigateTo({ name: 'register' })}
-            />
             <AuthLegalNotice content={legalContent} language={language} onContentTarget={onContentTarget} />
         </AuthLayout>
     );
@@ -458,24 +456,24 @@ export function RegisterPage({
                         onLogin={() => navigateTo({ name: 'login' })}
                         onRegister={() => navigateTo({ name: 'register' })}
                     />
-                    <header className={`auth-form-heading auth-form-heading-${language}`}>
-                        <h1>{isZh ? '创建账户' : 'Create your account'}</h1>
-                        <p>
-                            {isZh
-                                ? '验证邮箱后，即可统一管理收藏与订单'
-                                : 'Verify your email to manage favorites and orders'}
-                        </p>
-                    </header>
+                    <h1 className="visually-hidden">{isZh ? '注册' : 'Register'}</h1>
                     <form
+                        className="auth-account-form"
                         aria-label={isZh ? '注册表单' : 'Registration form'}
                         onSubmit={event => void submit(event)}
                     >
-                        <Field name="fullName" label={isZh ? '姓名' : 'Full name'} autoComplete="name" />
+                        <Field
+                            name="fullName"
+                            label={isZh ? '姓名' : 'Full name'}
+                            autoComplete="name"
+                            showLabel={false}
+                        />
                         <Field
                             name="emailAddress"
                             label={isZh ? '电子邮箱' : 'Email address'}
                             type="email"
                             autoComplete="email"
+                            showLabel={false}
                         />
                         <Field
                             name="password"
@@ -486,6 +484,7 @@ export function RegisterPage({
                             maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
                             revealPassword
                             language={language}
+                            showLabel={false}
                         />
                         <Field
                             name="confirmPassword"
@@ -496,6 +495,7 @@ export function RegisterPage({
                             maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
                             revealPassword
                             language={language}
+                            showLabel={false}
                         />
                         <small className="auth-password-hint">
                             {isZh
@@ -510,6 +510,7 @@ export function RegisterPage({
                                     autoComplete="off"
                                     maxLength={12}
                                     required={false}
+                                    showLabel={false}
                                     value={inviteCode}
                                     onChange={value => {
                                         setInviteCode(normalizeReferralCode(value));
@@ -562,11 +563,6 @@ export function RegisterPage({
                             busy={isZh ? '注册中' : 'Creating account'}
                         />
                     </form>
-                    <AuthSwitch
-                        prompt={isZh ? '已有账户？' : 'Already have an account?'}
-                        action={isZh ? '去登录' : 'Sign in'}
-                        onClick={() => navigateTo({ name: 'login' })}
-                    />
                     <AuthLegalNotice
                         content={legalContent}
                         language={language}
@@ -1187,6 +1183,7 @@ function Field({
     maxLength,
     icon,
     labelAction,
+    showLabel = true,
     revealPassword = false,
     language = 'en',
     wide = true,
@@ -1203,6 +1200,7 @@ function Field({
     maxLength?: number;
     icon?: ReactNode;
     labelAction?: ReactNode;
+    showLabel?: boolean;
     revealPassword?: boolean;
     language?: StorefrontLanguage;
     wide?: boolean;
@@ -1239,13 +1237,21 @@ function Field({
     );
 
     return (
-        <div className={`auth-field${wide ? ' field-wide' : ''}`}>
-            <div className="auth-field-label-row">
-                <label className="auth-field-label" htmlFor={inputId}>
+        <div
+            className={`auth-field${wide ? ' field-wide' : ''}${showLabel ? '' : ' auth-field-placeholder-only'}`}
+        >
+            {showLabel ? (
+                <div className="auth-field-label-row">
+                    <label className="auth-field-label" htmlFor={inputId}>
+                        {label}
+                    </label>
+                    {labelAction}
+                </div>
+            ) : (
+                <label className="visually-hidden" htmlFor={inputId}>
                     {label}
                 </label>
-                {labelAction}
-            </div>
+            )}
             <div className={`auth-input-shell${hasPasswordToggle ? ' auth-password-input' : ''}`}>
                 {icon && (
                     <span className="auth-field-icon" aria-hidden="true">
@@ -1269,6 +1275,7 @@ function Field({
                     input
                 )}
             </div>
+            {!showLabel && labelAction ? <div className="auth-field-action-row">{labelAction}</div> : null}
         </div>
     );
 }
@@ -1327,17 +1334,6 @@ function AuthRouteTabs({
                 {isZh ? '注册' : 'Register'}
             </button>
         </nav>
-    );
-}
-
-function AuthSwitch({ prompt, action, onClick }: { prompt: string; action: string; onClick: () => void }) {
-    return (
-        <div className="auth-switch">
-            <span>{prompt}</span>
-            <button type="button" onClick={onClick}>
-                {action}
-            </button>
-        </div>
     );
 }
 
