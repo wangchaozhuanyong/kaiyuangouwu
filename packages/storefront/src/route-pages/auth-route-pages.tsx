@@ -57,6 +57,7 @@ export function LoginRoutePage() {
                 storefrontName={runtime.storefrontName}
                 legalContent={runtime.legalContent}
                 authVisualContent={findAuthVisualContent(runtime.contentBlocks, 'login')}
+                authSettings={runtime.authSettings}
                 onBack={runtime.goBack}
                 onSuccess={runtime.completeAuthentication}
                 onContentTarget={runtime.openContentTarget}
@@ -78,7 +79,9 @@ export function RegisterRoutePage() {
                 storefrontName={runtime.storefrontName}
                 legalContent={runtime.legalContent}
                 authVisualContent={findAuthVisualContent(runtime.contentBlocks, 'register')}
+                authSettings={runtime.authSettings}
                 onBack={runtime.goBack}
+                onSuccess={runtime.completeAuthentication}
                 onContentTarget={runtime.openContentTarget}
             />
         </AuthRouteBoundary>

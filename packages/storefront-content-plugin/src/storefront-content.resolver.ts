@@ -2,6 +2,7 @@ import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, ForbiddenError, ID, Permission, RequestContext, Transaction } from '@vendure/core';
 
 import { storefrontContentPermission } from './constants';
+import { StorefrontAuthSettingsService, UpdateStorefrontAuthSettingsInput } from './storefront-auth-settings';
 import { StorefrontContentService } from './storefront-content.service';
 import {
     ApplyStorefrontContentChangesInput,
@@ -12,7 +13,10 @@ import {
 
 @Resolver()
 export class StorefrontContentShopResolver {
-    constructor(private readonly storefrontContentService: StorefrontContentService) {}
+    constructor(
+        private readonly storefrontContentService: StorefrontContentService,
+        private readonly storefrontAuthSettingsService: StorefrontAuthSettingsService,
+    ) {}
 
     @Query()
     @Allow(Permission.Public)
@@ -22,14 +26,21 @@ export class StorefrontContentShopResolver {
 
     @Query()
     @Allow(Permission.Public)
-    storefrontContentSettings(@Ctx() ctx: RequestContext) {
-        return this.storefrontContentService.getSettings(ctx);
+    async storefrontContentSettings(@Ctx() ctx: RequestContext) {
+        const [settings, auth] = await Promise.all([
+            this.storefrontContentService.getSettings(ctx),
+            this.storefrontAuthSettingsService.get(ctx),
+        ]);
+        return { ...settings, auth };
     }
 }
 
 @Resolver()
 export class StorefrontContentAdminResolver {
-    constructor(private readonly storefrontContentService: StorefrontContentService) {}
+    constructor(
+        private readonly storefrontContentService: StorefrontContentService,
+        private readonly storefrontAuthSettingsService: StorefrontAuthSettingsService,
+    ) {}
 
     @Query()
     @Allow(storefrontContentPermission.Read)
@@ -45,8 +56,12 @@ export class StorefrontContentAdminResolver {
 
     @Query()
     @Allow(storefrontContentPermission.Read)
-    storefrontContentSettings(@Ctx() ctx: RequestContext) {
-        return this.storefrontContentService.getSettings(ctx);
+    async storefrontContentSettings(@Ctx() ctx: RequestContext) {
+        const [settings, auth] = await Promise.all([
+            this.storefrontContentService.getSettings(ctx),
+            this.storefrontAuthSettingsService.get(ctx),
+        ]);
+        return { ...settings, auth };
     }
 
     @Transaction()
@@ -106,5 +121,15 @@ export class StorefrontContentAdminResolver {
         @Args('input') input: UpdateStorefrontContentSettingsInput,
     ) {
         return this.storefrontContentService.updateSettings(ctx, input);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(storefrontContentPermission.Update)
+    updateStorefrontAuthSettings(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: UpdateStorefrontAuthSettingsInput,
+    ) {
+        return this.storefrontAuthSettingsService.update(ctx, input);
     }
 }

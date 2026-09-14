@@ -90,6 +90,7 @@ import {
     orderConfirmationRecipient,
 } from './order-confirmation-email';
 import { resolveRuntimeAdminCredentials } from './runtime-admin-credentials';
+import { StorefrontGoogleAuthenticationStrategy } from './storefront-google-authentication-strategy';
 import { StorefrontNativeAuthenticationStrategy } from './storefront-native-authentication-strategy';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -586,7 +587,10 @@ export const devConfig: VendureConfig = {
         tokenMethod: ['bearer', 'cookie', 'api-key'] as const,
         requireVerification: true,
         verificationTokenDuration: ACCOUNT_TOKEN_DURATION,
-        shopAuthenticationStrategy: [new StorefrontNativeAuthenticationStrategy()],
+        shopAuthenticationStrategy: [
+            new StorefrontNativeAuthenticationStrategy(),
+            new StorefrontGoogleAuthenticationStrategy(),
+        ],
         passwordValidationStrategy: new DefaultPasswordValidationStrategy({ minLength: 8, maxLength: 72 }),
         customPermissions: [],
         superadminCredentials: {

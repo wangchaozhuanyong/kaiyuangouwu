@@ -12,6 +12,14 @@ const market: MarketConfig = {
     label: '中国大陆',
 };
 
+const defaultAuthSettings = {
+    emailPasswordEnabled: true,
+    emailAutoRegistrationEnabled: false,
+    emailQuickRegistrationEnabled: false,
+    googleEnabled: false,
+    googleClientId: null,
+};
+
 function mockGraphQlResponse(data: Record<string, unknown>) {
     const fetchMock = vi.fn().mockResolvedValue(
         new Response(JSON.stringify({ data }), {
@@ -419,6 +427,22 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('... on InvalidCredentialsError { authenticationError }');
     });
 
+    it('authenticates a Google credential through the configured strategy', async () => {
+        const fetchMock = mockGraphQlResponse({
+            authenticate: { __typename: 'CurrentUser', id: 'user-1', identifier: 'buyer@gmail.com' },
+        });
+
+        await expect(new ShopApi(market).authenticateWithGoogle('signed-google-id-token')).resolves.toBe(
+            undefined,
+        );
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.query).toContain('authenticate(input: { google: { credential: $credential } }');
+        expect(request.variables).toEqual({ credential: 'signed-google-id-token' });
+    });
+
     it('limits the initial storefront product request to 12 items', async () => {
         const fetchMock = mockGraphQlResponse({ products: { items: [] } });
 
@@ -460,7 +484,11 @@ describe('ShopApi storefront mutations', () => {
             blocks: [],
             flashSales: [],
             systemAnnouncements: [],
-            settings: { heroAutoplayIntervalSeconds: 8, configuredBlockTypes: [] },
+            settings: {
+                heroAutoplayIntervalSeconds: 8,
+                configuredBlockTypes: [],
+                auth: defaultAuthSettings,
+            },
         });
 
         expect(fetchMock).toHaveBeenCalledWith(
@@ -743,7 +771,11 @@ describe('ShopApi storefront mutations', () => {
             blocks: [],
             flashSales: [],
             systemAnnouncements: [],
-            settings: { heroAutoplayIntervalSeconds: 5, configuredBlockTypes: [] },
+            settings: {
+                heroAutoplayIntervalSeconds: 5,
+                configuredBlockTypes: [],
+                auth: defaultAuthSettings,
+            },
         });
     });
 
@@ -779,7 +811,11 @@ describe('ShopApi storefront mutations', () => {
             blocks: [],
             flashSales: [],
             systemAnnouncements: [],
-            settings: { heroAutoplayIntervalSeconds: 7, configuredBlockTypes: [] },
+            settings: {
+                heroAutoplayIntervalSeconds: 7,
+                configuredBlockTypes: [],
+                auth: defaultAuthSettings,
+            },
         });
 
         expect(fetchMock).toHaveBeenCalledTimes(2);

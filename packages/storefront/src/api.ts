@@ -257,6 +257,10 @@ export class ShopApi {
         this.publishCookieAuthenticationChange();
     }
 
+    async authenticateWithGoogle(credential: string): Promise<void> {
+        return this.accountApi.authenticateWithGoogle(credential);
+    }
+
     async referralProgram(signal?: AbortSignal): Promise<ReferralProgram> {
         return this.referralsApi.referralProgram(signal);
     }

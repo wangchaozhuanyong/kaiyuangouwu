@@ -409,9 +409,9 @@ export interface CustomerAddressUpdateInput extends CustomerAddressInput {
 
 export interface RegisterCustomerInput {
     emailAddress: string;
-    firstName: string;
-    lastName: string;
-    password: string;
+    firstName?: string;
+    lastName?: string;
+    password?: string;
 }
 
 export interface ReferralProgram {
@@ -780,6 +780,15 @@ export interface StorefrontContentBlock {
 export interface StorefrontContentSettings {
     heroAutoplayIntervalSeconds: number;
     configuredBlockTypes?: StorefrontContentBlockType[];
+    auth: StorefrontAuthSettings;
+}
+
+export interface StorefrontAuthSettings {
+    emailPasswordEnabled: boolean;
+    emailAutoRegistrationEnabled: boolean;
+    emailQuickRegistrationEnabled: boolean;
+    googleEnabled: boolean;
+    googleClientId: string | null;
 }
 
 export type StorefrontCouponCampaignKind =

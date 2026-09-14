@@ -214,6 +214,66 @@ describe('auth password visibility controls', () => {
         expect(registerMarkup).toContain('placeholder="Full name"');
     });
 
+    it('renders the email-only quick registration form when enabled by the store', () => {
+        const markup = renderToStaticMarkup(
+            createElement(RegisterPage, {
+                ...authPageProps,
+                authSettings: {
+                    emailPasswordEnabled: true,
+                    emailAutoRegistrationEnabled: false,
+                    emailQuickRegistrationEnabled: true,
+                    googleEnabled: false,
+                    googleClientId: null,
+                },
+            }),
+        );
+
+        expect(markup).toContain('使用邮箱快捷注册');
+        expect(markup).toContain('name="emailAddress"');
+        expect(markup).not.toContain('name="fullName"');
+        expect(markup).not.toContain('name="password"');
+        expect(markup).not.toContain('name="confirmPassword"');
+    });
+
+    it('shows Google as the only method when email registration is disabled', () => {
+        const markup = renderToStaticMarkup(
+            createElement(RegisterPage, {
+                ...authPageProps,
+                authSettings: {
+                    emailPasswordEnabled: false,
+                    emailAutoRegistrationEnabled: false,
+                    emailQuickRegistrationEnabled: false,
+                    googleEnabled: true,
+                    googleClientId: '123456789-test.apps.googleusercontent.com',
+                },
+            }),
+        );
+
+        expect(markup).toContain('class="google-auth-button"');
+        expect(markup).not.toContain('class="auth-account-form"');
+        expect(markup).not.toContain('当前店铺暂未开启注册方式');
+    });
+
+    it('shows a clear message when all login methods are disabled', () => {
+        const markup = renderToStaticMarkup(
+            createElement(LoginPage, {
+                ...authPageProps,
+                onSuccess: vi.fn().mockResolvedValue(undefined),
+                authSettings: {
+                    emailPasswordEnabled: false,
+                    emailAutoRegistrationEnabled: false,
+                    emailQuickRegistrationEnabled: false,
+                    googleEnabled: false,
+                    googleClientId: null,
+                },
+            }),
+        );
+
+        expect(markup).toContain('当前店铺暂未开启登录方式');
+        expect(markup).not.toContain('class="auth-account-form"');
+        expect(markup).not.toContain('class="google-auth-button"');
+    });
+
     it('renders the managed image, copy and theme when the dashboard has published a login visual', () => {
         const markup = renderToStaticMarkup(
             createElement(LoginPage, {

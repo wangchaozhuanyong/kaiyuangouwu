@@ -113,6 +113,13 @@ export function useStorefrontPublicData({
     );
 
     const configuredBlockTypes = contentQuery.data?.settings?.configuredBlockTypes ?? [];
+    const authSettings = contentQuery.data?.settings.auth ?? {
+        emailPasswordEnabled: true,
+        emailAutoRegistrationEnabled: false,
+        emailQuickRegistrationEnabled: false,
+        googleEnabled: false,
+        googleClientId: null,
+    };
 
     const criticalPublicQueries = [productsQuery, collectionsQuery, configQuery, contentQuery];
 
@@ -176,6 +183,7 @@ export function useStorefrontPublicData({
         activeFlashSaleItems,
         heroAutoplayIntervalSeconds,
         configuredBlockTypes,
+        authSettings,
         loading,
         error,
         publicLoadState,

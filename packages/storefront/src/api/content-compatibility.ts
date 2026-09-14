@@ -4,6 +4,7 @@ const fallbackFields = {
     content: new Set([
         'Query.activeStorefrontFlashSales',
         'Query.activeSystemAnnouncements',
+        'StorefrontContentSettings.auth',
         'StorefrontContentSettings.configuredBlockTypes',
         'StorefrontContentBlock.internalName',
         'StorefrontContentBlock.layoutVariant',

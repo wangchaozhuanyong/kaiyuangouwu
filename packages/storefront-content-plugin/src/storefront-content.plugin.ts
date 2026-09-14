@@ -1,5 +1,5 @@
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
-import { PluginCommonModule, VendurePlugin } from '@vendure/core';
+import { PluginCommonModule, SettingsStoreScopes, VendurePlugin } from '@vendure/core';
 
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 import { storefrontContentPermission } from './constants';
@@ -8,6 +8,12 @@ import { StorefrontContentBlock } from './entities/storefront-content-block.enti
 import { StorefrontContentItemTranslation } from './entities/storefront-content-item-translation.entity';
 import { StorefrontContentItem } from './entities/storefront-content-item.entity';
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
+import {
+    isGoogleWebClientId,
+    normalizeGoogleClientId,
+    STOREFRONT_AUTH_SETTINGS_NAMESPACE,
+    StorefrontAuthSettingsService,
+} from './storefront-auth-settings';
 import { StorefrontContentAdminResolver, StorefrontContentShopResolver } from './storefront-content.resolver';
 import { StorefrontContentService } from './storefront-content.service';
 import { StorefrontExternalImageService } from './storefront-external-image.service';
@@ -26,9 +32,47 @@ import { StorefrontVisualPresetService } from './storefront-visual-preset.servic
         StorefrontContentItemTranslation,
         StorefrontContentSettings,
     ],
-    providers: [StorefrontContentService, StorefrontExternalImageService, StorefrontVisualPresetService],
+    providers: [
+        StorefrontContentService,
+        StorefrontExternalImageService,
+        StorefrontVisualPresetService,
+        StorefrontAuthSettingsService,
+    ],
     configuration: config => {
         config.authOptions.customPermissions.push(storefrontContentPermission);
+        config.settingsStoreFields ??= {};
+        config.settingsStoreFields[STOREFRONT_AUTH_SETTINGS_NAMESPACE] = [
+            ...(config.settingsStoreFields[STOREFRONT_AUTH_SETTINGS_NAMESPACE] ?? []),
+            ...[
+                'emailPasswordEnabled',
+                'emailAutoRegistrationEnabled',
+                'emailQuickRegistrationEnabled',
+                'googleEnabled',
+            ].map(name => ({
+                name,
+                scope: SettingsStoreScopes.channel,
+                requiresPermission: {
+                    read: storefrontContentPermission.Read,
+                    write: storefrontContentPermission.Update,
+                },
+                validate: (value: unknown) =>
+                    typeof value === 'boolean' ? undefined : 'Value must be a boolean',
+            })),
+            {
+                name: 'googleClientId',
+                scope: SettingsStoreScopes.channel,
+                requiresPermission: {
+                    read: storefrontContentPermission.Read,
+                    write: storefrontContentPermission.Update,
+                },
+                validate: (value: unknown) => {
+                    const clientId = normalizeGoogleClientId(value);
+                    return !clientId || isGoogleWebClientId(clientId)
+                        ? undefined
+                        : 'Value must be a Google OAuth web client ID';
+                },
+            },
+        ];
         return config;
     },
     adminApiExtensions: {

@@ -78,6 +78,13 @@ export const STOREFRONT_CONTENT_QUERY = gql`
         storefrontContentSettings {
             heroAutoplayIntervalSeconds
             configuredBlockTypes
+            auth {
+                emailPasswordEnabled
+                emailAutoRegistrationEnabled
+                emailQuickRegistrationEnabled
+                googleEnabled
+                googleClientId
+            }
         }
         storefrontContentBlocks {
             ...NextAdminStorefrontBlockFields
@@ -127,6 +134,18 @@ export const UPDATE_STOREFRONT_SETTINGS_MUTATION = gql`
         updateStorefrontContentSettings(input: $input) {
             heroAutoplayIntervalSeconds
             configuredBlockTypes
+        }
+    }
+`;
+
+export const UPDATE_STOREFRONT_AUTH_SETTINGS_MUTATION = gql`
+    mutation NextAdminUpdateStorefrontAuthSettings($input: UpdateStorefrontAuthSettingsInput!) {
+        updateStorefrontAuthSettings(input: $input) {
+            emailPasswordEnabled
+            emailAutoRegistrationEnabled
+            emailQuickRegistrationEnabled
+            googleEnabled
+            googleClientId
         }
     }
 `;
@@ -385,8 +404,17 @@ export interface StorefrontContentResult {
     storefrontContentSettings: {
         heroAutoplayIntervalSeconds: number;
         configuredBlockTypes: StorefrontBlockType[];
+        auth: StorefrontAuthSettingsRecord;
     };
     storefrontContentBlocks: StorefrontContentBlock[];
+}
+
+export interface StorefrontAuthSettingsRecord {
+    emailPasswordEnabled: boolean;
+    emailAutoRegistrationEnabled: boolean;
+    emailQuickRegistrationEnabled: boolean;
+    googleEnabled: boolean;
+    googleClientId: string | null;
 }
 
 export interface SystemAnnouncementRecord {

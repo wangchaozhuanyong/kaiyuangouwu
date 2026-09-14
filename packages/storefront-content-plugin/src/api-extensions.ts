@@ -98,6 +98,15 @@ const commonTypes = gql`
     type StorefrontContentSettings {
         heroAutoplayIntervalSeconds: Int!
         configuredBlockTypes: [StorefrontContentBlockType!]!
+        auth: StorefrontAuthSettings!
+    }
+
+    type StorefrontAuthSettings {
+        emailPasswordEnabled: Boolean!
+        emailAutoRegistrationEnabled: Boolean!
+        emailQuickRegistrationEnabled: Boolean!
+        googleEnabled: Boolean!
+        googleClientId: String
     }
 `;
 
@@ -218,6 +227,14 @@ export const adminApiExtensions = gql`
         heroAutoplayIntervalSeconds: Int!
     }
 
+    input UpdateStorefrontAuthSettingsInput {
+        emailPasswordEnabled: Boolean!
+        emailAutoRegistrationEnabled: Boolean!
+        emailQuickRegistrationEnabled: Boolean!
+        googleEnabled: Boolean!
+        googleClientId: String
+    }
+
     input StorefrontContentBlockVersionInput {
         id: ID!
         expectedUpdatedAt: DateTime!
@@ -254,5 +271,6 @@ export const adminApiExtensions = gql`
         updateStorefrontContentSettings(
             input: UpdateStorefrontContentSettingsInput!
         ): StorefrontContentSettings!
+        updateStorefrontAuthSettings(input: UpdateStorefrontAuthSettingsInput!): StorefrontAuthSettings!
     }
 `;

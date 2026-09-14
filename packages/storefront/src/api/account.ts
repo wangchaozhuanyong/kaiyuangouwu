@@ -251,6 +251,23 @@ export class AccountApi extends BaseDomainApi {
         this.assertNoError(result.login);
     }
 
+    async authenticateWithGoogle(credential: string): Promise<void> {
+        const result = await this.request<{ authenticate: ErrorResult }>(
+            `
+                mutation StorefrontGoogleAuthenticate($credential: String!) {
+                    authenticate(input: { google: { credential: $credential } }, rememberMe: true) {
+                        __typename
+                        ... on CurrentUser { id identifier }
+                        ... on ErrorResult { errorCode message }
+                        ... on InvalidCredentialsError { authenticationError }
+                    }
+                }
+            `,
+            { credential },
+        );
+        this.assertNoError(result.authenticate);
+    }
+
     async refreshCustomerVerification(emailAddress: string): Promise<void> {
         const result = await this.request<{ refreshCustomerVerification: ErrorResult }>(
             `
