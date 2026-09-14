@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     Channel,
     ChannelService,
     PaymentMethod,
+    PaymentMethodService,
     RequestContext,
+    RequestContextService,
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
@@ -15,6 +18,7 @@ import { StoreUsdtWallet } from '../entities/store-usdt-wallet.entity';
 import {
     USDT_TRC20_CONTRACT_ADDRESS,
     USDT_TRC20_NETWORK,
+    USDT_TRC20_PAYMENT_HANDLER_CODE,
     USDT_TRC20_PAYMENT_METHOD_CODE,
 } from './usdt-payment.constants';
 import {
@@ -53,6 +57,8 @@ export class StoreUsdtWalletService {
         private readonly connection: TransactionalConnection,
         private readonly encryption: UsdtWalletConfigurationService,
         private readonly channelService: ChannelService,
+        private readonly paymentMethodService: PaymentMethodService,
+        private readonly requestContextService: RequestContextService,
     ) {}
 
     async configurationForChannel(
@@ -356,11 +362,68 @@ export class StoreUsdtWalletService {
     }
 
     private async assignPaymentMethodToChannel(ctx: RequestContext, channelId: ID): Promise<void> {
-        const paymentMethod = await this.connection.rawConnection.getRepository(PaymentMethod).findOne({
-            where: { code: USDT_TRC20_PAYMENT_METHOD_CODE },
+        const repository = this.connection.rawConnection.getRepository(PaymentMethod);
+        const assigned = await repository.find({
+            where: { code: USDT_TRC20_PAYMENT_METHOD_CODE, channels: { id: channelId } },
+            relations: { channels: true },
         });
-        if (!paymentMethod) throw new Error('USDT payment method is missing');
-        await this.channelService.assignToChannels(ctx, PaymentMethod, paymentMethod.id, [channelId]);
+        const exclusive = assigned.find(method => method.channels.length === 1);
+        if (exclusive) {
+            if (!exclusive.enabled) {
+                exclusive.enabled = true;
+                await repository.save(exclusive, { reload: false });
+            }
+            return;
+        }
+        const channel = await this.connection.getEntityOrThrow(ctx, Channel, channelId);
+        const channelCtx = await this.requestContextService.create({
+            apiType: 'admin',
+            channelOrToken: channel,
+        });
+        const source = assigned[0];
+        const created = await this.paymentMethodService.create(
+            channelCtx,
+            source
+                ? {
+                      code: source.code,
+                      enabled: true,
+                      ...(source.checker ? { checker: walletPaymentOperationInput(source.checker) } : {}),
+                      handler: walletPaymentOperationInput(source.handler),
+                      translations: source.translations.map(translation => ({
+                          languageCode: translation.languageCode,
+                          name: translation.name,
+                          description: translation.description,
+                          customFields: translation.customFields,
+                      })),
+                      customFields: source.customFields,
+                  }
+                : {
+                      code: USDT_TRC20_PAYMENT_METHOD_CODE,
+                      enabled: true,
+                      handler: { code: USDT_TRC20_PAYMENT_HANDLER_CODE, arguments: [] },
+                      translations: [
+                          {
+                              languageCode: LanguageCode.zh_Hans,
+                              name: 'USDT-TRC20 链上支付',
+                              description: '系统确认链上固化到账后自动更新订单为待发货',
+                          },
+                          {
+                              languageCode: LanguageCode.en,
+                              name: 'USDT-TRC20 on-chain payment',
+                              description: 'The order is paid after the transfer is solidified on TRON',
+                          },
+                      ],
+                  },
+        );
+        const defaultChannel = await this.channelService.getDefaultChannel(ctx);
+        if (String(defaultChannel.id) !== String(channel.id)) {
+            await this.channelService.removeFromChannels(channelCtx, PaymentMethod, created.id, [
+                defaultChannel.id,
+            ]);
+        }
+        for (const previous of assigned) {
+            await this.channelService.removeFromChannels(ctx, PaymentMethod, previous.id, [channel.id]);
+        }
     }
 
     private async findWalletForUpdate(ctx: RequestContext, channelId: ID): Promise<StoreUsdtWallet | null> {
@@ -396,6 +459,13 @@ export class StoreUsdtWalletService {
             { reload: false },
         );
     }
+}
+
+function walletPaymentOperationInput(operation: {
+    code: string;
+    args: Array<{ name: string; value: string }>;
+}) {
+    return { code: operation.code, arguments: operation.args.map(argument => ({ ...argument })) };
 }
 
 function unconfiguredWallet(): UsdtWalletConfiguration {

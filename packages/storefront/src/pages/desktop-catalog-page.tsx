@@ -112,7 +112,10 @@ export function DesktopCatalogPage() {
         : activeChild?.name || activeCollection?.name || runtime.storefrontTagline || runtime.storefrontName;
 
     return (
-        <main className="desktop-catalog-main">
+        <main
+            className="desktop-catalog-main"
+            data-page-pending={query.isPending && !error ? 'query' : undefined}
+        >
             <h1 className="visually-hidden">{title}</h1>
             <DesktopCategoryNavigation showCollections={false} />
             <div className="desktop-catalog-toolbar">

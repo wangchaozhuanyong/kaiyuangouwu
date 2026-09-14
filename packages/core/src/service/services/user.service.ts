@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { VerifyCustomerAccountResult } from '@vendure/common/lib/generated-shop-types';
 import { ID } from '@vendure/common/lib/shared-types';
+import { SelectQueryBuilder } from 'typeorm';
 
 import { RequestContext } from '../../api/common/request-context';
 import { ErrorResultUnion, isGraphQlErrorResult } from '../../common/error/error-result';
@@ -24,6 +25,7 @@ import { ConfigService } from '../../config/config.service';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { Role } from '../../entity';
 import { NativeAuthenticationMethod } from '../../entity/authentication-method/native-authentication-method.entity';
+import { Customer } from '../../entity/customer/customer.entity';
 import { User } from '../../entity/user/user.entity';
 import { PasswordCipher } from '../helpers/password-cipher/password-cipher';
 import { VerificationTokenGenerator } from '../helpers/verification-token-generator/verification-token-generator';
@@ -69,16 +71,25 @@ export class UserService {
         userType?: 'administrator' | 'customer',
     ): Promise<User | undefined> {
         const entity = userType ?? (ctx.apiType === 'admin' ? 'administrator' : 'customer');
-        const table = `${this.configService.dbConnectionOptions.entityPrefix ?? ''}${entity}`;
 
         const qb = this.connection
             .getRepository(ctx, User)
             .createQueryBuilder('user')
-            .innerJoin(table, table, `${table}.userId = user.id`)
             .leftJoinAndSelect('user.roles', 'roles')
             .leftJoinAndSelect('roles.channels', 'channels')
             .leftJoinAndSelect('user.authenticationMethods', 'authenticationMethods')
             .where('user.deletedAt IS NULL');
+
+        if (entity === 'customer') {
+            qb.innerJoin(Customer, 'customer', 'customer.userId = user.id')
+                .innerJoin('customer.channels', 'customerChannel')
+                .andWhere('customerChannel.id = :customerChannelId', {
+                    customerChannelId: ctx.channelId,
+                });
+        } else {
+            const table = `${this.configService.dbConnectionOptions.entityPrefix ?? ''}administrator`;
+            qb.innerJoin(table, table, `${table}.userId = user.id`);
+        }
 
         if (isEmailAddressLike(emailAddress)) {
             qb.andWhere('LOWER(user.identifier) = :identifier', {
@@ -232,14 +243,14 @@ export class UserService {
         verificationToken: string,
         password?: string,
     ): Promise<ErrorResultUnion<VerifyCustomerAccountResult, User>> {
-        const user = await this.connection
+        const query = this.connection
             .getRepository(ctx, User)
             .createQueryBuilder('user')
             .leftJoinAndSelect('user.authenticationMethods', 'aums')
             .leftJoin('user.authenticationMethods', 'authenticationMethod')
             .addSelect('aums.passwordHash')
-            .where('authenticationMethod.verificationToken = :verificationToken', { verificationToken })
-            .getOne();
+            .where('authenticationMethod.verificationToken = :verificationToken', { verificationToken });
+        const user = await this.scopeShopCustomerQuery(ctx, query).getOne();
         if (user) {
             const isTokenValid = await this.verificationTokenGenerator.verifyVerificationToken(
                 ctx,
@@ -307,13 +318,13 @@ export class UserService {
     ): Promise<
         User | PasswordResetTokenExpiredError | PasswordResetTokenInvalidError | PasswordValidationError
     > {
-        const user = await this.connection
+        const query = this.connection
             .getRepository(ctx, User)
             .createQueryBuilder('user')
             .leftJoinAndSelect('user.authenticationMethods', 'aums')
             .leftJoin('user.authenticationMethods', 'authenticationMethod')
-            .where('authenticationMethod.passwordResetToken = :passwordResetToken', { passwordResetToken })
-            .getOne();
+            .where('authenticationMethod.passwordResetToken = :passwordResetToken', { passwordResetToken });
+        const user = await this.scopeShopCustomerQuery(ctx, query).getOne();
         if (!user) {
             return new PasswordResetTokenInvalidError();
         }
@@ -399,15 +410,15 @@ export class UserService {
         | IdentifierChangeTokenInvalidError
         | IdentifierChangeTokenExpiredError
     > {
-        const user = await this.connection
+        const query = this.connection
             .getRepository(ctx, User)
             .createQueryBuilder('user')
             .leftJoinAndSelect('user.authenticationMethods', 'aums')
             .leftJoin('user.authenticationMethods', 'authenticationMethod')
             .where('authenticationMethod.identifierChangeToken = :identifierChangeToken', {
                 identifierChangeToken: token,
-            })
-            .getOne();
+            });
+        const user = await this.scopeShopCustomerQuery(ctx, query).getOne();
         if (!user) {
             return new IdentifierChangeTokenInvalidError();
         }
@@ -477,6 +488,26 @@ export class UserService {
         await this.moduleRef
             .get((await import('./session.service.js')).SessionService)
             .deleteSessionsByUser(ctx, user);
+    }
+
+    /**
+     * Customer account tokens are only valid in the Channel which owns the Customer. Admin flows
+     * create and verify users before the Customer relation exists, so they intentionally remain
+     * unscoped here and are protected by Admin API permissions.
+     */
+    private scopeShopCustomerQuery(
+        ctx: RequestContext,
+        query: SelectQueryBuilder<User>,
+    ): SelectQueryBuilder<User> {
+        if (ctx.apiType !== 'shop') {
+            return query;
+        }
+        return query
+            .innerJoin(Customer, 'tokenCustomer', 'tokenCustomer.userId = user.id')
+            .innerJoin('tokenCustomer.channels', 'tokenCustomerChannel')
+            .andWhere('tokenCustomerChannel.id = :tokenCustomerChannelId', {
+                tokenCustomerChannelId: ctx.channelId,
+            });
     }
 
     private async validatePassword(

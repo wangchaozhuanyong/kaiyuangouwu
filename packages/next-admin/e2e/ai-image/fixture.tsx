@@ -162,6 +162,46 @@ const usageRecord = {
     errorMessage: null,
     customer: { id: '1', firstName: '本地', lastName: '测试', emailAddress: 'fixture@example.invalid' },
 };
+const reviewedUsageRecord = {
+    ...usageRecord,
+    actualCostMicrounits: 2136,
+    costCurrency: 'USD',
+    missingCost: false,
+    costCompleteness: 'COMPLETE',
+    missingCostCount: 0,
+    costBreakdown: [{ currency: 'USD', amount: 0.002136 }],
+};
+const fixtureCostReviews = [
+    {
+        id: '2',
+        recordType: 'LEGACY_PROMPT',
+        recordIdSnapshot: '12',
+        batchId: 'demo-review-correction',
+        reviewer: '本地审核示例',
+        authorizationRef: 'demo-approval',
+        reviewedAt: usageRecord.createdAt,
+        reason: '按供应商更正账单追加审定，保留初次归属',
+        matchingStatus: 'CROSS_MATCH_REVIEWED',
+        previousAdjustmentId: '1',
+        oldCostMicrounits: 1250,
+        oldCurrency: 'USD',
+        newCostMicrounits: 2136,
+        newCurrency: 'USD',
+        sourceHash: 'a'.repeat(64),
+        supplierBills: [
+            {
+                supplierScope: 'supplier:demo',
+                billId: 'client:demo-bill',
+                amountMicrounits: 2136,
+                currency: 'USD',
+                billedAt: null,
+                displayedTime: '2026/09/13 20:00:00',
+                timeZone: null,
+                evidenceHash: 'b'.repeat(64),
+            },
+        ],
+    },
+];
 const usageDetail = {
     record: usageRecord,
     inputPrompt: '本地费用展示验证',
@@ -225,7 +265,7 @@ const client = new ApolloClient({
                                             recordType: 'IMAGE_GENERATION',
                                             modelCode: 'image-model',
                                         },
-                                        usageRecord,
+                                        reviewedUsageRecord,
                                     ],
                                     totalItems: 2,
                                 },
@@ -234,8 +274,18 @@ const client = new ApolloClient({
                             data = {
                                 imageAiUsageRecord: {
                                     ...usageDetail,
+                                    costAdjustments:
+                                        operation.variables.recordType === 'PROMPT_OPTIMIZATION'
+                                            ? fixtureCostReviews
+                                            : [],
+                                    attempts:
+                                        operation.variables.recordType === 'PROMPT_OPTIMIZATION'
+                                            ? []
+                                            : usageDetail.attempts,
                                     record: {
-                                        ...usageRecord,
+                                        ...(operation.variables.recordType === 'PROMPT_OPTIMIZATION'
+                                            ? reviewedUsageRecord
+                                            : usageRecord),
                                         recordType: operation.variables.recordType,
                                         modelCode:
                                             operation.variables.recordType === 'IMAGE_GENERATION'

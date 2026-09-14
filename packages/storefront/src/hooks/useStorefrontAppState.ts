@@ -78,6 +78,7 @@ export function useStorefrontAppState() {
         products,
         collections,
         contentQuery,
+        configQuery,
         commerceModeQuery,
         contentBlocks,
         navigationBlock,
@@ -120,7 +121,7 @@ export function useStorefrontAppState() {
         goBack,
         updateCategory,
         openContentTarget,
-    } = useStorefrontNavigation({ collections });
+    } = useStorefrontNavigation({ collections, contentBlocks, products });
 
     const {
         cartQueryKey,
@@ -720,6 +721,10 @@ export function useStorefrontAppState() {
     } satisfies Record<string, unknown>;
 
     return {
+        pageDataPending:
+            (!storefrontContextResolved && !configQuery.isError) ||
+            (contentQuery.isPending && !contentError && !configQuery.isError),
+        isNavigationPending,
         storefrontContextValue,
         customer,
         customerLoadState,

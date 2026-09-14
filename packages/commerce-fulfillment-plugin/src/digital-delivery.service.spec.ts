@@ -1,5 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,6 +7,14 @@ import { DigitalDeliveryService } from './digital-delivery.service';
 
 const secret = '4ea7f8d3c91b6a205f74e8c1d9a3b6208f51d7c4a2e9630b';
 const directories: string[] = [];
+const fixtureRoot = path.resolve(process.cwd(), '../../reports/pending-migrations-20260913/fixtures');
+const channelId = 'channel-1';
+const requestHost = 'shop-a.test';
+const ctx = {
+    channelId,
+    languageCode: 'en',
+    req: { headers: { host: requestHost } },
+} as any;
 afterEach(() => {
     directories.splice(0).forEach(directory => rmSync(directory, { recursive: true, force: true }));
 });
@@ -18,6 +25,7 @@ function digitalOrder(paymentState = 'Settled') {
         state: 'PaymentSettled',
         active: false,
         totalWithTax: 100,
+        channels: [{ id: channelId }],
         payments: paymentState ? [{ state: paymentState, amount: 100, refunds: [] }] : [],
         lines: [
             {
@@ -41,9 +49,11 @@ function digitalOrder(paymentState = 'Settled') {
 }
 
 function createService(order: any) {
-    const directory = mkdtempSync(path.join(tmpdir(), 'vendure-digital-service-'));
+    mkdirSync(fixtureRoot, { recursive: true });
+    const directory = mkdtempSync(path.join(fixtureRoot, 'vendure-digital-service-'));
     directories.push(directory);
-    writeFileSync(path.join(directory, 'DIGITAL-001.txt'), 'secure content');
+    mkdirSync(path.join(directory, channelId));
+    writeFileSync(path.join(directory, channelId, 'DIGITAL-001.txt'), 'secure content');
     const repository = { findOne: vi.fn().mockResolvedValue(order) };
     const connection = {
         getEntityOrThrow: vi.fn().mockResolvedValue(order),
@@ -63,7 +73,7 @@ describe('DigitalDeliveryService', () => {
         async change => {
             const order = digitalOrder();
             const { service } = createService(order);
-            const [first] = await service.deliveriesForOrder({} as any, order.id);
+            const [first] = await service.deliveriesForOrder(ctx, order.id);
             const token = first.downloadUrl?.split('/').at(-1);
             if (!token) throw new Error('Expected initial download entitlement');
             if (change === 'cancelled') order.state = 'Cancelled';
@@ -76,8 +86,8 @@ describe('DigitalDeliveryService', () => {
                         lines: change === 'refunded-line' ? [{ orderLineId: 'line-1', quantity: 1 }] : [],
                     },
                 ];
-            expect((await service.deliveriesForOrder({} as any, order.id))[0].downloadUrl).toBeUndefined();
-            await expect(service.authorizeDownload(token)).resolves.toBeUndefined();
+            expect((await service.deliveriesForOrder(ctx, order.id))[0].downloadUrl).toBeUndefined();
+            await expect(service.authorizeDownload(token, requestHost)).resolves.toBeUndefined();
         },
     );
 
@@ -89,13 +99,13 @@ describe('DigitalDeliveryService', () => {
             { state: 'Failed', total: 100, lines: [{ orderLineId: 'line-1', quantity: 1 }] },
         ];
         const { service } = createService(order);
-        expect((await service.deliveriesForOrder({} as any, order.id))[0].status).toBe('READY');
+        expect((await service.deliveriesForOrder(ctx, order.id))[0].status).toBe('READY');
     });
     it('returns a signed link only after an authorized or settled payment', async () => {
         const paid = createService(digitalOrder('Settled'));
         const pending = createService(digitalOrder(''));
 
-        await expect(paid.service.deliveriesForOrder({} as any, 'order-1')).resolves.toEqual([
+        await expect(paid.service.deliveriesForOrder(ctx, 'order-1')).resolves.toEqual([
             expect.objectContaining({
                 orderLineId: 'line-1',
                 sku: 'DIGITAL-001',
@@ -103,24 +113,36 @@ describe('DigitalDeliveryService', () => {
                 downloadUrl: expect.stringMatching(/^\/digital-delivery\//u),
             }),
         ]);
-        const pendingDeliveries = await pending.service.deliveriesForOrder({} as any, 'order-1');
+        const pendingDeliveries = await pending.service.deliveriesForOrder(ctx, 'order-1');
         expect(pendingDeliveries).toEqual([expect.objectContaining({ status: 'PAYMENT_REQUIRED' })]);
         expect(pendingDeliveries[0]).not.toHaveProperty('downloadUrl');
     });
 
     it('revalidates the order line and payment before authorizing a download', async () => {
         const { service } = createService(digitalOrder('Authorized'));
-        const [delivery] = await service.deliveriesForOrder({} as any, 'order-1');
+        const [delivery] = await service.deliveriesForOrder(ctx, 'order-1');
         const token = delivery?.downloadUrl?.split('/').at(-1);
         if (!token) {
             throw new Error('Expected a signed digital delivery token');
         }
 
-        await expect(service.authorizeDownload(token)).resolves.toMatchObject({
+        await expect(service.authorizeDownload(token, requestHost)).resolves.toMatchObject({
             resource: { downloadName: 'DIGITAL-001.txt' },
-            payload: { orderId: 'order-1', orderLineId: 'line-1', sku: 'DIGITAL-001' },
+            payload: {
+                orderId: 'order-1',
+                orderLineId: 'line-1',
+                channelId,
+                host: requestHost,
+                sku: 'DIGITAL-001',
+            },
         });
-        await expect(service.authorizeDownload(`${token}x`)).resolves.toBeUndefined();
+        await expect(service.authorizeDownload(token, 'shop-b.test')).resolves.toBeUndefined();
+        await expect(service.authorizeDownload(`${token}x`, requestHost)).resolves.toBeUndefined();
+
+        const order = digitalOrder('Authorized');
+        order.channels = [{ id: 'channel-2' }];
+        const crossChannel = createService(order);
+        await expect(crossChannel.service.authorizeDownload(token, requestHost)).resolves.toBeUndefined();
     });
 
     it('returns a translated name or SKU when the raw variant name is unavailable', async () => {
@@ -131,12 +153,12 @@ describe('DigitalDeliveryService', () => {
         ];
         const { service } = createService(order);
 
-        await expect(service.deliveriesForOrder({ languageCode: 'en' } as any, 'order-1')).resolves.toEqual([
+        await expect(service.deliveriesForOrder(ctx, 'order-1')).resolves.toEqual([
             expect.objectContaining({ name: 'Translated digital product' }),
         ]);
 
         order.lines[0].productVariant.translations = [];
-        await expect(service.deliveriesForOrder({ languageCode: 'en' } as any, 'order-1')).resolves.toEqual([
+        await expect(service.deliveriesForOrder(ctx, 'order-1')).resolves.toEqual([
             expect.objectContaining({ name: 'DIGITAL-001' }),
         ]);
     });
@@ -146,9 +168,9 @@ describe('DigitalDeliveryService', () => {
         const { service } = createService(order);
 
         order.lines[0].customFields.digitalDeliveryModeSnapshot = 'manual_service';
-        await expect(service.deliveriesForOrder({} as any, 'order-1')).resolves.toEqual([]);
+        await expect(service.deliveriesForOrder(ctx, 'order-1')).resolves.toEqual([]);
 
         order.lines[0].customFields.digitalDeliveryModeSnapshot = 'auto_card';
-        await expect(service.deliveriesForOrder({} as any, 'order-1')).resolves.toEqual([]);
+        await expect(service.deliveriesForOrder(ctx, 'order-1')).resolves.toEqual([]);
     });
 });

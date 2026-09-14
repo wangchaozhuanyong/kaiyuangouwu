@@ -221,6 +221,7 @@ describe('Image studio lifecycle regression', () => {
         const connection = {
             rawConnection: { getRepository: () => repository },
             getRepository: () => repository,
+            withTransaction: serialTransactions(),
         };
         const configService = {
             credentialByCode: async () => (archived ? null : original),
@@ -266,6 +267,7 @@ describe('Image studio lifecycle regression', () => {
                 return queue.process({ data: { outputId: output.id } });
             },
             refreshJob: async () => undefined,
+            refreshJobSettlement: async () => undefined,
         });
         if (timing === 'BEFORE') changeAccount();
         const attempts = await Promise.allSettled([
@@ -475,6 +477,7 @@ describe('Image studio lifecycle regression', () => {
             },
             quota,
             refreshJob: async () => undefined,
+            refreshJobSettlement: async () => undefined,
         });
         const refunds = await Promise.allSettled([
             service.adminRefundOutput(ctx, 'output-1', 'fixture refund'),

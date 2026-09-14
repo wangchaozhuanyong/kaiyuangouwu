@@ -48,11 +48,10 @@ import {
 import { ProductSection } from './product-section';
 
 export function BrandLogo({ url, name, className }: { url: string | null; name: string; className: string }) {
-    const [failedUrl, setFailedUrl] = useState<string | null>(null);
     const sourceUrl = url?.trim() || null;
     const responsiveSource = sourceUrl ? responsiveImageSources(sourceUrl, 'thumbnail') : null;
 
-    if (!responsiveSource || sourceUrl === failedUrl) {
+    if (!responsiveSource) {
         return (
             <span className={className} aria-hidden="true">
                 <Store size={24} />
@@ -61,17 +60,16 @@ export function BrandLogo({ url, name, className }: { url: string | null; name: 
     }
 
     return (
-        <img
-            className={className}
-            src={responsiveSource.fallbackSrc}
-            srcSet={responsiveSource.fallbackSrcSet}
-            sizes="36px"
-            width={36}
-            height={36}
-            decoding="async"
-            alt={name}
-            onError={() => setFailedUrl(sourceUrl)}
-        />
+        <span className={className}>
+            <SafeImage
+                src={sourceUrl ?? ''}
+                imageKind="thumbnail"
+                sizes="36px"
+                width={36}
+                height={36}
+                alt={name}
+            />
+        </span>
     );
 }
 

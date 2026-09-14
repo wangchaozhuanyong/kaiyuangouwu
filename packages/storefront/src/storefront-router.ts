@@ -78,7 +78,6 @@ export const customerResolvedRoutes: RouteName[] = [
     'notifications',
     'reviews',
     'image-studio',
-    'two-factor',
 ];
 export const cartResolvedRoutes: RouteName[] = ['cart', 'purchase', 'checkout', 'payment', 'coupons'];
 

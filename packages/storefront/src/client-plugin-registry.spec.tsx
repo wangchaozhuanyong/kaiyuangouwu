@@ -169,6 +169,17 @@ describe('category client plugin registry', () => {
         expect(resolveClientPlugins(block, 'BUSINESS_SERVICES_MAIN')).toEqual([]);
     });
 
+    it('keeps the shared iCloud entry independently configurable for each store', () => {
+        const enabled = pluginBlock([pluginItem('icloud-mail-query-entry', 'BUSINESS_SERVICES_MAIN', 0)]);
+        const disabled = pluginBlock([pluginItem('icloud-mail-query-entry', 'BUSINESS_SERVICES_MAIN', 0)]);
+        disabled.items[0].enabled = false;
+        expect(resolveClientPlugins(enabled, 'BUSINESS_SERVICES_MAIN').map(plugin => plugin.code)).toEqual([
+            'icloud-mail-query-entry',
+        ]);
+        expect(resolveClientPlugins(disabled, 'BUSINESS_SERVICES_MAIN')).toEqual([]);
+        expect(resolveClientPlugins(enabled, 'BUSINESS_SERVICES_MAIN')).toHaveLength(1);
+    });
+
     it('renders the registered 2FA client plugin', () => {
         const markup = renderToStaticMarkup(
             <ClientPluginSlot

@@ -1,9 +1,76 @@
-import { StockAdjustment, StockLevel, StockMovementEvent } from '@vendure/core';
+import { Product, ProductVariant, StockAdjustment, StockLevel, StockMovementEvent } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { PackagingUnpackEvent } from './entities/packaging-unpack-event.entity';
 import { ProductPackagingRule } from './entities/product-packaging-rule.entity';
 import { ProductPackagingService } from './product-packaging.service';
+
+const packagingInput = {
+    productId: 'product-1',
+    unitVariantId: 'unit-variant',
+    packageVariantId: 'package-variant',
+    unitLabel: 'Bottle',
+    packageLabel: 'Case',
+    unitsPerPackage: 24,
+    enabled: true,
+    autoUnpack: true,
+};
+
+describe('ProductPackagingService channel isolation', () => {
+    it('rejects a product shared with another channel', async () => {
+        const connection = {
+            getEntityOrThrow: vi.fn().mockResolvedValue({
+                id: 'product-1',
+                channels: [{ id: 'channel-1' }, { id: 'channel-2' }],
+            }),
+            getRepository: vi.fn(),
+        };
+        const service = new ProductPackagingService(connection as never, {} as never, {} as never);
+
+        await expect(
+            service.updateConfig({ channelId: 'channel-1' } as never, packagingInput),
+        ).rejects.toThrow('assigned exclusively to the active channel');
+
+        expect(connection.getRepository).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['assigned to another channel', [{ id: 'channel-2' }]],
+        ['shared with another channel', [{ id: 'channel-1' }, { id: 'channel-2' }]],
+    ])('rejects a packaging variant %s', async (_label, variantChannels) => {
+        const variants = [
+            {
+                id: 'unit-variant',
+                productId: 'product-1',
+                channels: variantChannels,
+            },
+            {
+                id: 'package-variant',
+                productId: 'product-1',
+                channels: [{ id: 'channel-1' }],
+            },
+        ];
+        const connection = {
+            getEntityOrThrow: vi.fn((_ctx: unknown, entity: unknown) => {
+                if (entity === Product) {
+                    return Promise.resolve({ id: 'product-1', channels: [{ id: 'channel-1' }] });
+                }
+                throw new Error('Unexpected entity');
+            }),
+            getRepository: vi.fn((_ctx: unknown, entity: unknown) => {
+                if (entity === ProductVariant) {
+                    return { find: vi.fn().mockResolvedValue(variants) };
+                }
+                throw new Error('Unexpected repository');
+            }),
+        };
+        const service = new ProductPackagingService(connection as never, {} as never, {} as never);
+
+        await expect(
+            service.updateConfig({ channelId: 'channel-1' } as never, packagingInput),
+        ).rejects.toThrow('assigned exclusively to the active channel');
+    });
+});
 
 describe('ProductPackagingService automatic unpacking', () => {
     it('opens the minimum packages, transfers stock and publishes stock movements', async () => {

@@ -407,6 +407,8 @@ describe('Channels', () => {
         expect(assignProductsToChannel[0].channels.map(c => c.id).sort()).toEqual(['T_1', 'T_2']);
 
         // create a Session on the Channel to be deleted to ensure it gets cleaned up
+        shopClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+        await shopClient.asAnonymousUser();
         shopClient.setChannelToken(SECOND_CHANNEL_TOKEN);
         await shopClient.query(getActiveOrderDocument);
 

@@ -132,7 +132,10 @@ export function SearchPage() {
     const loadMore = () => searchQuery.fetchNextPage();
 
     return (
-        <main className="page subpage search-page">
+        <main
+            className="page subpage search-page"
+            data-page-pending={term && (searching || searchQuery.isPlaceholderData) ? 'query' : undefined}
+        >
             <h1 className="visually-hidden">{isZh ? '搜索商品' : 'Search products'}</h1>
             <header className="search-header">
                 <button type="button" onClick={goBack} aria-label={isZh ? '返回' : 'Back'}>

@@ -29,3 +29,16 @@ export function storefrontWebpUrl(source: string, kind: StorefrontImageKind): st
 export function storefrontPlaceholderUrl(source: string, kind: StorefrontImageKind): string | null {
     return responsiveImageSources(source, kind)?.placeholderSrc ?? null;
 }
+
+/** Shared descriptor for speculative preload and the image the browser renders. */
+export function imageSources(source: string, kind?: StorefrontImageKind, sizes?: string) {
+    const responsive = kind ? responsiveImageSources(source, kind) : null;
+    return {
+        src: responsive?.fallbackSrc ?? normalizeStorefrontAssetUrl(source),
+        srcSet: responsive?.fallbackSrcSet,
+        sizes: sizes ?? responsive?.sizes,
+        width: responsive?.width,
+        height: responsive?.height,
+        placeholderSrc: responsive?.placeholderSrc,
+    };
+}

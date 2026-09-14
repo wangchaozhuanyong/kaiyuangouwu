@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { ChangeEvent, ReactNode, useEffect, useRef, useState } from 'react';
 
+import { SafeImage } from './safe-image';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
 import { ActiveCustomer, StoreCommerceMode, StorefrontLanguage } from './types';
@@ -143,7 +144,12 @@ export function AccountSecurityPage({
                         onClick={() => avatarInputRef.current?.click()}
                     >
                         {avatarUrl ? (
-                            <img className="security-user-avatar-image" src={avatarUrl} alt="" />
+                            <SafeImage
+                                frameClassName="security-user-avatar-image"
+                                className="security-user-avatar-image"
+                                src={avatarUrl}
+                                alt=""
+                            />
                         ) : (
                             <span aria-hidden="true">{initial}</span>
                         )}

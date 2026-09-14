@@ -59,15 +59,13 @@ export function ImageStudioRoutePage() {
 export function TwoFactorRoutePage() {
     const runtime = useRuntime();
     return (
-        <RouteGate name="two-factor">
-            <TwoFactorPage
-                customer={runtime.customer}
-                language={runtime.language}
-                onBack={runtime.goBack}
-                onSignIn={() => runtime.navigate({ name: 'login' })}
-                onNotify={runtime.notify}
-            />
-        </RouteGate>
+        <TwoFactorPage
+            customer={runtime.customer}
+            language={runtime.language}
+            onBack={runtime.goBack}
+            onSignIn={() => runtime.navigate({ name: 'login' })}
+            onNotify={runtime.notify}
+        />
     );
 }
 

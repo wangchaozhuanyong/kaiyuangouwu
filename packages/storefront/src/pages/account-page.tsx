@@ -25,6 +25,7 @@ import type { CSSProperties } from 'react';
 import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
+import accountRefractionImage from '../assets/ui/account-refraction.webp';
 import { useDesktopLayout } from '../desktop-layout';
 import { compactUiCopy, languageCodeFor } from '../i18n';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
@@ -33,6 +34,7 @@ import {
     readCachedReferralProgram,
     writeCachedReferralProgram,
 } from '../referral-client-feature';
+import { SafeImage } from '../safe-image';
 import { ACCOUNT_RECOMMENDATION_CREST_IMAGE } from '../storefront-images';
 import { AccountPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
@@ -153,6 +155,13 @@ export function AccountPage() {
     const activeAfterSalesCount = (afterSalesQuery.data ?? []).filter(request =>
         ['PENDING', 'APPROVED'].includes(request.state),
     ).length;
+    const pagePending = Boolean(
+        customer &&
+        (countsQuery.isPending ||
+            afterSalesQuery.isPending ||
+            referralProgramQuery.isPending ||
+            (referralEnabled && referralOverviewQuery.isPending)),
+    );
     const latestLogisticsOrder = orders.find(order =>
         order.lines.some(
             line =>
@@ -173,6 +182,7 @@ export function AccountPage() {
     if (desktop)
         return (
             <DesktopAccountPage
+                pending={pagePending}
                 customer={customer}
                 products={products}
                 market={market}
@@ -194,18 +204,23 @@ export function AccountPage() {
         );
 
     return (
-        <main className="page account-page lg:grid lg:content-start lg:gap-4 lg:pb-8 lg:pt-[88px]">
+        <main
+            className="page account-page lg:grid lg:content-start lg:gap-4 lg:pb-8 lg:pt-[88px]"
+            data-page-pending={pagePending ? 'query' : undefined}
+        >
             <section
                 className={`account-hero lg:col-span-full ${accountHeroImageUrl ? 'has-custom-background' : ''}`}
-                style={
-                    accountHeroImageUrl
-                        ? ({
-                              '--account-hero-image': `url(${JSON.stringify(accountHeroImageUrl)})`,
-                          } as CSSProperties)
-                        : undefined
-                }
                 aria-labelledby={customer ? undefined : 'guest-account-title'}
             >
+                <SafeImage
+                    src={accountHeroImageUrl || accountRefractionImage}
+                    fallbackSrc={accountRefractionImage}
+                    placeholderSrc={accountRefractionImage}
+                    frameClassName="account-hero-art"
+                    imageKind="hero"
+                    sizes="100vw"
+                    alt=""
+                />
                 {customer ? (
                     <div className="account-hero-content">
                         <button
@@ -228,7 +243,7 @@ export function AccountPage() {
                                 >
                                     <span className="account-hero-avatar">
                                         {customer.avatar?.preview ? (
-                                            <img
+                                            <SafeImage
                                                 className="size-full rounded-full object-cover"
                                                 src={customer.avatar.preview}
                                                 alt=""

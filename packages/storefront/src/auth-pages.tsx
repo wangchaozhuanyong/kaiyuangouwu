@@ -1084,42 +1084,48 @@ function AuthLayout({
                 <div
                     className={`auth-hero-message${heroMessage ? '' : ' auth-hero-message-brand-only'}${hasManagedHero ? ' auth-hero-message-managed' : ''}`}
                 >
-                    <div className="auth-hero-kicker">
-                        {!hasManagedHero && (
-                            <div className="auth-brand-lockup">
-                                <div className="auth-brand-main">
-                                    {logoUrl ? (
-                                        <img
-                                            className="auth-brand-mark"
-                                            src={storefrontWebpUrl(logoUrl, 'thumbnail')}
-                                            alt={storefrontName}
-                                        />
-                                    ) : (
-                                        <span className="auth-brand-mark" aria-hidden="true">
-                                            桥
-                                        </span>
-                                    )}
-                                    <strong>{storefrontName}</strong>
+                    {(!hasManagedHero || heroMessage?.eyebrow) && (
+                        <div className="auth-hero-kicker">
+                            {!hasManagedHero && (
+                                <div className="auth-brand-lockup">
+                                    <div className="auth-brand-main">
+                                        {logoUrl ? (
+                                            <SafeImage
+                                                frameClassName="auth-brand-mark"
+                                                src={storefrontWebpUrl(logoUrl, 'thumbnail')}
+                                                alt={storefrontName}
+                                            />
+                                        ) : (
+                                            <span className="auth-brand-mark" aria-hidden="true">
+                                                桥
+                                            </span>
+                                        )}
+                                        <strong>{storefrontName}</strong>
+                                    </div>
+                                    <small>{language === 'zh' ? '欢迎光临' : 'Welcome'}</small>
                                 </div>
-                                <small>{language === 'zh' ? '欢迎光临' : 'Welcome'}</small>
-                            </div>
-                        )}
-                        {heroMessage?.eyebrow && (
-                            <span className="auth-hero-eyebrow">{heroMessage.eyebrow}</span>
-                        )}
-                    </div>
+                            )}
+                            {heroMessage?.eyebrow && (
+                                <span className="auth-hero-eyebrow">{heroMessage.eyebrow}</span>
+                            )}
+                        </div>
+                    )}
                     {heroMessage && (
                         <>
-                            <div className="auth-hero-copy">
-                                {heroMessage.title && <h2>{heroMessage.title}</h2>}
-                                {heroMessage.description && <p>{heroMessage.description}</p>}
-                            </div>
-                            {hasManagedHero ? (
-                                <div className="auth-hero-tags" aria-label={heroMessage.tags.join('、')}>
-                                    {heroMessage.tags.map((tag, index) => (
-                                        <span key={`${tag}-${index}`}>{tag}</span>
-                                    ))}
+                            {(heroMessage.title || heroMessage.description) && (
+                                <div className="auth-hero-copy">
+                                    {heroMessage.title && <h2>{heroMessage.title}</h2>}
+                                    {heroMessage.description && <p>{heroMessage.description}</p>}
                                 </div>
+                            )}
+                            {hasManagedHero ? (
+                                heroMessage.tags.length > 0 && (
+                                    <div className="auth-hero-tags" aria-label={heroMessage.tags.join('、')}>
+                                        {heroMessage.tags.map((tag, index) => (
+                                            <span key={`${tag}-${index}`}>{tag}</span>
+                                        ))}
+                                    </div>
+                                )
                             ) : heroMessage.benefits.length || heroMessage.serviceTypes.length ? (
                                 <div className="auth-hero-footer">
                                     <div

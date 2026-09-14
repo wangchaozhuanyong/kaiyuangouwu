@@ -817,7 +817,7 @@ export function HomePage() {
     const colorfulQuickLinks = isColorfulHomepageStyle(quickBlock?.settings?.visualStyle);
 
     return (
-        <main className="page home-page">
+        <main className="page home-page" data-page-pending={loading ? 'query' : undefined}>
             <header className="topbar home-topbar">
                 <button
                     className="brand"

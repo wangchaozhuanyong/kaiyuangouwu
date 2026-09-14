@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID } from '@vendure/common/lib/shared-types';
 
 import { RequestContext } from '../../../api/common/request-context';
+import { ForbiddenError } from '../../../common/error/errors';
 import { ConfigService } from '../../../config/config.service';
 import { Customer } from '../../../entity/customer/customer.entity';
 import { ChannelService } from '../../services/channel.service';
@@ -24,9 +24,8 @@ export class CustomerChannelAssignmentService {
 
     /**
      * @description
-     * Assigns the active Customer to the active Channel where appropriate. Does not block the
-     * request: a Customer the strategy declines to assign may still operate on the Channel for the
-     * current session, just without a persisted membership.
+     * Assigns the active Customer to the active Channel where explicitly allowed. A Customer who
+     * does not belong to the active Channel is denied when the strategy declines the assignment.
      */
     async tryAssignToActiveChannel(ctx: RequestContext): Promise<void> {
         const userId = ctx.activeUserId;
@@ -35,10 +34,7 @@ export class CustomerChannelAssignmentService {
         }
         const { disableAuth, customerChannelAssignmentStrategy } = this.configService.authOptions;
 
-        // The default Channel and disableAuth dev mode always assign and never consult the strategy.
-        const isGated = !disableAuth && ctx.channel.code !== DEFAULT_CHANNEL_CODE;
-
-        if (isGated) {
+        if (!disableAuth) {
             const member = await this.customerService.findOneByUserId(ctx, userId, true);
             if (member) {
                 return;
@@ -52,7 +48,7 @@ export class CustomerChannelAssignmentService {
         }
 
         const canAssign =
-            !isGated ||
+            disableAuth ||
             (await customerChannelAssignmentStrategy.canAssignCustomerToChannel(
                 ctx,
                 customer,
@@ -60,6 +56,8 @@ export class CustomerChannelAssignmentService {
             ));
         if (canAssign) {
             await this.assignToActiveChannel(ctx, customer.id);
+        } else {
+            throw new ForbiddenError();
         }
     }
 

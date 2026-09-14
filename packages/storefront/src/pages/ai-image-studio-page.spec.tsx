@@ -213,6 +213,57 @@ async function type(container: Element, value: string) {
 }
 
 describe('AI studio complete customer workflows', () => {
+    it('preserves the draft, quantity and consent while switching views and restoring scroll positions', async () => {
+        const { container } = await setup({ history: [job(1)] });
+        await type(container, '保留这段商品描述');
+        await click(button(container, '生成张数'));
+        await click(button(document.body, '2 张'));
+        const consent = container.querySelector<HTMLInputElement>('.ai-studio-terms-row input');
+        if (!consent) throw new Error('Missing consent control');
+        await click(consent);
+        const create = container.querySelector<HTMLElement>('.ai-studio-create-panel');
+        const history = container.querySelector<HTMLElement>('.ai-studio-history');
+        const historyTab = container.querySelector<HTMLElement>('[aria-controls$="-HISTORY-panel"]');
+        const createTab = container.querySelector<HTMLElement>('[aria-controls$="-CREATE-panel"]');
+        if (!create || !history || !historyTab || !createTab) throw new Error('Missing studio views');
+        const scrollTo = vi.spyOn(window, 'scrollTo');
+        const scroll = vi.spyOn(window, 'scrollY', 'get');
+        scroll.mockReturnValue(300);
+        await click(historyTab);
+        expect(create.hidden).toBe(true);
+        expect(history.hidden).toBe(false);
+        expect(historyTab.getAttribute('aria-selected')).toBe('true');
+        expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'instant' });
+        scroll.mockReturnValue(500);
+        await click(createTab);
+        expect(create.hidden).toBe(false);
+        expect(history.hidden).toBe(true);
+        expect(container.querySelector('textarea')?.value).toBe('保留这段商品描述');
+        expect(button(container, '生成张数').textContent).toContain('2 张');
+        expect(consent.checked).toBe(false);
+        expect(scrollTo).toHaveBeenLastCalledWith({ top: 300, behavior: 'instant' });
+        await click(historyTab);
+        expect(scrollTo).toHaveBeenLastCalledWith({ top: 500, behavior: 'instant' });
+    });
+
+    it('shows history after submission and returns to the populated editor when using a previous generation', async () => {
+        const { api, container } = await setup({ history: [job(1)] });
+        await type(container, '新的商品描述');
+        await click(button(container, '开始生成'));
+        expect(api.createImageGeneration).toHaveBeenCalledTimes(1);
+        expect(container.querySelector<HTMLElement>('.ai-studio-create-panel')?.hidden).toBe(true);
+        expect(container.querySelector<HTMLElement>('.ai-studio-history')?.hidden).toBe(false);
+        const record = [...container.querySelectorAll('article')].find(
+            item => item.querySelector('p')?.textContent === '商品 1',
+        );
+        if (!record) throw new Error('Missing previous generation');
+        await click(button(record, '再次创作'));
+        expect(container.querySelector<HTMLElement>('.ai-studio-create-panel')?.hidden).toBe(false);
+        expect(container.querySelector<HTMLElement>('.ai-studio-history')?.hidden).toBe(true);
+        expect(container.querySelector('textarea')?.value).toBe('商品 1');
+        expect(api.createImageGeneration).toHaveBeenCalledTimes(1);
+    });
+
     it('releases replaced draft references before restoring another job and preserves failed releases for retry', async () => {
         const history = [
             {

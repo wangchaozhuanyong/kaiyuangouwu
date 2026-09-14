@@ -64,7 +64,7 @@ function model(overrides: Partial<ImageModelRecord> = {}): ImageModelRecord {
     };
 }
 
-async function renderModule() {
+async function renderModule(jobs: ImageGenerationAdminResult['imageGenerationJobs']['items'] = []) {
     const primaryModel = model();
     mocks.data = {
         activeChannel: { id: 'channel-1', code: 'default', defaultCurrencyCode: 'CNY' },
@@ -101,7 +101,7 @@ async function renderModule() {
                 }),
             ],
         },
-        imageGenerationJobs: { totalItems: 0, items: [] },
+        imageGenerationJobs: { totalItems: jobs.length, items: jobs },
         imagePromptSkillReleases: [],
     };
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -154,5 +154,82 @@ describe('AI 图片工坊运营配置', () => {
         expect(modelDrawer?.textContent).toContain('设置模型：Gemini 闪电');
         expect(modelDrawer?.textContent).toContain('服务商模型 ID');
         expect(modelDrawer?.textContent).toContain('保存模型');
+    });
+    it.each(['FREE', 'PAID'])('确认和反馈使用实际退款类型：%s', async billingMode => {
+        const job = {
+            id: 'job-1',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            state: 'SUCCEEDED',
+            modelCodeSnapshot: 'test',
+            modelNameSnapshot: 'Test',
+            officialModelIdSnapshot: 'test',
+            quantity: 1,
+            unitPriceSnapshot: 125,
+            reservedAmount: 125,
+            capturedAmount: billingMode === 'FREE' ? 0 : 125,
+            releasedAmount: 0,
+            currencyCode: 'USD',
+            termsVersion: 'test',
+            errorMessage: null,
+            completedAt: new Date().toISOString(),
+            outputs: [
+                {
+                    id: 'output-1',
+                    outputIndex: 0,
+                    state: 'SUCCEEDED',
+                    attemptCount: 1,
+                    errorMessage: null,
+                    completedAt: new Date().toISOString(),
+                    refundedAt: null,
+                    billingMode,
+                    chargeAmount: billingMode === 'FREE' ? 0 : 125,
+                },
+            ],
+        };
+        mocks.mutate.mockResolvedValue({
+            data: {
+                refundImageOutput: {
+                    refundedAt: new Date().toISOString(),
+                    billingMode,
+                    chargeAmount: job.outputs[0].chargeAmount,
+                },
+            },
+        });
+        const container = await renderModule([job]);
+        const click = async (label: string) => {
+            const button = Array.from(document.querySelectorAll('button')).find(
+                b => b.textContent?.trim() === label,
+            );
+            if (!button) throw new Error('Missing button: ' + label);
+            await act(async () => button.click());
+        };
+        await click('任务与售后 1');
+        await click('查看输出 1');
+        await click('售后退费');
+        const dialog = document.querySelector('[role="alertdialog"]')!;
+        expect(dialog.textContent).toContain(
+            billingMode === 'FREE'
+                ? '本次退回 1 次免费额度，不增加钱包余额'
+                : '本次将退回 US$1.25 至买家钱包',
+        );
+        const textarea = dialog.querySelector('textarea')!;
+        await act(async () => {
+            Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+                textarea,
+                'fixture reason',
+            );
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        mocks.refetch.mockRejectedValueOnce(new Error('fixture refresh unavailable'));
+        await click('确认退费');
+        expect(mocks.mutate).toHaveBeenCalledWith({
+            variables: { outputId: 'output-1', reason: 'fixture reason' },
+        });
+        expect(container.textContent).toContain(
+            billingMode === 'FREE' ? '已退回 1 次免费额度' : '已退回 US$1.25 至买家钱包',
+        );
+        expect(container.textContent).toContain('操作已完成，但列表刷新失败');
+        expect(container.textContent).not.toContain('该张已成功图片的费用已退回用户钱包');
     });
 });

@@ -1,3 +1,10 @@
+import { createHash } from 'node:crypto';
+
+import { PORTAL_JS } from './portal-script';
+
+// Keep browsers and CDN caches from serving a previous release's portal behavior.
+const scriptVersion = createHash('sha256').update(PORTAL_JS).digest('hex').slice(0, 16);
+
 export const PORTAL_HTML = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -1006,6 +1013,6 @@ export const PORTAL_HTML = `<!DOCTYPE html>
     </main>
 
     <!-- Load external script from self to fully comply with strict CSP script-src 'self' -->
-    <script src="/mail-query/portal.js"></script>
+    <script src="/mail-query/portal.js?v=${scriptVersion}"></script>
 </body>
 </html>`;

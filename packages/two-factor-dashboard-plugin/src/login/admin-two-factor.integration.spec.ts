@@ -1,4 +1,5 @@
 import {
+    Channel,
     ConfigService,
     Customer,
     DefaultLogger,
@@ -216,12 +217,16 @@ describe.sequential('administrator login 2FA through real GraphQL and SQL', () =
         const user = await connection.rawConnection
             .getRepository(User)
             .findOneByOrFail({ identifier: username });
+        const channel = await connection.rawConnection
+            .getRepository(Channel)
+            .findOneByOrFail({ code: '__default_channel__' });
         await connection.rawConnection.getRepository(Customer).save(
             new Customer({
                 firstName: 'Security',
                 lastName: 'Fixture',
                 emailAddress: 'security-fixture@example.invalid',
                 user,
+                channels: [channel],
             }),
         );
         const shop = await request(

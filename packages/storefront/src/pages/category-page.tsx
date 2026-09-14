@@ -279,7 +279,11 @@ export function CategoryPage() {
           : null;
 
     return (
-        <main className="page category-page" aria-label={isZh ? '商品' : 'Products'}>
+        <main
+            className="page category-page"
+            aria-label={isZh ? '商品' : 'Products'}
+            data-page-pending={categoryLoading || catalogQuery.isPlaceholderData ? 'query' : undefined}
+        >
             <div className="category-navigation-shell">
                 <header className="topbar category-topbar">
                     <button

@@ -936,3 +936,666 @@
     font-size: 12px;
     line-height: 1.5;
 }
+
+/* Approved image-first workflow. Scoped so detail sheets and other pages retain their styles. */
+.page.subpage:has(> .ai-studio-workflow) {
+    background: var(--surface, #fff);
+}
+
+.ai-studio-shell.ai-studio-workflow {
+    --shadow-sm: none;
+    width: 100%;
+    padding: 0 20px 32px;
+    display: block;
+    color: var(--text);
+    background: var(--surface, #fff);
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-view-tabs {
+    margin: 0 -20px 24px;
+    padding: 0 20px;
+    position: sticky;
+    top: 52px;
+    z-index: var(--layer-sticky);
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    background: var(--surface, #fff);
+}
+
+.ai-studio-view-tabs button {
+    min-height: 52px;
+    padding: 12px 8px;
+    position: relative;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-weight: var(--font-weight-medium);
+}
+
+.ai-studio-view-tabs button[aria-selected='true'] {
+    color: var(--accent);
+}
+
+.ai-studio-view-tabs button[aria-selected='true']::after {
+    width: 56px;
+    height: 3px;
+    position: absolute;
+    bottom: 0;
+    left: calc(50% - 28px);
+    border-radius: 2px;
+    background: var(--accent);
+    content: '';
+}
+
+.ai-studio-shell.ai-studio-workflow > [role='tabpanel'][hidden] {
+    display: none;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-create-panel {
+    padding-bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+    display: grid;
+    gap: 24px;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-controls {
+    min-width: 0;
+    display: grid;
+    gap: 24px;
+}
+
+.ai-studio-shell.ai-studio-workflow
+    :is(
+        .ai-studio-composer,
+        .ai-studio-options,
+        .ai-studio-checkout,
+        .ai-studio-history,
+        .ai-studio-model-grid,
+        .ai-studio-option-row,
+        .ai-studio-settlement-summary
+    ) {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.ai-studio-shell.ai-studio-workflow :is(.ai-studio-options, .ai-studio-checkout) {
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+}
+
+.ai-studio-shell.ai-studio-workflow
+    :is(.ai-studio-prompt-label, .ai-studio-options h3, .ai-studio-history h3) {
+    margin: 0 0 12px;
+    display: block;
+    font-size: 17px;
+    font-weight: var(--font-weight-semibold);
+    line-height: 1.5;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-prompt-wrap {
+    margin: 0;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: var(--soft);
+    box-shadow: none;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-prompt-wrap:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-prompt-wrap textarea {
+    min-height: 126px;
+    padding: 14px 14px 6px;
+    display: block;
+    resize: none;
+    font-size: 16px;
+    line-height: 1.65;
+    box-shadow: none;
+}
+
+.ai-studio-prompt-count {
+    padding: 4px 14px 12px;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-prompt-tools {
+    min-height: 0;
+    margin-top: 12px;
+    padding: 0;
+    border: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-optimizer-model {
+    max-width: none;
+    padding: 0;
+    border: 0;
+    display: block;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-optimizer-model > span {
+    display: inline;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-optimizer-model strong {
+    overflow: visible;
+    color: var(--text);
+    font: inherit;
+    text-overflow: clip;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-prompt-actions {
+    width: 100%;
+    margin: 0;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px 12px;
+}
+
+.ai-studio-prompt-quota {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-prompt-tools button {
+    max-width: 100%;
+    min-height: 44px;
+    padding: 10px 14px;
+    border: 0;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 14px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-prompt-tools button:not(:disabled):hover {
+    background: var(--accent-soft);
+    filter: brightness(0.97);
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-reference {
+    margin-top: 18px;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-reference-add {
+    min-height: 64px;
+    padding: 8px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-reference-add-copy small {
+    overflow: visible;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: normal;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-model-grid {
+    margin-top: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-model-grid button {
+    min-height: 48px;
+    padding: 10px;
+    border: 0;
+    border-radius: 8px;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-model-grid button.is-selected {
+    background: var(--accent-soft);
+    box-shadow: none;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-model-description {
+    overflow: visible;
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-model-grid strong {
+    margin: 0;
+    color: var(--text);
+    font-size: 13px;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-radio-mark {
+    color: var(--accent);
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-model-grid button.is-selected .ai-studio-radio-mark {
+    border-color: var(--accent);
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-radio-mark svg {
+    color: var(--accent);
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-option-row {
+    margin-top: 18px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-setting-trigger {
+    min-width: 0;
+    min-height: 64px;
+    padding: 4px 10px !important;
+    border: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 14px;
+    justify-content: start;
+    gap: 6px 3px;
+    background: transparent;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-setting-trigger + .ai-studio-setting-trigger {
+    border-left: 1px solid var(--line);
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-setting-trigger > span {
+    grid-column: 1 / -1;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-setting-trigger strong {
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    justify-content: flex-start;
+    background: transparent;
+    font-size: 14px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-settlement-summary {
+    display: block;
+    overflow: visible;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-settlement-amount {
+    min-height: 24px;
+    padding: 0;
+    border: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-align: left;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-settlement-amount strong.is-balance {
+    font-size: 16px;
+    color: var(--text);
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-settlement-refund {
+    margin-top: 14px;
+    padding: 0;
+    border: 0;
+    display: block;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-settlement-refund > svg {
+    display: none;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-settlement-refund :is(strong, span) {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-terms-row {
+    min-height: 44px;
+    margin-top: 12px;
+    padding: 10px 0;
+    align-items: flex-start;
+    color: var(--muted);
+    font-size: 12px !important;
+    line-height: 1.6;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-terms-row button {
+    color: var(--accent);
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-terms-row input {
+    accent-color: var(--accent);
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-fixed-generate {
+    width: min(520px, 100%);
+    min-height: 76px;
+    padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(168px, 1.6fr);
+    align-items: center;
+    gap: 12px;
+    border-top: 1px solid var(--line);
+    background: var(--surface, #fff);
+    box-shadow: none;
+}
+
+.ai-studio-hold-amount {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+.ai-studio-hold-amount small {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.ai-studio-hold-amount strong {
+    color: var(--text);
+    font-size: 22px;
+    line-height: 1.2;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-generate-button {
+    min-width: 0;
+    min-height: 48px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 15px;
+    box-shadow: none;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-history {
+    display: block;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-history-heading h3 {
+    margin: 0;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-history-heading > button {
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+    font-size: 13px;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-history-filters {
+    width: 100%;
+    min-width: 0;
+    margin: 12px 0 18px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    background: transparent;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-history-filters button {
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 0;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    color: var(--muted);
+    background: transparent;
+    font-size: 13px;
+    box-shadow: none;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-history-filters button.is-active {
+    border-bottom-color: var(--accent);
+    color: var(--accent);
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-card {
+    min-height: 0;
+    margin: 0 0 24px;
+    padding: 0 0 20px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 12px;
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-card-preview {
+    width: 100%;
+    height: auto;
+    max-height: 360px;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    aspect-ratio: 4 / 3;
+    background: var(--soft);
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-card-preview > .safe-image-frame,
+.ai-studio-shell.ai-studio-workflow .ai-generation-card-preview > .image-placeholder {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    background-color: transparent;
+    background-size: contain;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-card-preview img {
+    border-radius: 0;
+    object-fit: contain;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-card-preview:not(:has(.safe-image-frame)) {
+    min-height: 112px;
+    aspect-ratio: auto;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-card-content > p {
+    margin: 8px 0 0;
+    font-size: 14px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+    -webkit-line-clamp: 2;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-card header time,
+.ai-studio-shell.ai-studio-workflow .ai-generation-status {
+    padding: 0;
+    font-size: 12px;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-meta {
+    margin-top: 8px;
+    gap: 4px 0;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-meta span {
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-meta span + span::before {
+    padding: 0 6px;
+    content: '·';
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-meta :is(.is-actual-size, .is-mismatch) {
+    flex-basis: 100%;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-meta :is(.is-actual-size, .is-mismatch)::before {
+    content: none;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-meta .is-mismatch {
+    color: #a6561d;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-card footer {
+    margin: 8px 0 0;
+    padding: 0;
+    flex-direction: row;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-card footer > div {
+    width: 100%;
+    margin: 0;
+    justify-content: flex-start;
+    gap: 6px 16px;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-card footer button {
+    min-height: 44px;
+    padding: 8px 0;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-card footer svg {
+    width: 16px;
+    height: 16px;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-generation-card footer .ai-generation-delete-button {
+    width: 44px;
+    margin-left: auto;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-empty {
+    padding: 48px 16px;
+    border: 0;
+    display: grid;
+    justify-items: center;
+    gap: 20px;
+    line-height: 1.6;
+}
+
+.ai-studio-shell.ai-studio-workflow .ai-studio-empty button {
+    min-height: 44px;
+    padding: 10px 16px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.ai-studio-shell.ai-studio-workflow > .ai-studio-error {
+    margin: 0 0 20px;
+}
+
+.ai-studio-shell.ai-studio-workflow :is(.ai-studio-error, .ai-generation-error-copy) {
+    overflow-wrap: anywhere;
+}
+
+.ai-studio-shell.ai-studio-workflow :is(button, input):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+
+@media (min-width: 960px) {
+    .ai-studio-shell.ai-studio-workflow {
+        padding: 0 28px 40px;
+    }
+
+    .ai-studio-shell.ai-studio-workflow .ai-studio-view-tabs {
+        margin-right: -28px;
+        margin-left: -28px;
+        padding: 0 28px;
+        top: 72px;
+        grid-template-columns: repeat(2, minmax(120px, 180px));
+    }
+
+    .ai-studio-shell.ai-studio-workflow .ai-studio-create-panel {
+        padding-bottom: 0;
+        grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+        gap: 40px;
+        align-items: start;
+    }
+
+    .ai-studio-shell.ai-studio-workflow .ai-studio-prompt-wrap textarea {
+        min-height: 230px;
+        resize: vertical;
+    }
+
+    .ai-studio-shell.ai-studio-workflow .ai-studio-options {
+        padding-top: 0;
+        border-top: 0;
+    }
+
+    .ai-studio-shell.ai-studio-workflow .ai-studio-fixed-generate {
+        width: 100%;
+        padding: 0;
+        border: 0;
+    }
+
+    .ai-studio-shell.ai-studio-workflow .ai-studio-history {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0 28px;
+    }
+
+    .ai-studio-shell.ai-studio-workflow .ai-studio-history > :not(.ai-generation-card) {
+        grid-column: 1 / -1;
+    }
+
+    .ai-studio-shell.ai-studio-workflow .ai-studio-history-filters {
+        width: min(440px, 100%);
+    }
+}
+
+@media (min-width: 1200px) {
+    .ai-studio-shell.ai-studio-workflow .ai-studio-history {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}

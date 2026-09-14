@@ -24,7 +24,7 @@ describe('IcloudPortalController', () => {
         expect(headers['Cache-Control']).toBe('no-cache');
 
         // Verify script is external to comply with strict CSP script-src 'self'
-        expect(sentBody).toContain('<script src="/mail-query/portal.js"></script>');
+        expect(sentBody).toMatch(/<script src="\/mail-query\/portal\.js\?v=[a-f0-9]{16}"><\/script>/);
         expect(sentBody).not.toMatch(/<script>[\s\S]+<\/script>/);
 
         // Verify key UI elements requested by user

@@ -14,6 +14,7 @@ import {
     verificationRequiresPassword,
 } from './auth-pages';
 import { readStorefrontStylesheet } from './test-stylesheet';
+import { StorefrontContentBlock } from './types';
 
 const authPageProps = {
     api: {} as never,
@@ -245,6 +246,48 @@ describe('auth password visibility controls', () => {
 });
 
 describe('managed auth visual layout', () => {
+    it('omits empty text groups after managed labels and benefits are cleared', () => {
+        const content: StorefrontContentBlock = {
+            id: 'compact',
+            code: 'compact',
+            type: 'AUTH_LOGIN',
+            enabled: true,
+            position: 0,
+            startsAt: null,
+            endsAt: null,
+            imageUrl: '/assets/preview/auth.png',
+            backgroundColor: null,
+            textColor: null,
+            targetType: 'NONE',
+            targetValue: null,
+            settings: {},
+            title: 'Short title',
+            subtitle: 'One sentence.',
+            body: '',
+            ctaLabel: '',
+            items: [],
+        };
+        const markup = renderToStaticMarkup(
+            createElement(LoginPage, {
+                ...authPageProps,
+                authVisualContent: content,
+                onSuccess: vi.fn(),
+            }),
+        );
+        expect(markup).toContain('Short title');
+        expect(markup).toContain('One sentence.');
+        expect(markup).not.toContain('auth-hero-kicker');
+        expect(markup).not.toContain('auth-hero-tags');
+        const emptyMarkup = renderToStaticMarkup(
+            createElement(LoginPage, {
+                ...authPageProps,
+                authVisualContent: { ...content, title: '', subtitle: '' },
+                onSuccess: vi.fn(),
+            }),
+        );
+        expect(emptyMarkup).not.toContain('auth-hero-copy');
+    });
+
     it('keeps the previous compact hero and form layout on mobile and short screens', () => {
         const styles = readStorefrontStylesheet();
 

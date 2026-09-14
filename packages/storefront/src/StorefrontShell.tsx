@@ -11,6 +11,7 @@ import {
 import { DesktopHeader } from './components/common/desktop-header';
 import { DesktopLayoutContext, useDesktopViewport } from './desktop-layout';
 import { type useStorefrontAppState } from './hooks/useStorefrontAppState';
+import { PageReadinessBoundary } from './page-readiness';
 import { RouteTransitionLoader } from './route-loading';
 import { isBrowsingStorefrontRoute, isPublicStorefrontRoute } from './storefront-access';
 import { StorefrontContext } from './StorefrontContext';
@@ -46,118 +47,135 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     return (
         <StorefrontContext.Provider value={storefrontContextValue}>
             <DesktopLayoutContext.Provider value={desktop}>
-                <div
-                    data-route={protectedRoute && !customer ? 'login' : displayedRoute.name}
-                    className={`storefront-app${online ? '' : ' is-offline'}${desktop ? ' desktop-store-layout' : ''}`}
+                <PageReadinessBoundary
+                    requestKey={JSON.stringify([language, storefrontContextValue.route ?? displayedRoute])}
+                    navigationKey={JSON.stringify([
+                        storefrontContextValue.storefrontCode,
+                        language,
+                        customer?.id,
+                        storefrontContextValue.route ?? displayedRoute,
+                    ])}
+                    pending={Boolean(state.pageDataPending || state.isNavigationPending)}
+                    online={online}
+                    language={language}
+                    logoUrl={logoUrl}
+                    storefrontName={storefrontName}
+                    onRetry={() => window.location.reload()}
+                    onBack={storefrontContextValue.goBack ?? (() => window.history.back())}
                 >
-                    <a className="skip-link" href="#storefront-content">
-                        {isZh ? '跳到主要内容' : 'Skip to content'}
-                    </a>
-                    {!online && (
-                        <div className="network-banner" role="status">
-                            <WifiOff aria-hidden="true" />
-                            {isZh
-                                ? '当前网络不可用，部分操作可能失败'
-                                : 'You are offline. Some actions may fail.'}
-                        </div>
-                    )}
-                    {desktop && showNavigation && (
-                        <DesktopHeader
-                            navigationBlock={navigationBlock}
-                            cartQuantity={cart?.totalQuantity ?? 0}
-                        />
-                    )}
                     <div
-                        className={
-                            desktop && customer && isDesktopAccountRoute(displayedRoute.name)
-                                ? 'desktop-account-layout'
-                                : undefined
-                        }
+                        data-route={protectedRoute && !customer ? 'login' : displayedRoute.name}
+                        className={`storefront-app${online ? '' : ' is-offline'}${desktop ? ' desktop-store-layout' : ''}`}
                     >
-                        {desktop && customer && <DesktopAccountNavigation />}
-                        <div id="storefront-content" tabIndex={-1}>
-                            <Suspense
-                                fallback={
-                                    <RouteTransitionLoader
-                                        language={language}
-                                        logoUrl={logoUrl}
-                                        storefrontName={storefrontName}
-                                    />
-                                }
-                            >
-                                {protectedRoute && waitingForAccount ? (
-                                    accountFailed ? (
-                                        <div role="alert" className="empty-state">
-                                            <p>{customerLoadError}</p>
-                                            <button type="button" onClick={() => void retryAccount()}>
-                                                {isZh ? '重试' : 'Try again'}
-                                            </button>
-                                            <a href="/promo">
-                                                {isZh ? '返回介绍页' : 'Back to introduction'}
-                                            </a>
-                                        </div>
-                                    ) : (
+                        <a className="skip-link" href="#storefront-content">
+                            {isZh ? '跳到主要内容' : 'Skip to content'}
+                        </a>
+                        {!online && (
+                            <div className="network-banner" role="status">
+                                <WifiOff aria-hidden="true" />
+                                {isZh
+                                    ? '当前网络不可用，部分操作可能失败'
+                                    : 'You are offline. Some actions may fail.'}
+                            </div>
+                        )}
+                        {desktop && showNavigation && (
+                            <DesktopHeader
+                                navigationBlock={navigationBlock}
+                                cartQuantity={cart?.totalQuantity ?? 0}
+                            />
+                        )}
+                        <div
+                            className={
+                                desktop && customer && isDesktopAccountRoute(displayedRoute.name)
+                                    ? 'desktop-account-layout'
+                                    : undefined
+                            }
+                        >
+                            {desktop && customer && <DesktopAccountNavigation />}
+                            <div id="storefront-content" tabIndex={-1}>
+                                <Suspense
+                                    fallback={
                                         <RouteTransitionLoader
                                             language={language}
                                             logoUrl={logoUrl}
                                             storefrontName={storefrontName}
                                         />
-                                    )
-                                ) : protectedRoute && !customer ? (
-                                    <LoginRoutePage />
-                                ) : (
-                                    <Outlet />
-                                )}
-                            </Suspense>
+                                    }
+                                >
+                                    {protectedRoute && waitingForAccount ? (
+                                        accountFailed ? (
+                                            <div role="alert" className="empty-state">
+                                                <p>{customerLoadError}</p>
+                                                <button type="button" onClick={() => void retryAccount()}>
+                                                    {isZh ? '重试' : 'Try again'}
+                                                </button>
+                                                <a href="/promo">
+                                                    {isZh ? '返回介绍页' : 'Back to introduction'}
+                                                </a>
+                                            </div>
+                                        ) : (
+                                            <RouteTransitionLoader
+                                                language={language}
+                                                logoUrl={logoUrl}
+                                                storefrontName={storefrontName}
+                                            />
+                                        )
+                                    ) : protectedRoute && !customer ? (
+                                        <LoginRoutePage />
+                                    ) : (
+                                        <Outlet />
+                                    )}
+                                </Suspense>
+                            </div>
                         </div>
                     </div>
-                </div>
-                {!desktop &&
-                    showNavigation &&
-                    shouldShowBottomNavigation(displayedRoute.name, navigationBlock) && (
-                        <BottomNavigation
-                            activeRoute={displayedRoute.name}
-                            cartQuantity={cart?.totalQuantity ?? 0}
-                            language={language}
-                            navigationBlock={navigationBlock}
-                        />
-                    )}
-                {toast && (
-                    <div
-                        className={clsx(
-                            'toast',
-                            typeof toast === 'object' && toast.type && `toast--${toast.type}`,
+                    {!desktop &&
+                        showNavigation &&
+                        shouldShowBottomNavigation(displayedRoute.name, navigationBlock) && (
+                            <BottomNavigation
+                                activeRoute={displayedRoute.name}
+                                cartQuantity={cart?.totalQuantity ?? 0}
+                                language={language}
+                                navigationBlock={navigationBlock}
+                            />
                         )}
-                        role="status"
-                        aria-live="polite"
-                    >
-                        {typeof toast === 'string' ? (
-                            toast
-                        ) : (
-                            <div className="toast-inner">
-                                {toast.type === 'success' && <span className="toast-icon">✓</span>}
-                                {toast.type === 'error' && <span className="toast-icon">✕</span>}
-                                {toast.type === 'warning' && <span className="toast-icon">⚠</span>}
-                                {toast.type === 'info' && <span className="toast-icon">ℹ</span>}
-                                <div className="toast-content">
-                                    {toast.title && <div className="toast-title">{toast.title}</div>}
-                                    <div className="toast-message">{toast.message}</div>
+                    {toast && (
+                        <div
+                            className={clsx(
+                                'toast',
+                                typeof toast === 'object' && toast.type && `toast--${toast.type}`,
+                            )}
+                            role="status"
+                            aria-live="polite"
+                        >
+                            {typeof toast === 'string' ? (
+                                toast
+                            ) : (
+                                <div className="toast-inner">
+                                    {toast.type === 'success' && <span className="toast-icon">✓</span>}
+                                    {toast.type === 'error' && <span className="toast-icon">✕</span>}
+                                    {toast.type === 'warning' && <span className="toast-icon">⚠</span>}
+                                    {toast.type === 'info' && <span className="toast-icon">ℹ</span>}
+                                    <div className="toast-content">
+                                        {toast.title && <div className="toast-title">{toast.title}</div>}
+                                        <div className="toast-message">{toast.message}</div>
+                                    </div>
+                                    {toast.action && (
+                                        <button
+                                            type="button"
+                                            className="toast-action"
+                                            onClick={toast.action.onClick}
+                                        >
+                                            {toast.action.label}
+                                        </button>
+                                    )}
                                 </div>
-                                {toast.action && (
-                                    <button
-                                        type="button"
-                                        className="toast-action"
-                                        onClick={toast.action.onClick}
-                                    >
-                                        {toast.action.label}
-                                    </button>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                )}
+                            )}
+                        </div>
+                    )}
 
-                <StorefrontUpdatePrompt language={language} />
+                    <StorefrontUpdatePrompt language={language} />
+                </PageReadinessBoundary>
             </DesktopLayoutContext.Provider>
         </StorefrontContext.Provider>
     );

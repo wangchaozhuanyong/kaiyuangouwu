@@ -33,10 +33,12 @@ export function resolveAuthVisualMessage(
     variant: AuthVisualVariant,
     language: StorefrontLanguage,
 ): AuthVisualMessage {
-    const benefits = (content?.items ?? []).map(item => ({
-        title: item.label.trim(),
-        description: item.description.trim(),
-    }));
+    const benefits = (content?.items ?? [])
+        .filter(item => item.enabled !== false && item.label.trim())
+        .map(item => ({
+            title: item.label.trim(),
+            description: item.description.trim(),
+        }));
     return {
         eyebrow: content ? content.ctaLabel.trim() : '',
         title: content

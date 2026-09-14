@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Permission } from '@vendure/common/lib/generated-types';
+import { ID, Type } from '@vendure/common/lib/shared-types';
 import {
     ContentTranslationService,
     PreparedLocalizedContentField,
@@ -11,12 +12,15 @@ import {
     InternalServerError,
     isGraphQlErrorResult,
     PaymentMethod,
+    PaymentMethodService,
     RequestContext,
     Role,
     RoleService,
     SellerService,
     ShippingMethod,
+    ShippingMethodService,
     StockLocation,
+    StockLocationService,
     TransactionalConnection,
     User,
     UserInputError,
@@ -36,6 +40,7 @@ import {
 } from './referral/referral.constants';
 import { StoreProfileService } from './store-profile.service';
 import { ProvisionStoreInput, ProvisionStoreResult } from './types';
+import { USDT_TRC20_PAYMENT_METHOD_CODE } from './usdt/usdt-payment.constants';
 
 export const storeAdministratorPermissions: Permission[] = [
     Permission.ReadChannel,
@@ -102,6 +107,9 @@ export class StoreProvisioningService {
         private readonly channelService: ChannelService,
         private readonly roleService: RoleService,
         private readonly administratorService: AdministratorService,
+        private readonly stockLocationService: StockLocationService,
+        private readonly shippingMethodService: ShippingMethodService,
+        private readonly paymentMethodService: PaymentMethodService,
         private readonly storeProfileService: StoreProfileService,
         private readonly merchantInitialPasswordService: MerchantInitialPasswordService,
         private readonly contentTranslations: ContentTranslationService,
@@ -122,7 +130,7 @@ export class StoreProvisioningService {
         if (!template.defaultShippingZone || !template.defaultTaxZone) {
             throw new UserInputError('基础店铺必须先配置默认配送区域和默认计税区域');
         }
-        const [sharedStockLocations, sharedPaymentMethods, sharedShippingMethods] = await Promise.all([
+        const [templateStockLocations, templatePaymentMethods, templateShippingMethods] = await Promise.all([
             this.connection.getRepository(ctx, StockLocation).find({
                 where: { channels: { id: template.id } },
                 order: { createdAt: 'ASC' },
@@ -136,8 +144,8 @@ export class StoreProvisioningService {
                 order: { createdAt: 'ASC' },
             }),
         ]);
-        if (sharedStockLocations.length === 0) {
-            throw new UserInputError('基础店铺没有可共享的库存点');
+        if (templateStockLocations.length === 0) {
+            throw new UserInputError('基础店铺没有可复制的库存点');
         }
         await this.assertUnique(ctx, normalized.code, normalized.administrator.emailAddress);
 
@@ -200,14 +208,18 @@ export class StoreProvisioningService {
             roleIds: [role.id],
         });
         await this.merchantInitialPasswordService.requirePasswordChange(ctx, administrator);
-        for (const stockLocation of sharedStockLocations) {
-            await this.channelService.assignToChannels(ctx, StockLocation, stockLocation.id, [channel.id]);
+        const channelCtx = this.contextForChannel(ctx, channel);
+        const stockLocations: StockLocation[] = [];
+        for (const stockLocation of templateStockLocations) {
+            stockLocations.push(await this.cloneStockLocation(channelCtx, channel, stockLocation));
         }
-        for (const paymentMethod of sharedPaymentMethods) {
-            await this.channelService.assignToChannels(ctx, PaymentMethod, paymentMethod.id, [channel.id]);
+        for (const paymentMethod of templatePaymentMethods.filter(
+            method => method.code !== USDT_TRC20_PAYMENT_METHOD_CODE,
+        )) {
+            await this.clonePaymentMethod(channelCtx, channel, paymentMethod);
         }
-        for (const shippingMethod of sharedShippingMethods) {
-            await this.channelService.assignToChannels(ctx, ShippingMethod, shippingMethod.id, [channel.id]);
+        for (const shippingMethod of templateShippingMethods) {
+            await this.cloneShippingMethod(channelCtx, channel, shippingMethod);
         }
         const profile = await this.storeProfileService.createDraft(ctx, channel);
         await this.recordStorefrontNameTranslation(ctx, profile, preparedStorefrontName);
@@ -217,7 +229,7 @@ export class StoreProvisioningService {
             channelId: channel.id,
             roleId: role.id,
             administratorId: administrator.id,
-            stockLocationId: sharedStockLocations[0].id,
+            stockLocationId: stockLocations[0].id,
             profileId: profile.id,
             channelCode: channel.code,
             temporaryPassword,
@@ -298,6 +310,90 @@ export class StoreProvisioningService {
             },
             [field],
         );
+    }
+
+    private contextForChannel(ctx: RequestContext, channel: Channel): RequestContext {
+        const channelCtx = ctx.copy();
+        Object.assign(channelCtx as unknown as Record<string, unknown>, {
+            _channel: channel,
+            _languageCode: channel.defaultLanguageCode,
+            _currencyCode: channel.defaultCurrencyCode,
+        });
+        return channelCtx;
+    }
+
+    private async cloneStockLocation(
+        ctx: RequestContext,
+        channel: Channel,
+        source: StockLocation,
+    ): Promise<StockLocation> {
+        const cloned = await this.stockLocationService.create(ctx, {
+            name: source.name,
+            description: source.description,
+            customFields: source.customFields,
+        });
+        await this.removeDefaultChannelAssignment(ctx, channel, StockLocation, cloned.id);
+        return cloned;
+    }
+
+    private async cloneShippingMethod(
+        ctx: RequestContext,
+        channel: Channel,
+        source: ShippingMethod,
+    ): Promise<ShippingMethod> {
+        const cloned = await this.shippingMethodService.create(ctx, {
+            code: source.code,
+            checker: this.operationInput(source.checker),
+            calculator: this.operationInput(source.calculator),
+            fulfillmentHandler: source.fulfillmentHandlerCode,
+            translations: source.translations.map(translation => ({
+                languageCode: translation.languageCode,
+                name: translation.name,
+                description: translation.description,
+                customFields: translation.customFields,
+            })),
+            customFields: source.customFields,
+        });
+        await this.removeDefaultChannelAssignment(ctx, channel, ShippingMethod, cloned.id);
+        return cloned;
+    }
+
+    private async clonePaymentMethod(
+        ctx: RequestContext,
+        channel: Channel,
+        source: PaymentMethod,
+    ): Promise<PaymentMethod> {
+        const cloned = await this.paymentMethodService.create(ctx, {
+            code: source.code,
+            enabled: source.enabled,
+            ...(source.checker ? { checker: this.operationInput(source.checker) } : {}),
+            handler: this.operationInput(source.handler),
+            translations: source.translations.map(translation => ({
+                languageCode: translation.languageCode,
+                name: translation.name,
+                description: translation.description,
+                customFields: translation.customFields,
+            })),
+            customFields: source.customFields,
+        });
+        await this.removeDefaultChannelAssignment(ctx, channel, PaymentMethod, cloned.id);
+        return cloned;
+    }
+
+    private operationInput(operation: { code: string; args: Array<{ name: string; value: string }> }) {
+        return { code: operation.code, arguments: operation.args.map(argument => ({ ...argument })) };
+    }
+
+    private async removeDefaultChannelAssignment<T extends StockLocation | ShippingMethod | PaymentMethod>(
+        ctx: RequestContext,
+        channel: Channel,
+        entity: Type<T>,
+        entityId: ID,
+    ): Promise<void> {
+        const defaultChannel = await this.channelService.getDefaultChannel(ctx);
+        if (String(defaultChannel.id) !== String(channel.id)) {
+            await this.channelService.removeFromChannels(ctx, entity, entityId, [defaultChannel.id]);
+        }
     }
 
     private extendSuperAdminContext(ctx: RequestContext, channel: Channel, permissions: Permission[]): void {

@@ -2,7 +2,7 @@ import 'reflect-metadata';
 
 import { ContentTranslationService } from '@vendure/content-translation-plugin';
 import { Channel, EntityNotFoundError, Seller } from '@vendure/core';
-import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StoreProfile } from './entities/store-profile.entity';
@@ -667,8 +667,9 @@ describe('StoreProfileService', () => {
     });
 
     it('accepts the actual Damatong publisher names through the API service', async () => {
-        const configPath = fileURLToPath(
-            new URL('../../dev-server/scripts/damatong-storefront-config.mjs', import.meta.url),
+        const configPath = path.resolve(
+            process.cwd(),
+            '../dev-server/scripts/damatong-storefront-config.mjs',
         );
         const { damatongStorefront } = await import(configPath);
         const current = profile();

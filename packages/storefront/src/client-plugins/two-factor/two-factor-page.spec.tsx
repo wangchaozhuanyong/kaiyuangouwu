@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
+/* eslint-disable import/order -- The repository import organizer keeps type-only relative imports after libraries. */
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { ActiveCustomer } from '../../types';
+import type { ActiveCustomer } from '../../types';
+import type { TwoFactorAccount } from './types';
 
 import { TwoFactorPage } from './two-factor-page';
-import { TwoFactorAccount } from './types';
 
 const storageState = vi.hoisted(() => ({
     available: false,
@@ -104,6 +104,41 @@ describe('TwoFactorPage', () => {
         );
         expect(saveButton).toBeDefined();
         expect(saveButton?.disabled).toBe(false);
+    });
+
+    it('allows an anonymous visitor to generate a code without signing in', async () => {
+        await act(async () => {
+            root.render(
+                <TwoFactorPage
+                    customer={null}
+                    language="zh"
+                    onBack={vi.fn()}
+                    onSignIn={vi.fn()}
+                    onNotify={vi.fn()}
+                />,
+            );
+            await Promise.resolve();
+        });
+
+        expect(container.textContent).not.toContain('登录后使用 2FA 工具');
+        const secretInput = container.querySelector<HTMLInputElement>('#storefront-two-factor-secret');
+        expect(secretInput).not.toBeNull();
+
+        act(() => {
+            const valueSetter = Object.getOwnPropertyDescriptor(
+                HTMLInputElement.prototype,
+                'value',
+            )?.set?.bind(secretInput);
+            valueSetter?.('JBSWY3DPEHPK3PXP');
+            secretInput?.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+
+        await act(async () => {
+            secretInput?.form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            await Promise.resolve();
+        });
+
+        expect(container.textContent).toContain('123 456');
     });
 
     it('collapses both explanations by default and expands them on request', async () => {

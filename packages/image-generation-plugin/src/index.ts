@@ -27,3 +27,9 @@ export type {
     SaveImageModelInput,
     SaveImageProviderCredentialInput,
 } from './types.js';
+
+export { ImageProviderBillingLink } from './entities/image-provider-billing-link.entity.js';
+export { ImageProviderCostAdjustment } from './entities/image-provider-cost-adjustment.entity.js';
+export * from './image-provider-billing-review.js';
+
+export { runBillingReviewCli } from './image-provider-billing-cli.js';

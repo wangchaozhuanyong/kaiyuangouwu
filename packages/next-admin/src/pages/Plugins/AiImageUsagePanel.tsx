@@ -250,6 +250,84 @@ function ImageUsageDetail({ record, onClose }: { record: ImageAiUsageRecord; onC
                     detail && (
                         <>
                             <ImageUsageCost record={detail.record} />
+                            {(detail.costAdjustments ?? []).length > 0 && (
+                                <section aria-label="历史费用审定" className="space-y-3">
+                                    <h3 className="font-semibold">历史费用审定</h3>
+                                    <p className="text-xs text-slate-500">
+                                        以下金额来自已审核的供应商账单交叉匹配，不代表请求编号直接匹配。更正记录按时间倒序保留。
+                                    </p>
+                                    {detail.costAdjustments.map(review => (
+                                        <details
+                                            key={review.id}
+                                            className="rounded-lg border border-slate-200 p-3 text-sm"
+                                        >
+                                            <summary className="cursor-pointer">
+                                                审定 #{review.id} ·{' '}
+                                                {review.recordType === 'LEGACY_PROMPT'
+                                                    ? '描述优化'
+                                                    : review.recordType === 'PROMPT_ATTEMPT'
+                                                      ? '描述优化调用'
+                                                      : '生图费用'}{' '}
+                                                #{review.recordIdSnapshot}
+                                                {' · '}
+                                                {review.newCostMicrounits == null || !review.newCurrency
+                                                    ? '更正为费用未知'
+                                                    : `${review.newCurrency} ${(review.newCostMicrounits / 1_000_000).toFixed(6)}`}
+                                            </summary>
+                                            <dl className="mt-3 grid gap-x-4 gap-y-2 break-all sm:grid-cols-[130px_1fr]">
+                                                <dt>审核时间 / 人员</dt>
+                                                <dd>
+                                                    {formatDateTime(review.reviewedAt)} / {review.reviewer}
+                                                </dd>
+                                                <dt>关联方式</dt>
+                                                <dd>
+                                                    {review.matchingStatus === 'COST_REVERTED'
+                                                        ? '费用已更正为未知'
+                                                        : '交叉匹配已审'}
+                                                </dd>
+                                                <dt>批次 / 授权引用</dt>
+                                                <dd>
+                                                    {review.batchId} / {review.authorizationRef}
+                                                </dd>
+                                                <dt>原费用</dt>
+                                                <dd>
+                                                    {review.oldCostMicrounits == null || !review.oldCurrency
+                                                        ? '未知'
+                                                        : `${review.oldCurrency} ${(review.oldCostMicrounits / 1_000_000).toFixed(6)}`}
+                                                </dd>
+                                                <dt>审定说明</dt>
+                                                <dd>{review.reason}</dd>
+                                                {review.previousAdjustmentId && (
+                                                    <>
+                                                        <dt>更正前审定</dt>
+                                                        <dd>#{review.previousAdjustmentId}</dd>
+                                                    </>
+                                                )}
+                                                <dt>供应商账单</dt>
+                                                <dd className="space-y-2">
+                                                    {review.supplierBills.map(bill => (
+                                                        <div key={`${bill.supplierScope}:${bill.billId}`}>
+                                                            <div>
+                                                                {bill.supplierScope} / {bill.billId}
+                                                            </div>
+                                                            <div>
+                                                                {bill.currency}{' '}
+                                                                {(bill.amountMicrounits / 1_000_000).toFixed(
+                                                                    6,
+                                                                )}{' '}
+                                                                /{' '}
+                                                                {bill.billedAt
+                                                                    ? formatDateTime(bill.billedAt)
+                                                                    : `${bill.displayedTime}（${bill.timeZone ?? '时区未核实'}）`}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </dd>
+                                            </dl>
+                                        </details>
+                                    ))}
+                                </section>
+                            )}
                             <p className="text-xs text-slate-500">
                                 请求编号用于追溯；保存编号不代表已经与供应商账单核实。
                             </p>
@@ -297,13 +375,17 @@ function ImageUsageDetail({ record, onClose }: { record: ImageAiUsageRecord; onC
                                         <dd>
                                             {attempt.matchingStatus === 'UNRECONCILED'
                                                 ? '尚未核实供应商账单'
-                                                : attempt.matchingStatus}
+                                                : attempt.matchingStatus === 'CROSS_MATCH_REVIEWED'
+                                                  ? '交叉匹配已审'
+                                                  : attempt.matchingStatus}
                                         </dd>
                                         <dt>费用来源</dt>
                                         <dd>
                                             {attempt.costSource === 'UNVERIFIED'
                                                 ? '未核实'
-                                                : attempt.costSource}
+                                                : attempt.costSource === 'SUPPLIER_BILLING'
+                                                  ? '供应商账单审定'
+                                                  : attempt.costSource}
                                         </dd>
                                         {attempt.reportedCostEvidence && (
                                             <>

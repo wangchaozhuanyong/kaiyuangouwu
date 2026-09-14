@@ -8,6 +8,7 @@ import { ImageGenerationJob } from './entities/image-generation-job.entity';
 import { ImageGenerationOutput } from './entities/image-generation-output.entity';
 import { ImagePromptOptimizationAttempt } from './entities/image-prompt-optimization-attempt.entity';
 import { ImagePromptOptimization } from './entities/image-prompt-optimization.entity';
+import { ImageProviderCostAdjustment } from './entities/image-provider-cost-adjustment.entity';
 import { ImageUsageQuotaBucket } from './entities/image-usage-quota-bucket.entity';
 import { ImageUsageQuotaEvent } from './entities/image-usage-quota-event.entity';
 import {
@@ -60,17 +61,9 @@ export class ImageGenerationUsageQuery {
                     failureStates: ['FAILED', 'UNKNOWN', 'CANCELLED', 'PARTIAL_SUCCESS'],
                 });
             if (options.missingCostOnly) {
-                const rawMissing = await this.connection
-                    .getRepository(ctx, ImageGenerationCostEvent)
-                    .createQueryBuilder('cost')
-                    .select('DISTINCT cost.jobIdSnapshot', 'jobId')
-                    .where('cost.channelId = :channelId', { channelId: ctx.channelId })
-                    .andWhere('(cost.actualCostMicrounits IS NULL OR cost.costCurrency IS NULL)')
-                    .limit(50_000)
-                    .getRawMany();
-                const missingIds = rawMissing.map(row => String(row.jobId));
-                if (missingIds.length) query.andWhere('job.id IN (:...missingIds)', { missingIds });
-                else query.andWhere('1 = 0');
+                query.andWhere(missingImageCostSql(this.connection), {
+                    reviewChannelId: String(ctx.channelId),
+                });
             }
             [imageItems, imageTotal] = await query
                 .orderBy('job.createdAt', 'DESC')
@@ -98,10 +91,9 @@ export class ImageGenerationUsageQuery {
             } else if (options.state) query.andWhere('1 = 0');
             if (options.failuresOnly) query.andWhere('prompt.errorMessage IS NOT NULL');
             if (options.missingCostOnly) {
-                query.andWhere(
-                    "(prompt.attemptLedgerVersion IS NULL OR prompt.source = 'PENDING' OR " +
-                        '(prompt.upstreamCallCount > 0 AND (prompt.actualCostMicrounits IS NULL OR prompt.costCurrency IS NULL)))',
-                );
+                query.andWhere(missingPromptCostSql(this.connection), {
+                    reviewChannelId: String(ctx.channelId),
+                });
             }
             [promptItems, promptTotal] = await query
                 .orderBy('prompt.createdAt', 'DESC')
@@ -132,6 +124,12 @@ export class ImageGenerationUsageQuery {
               })
             : [];
         const attemptsByPrompt = groupBy(promptAttempts, attempt => attempt.optimizationIdSnapshot);
+        const promptReviews = await this.costAdjustments(
+            ctx,
+            'LEGACY_PROMPT',
+            promptItems.map(item => String(item.id)),
+        );
+        const reviewsByPrompt = groupBy(promptReviews, review => review.recordIdSnapshot);
         const refundsByJob = new Map<string, { amount: number; count: number }>();
         for (const output of refundedOutputs) {
             const key = String(output.jobId);
@@ -149,7 +147,11 @@ export class ImageGenerationUsageQuery {
                 ),
             ),
             ...promptItems.map(prompt =>
-                this.promptUsageRecord(prompt, attemptsByPrompt.get(String(prompt.id)) ?? []),
+                this.promptUsageRecord(
+                    prompt,
+                    attemptsByPrompt.get(String(prompt.id)) ?? [],
+                    reviewsByPrompt.get(String(prompt.id))?.[0],
+                ),
             ),
         ]
             .sort((left, right) => {
@@ -288,6 +290,7 @@ export class ImageGenerationUsageQuery {
     private promptUsageRecord(
         prompt: ImagePromptOptimization,
         attempts: ImagePromptOptimizationAttempt[] = [],
+        review?: ImageProviderCostAdjustment,
     ) {
         const state = prompt.source === 'PENDING' ? 'PENDING' : prompt.errorMessage ? 'FAILED' : 'SUCCEEDED';
         return {
@@ -309,9 +312,16 @@ export class ImageGenerationUsageQuery {
             currencyCode: prompt.currencyCode,
             ...summarizeProviderCosts(
                 prompt.attemptLedgerVersion === 1 ? attempts : [prompt],
-                prompt.attemptLedgerVersion === 1 &&
-                    prompt.source !== 'PENDING' &&
-                    attempts.length >= prompt.upstreamCallCount,
+                prompt.attemptLedgerVersion === 1
+                    ? prompt.source !== 'PENDING' &&
+                          prompt.upstreamCallCount > 0 &&
+                          attempts.length === prompt.upstreamCallCount &&
+                          attempts.every(
+                              attempt =>
+                                  attempt.completedAt !== null &&
+                                  ['SUCCEEDED', 'FAILED', 'UNKNOWN'].includes(attempt.outcome),
+                          )
+                    : isCurrentCostReview(review, prompt),
             ),
             errorMessage: prompt.errorMessage,
         };
@@ -327,6 +337,12 @@ export class ImageGenerationUsageQuery {
             where: { channelId: ctx.channelId, jobIdSnapshot: String(job.id) },
             order: { createdAt: 'ASC', attemptNumber: 'ASC' },
         });
+        const reviews = await this.costAdjustments(
+            ctx,
+            'IMAGE_COST_EVENT',
+            costs.map(cost => String(cost.id)),
+        );
+        const reviewsByCost = groupBy(reviews, review => review.recordIdSnapshot);
         const wallet = job.walletUsageId
             ? await this.connection.getRepository(ctx, ReferralWalletUsage).findOne({
                   where: { id: job.walletUsageId, channelId: ctx.channelId },
@@ -411,12 +427,16 @@ export class ImageGenerationUsageQuery {
         }
         return {
             record: this.imageUsageRecord(job, costs),
+            costAdjustments: reviews,
             attempts: costs.map(cost =>
-                attemptAudit({
-                    ...cost,
-                    modelId: cost.modelCodeSnapshot,
-                    stage: cost.providerStage ?? 'LEGACY',
-                }),
+                attemptAudit(
+                    {
+                        ...cost,
+                        modelId: cost.modelCodeSnapshot,
+                        stage: cost.providerStage ?? 'LEGACY',
+                    },
+                    reviewsByCost.get(String(cost.id))?.[0],
+                ),
             ),
             inputPrompt: job.originalPrompt,
             outputPrompt: job.finalPrompt,
@@ -445,6 +465,15 @@ export class ImageGenerationUsageQuery {
             where: { channelId: ctx.channelId, optimizationIdSnapshot: String(prompt.id) },
             order: { attemptNumber: 'ASC' },
         });
+        const reviews =
+            prompt.attemptLedgerVersion === 1
+                ? await this.costAdjustments(
+                      ctx,
+                      'PROMPT_ATTEMPT',
+                      attempts.map(attempt => String(attempt.id)),
+                  )
+                : await this.costAdjustments(ctx, 'LEGACY_PROMPT', [String(prompt.id)]);
+        const reviewsByAttempt = groupBy(reviews, review => review.recordIdSnapshot);
         const wallet = prompt.walletUsageId
             ? await this.connection.getRepository(ctx, ReferralWalletUsage).findOne({
                   where: { id: prompt.walletUsageId, channelId: ctx.channelId },
@@ -495,8 +524,11 @@ export class ImageGenerationUsageQuery {
             keyLast4: prompt.credentialLast4Snapshot || null,
         });
         return {
-            record: this.promptUsageRecord(prompt, attempts),
-            attempts: attempts.map(attemptAudit),
+            record: this.promptUsageRecord(prompt, attempts, reviews[0]),
+            costAdjustments: reviews,
+            attempts: attempts.map(attempt =>
+                attemptAudit(attempt, reviewsByAttempt.get(String(attempt.id))?.[0]),
+            ),
             inputPrompt: prompt.inputPrompt,
             outputPrompt: prompt.optimizedPrompt,
             totalTokens: prompt.totalTokens,
@@ -511,6 +543,14 @@ export class ImageGenerationUsageQuery {
             outputs: [],
             timeline: sortUsageTimeline(timeline),
         };
+    }
+
+    private async costAdjustments(ctx: RequestContext, recordType: string, ids: string[]) {
+        if (!ids.length) return [];
+        return this.connection.getRepository(ctx, ImageProviderCostAdjustment).find({
+            where: { channelId: String(ctx.channelId), recordType, recordIdSnapshot: In(ids) },
+            order: { id: 'DESC' },
+        });
     }
 
     private async quotaTimeline(ctx: RequestContext, resourceIds: string[]) {
@@ -573,24 +613,92 @@ export class ImageGenerationUsageQuery {
     }
 }
 
-function attemptAudit(attempt: {
-    callId?: string | null;
-    attemptNumber: number;
-    stage: string;
-    outcome: string;
-    modelId: string;
-    credentialNameSnapshot: string;
-    headerRequestId?: string | null;
-    headerRequestIdSource?: string | null;
-    modelResponseId?: string | null;
-    providerRequestId?: string | null;
-    costSource?: string | null;
-    actualCostMicrounits?: number | null;
-    costCurrency?: string | null;
-    latencyMs: number;
-    reportedCostEvidence?: unknown;
-    httpStatus?: number | null;
-    createdAt: Date;
-}) {
-    return { ...attempt, costSource: attempt.costSource ?? 'UNVERIFIED', matchingStatus: 'UNRECONCILED' };
+function attemptAudit(
+    attempt: {
+        callId?: string | null;
+        attemptNumber: number;
+        stage: string;
+        outcome: string;
+        modelId: string;
+        credentialNameSnapshot: string;
+        headerRequestId?: string | null;
+        headerRequestIdSource?: string | null;
+        modelResponseId?: string | null;
+        providerRequestId?: string | null;
+        costSource?: string | null;
+        actualCostMicrounits?: number | null;
+        costCurrency?: string | null;
+        latencyMs: number;
+        reportedCostEvidence?: unknown;
+        httpStatus?: number | null;
+        createdAt: Date;
+    },
+    review?: ImageProviderCostAdjustment,
+) {
+    const reviewed = isCurrentCostReview(review, attempt);
+    return {
+        ...attempt,
+        costSource: reviewed ? 'SUPPLIER_BILLING' : (attempt.costSource ?? 'UNVERIFIED'),
+        matchingStatus: reviewed ? 'CROSS_MATCH_REVIEWED' : 'UNRECONCILED',
+    };
+}
+
+function isCurrentCostReview(
+    review: ImageProviderCostAdjustment | undefined,
+    cost: {
+        actualCostMicrounits?: number | null;
+        costCurrency?: string | null;
+    },
+) {
+    return (
+        review?.matchingStatus === 'CROSS_MATCH_REVIEWED' &&
+        review.newCostMicrounits != null &&
+        review.newCostMicrounits === cost.actualCostMicrounits &&
+        review.newCurrency === cost.costCurrency
+    );
+}
+
+function costSql(connection: TransactionalConnection) {
+    const mysql = ['mysql', 'mariadb'].includes(connection.rawConnection.options.type);
+    const escape = (name: string) => connection.rawConnection.driver.escape(name);
+    const column = (alias: string, name: string) => `${escape(alias)}.${escape(name)}`;
+    const idText = (alias: string) => `CAST(${column(alias, 'id')} AS ${mysql ? 'CHAR' : 'TEXT'})`;
+    // Historical tables may use a different MySQL collation from new audit tables.
+    const equal = (left: string, right: string) =>
+        mysql ? `BINARY ${left} = BINARY ${right}` : `${left} = ${right}`;
+    return { column, idText, equal };
+}
+
+function missingImageCostSql(connection: TransactionalConnection) {
+    const { column: c, idText, equal } = costSql(connection);
+    const owned = `${c('cost', 'channelId')} = :channelId AND ${equal(c('cost', 'jobIdSnapshot'), idText('job'))}`;
+    return (
+        `(${c('job', 'state')} IN ('QUEUED', 'RUNNING') OR NOT EXISTS ` +
+        `(SELECT 1 FROM image_generation_cost_event cost WHERE ${owned}) OR EXISTS ` +
+        `(SELECT 1 FROM image_generation_cost_event cost WHERE ${owned} AND ` +
+        `(${c('cost', 'actualCostMicrounits')} IS NULL OR ${c('cost', 'costCurrency')} IS NULL)))`
+    );
+}
+
+function missingPromptCostSql(connection: TransactionalConnection) {
+    const { column: c, idText, equal } = costSql(connection);
+    const approved =
+        `SELECT 1 FROM image_provider_cost_adjustment review WHERE ${c('review', 'channelId')} = :reviewChannelId ` +
+        `AND ${c('review', 'recordType')} = 'LEGACY_PROMPT' AND ${equal(c('review', 'recordIdSnapshot'), idText('prompt'))} ` +
+        `AND ${c('review', 'matchingStatus')} = 'CROSS_MATCH_REVIEWED' ` +
+        `AND ${c('review', 'newCostMicrounits')} = ${c('prompt', 'actualCostMicrounits')} ` +
+        `AND ${equal(c('review', 'newCurrency'), c('prompt', 'costCurrency'))} AND NOT EXISTS ` +
+        `(SELECT 1 FROM image_provider_cost_adjustment newer WHERE ${c('newer', 'targetKey')} = ${c('review', 'targetKey')} ` +
+        `AND ${c('newer', 'id')} > ${c('review', 'id')})`;
+    const owned = `${c('attempt', 'channelId')} = :channelId AND ${equal(c('attempt', 'optimizationIdSnapshot'), idText('prompt'))}`;
+    return (
+        `(${c('prompt', 'source')} = 'PENDING' OR ` +
+        `((${c('prompt', 'attemptLedgerVersion')} IS NULL OR ${c('prompt', 'attemptLedgerVersion')} <> 1) AND NOT EXISTS (${approved})) OR ` +
+        `(${c('prompt', 'attemptLedgerVersion')} = 1 AND (` +
+        `${c('prompt', 'upstreamCallCount')} <= 0 OR ` +
+        `(SELECT COUNT(*) FROM image_prompt_optimization_attempt attempt WHERE ${owned}) <> ${c('prompt', 'upstreamCallCount')} OR ` +
+        `EXISTS (SELECT 1 FROM image_prompt_optimization_attempt attempt WHERE ${owned} AND ` +
+        `(${c('attempt', 'completedAt')} IS NULL OR ${c('attempt', 'outcome')} NOT IN ('SUCCEEDED', 'FAILED', 'UNKNOWN') OR ` +
+        `${c('attempt', 'actualCostMicrounits')} IS NULL OR ${c('attempt', 'costCurrency')} IS NULL)))))`
+    );
 }

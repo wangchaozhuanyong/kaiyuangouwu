@@ -86,17 +86,33 @@ export class ProductPackagingService {
         const product = await this.connection.getEntityOrThrow(ctx, Product, input.productId, {
             relations: ['channels'],
         });
-        if (!product.channels.some(channel => idsAreEqual(channel.id, ctx.channelId))) {
-            throw new UserInputError('The product is not assigned to the active channel.');
+        if (
+            product.channels.length !== 1 ||
+            !product.channels.some(channel => idsAreEqual(channel.id, ctx.channelId))
+        ) {
+            throw new UserInputError(
+                'Packaging can only be configured for a product assigned exclusively to the active channel.',
+            );
         }
         const variants = await this.connection.getRepository(ctx, ProductVariant).find({
             where: { id: In([input.unitVariantId, input.packageVariantId]) },
-            relations: ['product'],
+            relations: ['product', 'channels'],
         });
         const unitVariant = variants.find(variant => idsAreEqual(variant.id, input.unitVariantId));
         const packageVariant = variants.find(variant => idsAreEqual(variant.id, input.packageVariantId));
         if (!unitVariant || !packageVariant) {
             throw new UserInputError('Both packaging variants must exist.');
+        }
+        if (
+            [unitVariant, packageVariant].some(
+                variant =>
+                    variant.channels.length !== 1 ||
+                    !variant.channels.some(channel => idsAreEqual(channel.id, ctx.channelId)),
+            )
+        ) {
+            throw new UserInputError(
+                'Both packaging variants must be assigned exclusively to the active channel.',
+            );
         }
         if (
             !idsAreEqual(unitVariant.productId, product.id) ||

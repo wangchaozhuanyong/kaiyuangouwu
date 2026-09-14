@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from './api';
+import { DesktopLayoutContext } from './desktop-layout';
 import { languageCodeFor } from './i18n';
 import { AccountPage } from './pages/account-page';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
@@ -53,7 +54,14 @@ const overview: MyReferralOverview = {
     ledger: [],
 };
 
-function renderAccount(referralEnabled: boolean, accountHeroImageUrl: string | null = null): string {
+function renderAccount(
+    referralEnabled: boolean,
+    accountHeroImageUrl: string | null = null,
+    options: {
+        desktop?: boolean;
+        prepareClient?: (client: ReturnType<typeof createStorefrontQueryClient>) => void;
+    } = {},
+): string {
     const client = createStorefrontQueryClient();
     const languageCode = languageCodeFor('zh');
     const program: ReferralProgram = {
@@ -99,6 +107,7 @@ function renderAccount(referralEnabled: boolean, accountHeroImageUrl: string | n
         );
     }
 
+    options.prepareClient?.(client);
     const api = {
         referralProgram: vi.fn(),
         myReferralOverview: vi.fn(),
@@ -126,7 +135,9 @@ function renderAccount(referralEnabled: boolean, accountHeroImageUrl: string | n
                     onLogout: vi.fn(),
                 }}
             >
-                <AccountPage />
+                <DesktopLayoutContext.Provider value={options.desktop ?? false}>
+                    <AccountPage />
+                </DesktopLayoutContext.Provider>
             </AccountPageContext.Provider>
         </QueryClientProvider>,
     );
@@ -139,6 +150,7 @@ describe('account referral visibility', () => {
         expect(markup).toContain('grid-cols-4');
         expect(markup).toContain('邀请返利');
         expect(markup).toContain('¥8.8');
+        expect(markup).not.toContain('data-page-pending="query"');
     });
 
     it('keeps three entries and hides referral when the program is disabled', () => {
@@ -148,12 +160,34 @@ describe('account referral visibility', () => {
         expect(markup).not.toContain('邀请返利');
     });
 
-    it('renders the managed account hero image as the top background layer', () => {
+    it('renders managed account artwork as an image tracked by the shared readiness boundary', () => {
         const markup = renderAccount(true, 'https://assets.example.com/account-hero.webp');
 
         expect(markup).toContain('has-custom-background');
-        expect(markup).toContain(
-            '--account-hero-image:url(&quot;https://assets.example.com/account-hero.webp&quot;)',
-        );
+        expect(markup).toContain('account-hero-art');
+        expect(markup).toContain('src="https://assets.example.com/account-hero.webp"');
+        expect(markup).not.toContain('--account-hero-image');
+    });
+
+    it.each([false, true])('waits for initial member counts in desktop=%s', desktop => {
+        const markup = renderAccount(true, null, {
+            desktop,
+            prepareClient: client =>
+                client.removeQueries({
+                    queryKey: storefrontQueryKeys.customerOrderCounts(
+                        storefrontQueryKeys.market(market),
+                        languageCodeFor('zh'),
+                        customer.id,
+                    ),
+                }),
+        });
+        expect(markup).toContain('data-page-pending="query"');
+    });
+
+    it('does not gate cached member content during a background refresh', () => {
+        const markup = renderAccount(true, null, {
+            prepareClient: client => void client.invalidateQueries(),
+        });
+        expect(markup).not.toContain('data-page-pending="query"');
     });
 });

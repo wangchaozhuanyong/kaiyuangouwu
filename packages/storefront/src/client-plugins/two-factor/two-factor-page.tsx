@@ -1,4 +1,4 @@
-/* eslint-disable max-len -- Bilingual customer-facing copy is intentionally kept next to the UI. */
+/* eslint-disable import/order, max-len -- Bilingual copy and organizer-owned type imports are intentional. */
 import {
     Check,
     ChevronDown,
@@ -19,13 +19,16 @@ import {
 } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ActiveCustomer, StorefrontLanguage } from '../../types';
+import type { BatchImportErrorCode } from './batch-parser';
+import type { TwoFactorAccount } from './types';
 
-import { EmptyState, Subpage } from '../../storefront-ui/page-shell';
-import { ActiveCustomer, StorefrontLanguage } from '../../types';
+import { Subpage } from '../../storefront-ui/page-shell';
 
-import { BatchImportErrorCode, MAX_BATCH_CHARACTERS, parseBatchImport } from './batch-parser';
+import { getAnonymousTwoFactorOwnerId } from './anonymous-owner';
+import { MAX_BATCH_CHARACTERS, parseBatchImport } from './batch-parser';
 import { formatTotpCode, generateTotp, getTotpSecondsRemaining, normalizeBase32Secret } from './totp';
-import { MAX_TWO_FACTOR_ACCOUNTS, TwoFactorAccount } from './types';
+import { MAX_TWO_FACTOR_ACCOUNTS } from './types';
 import { useBrowserVault } from './use-browser-vault';
 import { VaultControls } from './vault-controls';
 
@@ -41,15 +44,10 @@ export function TwoFactorPage(props: Readonly<TwoFactorPageProps>) {
     return <TwoFactorPageSession key={props.customer?.id ?? 'anonymous'} {...props} />;
 }
 
-function TwoFactorPageSession({
-    customer,
-    language,
-    onBack,
-    onSignIn,
-    onNotify,
-}: Readonly<TwoFactorPageProps>) {
+function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly<TwoFactorPageProps>) {
     const isZh = language === 'zh';
-    const ownerId = customer?.id ?? '';
+    const [anonymousOwnerId] = useState(getAnonymousTwoFactorOwnerId);
+    const ownerId = customer?.id ?? anonymousOwnerId;
     const sensitiveRevision = useRef(0);
     const [now, setNow] = useState(() => Date.now());
     const [codes, setCodes] = useState<Record<string, string>>({});
@@ -153,20 +151,6 @@ function TwoFactorPageSession({
             active = false;
         };
     }, [quickSecret, timeStep]);
-
-    if (!customer) {
-        return (
-            <Subpage title={copy.title} language={language} onBack={onBack}>
-                <EmptyState
-                    icon={<KeyRound />}
-                    title={copy.signInTitle}
-                    detail={copy.signInDescription}
-                    action={copy.signIn}
-                    onAction={onSignIn}
-                />
-            </Subpage>
-        );
-    }
 
     const queryCode = async (event: FormEvent) => {
         event.preventDefault();
@@ -959,11 +943,6 @@ function copyFor(language: StorefrontLanguage) {
     const isZh = language === 'zh';
     return {
         title: isZh ? '2FA 动态码' : '2FA codes',
-        signInTitle: isZh ? '登录后使用 2FA 工具' : 'Sign in to use the 2FA tool',
-        signInDescription: isZh
-            ? '登录后可在当前浏览器中查询和管理动态码。'
-            : 'Sign in to query and manage codes in this browser.',
-        signIn: isZh ? '去登录' : 'Sign in',
         quickQuery: isZh ? '查询 2FA 动态码' : 'Query a 2FA code',
         description: isZh
             ? '粘贴 Base32 密钥即可在本机生成验证码，密钥不会上传到服务器。'

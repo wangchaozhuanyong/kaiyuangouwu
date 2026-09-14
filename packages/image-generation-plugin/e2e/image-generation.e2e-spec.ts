@@ -40,11 +40,18 @@ import { ImageGenerationJob } from '../src/entities/image-generation-job.entity'
 import { ImageGenerationOutput } from '../src/entities/image-generation-output.entity';
 import { ImageModelConfig } from '../src/entities/image-model-config.entity';
 import { ImagePrivateAsset } from '../src/entities/image-private-asset.entity';
+import { ImagePromptOptimizationAttempt } from '../src/entities/image-prompt-optimization-attempt.entity';
 import { ImagePromptOptimization } from '../src/entities/image-prompt-optimization.entity';
+import { ImageProviderCredential } from '../src/entities/image-provider-credential.entity';
 import { ImageUsageQuotaBucket } from '../src/entities/image-usage-quota-bucket.entity';
 import { ImageUsageQuotaEvent } from '../src/entities/image-usage-quota-event.entity';
 import { ImageGenerationQueueService } from '../src/image-generation-queue.service';
 import { ImageGenerationPlugin } from '../src/image-generation.plugin';
+import {
+    applyImageBillingReview,
+    inspectImageBillingTarget,
+    type ImageBillingReview,
+} from '../src/image-provider-billing-review';
 import { ImageUsageQuotaService } from '../src/image-usage-quota.service';
 import { ImagePromptEngineService } from '../src/prompt/image-prompt-engine.service';
 import { PromptRulesService } from '../src/prompt/prompt-rules.service';
@@ -418,7 +425,20 @@ const USAGE_RECORD_DETAIL = gql`
             inputPrompt
             outputPrompt
             providerRequestIds
+            costAdjustments {
+                id
+                batchId
+                recordType
+                reviewer
+                matchingStatus
+                newCostMicrounits
+                supplierBills {
+                    billId
+                }
+            }
             record {
+                actualCostMicrounits
+                costCurrency
                 costCompleteness
                 missingCostCount
                 costBreakdown {
@@ -433,6 +453,7 @@ const USAGE_RECORD_DETAIL = gql`
                 attemptNumber
                 outcome
                 costSource
+                matchingStatus
             }
             timeline {
                 stage
@@ -1193,6 +1214,464 @@ describe('AI image generation full flow', () => {
             6,
         );
     }, 30_000);
+
+    it.runIf(config.dbConnectionOptions.type === 'mysql')(
+        'reviews historical supplier costs through the real usage API and reopens corrected unknown fees',
+        async () => {
+            const source = server.app.get(TransactionalConnection).rawConnection;
+            const prompts = source.getRepository(ImagePromptOptimization);
+            const channel = (await source.getRepository(Channel).find({ take: 1 }))[0];
+            const customer = await source
+                .getRepository(Customer)
+                .findOneByOrFail({ emailAddress: 'image-e2e@example.com' });
+            const model = await source
+                .getRepository(ImageModelConfig)
+                .findOneByOrFail({ code: 'OPENAI_HIGH_QUALITY' });
+            const original = new ImagePromptOptimization({
+                channelId: channel.id,
+                customerId: customer.id,
+                inputPrompt: '袋装咖啡商品图',
+                optimizedPrompt: '袋装咖啡包装正面商品图',
+                promptSpec: { subject: '袋装咖啡包装' },
+                source: 'MODEL',
+                optimizerModelId: 'prompt-e2e-model',
+                promptSkillHash: 'c'.repeat(64),
+                recommendedModelCode: model.code,
+                recommendationReason: 'Billing review fixture',
+                idempotencyKey: null,
+                billingMode: 'FREE',
+                chargedAmount: 0,
+                pricingSnapshot: null,
+                currencyCode: CurrencyCode.USD,
+                walletUsageId: null,
+                quotaEventId: null,
+                inputTokens: null,
+                outputTokens: null,
+                totalTokens: null,
+                actualCostMicrounits: null,
+                costCurrency: null,
+                providerRequestId: null,
+                credentialCodeSnapshot: 'prompt-e2e-primary',
+                credentialNameSnapshot: 'Prompt E2E fixture',
+                credentialLast4Snapshot: '-key',
+                credentialSelectionReason: 'E2E fixture',
+                attemptLedgerVersion: 1,
+                upstreamCallCount: 0,
+                latencyMs: 10,
+                errorMessage: null,
+            });
+            const legacy = await prompts.save(
+                new ImagePromptOptimization({
+                    ...original,
+                    id: undefined,
+                    createdAt: undefined,
+                    updatedAt: undefined,
+                    idempotencyKey: randomUUID(),
+                    attemptLedgerVersion: null,
+                    upstreamCallCount: 2,
+                    actualCostMicrounits: null,
+                    costCurrency: null,
+                }),
+            );
+            const jobs = source.getRepository(ImageGenerationJob);
+            const existingJob = await jobs.save(
+                new ImageGenerationJob({
+                    channelId: channel.id,
+                    customerId: customer.id,
+                    modelConfigId: model.id,
+                    referenceAssetId: null,
+                    idempotencyKey: randomUUID(),
+                    modelCodeSnapshot: model.code,
+                    modelNameSnapshot: model.displayNameEn,
+                    officialModelIdSnapshot: model.officialModelId,
+                    providerModelIdSnapshot: model.providerModelId,
+                    protocolSnapshot: model.protocol,
+                    providerScopeSnapshot: 'OPENAI',
+                    providerCredentialFingerprint: 'd'.repeat(64),
+                    providerCredentialCodeSnapshot: 'openai-e2e-primary',
+                    providerCredentialNameSnapshot: 'OpenAI E2E primary',
+                    providerCredentialLast4Snapshot: '-key',
+                    providerSelectionReason: 'E2E fixture',
+                    providerIdempotencySupportedSnapshot: false,
+                    originalPrompt: '袋装咖啡商品图',
+                    finalPrompt: '袋装咖啡包装正面商品图',
+                    promptSpec: { subject: '袋装咖啡包装' },
+                    promptSkillHash: 'c'.repeat(64),
+                    referenceMode: 'NONE',
+                    aspectRatio: '1:1',
+                    resolution: '1K',
+                    quantity: 1,
+                    unitPriceSnapshot: 125,
+                    pricingSnapshot: null,
+                    reservedAmount: 0,
+                    expectedChargeAmount: 0,
+                    freeQuantityReserved: 0,
+                    freeQuantityCaptured: 0,
+                    paidQuantityReserved: 0,
+                    quotaEventId: null,
+                    capturedAmount: 0,
+                    releasedAmount: 0,
+                    currencyCode: CurrencyCode.USD,
+                    walletUsageId: null,
+                    state: 'SUCCEEDED',
+                    termsVersion: 'e2e-2026-08-27',
+                    termsAcceptedAt: new Date(),
+                    errorMessage: null,
+                    completedAt: new Date(),
+                    customerDeletedAt: null,
+                }),
+            );
+            const image = await source.getRepository(ImageGenerationCostEvent).save(
+                new ImageGenerationCostEvent({
+                    channelId: channel.id,
+                    jobIdSnapshot: String(existingJob.id),
+                    outputIdSnapshot: `billing-${randomUUID()}`,
+                    attemptNumber: 1,
+                    modelCodeSnapshot: model.code,
+                    providerScopeSnapshot: 'OPENAI',
+                    credentialFingerprint: 'd'.repeat(64),
+                    credentialCodeSnapshot: 'openai-e2e-primary',
+                    credentialNameSnapshot: 'OpenAI E2E primary',
+                    credentialLast4Snapshot: '-key',
+                    credentialSelectionReason: 'E2E fixture',
+                    saleUnitPriceSnapshot: 125,
+                    saleCurrencyCode: 'USD',
+                    outcome: 'SUCCEEDED',
+                    httpStatus: 200,
+                    providerRequestId: 'image-e2e-billing-request',
+                    callId: randomUUID(),
+                    headerRequestId: 'image-e2e-billing-header',
+                    headerRequestIdSource: 'HEADER',
+                    modelResponseId: 'image-e2e-billing-response',
+                    costSource: null,
+                    reportedCostEvidence: null,
+                    latencyMs: 10,
+                    actualCostMicrounits: null,
+                    costCurrency: null,
+                    usage: null,
+                    errorMessage: null,
+                    failureCode: null,
+                    providerStage: 'GENERATION',
+                }),
+            );
+            const makeReview = async (
+                recordType: ImageBillingReview['recordType'],
+                recordId: string,
+                channelId: string,
+            ): Promise<ImageBillingReview> => {
+                const snapshot = await inspectImageBillingTarget(source, channelId, recordType, recordId);
+                return {
+                    batchId: 'api-e2e-review',
+                    channelId,
+                    recordType,
+                    recordId,
+                    expectedSnapshotHash: snapshot.snapshotHash,
+                    previousAdjustmentId: snapshot.previousAdjustmentId,
+                    sourceHash: 'a'.repeat(64),
+                    reviewer: 'e2e-operator',
+                    authorizationRef: 'e2e-approval',
+                    reviewedAt: new Date().toISOString(),
+                    reason: 'Fixture billing review',
+                    reviewStatus: 'APPROVED',
+                    completeRange: true,
+                    newCostMicrounits: 2136,
+                    newCurrency: 'USD',
+                    bills: [
+                        {
+                            supplierScope: 'e2e',
+                            billId: `${recordType}:${recordId}`,
+                            amountMicrounits: 2136,
+                            currency: 'USD',
+                            billedAt: new Date().toISOString(),
+                            displayedTime: '2026/09/13 13:00:00',
+                            timeZone: 'UTC',
+                            evidenceHash: 'b'.repeat(64),
+                        },
+                    ],
+                };
+            };
+            const promptReview = await makeReview(
+                'LEGACY_PROMPT',
+                String(legacy.id),
+                String(legacy.channelId),
+            );
+            await applyImageBillingReview(source, promptReview, true);
+            await applyImageBillingReview(
+                source,
+                await makeReview('IMAGE_COST_EVENT', String(image.id), String(image.channelId)),
+                true,
+            );
+            const encode = (id: string | number) =>
+                server.app.get(ConfigService).entityOptions.entityIdStrategy.encodeId(id);
+            const detail = (
+                await adminClient.query(USAGE_RECORD_DETAIL, {
+                    recordType: 'PROMPT_OPTIMIZATION',
+                    id: encode(legacy.id),
+                })
+            ).imageAiUsageRecord;
+            expect(detail.record.costCompleteness).toBe('COMPLETE');
+            expect(detail.attempts).toEqual([]);
+            expect(detail.costAdjustments).toEqual([
+                expect.objectContaining({
+                    batchId: 'api-e2e-review',
+                    matchingStatus: 'CROSS_MATCH_REVIEWED',
+                }),
+            ]);
+            const imageDetail = (
+                await adminClient.query(USAGE_RECORD_DETAIL, {
+                    recordType: 'IMAGE_GENERATION',
+                    id: encode(image.jobIdSnapshot),
+                })
+            ).imageAiUsageRecord;
+            expect(imageDetail.attempts).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        matchingStatus: 'CROSS_MATCH_REVIEWED',
+                        costSource: 'SUPPLIER_BILLING',
+                    }),
+                ]),
+            );
+            const missingIds = async () =>
+                (
+                    await adminClient.query(USAGE_RECORDS, {
+                        input: { recordType: 'PROMPT_OPTIMIZATION', missingCostOnly: true, take: 100 },
+                    })
+                ).imageAiUsageRecords.items.map((item: { id: string }) => item.id);
+            expect(await missingIds()).not.toContain(encode(legacy.id));
+            // A complete multi-currency ledger has no single aggregate currency, but is not missing cost.
+            const multi = await prompts.save(
+                new ImagePromptOptimization({
+                    ...original,
+                    id: undefined,
+                    createdAt: undefined,
+                    updatedAt: undefined,
+                    idempotencyKey: randomUUID(),
+                    attemptLedgerVersion: 1,
+                    upstreamCallCount: 2,
+                    actualCostMicrounits: null,
+                    costCurrency: null,
+                }),
+            );
+            const attemptRepo = source.getRepository(ImagePromptOptimizationAttempt);
+            const originalAttempt = new ImagePromptOptimizationAttempt({
+                channelId: channel.id,
+                optimizationIdSnapshot: 'fixture',
+                attemptNumber: 1,
+                stage: 'INITIAL',
+                outcome: 'SUCCEEDED',
+                modelId: 'prompt-e2e-model',
+                providerScope: 'OPENAI',
+                credentialCodeSnapshot: 'prompt-e2e-primary',
+                credentialNameSnapshot: 'Prompt E2E fixture',
+                credentialLast4Snapshot: '-key',
+                credentialSelectionReason: 'E2E fixture',
+                providerRequestId: 'prompt-e2e-billing-request',
+                callId: randomUUID(),
+                headerRequestId: 'prompt-e2e-billing-header',
+                headerRequestIdSource: 'HEADER',
+                modelResponseId: 'prompt-e2e-billing-response',
+                costSource: null,
+                reportedCostEvidence: null,
+                httpStatus: 200,
+                latencyMs: 10,
+                actualCostMicrounits: null,
+                costCurrency: null,
+                usage: null,
+                completedAt: new Date(),
+                errorMessage: null,
+            });
+            for (const [index, currency] of ['USD', 'EUR'].entries())
+                await attemptRepo.save(
+                    new ImagePromptOptimizationAttempt({
+                        ...originalAttempt,
+                        id: undefined,
+                        callId: randomUUID(),
+                        optimizationIdSnapshot: String(multi.id),
+                        attemptNumber: index + 1,
+                        actualCostMicrounits: 1000,
+                        costCurrency: currency,
+                    }),
+                );
+            const multiDetail = (
+                await adminClient.query(USAGE_RECORD_DETAIL, {
+                    recordType: 'PROMPT_OPTIMIZATION',
+                    id: encode(multi.id),
+                })
+            ).imageAiUsageRecord;
+            expect(multiDetail.record.costCompleteness).toBe('COMPLETE');
+            expect(await missingIds()).not.toContain(encode(multi.id));
+            // A known amount from an unfinished call is still not an auditable aggregate.
+            const incomplete = await prompts.save(
+                new ImagePromptOptimization({
+                    ...original,
+                    id: undefined,
+                    createdAt: undefined,
+                    updatedAt: undefined,
+                    idempotencyKey: randomUUID(),
+                    attemptLedgerVersion: 1,
+                    upstreamCallCount: 1,
+                    actualCostMicrounits: null,
+                    costCurrency: null,
+                }),
+            );
+            await attemptRepo.save(
+                new ImagePromptOptimizationAttempt({
+                    ...originalAttempt,
+                    id: undefined,
+                    callId: randomUUID(),
+                    optimizationIdSnapshot: String(incomplete.id),
+                    attemptNumber: 1,
+                    actualCostMicrounits: 1000,
+                    costCurrency: 'USD',
+                    completedAt: null,
+                }),
+            );
+            const incompleteDetail = (
+                await adminClient.query(USAGE_RECORD_DETAIL, {
+                    recordType: 'PROMPT_OPTIMIZATION',
+                    id: encode(incomplete.id),
+                })
+            ).imageAiUsageRecord;
+            expect(incompleteDetail.record.costCompleteness).toBe('PARTIAL');
+            expect(await missingIds()).toContain(encode(incomplete.id));
+            const noCostJob = await jobs.save(
+                new ImageGenerationJob({
+                    ...existingJob,
+                    id: undefined,
+                    idempotencyKey: randomUUID(),
+                    state: 'SUCCEEDED',
+                }),
+            );
+            const missingImages = (
+                await adminClient.query(USAGE_RECORDS, {
+                    input: { recordType: 'IMAGE_GENERATION', missingCostOnly: true, take: 100 },
+                })
+            ).imageAiUsageRecords;
+            expect(missingImages.items.map((item: { id: string }) => item.id)).toContain(
+                encode(noCostJob.id),
+            );
+            const revert = {
+                ...(await makeReview('LEGACY_PROMPT', String(legacy.id), String(legacy.channelId))),
+                batchId: 'api-e2e-revert',
+                newCostMicrounits: null,
+                newCurrency: null,
+                bills: promptReview.bills,
+            };
+            await applyImageBillingReview(source, revert, true);
+            expect(await missingIds()).toContain(encode(legacy.id));
+            const reverted = (
+                await adminClient.query(USAGE_RECORD_DETAIL, {
+                    recordType: 'PROMPT_OPTIMIZATION',
+                    id: encode(legacy.id),
+                })
+            ).imageAiUsageRecord;
+            expect(reverted.record.costCompleteness).toBe('UNKNOWN');
+            expect(reverted.costAdjustments).toHaveLength(2);
+
+            // New prompt ledgers are reviewed per real attempt; the parent total is derived atomically.
+            const reviewedPrompt = await prompts.save(
+                new ImagePromptOptimization({
+                    ...original,
+                    id: undefined,
+                    createdAt: undefined,
+                    updatedAt: undefined,
+                    idempotencyKey: randomUUID(),
+                    attemptLedgerVersion: 1,
+                    upstreamCallCount: 2,
+                    actualCostMicrounits: null,
+                    costCurrency: null,
+                }),
+            );
+            const reviewedAttempts = [];
+            for (const index of [0, 1])
+                reviewedAttempts.push(
+                    await attemptRepo.save(
+                        new ImagePromptOptimizationAttempt({
+                            ...originalAttempt,
+                            id: undefined,
+                            callId: randomUUID(),
+                            optimizationIdSnapshot: String(reviewedPrompt.id),
+                            attemptNumber: index + 1,
+                            stage: index === 0 ? 'INITIAL' : 'REPAIR',
+                            outcome: index === 0 ? 'FAILED' : 'SUCCEEDED',
+                            actualCostMicrounits: null,
+                            costCurrency: null,
+                            completedAt: new Date(),
+                        }),
+                    ),
+                );
+            const getPromptDetail = async () =>
+                (
+                    await adminClient.query(USAGE_RECORD_DETAIL, {
+                        recordType: 'PROMPT_OPTIMIZATION',
+                        id: encode(reviewedPrompt.id),
+                    })
+                ).imageAiUsageRecord;
+            const firstReview = await makeReview(
+                'PROMPT_ATTEMPT',
+                String(reviewedAttempts[0].id),
+                String(reviewedPrompt.channelId),
+            );
+            await applyImageBillingReview(source, firstReview, true);
+            expect((await getPromptDetail()).record.costCompleteness).toBe('PARTIAL');
+            expect(await missingIds()).toContain(encode(reviewedPrompt.id));
+            await applyImageBillingReview(
+                source,
+                await makeReview(
+                    'PROMPT_ATTEMPT',
+                    String(reviewedAttempts[1].id),
+                    String(reviewedPrompt.channelId),
+                ),
+                true,
+            );
+            const completePrompt = await getPromptDetail();
+            expect(completePrompt.record).toMatchObject({
+                costCompleteness: 'COMPLETE',
+                actualCostMicrounits: 4272,
+                costCurrency: 'USD',
+            });
+            expect(completePrompt.attempts).toHaveLength(2);
+            expect(
+                completePrompt.attempts.every(
+                    (attempt: { matchingStatus: string; costSource: string }) =>
+                        attempt.matchingStatus === 'CROSS_MATCH_REVIEWED' &&
+                        attempt.costSource === 'SUPPLIER_BILLING',
+                ),
+            ).toBe(true);
+            expect(completePrompt.costAdjustments).toHaveLength(2);
+            expect(
+                completePrompt.costAdjustments.every(
+                    (review: { recordType: string }) => review.recordType === 'PROMPT_ATTEMPT',
+                ),
+            ).toBe(true);
+            expect(await missingIds()).not.toContain(encode(reviewedPrompt.id));
+            expect(await prompts.findOneByOrFail({ id: reviewedPrompt.id })).toEqual({
+                ...reviewedPrompt,
+                actualCostMicrounits: 4272,
+                costCurrency: 'USD',
+            });
+            await applyImageBillingReview(
+                source,
+                {
+                    ...(await makeReview(
+                        'PROMPT_ATTEMPT',
+                        String(reviewedAttempts[0].id),
+                        String(reviewedPrompt.channelId),
+                    )),
+                    batchId: 'api-e2e-attempt-revert',
+                    newCostMicrounits: null,
+                    newCurrency: null,
+                    bills: firstReview.bills,
+                },
+                true,
+            );
+            const correctedPrompt = await getPromptDetail();
+            expect(correctedPrompt.record.costCompleteness).toBe('PARTIAL');
+            expect(correctedPrompt.attempts[0].matchingStatus).toBe('UNRECONCILED');
+            expect(correctedPrompt.costAdjustments).toHaveLength(3);
+            expect(await missingIds()).toContain(encode(reviewedPrompt.id));
+        },
+    );
 
     it('binds private images to the database owner and channel and revokes HTTP links', async () => {
         const upload = await shopClient.fileUploadMutation({
@@ -2192,6 +2671,346 @@ describe('AI image generation full flow', () => {
             );
         } finally {
             provider.mockRestore();
+        }
+    }, 30_000);
+
+    // Closure review F01/F03: fail after the job write, not just before the wallet operation.
+    function failClosureJobSave(connection: TransactionalConnection, jobId: any) {
+        const prototype = Object.getPrototypeOf(connection.rawConnection.getRepository(ImageGenerationJob));
+        const save = prototype.save;
+        let pending = true;
+        return vi.spyOn(prototype, 'save').mockImplementation(function (this: any, ...args: any[]) {
+            return save.apply(this, args).then((result: any) => {
+                if (
+                    pending &&
+                    this.metadata.target === ImageGenerationJob &&
+                    String(args[0]?.id) === String(jobId)
+                ) {
+                    pending = false;
+                    throw new Error('closure rollback after parent settlement write');
+                }
+                return result;
+            });
+        });
+    }
+
+    async function closureSetup(free: boolean) {
+        const connection = server.app.get(TransactionalConnection);
+        const raw = connection.rawConnection;
+        const model = await raw
+            .getRepository(ImageModelConfig)
+            .findOneByOrFail({ code: 'OPENAI_HIGH_QUALITY' });
+        await raw.getRepository(ImageModelConfig).update(
+            { id: model.id },
+            {
+                unitPrice: 100,
+                freeImageEnabled: free,
+                dailyFreeImageUnlimited: free,
+                dailyFreeImageLimit: 0,
+                supportsIdempotency: true,
+                dailyGenerationSafetyLimit: 100,
+            },
+        );
+        return {
+            connection,
+            raw,
+            create: async (key: string) => {
+                // Each financial fault starts with a healthy isolated route; repeated UNKNOWN
+                // fixtures must not trip the unrelated three-failure circuit breaker.
+                await raw.getRepository(ImageModelConfig).update(
+                    { id: model.id },
+                    {
+                        healthStatus: 'HEALTHY',
+                        consecutiveFailures: 0,
+                    },
+                );
+                await raw.getRepository(ImageProviderCredential).update(
+                    { scope: 'OPENAI' },
+                    {
+                        healthStatus: 'HEALTHY',
+                        consecutiveFailures: 0,
+                        cooldownUntil: null,
+                    },
+                );
+                return (
+                    await shopClient.query(CREATE, {
+                        input: {
+                            modelCode: model.code,
+                            prompt: key,
+                            referenceMode: 'NONE',
+                            aspectRatio: '1:1',
+                            resolution: '1K',
+                            quantity: 1,
+                            expectedUnitPrice: 100,
+                            expectedChargeAmount: free ? 0 : 100,
+                            currencyCode: 'USD',
+                            termsAccepted: true,
+                            idempotencyKey: key,
+                        },
+                    })
+                ).createImageGeneration;
+            },
+            restore: () => raw.getRepository(ImageModelConfig).save(model),
+        };
+    }
+
+    it.each(['PAID', 'FREE'])(
+        'closure release is atomic and repairs legacy terminal holds (%s)',
+        async mode => {
+            const fixture = await closureSetup(mode === 'FREE');
+            const { connection, raw } = fixture;
+            const queue = server.app.get(ImageGenerationQueueService);
+            const provider = vi
+                .spyOn(server.app.get(ImageProviderClient), 'generate')
+                .mockRejectedValue(
+                    new AmbiguousImageProviderError('closure unknown fixture', { retryAfterSeconds: 0 }),
+                );
+            try {
+                for (const legacy of [false, true]) {
+                    const key = `closure-release-${mode}-${legacy}`;
+                    const created = await fixture.create(key);
+                    await waitForJob(created.id, ['UNKNOWN']);
+                    const job = await raw
+                        .getRepository(ImageGenerationJob)
+                        .findOneByOrFail({ idempotencyKey: key });
+                    const outputs = raw.getRepository(ImageGenerationOutput);
+                    const output = await outputs.findOneByOrFail({ jobId: job.id });
+                    if (legacy) {
+                        await outputs.update(
+                            { id: output.id },
+                            {
+                                state: 'FAILED',
+                                walletSettled: true,
+                                billingMode: 'RELEASED',
+                                chargeAmount: 0,
+                            },
+                        );
+                    } else {
+                        await outputs.update(
+                            { id: output.id },
+                            { unknownAt: new Date(Date.now() - 20 * 60_000) },
+                        );
+                        const failure = failClosureJobSave(connection, job.id);
+                        try {
+                            await expect(queue.reconcileUnknown()).rejects.toThrow('closure rollback');
+                        } finally {
+                            failure.mockRestore();
+                        }
+                        expect(await outputs.findOneByOrFail({ id: output.id })).toMatchObject({
+                            state: 'UNKNOWN',
+                            walletSettled: false,
+                        });
+                        if (job.walletUsageId)
+                            expect(
+                                await raw
+                                    .getRepository(ReferralWalletUsage)
+                                    .findOneByOrFail({ id: job.walletUsageId }),
+                            ).toMatchObject({ capturedAmount: 0, releasedAmount: 0 });
+                        if (job.quotaEventId)
+                            expect(
+                                await raw
+                                    .getRepository(ImageUsageQuotaEvent)
+                                    .findOneByOrFail({ id: job.quotaEventId }),
+                            ).toMatchObject({ consumedAmount: 0, releasedAmount: 0 });
+                    }
+                    for (let tick = 0; tick < 3; tick++) await queue.reconcileUnknown();
+                    const view = (await shopClient.query(MY_JOB, { id: created.id })).myImageGenerationJob;
+                    expect(view).toMatchObject({
+                        state: 'FAILED',
+                        capturedAmount: 0,
+                        releasedAmount: mode === 'FREE' ? 0 : 100,
+                    });
+                    expect(await outputs.findOneByOrFail({ id: output.id })).toMatchObject({
+                        state: 'FAILED',
+                        walletSettled: true,
+                    });
+                    if (job.walletUsageId)
+                        expect(
+                            await raw
+                                .getRepository(ReferralWalletUsage)
+                                .findOneByOrFail({ id: job.walletUsageId }),
+                        ).toMatchObject({ capturedAmount: 0, releasedAmount: 100 });
+                    if (job.quotaEventId)
+                        expect(
+                            await raw
+                                .getRepository(ImageUsageQuotaEvent)
+                                .findOneByOrFail({ id: job.quotaEventId }),
+                        ).toMatchObject({ consumedAmount: 0, releasedAmount: 1 });
+                }
+            } finally {
+                provider.mockRestore();
+                await fixture.restore();
+            }
+        },
+        30_000,
+    );
+
+    it.each(['PAID', 'FREE'])(
+        'closure refund rolls back parent failures and repairs legacy totals (%s)',
+        async mode => {
+            const fixture = await closureSetup(mode === 'FREE');
+            const { connection, raw } = fixture;
+            const provider = vi.spyOn(server.app.get(ImageProviderClient), 'generate').mockResolvedValue({
+                bytes: Buffer.from(generatedPngBase64, 'base64'),
+                mimeType: 'image/png',
+            });
+            try {
+                const key = `closure-refund-${mode}`;
+                const created = await fixture.create(key);
+                const view = (await waitForJob(created.id, ['SUCCEEDED'])).myImageGenerationJob;
+                const job = await raw
+                    .getRepository(ImageGenerationJob)
+                    .findOneByOrFail({ idempotencyKey: key });
+                const output = await raw
+                    .getRepository(ImageGenerationOutput)
+                    .findOneByOrFail({ jobId: job.id });
+                const failure = failClosureJobSave(connection, job.id);
+                try {
+                    await expect(
+                        adminClient.query(REFUND_OUTPUT, { outputId: view.outputs[0].id }),
+                    ).rejects.toThrow('closure rollback');
+                } finally {
+                    failure.mockRestore();
+                }
+                expect(
+                    (await raw.getRepository(ImageGenerationOutput).findOneByOrFail({ id: output.id }))
+                        .refundedAt,
+                ).toBeNull();
+                if (job.walletUsageId)
+                    expect(
+                        await raw
+                            .getRepository(ReferralWalletUsage)
+                            .findOneByOrFail({ id: job.walletUsageId }),
+                    ).toMatchObject({ capturedAmount: 100, releasedAmount: 0 });
+                if (job.quotaEventId)
+                    expect(
+                        await raw
+                            .getRepository(ImageUsageQuotaEvent)
+                            .findOneByOrFail({ id: job.quotaEventId }),
+                    ).toMatchObject({ consumedAmount: 1, releasedAmount: 0 });
+                await adminClient.query(REFUND_OUTPUT, { outputId: view.outputs[0].id });
+                await expect(
+                    adminClient.query(REFUND_OUTPUT, { outputId: view.outputs[0].id }),
+                ).rejects.toThrow('不能重复退款');
+                expect(
+                    (await shopClient.query(MY_JOB, { id: created.id })).myImageGenerationJob.capturedAmount,
+                ).toBe(0);
+                if (mode === 'PAID')
+                    await raw
+                        .getRepository(ImageGenerationJob)
+                        .update({ id: job.id }, { capturedAmount: 100, releasedAmount: 0 });
+                for (let tick = 0; tick < 3; tick++)
+                    await server.app.get(ImageGenerationQueueService).reconcileUnknown();
+                expect(
+                    (await shopClient.query(MY_JOB, { id: created.id })).myImageGenerationJob,
+                ).toMatchObject({ capturedAmount: 0, releasedAmount: mode === 'FREE' ? 0 : 100 });
+                if (job.walletUsageId)
+                    expect(
+                        await raw
+                            .getRepository(ReferralWalletUsage)
+                            .findOneByOrFail({ id: job.walletUsageId }),
+                    ).toMatchObject({ capturedAmount: 0, releasedAmount: 100 });
+                if (job.quotaEventId)
+                    expect(
+                        await raw
+                            .getRepository(ImageUsageQuotaEvent)
+                            .findOneByOrFail({ id: job.quotaEventId }),
+                    ).toMatchObject({ consumedAmount: 0, releasedAmount: 1 });
+            } finally {
+                provider.mockRestore();
+                await fixture.restore();
+            }
+        },
+        30_000,
+    );
+
+    it('closure retry commits output and dispatch together and restores legacy approval', async () => {
+        const fixture = await closureSetup(false);
+        const { raw } = fixture;
+        let unknown = true;
+        const provider = vi.spyOn(server.app.get(ImageProviderClient), 'generate').mockImplementation(() => {
+            if (unknown)
+                return Promise.reject(
+                    new AmbiguousImageProviderError('closure retry unknown', { retryAfterSeconds: 0 }),
+                );
+            return Promise.resolve({
+                bytes: Buffer.from(generatedPngBase64, 'base64'),
+                mimeType: 'image/png',
+            });
+        });
+        const retry = gql`
+            mutation ClosureRetry($outputId: ID!) {
+                retryUnknownImageOutput(outputId: $outputId) {
+                    id
+                    state
+                }
+            }
+        `;
+        try {
+            for (const legacy of [false, true]) {
+                unknown = true;
+                const key = `closure-retry-${legacy}`;
+                const created = await fixture.create(key);
+                const view = (await waitForJob(created.id, ['UNKNOWN'])).myImageGenerationJob;
+                const job = await raw
+                    .getRepository(ImageGenerationJob)
+                    .findOneByOrFail({ idempotencyKey: key });
+                const output = await raw
+                    .getRepository(ImageGenerationOutput)
+                    .findOneByOrFail({ jobId: job.id });
+                const dispatches = raw.getRepository(ImageGenerationDispatch);
+                await dispatches.update(
+                    { outputId: output.id },
+                    { state: 'COMPLETED', processingStage: 'REQUEST_STARTED' },
+                );
+                if (legacy) {
+                    await raw
+                        .getRepository(ImageGenerationOutput)
+                        .update(
+                            { id: output.id },
+                            { state: 'QUEUED', failureCode: 'UNKNOWN_RETRY', unknownAt: null },
+                        );
+                    const before = provider.mock.calls.length;
+                    await server.app.get(ImageGenerationQueueService).reconcileUnknown();
+                    expect(provider).toHaveBeenCalledTimes(before);
+                } else {
+                    const prototype = Object.getPrototypeOf(dispatches);
+                    const upsert = prototype.upsert;
+                    const failure = vi.spyOn(prototype, 'upsert').mockImplementation(function (
+                        this: any,
+                        ...args: any[]
+                    ) {
+                        if (this.metadata.target === ImageGenerationDispatch)
+                            return Promise.reject(new Error('closure dispatch write failed'));
+                        return upsert.apply(this, args);
+                    });
+                    try {
+                        await expect(
+                            adminClient.query(retry, { outputId: view.outputs[0].id }),
+                        ).rejects.toThrow('closure dispatch write failed');
+                    } finally {
+                        failure.mockRestore();
+                    }
+                }
+                expect(
+                    await raw.getRepository(ImageGenerationOutput).findOneByOrFail({ id: output.id }),
+                ).toMatchObject({ state: 'UNKNOWN', walletSettled: false });
+                expect((await shopClient.query(MY_JOB, { id: created.id })).myImageGenerationJob.state).toBe(
+                    'UNKNOWN',
+                );
+                unknown = false;
+                await adminClient.query(retry, { outputId: view.outputs[0].id });
+                expect(
+                    (await waitForJob(created.id, ['SUCCEEDED'])).myImageGenerationJob.capturedAmount,
+                ).toBe(100);
+                if (!job.walletUsageId) throw new Error('Paid retry is missing its wallet usage');
+                expect(
+                    await raw.getRepository(ReferralWalletUsage).findOneByOrFail({ id: job.walletUsageId }),
+                ).toMatchObject({ capturedAmount: 100, releasedAmount: 0 });
+            }
+        } finally {
+            provider.mockRestore();
+            await fixture.restore();
         }
     }, 30_000);
 

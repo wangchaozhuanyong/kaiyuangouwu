@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Res } from '@nestjs/common';
+import { Controller, Get, Param, Req, Res } from '@nestjs/common';
 import { createReadStream, statSync } from 'node:fs';
 import path from 'node:path';
 
@@ -9,8 +9,11 @@ export class DigitalDeliveryController {
     constructor(private readonly deliveryService: DigitalDeliveryService) {}
 
     @Get(':token')
-    async download(@Param('token') token: string, @Res() response: any): Promise<void> {
-        const authorized = await this.deliveryService.authorizeDownload(token);
+    async download(@Param('token') token: string, @Req() request: any, @Res() response: any): Promise<void> {
+        const authorized = await this.deliveryService.authorizeDownload(
+            token,
+            request.headers?.['x-forwarded-host'] ?? request.headers?.host,
+        );
         if (!authorized) {
             response.status(404).send('Digital delivery link is invalid or expired');
             return;

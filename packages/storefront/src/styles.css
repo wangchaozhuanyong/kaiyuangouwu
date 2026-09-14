@@ -291,16 +291,7 @@ img {
 }
 
 .safe-image {
-    /* Let the browser paint cached and progressively decoded images immediately. */
-    opacity: 1;
-    transition: transform 220ms ease;
-}
-
-.safe-image-frame.has-placeholder .safe-image:not(.is-loaded) {
     opacity: 0;
-}
-
-.safe-image-frame.has-placeholder .safe-image {
     transition:
         opacity 180ms ease,
         transform 220ms ease;
@@ -309,10 +300,55 @@ img {
 .safe-image.is-loaded {
     opacity: 1;
 }
-
 .safe-image-frame.is-priority .safe-image {
-    opacity: 1;
     transition: none;
+}
+.safe-image-fallback {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: #94a3b8;
+    background: linear-gradient(135deg, #eef1f0, #e2e8f0);
+    background-size: cover;
+    background-position: center;
+    transition: opacity 180ms ease;
+}
+.safe-image-frame.is-loaded > .safe-image-fallback {
+    opacity: 0;
+}
+.safe-image-frame.is-priority > .safe-image-fallback {
+    transition: none;
+}
+.safe-image-fallback > svg {
+    width: 28px;
+    height: 28px;
+}
+.safe-image-unavailable {
+    display: block;
+    min-height: 1px;
+    width: 100%;
+    height: 100%;
+}
+.page-readiness {
+    min-height: 100dvh;
+}
+.page-readiness-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 65;
+    display: grid;
+    place-items: center;
+    background: var(--skin-background, #f4f5f7);
+}
+.page-readiness-error {
+    max-width: 420px;
+    padding: 24px;
+    text-align: center;
+}
+.page-readiness-error button {
+    margin: 8px;
+    padding: 10px 20px;
 }
 
 .route-transition {
