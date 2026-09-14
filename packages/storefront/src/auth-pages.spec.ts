@@ -353,6 +353,17 @@ describe('managed auth visual layout', () => {
             /@media \(min-width:\s*1024px\) and \(max-width:\s*1199px\)[\s\S]*?\.auth-page \.auth-hero-tags\s*\{[^}]*width:\s*100%;[^}]*flex-wrap:\s*wrap;[^}]*overflow:\s*visible;/,
         );
     });
+
+    it('centers the complete desktop auth module in the available viewport', () => {
+        const styles = readStorefrontStylesheet(['./styles/desktop-pages.css']);
+
+        expect(styles).toMatch(
+            /\.desktop-store-layout:has\(\.auth-page\) #storefront-content\s*\{[^}]*min-height:\s*100dvh;[^}]*padding:\s*32px;[^}]*display:\s*flex;/,
+        );
+        expect(styles).toMatch(
+            /\.desktop-store-layout \.page\.auth-page\s*\{[^}]*width:\s*min\(100%, 1060px\);[^}]*min-height:\s*min\(600px, calc\(100dvh - 64px\)\);[^}]*margin:\s*auto;/,
+        );
+    });
 });
 
 describe('splitCustomerName', () => {

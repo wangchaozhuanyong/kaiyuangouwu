@@ -1072,15 +1072,20 @@
 
     /* Authentication is a desktop form composition, with existing configured brand artwork. */
     .desktop-store-layout:has(.auth-page) {
-        --desktop-header-height: 121px;
+        --desktop-header-height: 0px;
     }
     .desktop-store-layout:has(.auth-page) .desktop-store-nav {
         display: none;
     }
+    .desktop-store-layout:has(.auth-page) #storefront-content {
+        min-height: 100dvh;
+        padding: 32px;
+        display: flex;
+    }
     .desktop-store-layout .page.auth-page {
-        width: min(calc(100% - 64px), 1060px);
-        min-height: 600px;
-        margin: 32px auto;
+        width: min(100%, 1060px);
+        min-height: min(600px, calc(100dvh - 64px));
+        margin: auto;
         padding: 0;
         display: grid;
         grid-template-columns: minmax(0, 1fr) 460px;
