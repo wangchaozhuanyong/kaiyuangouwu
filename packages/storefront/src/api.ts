@@ -53,19 +53,18 @@ import type {
 import { type StorefrontVisualPresetConfig } from '../../storefront-content-plugin/src/visual-presets';
 
 import { AccountApi } from './api/account';
+import { AuthTokenState } from './api/auth-token-state';
 import { CartCheckoutApi } from './api/cart-checkout';
 import { CatalogApi } from './api/catalog';
 import { ContentReviewsApi } from './api/content-reviews';
 import {
     API_URL,
-    AUTH_TOKEN_HEADER,
     authTokenStorageKey,
     calculateStorefrontRealtimeRetry,
     createRequestSignal,
     ErrorResult,
     isStorefrontQuery,
     parseShopApiResponse,
-    readSessionAuthToken,
     SEND_CLIENT_CHANNEL_TOKEN,
     SHOP_API_QUERY_TIMEOUT_MS,
     ShopApiError,
@@ -87,12 +86,7 @@ export {
 };
 
 export class ShopApi {
-    private readonly authTokenStorageKey: string | null;
-    private authToken: string | null;
-    private authTokenGeneration = 0;
-    private authTokenRequestId = 0;
-    private lastAuthTokenRequestId = 0;
-    private latestAuthenticationRequestId = 0;
+    private readonly authTokens: AuthTokenState;
     private storefrontCatalogAvailable: boolean | null = null;
     private readonly contentReviewsApi: ContentReviewsApi;
     private readonly catalogApi: CatalogApi;
@@ -106,14 +100,13 @@ export class ShopApi {
         private readonly market: MarketConfig,
         private readonly languageCode: VendureLanguageCode = market.defaultLanguageCode,
     ) {
-        this.authTokenStorageKey = authTokenStorageKey(market.code);
-        this.authToken = readSessionAuthToken(this.authTokenStorageKey);
+        this.authTokens = new AuthTokenState(authTokenStorageKey(market.code));
         const ctx: ShopApiContext = {
             market: this.market,
             languageCode: this.languageCode,
-            getAuthToken: () => this.authToken,
-            createAuthTokenCapture: () => this.createAuthTokenCapture(),
-            clearAuthToken: () => this.clearAuthToken(),
+            getAuthToken: () => this.authTokens.value,
+            createAuthTokenCapture: () => this.authTokens.createCapture(),
+            clearAuthToken: () => this.authTokens.clear(),
             request: (q, v, s, t, r) => this.request(q, v, s, t, r),
             authenticationRequest: (q, v) => this.request(q, v, undefined, undefined, false, true),
             assertCart: res => this.assertCart(res),
@@ -565,7 +558,7 @@ export class ShopApi {
         resultUnknownOnTimeout = false,
         authenticates = false,
     ): Promise<T> {
-        const captureAuthToken = this.createAuthTokenCapture(authenticates);
+        const captureAuthToken = this.authTokens.createCapture(authenticates);
         const headers: Record<string, string> = {
             'content-type': 'application/json',
             'language-code': this.languageCode,
@@ -573,8 +566,8 @@ export class ShopApi {
         if (SEND_CLIENT_CHANNEL_TOKEN) {
             headers['vendure-token'] = this.market.code;
         }
-        if (this.authToken) {
-            headers.authorization = `Bearer ${this.authToken}`;
+        if (this.authTokens.value) {
+            headers.authorization = `Bearer ${this.authTokens.value}`;
         }
         const languageSeparator = API_URL.includes('?') ? '&' : '?';
         const requestUrl =
@@ -611,46 +604,8 @@ export class ShopApi {
         return parseShopApiResponse<T>(rawBody, response.status, response.ok);
     }
 
-    private createAuthTokenCapture(authenticates = false): (response: Response) => void {
-        const requestId = ++this.authTokenRequestId;
-        const generation = this.authTokenGeneration;
-        if (authenticates) this.latestAuthenticationRequestId = requestId;
-        return response => {
-            const authToken = response.headers.get(AUTH_TOKEN_HEADER)?.trim();
-            if (!authToken || generation !== this.authTokenGeneration) return;
-            if (authenticates) {
-                // A login/verification/reset response owns the new session, even when a
-                // later-started guest query returned first. Older auth attempts cannot win.
-                if (requestId !== this.latestAuthenticationRequestId) return;
-                this.authTokenGeneration++;
-            } else if (requestId < this.lastAuthTokenRequestId) {
-                return;
-            }
-            this.lastAuthTokenRequestId = requestId;
-            this.authToken = authToken;
-            if (!this.authTokenStorageKey) return;
-            try {
-                sessionStorage.setItem(this.authTokenStorageKey, authToken);
-            } catch {
-                // The in-memory token still preserves the session for this page lifetime.
-            }
-        };
-    }
-
-    private clearAuthToken(): void {
-        // Also invalidates pending responses when there was no in-memory token yet.
-        this.authTokenGeneration++;
-        this.authToken = null;
-        if (!this.authTokenStorageKey) return;
-        try {
-            sessionStorage.removeItem(this.authTokenStorageKey);
-        } catch {
-            // Storage can be unavailable in privacy-restricted browser contexts.
-        }
-    }
-
     private publishCookieAuthenticationChange(): void {
-        if (this.authTokenStorageKey === null) publishAuthSessionChange(this.market.code);
+        if (this.authTokens.usesCookieAuthentication) publishAuthSessionChange(this.market.code);
     }
 
     private assertCart(result: StorefrontCart & ErrorResult): StorefrontCart {

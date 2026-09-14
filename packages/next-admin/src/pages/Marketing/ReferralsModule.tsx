@@ -37,15 +37,7 @@ import {
     WithdrawalsPanel,
 } from './ReferralPanels';
 import { ReferralHeading, errorText, programDraft, programDraftError } from './referral-ui';
-import { ProgramDraft, ReferralTab, ReportKey, WithdrawalAction } from './referrals-types';
-
-const REFERRAL_TABS = {
-    settings: 'SETTINGS',
-    promoters: 'PROMOTERS',
-    rewards: 'REWARDS',
-    ledger: 'LEDGER',
-    withdrawals: 'WITHDRAWALS',
-} as const;
+import { ProgramDraft, REFERRAL_TABS, ReferralTab, ReportKey, WithdrawalAction } from './referrals-types';
 
 export function ReferralsModule() {
     const [params] = useSearchParams();
