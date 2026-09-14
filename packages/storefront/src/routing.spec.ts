@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    customerResolvedRoutes,
     getStorefrontScrollRestorationKey,
     routeFromHash,
     routeFromRouterLocation,
@@ -162,6 +163,10 @@ describe('storefront routing', () => {
         expect(routeFromHash('#/flash-sale').name).toBe('flash-sale');
         expect(routeFromHash('#/recommendations').name).toBe('recommendations');
         expect(routeFromHash('#/two-factor').name).toBe('two-factor');
+    });
+
+    it('does not wait for a customer session before opening the public 2FA tool', () => {
+        expect(customerResolvedRoutes).not.toContain('two-factor');
     });
 
     it('preserves email verification and password reset tokens', () => {

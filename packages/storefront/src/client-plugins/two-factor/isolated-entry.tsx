@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import type { ActiveCustomer, StorefrontLanguage } from '../../types';
 
-import { ActiveCustomer, StorefrontLanguage } from '../../types';
-
+import { getAnonymousTwoFactorOwnerId } from './anonymous-owner';
 import { browserVaultStorage } from './browser-storage';
 import { TwoFactorPage } from './two-factor-page';
 
@@ -35,6 +35,7 @@ export function CustomerTwoFactorEntry(
 
 function IsolatedEntrySession(props: Parameters<typeof CustomerTwoFactorEntry>[0]) {
     const iframe = useRef<HTMLIFrameElement>(null);
+    const [ownerId] = useState(() => props.customer?.id ?? getAnonymousTwoFactorOwnerId());
     const [migrating, setMigrating] = useState(false);
     const [legacy, setLegacy] = useState(false);
     const [ready, setReady] = useState(false);
@@ -46,21 +47,20 @@ function IsolatedEntrySession(props: Parameters<typeof CustomerTwoFactorEntry>[0
         invalid = true;
     }
     useEffect(() => {
-        if (!origin || !props.customer) return;
+        if (!origin) return;
         try {
-            const status = browserVaultStorage()?.inspect(props.customer.id);
+            const status = browserVaultStorage()?.inspect(ownerId);
             setLegacy(!!status && (status.exists || status.legacy));
         } catch {
             setLegacy(true);
         }
-        const customerId = props.customer.id;
         const receive = (event: MessageEvent) => {
             if (event.source !== iframe.current?.contentWindow || event.origin !== origin) return;
             if (event.data?.type === 'vendure-vault-ready') {
                 iframe.current?.contentWindow?.postMessage(
                     {
                         type: 'vendure-vault-init',
-                        ownerId: customerId,
+                        ownerId,
                         language: props.language,
                     },
                     origin,
@@ -70,7 +70,7 @@ function IsolatedEntrySession(props: Parameters<typeof CustomerTwoFactorEntry>[0
         };
         window.addEventListener('message', receive);
         return () => window.removeEventListener('message', receive);
-    }, [origin, props.customer?.id, props.language, props.onBack, migrating]);
+    }, [origin, ownerId, props.language, props.onBack, migrating]);
     if (invalid)
         return (
             <p role="alert">
@@ -79,7 +79,7 @@ function IsolatedEntrySession(props: Parameters<typeof CustomerTwoFactorEntry>[0
                     : 'Invalid secure 2FA configuration. Contact support.'}
             </p>
         );
-    if (!origin || !props.customer) return <TwoFactorPage {...props} />;
+    if (!origin) return <TwoFactorPage {...props} />;
     if (migrating)
         return (
             <div>
@@ -127,7 +127,7 @@ function IsolatedEntrySession(props: Parameters<typeof CustomerTwoFactorEntry>[0
                     iframe.current?.contentWindow?.postMessage(
                         {
                             type: 'vendure-vault-init',
-                            ownerId: props.customer?.id,
+                            ownerId,
                             language: props.language,
                         },
                         origin,

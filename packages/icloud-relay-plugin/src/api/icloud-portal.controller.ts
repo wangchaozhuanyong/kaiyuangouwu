@@ -1,4 +1,5 @@
 import { Controller, Get, Res } from '@nestjs/common';
+import { Allow, Permission } from '@vendure/core';
 
 import { PORTAL_HTML } from './portal-html';
 import { PORTAL_JS } from './portal-script';
@@ -9,6 +10,7 @@ import { PORTAL_JS } from './portal-script';
 @Controller('mail-query')
 export class IcloudPortalController {
     @Get()
+    @Allow(Permission.Public)
     servePortal(@Res() res: any) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-cache');
