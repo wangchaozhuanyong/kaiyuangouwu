@@ -8,6 +8,7 @@ export type SafeImageProps = {
     src: string;
     fallbackSrc?: string;
     placeholderSrc?: string;
+    showFallbackIcon?: boolean;
     frameClassName?: string;
     alt: string;
     imageKind?: StorefrontImageKind;
@@ -42,6 +43,7 @@ function SafeImageSource({
     src,
     fallbackSrc,
     placeholderSrc,
+    showFallbackIcon = true,
     frameClassName,
     alt,
     imageKind,
@@ -151,7 +153,7 @@ function SafeImageSource({
                 aria-hidden="true"
                 style={placeholder ? { backgroundImage: `url(${JSON.stringify(placeholder)})` } : undefined}
             >
-                {!placeholder && <Package />}
+                {!placeholder && showFallbackIcon && <Package />}
             </span>
             {!failed ? (
                 <img

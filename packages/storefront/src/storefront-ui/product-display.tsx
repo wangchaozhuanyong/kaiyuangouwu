@@ -429,7 +429,13 @@ export function renderColorfulQuickIcon(label: string, index: number, imageUrl?:
     if (managedImageUrl) {
         return (
             <span className="colorful-icon-img-wrap">
-                <SafeImage src={managedImageUrl} alt="" imageKind="thumbnail" sizes="48px" />
+                <SafeImage
+                    src={managedImageUrl}
+                    alt=""
+                    imageKind="thumbnail"
+                    sizes="48px"
+                    showFallbackIcon={false}
+                />
             </span>
         );
     }

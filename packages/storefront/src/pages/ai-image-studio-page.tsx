@@ -27,6 +27,7 @@ import { ShopApi, ShopApiTimeoutError } from '../api';
 import { isInputMethodKey } from '../input-method';
 import { formatDisplayMoney } from '../money-display';
 import { PageSkeleton } from '../route-loading';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
 import { SafeImage } from '../storefront-ui/product-display';
 import {
@@ -252,7 +253,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                     ...new Map([...current, ...items].map(item => [item.id, item])).values(),
                 ]);
             } catch (error) {
-                if (epoch === historyEpoch.current) setHistoryError(errorMessage(error));
+                if (epoch === historyEpoch.current) setHistoryError(customerErrorMessage(error, isZh));
             } finally {
                 if (epoch === historyEpoch.current) setHistoryLoading(false);
             }
@@ -323,7 +324,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 );
             }
         } catch (error) {
-            if (epoch === loadEpoch.current) setLoadError(errorMessage(error));
+            if (epoch === loadEpoch.current) setLoadError(customerErrorMessage(error, isZh));
         } finally {
             if (epoch === loadEpoch.current) setLoading(false);
         }
@@ -455,7 +456,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 },
                 error => {
                     if (!controller.signal.aborted)
-                        setPromptBudget({ key: budgetKey, error: errorMessage(error) });
+                        setPromptBudget({ key: budgetKey, error: customerErrorMessage(error, isZh) });
                 },
             );
         }, 180);
@@ -711,7 +712,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                     return true;
                 } catch (error) {
                     if (epoch !== settlementEpoch.current) return false;
-                    const message = errorMessage(error);
+                    const message = customerErrorMessage(error, isZh);
                     setReferenceItems(current =>
                         current.map(currentItem =>
                             currentItem.id === item.id
@@ -756,7 +757,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                             : 'Removed from the editor. History still uses this reference until expiry.',
                     );
             } catch (error) {
-                if (epoch === settlementEpoch.current) setReferenceError(errorMessage(error));
+                if (epoch === settlementEpoch.current) setReferenceError(customerErrorMessage(error, isZh));
                 return;
             }
         }
@@ -840,7 +841,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             await api.cancelQueuedImageGeneration(id);
             await Promise.all([load(), loadHistory()]);
         } catch (error) {
-            setActionError(errorMessage(error));
+            setActionError(customerErrorMessage(error, isZh));
         }
     };
     const deleteJob = async () => {
@@ -854,7 +855,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             setJobs(current => current.filter(job => job.id !== id));
             await Promise.all([load(), loadHistory()]);
         } catch (error) {
-            setActionError(errorMessage(error));
+            setActionError(customerErrorMessage(error, isZh));
         } finally {
             setDeletingJobId(null);
         }
@@ -892,11 +893,12 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 setReferenceItems(current =>
                     current.filter(item => !item.asset || !released.has(item.asset.id)),
                 );
-                throw new Error(
+                setActionError(
                     isZh
                         ? '部分旧参考图释放失败，请重试再次创作'
                         : 'Some old references could not be released. Retry recreating this image.',
                 );
+                return;
             }
             clearReferencePreviews();
             setReferenceItems(
@@ -960,7 +962,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             generateRequestRef.current = null;
             showView('CREATE', true);
         } catch (error) {
-            if (epoch === settlementEpoch.current) setActionError(errorMessage(error));
+            if (epoch === settlementEpoch.current) setActionError(customerErrorMessage(error, isZh));
         } finally {
             if (epoch === settlementEpoch.current) setBusy('');
         }
@@ -1686,7 +1688,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                     onView={() => {
                                         setSelectedJobId(job.id);
                                         void refreshDetail(job.id).catch(error =>
-                                            onNotify(errorMessage(error)),
+                                            onNotify(customerErrorMessage(error, isZh)),
                                         );
                                     }}
                                 />
@@ -2190,7 +2192,7 @@ function GenerationDetail({
             if (!current?.imageUrl) throw new Error(isZh ? '图片已删除或过期' : 'Image deleted or expired');
             setPreviewOutput(current);
         } catch (error) {
-            onNotify(errorMessage(error));
+            onNotify(customerErrorMessage(error, isZh));
         }
     };
     const settlementLabel =
@@ -2718,7 +2720,7 @@ function actionErrorMessage(error: unknown, isZh: boolean): string {
             ? '提交结果暂时无法确认。请保持当前参数后重试，系统会复用同一请求，不会重复创建任务。'
             : 'The result is temporarily unknown. Retry with the same settings to reuse this request.';
     }
-    return errorMessage(error);
+    return customerErrorMessage(error, isZh);
 }
 function failureSuggestion(failureCode: string | null | undefined, isZh: boolean): string {
     if (!failureCode) return '';
@@ -2733,6 +2735,6 @@ function failureSuggestion(failureCode: string | null | undefined, isZh: boolean
     }
     return isZh ? ' 可稍后重新创作。' : ' You can retry this generation later.';
 }
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
+function customerErrorMessage(error: unknown, isZh: boolean): string {
+    return storefrontErrorMessage(error, isZh ? 'zh' : 'en');
 }
