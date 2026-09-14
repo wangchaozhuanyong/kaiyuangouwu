@@ -454,6 +454,9 @@ export function CustomersModule() {
                         <div className="relative min-w-0 flex-1 lg:max-w-md">
                             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                             <SearchInput
+                                type="search"
+                                autoComplete="off"
+                                disabled={groupManagerOpen}
                                 value={searchTerm}
                                 onValueChange={setSearchTerm}
                                 aria-label="搜索客户"
@@ -1656,7 +1659,7 @@ function CustomerEditForm({
     );
 }
 
-function GroupManager({
+export function GroupManager({
     open,
     groups,
     onClose,
@@ -1725,28 +1728,32 @@ function GroupManager({
             width="max-w-lg"
         >
             <div className="space-y-4">
-                <div className="flex gap-2">
-                    <input
-                        value={newName}
-                        onChange={event => setNewName(event.target.value)}
-                        onKeyDown={event => {
-                            if (isInputMethodKey(event.nativeEvent)) return;
-                            if (event.key === 'Enter') void create();
-                        }}
-                        maxLength={80}
-                        placeholder="输入新分组名称"
-                        className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs outline-none focus:border-blue-500"
-                    />
-                    <button
-                        type="button"
-                        onClick={() => void create()}
-                        disabled={!newName.trim() || pending}
-                        className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
-                    >
-                        <Plus className="h-3.5 w-3.5" />
-                        新建
-                    </button>
-                </div>
+                {!deleting && (
+                    <div className="flex gap-2">
+                        <input
+                            autoComplete="off"
+                            aria-label="新分组名称"
+                            value={newName}
+                            onChange={event => setNewName(event.target.value)}
+                            onKeyDown={event => {
+                                if (isInputMethodKey(event.nativeEvent)) return;
+                                if (event.key === 'Enter') void create();
+                            }}
+                            maxLength={80}
+                            placeholder="输入新分组名称"
+                            className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs outline-none focus:border-blue-500"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => void create()}
+                            disabled={!newName.trim() || pending}
+                            className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                            新建
+                        </button>
+                    </div>
+                )}
                 <div className="max-h-[420px] space-y-2 overflow-y-auto">
                     {groups.map(group => (
                         <div
@@ -1794,6 +1801,7 @@ function GroupManager({
                                     <button
                                         type="button"
                                         onClick={() => setEditing({ id: group.id, name: group.name })}
+                                        disabled={Boolean(deleting) || pending}
                                         className="rounded p-1.5 text-slate-500 hover:bg-slate-100"
                                         aria-label="重命名分组"
                                     >
@@ -1802,9 +1810,11 @@ function GroupManager({
                                     <button
                                         type="button"
                                         onClick={() => {
+                                            setEditing(null);
                                             setDeletePassword('');
                                             setDeleting(group);
                                         }}
+                                        disabled={Boolean(deleting) || pending}
                                         className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
                                         aria-label="删除分组"
                                     >

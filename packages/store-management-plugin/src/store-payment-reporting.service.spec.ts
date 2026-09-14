@@ -1,9 +1,21 @@
 import { Payment, Refund } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
-import { mergePaymentStats, StorePaymentReportingService } from './store-payment-reporting.service';
+import {
+    mergePaymentStats,
+    paymentReportDate,
+    StorePaymentReportingService,
+} from './store-payment-reporting.service';
 
 describe('StorePaymentReportingService', () => {
+    it.each([
+        ['2026-09-14 08:15:00.123', '2026-09-14T08:15:00.123Z'],
+        ['2026-09-14T08:15:00', '2026-09-14T08:15:00.000Z'],
+        ['2026-09-14T16:15:00+08:00', '2026-09-14T08:15:00.000Z'],
+        [new Date('2026-09-14T08:15:00Z'), '2026-09-14T08:15:00.000Z'],
+    ])('preserves the UTC report instant for %s', (input, expected) => {
+        expect(paymentReportDate(input).toISOString()).toBe(expected);
+    });
     it('combines settled payments and settled refunds into gross and net Channel totals', () => {
         const result = mergePaymentStats(
             [
@@ -72,6 +84,11 @@ describe('StorePaymentReportingService', () => {
         expect(refundQuery.andWhere).toHaveBeenCalledWith('channel.id = :channelId', {
             channelId: 'channel-1',
         });
+        for (const query of [paymentQuery, refundQuery]) {
+            expect(query.andWhere).toHaveBeenCalledWith(expect.stringContaining('OR NOT EXISTS'), {
+                reportDefaultChannelCode: '__default_channel__',
+            });
+        }
         expect(result[0]).toMatchObject({ grossAmount: 5000, refundedAmount: 0, netAmount: 5000 });
     });
 
@@ -130,6 +147,11 @@ describe('StorePaymentReportingService', () => {
         expect(detailsQuery.addOrderBy).toHaveBeenCalledWith('payment.id', 'DESC');
         expect(detailsQuery.offset).toHaveBeenCalledWith(50);
         expect(detailsQuery.limit).toHaveBeenCalledWith(100);
+        for (const query of [detailsQuery, countQuery]) {
+            expect(query.andWhere).toHaveBeenCalledWith(expect.stringContaining('OR NOT EXISTS'), {
+                reportDefaultChannelCode: '__default_channel__',
+            });
+        }
         expect(result).toEqual({
             totalItems: 2,
             items: [
@@ -143,6 +165,7 @@ describe('StorePaymentReportingService', () => {
 function queryBuilder(rows: unknown[], totalItems = rows.length) {
     const builder: Record<string, ReturnType<typeof vi.fn>> = {};
     for (const method of [
+        'from',
         'innerJoin',
         'leftJoin',
         'select',
@@ -160,5 +183,7 @@ function queryBuilder(rows: unknown[], totalItems = rows.length) {
     }
     builder.getRawMany = vi.fn(() => Promise.resolve(rows));
     builder.getRawOne = vi.fn(() => Promise.resolve({ totalItems }));
+    builder.subQuery = vi.fn(() => queryBuilder([]));
+    builder.getQuery = vi.fn(() => '(SELECT 1 FROM merchant_channel_membership)');
     return builder;
 }

@@ -43,6 +43,14 @@ const emptyDraft = (): SupplierDraft => ({
     notes: '',
 });
 
+// oxlint-disable-next-line react/only-export-components -- exported for focused regression tests
+export function validateSupplierDraft(draft: Pick<SupplierDraft, 'name' | 'email'>): string {
+    if (!draft.name.trim()) return '供货商名称不能为空';
+    const email = draft.email.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return '请输入有效的供货商邮箱';
+    return '';
+}
+
 export function SuppliersModule() {
     const [search, setSearch] = useState('');
     const deferredSearch = useDeferredValue(search.trim());
@@ -270,7 +278,11 @@ export function SuppliersModule() {
             {draft && (
                 <SupplierEditor
                     value={draft}
-                    onClose={() => setDraft(null)}
+                    error={actionError}
+                    onClose={() => {
+                        setDraft(null);
+                        setActionError('');
+                    }}
                     onSaved={async message => {
                         setDraft(null);
                         setNotice(message);
@@ -285,13 +297,15 @@ export function SuppliersModule() {
     );
 }
 
-function SupplierEditor({
+export function SupplierEditor({
     value,
+    error,
     onClose,
     onSaved,
     onError,
 }: {
     value: SupplierDraft;
+    error?: string;
     onClose: () => void;
     onSaved: (message: string) => Promise<void>;
     onError: (message: string) => void;
@@ -303,7 +317,8 @@ function SupplierEditor({
     const update = (field: keyof SupplierDraft, next: string | boolean) =>
         setDraft(current => ({ ...current, [field]: next }));
     const save = async () => {
-        if (!draft.name.trim()) return onError('供货商名称不能为空');
+        const validationError = validateSupplierDraft(draft);
+        if (validationError) return onError(validationError);
         try {
             const input = {
                 ...(draft.id ? { id: draft.id } : {}),
@@ -325,6 +340,11 @@ function SupplierEditor({
     };
     return (
         <Modal title={draft.id ? '编辑供货商' : '新增供货商'} onClose={onClose}>
+            {error && (
+                <div role="alert" className="mb-4 rounded-lg bg-rose-50 p-3 text-rose-700">
+                    {error}
+                </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="名称 *" value={draft.name} onChange={value => update('name', value)} />
                 <Field

@@ -334,6 +334,7 @@ export const GET_INVENTORY_OVERVIEW = gql`
         }
         globalSettings {
             outOfStockThreshold
+            trackInventory
         }
     }
 `;

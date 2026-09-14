@@ -1,4 +1,4 @@
-import { ConfigService, ProcessContext } from '@vendure/core';
+import { AssetStorageStrategy, ConfigService, ProcessContext } from '@vendure/core';
 import { createHash } from 'crypto';
 import express from 'express';
 import fs from 'fs-extra';
@@ -9,16 +9,20 @@ import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AssetServer } from './asset-server';
+import { CustomerAvatarStorageStrategy } from './config/customer-avatar-storage-strategy';
 import { ImageTransformStrategy } from './config/image-transform-strategy';
 import { LocalAssetStorageStrategy } from './config/local-asset-storage-strategy';
 import { PresetOnlyStrategy } from './config/preset-only-strategy';
 
-vi.mock('@vendure/core', () => ({ Logger: { debug: vi.fn(), error: vi.fn() } }));
+vi.mock('@vendure/core', async importOriginal => ({
+    ...(await importOriginal<typeof import('@vendure/core')>()),
+    Logger: { debug: vi.fn(), error: vi.fn() },
+}));
 
 describe('SVG asset responses', () => {
     let root: string;
     let server: Server | undefined;
-    let storage: LocalAssetStorageStrategy;
+    let storage: AssetStorageStrategy;
     let source: Buffer;
 
     beforeEach(async () => {
@@ -142,4 +146,39 @@ describe('SVG asset responses', () => {
         expect(response.headers.get('content-type')).toMatch(/^image\/png\b/);
         expect((await sharp(Buffer.from(await response.arrayBuffer())).metadata()).format).toBe('png');
     });
+
+    it.each(['', '?w=900&h=900&format=png'])(
+        'serves isolated avatars and keeps their cached derivatives isolated (%s)',
+        async query => {
+            const ordinary = storage;
+            const ordinaryReads = vi.spyOn(ordinary, 'readFileToBuffer');
+            const ordinaryWrites = vi.spyOn(ordinary, 'writeFileFromBuffer');
+            storage = new CustomerAvatarStorageStrategy(ordinary, path.join(root, 'avatar-zone'));
+            const avatarKey = 'avatars/v2/preview/customer-avatar-synthetic.webp';
+            const avatar = await sharp({
+                create: { width: 800, height: 600, channels: 3, background: '#fff' },
+            })
+                .png()
+                .toBuffer();
+            await storage.writeFileFromBuffer(avatarKey, avatar);
+            const writes = vi.spyOn(storage, 'writeFileFromBuffer');
+            const origin = await start();
+            const url = `${origin}/${avatarKey}${query}`;
+            const response = await fetch(url);
+            const bytes = Buffer.from(await response.arrayBuffer());
+            expect(response.status).toBe(200);
+            expect(response.headers.get('content-type')).toMatch(/^image\/webp\b/);
+            const metadata = await sharp(bytes).metadata();
+            expect(metadata.format).toBe('webp');
+            expect(metadata.width).toBeLessThanOrEqual(512);
+            expect(metadata.height).toBeLessThanOrEqual(512);
+            const cached = await fetch(url);
+            expect(cached.status).toBe(200);
+            expect(Buffer.from(await cached.arrayBuffer())).toEqual(bytes);
+            expect(writes).toHaveBeenCalledTimes(1);
+            expect(writes.mock.calls[0][0]).toMatch(/^avatars\/v2\/cache\/preview\//);
+            expect(ordinaryReads).not.toHaveBeenCalled();
+            expect(ordinaryWrites).not.toHaveBeenCalled();
+        },
+    );
 });

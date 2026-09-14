@@ -11,6 +11,7 @@ import {
     setInitialActiveChannel,
     uploadAdminFiles,
 } from './apollo';
+import { GET_INVENTORY_OVERVIEW } from './graphql/catalog-admin.graphql';
 
 function storage(values: Record<string, string> = {}) {
     const items = new Map(Object.entries(values));
@@ -40,6 +41,82 @@ afterEach(async () => {
 });
 
 describe('admin channel request routing', () => {
+    it('keeps channel-specific payment report rows separate in the cache', () => {
+        const query = gql`
+            query PaymentReportCache {
+                storePaymentDetails {
+                    items {
+                        id
+                        channelId
+                        channelCode
+                        amount
+                    }
+                }
+            }
+        `;
+        const data = {
+            storePaymentDetails: {
+                items: [
+                    {
+                        __typename: 'StorePaymentDetail',
+                        id: '27',
+                        channelId: '16',
+                        channelCode: 'sim-audit-0913',
+                        amount: 113,
+                    },
+                    {
+                        __typename: 'StorePaymentDetail',
+                        id: '27',
+                        channelId: '1',
+                        channelCode: '__default_channel__',
+                        amount: 113,
+                    },
+                ],
+            },
+        };
+        client.cache.writeQuery({ query, data });
+        expect(client.cache.readQuery({ query })).toEqual(data);
+    });
+
+    it('retains every stock movement implementation when reading the inventory cache', () => {
+        const movements = ['StockAdjustment', 'Allocation', 'Sale', 'Cancellation', 'Return', 'Release'].map(
+            (__typename, index) => ({
+                __typename,
+                id: `movement-${index}`,
+                createdAt: '2026-09-14T07:00:00.000Z',
+                type: ['ADJUSTMENT', 'ALLOCATION', 'SALE', 'CANCELLATION', 'RETURN', 'RELEASE'][index],
+                quantity: index - 2,
+            }),
+        );
+        const variables = { variantOptions: { take: 20 } };
+        const data = {
+            productVariants: {
+                totalItems: 1,
+                items: [
+                    {
+                        __typename: 'ProductVariant',
+                        id: 'inventory-variant',
+                        name: '测试规格',
+                        sku: 'SIM-STOCK',
+                        enabled: true,
+                        price: 100,
+                        currencyCode: 'CNY',
+                        trackInventory: 'TRUE',
+                        outOfStockThreshold: 0,
+                        useGlobalOutOfStockThreshold: true,
+                        product: { __typename: 'Product', id: 'inventory-product', name: '测试商品' },
+                        stockLevels: [],
+                        stockMovements: { totalItems: 6, items: movements },
+                    },
+                ],
+            },
+            globalSettings: { outOfStockThreshold: 0, trackInventory: true },
+        };
+        client.cache.writeQuery({ query: GET_INVENTORY_OVERVIEW, variables, data });
+        const read = client.cache.readQuery<typeof data>({ query: GET_INVENTORY_OVERVIEW, variables });
+        expect(read?.productVariants.items[0].stockMovements.items).toEqual(movements);
+    });
+
     it('opens one authenticated event stream with an abort signal and replay cursor, without URL credentials', async () => {
         vi.stubGlobal('window', { location: { origin: 'https://admin.example.test' } });
         request.mockResolvedValue(new Response(null, { headers: { 'content-type': 'text/event-stream' } }));

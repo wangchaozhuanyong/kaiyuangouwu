@@ -122,6 +122,7 @@ export function AccountPage() {
             return program;
         },
         initialData: () => readCachedReferralProgram(market.code),
+        initialDataUpdatedAt: 0,
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });

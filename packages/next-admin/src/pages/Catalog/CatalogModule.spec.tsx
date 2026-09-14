@@ -190,6 +190,22 @@ async function renderCatalog({ empty = false, initialEntry = '/' } = {}) {
 }
 
 describe('CatalogModule category columns', () => {
+    it('describes soft deletion accurately and disables background search during password confirmation', async () => {
+        const container = await renderCatalog();
+        await act(async () => container.querySelector<HTMLButtonElement>('[title="删除商品"]')!.click());
+        const dialog = container.querySelector('[role="alertdialog"]');
+        expect(dialog?.textContent).toContain('标记删除');
+        expect(dialog?.textContent).toContain('所有已分配店铺');
+        expect(dialog?.textContent).not.toContain('从数据库中彻底移除');
+        expect(container.querySelector<HTMLInputElement>('[aria-label="搜索商品"]')?.disabled).toBe(true);
+        await act(async () =>
+            [...dialog!.querySelectorAll('button')]
+                .find(button => button.textContent?.trim() === '取消')!
+                .click(),
+        );
+        expect(container.querySelector<HTMLInputElement>('[aria-label="搜索商品"]')?.disabled).toBe(false);
+    });
+
     it('renders separate first-level and second-level category statistics', async () => {
         const container = await renderCatalog();
         const headers = Array.from(container.querySelectorAll('thead th')).map(header =>

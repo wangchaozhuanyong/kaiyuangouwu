@@ -1,4 +1,4 @@
-import { ConfigArg } from '@vendure/common/lib/generated-types';
+import { ConfigArg, ConfigurableOperation } from '@vendure/common/lib/generated-types';
 import { SelectQueryBuilder } from 'typeorm';
 
 import {
@@ -72,4 +72,18 @@ export class CollectionFilter<T extends ConfigArgs = ConfigArgs> extends Configu
     apply(qb: SelectQueryBuilder<ProductVariant>, args: ConfigArg[]): SelectQueryBuilder<ProductVariant> {
         return this.applyFn(qb, this.argsArrayToHash(args));
     }
+}
+
+/** Apply stored rules in their configured order: grouping by type changes mixed AND/OR semantics. */
+export function applyCollectionFiltersInOrder(
+    qb: SelectQueryBuilder<ProductVariant>,
+    filters: ConfigurableOperation[],
+    definitions: CollectionFilter[],
+): SelectQueryBuilder<ProductVariant> {
+    const byCode = new Map(definitions.map(definition => [definition.code, definition]));
+    for (const filter of filters) {
+        const definition = byCode.get(filter.code);
+        if (definition) qb = definition.apply(qb, filter.args);
+    }
+    return qb;
 }

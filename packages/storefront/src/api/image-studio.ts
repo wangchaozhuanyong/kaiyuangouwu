@@ -190,6 +190,7 @@ export class ImageStudioApi extends BaseDomainApi {
         if (this.authToken) headers.authorization = `Bearer ${this.authToken}`;
         const separator = API_URL.includes('?') ? '&' : '?';
         const timeout = createRequestSignal(undefined, 60_000);
+        const captureAuthToken = this.createAuthTokenCapture();
         let response: Response;
         let body: GraphQlResponse<{ uploadImageReference: ImagePrivateAssetView }>;
         try {
@@ -197,7 +198,7 @@ export class ImageStudioApi extends BaseDomainApi {
                 `${API_URL}${separator}languageCode=${encodeURIComponent(this.languageCode)}&currencyCode=${encodeURIComponent(this.market.currencyCode)}`,
                 { method: 'POST', credentials: 'include', headers, body: form, signal: timeout.signal },
             );
-            this.captureAuthToken(response);
+            captureAuthToken(response);
             body = (await response.json()) as GraphQlResponse<{
                 uploadImageReference: ImagePrivateAssetView;
             }>;

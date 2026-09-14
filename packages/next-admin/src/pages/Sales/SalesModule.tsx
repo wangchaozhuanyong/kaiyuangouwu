@@ -162,6 +162,15 @@ const tabStateFilter: Record<OrderTab, Record<string, unknown>> = {
     CANCELLED: { eq: 'Cancelled' },
 };
 
+// oxlint-disable-next-line react/only-export-components -- exported for focused regression tests
+export function orderTabFilters(activeTab: OrderTab): Array<Record<string, unknown>> {
+    const filters: Array<Record<string, unknown>> = [{ state: tabStateFilter[activeTab] }];
+    // Submitted checkouts stay active until fully paid, including partial balance payments.
+    // ALL already excludes shopping carts and drafts by state; do not hide pending payments.
+    if (activeTab !== 'DRAFT' && activeTab !== 'ALL') filters.unshift({ active: { eq: false } });
+    return filters;
+}
+
 export function SalesModule() {
     const navigate = useNavigate();
     const { hasAnyPermission } = useAdminPermissions();
@@ -189,8 +198,7 @@ export function SalesModule() {
     const [batchProgress, setBatchProgress] = useState('');
 
     const queryVariables = useMemo(() => {
-        const filters: Array<Record<string, unknown>> = [{ state: tabStateFilter[activeTab] }];
-        if (activeTab !== 'DRAFT') filters.unshift({ active: { eq: false } });
+        const filters = orderTabFilters(activeTab);
         const query = deferredSearchTerm.trim();
         if (query) {
             filters.push({
@@ -659,7 +667,7 @@ export function SalesModule() {
                                                     收货地址
                                                 </th>
                                                 <SortableTableHeader
-                                                    label="实付金额"
+                                                    label="订单金额"
                                                     sortField="totalWithTax"
                                                     activeSortField={sortField}
                                                     sortDirection={sortDirection}

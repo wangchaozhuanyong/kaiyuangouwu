@@ -44,6 +44,7 @@ import { usePageSize } from '../../hooks/use-page-size';
 import { copyAdminText } from '../../utils/admin-clipboard';
 import { AdminImage } from '../../utils/admin-image';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { SOURCE_LANGUAGE_CODE } from './product-editor-types';
 
 interface AssetItem {
     id: string;
@@ -73,6 +74,21 @@ interface PendingFile {
     errorMsg?: string;
 }
 
+// oxlint-disable-next-line react/only-export-components -- exported for focused regression tests
+export function assetTranslationsWithSourceName(translations: AssetItem['translations'], name: string) {
+    const updated: Array<{ id?: string; languageCode: string; name: string }> = translations.map(
+        translation => ({
+            id: translation.id,
+            languageCode: translation.languageCode,
+            name: translation.languageCode === SOURCE_LANGUAGE_CODE ? name : translation.name,
+        }),
+    );
+    if (!updated.some(translation => translation.languageCode === SOURCE_LANGUAGE_CODE)) {
+        updated.push({ languageCode: SOURCE_LANGUAGE_CODE, name });
+    }
+    return updated;
+}
+
 interface GetAssetsData {
     assets: { items: AssetItem[]; totalItems: number };
 }
@@ -84,6 +100,11 @@ interface CreateAssetResult extends Partial<AssetItem> {
 
 interface CreateAssetsData {
     createAssets: CreateAssetResult[];
+}
+
+// oxlint-disable-next-line react/only-export-components -- exported for focused regression tests
+export function countUploadedAssets(results: CreateAssetResult[], requestedCount: number): number {
+    return results.slice(0, requestedCount).filter(result => result.__typename === 'Asset').length;
 }
 
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
@@ -221,14 +242,13 @@ export function AssetsModule() {
                     })),
                 }),
             );
-            let successCount = 0;
+            const successCount = countUploadedAssets(result.createAssets, ready.length);
             setPendingFiles(current =>
                 current.map(file => {
                     const resultIndex = ready.findIndex(item => item.id === file.id);
                     if (resultIndex < 0) return file;
                     const uploaded = result.createAssets[resultIndex];
                     if (uploaded?.__typename === 'Asset') {
-                        successCount += 1;
                         return { ...file, status: 'SUCCESS', errorMsg: undefined };
                     }
                     return {
@@ -297,16 +317,18 @@ export function AssetsModule() {
                         name,
                         tags,
                         customFields: customFieldInputFromValues(assetCustomFields, customFieldValues),
-                        translations: selectedAsset.translations.map(translation => ({
-                            id: translation.id,
-                            languageCode: translation.languageCode,
-                            name: translation.name,
-                            customFields: localizedCustomFieldInputFromValues(
-                                assetCustomFields,
-                                customFieldValues,
-                                translation.languageCode,
-                            ),
-                        })),
+                        translations: assetTranslationsWithSourceName(selectedAsset.translations, name).map(
+                            translation => ({
+                                id: translation.id,
+                                languageCode: translation.languageCode,
+                                name: translation.name,
+                                customFields: localizedCustomFieldInputFromValues(
+                                    assetCustomFields,
+                                    customFieldValues,
+                                    translation.languageCode,
+                                ),
+                            }),
+                        ),
                     },
                 },
             });
@@ -323,7 +345,7 @@ export function AssetsModule() {
     const handleDeleteAsset = async (asset: AssetItem) => {
         const confirmation = await requestConfirmation({
             title: '删除素材？',
-            description: `即将删除《${asset.name}》。如果该素材仍被商品引用，系统会阻止删除。`,
+            description: `将从当前店铺移除《${asset.name}》，其他店铺关联仍会保留。如果该素材仍被商品引用，系统会阻止移除。`,
             confirmLabel: '确认删除',
             tone: 'danger',
             requireCurrentPassword: true,
@@ -351,7 +373,7 @@ export function AssetsModule() {
                 await refetch();
             }
             setSelectedAsset(null);
-            showNotice('已删除素材《' + asset.name + '》');
+            showNotice('已从当前店铺移除素材《' + asset.name + '》');
         } catch (deleteError) {
             showError(toUserFacingError(deleteError, '素材删除失败，请稍后重试'));
         } finally {
@@ -363,7 +385,8 @@ export function AssetsModule() {
         if (!selectedAssetIds.length) return;
         const confirmation = await requestConfirmation({
             title: `批量删除 ${selectedAssetIds.length} 个素材？`,
-            description: '仅删除未被业务数据引用的素材；任一素材仍被引用时，后端会拒绝本次删除。',
+            description:
+                '仅从当前店铺移除未被业务数据引用的素材，其他店铺关联仍会保留；任一素材仍被引用时，后端会拒绝本次操作。',
             confirmLabel: '验证并删除',
             tone: 'danger',
             requireCurrentPassword: true,
@@ -385,7 +408,7 @@ export function AssetsModule() {
             const deletedCount = selectedAssetIds.length;
             setSelectedAssetIds([]);
             await refetch();
-            showNotice(`已删除 ${deletedCount} 个素材`);
+            showNotice(`已从当前店铺移除 ${deletedCount} 个素材`);
         } catch (bulkDeleteError) {
             showError(toUserFacingError(bulkDeleteError, '素材批量删除失败'));
         }
@@ -403,7 +426,7 @@ export function AssetsModule() {
                         <FeatureHelpButton topic="catalog.assets" title="素材媒体库" />
                     </h1>
                     <p className="mt-1 text-xs text-slate-500">
-                        管理 Vendure 全局图片、视频与文件素材，支持真实上传、标签编辑和安全删除
+                        管理当前店铺的图片、视频与文件素材；删除仅移除当前店铺关联，不清理其他店铺素材
                     </p>
                 </div>
                 <div className="flex gap-2">

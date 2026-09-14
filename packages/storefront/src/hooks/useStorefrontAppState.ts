@@ -2,7 +2,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ShopApiError } from '../api';
+import { subscribeAuthSessionChanges } from '../auth-session-sync';
 import { resumeAuthenticatedCheckout } from '../checkout-authentication';
+import { resolveCurrentCheckoutOrder } from '../payment-readiness';
 import { cartLineCanSelect } from '../product-availability';
 import { storefrontQueryKeys } from '../query-client';
 import { invalidateStorefrontRealtimeQueries } from '../realtime-updates';
@@ -190,7 +192,7 @@ export function useStorefrontAppState() {
         configuredBlockTypes,
     });
 
-    const currentCheckoutOrder = cart?.checkoutOrder ?? checkoutOrder;
+    const currentCheckoutOrder = resolveCurrentCheckoutOrder(cart?.checkoutOrder, checkoutOrder);
 
     const setCart = useCallback(
         (_nextCart: StorefrontCart) => {
@@ -230,6 +232,28 @@ export function useStorefrontAppState() {
             refetchType: 'none',
         });
     }, [customer, market.code, market.currencyCode, queryClient, vendureLanguageCode]);
+    useEffect(() => {
+        let refreshId = 0;
+        const unsubscribe = subscribeAuthSessionChanges(market.code, () => {
+            const currentRefreshId = ++refreshId;
+            cartController.reset();
+            clearPrivateQueryCache();
+            setCompletedOrder(null);
+            void Promise.all([api.activeCustomer(), api.cart()])
+                .then(([nextCustomer, nextCart]) => {
+                    if (currentRefreshId !== refreshId) return;
+                    setCustomer(nextCustomer);
+                    setCart(nextCart);
+                    setCartError(null);
+                    setCheckoutOrder(nextCart.checkoutOrder);
+                })
+                .catch(() => undefined);
+        });
+        return () => {
+            refreshId++;
+            unsubscribe();
+        };
+    }, [api, cartController, clearPrivateQueryCache, market.code, setCart, setCustomer]);
     const {
         productQuery,
         routeProduct,

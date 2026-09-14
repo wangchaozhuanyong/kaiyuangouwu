@@ -29,6 +29,7 @@ import { Instrument } from '../../common/instrument-decorator';
 import { ListQueryOptions } from '../../common/types/common-types';
 import { Translated } from '../../common/types/locale-types';
 import { assertFound, idsAreEqual } from '../../common/utils';
+import { applyCollectionFiltersInOrder } from '../../config/catalog/collection-filter';
 import { ConfigService } from '../../config/config.service';
 import { Logger } from '../../config/logger/vendure-logger';
 import { TransactionalConnection } from '../../connection/transactional-connection';
@@ -503,23 +504,23 @@ export class CollectionService implements OnModuleInit {
             );
             applicableFilters.push(...parentFilters, ...ancestorFilters);
         }
-        let qb = this.listQueryBuilder.build(ProductVariant, options, {
+        const qb = this.listQueryBuilder.build(ProductVariant, options, {
             relations: relations ?? ['taxCategory'],
             channelId: ctx.channelId,
-            where: { deletedAt: IsNull() },
+            where: { deletedAt: IsNull(), product: { deletedAt: IsNull() } },
             ctx,
             entityAlias: 'productVariant',
         });
 
         const { collectionFilters } = this.configService.catalogOptions;
-        for (const filterType of collectionFilters) {
-            const filtersOfType = applicableFilters.filter(f => f.code === filterType.code);
-            if (filtersOfType.length) {
-                for (const collectionFilter of filtersOfType) {
-                    qb = filterType.apply(qb, collectionFilter.args);
-                }
-            }
-        }
+        let filterQb = this.connection
+            .getRepository(ctx, ProductVariant)
+            .createQueryBuilder('productVariant')
+            .select('productVariant.id')
+            .setFindOptions({ loadEagerRelations: false });
+        filterQb = applyCollectionFiltersInOrder(filterQb, applicableFilters, collectionFilters);
+        // Collection OR rules must not bypass deletion, channel or list constraints.
+        qb.andWhere(`productVariant.id IN (${filterQb.getQuery()})`).setParameters(filterQb.getParameters());
         return qb.getManyAndCount().then(([items, totalItems]) => ({
             items,
             totalItems,
@@ -561,11 +562,30 @@ export class CollectionService implements OnModuleInit {
 
     async update(ctx: RequestContext, input: UpdateCollectionInput): Promise<Translated<Collection>> {
         // Ensure the entity belongs to the active channel before updating.
-        await this.connection.getEntityOrThrow(ctx, Collection, input.id, { channelId: ctx.channelId });
+        const current = await this.connection.getEntityOrThrow(ctx, Collection, input.id, {
+            channelId: ctx.channelId,
+        });
         await this.slugValidator.validateSlugs(ctx, input, CollectionTranslation);
+        const { parentId, ...updateInput } = input;
+        if (parentId !== undefined) {
+            const nextParentId = parentId ?? (await this.getRootCollection(ctx)).id;
+            if (!idsAreEqual(nextParentId, current.parentId)) {
+                if (parentId != null) {
+                    await this.connection.getEntityOrThrow(ctx, Collection, parentId, {
+                        channelId: ctx.channelId,
+                    });
+                }
+                // Updating only parentId leaves the tree closure stale; null means the root, not an orphan.
+                await this.move(ctx, {
+                    collectionId: input.id,
+                    parentId: nextParentId,
+                    index: await this.getNextPositionInParent(ctx, nextParentId),
+                });
+            }
+        }
         const collection = await this.translatableSaver.update({
             ctx,
-            input,
+            input: updateInput,
             entityType: Collection,
             translationType: CollectionTranslation,
             beforeSave: async coll => {
@@ -751,14 +771,7 @@ export class CollectionService implements OnModuleInit {
         }
 
         //  Applies the CollectionFilters and returns an array of ProductVariant entities which match
-        for (const filterType of collectionFilters) {
-            const filtersOfType = filters.filter(f => f.code === filterType.code);
-            if (filtersOfType.length) {
-                for (const collectionFilter of filtersOfType) {
-                    filteredQb = filterType.apply(filteredQb, collectionFilter.args);
-                }
-            }
-        }
+        filteredQb = applyCollectionFiltersInOrder(filteredQb, filters, collectionFilters);
 
         // Subquery for existing variants in the collection
         const existingVariantsQb = masterConnection

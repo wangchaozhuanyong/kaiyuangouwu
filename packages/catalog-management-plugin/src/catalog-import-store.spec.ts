@@ -7,6 +7,8 @@ import { catalogImportStoreError } from './catalog-import-store';
 import { CatalogImportWriter } from './catalog-import-writer';
 import { catalogImportTemplateCsv } from './dashboard/catalog-import-template';
 import { parseCatalogArrayBuffer } from './dashboard/catalog-local-file';
+import { CatalogImportJob } from './entities/catalog-import-job.entity';
+import { CatalogImportRow } from './entities/catalog-import-row.entity';
 
 const encode = (csv: string) => new TextEncoder().encode(csv).buffer;
 const context = { channelId: '2', channel: { code: 'store-a' } } as RequestContext;
@@ -51,11 +53,11 @@ describe('explicit import store', () => {
                 Reflect.get(writer, 'applyRow').call(
                     writer,
                     context,
-                    {},
-                    {
+                    new CatalogImportJob(),
+                    new CatalogImportRow({
                         normalizedData: row,
                         resolution: 'APPLY',
-                    },
+                    }),
                     new Map(),
                     new Map(),
                     [],

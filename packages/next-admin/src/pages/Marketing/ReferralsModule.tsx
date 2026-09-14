@@ -276,6 +276,8 @@ function ReferralManagement() {
                                 <div className="relative max-w-md">
                                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                                     <input
+                                        type="search"
+                                        autoComplete="off"
                                         value={search}
                                         onChange={event => setSearch(event.target.value)}
                                         aria-label="搜索分销流水"
@@ -366,6 +368,7 @@ function ReferralManagement() {
                     onClose={() => setWithdrawalAction(null)}
                     onSaved={async message => {
                         setWithdrawalAction(null);
+                        setActionError('');
                         setNotice(message);
                         await reports.refetch();
                     }}
@@ -379,6 +382,7 @@ function ReferralManagement() {
                     onClose={() => setFinancialDialog(null)}
                     onSaved={async message => {
                         setFinancialDialog(null);
+                        setActionError('');
                         setNotice(message);
                         await reports.refetch();
                     }}

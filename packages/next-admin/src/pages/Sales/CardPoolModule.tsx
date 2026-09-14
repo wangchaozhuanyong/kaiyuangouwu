@@ -747,7 +747,7 @@ function RevealDialog({
         </Modal>
     );
 }
-function DisableDialog({
+export function DisableDialog({
     item,
     onClose,
     onCompleted,
@@ -759,14 +759,20 @@ function DisableDialog({
     onError: (message: string) => void;
 }) {
     const [reason, setReason] = useState('');
+    const [dialogError, setDialogError] = useState('');
     const [setEnabled, state] = useMutation(SET_AUTO_CARD_ITEM_ENABLED_MUTATION);
+    const showError = (message: string) => {
+        setDialogError(message);
+        onError(message);
+    };
     const submit = async () => {
-        if (!reason.trim()) return onError('请填写停用原因');
+        setDialogError('');
+        if (!reason.trim()) return showError('请填写停用原因');
         try {
             await setEnabled({ variables: { id: item.id, enabled: false, reason: reason.trim() } });
             await onCompleted();
         } catch (error) {
-            onError(errorText(error));
+            showError(errorText(error));
         }
     };
     return (
@@ -775,6 +781,11 @@ function DisableDialog({
             description="停用后不会被新订单分配，之后可以恢复"
             onClose={onClose}
         >
+            {dialogError && (
+                <p role="alert" className="mb-3 text-xs text-rose-700">
+                    {dialogError}
+                </p>
+            )}
             <Field label="停用原因 *">
                 <textarea
                     rows={4}

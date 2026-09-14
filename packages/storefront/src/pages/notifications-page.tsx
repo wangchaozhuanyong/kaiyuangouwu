@@ -15,7 +15,7 @@ import { NotificationsPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { afterSalesNotification, orderNotification } from '../storefront-ui/order-ui';
 import { EmptyState, Subpage } from '../storefront-ui/page-shell';
-import { ActiveCustomer, MarketConfig, StorefrontLanguage } from '../types';
+import { ActiveCustomer, AfterSalesRequest, MarketConfig, OrderSummary, StorefrontLanguage } from '../types';
 
 // TODO: Fix internal imports later
 
@@ -25,6 +25,18 @@ export interface NotificationsPageProps {
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
+}
+
+export function recentNotificationEntries(orders: OrderSummary[], requests: AfterSalesRequest[]) {
+    const entries = [
+        ...orders.map(order => ({ kind: 'order' as const, order, date: order.orderPlacedAt })),
+        ...requests.map(request => ({ kind: 'after-sales' as const, request, date: request.updatedAt })),
+    ];
+    const timestamp = (date: string | null | undefined) => {
+        const value = date ? Date.parse(date) : NaN;
+        return Number.isFinite(value) ? value : -Infinity;
+    };
+    return entries.sort((a, b) => timestamp(b.date) - timestamp(a.date));
 }
 
 export function NotificationsPage() {
@@ -47,6 +59,7 @@ export function NotificationsPage() {
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const afterSalesRequests = afterSalesQuery.data ?? [];
+    const notifications = recentNotificationEntries(orders, afterSalesRequests);
     return (
         <Subpage title={isZh ? '消息通知' : 'Notifications'} language={language} onBack={goBack}>
             {!customer ? (
@@ -80,50 +93,40 @@ export function NotificationsPage() {
                     className="notification-list"
                     aria-label={isZh ? '最近通知' : 'Recent notifications'}
                 >
-                    {afterSalesRequests.map(request => {
-                        const notification = afterSalesNotification(request, language);
+                    {notifications.map(entry => {
+                        const notification =
+                            entry.kind === 'after-sales'
+                                ? afterSalesNotification(entry.request, language)
+                                : orderNotification(entry.order, language);
                         return (
                             <button
                                 type="button"
-                                key={`after-sales-${request.id}`}
-                                onClick={() => navigateTo({ name: 'orders', tab: 'service' })}
+                                key={
+                                    entry.kind === 'after-sales'
+                                        ? `after-sales-${entry.request.id}`
+                                        : `order-${entry.order.id}`
+                                }
+                                onClick={() =>
+                                    navigateTo(
+                                        entry.kind === 'after-sales'
+                                            ? { name: 'orders', tab: 'service' }
+                                            : { name: 'order-detail', id: entry.order.id },
+                                    )
+                                }
                             >
                                 <span className={`notification-icon is-${notification.tone}`}>
-                                    <RotateCcw aria-hidden="true" />
+                                    {entry.kind === 'after-sales' ? (
+                                        <RotateCcw aria-hidden="true" />
+                                    ) : (
+                                        <Bell aria-hidden="true" />
+                                    )}
                                 </span>
                                 <span>
                                     <strong>{notification.title}</strong>
                                     <small>{notification.detail}</small>
                                     <em>
-                                        {formatBusinessDate(locale, request.updatedAt, {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                        })}
-                                    </em>
-                                </span>
-                                <ChevronRight aria-hidden="true" />
-                            </button>
-                        );
-                    })}
-                    {orders.map(order => {
-                        const notification = orderNotification(order, language);
-                        return (
-                            <button
-                                type="button"
-                                key={order.id}
-                                onClick={() => navigateTo({ name: 'order-detail', id: order.id })}
-                            >
-                                <span className={`notification-icon is-${notification.tone}`}>
-                                    <Bell aria-hidden="true" />
-                                </span>
-                                <span>
-                                    <strong>{notification.title}</strong>
-                                    <small>{notification.detail}</small>
-                                    <em>
-                                        {order.orderPlacedAt
-                                            ? formatBusinessDate(locale, order.orderPlacedAt, {
+                                        {entry.date && Number.isFinite(Date.parse(entry.date))
+                                            ? formatBusinessDate(locale, entry.date, {
                                                   month: 'short',
                                                   day: 'numeric',
                                                   hour: '2-digit',

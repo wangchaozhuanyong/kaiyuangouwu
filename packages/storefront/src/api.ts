@@ -75,6 +75,7 @@ import {
 import { ImageStudioApi } from './api/image-studio';
 import { RealtimeApi } from './api/realtime';
 import { ReferralsApi } from './api/referrals';
+import { publishAuthSessionChange } from './auth-session-sync';
 import { StorefrontRealtimeEvent } from './realtime-updates';
 
 export {
@@ -88,6 +89,10 @@ export {
 export class ShopApi {
     private readonly authTokenStorageKey: string | null;
     private authToken: string | null;
+    private authTokenGeneration = 0;
+    private authTokenRequestId = 0;
+    private lastAuthTokenRequestId = 0;
+    private latestAuthenticationRequestId = 0;
     private storefrontCatalogAvailable: boolean | null = null;
     private readonly contentReviewsApi: ContentReviewsApi;
     private readonly catalogApi: CatalogApi;
@@ -107,9 +112,10 @@ export class ShopApi {
             market: this.market,
             languageCode: this.languageCode,
             getAuthToken: () => this.authToken,
-            captureAuthToken: res => this.captureAuthToken(res),
+            createAuthTokenCapture: () => this.createAuthTokenCapture(),
             clearAuthToken: () => this.clearAuthToken(),
             request: (q, v, s, t, r) => this.request(q, v, s, t, r),
+            authenticationRequest: (q, v) => this.request(q, v, undefined, undefined, false, true),
             assertCart: res => this.assertCart(res),
             assertCheckoutSession: res => this.assertCheckoutSession(res),
             assertOrder: res => this.assertOrder(res),
@@ -254,7 +260,8 @@ export class ShopApi {
     }
 
     async login(emailAddress: string, password: string): Promise<void> {
-        return this.accountApi.login(emailAddress, password);
+        await this.accountApi.login(emailAddress, password);
+        this.publishCookieAuthenticationChange();
     }
 
     async referralProgram(signal?: AbortSignal): Promise<ReferralProgram> {
@@ -356,7 +363,8 @@ export class ShopApi {
     }
 
     async verifyCustomerAccount(token: string, password?: string): Promise<void> {
-        return this.accountApi.verifyCustomerAccount(token, password);
+        await this.accountApi.verifyCustomerAccount(token, password);
+        this.publishCookieAuthenticationChange();
     }
 
     async requestPasswordReset(emailAddress: string): Promise<void> {
@@ -364,12 +372,14 @@ export class ShopApi {
     }
 
     async resetPassword(token: string, password: string): Promise<void> {
-        return this.accountApi.resetPassword(token, password);
+        await this.accountApi.resetPassword(token, password);
+        this.publishCookieAuthenticationChange();
     }
 
     async logout(): Promise<void> {
         this.cartCheckoutApi.controller?.reset();
-        return this.accountApi.logout();
+        await this.accountApi.logout();
+        this.publishCookieAuthenticationChange();
     }
 
     async createAddress(input: CustomerAddressInput): Promise<CustomerAddress> {
@@ -553,7 +563,9 @@ export class ShopApi {
         signal?: AbortSignal,
         timeoutMs?: number,
         resultUnknownOnTimeout = false,
+        authenticates = false,
     ): Promise<T> {
+        const captureAuthToken = this.createAuthTokenCapture(authenticates);
         const headers: Record<string, string> = {
             'content-type': 'application/json',
             'language-code': this.languageCode,
@@ -581,7 +593,7 @@ export class ShopApi {
                 body: JSON.stringify({ query, variables }),
                 signal: timeout.signal,
             });
-            this.captureAuthToken(response);
+            captureAuthToken(response);
             rawBody = await response.text();
         } catch (error) {
             if (timeout.didTimeout()) {
@@ -599,19 +611,35 @@ export class ShopApi {
         return parseShopApiResponse<T>(rawBody, response.status, response.ok);
     }
 
-    private captureAuthToken(response: Response): void {
-        const authToken = response.headers.get(AUTH_TOKEN_HEADER)?.trim();
-        if (!authToken) return;
-        this.authToken = authToken;
-        if (!this.authTokenStorageKey) return;
-        try {
-            sessionStorage.setItem(this.authTokenStorageKey, authToken);
-        } catch {
-            // The in-memory token still preserves the session for this page lifetime.
-        }
+    private createAuthTokenCapture(authenticates = false): (response: Response) => void {
+        const requestId = ++this.authTokenRequestId;
+        const generation = this.authTokenGeneration;
+        if (authenticates) this.latestAuthenticationRequestId = requestId;
+        return response => {
+            const authToken = response.headers.get(AUTH_TOKEN_HEADER)?.trim();
+            if (!authToken || generation !== this.authTokenGeneration) return;
+            if (authenticates) {
+                // A login/verification/reset response owns the new session, even when a
+                // later-started guest query returned first. Older auth attempts cannot win.
+                if (requestId !== this.latestAuthenticationRequestId) return;
+                this.authTokenGeneration++;
+            } else if (requestId < this.lastAuthTokenRequestId) {
+                return;
+            }
+            this.lastAuthTokenRequestId = requestId;
+            this.authToken = authToken;
+            if (!this.authTokenStorageKey) return;
+            try {
+                sessionStorage.setItem(this.authTokenStorageKey, authToken);
+            } catch {
+                // The in-memory token still preserves the session for this page lifetime.
+            }
+        };
     }
 
     private clearAuthToken(): void {
+        // Also invalidates pending responses when there was no in-memory token yet.
+        this.authTokenGeneration++;
         this.authToken = null;
         if (!this.authTokenStorageKey) return;
         try {
@@ -619,6 +647,10 @@ export class ShopApi {
         } catch {
             // Storage can be unavailable in privacy-restricted browser contexts.
         }
+    }
+
+    private publishCookieAuthenticationChange(): void {
+        if (this.authTokenStorageKey === null) publishAuthSessionChange(this.market.code);
     }
 
     private assertCart(result: StorefrontCart & ErrorResult): StorefrontCart {

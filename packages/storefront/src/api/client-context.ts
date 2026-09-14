@@ -11,8 +11,9 @@ export interface ShopApiContext {
     readonly market: MarketConfig;
     readonly languageCode: VendureLanguageCode;
     getAuthToken: () => string | null;
-    captureAuthToken: (response: Response) => void;
+    createAuthTokenCapture: () => (response: Response) => void;
     clearAuthToken: () => void;
+    authenticationRequest: <T>(query: string, variables: Record<string, unknown>) => Promise<T>;
     request: <T>(
         query: string,
         variables?: Record<string, unknown>,

@@ -1,6 +1,6 @@
 import { useQuery } from '@apollo/client/react';
 import type { DocumentNode } from 'graphql';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
     GET_ACTIVE_CHANNEL,
     GET_ASSETS,
@@ -83,17 +83,31 @@ export function useProductEditorData({
     const fixedFulfillmentType = fulfillmentTypeForMode(commerceMode);
 
     const {
-        data: productData,
+        data: rawProductData,
         loading: productLoading,
         error: productError,
         refetch: refetchProduct,
     } = useQuery<{
         product: ProductDetailRecord | null;
+        catalogProductChannelAssignments?: {
+            items: Array<{ id: string; channels: ProductDetailRecord['channels'] }>;
+        };
     }>(productDetailDocument, {
-        variables: { id: productId },
+        variables: { id: productId, assignmentId: productId },
         skip: isCreateMode,
         fetchPolicy: 'network-only',
     });
+    const productData = useMemo(() => {
+        if (!rawProductData?.product) return rawProductData;
+        const assignment = rawProductData.catalogProductChannelAssignments?.items.find(
+            item => item.id === rawProductData.product?.id,
+        );
+        // Core Product.channels only exposes the current non-default channel.
+        // The existing assignment view returns exactly the stores this admin may read.
+        return assignment
+            ? { ...rawProductData, product: { ...rawProductData.product, channels: assignment.channels } }
+            : rawProductData;
+    }, [rawProductData]);
 
     const {
         data: facetsData,

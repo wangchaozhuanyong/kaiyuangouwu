@@ -1,7 +1,53 @@
 import { describe, expect, it } from 'vitest';
 
-import { isTestPaymentMethod, paymentAvailability } from './payment-readiness';
-import { PaymentMethod } from './types';
+import {
+    isPaymentCompletedOrderState,
+    isTestPaymentMethod,
+    paymentAvailability,
+    resolveCurrentCheckoutOrder,
+} from './payment-readiness';
+import { Order, PaymentMethod } from './types';
+
+describe('current checkout order', () => {
+    const stale = { id: '44', payments: [] } as unknown as Order;
+    const partial = {
+        ...stale,
+        payments: [{ id: '28', method: 'referral-balance', amount: 50, state: 'Settled' }],
+    } as Order;
+
+    it('retains partial payment returned after the cart snapshot', () => {
+        expect(resolveCurrentCheckoutOrder(stale, partial)).toBe(partial);
+    });
+    it('uses a new cart checkout rather than another order response', () => {
+        const next = { ...stale, id: '45' };
+        expect(resolveCurrentCheckoutOrder(next, partial)).toBe(next);
+    });
+    it('supports the initial cart and standalone payment responses', () => {
+        expect(resolveCurrentCheckoutOrder(stale, null)).toBe(stale);
+        expect(resolveCurrentCheckoutOrder(null, partial)).toBe(partial);
+        expect(resolveCurrentCheckoutOrder(undefined, null)).toBeNull();
+    });
+});
+
+describe('completed payment states', () => {
+    it.each([
+        'PaymentAuthorized',
+        'PaymentSettled',
+        'TestPaymentSettled',
+        'PartiallyShipped',
+        'Shipped',
+        'PartiallyDelivered',
+        'Delivered',
+    ])('recognizes %s', state => {
+        expect(isPaymentCompletedOrderState(state)).toBe(true);
+    });
+    it.each(['Created', 'AddingItems', 'ArrangingPayment', 'Cancelled', 'Modifying', ''])(
+        'does not complete %s',
+        state => {
+            expect(isPaymentCompletedOrderState(state)).toBe(false);
+        },
+    );
+});
 
 function method(overrides: Partial<PaymentMethod> = {}): PaymentMethod {
     return {

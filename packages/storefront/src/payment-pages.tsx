@@ -20,7 +20,7 @@ import { languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
 import { formatDisplayMoney } from './money-display';
 import { orderStatusRefreshInterval } from './order-refresh';
-import { isTestPaymentMethod, paymentAvailability } from './payment-readiness';
+import { isPaymentCompletedOrderState, isTestPaymentMethod, paymentAvailability } from './payment-readiness';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { PageSkeleton } from './route-loading';
 import { storefrontErrorCode, storefrontErrorMessage } from './storefront-errors';
@@ -206,7 +206,7 @@ export function PaymentPage({
             !paidOrder ||
             !token ||
             usdtCompletionLock.current ||
-            (paidOrder.state !== 'PaymentSettled' && paidOrder.state !== 'PaymentAuthorized')
+            !isPaymentCompletedOrderState(paidOrder.state)
         ) {
             return;
         }
@@ -250,7 +250,7 @@ export function PaymentPage({
             const result = await api.useReferralBalance(amount);
             onOrderChange(result.order);
             await referralOverviewQuery.refetch();
-            if (result.order.state === 'PaymentSettled' || result.order.state === 'PaymentAuthorized') {
+            if (isPaymentCompletedOrderState(result.order.state)) {
                 await onComplete(result.order, confirmationTokenRef.current);
             }
         } catch (requestError) {
@@ -903,8 +903,8 @@ export function OrderConfirmationPage({
                                     <em>
                                         {delivery.status === 'PAYMENT_REQUIRED'
                                             ? isZh
-                                                ? '付款后开放'
-                                                : 'Available after payment'
+                                                ? '当前不可领取，请检查支付或退款状态'
+                                                : 'Unavailable. Check payment or refund status.'
                                             : isZh
                                               ? '内容准备中'
                                               : 'Content is being prepared'}

@@ -83,6 +83,7 @@ export class AccountApi extends BaseDomainApi {
         if (this.authToken) headers.authorization = `Bearer ${this.authToken}`;
         const separator = API_URL.includes('?') ? '&' : '?';
         const timeout = createRequestSignal(undefined, 60_000);
+        const captureAuthToken = this.createAuthTokenCapture();
         let response: Response;
         let body: GraphQlResponse<{ setCustomerAvatar: Asset }>;
         try {
@@ -90,7 +91,7 @@ export class AccountApi extends BaseDomainApi {
                 `${API_URL}${separator}languageCode=${encodeURIComponent(this.languageCode)}&currencyCode=${encodeURIComponent(this.market.currencyCode)}`,
                 { method: 'POST', credentials: 'include', headers, body: form, signal: timeout.signal },
             );
-            this.captureAuthToken(response);
+            captureAuthToken(response);
             body = (await response.json()) as GraphQlResponse<{ setCustomerAvatar: Asset }>;
         } catch (error) {
             if (timeout.didTimeout()) throw new ShopApiTimeoutError('头像上传超时，请检查网络后重试');
@@ -234,7 +235,7 @@ export class AccountApi extends BaseDomainApi {
     }
 
     async login(emailAddress: string, password: string): Promise<void> {
-        const result = await this.request<{ login: ErrorResult }>(
+        const result = await this.authenticationRequest<{ login: ErrorResult }>(
             `
                 mutation StorefrontLogin($emailAddress: String!, $password: String!) {
                     login(username: $emailAddress, password: $password, rememberMe: true) {
@@ -267,7 +268,7 @@ export class AccountApi extends BaseDomainApi {
     }
 
     async verifyCustomerAccount(token: string, password?: string): Promise<void> {
-        const result = await this.request<{ verifyCustomerAccount: ErrorResult }>(
+        const result = await this.authenticationRequest<{ verifyCustomerAccount: ErrorResult }>(
             `
                 mutation VerifyStorefrontCustomer($token: String!, $password: String) {
                     verifyCustomerAccount(token: $token, password: $password) {
@@ -301,7 +302,7 @@ export class AccountApi extends BaseDomainApi {
     }
 
     async resetPassword(token: string, password: string): Promise<void> {
-        const result = await this.request<{ resetPassword: ErrorResult }>(
+        const result = await this.authenticationRequest<{ resetPassword: ErrorResult }>(
             `
                 mutation ResetStorefrontPassword($token: String!, $password: String!) {
                     resetPassword(token: $token, password: $password) {

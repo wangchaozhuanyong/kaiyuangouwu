@@ -1696,6 +1696,55 @@ describe('Collection resolver', () => {
         });
 
         describe('previewCollectionVariants', () => {
+            it('keeps OR collection filters separate from list constraints', async () => {
+                const input = {
+                    inheritFilters: false,
+                    filters: [
+                        {
+                            code: variantIdCollectionFilter.code,
+                            arguments: [
+                                { name: 'variantIds', value: '["T_1"]' },
+                                { name: 'combineWithAnd', value: 'false' },
+                            ],
+                        },
+                    ],
+                };
+                const result = await adminClient.query(previewCollectionVariantsDocument, { input });
+                expect(result.previewCollectionVariants.items.map(item => item.id)).toEqual(['T_1']);
+                expect(result.previewCollectionVariants.totalItems).toBe(1);
+
+                const excluded = await adminClient.query(previewCollectionVariantsDocument, {
+                    input,
+                    options: { filter: { id: { eq: 'T_2' } } },
+                });
+                expect(excluded.previewCollectionVariants.items).toEqual([]);
+                expect(excluded.previewCollectionVariants.totalItems).toBe(0);
+            });
+
+            it('does not preview variants outside the active channel with OR filters', async () => {
+                adminClient.setChannelToken(SECOND_CHANNEL_TOKEN);
+                try {
+                    const result = await adminClient.query(previewCollectionVariantsDocument, {
+                        input: {
+                            inheritFilters: false,
+                            filters: [
+                                {
+                                    code: variantIdCollectionFilter.code,
+                                    arguments: [
+                                        { name: 'variantIds', value: '["T_1"]' },
+                                        { name: 'combineWithAnd', value: 'false' },
+                                    ],
+                                },
+                            ],
+                        },
+                    });
+                    expect(result.previewCollectionVariants.items).toEqual([]);
+                    expect(result.previewCollectionVariants.totalItems).toBe(0);
+                } finally {
+                    adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+                }
+            });
+
             it('returns correct contents', async () => {
                 const { previewCollectionVariants } = await adminClient.query(
                     previewCollectionVariantsDocument,
@@ -1959,6 +2008,37 @@ describe('Collection resolver', () => {
                 'Gaming PC i7-8700 240GB SSD',
                 // 'Instant Camera',
             ]);
+        });
+
+        it('does not preview deleted products or variants through OR filters', async () => {
+            const result = await adminClient.query(previewCollectionVariantsDocument, {
+                input: {
+                    inheritFilters: false,
+                    filters: [
+                        {
+                            code: productIdCollectionFilter.code,
+                            arguments: [
+                                { name: 'productIds', value: '["T_1", "T_2"]' },
+                                { name: 'combineWithAnd', value: 'true' },
+                            ],
+                        },
+                        {
+                            code: variantIdCollectionFilter.code,
+                            arguments: [
+                                { name: 'variantIds', value: '["T_18"]' },
+                                { name: 'combineWithAnd', value: 'false' },
+                            ],
+                        },
+                    ],
+                },
+            });
+            expect(result.previewCollectionVariants.items.map(item => item.id).sort()).toEqual([
+                'T_1',
+                'T_2',
+                'T_3',
+                'T_4',
+            ]);
+            expect(result.previewCollectionVariants.totalItems).toBe(4);
         });
 
         it('does not list disabled variants in Shop API', async () => {
@@ -2260,6 +2340,77 @@ describe('Collection resolver', () => {
                 id: targetCollectionId,
             });
             expect(collection?.name).toBe('Channel-A Collection');
+        });
+    });
+
+    describe('updateCollection parent changes', () => {
+        let parent: FragmentOf<typeof collectionFragment>;
+        let child: FragmentOf<typeof collectionFragment>;
+
+        beforeAll(async () => {
+            adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+            parent = (
+                await adminClient.query(createCollectionDocument, {
+                    input: {
+                        filters: [],
+                        translations: [
+                            {
+                                languageCode: LanguageCode.en,
+                                name: 'Move parent',
+                                slug: 'move-parent',
+                                description: '',
+                            },
+                        ],
+                    },
+                })
+            ).createCollection;
+            child = (
+                await adminClient.query(createCollectionDocument, {
+                    input: {
+                        parentId: parent.id,
+                        filters: [],
+                        translations: [
+                            {
+                                languageCode: LanguageCode.en,
+                                name: 'Move child',
+                                slug: 'move-child',
+                                description: '',
+                            },
+                        ],
+                    },
+                })
+            ).createCollection;
+        });
+
+        it('moves a child to the root and back through updateCollection', async () => {
+            const moved = await adminClient.query(updateCollectionDocument, {
+                input: { id: child.id, parentId: null },
+            });
+            expect(moved.updateCollection.parent?.id).toBe(parent.parent?.id);
+            const oldParent = await adminClient.query(getCollectionDocument, { id: parent.id });
+            expect(oldParent.collection?.children?.map(item => item.id)).not.toContain(child.id);
+
+            const restored = await adminClient.query(updateCollectionDocument, {
+                input: { id: child.id, parentId: parent.id },
+            });
+            expect(restored.updateCollection.parent?.id).toBe(parent.id);
+            const newParent = await adminClient.query(getCollectionDocument, { id: parent.id });
+            expect(newParent.collection?.children?.map(item => item.id)).toContain(child.id);
+        });
+
+        it('rejects a cycle before saving other collection fields', async () => {
+            await expect(
+                adminClient.query(updateCollectionDocument, {
+                    input: {
+                        id: parent.id,
+                        parentId: child.id,
+                        translations: [{ languageCode: LanguageCode.en, name: 'Should not persist' }],
+                    },
+                }),
+            ).rejects.toThrow();
+            const unchanged = await adminClient.query(getCollectionDocument, { id: parent.id });
+            expect(unchanged.collection?.name).toBe('Move parent');
+            expect(unchanged.collection?.parent?.id).toBe(parent.parent?.id);
         });
     });
 

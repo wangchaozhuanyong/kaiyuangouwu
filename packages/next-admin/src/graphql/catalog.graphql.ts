@@ -66,7 +66,16 @@ export const GET_PRODUCTS = gql`
 `;
 
 export const GET_PRODUCT_DETAIL = gql`
-    query GetProductDetail($id: ID!) {
+    query GetProductDetail($id: ID!, $assignmentId: String!) {
+        catalogProductChannelAssignments(options: { take: 1, filter: { id: { eq: $assignmentId } } }) {
+            items {
+                id
+                channels {
+                    id
+                    code
+                }
+            }
+        }
         product(id: $id) {
             id
             createdAt

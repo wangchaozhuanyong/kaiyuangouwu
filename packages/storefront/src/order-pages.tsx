@@ -2327,7 +2327,10 @@ function digitalDeliveryStatus(
 ): string {
     const labels = {
         READY: language === 'zh' ? '可下载' : 'Ready',
-        PAYMENT_REQUIRED: language === 'zh' ? '付款后开放' : 'Available after payment',
+        PAYMENT_REQUIRED:
+            language === 'zh'
+                ? '当前不可领取，请检查支付或退款状态'
+                : 'Unavailable. Check payment or refund status.',
         NOT_CONFIGURED: language === 'zh' ? '交付服务配置中' : 'Delivery is being configured',
         FILE_MISSING: language === 'zh' ? '内容准备中，请联系商家' : 'Content is being prepared',
     };

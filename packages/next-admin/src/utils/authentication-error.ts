@@ -1,3 +1,5 @@
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
+
 const authenticationRequiredPattern =
     /you are not currently authorized to perform this action|authentication required|invalid authentication|你当前无权执行此操作/i;
 
@@ -32,4 +34,21 @@ export function isAuthenticationRequiredError(error: unknown): boolean {
         return authenticationRequiredPattern.test(candidate.message ?? '');
     }
     return authenticationRequiredPattern.test(String(error ?? ''));
+}
+
+// This result must come from the dedicated, unaliased Admin API `me` query.
+// That resolver reports FORBIDDEN for anonymous sessions and non-admin identities.
+export function isMissingAdminSession(data: { me: { id: string } | null } | undefined, error: unknown) {
+    if (data?.me !== null) return false;
+    if (!error) return true;
+    return (
+        CombinedGraphQLErrors.is(error) &&
+        error.errors.length > 0 &&
+        error.errors.every(
+            item =>
+                item.path?.length === 1 &&
+                item.path[0] === 'me' &&
+                (item.extensions?.code === 'FORBIDDEN' || item.extensions?.code === 'UNAUTHENTICATED'),
+        )
+    );
 }

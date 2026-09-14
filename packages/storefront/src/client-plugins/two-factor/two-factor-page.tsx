@@ -23,7 +23,7 @@ import type { ActiveCustomer, StorefrontLanguage } from '../../types';
 import type { BatchImportErrorCode } from './batch-parser';
 import type { TwoFactorAccount } from './types';
 
-import { Subpage } from '../../storefront-ui/page-shell';
+import { Sheet, Subpage } from '../../storefront-ui/page-shell';
 
 import { getAnonymousTwoFactorOwnerId } from './anonymous-owner';
 import { MAX_BATCH_CHARACTERS, parseBatchImport } from './batch-parser';
@@ -68,6 +68,9 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
     const [batchValidated, setBatchValidated] = useState(false);
     const [search, setSearch] = useState('');
     const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
+    const [deletion, setDeletion] = useState<{ id: string; projectName: string } | 'all' | null>(null);
+    const [deletionError, setDeletionError] = useState(false);
+    const deletionPending = useRef(false);
     const clearSensitiveState = useCallback(() => {
         sensitiveRevision.current++;
         setCodes({});
@@ -84,6 +87,8 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
         setEditingId(null);
         setRevealedIds(new Set());
         setSearch('');
+        setDeletion(null);
+        setDeletionError(false);
     }, []);
     const vault = useBrowserVault(ownerId, clearSensitiveState);
     const { accounts, canWrite: storageAvailable } = vault;
@@ -278,17 +283,25 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
         onNotify(copy.accountsImported);
     };
 
-    const deleteAccount = async (account: TwoFactorAccount) => {
-        if (!window.confirm(copy.deleteConfirm)) return;
-        if (await persistAccounts(accounts.filter(item => item.id !== account.id)))
-            onNotify(copy.accountDeleted);
-    };
-
-    const clearAll = async () => {
-        if (!window.confirm(copy.clearConfirm)) return;
-        if (!(await persistAccounts([]))) return;
-        setCodes({});
-        onNotify(copy.accountsCleared);
+    const confirmDeletion = async () => {
+        if (!deletion || !storageAvailable || deletionPending.current) return;
+        const epoch = sensitiveRevision.current;
+        deletionPending.current = true;
+        setDeletionError(false);
+        try {
+            const next = deletion === 'all' ? [] : accounts.filter(item => item.id !== deletion.id);
+            if (!(await persistAccounts(next))) {
+                if (sensitiveRevision.current === epoch) setDeletionError(true);
+                return;
+            }
+            if (sensitiveRevision.current !== epoch) return;
+            setDeletion(null);
+            setCodes({});
+            setRevealedIds(new Set());
+            onNotify(deletion === 'all' ? copy.accountsCleared : copy.accountDeleted);
+        } finally {
+            deletionPending.current = false;
+        }
     };
 
     const copyAccountCode = async (account: TwoFactorAccount) => {
@@ -646,7 +659,11 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                             <button
                                 className={`${secondaryButtonClass} text-red-600`}
                                 type="button"
-                                onClick={() => void clearAll()}
+                                disabled={!storageAvailable}
+                                onClick={() => {
+                                    setDeletionError(false);
+                                    setDeletion('all');
+                                }}
                             >
                                 <Trash2 className="size-4" />
                                 {copy.clearAll}
@@ -699,7 +716,13 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                                                     )
                                                 }
                                                 onEdit={() => openAccountForm(account)}
-                                                onDelete={() => void deleteAccount(account)}
+                                                onDelete={() => {
+                                                    setDeletionError(false);
+                                                    setDeletion({
+                                                        id: account.id,
+                                                        projectName: account.projectName,
+                                                    });
+                                                }}
                                             />
                                         </div>
                                         <div className="mt-2 flex min-h-12 items-center gap-2 rounded-xl bg-slate-50 px-2.5 py-1.5">
@@ -730,6 +753,46 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                     )}
                 </section>
             </div>
+            {deletion ? (
+                <Sheet
+                    title={deletion === 'all' ? copy.clearAll : copy.delete}
+                    language={language}
+                    initialFocus="dialog"
+                    onClose={() => {
+                        if (!deletionPending.current) setDeletion(null);
+                    }}
+                >
+                    <div className="p-4">
+                        <p>{deletion === 'all' ? copy.clearConfirm : copy.deleteConfirm}</p>
+                        {deletion !== 'all' && (
+                            <p className="break-words font-bold">{deletion.projectName}</p>
+                        )}
+                        {deletionError && (
+                            <p role="alert" className="text-sm text-red-600">
+                                {copy.deleteFailed}
+                            </p>
+                        )}
+                        <div className="mt-4 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                className={secondaryButtonClass}
+                                disabled={vault.busy}
+                                onClick={() => setDeletion(null)}
+                            >
+                                {copy.cancel}
+                            </button>
+                            <button
+                                type="button"
+                                className={`${secondaryButtonClass} text-red-600`}
+                                disabled={!storageAvailable}
+                                onClick={() => void confirmDeletion()}
+                            >
+                                {vault.busy ? copy.deleting : copy.confirmDelete}
+                            </button>
+                        </div>
+                    </div>
+                </Sheet>
+            ) : null}
         </Subpage>
     );
 }
@@ -1027,8 +1090,13 @@ function copyFor(language: StorefrontLanguage) {
         accountsImported: isZh ? '账号已导入' : 'Accounts imported',
         accountsCleared: isZh ? '所有账号已清空' : 'All accounts cleared',
         deleteConfirm: isZh ? '确定删除这个 2FA 账号吗？' : 'Delete this 2FA account?',
+        confirmDelete: isZh ? '确认删除' : 'Confirm deletion',
+        deleting: isZh ? '删除中…' : 'Deleting…',
+        deleteFailed: isZh
+            ? '删除未完成，请确认账号已解锁后重试。'
+            : 'Deletion failed. Make sure the accounts are unlocked and retry.',
         clearConfirm: isZh
-            ? '确定清空当前浏览器中保存的所有 2FA 账号吗？'
-            : 'Clear all 2FA accounts saved in this browser?',
+            ? '确定清空当前身份在此浏览器中保存的所有 2FA 账号吗？此操作不能撤销。'
+            : 'Clear all 2FA accounts for the current identity in this browser? This cannot be undone.',
     } as const;
 }

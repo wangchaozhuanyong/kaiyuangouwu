@@ -456,7 +456,9 @@ export function CatalogModule() {
                             <div className="relative">
                                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                                 <SearchInput
-                                    type="text"
+                                    type="search"
+                                    autoComplete="off"
+                                    disabled={Boolean(productToDelete)}
                                     value={searchTerm}
                                     onValueChange={setSearchTerm}
                                     aria-label="搜索商品"
@@ -956,11 +958,11 @@ export function CatalogModule() {
                 </div>
             </div>
 
-            {/* 删除二次确认弹窗 (明确为“永久删除”而非“归档”) */}
+            {/* Backend soft-deletes the shared product; this is not physical erasure. */}
             {productToDelete && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs animate-fadeIn">
                     <AccessibleDialogSurface
-                        accessibleName="永久删除商品"
+                        accessibleName="删除商品确认"
                         onRequestClose={() => {
                             if (!deleting) {
                                 setProductToDelete(null);
@@ -974,13 +976,14 @@ export function CatalogModule() {
                             <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center">
                                 <AlertTriangle className="w-5 h-5" />
                             </div>
-                            <h3 className="text-base font-bold text-slate-900">确认永久删除该商品？</h3>
+                            <h3 className="text-base font-bold text-slate-900">确认删除该商品？</h3>
                         </div>
 
                         <p className="text-xs text-slate-600 leading-relaxed">
-                            确定要从数据库中永久删除商品{' '}
+                            确定要删除商品{' '}
                             <strong className="text-slate-900">《{productToDelete.name}》</strong>{' '}
-                            吗？删除后该商品及所有下属 SKU 规格变体将从数据库中彻底移除，不可恢复。
+                            吗？该商品及下属 SKU 将从所有已分配店铺的商品列表和商城中移除，历史业务记录保留。
+                            这是标记删除，不会物理擦除数据库记录；当前后台没有恢复入口。
                         </p>
 
                         <label className="block text-xs font-bold text-slate-700">
