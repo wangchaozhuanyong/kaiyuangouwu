@@ -11,7 +11,7 @@ const EXCLUDED_PATHS = [
     'components/FeatureHelp.tsx',
 ];
 const NON_FUNCTIONAL_TITLE =
-    /(失败|没有|不存在|无权访问|暂不可用|暂无|还没有|确认永久删除|当前登录会话|未配置|加载失败|^规则包 v$)/;
+    /(失败|没有|不存在|无权访问|暂不可用|暂无|还没有|确认(?:永久)?删除|当前登录会话|未配置|加载失败|^规则包 v$)/;
 
 function tsxFiles(directory: string): string[] {
     return readdirSync(directory).flatMap(name => {

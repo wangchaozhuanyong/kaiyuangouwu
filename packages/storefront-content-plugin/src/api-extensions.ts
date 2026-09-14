@@ -98,6 +98,15 @@ const commonTypes = gql`
     type StorefrontContentSettings {
         heroAutoplayIntervalSeconds: Int!
         configuredBlockTypes: [StorefrontContentBlockType!]!
+        auth: StorefrontAuthSettings!
+    }
+
+    type StorefrontAuthSettings {
+        emailPasswordEnabled: Boolean!
+        emailAutoRegistrationEnabled: Boolean!
+        emailQuickRegistrationEnabled: Boolean!
+        googleEnabled: Boolean!
+        googleClientId: String
     }
 `;
 
@@ -218,6 +227,39 @@ export const adminApiExtensions = gql`
         heroAutoplayIntervalSeconds: Int!
     }
 
+    input UpdateStorefrontAuthSettingsInput {
+        emailPasswordEnabled: Boolean!
+        emailAutoRegistrationEnabled: Boolean!
+        emailQuickRegistrationEnabled: Boolean!
+        googleOverrideEnabled: Boolean!
+        storeGoogleEnabled: Boolean!
+        storeGoogleClientId: String
+    }
+
+    input UpdateStorefrontGooglePlatformSettingsInput {
+        googleEnabled: Boolean!
+        googleClientId: String
+    }
+
+    enum StorefrontGoogleConfigurationSource {
+        PLATFORM
+        STORE
+    }
+
+    type StorefrontAuthConfiguration {
+        emailPasswordEnabled: Boolean!
+        emailAutoRegistrationEnabled: Boolean!
+        emailQuickRegistrationEnabled: Boolean!
+        googleOverrideEnabled: Boolean!
+        storeGoogleEnabled: Boolean!
+        storeGoogleClientId: String
+        platformGoogleEnabled: Boolean!
+        platformGoogleClientId: String
+        effectiveGoogleEnabled: Boolean!
+        effectiveGoogleClientId: String
+        googleConfigurationSource: StorefrontGoogleConfigurationSource!
+    }
+
     input StorefrontContentBlockVersionInput {
         id: ID!
         expectedUpdatedAt: DateTime!
@@ -235,6 +277,7 @@ export const adminApiExtensions = gql`
         storefrontContentBlocks: [StorefrontContentBlock!]!
         storefrontContentBlock(id: ID!): StorefrontContentBlock
         storefrontContentSettings: StorefrontContentSettings!
+        storefrontAuthConfiguration: StorefrontAuthConfiguration!
     }
 
     input UpdateStorefrontVisualPresetInput {
@@ -254,5 +297,9 @@ export const adminApiExtensions = gql`
         updateStorefrontContentSettings(
             input: UpdateStorefrontContentSettingsInput!
         ): StorefrontContentSettings!
+        updateStorefrontAuthSettings(input: UpdateStorefrontAuthSettingsInput!): StorefrontAuthConfiguration!
+        updateStorefrontGooglePlatformSettings(
+            input: UpdateStorefrontGooglePlatformSettingsInput!
+        ): StorefrontAuthConfiguration!
     }
 `;

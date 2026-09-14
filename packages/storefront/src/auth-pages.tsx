@@ -28,6 +28,7 @@ import {
     validateAccountPassword,
 } from './auth-validation';
 import { resolveAuthVisualMessage } from './auth-visual';
+import { GoogleAuthButton } from './google-auth-button';
 import {
     attributionWithinWindow,
     captureReferralAttribution,
@@ -39,7 +40,12 @@ import { storefrontWebpUrl } from './responsive-image';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions, RouteState } from './storefront-router';
 import { SafeImage } from './storefront-ui/product-display';
-import { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from './types';
+import {
+    StorefrontAuthSettings,
+    StorefrontContentBlock,
+    StorefrontContentTargetType,
+    StorefrontLanguage,
+} from './types';
 
 type AuthRoute = { name: 'login' | 'register' | 'forgot-password' };
 
@@ -151,9 +157,42 @@ interface AuthCompletionProps {
     onSuccess: () => Promise<void>;
 }
 
+interface AuthMethodsProps {
+    authSettings?: StorefrontAuthSettings;
+}
+
+const defaultAuthSettings: StorefrontAuthSettings = {
+    emailPasswordEnabled: true,
+    emailAutoRegistrationEnabled: false,
+    emailQuickRegistrationEnabled: false,
+    googleEnabled: false,
+    googleClientId: null,
+};
+
 function formString(data: FormData, name: string): string {
     const value = data.get(name);
     return typeof value === 'string' ? value : '';
+}
+
+function isInvalidCredentials(error: unknown): boolean {
+    return error instanceof ShopApiError && error.errorCode === 'INVALID_CREDENTIALS_ERROR';
+}
+
+function googleAuthErrorMessage(error: unknown, language: StorefrontLanguage): string {
+    if (error instanceof ShopApiError && error.authenticationError === 'STOREFRONT_GOOGLE_AUTH_UNAVAILABLE') {
+        return language === 'zh'
+            ? '当前店铺尚未完成 Google 登录配置'
+            : 'Google sign-in is not configured for this store';
+    }
+    return language === 'zh' ? 'Google 登录失败，请重试' : 'Google sign-in failed. Try again';
+}
+
+function AuthMethodDivider({ language }: { language: StorefrontLanguage }) {
+    return (
+        <div className="auth-method-divider" role="separator">
+            <span>{language === 'zh' ? '或' : 'or'}</span>
+        </div>
+    );
 }
 
 export function LoginPage({
@@ -165,10 +204,11 @@ export function LoginPage({
     logoUrl,
     legalContent,
     authVisualContent,
+    authSettings = defaultAuthSettings,
     onBack,
     onSuccess,
     onContentTarget,
-}: AuthPageBaseProps & AuthLegalProps & AuthCompletionProps & AuthVisualProps) {
+}: AuthPageBaseProps & AuthLegalProps & AuthCompletionProps & AuthVisualProps & AuthMethodsProps) {
     const navigate = useNavigate();
     const navigateTo = (route: AuthRoute) =>
         void navigate(
@@ -181,20 +221,48 @@ export function LoginPage({
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
+    const [autoRegistrationEmail, setAutoRegistrationEmail] = useState('');
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const data = new FormData(event.currentTarget);
+        const emailAddress = formString(data, 'emailAddress').trim();
+        const password = formString(data, 'password');
         setSubmitting(true);
         setError('');
         try {
-            await api.login(formString(data, 'emailAddress'), formString(data, 'password'));
+            await api.login(emailAddress, password);
             await onSuccess();
         } catch (requestError) {
-            setError(loginErrorMessage(requestError, language));
+            if (authSettings.emailAutoRegistrationEnabled && isInvalidCredentials(requestError)) {
+                try {
+                    await api.registerCustomerAccount({ emailAddress, password });
+                    setAutoRegistrationEmail(emailAddress);
+                } catch (registrationError) {
+                    setError(registerErrorMessage(registrationError, language));
+                }
+            } else {
+                setError(loginErrorMessage(requestError, language));
+            }
         } finally {
             setSubmitting(false);
         }
     };
+
+    const authenticateWithGoogle = async (credential: string) => {
+        setSubmitting(true);
+        setError('');
+        try {
+            await api.authenticateWithGoogle(credential);
+            await onSuccess();
+        } catch (requestError) {
+            throw new Error(googleAuthErrorMessage(requestError, language));
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const googleClientId = authSettings.googleEnabled ? authSettings.googleClientId : null;
+    const googleAvailable = Boolean(googleClientId);
 
     return (
         <AuthLayout
@@ -209,50 +277,99 @@ export function LoginPage({
                 onLogin={() => navigateTo({ name: 'login' })}
                 onRegister={() => navigateTo({ name: 'register' })}
             />
-            <header className={`auth-form-heading auth-form-heading-${language}`}>
-                <h1>{isZh ? '欢迎回来' : 'Welcome back'}</h1>
-                <p>{isZh ? '登录后管理你的账户与订单' : 'Sign in to manage your account and orders'}</p>
-            </header>
-            <form aria-label={isZh ? '登录表单' : 'Sign-in form'} onSubmit={event => void submit(event)}>
-                <Field
-                    name="emailAddress"
-                    label={isZh ? '电子邮箱' : 'Email address'}
-                    type="email"
-                    autoComplete="email"
-                />
-                <Field
-                    name="password"
-                    label={isZh ? '密码' : 'Password'}
-                    type="password"
-                    autoComplete="current-password"
-                    revealPassword
-                    language={language}
-                    labelAction={
-                        <button
-                            className="auth-inline-link"
-                            type="button"
-                            onClick={() => navigateTo({ name: 'forgot-password' })}
-                        >
-                            {isZh ? '忘记密码？' : 'Forgot password?'}
-                        </button>
+            <h1 className="visually-hidden">{isZh ? '登录' : 'Sign in'}</h1>
+            {autoRegistrationEmail ? (
+                <AuthResult
+                    icon={<CircleCheck />}
+                    title={isZh ? '请检查邮箱或密码' : 'Check your email or password'}
+                    detail={
+                        isZh
+                            ? `如果 ${autoRegistrationEmail} 是新邮箱，验证邮件已发送；如果已有账户，请返回检查密码或重置密码。`
+                            : `If ${autoRegistrationEmail} is new, a verification email was sent. If it already has an account, go back to check or reset the password.`
                     }
-                />
-                {error && (
-                    <small className="form-error" role="alert">
-                        {error}
-                    </small>
-                )}
-                <SubmitButton
-                    submitting={submitting}
-                    idle={isZh ? '登录' : 'Sign in'}
-                    busy={isZh ? '登录中' : 'Signing in'}
-                />
-            </form>
-            <AuthSwitch
-                prompt={isZh ? '还没有账户？' : 'New here?'}
-                action={isZh ? '注册账户' : 'Create account'}
-                onClick={() => navigateTo({ name: 'register' })}
-            />
+                >
+                    <button
+                        className="auth-secondary-action"
+                        type="button"
+                        onClick={() => setAutoRegistrationEmail('')}
+                    >
+                        {isZh ? '返回登录' : 'Back to sign in'}
+                    </button>
+                    <button
+                        className="auth-secondary-action"
+                        type="button"
+                        onClick={() => navigateTo({ name: 'forgot-password' })}
+                    >
+                        {isZh ? '重置密码' : 'Reset password'}
+                    </button>
+                </AuthResult>
+            ) : (
+                <>
+                    {authSettings.emailPasswordEnabled ? (
+                        <form
+                            className="auth-account-form"
+                            aria-label={isZh ? '登录表单' : 'Sign-in form'}
+                            onSubmit={event => void submit(event)}
+                        >
+                            <Field
+                                name="emailAddress"
+                                label={isZh ? '电子邮箱' : 'Email address'}
+                                type="email"
+                                autoComplete="email"
+                                showLabel={false}
+                            />
+                            <Field
+                                name="password"
+                                label={isZh ? '密码' : 'Password'}
+                                type="password"
+                                autoComplete="current-password"
+                                revealPassword
+                                language={language}
+                                showLabel={false}
+                                labelAction={
+                                    <button
+                                        className="auth-inline-link"
+                                        type="button"
+                                        onClick={() => navigateTo({ name: 'forgot-password' })}
+                                    >
+                                        {isZh ? '忘记密码？' : 'Forgot password?'}
+                                    </button>
+                                }
+                            />
+                            {error && (
+                                <small className="form-error" role="alert">
+                                    {error}
+                                </small>
+                            )}
+                            <SubmitButton
+                                submitting={submitting}
+                                idle={isZh ? '登录' : 'Sign in'}
+                                busy={isZh ? '登录中' : 'Signing in'}
+                            />
+                        </form>
+                    ) : null}
+                    {googleClientId ? (
+                        <>
+                            {authSettings.emailPasswordEnabled ? (
+                                <AuthMethodDivider language={language} />
+                            ) : null}
+                            <GoogleAuthButton
+                                clientId={googleClientId}
+                                language={language}
+                                disabled={submitting}
+                                onCredential={authenticateWithGoogle}
+                            />
+                        </>
+                    ) : null}
+                    {!authSettings.emailPasswordEnabled && !googleAvailable ? (
+                        <p className="auth-methods-unavailable" role="status">
+                            {isZh
+                                ? '当前店铺暂未开启登录方式'
+                                : 'No sign-in method is enabled for this store'}
+                        </p>
+                    ) : null}
+                </>
+            )}
             <AuthLegalNotice content={legalContent} language={language} onContentTarget={onContentTarget} />
         </AuthLayout>
     );
@@ -267,9 +384,11 @@ export function RegisterPage({
     logoUrl,
     legalContent,
     authVisualContent,
+    authSettings = defaultAuthSettings,
     onBack,
+    onSuccess,
     onContentTarget,
-}: AuthPageBaseProps & AuthLegalProps & AuthVisualProps) {
+}: AuthPageBaseProps & AuthLegalProps & AuthVisualProps & AuthMethodsProps & Partial<AuthCompletionProps>) {
     const navigate = useNavigate();
     const navigateTo = (route: AuthRoute) =>
         void navigate(
@@ -289,6 +408,9 @@ export function RegisterPage({
     const [inviteCode, setInviteCode] = useState('');
     const [inviteSource, setInviteSource] = useState<ReferralSource>('CODE');
     const [inviteStatus, setInviteStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+    const quickRegistration = authSettings.emailQuickRegistrationEnabled;
+    const googleClientId = authSettings.googleEnabled ? authSettings.googleClientId : null;
+    const googleAvailable = Boolean(googleClientId);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -318,21 +440,28 @@ export function RegisterPage({
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const data = new FormData(event.currentTarget);
-        const fullName = formString(data, 'fullName').trim();
-        const { firstName, lastName } = splitCustomerName(fullName, language);
-        if (!firstName || !lastName) {
-            setError(isZh ? '请输入完整姓名' : 'Enter your full name');
-            return;
-        }
-        const password = formString(data, 'password');
-        const passwordError = validateAccountPassword(
-            password,
-            formString(data, 'confirmPassword'),
-            language,
-        );
-        if (passwordError) {
-            setError(passwordError);
-            return;
+        let firstName: string | undefined;
+        let lastName: string | undefined;
+        let password: string | undefined;
+        if (!quickRegistration) {
+            const fullName = formString(data, 'fullName').trim();
+            const splitName = splitCustomerName(fullName, language);
+            firstName = splitName.firstName;
+            lastName = splitName.lastName;
+            if (!firstName || !lastName) {
+                setError(isZh ? '请输入完整姓名' : 'Enter your full name');
+                return;
+            }
+            password = formString(data, 'password');
+            const passwordError = validateAccountPassword(
+                password,
+                formString(data, 'confirmPassword'),
+                language,
+            );
+            if (passwordError) {
+                setError(passwordError);
+                return;
+            }
         }
         setSubmitting(true);
         setError('');
@@ -349,9 +478,9 @@ export function RegisterPage({
             await api.registerCustomerAccount(
                 {
                     emailAddress,
-                    firstName,
-                    lastName,
-                    password,
+                    ...(firstName ? { firstName } : {}),
+                    ...(lastName ? { lastName } : {}),
+                    ...(password ? { password } : {}),
                 },
                 submittedInviteCode || undefined,
                 submittedInviteCode ? inviteSource : undefined,
@@ -360,6 +489,19 @@ export function RegisterPage({
             setResendSeconds(60);
         } catch (requestError) {
             setError(registerErrorMessage(requestError, language));
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const authenticateWithGoogle = async (credential: string) => {
+        setSubmitting(true);
+        setError('');
+        try {
+            await api.authenticateWithGoogle(credential);
+            await onSuccess?.();
+        } catch (requestError) {
+            throw new Error(googleAuthErrorMessage(requestError, language));
         } finally {
             setSubmitting(false);
         }
@@ -458,115 +600,157 @@ export function RegisterPage({
                         onLogin={() => navigateTo({ name: 'login' })}
                         onRegister={() => navigateTo({ name: 'register' })}
                     />
-                    <header className={`auth-form-heading auth-form-heading-${language}`}>
-                        <h1>{isZh ? '创建账户' : 'Create your account'}</h1>
-                        <p>
-                            {isZh
-                                ? '验证邮箱后，即可统一管理收藏与订单'
-                                : 'Verify your email to manage favorites and orders'}
-                        </p>
-                    </header>
-                    <form
-                        aria-label={isZh ? '注册表单' : 'Registration form'}
-                        onSubmit={event => void submit(event)}
-                    >
-                        <Field name="fullName" label={isZh ? '姓名' : 'Full name'} autoComplete="name" />
-                        <Field
-                            name="emailAddress"
-                            label={isZh ? '电子邮箱' : 'Email address'}
-                            type="email"
-                            autoComplete="email"
-                        />
-                        <Field
-                            name="password"
-                            label={isZh ? '密码' : 'Password'}
-                            type="password"
-                            autoComplete="new-password"
-                            minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
-                            maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
-                            revealPassword
-                            language={language}
-                        />
-                        <Field
-                            name="confirmPassword"
-                            label={isZh ? '确认密码' : 'Confirm password'}
-                            type="password"
-                            autoComplete="new-password"
-                            minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
-                            maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
-                            revealPassword
-                            language={language}
-                        />
-                        <small className="auth-password-hint">
-                            {isZh
-                                ? `密码需为 ${ACCOUNT_PASSWORD_MIN_LENGTH}–${ACCOUNT_PASSWORD_MAX_LENGTH} 个字符`
-                                : `Use ${ACCOUNT_PASSWORD_MIN_LENGTH}–${ACCOUNT_PASSWORD_MAX_LENGTH} characters`}
-                        </small>
-                        {referralEnabled && (
-                            <>
+                    <h1 className="visually-hidden">{isZh ? '注册' : 'Register'}</h1>
+                    {authSettings.emailPasswordEnabled ? (
+                        <form
+                            className="auth-account-form"
+                            aria-label={isZh ? '注册表单' : 'Registration form'}
+                            onSubmit={event => void submit(event)}
+                        >
+                            {!quickRegistration ? (
                                 <Field
-                                    name="inviteCode"
-                                    label={isZh ? '邀请码（选填）' : 'Invitation code (optional)'}
-                                    autoComplete="off"
-                                    maxLength={12}
-                                    required={false}
-                                    value={inviteCode}
-                                    onChange={value => {
-                                        setInviteCode(normalizeReferralCode(value));
-                                        setInviteSource('CODE');
-                                        setInviteStatus('idle');
-                                    }}
-                                    onBlur={value => {
-                                        const code = normalizeReferralCode(value);
-                                        if (!code) {
-                                            setInviteStatus('idle');
-                                            return;
-                                        }
-                                        setInviteStatus('checking');
-                                        void api
-                                            .validateReferralInviteCode(code)
-                                            .then(valid => setInviteStatus(valid ? 'valid' : 'invalid'))
-                                            .catch(() => setInviteStatus('idle'));
-                                    }}
+                                    name="fullName"
+                                    label={isZh ? '姓名' : 'Full name'}
+                                    autoComplete="name"
+                                    showLabel={false}
                                 />
-                                {inviteStatus !== 'idle' && (
-                                    <small
-                                        className={
-                                            inviteStatus === 'invalid' ? 'form-error' : 'auth-success-message'
-                                        }
-                                        role={inviteStatus === 'invalid' ? 'alert' : 'status'}
-                                    >
-                                        {inviteStatus === 'checking'
-                                            ? isZh
-                                                ? '正在验证邀请码…'
-                                                : 'Checking invitation code…'
-                                            : inviteStatus === 'valid'
-                                              ? isZh
-                                                  ? '邀请码有效，注册后将自动绑定邀请关系'
-                                                  : 'Valid code. Your referral will be linked after registration.'
-                                              : isZh
-                                                ? '邀请码无效，不填写也可以正常注册'
-                                                : 'Invalid code. You can leave this field empty.'}
+                            ) : null}
+                            <Field
+                                name="emailAddress"
+                                label={isZh ? '电子邮箱' : 'Email address'}
+                                type="email"
+                                autoComplete="email"
+                                showLabel={false}
+                            />
+                            {!quickRegistration ? (
+                                <>
+                                    <Field
+                                        name="password"
+                                        label={isZh ? '密码' : 'Password'}
+                                        type="password"
+                                        autoComplete="new-password"
+                                        minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
+                                        maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
+                                        revealPassword
+                                        language={language}
+                                        showLabel={false}
+                                    />
+                                    <Field
+                                        name="confirmPassword"
+                                        label={isZh ? '确认密码' : 'Confirm password'}
+                                        type="password"
+                                        autoComplete="new-password"
+                                        minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
+                                        maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
+                                        revealPassword
+                                        language={language}
+                                        showLabel={false}
+                                    />
+                                    <small className="auth-password-hint">
+                                        {isZh
+                                            ? `密码需为 ${ACCOUNT_PASSWORD_MIN_LENGTH}–${ACCOUNT_PASSWORD_MAX_LENGTH} 个字符`
+                                            : `Use ${ACCOUNT_PASSWORD_MIN_LENGTH}–${ACCOUNT_PASSWORD_MAX_LENGTH} characters`}
                                     </small>
-                                )}
-                            </>
-                        )}
-                        {error && (
-                            <small className="form-error" role="alert">
-                                {error}
-                            </small>
-                        )}
-                        <SubmitButton
-                            submitting={submitting}
-                            idle={isZh ? '注册账户' : 'Create account'}
-                            busy={isZh ? '注册中' : 'Creating account'}
-                        />
-                    </form>
-                    <AuthSwitch
-                        prompt={isZh ? '已有账户？' : 'Already have an account?'}
-                        action={isZh ? '去登录' : 'Sign in'}
-                        onClick={() => navigateTo({ name: 'login' })}
-                    />
+                                </>
+                            ) : (
+                                <small className="auth-password-hint">
+                                    {isZh
+                                        ? '验证邮箱后再设置密码，无需现在填写姓名'
+                                        : 'Set your password after verifying your email; no name is needed now'}
+                                </small>
+                            )}
+                            {referralEnabled && (
+                                <>
+                                    <Field
+                                        name="inviteCode"
+                                        label={isZh ? '邀请码（选填）' : 'Invitation code (optional)'}
+                                        autoComplete="off"
+                                        maxLength={12}
+                                        required={false}
+                                        showLabel={false}
+                                        value={inviteCode}
+                                        onChange={value => {
+                                            setInviteCode(normalizeReferralCode(value));
+                                            setInviteSource('CODE');
+                                            setInviteStatus('idle');
+                                        }}
+                                        onBlur={value => {
+                                            const code = normalizeReferralCode(value);
+                                            if (!code) {
+                                                setInviteStatus('idle');
+                                                return;
+                                            }
+                                            setInviteStatus('checking');
+                                            void api
+                                                .validateReferralInviteCode(code)
+                                                .then(valid => setInviteStatus(valid ? 'valid' : 'invalid'))
+                                                .catch(() => setInviteStatus('idle'));
+                                        }}
+                                    />
+                                    {inviteStatus !== 'idle' && (
+                                        <small
+                                            className={
+                                                inviteStatus === 'invalid'
+                                                    ? 'form-error'
+                                                    : 'auth-success-message'
+                                            }
+                                            role={inviteStatus === 'invalid' ? 'alert' : 'status'}
+                                        >
+                                            {inviteStatus === 'checking'
+                                                ? isZh
+                                                    ? '正在验证邀请码…'
+                                                    : 'Checking invitation code…'
+                                                : inviteStatus === 'valid'
+                                                  ? isZh
+                                                      ? '邀请码有效，注册后将自动绑定邀请关系'
+                                                      : 'Valid code. Your referral will be linked after registration.'
+                                                  : isZh
+                                                    ? '邀请码无效，不填写也可以正常注册'
+                                                    : 'Invalid code. You can leave this field empty.'}
+                                        </small>
+                                    )}
+                                </>
+                            )}
+                            {error && (
+                                <small className="form-error" role="alert">
+                                    {error}
+                                </small>
+                            )}
+                            <SubmitButton
+                                submitting={submitting}
+                                idle={
+                                    quickRegistration
+                                        ? isZh
+                                            ? '使用邮箱快捷注册'
+                                            : 'Continue with email'
+                                        : isZh
+                                          ? '注册账户'
+                                          : 'Create account'
+                                }
+                                busy={isZh ? '注册中' : 'Creating account'}
+                            />
+                        </form>
+                    ) : null}
+                    {googleClientId ? (
+                        <>
+                            {authSettings.emailPasswordEnabled ? (
+                                <AuthMethodDivider language={language} />
+                            ) : null}
+                            <GoogleAuthButton
+                                clientId={googleClientId}
+                                language={language}
+                                disabled={submitting}
+                                onCredential={authenticateWithGoogle}
+                            />
+                        </>
+                    ) : null}
+                    {!authSettings.emailPasswordEnabled && !googleAvailable ? (
+                        <p className="auth-methods-unavailable" role="status">
+                            {isZh
+                                ? '当前店铺暂未开启注册方式'
+                                : 'No registration method is enabled for this store'}
+                        </p>
+                    ) : null}
                     <AuthLegalNotice
                         content={legalContent}
                         language={language}
@@ -1187,6 +1371,7 @@ function Field({
     maxLength,
     icon,
     labelAction,
+    showLabel = true,
     revealPassword = false,
     language = 'en',
     wide = true,
@@ -1203,6 +1388,7 @@ function Field({
     maxLength?: number;
     icon?: ReactNode;
     labelAction?: ReactNode;
+    showLabel?: boolean;
     revealPassword?: boolean;
     language?: StorefrontLanguage;
     wide?: boolean;
@@ -1239,13 +1425,21 @@ function Field({
     );
 
     return (
-        <div className={`auth-field${wide ? ' field-wide' : ''}`}>
-            <div className="auth-field-label-row">
-                <label className="auth-field-label" htmlFor={inputId}>
+        <div
+            className={`auth-field${wide ? ' field-wide' : ''}${showLabel ? '' : ' auth-field-placeholder-only'}`}
+        >
+            {showLabel ? (
+                <div className="auth-field-label-row">
+                    <label className="auth-field-label" htmlFor={inputId}>
+                        {label}
+                    </label>
+                    {labelAction}
+                </div>
+            ) : (
+                <label className="visually-hidden" htmlFor={inputId}>
                     {label}
                 </label>
-                {labelAction}
-            </div>
+            )}
             <div className={`auth-input-shell${hasPasswordToggle ? ' auth-password-input' : ''}`}>
                 {icon && (
                     <span className="auth-field-icon" aria-hidden="true">
@@ -1269,6 +1463,7 @@ function Field({
                     input
                 )}
             </div>
+            {!showLabel && labelAction ? <div className="auth-field-action-row">{labelAction}</div> : null}
         </div>
     );
 }
@@ -1327,17 +1522,6 @@ function AuthRouteTabs({
                 {isZh ? '注册' : 'Register'}
             </button>
         </nav>
-    );
-}
-
-function AuthSwitch({ prompt, action, onClick }: { prompt: string; action: string; onClick: () => void }) {
-    return (
-        <div className="auth-switch">
-            <span>{prompt}</span>
-            <button type="button" onClick={onClick}>
-                {action}
-            </button>
-        </div>
     );
 }
 

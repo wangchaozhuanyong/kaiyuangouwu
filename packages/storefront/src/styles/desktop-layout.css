@@ -839,10 +839,6 @@
         max-width: 440px;
     }
 
-    .auth-page-register .login-content form .auth-field {
-        margin-bottom: 12px;
-    }
-
     .sheet-layer {
         width: min(100%, var(--app-width));
         left: 50%;

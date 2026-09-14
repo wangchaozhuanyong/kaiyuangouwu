@@ -79,6 +79,19 @@ export const STOREFRONT_CONTENT_QUERY = gql`
             heroAutoplayIntervalSeconds
             configuredBlockTypes
         }
+        storefrontAuthConfiguration {
+            emailPasswordEnabled
+            emailAutoRegistrationEnabled
+            emailQuickRegistrationEnabled
+            googleOverrideEnabled
+            storeGoogleEnabled
+            storeGoogleClientId
+            platformGoogleEnabled
+            platformGoogleClientId
+            effectiveGoogleEnabled
+            effectiveGoogleClientId
+            googleConfigurationSource
+        }
         storefrontContentBlocks {
             ...NextAdminStorefrontBlockFields
         }
@@ -127,6 +140,44 @@ export const UPDATE_STOREFRONT_SETTINGS_MUTATION = gql`
         updateStorefrontContentSettings(input: $input) {
             heroAutoplayIntervalSeconds
             configuredBlockTypes
+        }
+    }
+`;
+
+export const UPDATE_STOREFRONT_AUTH_SETTINGS_MUTATION = gql`
+    mutation NextAdminUpdateStorefrontAuthSettings($input: UpdateStorefrontAuthSettingsInput!) {
+        updateStorefrontAuthSettings(input: $input) {
+            emailPasswordEnabled
+            emailAutoRegistrationEnabled
+            emailQuickRegistrationEnabled
+            googleOverrideEnabled
+            storeGoogleEnabled
+            storeGoogleClientId
+            platformGoogleEnabled
+            platformGoogleClientId
+            effectiveGoogleEnabled
+            effectiveGoogleClientId
+            googleConfigurationSource
+        }
+    }
+`;
+
+export const UPDATE_STOREFRONT_GOOGLE_PLATFORM_SETTINGS_MUTATION = gql`
+    mutation NextAdminUpdateStorefrontGooglePlatformSettings(
+        $input: UpdateStorefrontGooglePlatformSettingsInput!
+    ) {
+        updateStorefrontGooglePlatformSettings(input: $input) {
+            emailPasswordEnabled
+            emailAutoRegistrationEnabled
+            emailQuickRegistrationEnabled
+            googleOverrideEnabled
+            storeGoogleEnabled
+            storeGoogleClientId
+            platformGoogleEnabled
+            platformGoogleClientId
+            effectiveGoogleEnabled
+            effectiveGoogleClientId
+            googleConfigurationSource
         }
     }
 `;
@@ -386,7 +437,22 @@ export interface StorefrontContentResult {
         heroAutoplayIntervalSeconds: number;
         configuredBlockTypes: StorefrontBlockType[];
     };
+    storefrontAuthConfiguration: StorefrontAuthConfigurationRecord;
     storefrontContentBlocks: StorefrontContentBlock[];
+}
+
+export interface StorefrontAuthConfigurationRecord {
+    emailPasswordEnabled: boolean;
+    emailAutoRegistrationEnabled: boolean;
+    emailQuickRegistrationEnabled: boolean;
+    googleOverrideEnabled: boolean;
+    storeGoogleEnabled: boolean;
+    storeGoogleClientId: string | null;
+    platformGoogleEnabled: boolean;
+    platformGoogleClientId: string | null;
+    effectiveGoogleEnabled: boolean;
+    effectiveGoogleClientId: string | null;
+    googleConfigurationSource: 'PLATFORM' | 'STORE';
 }
 
 export interface SystemAnnouncementRecord {

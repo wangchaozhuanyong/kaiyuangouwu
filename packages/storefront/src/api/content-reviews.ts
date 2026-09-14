@@ -1,6 +1,7 @@
 import type {
     AfterSalesRequest,
     CreateAfterSalesRequestInput,
+    StorefrontAuthSettings,
     StorefrontConfig,
     StorefrontContentResponse,
     StorefrontCouponCampaign,
@@ -22,6 +23,14 @@ import {
 import { BaseDomainApi } from './base-domain-api';
 import { isSupportedContentSchemaFallback } from './content-compatibility';
 import { afterSalesFields, storefrontReviewFields } from './fragments';
+
+const defaultAuthSettings: StorefrontAuthSettings = {
+    emailPasswordEnabled: true,
+    emailAutoRegistrationEnabled: false,
+    emailQuickRegistrationEnabled: false,
+    googleEnabled: false,
+    googleClientId: null,
+};
 
 export class ContentReviewsApi extends BaseDomainApi {
     async storefrontVisualPreset(signal?: AbortSignal): Promise<StorefrontVisualPresetConfig> {
@@ -190,7 +199,11 @@ export class ContentReviewsApi extends BaseDomainApi {
             blocks: result.storefrontContent.filter(block => isAccountContentBlockType(block.type)),
             flashSales: [],
             systemAnnouncements: [],
-            settings: { heroAutoplayIntervalSeconds: 5, configuredBlockTypes: [] },
+            settings: {
+                heroAutoplayIntervalSeconds: 5,
+                configuredBlockTypes: [],
+                auth: defaultAuthSettings,
+            },
         };
     }
 
@@ -203,6 +216,13 @@ export class ContentReviewsApi extends BaseDomainApi {
                 storefrontContentSettings {
                     heroAutoplayIntervalSeconds
                     configuredBlockTypes
+                    auth {
+                        emailPasswordEnabled
+                        emailAutoRegistrationEnabled
+                        emailQuickRegistrationEnabled
+                        googleEnabled
+                        googleClientId
+                    }
                 }
                 activeStorefrontFlashSales {
                     id
@@ -316,6 +336,7 @@ export class ContentReviewsApi extends BaseDomainApi {
                 heroAutoplayIntervalSeconds:
                     result.storefrontContentSettings?.heroAutoplayIntervalSeconds ?? 5,
                 configuredBlockTypes: result.storefrontContentSettings?.configuredBlockTypes ?? [],
+                auth: result.storefrontContentSettings?.auth ?? defaultAuthSettings,
             },
         };
     }

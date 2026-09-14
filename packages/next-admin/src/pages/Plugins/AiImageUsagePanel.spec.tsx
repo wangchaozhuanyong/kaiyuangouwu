@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     refetch: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@apollo/client/react', () => ({ useQuery: (...args: unknown[]) => mocks.query(...args) }));
+vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
 const cleanups: Array<() => void> = [];
 afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));

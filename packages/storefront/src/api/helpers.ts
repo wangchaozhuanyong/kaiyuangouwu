@@ -1,6 +1,7 @@
 import { productAvailability } from '../product-availability';
 import {
     Product,
+    StorefrontAuthSettings,
     StorefrontCatalogInput,
     StorefrontContentBlock,
     StorefrontFlashSale,
@@ -26,6 +27,7 @@ export interface StorefrontContentQueryResult {
     storefrontContentSettings?: {
         heroAutoplayIntervalSeconds: number;
         configuredBlockTypes?: Array<StorefrontContentBlock['type']>;
+        auth?: StorefrontAuthSettings;
     };
 }
 

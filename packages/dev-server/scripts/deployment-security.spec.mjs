@@ -297,6 +297,10 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.match(storefrontServer, /listen 443 ssl http2 default_server;/u);
     assert.match(storefrontServer, /server_name moyaoai\.com damatong\.net _;/u);
     assert.doesNotMatch(storefrontServer, /auth_request \/_storefront_authenticated;/u);
+    assert.match(storefrontServer, /Cross-Origin-Opener-Policy "same-origin-allow-popups"/u);
+    assert.match(storefrontServer, /frame-src[^;]*https:\/\/accounts\.google\.com\/gsi\//u);
+    assert.match(storefrontServer, /script-src[^;]*https:\/\/accounts\.google\.com\/gsi\/client/u);
+    assert.match(storefrontServer, /connect-src[^;]*https:\/\/accounts\.google\.com\/gsi\//u);
     const logoRestoreLocation = storefrontServer.match(
         /location = \/storefront\/restore-logo\.js \{(?<body>[\s\S]*?)\n    \}/u,
     );

@@ -76,7 +76,8 @@
         "@vendure/store-domain-plugin": "0.1.0",
         "@vendure/telemetry-plugin": "3.7.2",
         "dotenv": "^16.6.1",
-        "@vendure/next-admin-plugin": "0.1.0"
+        "@vendure/next-admin-plugin": "0.1.0",
+        "google-auth-library": "^10.9.1"
     },
     "devDependencies": {
         "@typescript/native-preview": "7.0.0-dev.20260515.1",

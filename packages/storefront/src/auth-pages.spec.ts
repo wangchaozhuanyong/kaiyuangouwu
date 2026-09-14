@@ -144,14 +144,21 @@ describe('auth password visibility controls', () => {
         expect(markup).not.toContain('购买记录与状态清晰可查');
         expect(markup).not.toContain('支持服务类型');
         expect(markup).not.toContain('人工服务');
-        expect(markup).toContain('class="auth-form-heading auth-form-heading-zh"');
+        expect(markup).not.toContain('欢迎回来');
+        expect(markup).not.toContain('登录后管理你的账户与订单');
+        expect(markup).not.toContain('auth-form-heading');
         expect(markup).not.toContain('账户登录');
         expect(markup).toContain('auth-hero-header');
         expect(markup).toContain('>返回</span>');
         expect(markup).toContain('class="auth-route-tabs"');
         expect(markup).toContain('aria-current="page"');
+        expect(markup).toContain('class="auth-account-form"');
         expect(markup).toContain('aria-label="登录表单"');
-        expect(markup).toMatch(/<label class="auth-field-label"[^>]*>电子邮箱<\/label>/);
+        expect(markup).not.toContain('auth-field-label-row');
+        expect(markup).toMatch(/<label class="visually-hidden"[^>]*>电子邮箱<\/label>/);
+        expect(markup).toContain('placeholder="电子邮箱"');
+        expect(markup).toContain('class="auth-field-action-row"');
+        expect(markup).toContain('忘记密码？');
         expect(markup.match(/aria-label="显示密码"/g)).toHaveLength(1);
         expect(markup).toMatch(/type="password"[^>]*name="password"/);
     });
@@ -165,10 +172,17 @@ describe('auth password visibility controls', () => {
         expect(markup).not.toContain('验证邮箱即可开始使用');
         expect(markup).not.toContain('订单与售后状态清晰可查');
         expect(markup).not.toContain('新账户');
+        expect(markup).not.toContain('创建账户');
+        expect(markup).not.toContain('验证邮箱后，即可统一管理收藏与订单');
+        expect(markup).not.toContain('auth-form-heading');
         expect(markup).toContain('auth-hero-header');
         expect(markup).toContain('class="auth-route-tabs"');
         expect(markup).not.toContain('全球模型 · 一钥直达');
+        expect(markup).toContain('class="auth-account-form"');
         expect(markup).toContain('aria-label="注册表单"');
+        expect(markup).not.toContain('auth-field-label-row');
+        expect(markup).toMatch(/<label class="visually-hidden"[^>]*>姓名<\/label>/);
+        expect(markup).toContain('placeholder="姓名"');
         expect(markup).toContain('密码需为 8–72 个字符');
         expect(markup.match(/aria-label="显示密码"/g)).toHaveLength(2);
         expect(markup).toMatch(/name="fullName"/);
@@ -176,6 +190,88 @@ describe('auth password visibility controls', () => {
         expect(markup).not.toContain('验证码');
         expect(markup).toMatch(/type="password"[^>]*name="password"/);
         expect(markup).toMatch(/type="password"[^>]*name="confirmPassword"/);
+    });
+
+    it('uses the same compact placeholder-only form hierarchy in English', () => {
+        const loginMarkup = renderToStaticMarkup(
+            createElement(LoginPage, {
+                ...authPageProps,
+                language: 'en',
+                onSuccess: vi.fn().mockResolvedValue(undefined),
+            }),
+        );
+        const registerMarkup = renderToStaticMarkup(
+            createElement(RegisterPage, { ...authPageProps, language: 'en' }),
+        );
+
+        expect(loginMarkup).not.toContain('Welcome back');
+        expect(loginMarkup).not.toContain('Sign in to manage your account and orders');
+        expect(registerMarkup).not.toContain('Create your account');
+        expect(registerMarkup).not.toContain('Verify your email to manage favorites and orders');
+        expect(loginMarkup).not.toContain('auth-field-label-row');
+        expect(registerMarkup).not.toContain('auth-field-label-row');
+        expect(loginMarkup).toContain('placeholder="Email address"');
+        expect(registerMarkup).toContain('placeholder="Full name"');
+    });
+
+    it('renders the email-only quick registration form when enabled by the store', () => {
+        const markup = renderToStaticMarkup(
+            createElement(RegisterPage, {
+                ...authPageProps,
+                authSettings: {
+                    emailPasswordEnabled: true,
+                    emailAutoRegistrationEnabled: false,
+                    emailQuickRegistrationEnabled: true,
+                    googleEnabled: false,
+                    googleClientId: null,
+                },
+            }),
+        );
+
+        expect(markup).toContain('使用邮箱快捷注册');
+        expect(markup).toContain('name="emailAddress"');
+        expect(markup).not.toContain('name="fullName"');
+        expect(markup).not.toContain('name="password"');
+        expect(markup).not.toContain('name="confirmPassword"');
+    });
+
+    it('shows Google as the only method when email registration is disabled', () => {
+        const markup = renderToStaticMarkup(
+            createElement(RegisterPage, {
+                ...authPageProps,
+                authSettings: {
+                    emailPasswordEnabled: false,
+                    emailAutoRegistrationEnabled: false,
+                    emailQuickRegistrationEnabled: false,
+                    googleEnabled: true,
+                    googleClientId: '123456789-test.apps.googleusercontent.com',
+                },
+            }),
+        );
+
+        expect(markup).toContain('class="google-auth-button"');
+        expect(markup).not.toContain('class="auth-account-form"');
+        expect(markup).not.toContain('当前店铺暂未开启注册方式');
+    });
+
+    it('shows a clear message when all login methods are disabled', () => {
+        const markup = renderToStaticMarkup(
+            createElement(LoginPage, {
+                ...authPageProps,
+                onSuccess: vi.fn().mockResolvedValue(undefined),
+                authSettings: {
+                    emailPasswordEnabled: false,
+                    emailAutoRegistrationEnabled: false,
+                    emailQuickRegistrationEnabled: false,
+                    googleEnabled: false,
+                    googleClientId: null,
+                },
+            }),
+        );
+
+        expect(markup).toContain('当前店铺暂未开启登录方式');
+        expect(markup).not.toContain('class="auth-account-form"');
+        expect(markup).not.toContain('class="google-auth-button"');
     });
 
     it('renders the managed image, copy and theme when the dashboard has published a login visual', () => {
@@ -298,6 +394,8 @@ describe('managed auth visual layout', () => {
         expect(styles).toContain('.auth-page .auth-hero-header .auth-back-button');
         expect(styles).toContain('.auth-page .auth-password-toggle svg');
         expect(styles).toContain('.auth-route-tabs');
+        expect(styles).toMatch(/\.auth-route-tabs\s*\{[^}]*display:\s*grid;/);
+        expect(styles).toMatch(/\.auth-account-form\s*\{[^}]*margin-top:\s*0;[^}]*display:\s*grid;/);
         expect(styles).toMatch(
             /@media \(min-width:\s*1024px\)[\s\S]*?\.auth-page \.auth-hero-tags\s*\{[^}]*width:\s*100%;[^}]*flex-wrap:\s*wrap;[^}]*overflow:\s*visible;/,
         );
@@ -313,6 +411,17 @@ describe('managed auth visual layout', () => {
         expect(styles).toMatch(
             // eslint-disable-next-line max-len -- Existing stylesheet regression pattern.
             /@media \(min-width:\s*1024px\) and \(max-width:\s*1199px\)[\s\S]*?\.auth-page \.auth-hero-tags\s*\{[^}]*width:\s*100%;[^}]*flex-wrap:\s*wrap;[^}]*overflow:\s*visible;/,
+        );
+    });
+
+    it('centers the complete desktop auth module in the available viewport', () => {
+        const styles = readStorefrontStylesheet(['./styles/desktop-pages.css']);
+
+        expect(styles).toMatch(
+            /\.desktop-store-layout:has\(\.auth-page\) #storefront-content\s*\{[^}]*min-height:\s*100dvh;[^}]*padding:\s*32px;[^}]*display:\s*flex;/,
+        );
+        expect(styles).toMatch(
+            /\.desktop-store-layout \.page\.auth-page\s*\{[^}]*width:\s*min\(100%, 1060px\);[^}]*min-height:\s*min\(600px, calc\(100dvh - 64px\)\);[^}]*margin:\s*auto;/,
         );
     });
 });

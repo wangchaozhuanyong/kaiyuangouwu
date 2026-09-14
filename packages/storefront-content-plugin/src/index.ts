@@ -16,6 +16,7 @@ export {
 export type { StorefrontContentBlockType, StorefrontContentTargetType } from './constants';
 export { StorefrontContentBlock } from './entities/storefront-content-block.entity';
 export { StorefrontContentItem } from './entities/storefront-content-item.entity';
+export * from './storefront-auth-settings';
 export { StorefrontContentChangedEvent } from './storefront-content-changed.event';
 export { StorefrontContentPlugin } from './storefront-content.plugin';
 export { StorefrontContentService } from './storefront-content.service';
