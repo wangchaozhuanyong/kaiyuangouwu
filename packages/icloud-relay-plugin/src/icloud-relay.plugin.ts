@@ -4,6 +4,7 @@ import { adminApiExtensions, shopApiExtensions } from './api/api-extensions';
 import { IcloudAdminResolver } from './api/icloud-admin.resolver';
 import { IcloudPortalController } from './api/icloud-portal.controller';
 import { IcloudPublicResolver } from './api/icloud-public.resolver';
+import { manageIcloudRelayPermission } from './constants';
 import { IcloudPrimaryAccount } from './entities/icloud-primary-account.entity';
 import { IcloudQueryAuditLog } from './entities/icloud-query-audit-log.entity';
 import { IcloudReceivedMail } from './entities/icloud-received-mail.entity';
@@ -70,6 +71,12 @@ import { IcloudRelayPluginOptions } from './types';
         resolvers: [IcloudPublicResolver],
     },
     dashboard: './dashboard/index.tsx',
+    configuration: config => {
+        if (!config.authOptions.customPermissions.includes(manageIcloudRelayPermission)) {
+            config.authOptions.customPermissions.push(manageIcloudRelayPermission);
+        }
+        return config;
+    },
     compatibility: '^3.7.0',
 })
 export class IcloudRelayPlugin {

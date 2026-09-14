@@ -1,6 +1,7 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
-import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendure/core';
+import { Allow, Ctx, ID, RequestContext, Transaction } from '@vendure/core';
 
+import { manageIcloudRelayPermission } from '../constants';
 import { IcloudAdminService } from '../services/icloud-admin.service';
 import { IcloudMailHistoryService } from '../services/icloud-mail-history.service';
 import {
@@ -19,7 +20,7 @@ export class IcloudAdminResolver {
     ) {}
 
     @Mutation()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Update)
     reconcileIcloudMailHistory(
         @Ctx() ctx: RequestContext,
         @Args('primaryAccountId') primaryAccountId: ID,
@@ -33,13 +34,13 @@ export class IcloudAdminResolver {
     // ==========================================
 
     @Query()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Read)
     icloudPrimaryAccounts(@Ctx() ctx: RequestContext) {
         return this.adminService.findAllPrimaryAccounts(ctx);
     }
 
     @Query()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Read)
     icloudPrimaryAccount(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.adminService.findPrimaryAccountById(ctx, id);
     }
@@ -49,13 +50,13 @@ export class IcloudAdminResolver {
     // ==========================================
 
     @Query()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Read)
     icloudVirtualEmails(@Ctx() ctx: RequestContext, @Args('primaryAccountId') primaryAccountId?: ID) {
         return this.adminService.findAllVirtualEmails(ctx, primaryAccountId);
     }
 
     @Query()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Read)
     icloudVirtualEmail(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.adminService.findVirtualEmailById(ctx, id);
     }
@@ -65,7 +66,7 @@ export class IcloudAdminResolver {
     // ==========================================
 
     @Query()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Read)
     icloudReceivedMails(
         @Ctx() ctx: RequestContext,
         @Args('virtualEmailId') virtualEmailId?: ID,
@@ -87,40 +88,40 @@ export class IcloudAdminResolver {
 
     @Mutation()
     @Transaction()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Create)
     createIcloudPrimaryAccount(@Ctx() ctx: RequestContext, @Args('input') input: CreatePrimaryAccountInput) {
         return this.adminService.createPrimaryAccount(ctx, input);
     }
 
     @Mutation()
     @Transaction()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Update)
     updateIcloudPrimaryAccount(@Ctx() ctx: RequestContext, @Args('input') input: UpdatePrimaryAccountInput) {
         return this.adminService.updatePrimaryAccount(ctx, input);
     }
 
     @Mutation()
     @Transaction()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Delete)
     deleteIcloudPrimaryAccount(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.adminService.deletePrimaryAccount(ctx, id);
     }
 
     @Mutation()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Update)
     testIcloudConnection(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.adminService.testConnection(ctx, id);
     }
 
     @Mutation()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Update)
     syncIcloudAccount(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.adminService.syncPrimaryAccount(ctx, id);
     }
 
     @Mutation()
     @Transaction()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Update)
     resetIcloudMasterCode(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.adminService.resetMasterCode(ctx, id);
     }
@@ -130,13 +131,13 @@ export class IcloudAdminResolver {
     // ==========================================
 
     @Mutation()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Create)
     createIcloudVirtualEmail(@Ctx() ctx: RequestContext, @Args('input') input: CreateVirtualEmailInput) {
         return this.adminService.createVirtualEmail(ctx, input);
     }
 
     @Mutation()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Create)
     batchCreateIcloudVirtualEmails(
         @Ctx() ctx: RequestContext,
         @Args('input') input: BatchCreateVirtualEmailsInput,
@@ -146,21 +147,21 @@ export class IcloudAdminResolver {
 
     @Mutation()
     @Transaction()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Update)
     updateIcloudVirtualEmail(@Ctx() ctx: RequestContext, @Args('input') input: UpdateVirtualEmailInput) {
         return this.adminService.updateVirtualEmail(ctx, input);
     }
 
     @Mutation()
     @Transaction()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Delete)
     deleteIcloudVirtualEmail(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.adminService.deleteVirtualEmail(ctx, id);
     }
 
     @Mutation()
     @Transaction()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Update)
     resetIcloudVirtualEmailCode(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.adminService.resetVirtualEmailCode(ctx, id);
     }
@@ -171,7 +172,7 @@ export class IcloudAdminResolver {
 
     @Mutation()
     @Transaction()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Update)
     reassignIcloudMail(
         @Ctx() ctx: RequestContext,
         @Args('mailId') mailId: ID,
@@ -182,7 +183,7 @@ export class IcloudAdminResolver {
 
     @Mutation()
     @Transaction()
-    @Allow(Permission.SuperAdmin)
+    @Allow(manageIcloudRelayPermission.Delete)
     deleteIcloudMail(@Ctx() ctx: RequestContext, @Args('mailId') mailId: ID) {
         return this.adminService.deleteMail(ctx, mailId);
     }

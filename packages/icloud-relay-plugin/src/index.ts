@@ -1,3 +1,4 @@
+export { manageIcloudRelayPermission } from './constants';
 export { IcloudPrimaryAccount } from './entities/icloud-primary-account.entity';
 export { IcloudQueryAuditLog } from './entities/icloud-query-audit-log.entity';
 export { IcloudReceivedMail } from './entities/icloud-received-mail.entity';

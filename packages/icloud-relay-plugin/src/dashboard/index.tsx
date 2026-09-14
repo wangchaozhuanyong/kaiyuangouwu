@@ -12,6 +12,7 @@ const icloudRelayRoute: DashboardRouteDefinition = {
         icon: MailCheck,
     },
     path: '/icloud-relay',
+    requiresPermission: ['ReadIcloudRelay'],
     loader: () => ({ breadcrumb: () => 'iCloud 邮箱管理' }),
     component: () => <IcloudRelayPage />,
 };

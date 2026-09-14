@@ -40,7 +40,7 @@ Next Admin 交互回归位于 `packages/next-admin/src/pages/Plugins/IcloudRelay
 
 ## 历史邮件归属与买家展示
 
-- `reconcileIcloudMailHistory(primaryAccountId, dryRun: true)` 默认只检查，沿用管理员 `SuperAdmin` 权限和现有主邮箱访问范围。Next Admin 的“检查历史邮件”先展示数量，再由“修复匹配记录”执行；买家查询不会触发修复。
+- `reconcileIcloudMailHistory(primaryAccountId, dryRun: true)` 默认只检查，需要管理员具备 `UpdateIcloudRelay` 权限，并沿用现有主邮箱访问范围。Next Admin 的“检查历史邮件”先展示数量，再由“修复匹配记录”执行；买家查询不会触发修复。
 - 只关联同一主邮箱内未分配、且收件地址唯一匹配的记录。显示名称、注释、发件人、主题和正文不作为归属证据；冲突记录保持未分配。
 - 管理员检查缺失的收件信息时，按 UID 只读获取原始收件头并核验 Message-ID。连接失败、邮件不存在或标识不一致计入 `unresolvedCount`，不强行分配。检查/修复响应仅包含数量。
 - 新建虚拟邮箱和批量导入在原事务内完成数据库历史关联；批量导入只在全部地址创建后处理一次，不连接 IMAP。独立修复按 100 封分批、更新时重新验证匹配和原记录，重复或并发操作只统计实际写入。
