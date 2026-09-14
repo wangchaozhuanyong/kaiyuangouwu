@@ -427,6 +427,7 @@ const USAGE_RECORD_DETAIL = gql`
             costAdjustments {
                 id
                 batchId
+                recordType
                 reviewer
                 matchingStatus
                 newCostMicrounits
@@ -435,6 +436,8 @@ const USAGE_RECORD_DETAIL = gql`
                 }
             }
             record {
+                actualCostMicrounits
+                costCurrency
                 costCompleteness
                 missingCostCount
                 costBreakdown {
@@ -1216,7 +1219,46 @@ describe('AI image generation full flow', () => {
         async () => {
             const source = server.app.get(TransactionalConnection).rawConnection;
             const prompts = source.getRepository(ImagePromptOptimization);
-            const original = (await prompts.find({ take: 1 }))[0];
+            const channel = (await source.getRepository(Channel).find({ take: 1 }))[0];
+            const customer = await source
+                .getRepository(Customer)
+                .findOneByOrFail({ emailAddress: 'image-e2e@example.com' });
+            const model = await source
+                .getRepository(ImageModelConfig)
+                .findOneByOrFail({ code: 'OPENAI_HIGH_QUALITY' });
+            const original = new ImagePromptOptimization({
+                channelId: channel.id,
+                customerId: customer.id,
+                inputPrompt: '袋装咖啡商品图',
+                optimizedPrompt: '袋装咖啡包装正面商品图',
+                promptSpec: { subject: '袋装咖啡包装' },
+                source: 'MODEL',
+                optimizerModelId: 'prompt-e2e-model',
+                promptSkillHash: 'c'.repeat(64),
+                recommendedModelCode: model.code,
+                recommendationReason: 'Billing review fixture',
+                idempotencyKey: null,
+                billingMode: 'FREE',
+                chargedAmount: 0,
+                pricingSnapshot: null,
+                currencyCode: CurrencyCode.USD,
+                walletUsageId: null,
+                quotaEventId: null,
+                inputTokens: null,
+                outputTokens: null,
+                totalTokens: null,
+                actualCostMicrounits: null,
+                costCurrency: null,
+                providerRequestId: null,
+                credentialCodeSnapshot: 'prompt-e2e-primary',
+                credentialNameSnapshot: 'Prompt E2E fixture',
+                credentialLast4Snapshot: '-key',
+                credentialSelectionReason: 'E2E fixture',
+                attemptLedgerVersion: 1,
+                upstreamCallCount: 0,
+                latencyMs: 10,
+                errorMessage: null,
+            });
             const legacy = await prompts.save(
                 new ImagePromptOptimization({
                     ...original,
@@ -1230,7 +1272,87 @@ describe('AI image generation full flow', () => {
                     costCurrency: null,
                 }),
             );
-            const image = (await source.getRepository(ImageGenerationCostEvent).find({ take: 1 }))[0];
+            const jobs = source.getRepository(ImageGenerationJob);
+            const existingJob = await jobs.save(
+                new ImageGenerationJob({
+                    channelId: channel.id,
+                    customerId: customer.id,
+                    modelConfigId: model.id,
+                    referenceAssetId: null,
+                    idempotencyKey: randomUUID(),
+                    modelCodeSnapshot: model.code,
+                    modelNameSnapshot: model.displayNameEn,
+                    officialModelIdSnapshot: model.officialModelId,
+                    providerModelIdSnapshot: model.providerModelId,
+                    protocolSnapshot: model.protocol,
+                    providerScopeSnapshot: 'OPENAI',
+                    providerCredentialFingerprint: 'd'.repeat(64),
+                    providerCredentialCodeSnapshot: 'openai-e2e-primary',
+                    providerCredentialNameSnapshot: 'OpenAI E2E primary',
+                    providerCredentialLast4Snapshot: '-key',
+                    providerSelectionReason: 'E2E fixture',
+                    providerIdempotencySupportedSnapshot: false,
+                    originalPrompt: '袋装咖啡商品图',
+                    finalPrompt: '袋装咖啡包装正面商品图',
+                    promptSpec: { subject: '袋装咖啡包装' },
+                    promptSkillHash: 'c'.repeat(64),
+                    referenceMode: 'NONE',
+                    aspectRatio: '1:1',
+                    resolution: '1K',
+                    quantity: 1,
+                    unitPriceSnapshot: 125,
+                    pricingSnapshot: null,
+                    reservedAmount: 0,
+                    expectedChargeAmount: 0,
+                    freeQuantityReserved: 0,
+                    freeQuantityCaptured: 0,
+                    paidQuantityReserved: 0,
+                    quotaEventId: null,
+                    capturedAmount: 0,
+                    releasedAmount: 0,
+                    currencyCode: CurrencyCode.USD,
+                    walletUsageId: null,
+                    state: 'SUCCEEDED',
+                    termsVersion: 'e2e-2026-08-27',
+                    termsAcceptedAt: new Date(),
+                    errorMessage: null,
+                    completedAt: new Date(),
+                    customerDeletedAt: null,
+                }),
+            );
+            const image = await source.getRepository(ImageGenerationCostEvent).save(
+                new ImageGenerationCostEvent({
+                    channelId: channel.id,
+                    jobIdSnapshot: String(existingJob.id),
+                    outputIdSnapshot: `billing-${randomUUID()}`,
+                    attemptNumber: 1,
+                    modelCodeSnapshot: model.code,
+                    providerScopeSnapshot: 'OPENAI',
+                    credentialFingerprint: 'd'.repeat(64),
+                    credentialCodeSnapshot: 'openai-e2e-primary',
+                    credentialNameSnapshot: 'OpenAI E2E primary',
+                    credentialLast4Snapshot: '-key',
+                    credentialSelectionReason: 'E2E fixture',
+                    saleUnitPriceSnapshot: 125,
+                    saleCurrencyCode: 'USD',
+                    outcome: 'SUCCEEDED',
+                    httpStatus: 200,
+                    providerRequestId: 'image-e2e-billing-request',
+                    callId: randomUUID(),
+                    headerRequestId: 'image-e2e-billing-header',
+                    headerRequestIdSource: 'HEADER',
+                    modelResponseId: 'image-e2e-billing-response',
+                    costSource: null,
+                    reportedCostEvidence: null,
+                    latencyMs: 10,
+                    actualCostMicrounits: null,
+                    costCurrency: null,
+                    usage: null,
+                    errorMessage: null,
+                    failureCode: null,
+                    providerStage: 'GENERATION',
+                }),
+            );
             const makeReview = async (
                 recordType: ImageBillingReview['recordType'],
                 recordId: string,
@@ -1330,7 +1452,33 @@ describe('AI image generation full flow', () => {
                 }),
             );
             const attemptRepo = source.getRepository(ImagePromptOptimizationAttempt);
-            const originalAttempt = (await attemptRepo.find({ take: 1 }))[0];
+            const originalAttempt = new ImagePromptOptimizationAttempt({
+                channelId: channel.id,
+                optimizationIdSnapshot: 'fixture',
+                attemptNumber: 1,
+                stage: 'INITIAL',
+                outcome: 'SUCCEEDED',
+                modelId: 'prompt-e2e-model',
+                providerScope: 'OPENAI',
+                credentialCodeSnapshot: 'prompt-e2e-primary',
+                credentialNameSnapshot: 'Prompt E2E fixture',
+                credentialLast4Snapshot: '-key',
+                credentialSelectionReason: 'E2E fixture',
+                providerRequestId: 'prompt-e2e-billing-request',
+                callId: randomUUID(),
+                headerRequestId: 'prompt-e2e-billing-header',
+                headerRequestIdSource: 'HEADER',
+                modelResponseId: 'prompt-e2e-billing-response',
+                costSource: null,
+                reportedCostEvidence: null,
+                httpStatus: 200,
+                latencyMs: 10,
+                actualCostMicrounits: null,
+                costCurrency: null,
+                usage: null,
+                completedAt: new Date(),
+                errorMessage: null,
+            });
             for (const [index, currency] of ['USD', 'EUR'].entries())
                 await attemptRepo.save(
                     new ImagePromptOptimizationAttempt({
@@ -1385,8 +1533,6 @@ describe('AI image generation full flow', () => {
             ).imageAiUsageRecord;
             expect(incompleteDetail.record.costCompleteness).toBe('PARTIAL');
             expect(await missingIds()).toContain(encode(incomplete.id));
-            const jobs = source.getRepository(ImageGenerationJob);
-            const existingJob = (await jobs.find({ take: 1 }))[0];
             const noCostJob = await jobs.save(
                 new ImageGenerationJob({
                     ...existingJob,
