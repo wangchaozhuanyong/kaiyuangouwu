@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { CurrencyCode, LanguageCode } from '@vendure/common/lib/generated-types';
+import { CustomerChannelAssignmentStrategy, mergeConfig } from '@vendure/core';
 import {
     createErrorResultGuard,
     createTestEnvironment,
@@ -29,8 +30,20 @@ import {
     updatedOrderFragment,
 } from './graphql/shop-definitions';
 
+class AllowCustomerChannelAssignmentStrategy implements CustomerChannelAssignmentStrategy {
+    canAssignCustomerToChannel(): boolean {
+        return true;
+    }
+}
+
 describe('Channelaware orders', () => {
-    const { server, adminClient, shopClient } = createTestEnvironment(testConfig());
+    const { server, adminClient, shopClient } = createTestEnvironment(
+        mergeConfig(testConfig(), {
+            authOptions: {
+                customerChannelAssignmentStrategy: new AllowCustomerChannelAssignmentStrategy(),
+            },
+        }),
+    );
     const SECOND_CHANNEL_TOKEN = 'second_channel_token';
     const THIRD_CHANNEL_TOKEN = 'third_channel_token';
     let customerUser: ResultOf<typeof getCustomerListDocument>['customers']['items'][number];
