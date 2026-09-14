@@ -1,3 +1,4 @@
+import { ErrorCode } from '@vendure/common/lib/generated-shop-types';
 import { CurrencyCode, LanguageCode } from '@vendure/common/lib/generated-types';
 import { CustomerChannelAssignmentStrategy, mergeConfig, RequestContext } from '@vendure/core';
 import { createTestEnvironment, E2E_DEFAULT_CHANNEL_TOKEN } from '@vendure/testing';
@@ -8,7 +9,12 @@ import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
 
 import { ResultOf } from './graphql/graphql-admin';
-import { createChannelDocument, getCustomerListDocument, MeDocument } from './graphql/shared-definitions';
+import {
+    attemptLoginDocument,
+    createChannelDocument,
+    getCustomerListDocument,
+    MeDocument,
+} from './graphql/shared-definitions';
 import { getProductsTake3Document } from './graphql/shop-definitions';
 
 const NO_AUTOJOIN_CHANNEL_CODE = 'no-autojoin-channel';
@@ -17,8 +23,7 @@ const OPEN_CHANNEL_CODE = 'open-channel';
 const OPEN_CHANNEL_TOKEN = 'open_channel_token';
 
 /**
- * Suppresses the silent auto-join for the no-autojoin channel. Every other channel behaves as the
- * default (auto-join).
+ * Explicitly authorizes assignment for the open channel and denies it for the no-autojoin channel.
  */
 class TestCustomerChannelAssignmentStrategy implements CustomerChannelAssignmentStrategy {
     canAssignCustomerToChannel(ctx: RequestContext): boolean {
@@ -77,21 +82,20 @@ describe('CustomerChannelAssignmentStrategy', () => {
         return customers.items.map(c => c.emailAddress);
     }
 
-    it('lets an authenticated non-member operate on a no-autojoin channel without persisting membership', async () => {
-        shopClient.setChannelToken(NO_AUTOJOIN_CHANNEL_TOKEN);
+    it('blocks an authenticated non-member on a no-autojoin channel', async () => {
+        shopClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
         await shopClient.asUserWithCredentials(customer.emailAddress, 'test');
+        shopClient.setChannelToken(NO_AUTOJOIN_CHANNEL_TOKEN);
 
-        // The authenticated, customer-scoped query succeeds.
-        const { me } = await shopClient.query(MeDocument);
-        expect(me?.identifier).toBe(customer.emailAddress);
+        await expect(shopClient.query(MeDocument)).rejects.toThrow();
 
-        // But the Customer is not recorded as a member of the channel.
         expect(await channelMembers(NO_AUTOJOIN_CHANNEL_TOKEN)).not.toContain(customer.emailAddress);
     });
 
     it('auto-joins the customer on an open channel', async () => {
-        shopClient.setChannelToken(OPEN_CHANNEL_TOKEN);
+        shopClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
         await shopClient.asUserWithCredentials(customer.emailAddress, 'test');
+        shopClient.setChannelToken(OPEN_CHANNEL_TOKEN);
         await shopClient.query(MeDocument);
 
         expect(await channelMembers(OPEN_CHANNEL_TOKEN)).toContain(customer.emailAddress);
@@ -102,15 +106,28 @@ describe('CustomerChannelAssignmentStrategy', () => {
         await shopClient.asUserWithCredentials(customer.emailAddress, 'test');
 
         shopClient.setChannelToken(NO_AUTOJOIN_CHANNEL_TOKEN);
-        const { me } = await shopClient.query(MeDocument);
-        expect(me?.identifier).toBe(customer.emailAddress);
+        await expect(shopClient.query(MeDocument)).rejects.toThrow();
 
         expect(await channelMembers(NO_AUTOJOIN_CHANNEL_TOKEN)).not.toContain(customer.emailAddress);
     });
 
-    it('allows an anonymous public query on a no-autojoin channel', async () => {
-        shopClient.setChannelToken(NO_AUTOJOIN_CHANNEL_TOKEN);
+    it('does not authenticate a customer directly through an unassigned channel', async () => {
+        shopClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
         await shopClient.asAnonymousUser();
+        shopClient.setChannelToken(NO_AUTOJOIN_CHANNEL_TOKEN);
+        const { login } = await shopClient.query(attemptLoginDocument, {
+            username: customer.emailAddress,
+            password: 'test',
+        });
+
+        expect('errorCode' in login ? login.errorCode : undefined).toBe(ErrorCode.INVALID_CREDENTIALS_ERROR);
+        expect(await channelMembers(NO_AUTOJOIN_CHANNEL_TOKEN)).not.toContain(customer.emailAddress);
+    });
+
+    it('allows an anonymous public query on a no-autojoin channel', async () => {
+        shopClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+        await shopClient.asAnonymousUser();
+        shopClient.setChannelToken(NO_AUTOJOIN_CHANNEL_TOKEN);
         const { products } = await shopClient.query(getProductsTake3Document);
         expect(Array.isArray(products.items)).toBe(true);
     });
@@ -124,7 +141,7 @@ describe('CustomerChannelAssignmentStrategy', () => {
     });
 });
 
-describe('default channel is never gated', () => {
+describe('existing default-channel membership', () => {
     class NeverAssignStrategy implements CustomerChannelAssignmentStrategy {
         canAssignCustomerToChannel(): boolean {
             return false;

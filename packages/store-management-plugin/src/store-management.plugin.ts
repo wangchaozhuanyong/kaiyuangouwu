@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, NestModule, OnApplicationBootstrap } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
+import { CreatePaymentMethodInput } from '@vendure/common/lib/generated-types';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
     Channel,
@@ -390,11 +391,8 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
     private async ensureReferralPaymentMethod(): Promise<void> {
         const ctx = await this.requestContextService.create({ apiType: 'admin' });
         const channels = await this.connection.getRepository(ctx, Channel).find();
-        let paymentMethod = await this.connection.rawConnection.getRepository(PaymentMethod).findOne({
-            where: { code: REFERRAL_BALANCE_PAYMENT_METHOD_CODE },
-        });
-        if (!paymentMethod) {
-            paymentMethod = await this.paymentMethodService.create(ctx, {
+        for (const channel of channels) {
+            await this.ensureIsolatedPaymentMethod(ctx, channel, true, {
                 code: REFERRAL_BALANCE_PAYMENT_METHOD_CODE,
                 enabled: true,
                 handler: { code: referralBalancePaymentHandler.code, arguments: [] },
@@ -412,17 +410,10 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
                 ],
             });
         }
-        await this.channelService.assignToChannels(
-            ctx,
-            PaymentMethod,
-            paymentMethod.id,
-            channels.map(channel => channel.id),
-        );
     }
 
     private async ensureUsdtPaymentMethod(): Promise<void> {
         const ctx = await this.requestContextService.create({ apiType: 'admin' });
-        const repository = this.connection.rawConnection.getRepository(PaymentMethod);
         const channels = await this.connection.getRepository(ctx, Channel).find();
         await this.storeUsdtWallets.rotateEncryptionKey(ctx);
         await this.storeUsdtWallets.seedLegacyWallet(ctx, channels, this.usdtWalletConfiguration.get());
@@ -431,53 +422,98 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
                 .filter(wallet => wallet.configured)
                 .map(wallet => String(wallet.channelId)),
         );
-        let paymentMethod = await repository.findOne({
-            where: { code: USDT_TRC20_PAYMENT_METHOD_CODE },
+        for (const channel of channels) {
+            await this.ensureIsolatedPaymentMethod(
+                ctx,
+                channel,
+                configuredChannelIds.has(String(channel.id)),
+                {
+                    code: USDT_TRC20_PAYMENT_METHOD_CODE,
+                    enabled: true,
+                    handler: { code: usdtTrc20PaymentHandler.code, arguments: [] },
+                    translations: [
+                        {
+                            languageCode: LanguageCode.zh_Hans,
+                            name: 'USDT-TRC20 链上支付',
+                            description: '系统确认链上固化到账后自动更新订单为待发货',
+                        },
+                        {
+                            languageCode: LanguageCode.en,
+                            name: 'USDT-TRC20 on-chain payment',
+                            description: 'The order is paid after the transfer is solidified on TRON',
+                        },
+                    ],
+                },
+            );
+        }
+    }
+
+    private async ensureIsolatedPaymentMethod(
+        ctx: Awaited<ReturnType<RequestContextService['create']>>,
+        channel: Channel,
+        shouldAssign: boolean,
+        defaults: CreatePaymentMethodInput,
+    ): Promise<PaymentMethod | undefined> {
+        const repository = this.connection.rawConnection.getRepository(PaymentMethod);
+        const candidates = await repository.find({
+            where: { code: defaults.code },
+            relations: { channels: true },
         });
-        if (!paymentMethod) {
-            paymentMethod = await this.paymentMethodService.create(ctx, {
-                code: USDT_TRC20_PAYMENT_METHOD_CODE,
-                enabled: true,
-                handler: { code: usdtTrc20PaymentHandler.code, arguments: [] },
-                translations: [
-                    {
-                        languageCode: LanguageCode.zh_Hans,
-                        name: 'USDT-TRC20 链上支付',
-                        description: '系统确认链上固化到账后自动更新订单为待发货',
-                    },
-                    {
-                        languageCode: LanguageCode.en,
-                        name: 'USDT-TRC20 on-chain payment',
-                        description: 'The order is paid after the transfer is solidified on TRON',
-                    },
-                ],
-            });
-        } else if (!paymentMethod.enabled) {
-            paymentMethod.enabled = true;
-            await repository.save(paymentMethod, { reload: false });
+        const assigned = candidates.filter(method =>
+            method.channels.some(item => String(item.id) === String(channel.id)),
+        );
+        if (!shouldAssign) {
+            for (const method of assigned) {
+                await this.channelService.removeFromChannels(ctx, PaymentMethod, method.id, [channel.id]);
+            }
+            return;
         }
-        const assignedChannelIds = channels
-            .filter(channel => configuredChannelIds.has(String(channel.id)))
-            .map(channel => channel.id);
-        const unassignedChannelIds = channels
-            .filter(channel => !configuredChannelIds.has(String(channel.id)))
-            .map(channel => channel.id);
-        if (assignedChannelIds.length) {
-            await this.channelService.assignToChannels(
-                ctx,
-                PaymentMethod,
-                paymentMethod.id,
-                assignedChannelIds,
-            );
+
+        const exclusive = assigned.find(method => method.channels.length === 1);
+        if (exclusive) {
+            if (!exclusive.enabled) {
+                exclusive.enabled = true;
+                await repository.save(exclusive, { reload: false });
+            }
+            for (const duplicate of assigned.filter(method => method.id !== exclusive.id)) {
+                await this.channelService.removeFromChannels(ctx, PaymentMethod, duplicate.id, [channel.id]);
+            }
+            return exclusive;
         }
-        if (unassignedChannelIds.length) {
-            await this.channelService.removeFromChannels(
-                ctx,
-                PaymentMethod,
-                paymentMethod.id,
-                unassignedChannelIds,
-            );
+
+        const source = assigned[0] ?? candidates[0];
+        const channelCtx = await this.requestContextService.create({
+            apiType: 'admin',
+            channelOrToken: channel,
+        });
+        const created = await this.paymentMethodService.create(
+            channelCtx,
+            source
+                ? {
+                      code: source.code,
+                      enabled: true,
+                      ...(source.checker ? { checker: paymentOperationInput(source.checker) } : {}),
+                      handler: paymentOperationInput(source.handler),
+                      translations: source.translations.map(translation => ({
+                          languageCode: translation.languageCode,
+                          name: translation.name,
+                          description: translation.description,
+                          customFields: translation.customFields,
+                      })),
+                      customFields: source.customFields,
+                  }
+                : defaults,
+        );
+        const defaultChannel = await this.channelService.getDefaultChannel(ctx);
+        if (String(defaultChannel.id) !== String(channel.id)) {
+            await this.channelService.removeFromChannels(channelCtx, PaymentMethod, created.id, [
+                defaultChannel.id,
+            ]);
         }
+        for (const previous of assigned) {
+            await this.channelService.removeFromChannels(ctx, PaymentMethod, previous.id, [channel.id]);
+        }
+        return created;
     }
 
     private async ensurePrimaryStoreAdminPermissions(): Promise<void> {
@@ -504,4 +540,8 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
             }
         }
     }
+}
+
+function paymentOperationInput(operation: { code: string; args: Array<{ name: string; value: string }> }) {
+    return { code: operation.code, arguments: operation.args.map(argument => ({ ...argument })) };
 }

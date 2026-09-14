@@ -9,9 +9,8 @@ import { Customer } from '../../entity/customer/customer.entity';
  * Determines if an authenticated Customer should be automatically assigned to the current Channel.
  * Use this to keep customer bases strictly separated in multi-channel or B2B setups.
  *
- * NOTE: This controls channel membership, not API access. Returning `false`
- * won't block the request, it just stops the customer from bein assigned to this channel.
- * (This is skipped on the default channel and during registration/checkout).
+ * Returning `false` blocks an authenticated Customer who is not already assigned to the active
+ * Channel. Returning `true` explicitly authorizes and persists the cross-Channel assignment.
  *
  * @example
  * ```ts
@@ -39,11 +38,11 @@ export interface CustomerChannelAssignmentStrategy extends InjectableStrategy {
     /**
      * @description
      * Return `true` to assign the Customer to the current Channel,
-     * or `false` to let them use it for this session without assigning.
+     * or `false` to deny access to that Channel.
      *
      * Triggered when an authenticated Customer's request targets a different
-     * Channel than the one currently active on their session. This doesn't run on the default Channel
-     * or if the Customer is already a member of the Channel.
+     * Channel than the one currently active on their session. This does not run if the Customer is
+     * already a member of the Channel.
      */
     canAssignCustomerToChannel(
         ctx: RequestContext,

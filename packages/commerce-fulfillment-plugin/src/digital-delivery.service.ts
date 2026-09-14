@@ -5,6 +5,7 @@ import {
     DigitalDeliveryResource,
     DigitalDeliveryTokenPayload,
     DigitalDeliveryTokenService,
+    normalizeDigitalDeliveryHost,
 } from './digital-delivery-token.service';
 import { isFileDownloadOrderLine } from './fulfillment-classification';
 
@@ -37,19 +38,24 @@ export class DigitalDeliveryService {
                 'lines',
                 'lines.productVariant',
                 'lines.productVariant.translations',
+                'channels',
                 'payments',
                 'payments.refunds',
                 'payments.refunds.lines',
             ],
+            channelId: ctx.channelId,
         });
         return order.lines
             .filter(line => isFileDownloadOrderLine(line))
             .map(line => this.deliveryForLine(ctx, order, line));
     }
 
-    async authorizeDownload(token: string): Promise<AuthorizedDigitalDownload | undefined> {
+    async authorizeDownload(
+        token: string,
+        requestHost: unknown,
+    ): Promise<AuthorizedDigitalDownload | undefined> {
         const payload = this.tokens.verifyToken(token);
-        if (!payload) {
+        if (!payload || normalizeDigitalDeliveryHost(requestHost) !== payload.host) {
             return;
         }
         const order = await this.connection.rawConnection.getRepository(Order).findOne({
@@ -57,12 +63,13 @@ export class DigitalDeliveryService {
             relations: [
                 'lines',
                 'lines.productVariant',
+                'channels',
                 'payments',
                 'payments.refunds',
                 'payments.refunds.lines',
             ],
         });
-        if (!order) {
+        if (!order || !(order.channels ?? []).some(channel => String(channel.id) === payload.channelId)) {
             return;
         }
         const line = order.lines.find(item => String(item.id) === payload.orderLineId);
@@ -74,7 +81,7 @@ export class DigitalDeliveryService {
         ) {
             return;
         }
-        const resource = this.tokens.resourceForSku(payload.sku);
+        const resource = this.tokens.resourceForSku(payload.channelId, payload.sku);
         return resource ? { resource, payload } : undefined;
     }
 
@@ -90,12 +97,21 @@ export class DigitalDeliveryService {
         if (!this.tokens.configured) {
             return { ...base, status: 'NOT_CONFIGURED' };
         }
-        if (!this.tokens.resourceForSku(line.productVariant.sku)) {
+        const channelId = String(ctx.channelId);
+        const host = normalizeDigitalDeliveryHost(
+            ctx.req?.headers?.['x-forwarded-host'] ?? ctx.req?.headers?.host,
+        );
+        if (!host) {
+            return { ...base, status: 'NOT_CONFIGURED' };
+        }
+        if (!this.tokens.resourceForSku(channelId, line.productVariant.sku)) {
             return { ...base, status: 'FILE_MISSING' };
         }
         const signed = this.tokens.createToken({
             orderId: String(order.id),
             orderLineId: String(line.id),
+            channelId,
+            host,
             sku: line.productVariant.sku,
         });
         return {

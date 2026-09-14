@@ -22,25 +22,40 @@ describe('StoreUsdtWalletService', () => {
         let stored: StoreUsdtWallet | null = null;
         const audits: StoreUsdtWalletAudit[] = [];
         const walletRepository = {
-            findOne: vi.fn(async () => stored),
-            find: vi.fn(async () => (stored ? [stored] : [])),
-            save: vi.fn(async (wallet: StoreUsdtWallet) => {
+            findOne: vi.fn(() => stored),
+            find: vi.fn(() => (stored ? [stored] : [])),
+            save: vi.fn((wallet: StoreUsdtWallet) => {
                 stored = Object.assign(wallet, { id: 'wallet-1', channel });
                 return stored;
             }),
             createQueryBuilder: vi.fn(() => lockedQuery(() => stored)),
         };
         const auditRepository = {
-            save: vi.fn(async (audit: StoreUsdtWalletAudit) => {
+            save: vi.fn((audit: StoreUsdtWalletAudit) => {
                 audits.push(audit);
                 return audit;
             }),
         };
-        const channelRepository = { find: vi.fn(async () => [channel]) };
+        const channelRepository = { find: vi.fn(() => [channel]) };
         const paymentMethodRepository = {
-            findOne: vi.fn(async () => ({ id: 'usdt-payment-method' }) as PaymentMethod),
+            find: vi.fn(() => [
+                {
+                    id: 'usdt-payment-method',
+                    code: 'usdt-trc20',
+                    enabled: true,
+                    checker: null,
+                    handler: { code: 'usdt-trc20-chain-handler', args: [] },
+                    translations: [{ languageCode: 'en', name: 'USDT', description: 'USDT' }],
+                    customFields: {},
+                    channels: [channel, { id: 'channel-2', code: 'store-two' }],
+                } as unknown as PaymentMethod,
+            ]),
+            save: vi.fn((value: PaymentMethod) => value),
         };
-        const assignToChannels = vi.fn().mockResolvedValue(undefined);
+        const removeFromChannels = vi.fn().mockResolvedValue(undefined);
+        const paymentMethodService = {
+            create: vi.fn().mockResolvedValue({ id: 'isolated-usdt-payment-method' }),
+        };
         const connection = {
             getRepository: vi.fn((_ctx, entity) => {
                 if (entity === StoreUsdtWallet) return walletRepository;
@@ -48,7 +63,7 @@ describe('StoreUsdtWalletService', () => {
                 if (entity === Channel) return channelRepository;
                 throw new Error(`Unexpected entity ${String(entity)}`);
             }),
-            getEntityOrThrow: vi.fn(async () => channel),
+            getEntityOrThrow: vi.fn(() => channel),
             rawConnection: {
                 getRepository: vi.fn(entity => {
                     if (entity === PaymentMethod) return paymentMethodRepository;
@@ -56,9 +71,16 @@ describe('StoreUsdtWalletService', () => {
                 }),
             },
         };
-        const service = new StoreUsdtWalletService(connection as any, new UsdtWalletConfigurationService(), {
-            assignToChannels,
-        } as any);
+        const service = new StoreUsdtWalletService(
+            connection as any,
+            new UsdtWalletConfigurationService(),
+            {
+                getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default-channel' }),
+                removeFromChannels,
+            } as any,
+            paymentMethodService as any,
+            { create: vi.fn().mockResolvedValue({ channelId: channel.id }) } as any,
+        );
 
         const submitted = await service.submit(
             { channelId: channel.id, activeUserId: 'merchant-user' } as any,
@@ -87,7 +109,7 @@ describe('StoreUsdtWalletService', () => {
         ).rejects.toThrow('提交人不能审核自己提交的 USDT 收款地址');
         expect(submittedEntity?.reviewStatus).toBe('PENDING');
         expect(audits.map(audit => audit.action)).toEqual(['SUBMITTED']);
-        expect(assignToChannels).not.toHaveBeenCalled();
+        expect(paymentMethodService.create).not.toHaveBeenCalled();
 
         const approved = await service.review({ activeUserId: 'superadmin-user' } as any, {
             channelId: channel.id,
@@ -97,7 +119,20 @@ describe('StoreUsdtWalletService', () => {
 
         expect(approved).toMatchObject({ reviewStatus: 'ACTIVE', configured: true, canReview: false });
         expect(configuration.receivingAddress).toBe(USDT_TRC20_CONTRACT_ADDRESS);
-        expect(assignToChannels).toHaveBeenCalledWith(
+        expect(paymentMethodService.create).toHaveBeenCalledWith(
+            expect.objectContaining({ channelId: channel.id }),
+            expect.objectContaining({
+                code: 'usdt-trc20',
+                handler: { code: 'usdt-trc20-chain-handler', arguments: [] },
+            }),
+        );
+        expect(removeFromChannels).toHaveBeenCalledWith(
+            expect.anything(),
+            PaymentMethod,
+            'isolated-usdt-payment-method',
+            ['default-channel'],
+        );
+        expect(removeFromChannels).toHaveBeenCalledWith(
             expect.anything(),
             PaymentMethod,
             'usdt-payment-method',
@@ -126,19 +161,25 @@ describe('StoreUsdtWalletService', () => {
             { channel },
         );
         const walletRepository = {
-            findOne: vi.fn(async () => stored),
-            save: vi.fn(async (wallet: StoreUsdtWallet) => (stored = wallet)),
+            findOne: vi.fn(() => stored),
+            save: vi.fn((wallet: StoreUsdtWallet) => (stored = wallet)),
             createQueryBuilder: vi.fn(() => lockedQuery(() => stored)),
         };
-        const auditRepository = { save: vi.fn(async (value: unknown) => value) };
+        const auditRepository = { save: vi.fn((value: unknown) => value) };
         const connection = {
             getRepository: vi.fn((_ctx, entity) =>
                 entity === StoreUsdtWallet ? walletRepository : auditRepository,
             ),
-            getEntityOrThrow: vi.fn(async () => channel),
+            getEntityOrThrow: vi.fn(() => channel),
             rawConnection: { getRepository: vi.fn() },
         };
-        const service = new StoreUsdtWalletService(connection as any, encryption, {} as any);
+        const service = new StoreUsdtWalletService(
+            connection as any,
+            encryption,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
 
         await service.submit(
             { channelId: channel.id, activeUserId: 'merchant-user' } as any,
@@ -181,17 +222,23 @@ describe('StoreUsdtWalletService', () => {
             pendingReceivingAddressFingerprint: null,
         });
         const walletRepository = {
-            find: vi.fn(async () => [wallet]),
-            save: vi.fn(async (value: unknown) => value),
+            find: vi.fn(() => [wallet]),
+            save: vi.fn((value: unknown) => value),
         };
-        const auditRepository = { save: vi.fn(async (value: unknown) => value) };
+        const auditRepository = { save: vi.fn((value: unknown) => value) };
         const connection = {
             withTransaction: vi.fn((_ctx, work) => work({ channelId: 'channel-1' })),
             getRepository: vi.fn((_ctx, entity) =>
                 entity === StoreUsdtWallet ? walletRepository : auditRepository,
             ),
         };
-        const service = new StoreUsdtWalletService(connection as any, encryption, {} as any);
+        const service = new StoreUsdtWalletService(
+            connection as any,
+            encryption,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
 
         await expect(service.rotateEncryptionKey({} as any)).resolves.toBe(1);
 
@@ -213,7 +260,7 @@ function lockedQuery(value: () => StoreUsdtWallet | null) {
         leftJoinAndSelect: vi.fn().mockReturnThis(),
         setLock: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        getOne: vi.fn(async () => value()),
+        getOne: vi.fn(() => value()),
     };
     return query;
 }

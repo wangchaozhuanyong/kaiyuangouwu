@@ -133,6 +133,74 @@ describe('iCloud admin contract persistence', () => {
         return { ctx, admin, primary, alias, masterCode };
     }
 
+    // Shared-plugin decision: storefront Channels select an entry, not separate mailbox ownership.
+    it('shares code-authorized mail across Channels while retaining mailbox boundaries and admin protection', async () => {
+        const { createChannel } = await adminClient.query(gql`
+            mutation {
+                createChannel(
+                    input: {
+                        code: "shared-mail-store"
+                        token: "shared-mail-store-token"
+                        defaultLanguageCode: en
+                        currencyCode: GBP
+                        pricesIncludeTax: true
+                        defaultShippingZoneId: "T_1"
+                        defaultTaxZoneId: "T_1"
+                    }
+                ) {
+                    ... on Channel {
+                        id
+                        token
+                    }
+                }
+            }
+        `);
+        expect(createChannel.token).toBe('shared-mail-store-token');
+        const shared = await publicFixture('shared-channel-mail');
+        await publicFixture('separate-mailbox');
+        const headers = { 'vendure-token': createChannel.token };
+        for (const code of [shared.alias.buyerQueryCode, shared.masterCode]) {
+            const first = await publicQuery(code);
+            const second = await publicQuery(code, headers);
+            expect(first).toMatchObject({ success: true, totalEmails: 1 });
+            expect(second.items).toEqual(first.items);
+            expect(second.items.map(item => item.subject)).toEqual(['shared-channel-mail']);
+        }
+        await shared.admin.updateVirtualEmail(shared.ctx, {
+            id: shared.alias.id,
+            status: IcloudVirtualEmailStatus.DISABLED,
+        });
+        for (const channelHeaders of [{}, headers]) {
+            expect(await publicQuery(shared.alias.buyerQueryCode, channelHeaders)).toMatchObject({
+                success: false,
+                totalEmails: 0,
+                items: [],
+            });
+        }
+        await server.app
+            .get(TransactionalConnection)
+            .getRepository(shared.ctx, IcloudVirtualEmail)
+            .update(
+                { id: shared.alias.id },
+                { status: IcloudVirtualEmailStatus.ACTIVE, codeExpiresAt: new Date('2000-01-01') },
+            );
+        for (const channelHeaders of [{}, headers]) {
+            expect(await publicQuery(shared.alias.buyerQueryCode, channelHeaders)).toMatchObject({
+                success: false,
+                items: [],
+                message: expect.stringContaining('过期'),
+            });
+        }
+        const response = await fetch(`http://127.0.0.1:${port}/admin-api`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', ...headers },
+            body: JSON.stringify({ query: '{ icloudPrimaryAccounts { id } }' }),
+        });
+        const body = await response.json();
+        expect(body.errors?.length).toBeGreaterThan(0);
+        expect(body.data?.icloudPrimaryAccounts).toBeFalsy();
+    });
+
     it.each(['virtual', 'primary-master', 'primary-buyer'])(
         'rejects disabled %s access, records the denial, and restores access after re-enabling',
         async scenario => {
@@ -970,6 +1038,27 @@ describe('iCloud admin contract persistence', () => {
 
     it('cannot evade lockout using forged headers when proxies are untrusted, and unlocks after the timeout', async () => {
         const { alias } = await publicFixture('untrusted-proxy');
+        const { createChannel } = await adminClient.query(gql`
+            mutation {
+                createChannel(
+                    input: {
+                        code: "mail-rate-store"
+                        token: "mail-rate-store-token"
+                        defaultLanguageCode: en
+                        currencyCode: GBP
+                        pricesIncludeTax: true
+                        defaultShippingZoneId: "T_1"
+                        defaultTaxZoneId: "T_1"
+                    }
+                ) {
+                    ... on Channel {
+                        id
+                        token
+                    }
+                }
+            }
+        `);
+        expect(createChannel.token).toBe('mail-rate-store-token');
         const app = server.app.getHttpAdapter().getInstance();
         const previousTrust = app.get('trust proxy');
         app.set('trust proxy', false);
@@ -978,6 +1067,7 @@ describe('iCloud admin contract persistence', () => {
             for (let i = 0; i < RATE_LIMIT_MAX_FAILED_ATTEMPTS; i++) {
                 expect(
                     await publicQuery('INVALID-AUDIT-CODE', {
+                        'vendure-token': i % 2 ? createChannel.token : '',
                         'x-forwarded-for': `203.0.113.${i + 1}`,
                         'x-real-ip': `198.51.100.${i + 1}`,
                     }),
@@ -985,6 +1075,7 @@ describe('iCloud admin contract persistence', () => {
             }
             expect(
                 await publicQuery(alias.buyerQueryCode, {
+                    'vendure-token': createChannel.token,
                     'x-forwarded-for': '203.0.113.99',
                     'x-real-ip': '198.51.100.99',
                 }),

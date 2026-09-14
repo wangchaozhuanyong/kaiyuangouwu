@@ -46,7 +46,6 @@ import { ConfigService } from '../../config/config.service';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { Address } from '../../entity/address/address.entity';
 import { NativeAuthenticationMethod } from '../../entity/authentication-method/native-authentication-method.entity';
-import { Channel } from '../../entity/channel/channel.entity';
 import { CustomerGroup } from '../../entity/customer-group/customer-group.entity';
 // eslint-disable-next-line import/order -- Prettier sorts the hyphenated customer-group path first.
 import { Customer } from '../../entity/customer/customer.entity';
@@ -164,7 +163,10 @@ export class CustomerService {
             .createQueryBuilder('address')
             .leftJoinAndSelect('address.country', 'country')
             .leftJoinAndSelect('country.translations', 'countryTranslation')
+            .innerJoin('address.customer', 'addressCustomer')
+            .innerJoin('addressCustomer.channels', 'addressCustomerChannel')
             .where('address.customer = :id', { id: customerId })
+            .andWhere('addressCustomerChannel.id = :channelId', { channelId: ctx.channelId })
             .getMany()
             .then(addresses => {
                 addresses.forEach(address => {
@@ -230,28 +232,6 @@ export class CustomerService {
             return new EmailAddressConflictAdminError();
         }
 
-        const existingCustomer = await this.connection.getRepository(ctx, Customer).findOne({
-            relations: ['channels'],
-            where: {
-                emailAddress: input.emailAddress,
-                deletedAt: IsNull(),
-            },
-        });
-        const existingUser = await this.userService.getUserByEmailAddress(
-            ctx,
-            input.emailAddress,
-            'customer',
-        );
-
-        if (existingCustomer && existingUser) {
-            // Customer already exists, bring to this Channel
-            const updatedCustomer = patchEntity(existingCustomer, input);
-            updatedCustomer.channels.push(ctx.channel);
-            return this.connection.getRepository(ctx, Customer).save(updatedCustomer);
-        } else if (existingCustomer || existingUser) {
-            // Not sure when this situation would occur
-            return new EmailAddressConflictAdminError();
-        }
         const customerUser = await this.userService.createCustomerUser(ctx, input.emailAddress, password);
         if (isGraphQlErrorResult(customerUser)) {
             // GraphQL ErrorResult objects are deliberately propagated to the resolver union.
@@ -275,7 +255,7 @@ export class CustomerService {
             }
         }
         await this.eventBus.publish(new AccountRegistrationEvent(ctx, customer.user));
-        await this.channelService.assignToCurrentChannel(customer, ctx);
+        await this.channelService.assignToCurrentChannel(customer, ctx, false);
         const createdCustomer = await this.connection.getRepository(ctx, Customer).save(customer);
         await this.customFieldRelationService.updateRelations(ctx, Customer, input, createdCustomer);
         await this.historyService.createHistoryEntryForCustomer({
@@ -496,12 +476,9 @@ export class CustomerService {
         if (isGraphQlErrorResult(result)) {
             return result;
         }
-        const customer = await this.findOneByUserId(ctx, result.id, false);
+        const customer = await this.findOneByUserId(ctx, result.id, true);
         if (!customer) {
             throw new InternalServerError('error.cannot-locate-customer-for-user');
-        }
-        if (ctx.channelId) {
-            await this.channelService.assignToChannels(ctx, Customer, customer.id, [ctx.channelId]);
         }
         await this.historyService.createHistoryEntryForCustomer({
             customerId: customer.id,
@@ -677,23 +654,24 @@ export class CustomerService {
     ): Promise<Customer | EmailAddressConflictError> {
         input.emailAddress = normalizeEmailAddress(input.emailAddress);
         let customer: Customer;
-        const existing = await this.connection.getRepository(ctx, Customer).findOne({
-            relations: ['channels'],
-            where: {
-                emailAddress: input.emailAddress,
-                deletedAt: IsNull(),
-            },
-        });
+        const existing = await this.connection
+            .getRepository(ctx, Customer)
+            .createQueryBuilder('customer')
+            .innerJoin('customer.channels', 'channel')
+            .leftJoinAndSelect('customer.user', 'user')
+            .where('channel.id = :channelId', { channelId: ctx.channelId })
+            .andWhere('customer.emailAddress = :emailAddress', { emailAddress: input.emailAddress })
+            .andWhere('customer.deletedAt IS NULL')
+            .getOne();
         if (existing) {
             if (existing.user && errorOnExistingUser) {
                 // It is not permitted to modify an existing *registered* Customer
                 return new EmailAddressConflictError();
             }
             customer = patchEntity(existing, input);
-            customer.channels.push(await this.connection.getEntityOrThrow(ctx, Channel, ctx.channelId));
         } else {
             customer = await this.connection.getRepository(ctx, Customer).save(new Customer(input));
-            await this.channelService.assignToCurrentChannel(customer, ctx);
+            await this.channelService.assignToCurrentChannel(customer, ctx, false);
             await this.eventBus.publish(new CustomerEvent(ctx, customer, 'created', input));
         }
         return this.connection.getRepository(ctx, Customer).save(customer);

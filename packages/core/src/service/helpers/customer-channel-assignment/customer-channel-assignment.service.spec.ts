@@ -4,6 +4,7 @@ import { ID } from '@vendure/common/lib/shared-types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RequestContext } from '../../../api/common/request-context';
+import { ForbiddenError } from '../../../common/error/errors';
 import { ConfigService } from '../../../config/config.service';
 import { MockConfigService } from '../../../config/config.service.mock';
 import { Channel } from '../../../entity/channel/channel.entity';
@@ -58,16 +59,16 @@ describe('CustomerChannelAssignmentService', () => {
             customerChannelAssignmentStrategy: {
                 canAssignCustomerToChannel,
             },
-        } as any;
+        };
     });
 
     /** member-filtered call (filterOnChannel=true) returns the member; the unfiltered call the entity. */
     function mockCustomer(opts: { isMember: boolean; exists: boolean }) {
         findOneByUserId.mockImplementation((_ctx: RequestContext, _userId: ID, filterOnChannel = true) => {
             if (filterOnChannel) {
-                return Promise.resolve(opts.isMember ? customer : undefined);
+                return opts.isMember ? customer : undefined;
             }
-            return Promise.resolve(opts.exists ? customer : undefined);
+            return opts.exists ? customer : undefined;
         });
     }
 
@@ -83,11 +84,13 @@ describe('CustomerChannelAssignmentService', () => {
             ]);
         });
 
-        it('allows a non-member without assigning when assignment is suppressed', async () => {
+        it('rejects a non-member when assignment is suppressed', async () => {
             mockCustomer({ isMember: false, exists: true });
             canAssignCustomerToChannel.mockReturnValue(false);
 
-            await service.tryAssignToActiveChannel(createCtx(NON_DEFAULT_CODE));
+            await expect(
+                service.tryAssignToActiveChannel(createCtx(NON_DEFAULT_CODE)),
+            ).rejects.toBeInstanceOf(ForbiddenError);
 
             expect(assignToChannels).not.toHaveBeenCalled();
         });
@@ -111,18 +114,30 @@ describe('CustomerChannelAssignmentService', () => {
         });
     });
 
-    describe('ungated path', () => {
-        it('assigns on the default channel without consulting the strategy', async () => {
+    describe('default channel', () => {
+        it('rejects a non-member when the strategy suppresses assignment', async () => {
             mockCustomer({ isMember: false, exists: true });
+            canAssignCustomerToChannel.mockReturnValue(false);
+
+            await expect(
+                service.tryAssignToActiveChannel(createCtx(DEFAULT_CHANNEL_CODE)),
+            ).rejects.toBeInstanceOf(ForbiddenError);
+
+            expect(assignToChannels).not.toHaveBeenCalled();
+            expect(canAssignCustomerToChannel).toHaveBeenCalledWith(expect.anything(), customer, CHANNEL_ID);
+        });
+
+        it('short-circuits an existing member without consulting the strategy', async () => {
+            mockCustomer({ isMember: true, exists: true });
 
             await service.tryAssignToActiveChannel(createCtx(DEFAULT_CHANNEL_CODE));
 
-            expect(assignToChannels).toHaveBeenCalledWith(expect.anything(), Customer, customer.id, [
-                CHANNEL_ID,
-            ]);
             expect(canAssignCustomerToChannel).not.toHaveBeenCalled();
+            expect(assignToChannels).not.toHaveBeenCalled();
         });
+    });
 
+    describe('disableAuth path', () => {
         it('assigns under disableAuth without consulting the strategy', async () => {
             mockCustomer({ isMember: false, exists: true });
             (configService.authOptions as any).disableAuth = true;
@@ -133,10 +148,10 @@ describe('CustomerChannelAssignmentService', () => {
             expect(canAssignCustomerToChannel).not.toHaveBeenCalled();
         });
 
-        it('skips assignment on the default channel when the user has no Customer record', async () => {
+        it('skips assignment when the user has no Customer record', async () => {
             mockCustomer({ isMember: false, exists: false });
 
-            await service.tryAssignToActiveChannel(createCtx(DEFAULT_CHANNEL_CODE));
+            await service.tryAssignToActiveChannel(createCtx(NON_DEFAULT_CODE));
 
             expect(assignToChannels).not.toHaveBeenCalled();
         });

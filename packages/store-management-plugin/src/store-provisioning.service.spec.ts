@@ -14,10 +14,46 @@ import { storeAdministratorPermissions, StoreProvisioningService } from './store
 function createService() {
     const repository = { find: vi.fn(), findOne: vi.fn().mockResolvedValue(null) };
     const stockLocationRepository = {
-        find: vi.fn().mockResolvedValue([{ id: 'stock-location-1' }, { id: 'stock-location-2' }]),
+        find: vi.fn().mockResolvedValue([
+            { id: 'stock-location-1', name: 'Warehouse A', description: 'Primary', customFields: {} },
+            { id: 'stock-location-2', name: 'Warehouse B', description: 'Overflow', customFields: {} },
+        ]),
     };
-    const paymentMethodRepository = { find: vi.fn().mockResolvedValue([{ id: 'payment-method-1' }]) };
-    const shippingMethodRepository = { find: vi.fn().mockResolvedValue([{ id: 'shipping-method-1' }]) };
+    const paymentMethodRepository = {
+        find: vi.fn().mockResolvedValue([
+            {
+                id: 'payment-method-1',
+                code: 'referral-balance',
+                enabled: true,
+                checker: null,
+                handler: { code: 'referral-balance-payment', args: [] },
+                translations: [{ languageCode: 'en', name: 'Referral balance', description: 'Balance' }],
+                customFields: {},
+            },
+            {
+                id: 'payment-method-2',
+                code: 'usdt-trc20',
+                enabled: true,
+                checker: null,
+                handler: { code: 'usdt-trc20-chain-handler', args: [] },
+                translations: [{ languageCode: 'en', name: 'USDT', description: 'USDT' }],
+                customFields: {},
+            },
+        ]),
+    };
+    const shippingMethodRepository = {
+        find: vi.fn().mockResolvedValue([
+            {
+                id: 'shipping-method-1',
+                code: 'standard-shipping',
+                checker: { code: 'default-shipping-eligibility-checker', args: [] },
+                calculator: { code: 'default-shipping-calculator', args: [] },
+                fulfillmentHandlerCode: 'manual-fulfillment',
+                translations: [{ languageCode: 'en', name: 'Standard', description: 'Standard delivery' }],
+                customFields: {},
+            },
+        ]),
+    };
     const connection = {
         getRepository: vi.fn((_ctx, entity) => {
             if (entity === StockLocation) return stockLocationRepository;
@@ -44,6 +80,8 @@ function createService() {
         }),
         create: vi.fn().mockResolvedValue(channel),
         assignToChannels: vi.fn().mockResolvedValue(undefined),
+        getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default-channel' }),
+        removeFromChannels: vi.fn().mockResolvedValue(undefined),
     };
     const superAdminRole = { id: 'super-admin-role', permissions: [Permission.SuperAdmin] };
     const roleService = {
@@ -53,6 +91,18 @@ function createService() {
         create: vi.fn().mockResolvedValue({ id: 'store-role-1' }),
     };
     const administratorService = { create: vi.fn().mockResolvedValue({ id: 'administrator-1' }) };
+    const stockLocationService = {
+        create: vi
+            .fn()
+            .mockResolvedValueOnce({ id: 'cloned-stock-location-1' })
+            .mockResolvedValueOnce({ id: 'cloned-stock-location-2' }),
+    };
+    const shippingMethodService = {
+        create: vi.fn().mockResolvedValue({ id: 'cloned-shipping-method-1' }),
+    };
+    const paymentMethodService = {
+        create: vi.fn().mockResolvedValue({ id: 'cloned-payment-method-1' }),
+    };
     const storeProfileService = {
         createDraft: vi.fn().mockResolvedValue({ id: 'profile-1', channelId: 'store-1' }),
     };
@@ -78,6 +128,9 @@ function createService() {
         channelService as any,
         roleService as any,
         administratorService as any,
+        stockLocationService as any,
+        shippingMethodService as any,
+        paymentMethodService as any,
         storeProfileService as any,
         merchantInitialPasswordService as any,
         contentTranslations as any,
@@ -90,7 +143,10 @@ function createService() {
         stockLocationRepository,
         roleService,
         sellerService,
+        shippingMethodService,
+        paymentMethodService,
         service,
+        stockLocationService,
         storeProfileService,
         merchantInitialPasswordService,
         contentTranslations,
@@ -121,6 +177,9 @@ describe('StoreProvisioningService', () => {
             sellerService,
             service,
             shippingMethodRepository,
+            shippingMethodService,
+            paymentMethodService,
+            stockLocationService,
             storeProfileService,
             merchantInitialPasswordService,
             contentTranslations,
@@ -128,6 +187,7 @@ describe('StoreProvisioningService', () => {
         const ctx = {
             channelId: 'template-1',
             session: { user: { channelPermissions: [] } },
+            copy: vi.fn().mockReturnValue({}),
         } as any;
 
         const result = await service.provision(ctx, input);
@@ -175,33 +235,61 @@ describe('StoreProvisioningService', () => {
             ctx,
             expect.objectContaining({ id: 'administrator-1' }),
         );
-        expect(channelService.assignToChannels).toHaveBeenCalledWith(
-            ctx,
-            expect.any(Function),
-            'stock-location-1',
-            ['store-1'],
+        expect(stockLocationService.create).toHaveBeenNthCalledWith(
+            1,
+            expect.anything(),
+            expect.objectContaining({ name: 'Warehouse A', description: 'Primary' }),
         );
-        expect(channelService.assignToChannels).toHaveBeenCalledWith(
-            ctx,
-            expect.any(Function),
-            'stock-location-2',
-            ['store-1'],
+        expect(stockLocationService.create).toHaveBeenNthCalledWith(
+            2,
+            expect.anything(),
+            expect.objectContaining({ name: 'Warehouse B', description: 'Overflow' }),
         );
-        expect(channelService.assignToChannels).toHaveBeenCalledWith(ctx, PaymentMethod, 'payment-method-1', [
-            'store-1',
-        ]);
-        expect(channelService.assignToChannels).toHaveBeenCalledWith(
-            ctx,
-            ShippingMethod,
-            'shipping-method-1',
-            ['store-1'],
+        expect(paymentMethodService.create).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                code: 'referral-balance',
+                handler: { code: 'referral-balance-payment', arguments: [] },
+            }),
+        );
+        expect(paymentMethodService.create).toHaveBeenCalledTimes(1);
+        expect(shippingMethodService.create).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                code: 'standard-shipping',
+                fulfillmentHandler: 'manual-fulfillment',
+            }),
         );
         expect(shippingMethodRepository.find).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: expect.objectContaining({ deletedAt: expect.anything() }),
             }),
         );
-        expect(channelService.assignToChannels).toHaveBeenCalledTimes(4);
+        expect(channelService.assignToChannels).not.toHaveBeenCalled();
+        expect(channelService.removeFromChannels).toHaveBeenCalledWith(
+            expect.anything(),
+            StockLocation,
+            'cloned-stock-location-1',
+            ['default-channel'],
+        );
+        expect(channelService.removeFromChannels).toHaveBeenCalledWith(
+            expect.anything(),
+            StockLocation,
+            'cloned-stock-location-2',
+            ['default-channel'],
+        );
+        expect(channelService.removeFromChannels).toHaveBeenCalledWith(
+            expect.anything(),
+            ShippingMethod,
+            'cloned-shipping-method-1',
+            ['default-channel'],
+        );
+        expect(channelService.removeFromChannels).toHaveBeenCalledWith(
+            expect.anything(),
+            PaymentMethod,
+            'cloned-payment-method-1',
+            ['default-channel'],
+        );
         expect(storeProfileService.createDraft).toHaveBeenCalledWith(ctx, channel);
         expect(contentTranslations.prepareLocalizedFields).toHaveBeenCalledWith([
             expect.objectContaining({ sourceText: '阿尔法商城', targetText: '', required: true }),
@@ -224,7 +312,7 @@ describe('StoreProvisioningService', () => {
             channelId: 'store-1',
             roleId: 'store-role-1',
             administratorId: 'administrator-1',
-            stockLocationId: 'stock-location-1',
+            stockLocationId: 'cloned-stock-location-1',
             profileId: 'profile-1',
             channelCode: 'alpha-store',
         });
@@ -240,7 +328,7 @@ describe('StoreProvisioningService', () => {
         expect(sellerService.create).not.toHaveBeenCalled();
     });
 
-    it('rejects provisioning when the base store has no shared inventory', async () => {
+    it('rejects provisioning when the base store has no inventory to clone', async () => {
         const { stockLocationRepository, sellerService, service } = createService();
         stockLocationRepository.find.mockResolvedValueOnce([]);
 
@@ -249,7 +337,7 @@ describe('StoreProvisioningService', () => {
                 { channelId: 'template-1', session: { user: { channelPermissions: [] } } } as any,
                 input,
             ),
-        ).rejects.toThrow('基础店铺没有可共享的库存点');
+        ).rejects.toThrow('基础店铺没有可复制的库存点');
         expect(sellerService.create).not.toHaveBeenCalled();
     });
 

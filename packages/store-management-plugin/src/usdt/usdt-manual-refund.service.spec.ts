@@ -17,6 +17,8 @@ describe('UsdtManualRefundService', () => {
     let auditRepository: ReturnType<typeof createAuditRepository>;
     let refundRepository: ReturnType<typeof createRefundRepository>;
     let orderService: {
+        withOrderMutationTransaction: ReturnType<typeof vi.fn>;
+        lockOrderForRefund: ReturnType<typeof vi.fn>;
         refundOrder: ReturnType<typeof vi.fn>;
         settleRefund: ReturnType<typeof vi.fn>;
     };

@@ -96,6 +96,83 @@ describe('StoreManagementPlugin promotion options', () => {
         ).toThrow('must not repeat');
     });
 
+    it('splits a shared referral payment method into one entity per Channel at startup', async () => {
+        const channels = [{ id: 'channel-a' }, { id: 'channel-b' }] as Channel[];
+        const shared = {
+            id: 'shared-referral',
+            code: 'referral-balance',
+            enabled: true,
+            checker: null,
+            handler: { code: 'referral-balance-payment', args: [] },
+            translations: [{ languageCode: 'en', name: 'Referral', description: 'Referral balance' }],
+            customFields: {},
+            channels: [...channels],
+        } as unknown as PaymentMethod;
+        const paymentMethodRepository = {
+            find: vi.fn(({ where }) => Promise.resolve(where.code === 'referral-balance' ? [shared] : [])),
+            save: vi.fn((value: PaymentMethod) => Promise.resolve(value)),
+        };
+        const roleRepository = { find: vi.fn().mockResolvedValue([]), save: vi.fn() };
+        const connection = {
+            getRepository: vi.fn((_ctx, entity) => {
+                if (entity === Channel) return { find: vi.fn().mockResolvedValue(channels) };
+                throw new Error(`Unexpected contextual repository ${String(entity)}`);
+            }),
+            rawConnection: {
+                getRepository: vi.fn(entity => {
+                    if (entity === PaymentMethod) return paymentMethodRepository;
+                    if (entity === Role) return roleRepository;
+                    throw new Error(`Unexpected raw repository ${String(entity)}`);
+                }),
+            },
+        };
+        const removeFromChannels = vi.fn((_ctx, _entity, id, channelIds) => {
+            if (id === shared.id) {
+                shared.channels = shared.channels.filter(
+                    channel => !channelIds.some((channelId: string) => channel.id === channelId),
+                );
+            }
+        });
+        const paymentMethodService = {
+            create: vi.fn().mockResolvedValue({ id: 'referral-channel-a' }),
+        };
+        const plugin = new StoreManagementPlugin(
+            {} as any,
+            connection as any,
+            {
+                create: vi.fn(({ channelOrToken }) =>
+                    Promise.resolve({ channelId: channelOrToken?.id ?? 'channel-a' }),
+                ),
+            } as any,
+            paymentMethodService as any,
+            {
+                getDefaultChannel: vi.fn().mockResolvedValue(channels[0]),
+                removeFromChannels,
+            } as any,
+            { get: vi.fn().mockReturnValue({ enabled: false }) } as any,
+            {
+                rotateEncryptionKey: vi.fn().mockResolvedValue(0),
+                seedLegacyWallet: vi.fn().mockResolvedValue(undefined),
+                list: vi.fn().mockResolvedValue([]),
+            } as any,
+        );
+
+        await plugin.onApplicationBootstrap();
+
+        expect(paymentMethodService.create).toHaveBeenCalledTimes(1);
+        expect(paymentMethodService.create).toHaveBeenCalledWith(
+            expect.objectContaining({ channelId: 'channel-a' }),
+            expect.objectContaining({
+                code: 'referral-balance',
+                handler: { code: 'referral-balance-payment', arguments: [] },
+            }),
+        );
+        expect(removeFromChannels).toHaveBeenCalledWith(expect.anything(), PaymentMethod, 'shared-referral', [
+            'channel-a',
+        ]);
+        expect(shared.channels).toEqual([{ id: 'channel-b' }]);
+    });
+
     it('upgrades store administrators with referral permissions without granting them to employees', async () => {
         const storeAdministrator = {
             id: 'role-admin',
@@ -108,15 +185,22 @@ describe('StoreManagementPlugin promotion options', () => {
             save: vi.fn().mockImplementation(role => Promise.resolve(role)),
         };
         const paymentMethodRepository = {
-            findOne: vi
-                .fn()
-                .mockImplementation(({ where }) =>
-                    Promise.resolve(
-                        where.code === 'usdt-trc20'
-                            ? { id: 'usdt-payment-method', enabled: true }
-                            : { id: 'referral-payment-method', enabled: true },
-                    ),
-                ),
+            find: vi.fn().mockImplementation(({ where }) =>
+                Promise.resolve([
+                    where.code === 'usdt-trc20'
+                        ? {
+                              id: 'usdt-payment-method',
+                              enabled: true,
+                              channels: [{ id: 'channel-1' }],
+                          }
+                        : {
+                              id: 'referral-payment-method',
+                              enabled: true,
+                              channels: [{ id: 'channel-1' }],
+                          },
+                ]),
+            ),
+            save: vi.fn().mockImplementation(value => Promise.resolve(value)),
         };
         const connection = {
             getRepository: vi.fn((_ctx, entity) => {

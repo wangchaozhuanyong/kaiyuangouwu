@@ -2,8 +2,8 @@ import { CustomerChannelAssignmentStrategy } from './customer-channel-assignment
 
 /**
  * @description
- * The default {@link CustomerChannelAssignmentStrategy}: a Customer is auto-assigned to whichever
- * Channel they authenticate against.
+ * The default {@link CustomerChannelAssignmentStrategy}: Customers remain isolated to their
+ * assigned Channels. Cross-Channel assignment must be explicitly enabled with a custom strategy.
  *
  * @docsCategory auth
  * @docsPage CustomerChannelAssignmentStrategy
@@ -11,6 +11,6 @@ import { CustomerChannelAssignmentStrategy } from './customer-channel-assignment
  */
 export class DefaultCustomerChannelAssignmentStrategy implements CustomerChannelAssignmentStrategy {
     canAssignCustomerToChannel(): boolean {
-        return true;
+        return false;
     }
 }
