@@ -195,13 +195,29 @@ describe('populate() function', () => {
             expect(collections.items.map(i => i.name).sort()).toEqual(['Collection 2']);
         });
 
-        it('retains the admin aggregate without assigning imported products to the default storefront', async () => {
+        it('keeps imported products isolated from the default store', async () => {
             adminClient.setChannelToken(channel2.token);
             const { products } = await adminClient.query(getProductListDocument);
             const imported = products.items.find(item => item.name === 'Model Hand');
             if (!imported) throw new Error('Imported product missing from target channel');
+            const adminCatalogQuery = gql`
+                query ($id: ID!) {
+                    product(id: $id) {
+                        channels {
+                            id
+                        }
+                        variants {
+                            channels {
+                                id
+                            }
+                        }
+                    }
+                }
+            `;
             adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
-            const { product } = await adminClient.query(getProductWithVariantsDocument, { id: imported.id });
+            expect((await adminClient.query(adminCatalogQuery, { id: imported.id })).product).toBeNull();
+            adminClient.setChannelToken(channel2.token);
+            const { product } = await adminClient.query(adminCatalogQuery, { id: imported.id });
             expect(product?.channels.map(channel => channel.id)).toEqual([channel2.id]);
             expect(product?.variants[0].channels.map(channel => channel.id)).toEqual([channel2.id]);
             const query = gql`
