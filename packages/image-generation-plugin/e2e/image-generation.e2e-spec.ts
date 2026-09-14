@@ -1351,6 +1351,40 @@ describe('AI image generation full flow', () => {
             ).imageAiUsageRecord;
             expect(multiDetail.record.costCompleteness).toBe('COMPLETE');
             expect(await missingIds()).not.toContain(encode(multi.id));
+            // A known amount from an unfinished call is still not an auditable aggregate.
+            const incomplete = await prompts.save(
+                new ImagePromptOptimization({
+                    ...original,
+                    id: undefined,
+                    createdAt: undefined,
+                    updatedAt: undefined,
+                    idempotencyKey: randomUUID(),
+                    attemptLedgerVersion: 1,
+                    upstreamCallCount: 1,
+                    actualCostMicrounits: null,
+                    costCurrency: null,
+                }),
+            );
+            await attemptRepo.save(
+                new ImagePromptOptimizationAttempt({
+                    ...originalAttempt,
+                    id: undefined,
+                    callId: randomUUID(),
+                    optimizationIdSnapshot: String(incomplete.id),
+                    attemptNumber: 1,
+                    actualCostMicrounits: 1000,
+                    costCurrency: 'USD',
+                    completedAt: null,
+                }),
+            );
+            const incompleteDetail = (
+                await adminClient.query(USAGE_RECORD_DETAIL, {
+                    recordType: 'PROMPT_OPTIMIZATION',
+                    id: encode(incomplete.id),
+                })
+            ).imageAiUsageRecord;
+            expect(incompleteDetail.record.costCompleteness).toBe('PARTIAL');
+            expect(await missingIds()).toContain(encode(incomplete.id));
             const jobs = source.getRepository(ImageGenerationJob);
             const existingJob = (await jobs.find({ take: 1 }))[0];
             const noCostJob = await jobs.save(
@@ -1386,6 +1420,109 @@ describe('AI image generation full flow', () => {
             ).imageAiUsageRecord;
             expect(reverted.record.costCompleteness).toBe('UNKNOWN');
             expect(reverted.costAdjustments).toHaveLength(2);
+
+            // New prompt ledgers are reviewed per real attempt; the parent total is derived atomically.
+            const reviewedPrompt = await prompts.save(
+                new ImagePromptOptimization({
+                    ...original,
+                    id: undefined,
+                    createdAt: undefined,
+                    updatedAt: undefined,
+                    idempotencyKey: randomUUID(),
+                    attemptLedgerVersion: 1,
+                    upstreamCallCount: 2,
+                    actualCostMicrounits: null,
+                    costCurrency: null,
+                }),
+            );
+            const reviewedAttempts = [];
+            for (const index of [0, 1])
+                reviewedAttempts.push(
+                    await attemptRepo.save(
+                        new ImagePromptOptimizationAttempt({
+                            ...originalAttempt,
+                            id: undefined,
+                            callId: randomUUID(),
+                            optimizationIdSnapshot: String(reviewedPrompt.id),
+                            attemptNumber: index + 1,
+                            stage: index === 0 ? 'INITIAL' : 'REPAIR',
+                            outcome: index === 0 ? 'FAILED' : 'SUCCEEDED',
+                            actualCostMicrounits: null,
+                            costCurrency: null,
+                            completedAt: new Date(),
+                        }),
+                    ),
+                );
+            const getPromptDetail = async () =>
+                (
+                    await adminClient.query(USAGE_RECORD_DETAIL, {
+                        recordType: 'PROMPT_OPTIMIZATION',
+                        id: encode(reviewedPrompt.id),
+                    })
+                ).imageAiUsageRecord;
+            const firstReview = await makeReview(
+                'PROMPT_ATTEMPT',
+                String(reviewedAttempts[0].id),
+                String(reviewedPrompt.channelId),
+            );
+            await applyImageBillingReview(source, firstReview, true);
+            expect((await getPromptDetail()).record.costCompleteness).toBe('PARTIAL');
+            expect(await missingIds()).toContain(encode(reviewedPrompt.id));
+            await applyImageBillingReview(
+                source,
+                await makeReview(
+                    'PROMPT_ATTEMPT',
+                    String(reviewedAttempts[1].id),
+                    String(reviewedPrompt.channelId),
+                ),
+                true,
+            );
+            const completePrompt = await getPromptDetail();
+            expect(completePrompt.record).toMatchObject({
+                costCompleteness: 'COMPLETE',
+                actualCostMicrounits: 4272,
+                costCurrency: 'USD',
+            });
+            expect(completePrompt.attempts).toHaveLength(2);
+            expect(
+                completePrompt.attempts.every(
+                    (attempt: { matchingStatus: string; costSource: string }) =>
+                        attempt.matchingStatus === 'CROSS_MATCH_REVIEWED' &&
+                        attempt.costSource === 'SUPPLIER_BILLING',
+                ),
+            ).toBe(true);
+            expect(completePrompt.costAdjustments).toHaveLength(2);
+            expect(
+                completePrompt.costAdjustments.every(
+                    (review: { recordType: string }) => review.recordType === 'PROMPT_ATTEMPT',
+                ),
+            ).toBe(true);
+            expect(await missingIds()).not.toContain(encode(reviewedPrompt.id));
+            expect(await prompts.findOneByOrFail({ id: reviewedPrompt.id })).toEqual({
+                ...reviewedPrompt,
+                actualCostMicrounits: 4272,
+                costCurrency: 'USD',
+            });
+            await applyImageBillingReview(
+                source,
+                {
+                    ...(await makeReview(
+                        'PROMPT_ATTEMPT',
+                        String(reviewedAttempts[0].id),
+                        String(reviewedPrompt.channelId),
+                    )),
+                    batchId: 'api-e2e-attempt-revert',
+                    newCostMicrounits: null,
+                    newCurrency: null,
+                    bills: firstReview.bills,
+                },
+                true,
+            );
+            const correctedPrompt = await getPromptDetail();
+            expect(correctedPrompt.record.costCompleteness).toBe('PARTIAL');
+            expect(correctedPrompt.attempts[0].matchingStatus).toBe('UNRECONCILED');
+            expect(correctedPrompt.costAdjustments).toHaveLength(3);
+            expect(await missingIds()).toContain(encode(reviewedPrompt.id));
         },
     );
 

@@ -86,3 +86,16 @@ test('a batch cannot assign the same supplier bill to two targets', () => {
         /一张账单/,
     );
 });
+
+test('new prompt attempts have their own target namespace', () => {
+    const targets = ['LEGACY_PROMPT', 'PROMPT_ATTEMPT'].map(recordType => ({
+        channelId: '1',
+        recordId: '12',
+        recordType,
+    }));
+    assert.equal(
+        verifyBillingReviewManifest(Buffer.from(JSON.stringify({ version: 1, targets })), { inspect: true })
+            .entries.length,
+        2,
+    );
+});

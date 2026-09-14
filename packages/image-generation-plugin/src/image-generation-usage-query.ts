@@ -313,7 +313,14 @@ export class ImageGenerationUsageQuery {
             ...summarizeProviderCosts(
                 prompt.attemptLedgerVersion === 1 ? attempts : [prompt],
                 prompt.attemptLedgerVersion === 1
-                    ? prompt.source !== 'PENDING' && attempts.length >= prompt.upstreamCallCount
+                    ? prompt.source !== 'PENDING' &&
+                          prompt.upstreamCallCount > 0 &&
+                          attempts.length === prompt.upstreamCallCount &&
+                          attempts.every(
+                              attempt =>
+                                  attempt.completedAt !== null &&
+                                  ['SUCCEEDED', 'FAILED', 'UNKNOWN'].includes(attempt.outcome),
+                          )
                     : isCurrentCostReview(review, prompt),
             ),
             errorMessage: prompt.errorMessage,
@@ -458,7 +465,15 @@ export class ImageGenerationUsageQuery {
             where: { channelId: ctx.channelId, optimizationIdSnapshot: String(prompt.id) },
             order: { attemptNumber: 'ASC' },
         });
-        const reviews = await this.costAdjustments(ctx, 'LEGACY_PROMPT', [String(prompt.id)]);
+        const reviews =
+            prompt.attemptLedgerVersion === 1
+                ? await this.costAdjustments(
+                      ctx,
+                      'PROMPT_ATTEMPT',
+                      attempts.map(attempt => String(attempt.id)),
+                  )
+                : await this.costAdjustments(ctx, 'LEGACY_PROMPT', [String(prompt.id)]);
+        const reviewsByAttempt = groupBy(reviews, review => review.recordIdSnapshot);
         const wallet = prompt.walletUsageId
             ? await this.connection.getRepository(ctx, ReferralWalletUsage).findOne({
                   where: { id: prompt.walletUsageId, channelId: ctx.channelId },
@@ -511,7 +526,9 @@ export class ImageGenerationUsageQuery {
         return {
             record: this.promptUsageRecord(prompt, attempts, reviews[0]),
             costAdjustments: reviews,
-            attempts: attempts.map(attempt => attemptAudit(attempt)),
+            attempts: attempts.map(attempt =>
+                attemptAudit(attempt, reviewsByAttempt.get(String(attempt.id))?.[0]),
+            ),
             inputPrompt: prompt.inputPrompt,
             outputPrompt: prompt.optimizedPrompt,
             totalTokens: prompt.totalTokens,
@@ -678,8 +695,10 @@ function missingPromptCostSql(connection: TransactionalConnection) {
         `(${c('prompt', 'source')} = 'PENDING' OR ` +
         `((${c('prompt', 'attemptLedgerVersion')} IS NULL OR ${c('prompt', 'attemptLedgerVersion')} <> 1) AND NOT EXISTS (${approved})) OR ` +
         `(${c('prompt', 'attemptLedgerVersion')} = 1 AND (` +
-        `(SELECT COUNT(*) FROM image_prompt_optimization_attempt attempt WHERE ${owned}) < ${c('prompt', 'upstreamCallCount')} OR ` +
+        `${c('prompt', 'upstreamCallCount')} <= 0 OR ` +
+        `(SELECT COUNT(*) FROM image_prompt_optimization_attempt attempt WHERE ${owned}) <> ${c('prompt', 'upstreamCallCount')} OR ` +
         `EXISTS (SELECT 1 FROM image_prompt_optimization_attempt attempt WHERE ${owned} AND ` +
-        `(${c('attempt', 'actualCostMicrounits')} IS NULL OR ${c('attempt', 'costCurrency')} IS NULL)))))`
+        `(${c('attempt', 'completedAt')} IS NULL OR ${c('attempt', 'outcome')} NOT IN ('SUCCEEDED', 'FAILED', 'UNKNOWN') OR ` +
+        `${c('attempt', 'actualCostMicrounits')} IS NULL OR ${c('attempt', 'costCurrency')} IS NULL)))))`
     );
 }

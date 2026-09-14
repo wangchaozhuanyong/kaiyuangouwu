@@ -60,7 +60,10 @@ export function verifyBillingReviewManifest(bytes: Buffer, options: Partial<Opti
     const keys = new Set<string>();
     const supplierBills = new Set<string>();
     for (const entry of entries) {
-        assert.ok(['IMAGE_COST_EVENT', 'LEGACY_PROMPT'].includes(entry.recordType), '目标类型无效');
+        assert.ok(
+            ['IMAGE_COST_EVENT', 'LEGACY_PROMPT', 'PROMPT_ATTEMPT'].includes(entry.recordType),
+            '目标类型无效',
+        );
         assert.ok(
             typeof entry.channelId === 'string' && typeof entry.recordId === 'string',
             '目标编号必须为字符串',

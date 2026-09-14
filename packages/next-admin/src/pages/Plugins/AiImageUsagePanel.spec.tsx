@@ -190,65 +190,72 @@ describe('AI 图片工坊供应商费用', () => {
         );
     });
 
-    it('展示独立的历史审定，不补造旧调用，并保留更正链和供应商账单', async () => {
-        const review = {
-            id: '2',
-            recordType: 'LEGACY_PROMPT',
-            recordIdSnapshot: '12',
-            batchId: 'approved-batch',
-            reviewer: '审核人',
-            authorizationRef: 'approval-26',
-            reviewedAt: record.createdAt,
-            reason: '完整账单已交叉核对',
-            matchingStatus: 'CROSS_MATCH_REVIEWED',
-            previousAdjustmentId: '1',
-            oldCostMicrounits: null,
-            oldCurrency: null,
-            newCostMicrounits: 2136,
-            newCurrency: 'USD',
-            sourceHash: 'source-hash',
-            supplierBills: [
-                {
-                    supplierScope: 'supplier-account-1',
-                    billId: 'client:bill-1',
-                    amountMicrounits: 2136,
-                    currency: 'USD',
-                    billedAt: null,
-                    displayedTime: '2026/09/13 20:00:00',
-                    timeZone: null,
-                    evidenceHash: 'bill-hash',
-                },
-            ],
-        };
-        mocks.query.mockImplementation(query => ({
-            loading: false,
-            refetch: mocks.refetch,
-            data:
-                query === IMAGE_AI_USAGE_DETAIL_QUERY
-                    ? { imageAiUsageRecord: { record, attempts: [], costAdjustments: [review] } }
-                    : { imageAiUsageRecords: { totalItems: 1, items: [record] } },
-        }));
-        const container = await mount();
-        await act(async () =>
-            Array.from(container.querySelectorAll('button'))
-                .find(button => button.textContent === '查看调用明细')!
-                .click(),
-        );
-        const detail = container.querySelector('[role="dialog"]')!;
-        for (const text of [
-            '历史费用审定',
-            '交叉匹配已审',
-            'client:bill-1',
-            'USD 0.002136',
-            'approval-26',
-            '更正前审定',
-            '旧记录不能据此判断',
-            '时区未核实',
-        ]) {
-            expect(detail.textContent).toContain(text);
-        }
-        expect(detail.textContent).not.toContain('第 1 次');
-    });
+    it.each(['LEGACY_PROMPT', 'PROMPT_ATTEMPT'])(
+        '展示 %s 的独立审定，并保留更正链和供应商账单',
+        async recordType => {
+            const review = {
+                id: '2',
+                recordType,
+                recordIdSnapshot: '12',
+                batchId: 'approved-batch',
+                reviewer: '审核人',
+                authorizationRef: 'approval-26',
+                reviewedAt: record.createdAt,
+                reason: '完整账单已交叉核对',
+                matchingStatus: 'CROSS_MATCH_REVIEWED',
+                previousAdjustmentId: '1',
+                oldCostMicrounits: null,
+                oldCurrency: null,
+                newCostMicrounits: 2136,
+                newCurrency: 'USD',
+                sourceHash: 'source-hash',
+                supplierBills: [
+                    {
+                        supplierScope: 'supplier-account-1',
+                        billId: 'client:bill-1',
+                        amountMicrounits: 2136,
+                        currency: 'USD',
+                        billedAt: null,
+                        displayedTime: '2026/09/13 20:00:00',
+                        timeZone: null,
+                        evidenceHash: 'bill-hash',
+                    },
+                ],
+            };
+            mocks.query.mockImplementation(query => ({
+                loading: false,
+                refetch: mocks.refetch,
+                data:
+                    query === IMAGE_AI_USAGE_DETAIL_QUERY
+                        ? { imageAiUsageRecord: { record, attempts: [], costAdjustments: [review] } }
+                        : { imageAiUsageRecords: { totalItems: 1, items: [record] } },
+            }));
+            const container = await mount();
+            await act(async () =>
+                Array.from(container.querySelectorAll('button'))
+                    .find(button => button.textContent === '查看调用明细')!
+                    .click(),
+            );
+            const detail = container.querySelector('[role="dialog"]')!;
+            for (const text of [
+                '历史费用审定',
+                '交叉匹配已审',
+                'client:bill-1',
+                'USD 0.002136',
+                'approval-26',
+                '更正前审定',
+                '旧记录不能据此判断',
+                '时区未核实',
+            ]) {
+                expect(detail.textContent).toContain(text);
+            }
+            expect(detail.textContent).not.toContain('第 1 次');
+            expect(detail.textContent).toContain(
+                recordType === 'PROMPT_ATTEMPT' ? '描述优化调用 #12' : '描述优化 #12',
+            );
+            expect(detail.textContent).not.toContain('生图费用 #12');
+        },
+    );
 
     it('读取失败显示错误并允许刷新，不展示空白成功', async () => {
         mocks.query.mockReturnValue({

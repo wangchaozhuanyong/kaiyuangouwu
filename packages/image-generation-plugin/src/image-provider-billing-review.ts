@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import { DataSource, EntityManager } from 'typeorm';
 
-export type BillingReviewTarget = 'IMAGE_COST_EVENT' | 'LEGACY_PROMPT';
+import { summarizeProviderCosts } from './image-provider-cost-summary';
+
+export type BillingReviewTarget = 'IMAGE_COST_EVENT' | 'LEGACY_PROMPT' | 'PROMPT_ATTEMPT';
 export interface ReviewedSupplierBill {
     supplierScope: string;
     billId: string;
@@ -69,6 +71,29 @@ const targets = {
             'actualCostMicrounits',
             'costCurrency',
             'providerRequestId',
+        ],
+    },
+    PROMPT_ATTEMPT: {
+        table: 'image_prompt_optimization_attempt',
+        fields: [
+            'id',
+            'channelId',
+            'createdAt',
+            'updatedAt',
+            'optimizationIdSnapshot',
+            'attemptNumber',
+            'stage',
+            'outcome',
+            'modelId',
+            'credentialCodeSnapshot',
+            'actualCostMicrounits',
+            'costCurrency',
+            'costSource',
+            'callId',
+            'providerRequestId',
+            'headerRequestId',
+            'modelResponseId',
+            'completedAt',
         ],
     },
 } as const;
@@ -191,7 +216,9 @@ async function readTarget(
         .from(spec.table, 'target')
         .where(`target.${escape('id')} = :recordId`, { recordId })
         .andWhere(`target.${escape('channelId')} = :channelId`, { channelId });
-    if (lock) query.setLock('pessimistic_write');
+    // Prompt reviews lock the parent first, then all its attempts in ID order, so concurrent
+    // reviews of different attempts cannot overwrite the parent's derived total.
+    if (lock && recordType !== 'PROMPT_ATTEMPT') query.setLock('pessimistic_write');
     const target = await query.getRawOne<Record<string, any>>();
     requireValue(
         target && String(target.channelId) === channelId && String(target.id) === recordId,
@@ -205,7 +232,75 @@ async function readTarget(
             '只允许审定已结束且有历史调用的旧提示词记录',
         );
     }
+    if (recordType === 'PROMPT_ATTEMPT') {
+        const parentQuery = manager
+            .createQueryBuilder()
+            .select('*')
+            .from('image_prompt_optimization', 'prompt')
+            .where(`prompt.${escape('id')} = :id AND prompt.${escape('channelId')} = :channelId`, {
+                id: target.optimizationIdSnapshot,
+                channelId,
+            });
+        if (lock) parentQuery.setLock('pessimistic_write');
+        const parent = await parentQuery.getRawOne<Record<string, any>>();
+        requireValue(
+            parent &&
+                String(parent.id) === target.optimizationIdSnapshot &&
+                String(parent.channelId) === channelId,
+            '调用所属优化记录不存在或不属于指定频道',
+        );
+        const attempts = await readPromptAttempts(manager, channelId, target.optimizationIdSnapshot, lock);
+        requireValue(
+            parent.attemptLedgerVersion === 1 &&
+                ['MODEL', 'FALLBACK'].includes(parent.source) &&
+                parent.upstreamCallCount > 0 &&
+                attempts.length === parent.upstreamCallCount &&
+                attempts.every(
+                    attempt =>
+                        attempt.completedAt && ['SUCCEEDED', 'FAILED', 'UNKNOWN'].includes(attempt.outcome),
+                ),
+            '只允许审定已结束且逐次账本完整的提示词调用',
+        );
+        const current = attempts.find(attempt => String(attempt.id) === recordId);
+        requireValue(current, '调用所属优化记录已变化，请重新核对');
+        return Object.fromEntries(spec.fields.map(field => [field, current[field]]));
+    }
     return target;
+}
+
+async function readPromptAttempts(
+    manager: EntityManager,
+    channelId: string,
+    optimizationId: string,
+    lock: boolean,
+) {
+    const escape = (name: string) => manager.connection.driver.escape(name);
+    const query = manager
+        .createQueryBuilder()
+        .select('*')
+        .from('image_prompt_optimization_attempt', 'attempt')
+        .where(
+            `attempt.${escape('channelId')} = :channelId AND attempt.${escape('optimizationIdSnapshot')} = :optimizationId`,
+            {
+                channelId,
+                optimizationId,
+            },
+        )
+        .orderBy(`attempt.${escape('id')}`, 'ASC');
+    if (lock) query.setLock('pessimistic_write');
+    return query.getRawMany<Record<string, any>>();
+}
+
+async function promptCostTotal(
+    manager: EntityManager,
+    channelId: string,
+    optimizationId: string,
+    lock: boolean,
+) {
+    const summary = summarizeProviderCosts(
+        await readPromptAttempts(manager, channelId, optimizationId, lock),
+    );
+    return { actualCostMicrounits: summary.actualCostMicrounits, costCurrency: summary.costCurrency };
 }
 
 export async function inspectImageBillingTarget(
@@ -241,13 +336,14 @@ export async function applyImageBillingReview(source: DataSource, review: ImageB
     return source.transaction(async manager => {
         // Lock the business target before testing idempotency or appending a correction.
         const target = await readTarget(manager, review.channelId, review.recordType, review.recordId, apply);
-        const history = await manager
+        const historyQuery = manager
             .createQueryBuilder()
             .select('*')
             .from('image_provider_cost_adjustment', 'adjustment')
             .where('adjustment.targetKey = :key', { key })
-            .orderBy('adjustment.id', 'DESC')
-            .getRawMany();
+            .orderBy('adjustment.id', 'DESC');
+        if (apply) historyQuery.setLock('pessimistic_write');
+        const history = await historyQuery.getRawMany();
         const existing = history.find(item => item.batchId === review.batchId);
         if (existing) {
             requireValue(existing.entryHash === entryHash, '同一批次内容已改变，拒绝覆盖');
@@ -258,6 +354,29 @@ export async function applyImageBillingReview(source: DataSource, review: ImageB
                         target.costCurrency === existing.newCurrency,
                     '已审定费用被外部更改，需追加更正',
                 );
+            if (review.recordType === 'PROMPT_ATTEMPT') {
+                const total = await promptCostTotal(
+                    manager,
+                    review.channelId,
+                    target.optimizationIdSnapshot,
+                    apply,
+                );
+                const parentQuery = manager
+                    .createQueryBuilder()
+                    .select('*')
+                    .from('image_prompt_optimization', 'prompt')
+                    .where('prompt.id = :id AND prompt.channelId = :channelId', {
+                        id: target.optimizationIdSnapshot,
+                        channelId: review.channelId,
+                    });
+                if (apply) parentQuery.setLock('pessimistic_write');
+                const parent = await parentQuery.getRawOne();
+                requireValue(
+                    parent?.actualCostMicrounits === total.actualCostMicrounits &&
+                        parent?.costCurrency === total.costCurrency,
+                    '优化费用汇总被外部更改，需重新核对',
+                );
+            }
             return {
                 status: 'ALREADY_APPLIED',
                 adjustmentId: String(existing.id),
@@ -351,6 +470,24 @@ export async function applyImageBillingReview(source: DataSource, review: ImageB
             })
             .execute();
         requireValue(updated.affected === 1, '费用目标更新数量异常');
+        if (review.recordType === 'PROMPT_ATTEMPT') {
+            const total = await promptCostTotal(
+                manager,
+                review.channelId,
+                target.optimizationIdSnapshot,
+                true,
+            );
+            const parentUpdated = await manager
+                .createQueryBuilder()
+                .update('image_prompt_optimization')
+                .set({ ...total, updatedAt: () => manager.connection.driver.escape('updatedAt') })
+                .where('id = :id AND channelId = :channelId', {
+                    id: target.optimizationIdSnapshot,
+                    channelId: review.channelId,
+                })
+                .execute();
+            requireValue(parentUpdated.affected === 1, '优化费用汇总更新数量异常');
+        }
         return { status: 'APPLIED', adjustmentId: String(adjustment.id), targetKey: key };
     });
 }

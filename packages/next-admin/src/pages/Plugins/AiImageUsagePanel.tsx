@@ -265,7 +265,9 @@ function ImageUsageDetail({ record, onClose }: { record: ImageAiUsageRecord; onC
                                                 审定 #{review.id} ·{' '}
                                                 {review.recordType === 'LEGACY_PROMPT'
                                                     ? '描述优化'
-                                                    : '生图费用'}{' '}
+                                                    : review.recordType === 'PROMPT_ATTEMPT'
+                                                      ? '描述优化调用'
+                                                      : '生图费用'}{' '}
                                                 #{review.recordIdSnapshot}
                                                 {' · '}
                                                 {review.newCostMicrounits == null || !review.newCurrency

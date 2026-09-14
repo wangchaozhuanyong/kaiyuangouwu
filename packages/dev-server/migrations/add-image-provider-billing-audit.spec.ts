@@ -217,6 +217,135 @@ describe.skipIf(process.env.DB !== 'mysql')('image billing review transactions (
         });
     });
 
+    it('reviews completed prompt attempts through the CLI and derives the parent cost without changing business fields', async () => {
+        const first = await reviewFor(source, '1', 'PROMPT_ATTEMPT');
+        const second = await reviewFor(source, '2', 'PROMPT_ATTEMPT');
+        second.bills[0].billId = 'client:second-prompt-bill';
+        const beforeAttempts = await rows(source, 'image_prompt_optimization_attempt');
+        const beforeParent = (await rows(source, 'image_prompt_optimization'))[1];
+        await withCliFixture(source, [first, second], ({ execute }) => {
+            expect(execute('prompt-apply.json').status).toBe(0);
+            expect(execute('prompt-repeat.json').status).toBe(0);
+        });
+        expect((await rows(source, 'image_prompt_optimization'))[1]).toEqual({
+            ...beforeParent,
+            actualCostMicrounits: 2500,
+            costCurrency: 'USD',
+        });
+        expect(await rows(source, 'image_prompt_optimization_attempt')).toEqual(
+            beforeAttempts.map(attempt => ({
+                ...attempt,
+                actualCostMicrounits: 1250,
+                costCurrency: 'USD',
+            })),
+        );
+        const revert = {
+            ...first,
+            ...(await reviewFor(source, '1', 'PROMPT_ATTEMPT')),
+            batchId: 'prompt-revert',
+            newCostMicrounits: null,
+            newCurrency: null,
+            bills: first.bills,
+        };
+        await applyImageBillingReview(source, revert, true);
+        expect((await rows(source, 'image_prompt_optimization'))[1]).toEqual(beforeParent);
+        expect(await rows(source, 'image_provider_cost_adjustment')).toHaveLength(3);
+        expect(await rows(source, 'image_provider_billing_link')).toHaveLength(2);
+    });
+
+    it('serializes concurrent reviews of different attempts under the same prompt', async () => {
+        const first = await reviewFor(source, '1', 'PROMPT_ATTEMPT');
+        const second = await reviewFor(source, '2', 'PROMPT_ATTEMPT');
+        second.bills[0].billId = 'client:parallel-prompt-bill';
+        await Promise.all([
+            applyImageBillingReview(source, first, true),
+            applyImageBillingReview(source, second, true),
+        ]);
+        expect((await rows(source, 'image_prompt_optimization'))[1]).toMatchObject({
+            actualCostMicrounits: 2500,
+            costCurrency: 'USD',
+        });
+        const results = await Promise.all([
+            applyImageBillingReview(source, first, true),
+            applyImageBillingReview(source, second, true),
+        ]);
+        expect(results.every(result => result.status === 'ALREADY_APPLIED')).toBe(true);
+        expect(await rows(source, 'image_provider_cost_adjustment')).toHaveLength(2);
+    });
+
+    it('keeps partial, mixed-currency and overflowing prompt totals unknown', async () => {
+        const first = await reviewFor(source, '1', 'PROMPT_ATTEMPT');
+        const second = await reviewFor(source, '2', 'PROMPT_ATTEMPT');
+        second.bills[0] = { ...second.bills[0], billId: 'client:euro-prompt-bill', currency: 'EUR' };
+        second.newCurrency = 'EUR';
+        await applyImageBillingReview(source, first, true);
+        expect((await rows(source, 'image_prompt_optimization'))[1]).toMatchObject({
+            actualCostMicrounits: null,
+            costCurrency: null,
+        });
+        await applyImageBillingReview(source, second, true);
+        expect((await rows(source, 'image_prompt_optimization'))[1]).toMatchObject({
+            actualCostMicrounits: null,
+            costCurrency: null,
+        });
+        const changed = await reviewFor(source, '2', 'PROMPT_ATTEMPT');
+        changed.batchId = 'large-prompt-correction';
+        changed.newCurrency = 'USD';
+        changed.newCostMicrounits = 2_147_483_647;
+        changed.bills = [{ ...second.bills[0], currency: 'USD', amountMicrounits: 2_147_483_647 }];
+        await applyImageBillingReview(source, changed, true);
+        expect((await rows(source, 'image_prompt_optimization'))[1]).toMatchObject({
+            actualCostMicrounits: null,
+            costCurrency: 'USD',
+        });
+    });
+
+    it('rejects active, incomplete, legacy or foreign prompt parents and an externally changed aggregate', async () => {
+        const first = await reviewFor(source, '1', 'PROMPT_ATTEMPT');
+        for (const patch of [
+            { source: 'PENDING' },
+            { upstreamCallCount: 3 },
+            { attemptLedgerVersion: null },
+            { channelId: 2 },
+        ]) {
+            await source
+                .createQueryBuilder()
+                .update('image_prompt_optimization')
+                .set(patch)
+                .where('id = 2')
+                .execute();
+            await expect(applyImageBillingReview(source, first, true)).rejects.toThrow();
+            await source
+                .createQueryBuilder()
+                .update('image_prompt_optimization')
+                .set({ source: 'MODEL', upstreamCallCount: 2, attemptLedgerVersion: 1, channelId: 1 })
+                .where('id = 2')
+                .execute();
+        }
+        await source.query('UPDATE image_prompt_optimization_attempt SET completedAt = NULL WHERE id = 2');
+        await expect(applyImageBillingReview(source, first, true)).rejects.toThrow('已结束');
+        await source.query(
+            'UPDATE image_prompt_optimization_attempt SET completedAt = updatedAt WHERE id = 2',
+        );
+        expect(await rows(source, 'image_provider_cost_adjustment')).toHaveLength(0);
+        await applyImageBillingReview(source, first, true);
+        await source.query(
+            "UPDATE image_prompt_optimization SET actualCostMicrounits = 1, costCurrency = 'USD' WHERE id = 2",
+        );
+        await expect(applyImageBillingReview(source, first, true)).rejects.toThrow('汇总被外部更改');
+    });
+
+    it('rolls back the attempt, bill ownership and audit when its parent update fails', async () => {
+        const first = await reviewFor(source, '1', 'PROMPT_ATTEMPT');
+        await source.query(`CREATE TRIGGER prompt_parent_failure BEFORE UPDATE ON image_prompt_optimization
+            FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'fixture parent failure'`);
+        const before = await rows(source, 'image_prompt_optimization_attempt');
+        await expect(applyImageBillingReview(source, first, true)).rejects.toThrow('fixture parent failure');
+        expect(await rows(source, 'image_prompt_optimization_attempt')).toEqual(before);
+        expect(await rows(source, 'image_provider_cost_adjustment')).toHaveLength(0);
+        expect(await rows(source, 'image_provider_billing_link')).toHaveLength(0);
+    });
+
     it('rejects changed evidence, cross-channel targeting, changed batch content and reused bills', async () => {
         const review = await reviewFor(source);
         await expect(
@@ -410,7 +539,7 @@ async function withCliFixture(
     check: (fixture: {
         directory: string;
         execute: (name: string, environment?: NodeJS.ProcessEnv) => ReturnType<typeof spawnSync>;
-    }) => Promise<void>,
+    }) => void | Promise<void>,
 ) {
     const directory = mkdtempSync(path.join(process.cwd(), '.billing-cli-fixture-'));
     try {
@@ -510,6 +639,48 @@ async function createFixture(type: string) {
             ],
         }),
     );
+    await runner.createTable(
+        new Table({
+            name: 'image_prompt_optimization_attempt',
+            columns: [
+                ...common,
+                { name: 'attemptNumber', type: 'int' },
+                { name: 'completedAt', type: 'datetime', isNullable: true },
+                ...[
+                    'optimizationIdSnapshot',
+                    'stage',
+                    'outcome',
+                    'modelId',
+                    'costSource',
+                    'callId',
+                    'headerRequestId',
+                    'modelResponseId',
+                ].map(name => ({ name, type: 'varchar', length: '200', isNullable: true })),
+            ],
+        }),
+    );
+    for (const id of [1, 2])
+        await source
+            .createQueryBuilder()
+            .insert()
+            .into('image_prompt_optimization_attempt')
+            .values({
+                id,
+                channelId: 1,
+                optimizationIdSnapshot: '2',
+                attemptNumber: id,
+                stage: id === 1 ? 'INITIAL' : 'REPAIR',
+                outcome: id === 1 ? 'FAILED' : 'SUCCEEDED',
+                modelId: 'fixture-prompt-model',
+                credentialCodeSnapshot: 'fixture',
+                callId: `fixture-prompt-${id}`,
+                headerRequestId: `fixture-header-${id}`,
+                modelResponseId: `fixture-model-${id}`,
+                createdAt: new Date('2026-09-12T12:00:00Z'),
+                updatedAt: new Date('2026-09-12T12:01:00Z'),
+                completedAt: new Date('2026-09-12T12:01:00Z'),
+            })
+            .execute();
     for (const id of [1, 2, 3])
         await source
             .createQueryBuilder()
