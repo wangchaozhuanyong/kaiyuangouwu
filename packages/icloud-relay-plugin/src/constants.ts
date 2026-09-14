@@ -1,5 +1,13 @@
+import { CrudPermissionDefinition } from '@vendure/core';
+
 export const ICLOUD_RELAY_PLUGIN_OPTIONS = Symbol('ICLOUD_RELAY_PLUGIN_OPTIONS');
 export const loggerCtx = 'IcloudRelayPlugin';
+export const ID_BUSINESS_CLIENT_IP_HEADER = 'x-id-business-client-ip';
+
+export const manageIcloudRelayPermission = new CrudPermissionDefinition(
+    'IcloudRelay',
+    operation => `${operation} iCloud mailbox relay accounts, aliases, messages, and query codes`,
+);
 
 export const DEFAULT_ICLOUD_IMAP_HOST = 'imap.mail.me.com';
 export const DEFAULT_ICLOUD_IMAP_PORT = 993;

@@ -1,6 +1,15 @@
 import { Args, Query, Resolver } from '@nestjs/graphql';
-import { Allow, Ctx, ForbiddenError, Permission, RequestContext } from '@vendure/core';
+import {
+    Allow,
+    API_KEY_AUTH_STRATEGY_NAME,
+    Ctx,
+    ForbiddenError,
+    Permission,
+    RequestContext,
+} from '@vendure/core';
+import { isIP } from 'node:net';
 
+import { ID_BUSINESS_CLIENT_IP_HEADER, manageIcloudRelayPermission } from '../constants';
 import { IcloudPublicQueryService } from '../services/icloud-public-query.service';
 
 @Resolver()
@@ -11,8 +20,17 @@ export class IcloudPublicResolver {
     @Allow(Permission.Public)
     async icloudQueryMails(@Ctx() ctx: RequestContext, @Args('queryCode') queryCode: string) {
         const req = ctx.req;
-        // Express resolves req.ip using the configured trusted proxies.
-        const clientIp = req?.ip || req?.socket?.remoteAddress;
+        const forwardedClientIp = req?.headers[ID_BUSINESS_CLIENT_IP_HEADER];
+        const authenticatedClientIp =
+            ctx.session?.authenticationStrategy === API_KEY_AUTH_STRATEGY_NAME &&
+            ctx.userHasPermissions([manageIcloudRelayPermission.Read]) &&
+            typeof forwardedClientIp === 'string' &&
+            isIP(forwardedClientIp.trim())
+                ? forwardedClientIp.trim()
+                : undefined;
+        // Express resolves req.ip using configured trusted proxies. The dedicated ID Business API key
+        // may carry the original browser address across the separate public HTTPS proxy chain.
+        const clientIp = authenticatedClientIp || req?.ip || req?.socket?.remoteAddress;
         if (!clientIp) throw new ForbiddenError();
         return this.publicQueryService.queryByCode(
             ctx,
