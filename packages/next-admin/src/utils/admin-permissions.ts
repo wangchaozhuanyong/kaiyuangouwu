@@ -36,6 +36,7 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
     },
     { prefix: '/storefront', permissions: ['ReadStorefrontContent'] },
     { prefix: '/plugins/client-plugins', permissions: ['ReadStorefrontContent'] },
+    { prefix: '/plugins/icloud-relay', permissions: ['ReadIcloudRelay'] },
     { prefix: '/plugins/ai-settings', permissions: ['ReadSettings'] },
     { prefix: '/plugins/translations', permissions: ['ReadSettings', 'ReadCatalog'] },
     { prefix: '/operations', permissions: ['ReadSystem'] },
