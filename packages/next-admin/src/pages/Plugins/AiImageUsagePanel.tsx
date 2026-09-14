@@ -1,6 +1,7 @@
 import { useQuery } from '@apollo/client/react';
 import { useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import {
     IMAGE_AI_USAGE_DETAIL_QUERY,
@@ -232,7 +233,10 @@ function ImageUsageDetail({ record, onClose }: { record: ImageAiUsageRecord; onC
         >
             <section className="max-h-full w-full max-w-3xl space-y-4 overflow-y-auto rounded-xl bg-white p-5">
                 <header className="flex items-center justify-between gap-3">
-                    <h2 className="text-lg font-bold">调用明细 #{record.id}</h2>
+                    <h2 className="flex items-center gap-2 text-lg font-bold">
+                        调用明细 #{record.id}
+                        <FeatureHelpButton topic="plugins.ai-usage" title="AI 图片调用明细" />
+                    </h2>
                     <button type="button" className={buttonClass} onClick={onClose}>
                         关闭
                     </button>
@@ -252,7 +256,10 @@ function ImageUsageDetail({ record, onClose }: { record: ImageAiUsageRecord; onC
                             <ImageUsageCost record={detail.record} />
                             {(detail.costAdjustments ?? []).length > 0 && (
                                 <section aria-label="历史费用审定" className="space-y-3">
-                                    <h3 className="font-semibold">历史费用审定</h3>
+                                    <h3 className="flex items-center gap-2 font-semibold">
+                                        历史费用审定
+                                        <FeatureHelpButton topic="plugins.ai-usage" title="历史费用审定" />
+                                    </h3>
                                     <p className="text-xs text-slate-500">
                                         以下金额来自已审核的供应商账单交叉匹配，不代表请求编号直接匹配。更正记录按时间倒序保留。
                                     </p>

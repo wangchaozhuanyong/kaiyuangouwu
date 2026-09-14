@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StorefrontAuthSettingsPanel } from './StorefrontAuthSettingsPanel';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
 
 let host: HTMLDivElement;
 let root: Root;

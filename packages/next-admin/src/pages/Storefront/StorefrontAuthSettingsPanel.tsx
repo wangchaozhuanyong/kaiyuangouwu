@@ -1,6 +1,7 @@
 import { ExternalLink, KeyRound, LoaderCircle } from 'lucide-react';
 import { useState } from 'react';
 
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import type { StorefrontAuthConfigurationRecord } from '../../graphql/storefront.graphql';
 
 const googleClientIdPattern = /^[0-9]+-[a-z0-9_-]+\.apps\.googleusercontent\.com$/iu;
@@ -115,7 +116,10 @@ export function StorefrontAuthSettingsPanel({
                     <KeyRound className="h-4 w-4" />
                 </span>
                 <div>
-                    <h3 className="text-sm font-bold text-slate-900">账号与登录</h3>
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        账号与登录
+                        <FeatureHelpButton topic="storefront.auth" title="账号与登录" />
+                    </h3>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
                         邮箱功能按店铺设置；Google 默认由全平台统一管理，新店铺会自动继承。 Client ID
                         是公开标识，不要填写 Client Secret。
@@ -259,7 +263,7 @@ export function StorefrontAuthSettingsPanel({
             </a>
 
             {error ? (
-                <p className="mt-3 text-xs font-medium text-red-600" role="alert">
+                <p className="mt-3 text-xs font-medium text-red-600 dark:text-red-300" role="alert">
                     {error}
                 </p>
             ) : null}

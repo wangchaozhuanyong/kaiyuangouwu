@@ -264,6 +264,12 @@ export const featureHelpContent = {
         example: '例如：将轮播图移到第一层，在其下方放置“本周推荐”商品楼层。',
         impact: '发布后会改变当前店铺首页的模块顺序与显示。',
     },
+    'storefront.auth': {
+        purpose: '统一配置商城邮箱注册登录和 Google 快捷注册登录方式。',
+        requirements: ['邮箱自动注册与快捷注册依赖邮箱密码登录', '全平台 Google 配置仅超级管理员可修改'],
+        example: '例如：全平台填写一次 Google Web Client ID，新店铺保持继承即可直接使用。',
+        impact: '店铺独立配置会覆盖全平台默认值；新独立域名仍需加入 Google 授权来源。',
+    },
     'storefront.carousel': {
         purpose: '集中管理当前店铺的首页轮播图、播放顺序和轮播间隔。',
         requirements: ['每张上线图片完成中英文内容和图片选择', '启停、排序及间隔保存后立即生效'],
@@ -389,6 +395,12 @@ export const featureHelpContent = {
         requirements: ['密钥仅在受保护的服务端表单中录入', '启用前执行连通性测试'],
         example: '例如：更新某生图服务商密钥后，测试成功再启用。',
         impact: '错误配置会使 AI 任务失败；说明中不会显示任何密钥值。',
+    },
+    'plugins.ai-usage': {
+        purpose: '查看 AI 图片任务的调用结果、客户收费、供应商成本和历史费用审定记录。',
+        requirements: ['费用缺失时保持待核对', '跨币种金额分别查看，不直接相加'],
+        example: '例如：打开一次调用明细，核对供应商账单匹配后的费用更正记录。',
+        impact: '本区域只读展示审计结果，不会重新计费或修改供应商账单。',
     },
     'plugins.two-factor': {
         purpose: '安全保存并快速查询管理用的 TOTP 二次验证码账号。',

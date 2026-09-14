@@ -3,9 +3,11 @@ import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/cli
 import { ApolloProvider } from '@apollo/client/react';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import type { ImageAiUsageRecord } from '../../graphql/image-usage.graphql';
 import { AiImageUsagePanel } from './AiImageUsagePanel';
+
+vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
 
 const record: ImageAiUsageRecord = {
     id: '12',

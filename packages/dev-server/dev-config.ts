@@ -90,8 +90,8 @@ import {
     orderConfirmationRecipient,
 } from './order-confirmation-email';
 import { resolveRuntimeAdminCredentials } from './runtime-admin-credentials';
-import { StorefrontGoogleAuthenticationStrategy } from './storefront-google-authentication-strategy';
-import { StorefrontNativeAuthenticationStrategy } from './storefront-native-authentication-strategy';
+import { StorefrontGoogleAuthenticationStrategy as GoogleAuthStrategy } from './storefront-google-authentication-strategy';
+import { StorefrontNativeAuthenticationStrategy as NativeAuthStrategy } from './storefront-native-authentication-strategy';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const testPaymentsEnabled = process.env.CONTROLLED_TEST_PAYMENTS_ENABLED === 'true';
@@ -587,10 +587,7 @@ export const devConfig: VendureConfig = {
         tokenMethod: ['bearer', 'cookie', 'api-key'] as const,
         requireVerification: true,
         verificationTokenDuration: ACCOUNT_TOKEN_DURATION,
-        shopAuthenticationStrategy: [
-            new StorefrontNativeAuthenticationStrategy(),
-            new StorefrontGoogleAuthenticationStrategy(),
-        ],
+        shopAuthenticationStrategy: [new NativeAuthStrategy(), new GoogleAuthStrategy()],
         passwordValidationStrategy: new DefaultPasswordValidationStrategy({ minLength: 8, maxLength: 72 }),
         customPermissions: [],
         superadminCredentials: {
@@ -610,9 +607,7 @@ export const devConfig: VendureConfig = {
         migrations: devServerMigrations,
         ...getDbConfig(),
     },
-    paymentOptions: {
-        paymentMethodHandlers: IS_PRODUCTION ? [] : [dummyPaymentHandler],
-    },
+    paymentOptions: { paymentMethodHandlers: IS_PRODUCTION ? [] : [dummyPaymentHandler] },
     catalogOptions: {
         productVariantPriceSelectionStrategy: new StoreDefaultCurrencyPriceSelectionStrategy(),
         productVariantPriceUpdateStrategy: new DefaultProductVariantPriceUpdateStrategy({
