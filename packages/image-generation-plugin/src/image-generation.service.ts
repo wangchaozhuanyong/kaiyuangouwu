@@ -759,35 +759,34 @@ export class ImageGenerationService {
         ) {
             throw new UserInputError('中转站账号或地址已更换，不能使用旧幂等键重试');
         }
-        const transition = await this.connection.getRepository(ctx, ImageGenerationOutput).update(
-            { id: output.id, state: 'UNKNOWN', walletSettled: false },
-            {
-                state: 'QUEUED',
-                unknownAt: null,
-                errorMessage: '管理员确认后使用相同幂等键重试',
-                failureCode: 'UNKNOWN_RETRY',
-            },
-        );
-        if (transition.affected !== 1) throw new UserInputError('该输出状态已变更，请刷新后重试');
-        output.state = 'QUEUED';
-        output.unknownAt = null;
-        output.errorMessage = '管理员确认后使用相同幂等键重试';
-        output.failureCode = 'UNKNOWN_RETRY';
-        await this.connection.getRepository(ctx, ImageGenerationDispatch).upsert(
-            {
-                outputId: output.id,
-                state: 'PENDING',
-                attemptCount: 0,
-                nextAttemptAt: imageDispatchReadyAt(),
-                dispatchedAt: null,
-                queueTaskId: null,
-                processingStage: null,
-                heartbeatAt: null,
-                stagedAssetId: null,
-                lastError: null,
-            },
-            ['outputId'],
-        );
+        await this.connection.withTransaction(ctx, async txCtx => {
+            const transition = await this.connection.getRepository(txCtx, ImageGenerationOutput).update(
+                { id: output.id, state: 'UNKNOWN', walletSettled: false },
+                {
+                    state: 'QUEUED',
+                    unknownAt: null,
+                    errorMessage: '管理员确认后使用相同幂等键重试',
+                    failureCode: 'UNKNOWN_RETRY',
+                },
+            );
+            if (transition.affected !== 1) throw new UserInputError('该输出状态已变更，请刷新后重试');
+            await this.connection.getRepository(txCtx, ImageGenerationDispatch).upsert(
+                {
+                    outputId: output.id,
+                    state: 'PENDING',
+                    attemptCount: 0,
+                    nextAttemptAt: imageDispatchReadyAt(),
+                    dispatchedAt: null,
+                    queueTaskId: null,
+                    processingStage: null,
+                    heartbeatAt: null,
+                    stagedAssetId: null,
+                    lastError: null,
+                },
+                ['outputId'],
+            );
+            await this.refreshJobSettlement(txCtx, output.jobId);
+        });
         try {
             await this.enqueueOutput(output.id);
         } catch {
@@ -796,7 +795,6 @@ export class ImageGenerationService {
                 .getRepository(ctx, ImageGenerationOutput)
                 .update({ id: output.id, state: 'QUEUED' }, { errorMessage: output.errorMessage });
         }
-        await this.refreshJob(ctx, output.jobId);
         return this.connection.getRepository(ctx, ImageGenerationOutput).findOneByOrFail({ id: output.id });
     }
 
@@ -845,9 +843,9 @@ export class ImageGenerationService {
             }
             output.refundedAt = new Date();
             await this.connection.getRepository(txCtx, ImageGenerationOutput).save(output, { reload: false });
+            await this.refreshJobSettlement(txCtx, output.jobId);
             return output;
         });
-        await this.refreshJob(ctx, refundedOutput.jobId);
         return refundedOutput;
     }
 
@@ -1170,6 +1168,8 @@ export class ImageGenerationService {
                 },
             );
             if (transition.affected !== 1) return false;
+            // The terminal flag cannot commit before its wallet/quota and parent totals.
+            await this.refreshJobSettlement(txCtx, job.id);
             output.state = targetState;
             output.errorMessage = message.slice(0, 500);
             output.failureCode = failureCode?.slice(0, 48) ?? output.failureCode;
@@ -1182,56 +1182,12 @@ export class ImageGenerationService {
     }
 
     async refreshJob(ctx: RequestContext, jobId: ID): Promise<void> {
-        let terminalReferenceAssetIds: string[] = [];
-        let terminalCustomerId: ID | undefined;
-        await this.connection.withTransaction(ctx, async txCtx => {
-            const repository = this.connection.getRepository(txCtx, ImageGenerationJob);
-            if (supportsGenerationLock(this.connection.rawConnection.options.type)) {
-                await repository
-                    .createQueryBuilder('job')
-                    .setLock('pessimistic_write')
-                    .where('job.id = :id', { id: jobId })
-                    .getOne();
-            }
-            const job = await repository.findOne({ where: { id: jobId }, relations: { outputs: true } });
-            if (!job) return;
-            const settlement = deriveImageJobSettlement(
-                job.quantity,
-                job.unitPriceSnapshot,
-                job.outputs,
-                job.expectedChargeAmount,
-            );
-            if (settlement.terminal) {
-                const walletUsage = job.walletUsageId
-                    ? await this.connection.getRepository(txCtx, ReferralWalletUsage).findOne({
-                          where: { id: job.walletUsageId },
-                      })
-                    : null;
-                const walletRelease = walletUsage
-                    ? Math.max(
-                          0,
-                          walletUsage.amount - walletUsage.capturedAmount - walletUsage.releasedAmount,
-                      )
-                    : 0;
-                if (job.walletUsageId && walletRelease > 0) {
-                    await this.walletSpend.release(txCtx, {
-                        usageId: job.walletUsageId,
-                        amount: walletRelease,
-                        operationKey: `JOB_TERMINAL:${String(job.id)}`,
-                        actorType: 'SYSTEM',
-                        metadata: { jobId: String(job.id), reason: '任务终态释放未使用预冻结金额' },
-                    });
-                }
-                if (job.quotaEventId) await this.quota.release(txCtx, job.quotaEventId);
-            }
-            job.capturedAmount = settlement.capturedAmount;
-            job.releasedAmount = settlement.releasedAmount;
-            job.state = settlement.state;
-            job.completedAt = settlement.terminal ? (job.completedAt ?? new Date()) : null;
-            await repository.save(job, { reload: false });
-            terminalReferenceAssetIds = settlement.terminal ? storedReferenceAssetIds(job) : [];
-            terminalCustomerId = job.customerId;
-        });
+        const job = await this.connection.withTransaction(ctx, txCtx =>
+            this.refreshJobSettlement(txCtx, jobId),
+        );
+        if (!job?.completedAt) return;
+        const terminalReferenceAssetIds = storedReferenceAssetIds(job);
+        const terminalCustomerId = job.customerId;
         if (!terminalReferenceAssetIds.length) return;
         await this.connection.withTransaction(ctx, async txCtx => {
             const customerQuery = this.connection
@@ -1255,6 +1211,52 @@ export class ImageGenerationService {
                 await this.storage.expireReferenceAfterTerminal(txCtx, referenceAssetId);
             }
         });
+    }
+
+    /** Database-only settlement; the caller owns the transaction and post-commit reference cleanup. */
+    private async refreshJobSettlement(txCtx: RequestContext, jobId: ID) {
+        const repository = this.connection.getRepository(txCtx, ImageGenerationJob);
+        if (supportsGenerationLock(this.connection.rawConnection.options.type)) {
+            await repository
+                .createQueryBuilder('job')
+                .setLock('pessimistic_write')
+                .where('job.id = :id', { id: jobId })
+                .getOne();
+        }
+        const job = await repository.findOne({ where: { id: jobId }, relations: { outputs: true } });
+        if (!job) return;
+        const settlement = deriveImageJobSettlement(
+            job.quantity,
+            job.unitPriceSnapshot,
+            job.outputs,
+            job.expectedChargeAmount,
+        );
+        if (settlement.terminal) {
+            const walletUsage = job.walletUsageId
+                ? await this.connection.getRepository(txCtx, ReferralWalletUsage).findOne({
+                      where: { id: job.walletUsageId },
+                  })
+                : null;
+            const walletRelease = walletUsage
+                ? Math.max(0, walletUsage.amount - walletUsage.capturedAmount - walletUsage.releasedAmount)
+                : 0;
+            if (job.walletUsageId && walletRelease > 0) {
+                await this.walletSpend.release(txCtx, {
+                    usageId: job.walletUsageId,
+                    amount: walletRelease,
+                    operationKey: `JOB_TERMINAL:${String(job.id)}`,
+                    actorType: 'SYSTEM',
+                    metadata: { jobId: String(job.id), reason: '任务终态释放未使用预冻结金额' },
+                });
+            }
+            if (job.quotaEventId) await this.quota.release(txCtx, job.quotaEventId);
+        }
+        job.capturedAmount = settlement.capturedAmount;
+        job.releasedAmount = settlement.releasedAmount;
+        job.state = settlement.state;
+        job.completedAt = settlement.terminal ? (job.completedAt ?? new Date()) : null;
+        await repository.save(job, { reload: false });
+        return job;
     }
 
     async releaseReference(ctx: RequestContext, assetId: ID) {

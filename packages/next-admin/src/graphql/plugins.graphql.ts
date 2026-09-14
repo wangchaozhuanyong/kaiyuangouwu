@@ -141,6 +141,8 @@ export const IMAGE_GENERATION_ADMIN_QUERY = gql`
                     errorMessage
                     completedAt
                     refundedAt
+                    billingMode
+                    chargeAmount
                 }
             }
         }
@@ -210,6 +212,8 @@ export const REFUND_IMAGE_OUTPUT_MUTATION = gql`
             id
             state
             refundedAt
+            billingMode
+            chargeAmount
         }
     }
 `;
@@ -367,6 +371,8 @@ export interface ImageGenerationOutputRecord {
     errorMessage: string | null;
     completedAt: string | null;
     refundedAt: string | null;
+    billingMode: string;
+    chargeAmount: number;
 }
 
 export interface ImageGenerationJobRecord {

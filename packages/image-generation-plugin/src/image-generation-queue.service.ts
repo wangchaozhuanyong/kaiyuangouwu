@@ -8,6 +8,7 @@ import {
     RequestContextService,
     TransactionalConnection,
 } from '@vendure/core';
+import { ReferralWalletUsage } from '@vendure/store-management-plugin';
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import { In, LessThan, LessThanOrEqual } from 'typeorm';
@@ -27,6 +28,7 @@ import { ImageGenerationOutput } from './entities/image-generation-output.entity
 import { ImageGenerationRuntimeStatus } from './entities/image-generation-runtime-status.entity';
 import { ImagePrivateAsset } from './entities/image-private-asset.entity';
 import { ImageProviderCredential } from './entities/image-provider-credential.entity';
+import { ImageUsageQuotaEvent } from './entities/image-usage-quota-event.entity';
 import { ImageGenerationConfigService } from './image-generation-config.service';
 import { classifyImageGenerationFailure, safeDiagnosticMessage } from './image-generation-failure';
 import {
@@ -58,6 +60,7 @@ interface ImageOutputJobData {
 
 @Injectable()
 export class ImageGenerationQueueService implements OnApplicationBootstrap, OnApplicationShutdown {
+    private settlementCursor?: ID;
     private queue: JobQueue<ImageOutputJobData>;
     private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
     private activeJobs = 0;
@@ -164,7 +167,76 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
             });
             if (await this.generations.settleUnreleasedTerminalOutput(ctx, output.id)) released += 1;
         }
-        return released + dispatched;
+        return released + dispatched + (await this.reconcileTerminalJobs());
+    }
+
+    /** Repair earlier interrupted releases/refunds from persisted output and wallet facts. */
+    private async reconcileTerminalJobs(): Promise<number> {
+        // Bound each sweep even when compliance history has grown beyond image retention.
+        const scan = this.connection.rawConnection
+            .getRepository(ImageGenerationJob)
+            .createQueryBuilder('job')
+            .select('job.id')
+            .orderBy('job.id', 'ASC')
+            .take(100);
+        if (this.settlementCursor != null) scan.where('job.id > :after', { after: this.settlementCursor });
+        const batch = await scan.getMany();
+        this.settlementCursor = batch.length === 100 ? batch[batch.length - 1].id : undefined;
+        if (!batch.length) return 0;
+        const settlementJobIds = batch.map(job => job.id);
+        const jobs = await this.connection.rawConnection
+            .getRepository(ImageGenerationJob)
+            .createQueryBuilder('job')
+            .innerJoinAndSelect('job.channel', 'channel')
+            .innerJoin(
+                query =>
+                    query
+                        .select('output.jobId', 'jobId')
+                        .addSelect('COUNT(*)', 'outputCount')
+                        .addSelect(
+                            "SUM(CASE WHEN output.state IN ('QUEUED', 'RUNNING', 'UNKNOWN') THEN 1 ELSE 0 END)",
+                            'activeCount',
+                        )
+                        .addSelect(
+                            "SUM(CASE WHEN output.state = 'SUCCEEDED' AND output.refundedAt IS NULL THEN output.chargeAmount ELSE 0 END)",
+                            'capturedAmount',
+                        )
+                        .from(ImageGenerationOutput, 'output')
+                        .where('output.jobId IN (:...settlementJobIds)', { settlementJobIds })
+                        .groupBy('output.jobId'),
+                'settlement',
+                'settlement.jobId = job.id',
+            )
+            .leftJoin(ReferralWalletUsage, 'usage', 'usage.id = job.walletUsageId')
+            .leftJoin(ImageUsageQuotaEvent, 'quota', 'quota.id = job.quotaEventId')
+            .where('settlement.activeCount = 0 AND settlement.outputCount = job.quantity')
+            .andWhere('job.id IN (:...settlementJobIds)', { settlementJobIds })
+            .andWhere(
+                `(job.state NOT IN ('SUCCEEDED', 'PARTIAL_SUCCESS', 'FAILED', 'CANCELLED')
+                OR job.completedAt IS NULL
+                OR job.capturedAmount <> settlement.capturedAmount
+                OR job.releasedAmount <> CASE WHEN job.expectedChargeAmount > settlement.capturedAmount
+                    THEN job.expectedChargeAmount - settlement.capturedAmount ELSE 0 END
+                OR usage.amount > usage.capturedAmount + usage.releasedAmount
+                OR quota.amount > quota.consumedAmount + quota.releasedAmount)`,
+            )
+            .orderBy('job.id', 'ASC')
+            .take(100)
+            .getMany();
+        let repaired = 0;
+        for (const job of jobs) {
+            const ctx = await this.requestContextService.create({
+                apiType: 'admin',
+                channelOrToken: job.channel,
+            });
+            try {
+                await this.generations.refreshJob(ctx, job.id);
+                repaired += 1;
+            } catch (error) {
+                Logger.warn(`settlement ${String(job.id)}: ${safeError(error)}`, IMAGE_GENERATION_LOGGER_CTX);
+            }
+        }
+        return repaired;
     }
 
     async dispatchOutput(outputId: ID): Promise<void> {
@@ -227,6 +299,39 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
     private async reconcileDispatches(): Promise<number> {
         const rawConnection = this.connection.rawConnection;
         const dispatchRepository = rawConnection.getRepository(ImageGenerationDispatch);
+        // Old retry writes could commit QUEUED while leaving a completed dispatch.
+        // Return these to UNKNOWN; the normal approval path rechecks the pinned credential.
+        const interruptedRetries = await rawConnection
+            .getRepository(ImageGenerationOutput)
+            .createQueryBuilder('output')
+            .innerJoin(ImageGenerationDispatch, 'dispatch', 'dispatch.outputId = output.id')
+            .innerJoinAndSelect('output.job', 'job')
+            .innerJoinAndSelect('job.channel', 'channel')
+            .where('output.state = :state AND output.walletSettled = :settled', {
+                state: 'QUEUED',
+                settled: false,
+            })
+            .andWhere('output.failureCode = :failure', { failure: 'UNKNOWN_RETRY' })
+            .andWhere('dispatch.state IN (:...dispatchStates)', { dispatchStates: ['COMPLETED', 'FAILED'] })
+            .take(100)
+            .getMany();
+        for (const output of interruptedRetries) {
+            const restored = await rawConnection.getRepository(ImageGenerationOutput).update(
+                { id: output.id, state: 'QUEUED', walletSettled: false, failureCode: 'UNKNOWN_RETRY' },
+                {
+                    state: 'UNKNOWN',
+                    unknownAt: output.updatedAt,
+                    errorMessage: '上次重试未完成，请确认后重新重试',
+                },
+            );
+            if (restored.affected === 1) {
+                const ctx = await this.requestContextService.create({
+                    apiType: 'admin',
+                    channelOrToken: output.job.channel,
+                });
+                await this.generations.refreshJob(ctx, output.jobId);
+            }
+        }
         const missing = await rawConnection
             .getRepository(ImageGenerationOutput)
             .createQueryBuilder('output')
@@ -325,7 +430,7 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
             }
         }
         await this.writeWorkerHeartbeat('RUNNING', new Date()).catch(() => undefined);
-        return handled + lostDispatched.length + recoveredStages;
+        return handled + lostDispatched.length + recoveredStages + interruptedRetries.length;
     }
 
     private async process(

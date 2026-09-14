@@ -34,6 +34,7 @@ import {
     type ImageGenerationAdminResult,
     type ImageGenerationConfigRecord,
     type ImageGenerationJobRecord,
+    type ImageGenerationOutputRecord,
     type ImageModelRecord,
     type ImageProviderProtocol,
 } from '../../graphql/plugins.graphql';
@@ -49,7 +50,15 @@ import { buildImageGenerationConfigInput, buildImageModelInput } from './ai-imag
 type StudioTab = 'CONFIG' | 'JOBS' | 'SKILLS' | 'USAGE';
 const AI_STUDIO_TABS = { config: 'CONFIG', jobs: 'JOBS', skills: 'SKILLS', usage: 'USAGE' } as const;
 type OutputAction =
-    { kind: 'RETRY'; jobId: string; outputId: string } | { kind: 'REFUND'; jobId: string; outputId: string };
+    | { kind: 'RETRY'; jobId: string; outputId: string }
+    | {
+          kind: 'REFUND';
+          jobId: string;
+          outputId: string;
+          billingMode: string;
+          chargeAmount: number;
+          currencyCode: string;
+      };
 type JobStateFilter =
     'ALL' | 'QUEUED' | 'RUNNING' | 'PARTIAL_SUCCESS' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN' | 'CANCELLED';
 type ConfigEditor = { kind: 'SERVICE' } | { kind: 'MODEL'; modelId: string } | { kind: 'TERMS' };
@@ -86,7 +95,9 @@ export function AiImageSettingsModule() {
         notifyOnNetworkStatusChange: true,
     });
     const [retryOutput, retryState] = useMutation(RETRY_IMAGE_OUTPUT_MUTATION);
-    const [refundOutput, refundState] = useMutation(REFUND_IMAGE_OUTPUT_MUTATION);
+    const [refundOutput, refundState] = useMutation<{
+        refundImageOutput: Pick<ImageGenerationOutputRecord, 'refundedAt' | 'billingMode' | 'chargeAmount'>;
+    }>(REFUND_IMAGE_OUTPUT_MUTATION);
     const [activateSkill, skillState] = useMutation(ACTIVATE_IMAGE_SKILL_MUTATION);
     const config = query.data?.imageGenerationAdminConfig;
     const jobs = query.data?.imageGenerationJobs.items ?? [];
@@ -105,17 +116,23 @@ export function AiImageSettingsModule() {
     const executeOutputAction = async (reason: string) => {
         if (!outputAction) return;
         try {
-            if (outputAction.kind === 'RETRY')
+            if (outputAction.kind === 'RETRY') {
                 await retryOutput({ variables: { outputId: outputAction.outputId } });
-            else
-                await refundOutput({ variables: { outputId: outputAction.outputId, reason: reason.trim() } });
-            showNotice(
-                outputAction.kind === 'RETRY'
-                    ? '未知结果已使用原幂等键重新入队'
-                    : '该张已成功图片的费用已退回用户钱包',
-            );
+                showNotice('未知结果已使用原幂等键重新入队');
+            } else {
+                const result = await refundOutput({
+                    variables: { outputId: outputAction.outputId, reason: reason.trim() },
+                });
+                const refunded = result.data?.refundImageOutput;
+                if (!refunded?.refundedAt) throw new Error('未能确认退费结果，请刷新任务后核对');
+                showNotice(
+                    refunded.billingMode === 'FREE'
+                        ? '已退回 1 次免费额度'
+                        : `已退回 ${formatMoney(refunded.chargeAmount || outputAction.chargeAmount, outputAction.currencyCode)} 至买家钱包`,
+                );
+            }
             setOutputAction(null);
-            await query.refetch();
+            await query.refetch().catch(() => setActionError('操作已完成，但列表刷新失败，请刷新核对。'));
         } catch (error) {
             showError(error);
         }
@@ -1379,6 +1396,13 @@ function JobOutputsDialog({
                                                                 kind: 'REFUND',
                                                                 jobId: job.id,
                                                                 outputId: output.id,
+                                                                billingMode: output.billingMode,
+                                                                chargeAmount:
+                                                                    output.billingMode === 'FREE'
+                                                                        ? 0
+                                                                        : output.chargeAmount ||
+                                                                          job.unitPriceSnapshot,
+                                                                currencyCode: job.currencyCode,
                                                             })
                                                         }
                                                         className="rounded-lg bg-blue-100 px-3 py-1.5 text-[10px] font-bold text-blue-800 hover:bg-blue-200"
@@ -1500,6 +1524,7 @@ function OutputActionDialog({
 }) {
     const [reason, setReason] = useState('');
     const refund = action.kind === 'REFUND';
+    const freeRefund = refund && action.billingMode === 'FREE';
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
             <AccessibleDialogSurface
@@ -1516,11 +1541,17 @@ function OutputActionDialog({
                     {refund ? <CircleDollarSign className="h-5 w-5" /> : <RotateCcw className="h-5 w-5" />}
                 </div>
                 <h2 className="mt-4 font-bold text-slate-900">
-                    {refund ? '对已成功图片执行售后退费' : '重试未知结果'}
+                    {refund
+                        ? freeRefund
+                            ? '退回该图片的免费额度'
+                            : '对已成功图片执行售后退费'
+                        : '重试未知结果'}
                 </h2>
                 <p className="mt-2 text-xs leading-5 text-slate-500">
                     {refund
-                        ? '退费只针对该张图片，等额退回买家钱包，并写入审计流水。'
+                        ? freeRefund
+                            ? '该图片使用免费额度，本次退回 1 次免费额度，不增加钱包余额。'
+                            : `本次将退回 ${formatMoney(action.chargeAmount, action.currencyCode)} 至买家钱包，并写入审计流水。`
                         : '只有 UNKNOWN 输出可重试。后端会使用原幂等键，避免重复扣费。'}
                 </p>
                 <div className="mt-3 rounded-lg bg-slate-50 p-2 font-mono text-[10px] text-slate-500">

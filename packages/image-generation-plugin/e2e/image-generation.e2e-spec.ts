@@ -42,6 +42,7 @@ import { ImageModelConfig } from '../src/entities/image-model-config.entity';
 import { ImagePrivateAsset } from '../src/entities/image-private-asset.entity';
 import { ImagePromptOptimizationAttempt } from '../src/entities/image-prompt-optimization-attempt.entity';
 import { ImagePromptOptimization } from '../src/entities/image-prompt-optimization.entity';
+import { ImageProviderCredential } from '../src/entities/image-provider-credential.entity';
 import { ImageUsageQuotaBucket } from '../src/entities/image-usage-quota-bucket.entity';
 import { ImageUsageQuotaEvent } from '../src/entities/image-usage-quota-event.entity';
 import { ImageGenerationQueueService } from '../src/image-generation-queue.service';
@@ -2670,6 +2671,345 @@ describe('AI image generation full flow', () => {
             );
         } finally {
             provider.mockRestore();
+        }
+    }, 30_000);
+
+    // Closure review F01/F03: fail after the job write, not just before the wallet operation.
+    function failClosureJobSave(connection: TransactionalConnection, jobId: any) {
+        const prototype = Object.getPrototypeOf(connection.rawConnection.getRepository(ImageGenerationJob));
+        const save = prototype.save;
+        let pending = true;
+        return vi.spyOn(prototype, 'save').mockImplementation(async function (this: any, ...args: any[]) {
+            const result = await save.apply(this, args);
+            if (
+                pending &&
+                this.metadata.target === ImageGenerationJob &&
+                String(args[0]?.id) === String(jobId)
+            ) {
+                pending = false;
+                throw new Error('closure rollback after parent settlement write');
+            }
+            return result;
+        });
+    }
+
+    async function closureSetup(free: boolean) {
+        const connection = server.app.get(TransactionalConnection);
+        const raw = connection.rawConnection;
+        const model = await raw
+            .getRepository(ImageModelConfig)
+            .findOneByOrFail({ code: 'OPENAI_HIGH_QUALITY' });
+        await raw.getRepository(ImageModelConfig).update(
+            { id: model.id },
+            {
+                unitPrice: 100,
+                freeImageEnabled: free,
+                dailyFreeImageUnlimited: free,
+                dailyFreeImageLimit: 0,
+                supportsIdempotency: true,
+                dailyGenerationSafetyLimit: 100,
+            },
+        );
+        return {
+            connection,
+            raw,
+            create: async (key: string) => {
+                // Each financial fault starts with a healthy isolated route; repeated UNKNOWN
+                // fixtures must not trip the unrelated three-failure circuit breaker.
+                await raw.getRepository(ImageModelConfig).update(
+                    { id: model.id },
+                    {
+                        healthStatus: 'HEALTHY',
+                        consecutiveFailures: 0,
+                    },
+                );
+                await raw.getRepository(ImageProviderCredential).update(
+                    { scope: 'OPENAI' },
+                    {
+                        healthStatus: 'HEALTHY',
+                        consecutiveFailures: 0,
+                        cooldownUntil: null,
+                    },
+                );
+                return (
+                    await shopClient.query(CREATE, {
+                        input: {
+                            modelCode: model.code,
+                            prompt: key,
+                            referenceMode: 'NONE',
+                            aspectRatio: '1:1',
+                            resolution: '1K',
+                            quantity: 1,
+                            expectedUnitPrice: 100,
+                            expectedChargeAmount: free ? 0 : 100,
+                            currencyCode: 'USD',
+                            termsAccepted: true,
+                            idempotencyKey: key,
+                        },
+                    })
+                ).createImageGeneration;
+            },
+            restore: () => raw.getRepository(ImageModelConfig).save(model),
+        };
+    }
+
+    it.each(['PAID', 'FREE'])(
+        'closure release is atomic and repairs legacy terminal holds (%s)',
+        async mode => {
+            const fixture = await closureSetup(mode === 'FREE');
+            const { connection, raw } = fixture;
+            const queue = server.app.get(ImageGenerationQueueService);
+            const provider = vi
+                .spyOn(server.app.get(ImageProviderClient), 'generate')
+                .mockRejectedValue(
+                    new AmbiguousImageProviderError('closure unknown fixture', { retryAfterSeconds: 0 }),
+                );
+            try {
+                for (const legacy of [false, true]) {
+                    const key = `closure-release-${mode}-${legacy}`;
+                    const created = await fixture.create(key);
+                    await waitForJob(created.id, ['UNKNOWN']);
+                    const job = await raw
+                        .getRepository(ImageGenerationJob)
+                        .findOneByOrFail({ idempotencyKey: key });
+                    const outputs = raw.getRepository(ImageGenerationOutput);
+                    const output = await outputs.findOneByOrFail({ jobId: job.id });
+                    if (legacy) {
+                        await outputs.update(
+                            { id: output.id },
+                            {
+                                state: 'FAILED',
+                                walletSettled: true,
+                                billingMode: 'RELEASED',
+                                chargeAmount: 0,
+                            },
+                        );
+                    } else {
+                        await outputs.update(
+                            { id: output.id },
+                            { unknownAt: new Date(Date.now() - 20 * 60_000) },
+                        );
+                        const failure = failClosureJobSave(connection, job.id);
+                        try {
+                            await expect(queue.reconcileUnknown()).rejects.toThrow('closure rollback');
+                        } finally {
+                            failure.mockRestore();
+                        }
+                        expect(await outputs.findOneByOrFail({ id: output.id })).toMatchObject({
+                            state: 'UNKNOWN',
+                            walletSettled: false,
+                        });
+                        if (job.walletUsageId)
+                            expect(
+                                await raw
+                                    .getRepository(ReferralWalletUsage)
+                                    .findOneByOrFail({ id: job.walletUsageId }),
+                            ).toMatchObject({ capturedAmount: 0, releasedAmount: 0 });
+                        if (job.quotaEventId)
+                            expect(
+                                await raw
+                                    .getRepository(ImageUsageQuotaEvent)
+                                    .findOneByOrFail({ id: job.quotaEventId }),
+                            ).toMatchObject({ consumedAmount: 0, releasedAmount: 0 });
+                    }
+                    for (let tick = 0; tick < 3; tick++) await queue.reconcileUnknown();
+                    const view = (await shopClient.query(MY_JOB, { id: created.id })).myImageGenerationJob;
+                    expect(view).toMatchObject({
+                        state: 'FAILED',
+                        capturedAmount: 0,
+                        releasedAmount: mode === 'FREE' ? 0 : 100,
+                    });
+                    expect(await outputs.findOneByOrFail({ id: output.id })).toMatchObject({
+                        state: 'FAILED',
+                        walletSettled: true,
+                    });
+                    if (job.walletUsageId)
+                        expect(
+                            await raw
+                                .getRepository(ReferralWalletUsage)
+                                .findOneByOrFail({ id: job.walletUsageId }),
+                        ).toMatchObject({ capturedAmount: 0, releasedAmount: 100 });
+                    if (job.quotaEventId)
+                        expect(
+                            await raw
+                                .getRepository(ImageUsageQuotaEvent)
+                                .findOneByOrFail({ id: job.quotaEventId }),
+                        ).toMatchObject({ consumedAmount: 0, releasedAmount: 1 });
+                }
+            } finally {
+                provider.mockRestore();
+                await fixture.restore();
+            }
+        },
+        30_000,
+    );
+
+    it.each(['PAID', 'FREE'])(
+        'closure refund rolls back parent failures and repairs legacy totals (%s)',
+        async mode => {
+            const fixture = await closureSetup(mode === 'FREE');
+            const { connection, raw } = fixture;
+            const provider = vi.spyOn(server.app.get(ImageProviderClient), 'generate').mockResolvedValue({
+                bytes: Buffer.from(generatedPngBase64, 'base64'),
+                mimeType: 'image/png',
+            });
+            try {
+                const key = `closure-refund-${mode}`;
+                const created = await fixture.create(key);
+                const view = (await waitForJob(created.id, ['SUCCEEDED'])).myImageGenerationJob;
+                const job = await raw
+                    .getRepository(ImageGenerationJob)
+                    .findOneByOrFail({ idempotencyKey: key });
+                const output = await raw
+                    .getRepository(ImageGenerationOutput)
+                    .findOneByOrFail({ jobId: job.id });
+                const failure = failClosureJobSave(connection, job.id);
+                try {
+                    await expect(
+                        adminClient.query(REFUND_OUTPUT, { outputId: view.outputs[0].id }),
+                    ).rejects.toThrow('closure rollback');
+                } finally {
+                    failure.mockRestore();
+                }
+                expect(
+                    (await raw.getRepository(ImageGenerationOutput).findOneByOrFail({ id: output.id }))
+                        .refundedAt,
+                ).toBeNull();
+                if (job.walletUsageId)
+                    expect(
+                        await raw
+                            .getRepository(ReferralWalletUsage)
+                            .findOneByOrFail({ id: job.walletUsageId }),
+                    ).toMatchObject({ capturedAmount: 100, releasedAmount: 0 });
+                if (job.quotaEventId)
+                    expect(
+                        await raw
+                            .getRepository(ImageUsageQuotaEvent)
+                            .findOneByOrFail({ id: job.quotaEventId }),
+                    ).toMatchObject({ consumedAmount: 1, releasedAmount: 0 });
+                await adminClient.query(REFUND_OUTPUT, { outputId: view.outputs[0].id });
+                await expect(
+                    adminClient.query(REFUND_OUTPUT, { outputId: view.outputs[0].id }),
+                ).rejects.toThrow('不能重复退款');
+                expect(
+                    (await shopClient.query(MY_JOB, { id: created.id })).myImageGenerationJob.capturedAmount,
+                ).toBe(0);
+                if (mode === 'PAID')
+                    await raw
+                        .getRepository(ImageGenerationJob)
+                        .update({ id: job.id }, { capturedAmount: 100, releasedAmount: 0 });
+                for (let tick = 0; tick < 3; tick++)
+                    await server.app.get(ImageGenerationQueueService).reconcileUnknown();
+                expect(
+                    (await shopClient.query(MY_JOB, { id: created.id })).myImageGenerationJob,
+                ).toMatchObject({ capturedAmount: 0, releasedAmount: mode === 'FREE' ? 0 : 100 });
+                if (job.walletUsageId)
+                    expect(
+                        await raw
+                            .getRepository(ReferralWalletUsage)
+                            .findOneByOrFail({ id: job.walletUsageId }),
+                    ).toMatchObject({ capturedAmount: 0, releasedAmount: 100 });
+                if (job.quotaEventId)
+                    expect(
+                        await raw
+                            .getRepository(ImageUsageQuotaEvent)
+                            .findOneByOrFail({ id: job.quotaEventId }),
+                    ).toMatchObject({ consumedAmount: 0, releasedAmount: 1 });
+            } finally {
+                provider.mockRestore();
+                await fixture.restore();
+            }
+        },
+        30_000,
+    );
+
+    it('closure retry commits output and dispatch together and restores legacy approval', async () => {
+        const fixture = await closureSetup(false);
+        const { raw } = fixture;
+        let unknown = true;
+        const provider = vi.spyOn(server.app.get(ImageProviderClient), 'generate').mockImplementation(() => {
+            if (unknown)
+                return Promise.reject(
+                    new AmbiguousImageProviderError('closure retry unknown', { retryAfterSeconds: 0 }),
+                );
+            return Promise.resolve({
+                bytes: Buffer.from(generatedPngBase64, 'base64'),
+                mimeType: 'image/png',
+            });
+        });
+        const retry = gql`
+            mutation ClosureRetry($outputId: ID!) {
+                retryUnknownImageOutput(outputId: $outputId) {
+                    id
+                    state
+                }
+            }
+        `;
+        try {
+            for (const legacy of [false, true]) {
+                unknown = true;
+                const key = `closure-retry-${legacy}`;
+                const created = await fixture.create(key);
+                const view = (await waitForJob(created.id, ['UNKNOWN'])).myImageGenerationJob;
+                const job = await raw
+                    .getRepository(ImageGenerationJob)
+                    .findOneByOrFail({ idempotencyKey: key });
+                const output = await raw
+                    .getRepository(ImageGenerationOutput)
+                    .findOneByOrFail({ jobId: job.id });
+                const dispatches = raw.getRepository(ImageGenerationDispatch);
+                await dispatches.update(
+                    { outputId: output.id },
+                    { state: 'COMPLETED', processingStage: 'REQUEST_STARTED' },
+                );
+                if (legacy) {
+                    await raw
+                        .getRepository(ImageGenerationOutput)
+                        .update(
+                            { id: output.id },
+                            { state: 'QUEUED', failureCode: 'UNKNOWN_RETRY', unknownAt: null },
+                        );
+                    const before = provider.mock.calls.length;
+                    await server.app.get(ImageGenerationQueueService).reconcileUnknown();
+                    expect(provider).toHaveBeenCalledTimes(before);
+                } else {
+                    const prototype = Object.getPrototypeOf(dispatches);
+                    const upsert = prototype.upsert;
+                    const failure = vi.spyOn(prototype, 'upsert').mockImplementation(function (
+                        this: any,
+                        ...args: any[]
+                    ) {
+                        if (this.metadata.target === ImageGenerationDispatch)
+                            return Promise.reject(new Error('closure dispatch write failed'));
+                        return upsert.apply(this, args);
+                    });
+                    try {
+                        await expect(
+                            adminClient.query(retry, { outputId: view.outputs[0].id }),
+                        ).rejects.toThrow('closure dispatch write failed');
+                    } finally {
+                        failure.mockRestore();
+                    }
+                }
+                expect(
+                    await raw.getRepository(ImageGenerationOutput).findOneByOrFail({ id: output.id }),
+                ).toMatchObject({ state: 'UNKNOWN', walletSettled: false });
+                expect((await shopClient.query(MY_JOB, { id: created.id })).myImageGenerationJob.state).toBe(
+                    'UNKNOWN',
+                );
+                unknown = false;
+                await adminClient.query(retry, { outputId: view.outputs[0].id });
+                expect(
+                    (await waitForJob(created.id, ['SUCCEEDED'])).myImageGenerationJob.capturedAmount,
+                ).toBe(100);
+                if (!job.walletUsageId) throw new Error('Paid retry is missing its wallet usage');
+                expect(
+                    await raw.getRepository(ReferralWalletUsage).findOneByOrFail({ id: job.walletUsageId }),
+                ).toMatchObject({ capturedAmount: 100, releasedAmount: 0 });
+            }
+        } finally {
+            provider.mockRestore();
+            await fixture.restore();
         }
     }, 30_000);
 
