@@ -38,7 +38,13 @@ export function StorefrontAuthSettingsPanel({
         setError('');
         setNotice('');
         try {
-            await onSave({ ...draft, googleClientId });
+            await onSave({
+                emailPasswordEnabled: draft.emailPasswordEnabled,
+                emailAutoRegistrationEnabled: draft.emailAutoRegistrationEnabled,
+                emailQuickRegistrationEnabled: draft.emailQuickRegistrationEnabled,
+                googleEnabled: draft.googleEnabled,
+                googleClientId,
+            });
             setNotice('当前店铺的账号与登录设置已保存。');
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : '账号与登录设置保存失败，请重试。');

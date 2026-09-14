@@ -11,6 +11,7 @@ let host: HTMLDivElement;
 let root: Root;
 
 const initialValue = {
+    __typename: 'StorefrontAuthSettings',
     emailPasswordEnabled: true,
     emailAutoRegistrationEnabled: false,
     emailQuickRegistrationEnabled: false,
