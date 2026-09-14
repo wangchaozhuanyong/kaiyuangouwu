@@ -19,8 +19,9 @@ function setup(options?: { enabled?: boolean; googleClientId?: string | null }) 
     };
     const settingsStore = {
         getMany: vi.fn().mockResolvedValue({
-            [storefrontAuthSettingKeys.googleEnabled]: options?.enabled ?? true,
-            [storefrontAuthSettingKeys.googleClientId]: options?.googleClientId ?? clientId,
+            [storefrontAuthSettingKeys.googleOverrideEnabled]: false,
+            [storefrontAuthSettingKeys.platformGoogleEnabled]: options?.enabled ?? true,
+            [storefrontAuthSettingKeys.platformGoogleClientId]: options?.googleClientId ?? clientId,
         }),
     };
     const injector = {
@@ -38,7 +39,7 @@ function setup(options?: { enabled?: boolean; googleClientId?: string | null }) 
 afterEach(() => vi.restoreAllMocks());
 
 describe('StorefrontGoogleAuthenticationStrategy', () => {
-    it('fails closed when Google authentication is not enabled for the channel', async () => {
+    it('fails closed when inherited Google authentication is not enabled', async () => {
         const { strategy, externalAuthenticationService } = setup({ enabled: false });
         const verify = vi.spyOn(OAuth2Client.prototype, 'verifyIdToken');
 
@@ -49,7 +50,7 @@ describe('StorefrontGoogleAuthenticationStrategy', () => {
         expect(externalAuthenticationService.findCustomerUser).not.toHaveBeenCalled();
     });
 
-    it('accepts only a verified Google email and reuses the linked customer', async () => {
+    it('accepts an inherited platform client ID and reuses the linked customer', async () => {
         const { strategy, externalAuthenticationService } = setup();
         const user = { id: 'user-1' };
         const verify = vi.spyOn(OAuth2Client.prototype, 'verifyIdToken').mockResolvedValue({

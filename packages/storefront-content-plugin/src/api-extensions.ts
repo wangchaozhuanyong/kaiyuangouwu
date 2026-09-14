@@ -231,8 +231,33 @@ export const adminApiExtensions = gql`
         emailPasswordEnabled: Boolean!
         emailAutoRegistrationEnabled: Boolean!
         emailQuickRegistrationEnabled: Boolean!
+        googleOverrideEnabled: Boolean!
+        storeGoogleEnabled: Boolean!
+        storeGoogleClientId: String
+    }
+
+    input UpdateStorefrontGooglePlatformSettingsInput {
         googleEnabled: Boolean!
         googleClientId: String
+    }
+
+    enum StorefrontGoogleConfigurationSource {
+        PLATFORM
+        STORE
+    }
+
+    type StorefrontAuthConfiguration {
+        emailPasswordEnabled: Boolean!
+        emailAutoRegistrationEnabled: Boolean!
+        emailQuickRegistrationEnabled: Boolean!
+        googleOverrideEnabled: Boolean!
+        storeGoogleEnabled: Boolean!
+        storeGoogleClientId: String
+        platformGoogleEnabled: Boolean!
+        platformGoogleClientId: String
+        effectiveGoogleEnabled: Boolean!
+        effectiveGoogleClientId: String
+        googleConfigurationSource: StorefrontGoogleConfigurationSource!
     }
 
     input StorefrontContentBlockVersionInput {
@@ -252,6 +277,7 @@ export const adminApiExtensions = gql`
         storefrontContentBlocks: [StorefrontContentBlock!]!
         storefrontContentBlock(id: ID!): StorefrontContentBlock
         storefrontContentSettings: StorefrontContentSettings!
+        storefrontAuthConfiguration: StorefrontAuthConfiguration!
     }
 
     input UpdateStorefrontVisualPresetInput {
@@ -271,6 +297,9 @@ export const adminApiExtensions = gql`
         updateStorefrontContentSettings(
             input: UpdateStorefrontContentSettingsInput!
         ): StorefrontContentSettings!
-        updateStorefrontAuthSettings(input: UpdateStorefrontAuthSettingsInput!): StorefrontAuthSettings!
+        updateStorefrontAuthSettings(input: UpdateStorefrontAuthSettingsInput!): StorefrontAuthConfiguration!
+        updateStorefrontGooglePlatformSettings(
+            input: UpdateStorefrontGooglePlatformSettingsInput!
+        ): StorefrontAuthConfiguration!
     }
 `;

@@ -2,7 +2,11 @@ import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, ForbiddenError, ID, Permission, RequestContext, Transaction } from '@vendure/core';
 
 import { storefrontContentPermission } from './constants';
-import { StorefrontAuthSettingsService, UpdateStorefrontAuthSettingsInput } from './storefront-auth-settings';
+import {
+    StorefrontAuthSettingsService,
+    UpdateStorefrontAuthSettingsInput,
+    UpdateStorefrontGooglePlatformSettingsInput,
+} from './storefront-auth-settings';
 import { StorefrontContentService } from './storefront-content.service';
 import {
     ApplyStorefrontContentChangesInput,
@@ -62,6 +66,12 @@ export class StorefrontContentAdminResolver {
             this.storefrontAuthSettingsService.get(ctx),
         ]);
         return { ...settings, auth };
+    }
+
+    @Query()
+    @Allow(storefrontContentPermission.Read)
+    storefrontAuthConfiguration(@Ctx() ctx: RequestContext) {
+        return this.storefrontAuthSettingsService.getConfiguration(ctx);
     }
 
     @Transaction()
@@ -131,5 +141,15 @@ export class StorefrontContentAdminResolver {
         @Args('input') input: UpdateStorefrontAuthSettingsInput,
     ) {
         return this.storefrontAuthSettingsService.update(ctx, input);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    updateStorefrontGooglePlatformSettings(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: UpdateStorefrontGooglePlatformSettingsInput,
+    ) {
+        return this.storefrontAuthSettingsService.updatePlatformGoogle(ctx, input);
     }
 }

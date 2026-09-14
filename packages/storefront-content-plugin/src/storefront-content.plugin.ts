@@ -1,5 +1,5 @@
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
-import { PluginCommonModule, SettingsStoreScopes, VendurePlugin } from '@vendure/core';
+import { Permission, PluginCommonModule, SettingsStoreScopes, VendurePlugin } from '@vendure/core';
 
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 import { storefrontContentPermission } from './constants';
@@ -47,6 +47,7 @@ import { StorefrontVisualPresetService } from './storefront-visual-preset.servic
                 'emailPasswordEnabled',
                 'emailAutoRegistrationEnabled',
                 'emailQuickRegistrationEnabled',
+                'googleOverrideEnabled',
                 'googleEnabled',
             ].map(name => ({
                 name,
@@ -64,6 +65,30 @@ import { StorefrontVisualPresetService } from './storefront-visual-preset.servic
                 requiresPermission: {
                     read: storefrontContentPermission.Read,
                     write: storefrontContentPermission.Update,
+                },
+                validate: (value: unknown) => {
+                    const clientId = normalizeGoogleClientId(value);
+                    return !clientId || isGoogleWebClientId(clientId)
+                        ? undefined
+                        : 'Value must be a Google OAuth web client ID';
+                },
+            },
+            {
+                name: 'platformGoogleEnabled',
+                scope: SettingsStoreScopes.global,
+                requiresPermission: {
+                    read: storefrontContentPermission.Read,
+                    write: Permission.SuperAdmin,
+                },
+                validate: (value: unknown) =>
+                    typeof value === 'boolean' ? undefined : 'Value must be a boolean',
+            },
+            {
+                name: 'platformGoogleClientId',
+                scope: SettingsStoreScopes.global,
+                requiresPermission: {
+                    read: storefrontContentPermission.Read,
+                    write: Permission.SuperAdmin,
                 },
                 validate: (value: unknown) => {
                     const clientId = normalizeGoogleClientId(value);

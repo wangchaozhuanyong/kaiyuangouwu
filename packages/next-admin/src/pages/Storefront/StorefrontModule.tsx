@@ -29,8 +29,9 @@ import {
     STOREFRONT_CONTENT_QUERY,
     UPDATE_STOREFRONT_AUTH_SETTINGS_MUTATION,
     UPDATE_STOREFRONT_BLOCK_MUTATION,
+    UPDATE_STOREFRONT_GOOGLE_PLATFORM_SETTINGS_MUTATION,
     UPDATE_STOREFRONT_SETTINGS_MUTATION,
-    type StorefrontAuthSettingsRecord,
+    type StorefrontAuthConfigurationRecord,
     type StorefrontContentBlock,
     type StorefrontContentResult,
     type StorefrontLanguageCode,
@@ -40,7 +41,11 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { AccountHeroImagePanel } from './AccountHeroImagePanel';
-import { StorefrontAuthSettingsPanel } from './StorefrontAuthSettingsPanel';
+import {
+    StorefrontAuthSettingsPanel,
+    type StorefrontGooglePlatformSettingsInput,
+    type StorefrontStoreAuthSettingsInput,
+} from './StorefrontAuthSettingsPanel';
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
 import { StorefrontFloorList } from './StorefrontFloorList';
 import { StorefrontVisualPresetPanel } from './StorefrontVisualPresetPanel';
@@ -70,6 +75,7 @@ export function StorefrontModule() {
     const canCreate = hasAnyPermission(['CreateStorefrontContent']);
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
     const canDelete = hasAnyPermission(['DeleteStorefrontContent']);
+    const canEditPlatformGoogle = hasAnyPermission(['SuperAdmin']);
     const [previewLanguage, setPreviewLanguage] = useState<StorefrontLanguageCode>('zh_Hans');
     const [viewport, setViewport] = useState<Viewport>('MOBILE');
     const [carouselOpen, setCarouselOpen] = useState(false);
@@ -94,8 +100,11 @@ export function StorefrontModule() {
     }>(DELETE_STOREFRONT_BLOCK_MUTATION, mutationOptions);
     const [updateSettings, settingsState] = useMutation(UPDATE_STOREFRONT_SETTINGS_MUTATION, mutationOptions);
     const [updateAuthSettings, authSettingsState] = useMutation<{
-        updateStorefrontAuthSettings: StorefrontAuthSettingsRecord;
+        updateStorefrontAuthSettings: StorefrontAuthConfigurationRecord;
     }>(UPDATE_STOREFRONT_AUTH_SETTINGS_MUTATION, mutationOptions);
+    const [updateGooglePlatformSettings, googlePlatformSettingsState] = useMutation<{
+        updateStorefrontGooglePlatformSettings: StorefrontAuthConfigurationRecord;
+    }>(UPDATE_STOREFRONT_GOOGLE_PLATFORM_SETTINGS_MUTATION, mutationOptions);
     const allBlocks = query.data?.storefrontContentBlocks ?? [];
     const accountHeroBlock = allBlocks.find(block => block.type === 'ACCOUNT_HERO') ?? null;
     const homepageRows = storefrontHomepageRows(allBlocks);
@@ -115,6 +124,7 @@ export function StorefrontModule() {
         deleteState.loading ||
         settingsState.loading ||
         authSettingsState.loading ||
+        googlePlatformSettingsState.loading ||
         query.loading ||
         Boolean(query.error);
 
@@ -142,10 +152,18 @@ export function StorefrontModule() {
         setNotice('');
     };
 
-    const saveAuthSettings = async (value: StorefrontAuthSettingsRecord) => {
+    const saveAuthSettings = async (value: StorefrontStoreAuthSettingsInput) => {
         const response = await updateAuthSettings({ variables: { input: value } });
         if (!response.data?.updateStorefrontAuthSettings) {
             throw new Error('账号与登录设置保存后未返回结果');
+        }
+        await query.refetch();
+    };
+
+    const saveGooglePlatformSettings = async (value: StorefrontGooglePlatformSettingsInput) => {
+        const response = await updateGooglePlatformSettings({ variables: { input: value } });
+        if (!response.data?.updateStorefrontGooglePlatformSettings) {
+            throw new Error('全平台 Google 配置保存后未返回结果');
         }
         await query.refetch();
     };
@@ -557,13 +575,16 @@ export function StorefrontModule() {
                 channelName={query.data ? getChannelDisplayName(query.data.activeChannel.code) : '当前店铺'}
                 onClose={() => setSettingsOpen(false)}
             >
-                {query.data?.storefrontContentSettings.auth ? (
+                {query.data?.storefrontAuthConfiguration ? (
                     <StorefrontAuthSettingsPanel
                         key={query.data.activeChannel.id}
-                        value={query.data.storefrontContentSettings.auth}
+                        value={query.data.storefrontAuthConfiguration}
                         disabled={Boolean(query.error) || !canUpdate}
-                        saving={authSettingsState.loading}
-                        onSave={saveAuthSettings}
+                        canEditPlatform={canEditPlatformGoogle}
+                        storeSaving={authSettingsState.loading}
+                        platformSaving={googlePlatformSettingsState.loading}
+                        onSaveStore={saveAuthSettings}
+                        onSavePlatform={saveGooglePlatformSettings}
                     />
                 ) : null}
                 <StorefrontVisualPresetPanel />
