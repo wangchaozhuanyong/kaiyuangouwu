@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { manageIcloudRelayPermission } from './constants';
@@ -20,12 +21,12 @@ describe('iCloud relay permissions', () => {
     });
 
     it('uses the read permission for both current admin navigation implementations', () => {
-        const dashboardRoute = readFileSync(new URL('./dashboard/index.tsx', import.meta.url), 'utf8');
+        const dashboardRoute = readFileSync(resolve(__dirname, 'dashboard/index.tsx'), 'utf8');
         const nextAdminExtensions = readFileSync(
-            new URL('../../next-admin/src/extensions/installed-extensions.tsx', import.meta.url),
+            resolve(__dirname, '../../next-admin/src/extensions/installed-extensions.tsx'),
             'utf8',
         );
-        const resolver = readFileSync(new URL('./api/icloud-admin.resolver.ts', import.meta.url), 'utf8');
+        const resolver = readFileSync(resolve(__dirname, 'api/icloud-admin.resolver.ts'), 'utf8');
 
         expect(dashboardRoute).toContain("requiresPermission: ['ReadIcloudRelay']");
         expect(nextAdminExtensions).toMatch(/id: 'icloud-relay'[\s\S]*?permissions: \['ReadIcloudRelay'\]/);
