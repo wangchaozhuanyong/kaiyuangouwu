@@ -1,3 +1,4 @@
+import { Order } from '@vendure/core';
 import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -45,7 +46,10 @@ describe('UsdtPaymentService', () => {
         };
         repository.createQueryBuilder.mockReturnValue(builder);
         const service = new UsdtPaymentService(
-            { getRepository: () => repository } as any,
+            {
+                getRepository: () => repository,
+                getEntityOrThrow: vi.fn().mockResolvedValue({ id: 'order-1', salesChannelId: 'channel-1' }),
+            } as any,
             {} as any,
             {} as any,
             { get: () => wallet, requireConfigured: () => wallet } as any,
@@ -60,7 +64,7 @@ describe('UsdtPaymentService', () => {
             expiresAt: new Date(Date.now() + 600_000),
         });
 
-        const intent = await service.ensureIntent({} as any, quote);
+        const intent = await service.ensureIntent({ channelId: 'channel-1' } as any, quote);
 
         expect(intent.expectedUsdtAmount).toMatch(/^13\.850\d{3}$/u);
         expect(Number(intent.expectedUsdtAmount)).toBeGreaterThan(13.85);
@@ -74,7 +78,7 @@ describe('UsdtPaymentService', () => {
         });
     });
 
-    it.each(['success', 'validation-throws'] as const)(
+    it.each(['success', 'validation-throws', 'foreign-order', 'foreign-quote', 'wrong-payment'] as const)(
         'preserves verified transfer evidence when settlement outcome is %s',
         async outcome => {
             const now = new Date('2026-08-26T02:05:00.000Z');
@@ -107,7 +111,9 @@ describe('UsdtPaymentService', () => {
                 }),
             };
             const paymentRepository = {
-                findOne: vi.fn().mockResolvedValue({ id: 'payment-1', state: 'Settled' }),
+                findOne: vi
+                    .fn()
+                    .mockResolvedValue({ id: 'payment-1', order: { id: 'order-1' }, state: 'Settled' }),
             };
             const quote = new StorefrontUsdtCheckoutQuote({
                 id: 'quote-1',
@@ -120,7 +126,16 @@ describe('UsdtPaymentService', () => {
                 getRepository: vi.fn((_ctx, entity) =>
                     entity === StorefrontUsdtPaymentIntent ? intentRepository : paymentRepository,
                 ),
-                getEntityOrThrow: vi.fn().mockResolvedValue(quote),
+                getEntityOrThrow: vi.fn((_ctx, entity) =>
+                    Promise.resolve(
+                        entity === Order
+                            ? {
+                                  id: 'order-1',
+                                  salesChannelId: outcome === 'foreign-order' ? 'channel-2' : 'channel-1',
+                              }
+                            : quote,
+                    ),
+                ),
                 withTransaction: vi.fn((_ctx, work) => work({ channelId: 'channel-1' })),
             };
             const orderService = {
@@ -158,12 +173,35 @@ describe('UsdtPaymentService', () => {
                 { publish: vi.fn() } as any,
             );
 
+            if (outcome === 'foreign-order')
+                connection.getEntityOrThrow.mockImplementation((_ctx, entity) =>
+                    Promise.resolve(
+                        entity === Order ? ({ id: 'order-1', salesChannelId: 'channel-2' } as any) : quote,
+                    ),
+                );
+            if (outcome === 'foreign-quote') quote.channelId = 'channel-2';
+            if (outcome === 'wrong-payment')
+                paymentRepository.findOne.mockResolvedValue({
+                    id: 'payment-1',
+                    order: { id: 'foreign-order' },
+                    state: 'Settled',
+                });
             const result = await service.scanPendingPayments({} as any, now);
 
             expect(result).toMatchObject({
                 settledCount: outcome === 'success' ? 1 : 0,
                 manualReviewCount: outcome === 'success' ? 0 : 1,
             });
+            if (outcome === 'foreign-order' || outcome === 'foreign-quote') {
+                expect(orderService.addPaymentToOrder).not.toHaveBeenCalled();
+                expect(intent).toMatchObject({
+                    status: 'MANUAL_REVIEW',
+                    transactionId: 'a'.repeat(64),
+                    blockNumber: 85_700_193,
+                });
+                expect(intent.paymentId).toBeUndefined();
+                return;
+            }
             expect(intentRepository.save.mock.invocationCallOrder[0]).toBeLessThan(
                 orderService.addPaymentToOrder.mock.invocationCallOrder[0],
             );

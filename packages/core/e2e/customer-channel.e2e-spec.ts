@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { ErrorCode } from '@vendure/common/lib/generated-shop-types';
 import { CurrencyCode, LanguageCode } from '@vendure/common/lib/generated-types';
 import { createTestEnvironment, E2E_DEFAULT_CHANNEL_TOKEN } from '@vendure/testing';
 import path from 'path';
@@ -155,7 +154,7 @@ describe('ChannelAware Customers', () => {
             const customersDefaultChannel = await adminClient.query(getCustomerListDocument);
 
             expect(customersSecondChannel.customers.totalItems).toBe(1);
-            expect(customersDefaultChannel.customers.totalItems).toBe(numberOfCustomers);
+            expect(customersDefaultChannel.customers.totalItems).toBe(numberOfCustomers + 1);
         });
 
         it('only shows customers from current channel', async () => {
@@ -164,13 +163,13 @@ describe('ChannelAware Customers', () => {
             expect(customers.totalItems).toBe(1);
         });
 
-        it('does not aggregate other-channel customers into the default channel', async () => {
+        it('aggregates identities in the platform administrator view', async () => {
             adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
             const { customers } = await adminClient.query(getCustomerListDocument);
-            expect(customers.totalItems).toBe(numberOfCustomers);
+            expect(customers.totalItems).toBe(numberOfCustomers + 1);
         });
 
-        it('creates an independent customer when another channel uses the same email address', async () => {
+        it('rejects duplicate admin creation without claiming membership or overwriting the global identity', async () => {
             adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
             let customersDefaultChannel = await adminClient.query(getCustomerListDocument);
             adminClient.setChannelToken(SECOND_CHANNEL_TOKEN);
@@ -200,11 +199,7 @@ describe('ChannelAware Customers', () => {
                 customer => customer.emailAddress === firstCustomer.emailAddress,
             );
 
-            expect(firstCustomerOnNewChannel).not.toBeNull();
-            expect(firstCustomerOnNewChannel?.emailAddress).toBe(firstCustomer.emailAddress);
-            expect(firstCustomerOnNewChannel?.firstName).toBe(firstCustomer.firstName + '_new');
-            expect(firstCustomerOnNewChannel?.lastName).toBe(firstCustomer.lastName + '_new');
-            expect(firstCustomerOnNewChannel?.id).not.toBe(firstCustomerOnDefaultChannel?.id);
+            expect(firstCustomerOnNewChannel).toBeUndefined();
 
             expect(firstCustomerOnDefaultChannel).not.toBeNull();
             expect(firstCustomerOnDefaultChannel?.emailAddress).toBe(firstCustomer.emailAddress);
@@ -214,21 +209,20 @@ describe('ChannelAware Customers', () => {
     });
 
     describe('Shop API', () => {
-        it('rejects direct login for a customer owned by another channel', async () => {
+        it('allows cross-store login and records membership only after authentication', async () => {
             shopClient.setChannelToken(SECOND_CHANNEL_TOKEN);
             await shopClient.asAnonymousUser();
             const { login } = await shopClient.query(attemptLoginDocument, {
                 username: secondCustomer.emailAddress,
                 password: 'test',
             });
-            expect('errorCode' in login ? login.errorCode : undefined).toBe(
-                ErrorCode.INVALID_CREDENTIALS_ERROR,
-            );
+            expect('errorCode' in login).toBe(false);
+            await shopClient.query(MeDocument);
 
             adminClient.setChannelToken(SECOND_CHANNEL_TOKEN);
             const { customers } = await adminClient.query(getCustomerListDocument);
             expect(customers.totalItems).toBe(2);
-            expect(customers.items.map(customer => customer.emailAddress)).not.toContain(
+            expect(customers.items.map(customer => customer.emailAddress)).toContain(
                 secondCustomer.emailAddress,
             );
         });
@@ -249,7 +243,7 @@ describe('ChannelAware Customers', () => {
         });
 
         // https://github.com/vendurehq/vendure/issues/834
-        it('rejects concurrent cross-channel session switches without creating membership', async () => {
+        it('handles concurrent verified store entry with one membership', async () => {
             const THIRD_CHANNEL_TOKEN = 'third_channel_token';
             await adminClient.query(createChannelDocument, {
                 input: {
@@ -271,12 +265,12 @@ describe('ChannelAware Customers', () => {
                 shopClient.query(MeDocument),
                 shopClient.query(MeDocument),
             ]);
-            expect(attempts.every(attempt => attempt.status === 'rejected')).toBe(true);
+            expect(attempts.every(attempt => attempt.status === 'fulfilled')).toBe(true);
 
             adminClient.setChannelToken(THIRD_CHANNEL_TOKEN);
             const { customers } = await adminClient.query(getCustomerListDocument);
-            expect(customers.totalItems).toBe(0);
-            expect(customers.items.map(customer => customer.emailAddress)).not.toContain(
+            expect(customers.totalItems).toBe(1);
+            expect(customers.items.map(customer => customer.emailAddress)).toContain(
                 secondCustomer.emailAddress,
             );
         });
@@ -285,10 +279,12 @@ describe('ChannelAware Customers', () => {
     describe('Customergroup manipulation', () => {
         it('does not add a customer from another channel to customerGroup', async () => {
             adminClient.setChannelToken(SECOND_CHANNEL_TOKEN);
-            await adminClient.query(addCustomersToGroupDocument, {
-                groupId: customerGroupId,
-                customerIds: [thirdCustomer.id],
-            });
+            await expect(
+                adminClient.query(addCustomersToGroupDocument, {
+                    groupId: customerGroupId,
+                    customerIds: [thirdCustomer.id],
+                }),
+            ).rejects.toThrow();
 
             adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
             const { customerGroup } = await adminClient.query(getCustomerGroupDocument, {
@@ -308,18 +304,17 @@ describe('ChannelAware Customers', () => {
             const { customerGroup } = await adminClient.query(getCustomerGroupDocument, {
                 id: customerGroupId,
             });
-            expect(customerGroup!.customers.totalItems).toBe(0);
-            expect(customerGroup!.customers.items.map(customer => customer.id)).not.toContain(
-                secondCustomer.id,
-            );
+            expect(customerGroup).toBeNull();
         });
 
         it('throws when deleting customer from other channel from customerGroup', async () => {
             adminClient.setChannelToken(SECOND_CHANNEL_TOKEN);
-            await adminClient.query(removeCustomersFromGroupDocument, {
-                groupId: customerGroupId,
-                customerIds: [thirdCustomer.id],
-            });
+            await expect(
+                adminClient.query(removeCustomersFromGroupDocument, {
+                    groupId: customerGroupId,
+                    customerIds: [thirdCustomer.id],
+                }),
+            ).rejects.toThrow();
         });
     });
 });

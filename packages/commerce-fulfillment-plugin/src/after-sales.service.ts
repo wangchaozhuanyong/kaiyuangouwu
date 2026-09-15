@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import { ContentTranslationService, isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import {
+    assertOrderSalesChannel,
     Customer,
     CustomerService,
     EntityNotFoundError,
@@ -12,7 +13,7 @@ import {
     UserInputError,
 } from '@vendure/core';
 import { randomBytes } from 'node:crypto';
-import { FindOptionsWhere, In, Like, LockNotSupportedOnGivenDriverError } from 'typeorm';
+import { FindOptionsWhere, In, Like } from 'typeorm';
 
 import {
     activeAfterSalesStates,
@@ -32,7 +33,13 @@ import {
     TransitionAfterSalesRequestInput,
 } from './types';
 
-const ELIGIBLE_ORDER_STATES = ['PaymentSettled', 'PartiallyShipped', 'Shipped', 'Delivered'];
+const ELIGIBLE_ORDER_STATES = [
+    'PaymentSettled',
+    'PartiallyShipped',
+    'Shipped',
+    'PartiallyDelivered',
+    'Delivered',
+];
 const DESCRIPTION_MAX_LENGTH = 2_000;
 const RESOLUTION_MAX_LENGTH = 2_000;
 const MAX_ITEMS_PER_REQUEST = 20;
@@ -53,7 +60,11 @@ export class AfterSalesService {
     async findForCustomer(ctx: RequestContext): Promise<AfterSalesRequest[]> {
         const customer = await this.activeCustomerOrThrow(ctx);
         const requests = await this.connection.getRepository(ctx, AfterSalesRequest).find({
-            where: { channelId: ctx.channelId, customerId: customer.id },
+            where: {
+                channelId: ctx.channelId,
+                customerId: customer.id,
+                order: { salesChannelId: ctx.channelId },
+            },
             relations: { items: true, events: true, order: true, refund: true },
             order: { createdAt: 'DESC', id: 'DESC', events: { createdAt: 'ASC' } },
         });
@@ -63,7 +74,12 @@ export class AfterSalesService {
     async findOneForCustomer(ctx: RequestContext, id: ID): Promise<AfterSalesRequest | undefined> {
         const customer = await this.activeCustomerOrThrow(ctx);
         const request = await this.connection.getRepository(ctx, AfterSalesRequest).findOne({
-            where: { id, channelId: ctx.channelId, customerId: customer.id },
+            where: {
+                id,
+                channelId: ctx.channelId,
+                customerId: customer.id,
+                order: { salesChannelId: ctx.channelId },
+            },
             relations: { items: true, events: true, order: true, refund: true },
             order: { events: { createdAt: 'ASC' } },
         });
@@ -89,6 +105,7 @@ export class AfterSalesService {
               : [];
         const baseWhere: FindOptionsWhere<AfterSalesRequest> = {
             channelId: ctx.channelId,
+            order: { salesChannelId: ctx.channelId },
             ...(selectedStates.length ? { state: In(selectedStates) } : {}),
         };
         const search = options.search?.trim().slice(0, 200);
@@ -97,7 +114,7 @@ export class AfterSalesService {
                   { ...baseWhere, code: Like(`%${search}%`) },
                   { ...baseWhere, customerName: Like(`%${search}%`) },
                   { ...baseWhere, customerEmail: Like(`%${search}%`) },
-                  { ...baseWhere, order: { code: Like(`%${search}%`) } },
+                  { ...baseWhere, order: { salesChannelId: ctx.channelId, code: Like(`%${search}%`) } },
               ]
             : baseWhere;
         const [items, totalItems] = await this.connection.getRepository(ctx, AfterSalesRequest).findAndCount({
@@ -115,9 +132,15 @@ export class AfterSalesService {
         this.validateCreateInput(input);
         await this.lockOrderForAfterSales(ctx, input.orderId);
         const order = await this.connection.getEntityOrThrow(ctx, Order, input.orderId, {
-            channelId: ctx.channelId,
-            relations: ['customer', 'customer.user', 'lines', 'lines.productVariant'],
+            relations: [
+                'customer',
+                'customer.user',
+                'lines',
+                'lines.productVariant',
+                'lines.productVariant.product',
+            ],
         });
+        assertOrderSalesChannel(ctx, order);
         if (String(order.customer?.id) !== String(customer.id)) {
             throw new UserInputError('订单不存在或当前账号无权申请售后');
         }
@@ -308,7 +331,7 @@ export class AfterSalesService {
                 where: {
                     id: input.refundId,
                     state: 'Settled',
-                    payment: { order: { id: request.orderId } },
+                    payment: { order: { id: request.orderId, salesChannelId: ctx.channelId } },
                 },
                 relations: { payment: { order: true } },
             });
@@ -403,18 +426,18 @@ export class AfterSalesService {
     }
 
     private async lockOrderForAfterSales(ctx: RequestContext, orderId: ID): Promise<void> {
-        try {
-            await this.connection
-                .getRepository(ctx, Order)
-                .createQueryBuilder('order')
-                .setLock('pessimistic_write')
-                .where('order.id = :orderId', { orderId })
-                .getOne();
-        } catch (error) {
-            if (!(error instanceof LockNotSupportedOnGivenDriverError)) {
-                throw error;
-            }
+        const repository = this.connection.getRepository(ctx, Order);
+        if (['sqlite', 'better-sqlite3', 'sqljs'].includes(this.connection.rawConnection.options.type)) {
+            // SQLite has no SELECT FOR UPDATE. Acquire its transaction write lock
+            // before checking existing requests, without changing business fields.
+            await repository.update({ id: orderId }, { id: orderId });
+            return;
         }
+        await repository
+            .createQueryBuilder('order')
+            .setLock('pessimistic_write')
+            .where('order.id = :orderId', { orderId })
+            .getOne();
     }
 
     private async getOwnedRequestOrThrow(
@@ -430,6 +453,7 @@ export class AfterSalesService {
         if (!request) {
             throw new EntityNotFoundError(AfterSalesRequest.name, id);
         }
+        assertOrderSalesChannel(ctx, request.order);
         return this.normalizeRelations(request, ctx);
     }
 
@@ -442,6 +466,7 @@ export class AfterSalesService {
         if (!request) {
             throw new EntityNotFoundError(AfterSalesRequest.name, id);
         }
+        assertOrderSalesChannel(ctx, request.order);
         return this.normalizeRelations(request, ctx);
     }
 

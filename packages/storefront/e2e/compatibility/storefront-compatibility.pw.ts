@@ -133,6 +133,25 @@ test('核心公开页面在目标浏览器中正常渲染', async ({ page }) => 
     expect(badResources).toEqual([]);
 });
 
+test('登录与注册互切不会累积浏览器历史', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await enterStorefront(page);
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/login(?:\?|$)/u);
+
+    const authHistoryLength = await page.evaluate(() => window.history.length);
+    for (let index = 0; index < 5; index += 1) {
+        await page.locator('.auth-route-tabs').getByRole('button', { name: '注册', exact: true }).click();
+        await expect(page).toHaveURL(/\/register(?:\?|$)/u);
+        await page.locator('.auth-route-tabs').getByRole('button', { name: '登录', exact: true }).click();
+        await expect(page).toHaveURL(/\/login(?:\?|$)/u);
+    }
+
+    expect(await page.evaluate(() => window.history.length)).toBe(authHistoryLength);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/$/u);
+});
+
 test('商品详情头部在页面滚动时保持可见', async ({ page }) => {
     await enterStorefront(page);
 

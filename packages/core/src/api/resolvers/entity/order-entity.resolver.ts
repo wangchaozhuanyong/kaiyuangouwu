@@ -109,6 +109,11 @@ export class OrderAdminEntityResolver {
     constructor(private orderService: OrderService) {}
 
     @ResolveField()
+    async salesChannel(@Ctx() ctx: RequestContext, @Parent() order: Order) {
+        return this.orderService.getOrderSalesChannel(ctx, order);
+    }
+
+    @ResolveField()
     async channels(@Ctx() ctx: RequestContext, @Parent() order: Order) {
         const channels = order.channels ?? (await this.orderService.getOrderChannels(ctx, order));
         return channels.filter(channel =>
@@ -125,7 +130,7 @@ export class OrderAdminEntityResolver {
     }
 
     @ResolveField()
-    async nextStates(@Parent() order: Order) {
+    nextStates(@Parent() order: Order) {
         return this.orderService.getNextOrderStates(order);
     }
 

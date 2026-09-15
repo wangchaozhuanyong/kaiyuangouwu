@@ -129,3 +129,21 @@ describe('authenticated order event stream', () => {
         expect(h.getSessionFromToken).not.toHaveBeenCalled();
     });
 });
+
+it('revokes a platform aggregate stream when SuperAdmin is removed even if ReadOrder remains', async () => {
+    const h = harness();
+    const ctx = { ...h.ctx, apiType: 'admin', channel: { code: '__default_channel__' } };
+    h.session.user.channelPermissions[0].permissions = ['SuperAdmin'];
+    h.controller.stream(ctx as never, h.req as never, h.res as never);
+    expect(h.subscribe.mock.calls[0][4]).toBe(true);
+    h.subscribe.mock.calls[0][2](payload);
+    await flush();
+    expect(h.res.write.mock.calls.some(([frame]) => frame.includes('order-placed'))).toBe(true);
+    h.res.write.mockClear();
+    h.session.user.channelPermissions[0].permissions = ['ReadOrder'];
+    h.subscribe.mock.calls[0][2]({ ...payload, id: 'server:2' });
+    await flush();
+    expect(h.res.write).not.toHaveBeenCalled();
+    expect(h.res.end).toHaveBeenCalled();
+    h.res.emit('close');
+});

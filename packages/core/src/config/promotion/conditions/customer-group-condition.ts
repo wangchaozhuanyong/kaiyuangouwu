@@ -47,10 +47,10 @@ export const customerGroup = new PromotionCondition({
         subscription = injector
             .get(EventBus)
             .ofType(CustomerGroupChangeEvent)
-            .subscribe(async event => {
+            .subscribe(event => {
                 // When a customer is added to or removed from a group, we need
                 // to invalidate the cache for that customer id
-                await groupIdCache.delete(event.customers.map(c => c.id));
+                void groupIdCache.delete(event.customers.map(c => `${event.ctx.channelId}:${c.id}`));
             });
     },
     destroy() {
@@ -61,7 +61,7 @@ export const customerGroup = new PromotionCondition({
             return false;
         }
         const customerId = order.customer.id;
-        const groupIds = await groupIdCache.get(customerId, async () => {
+        const groupIds = await groupIdCache.get(`${ctx.channelId}:${customerId}`, async () => {
             const groups = await customerService.getCustomerGroups(ctx, customerId);
             return groups.map(g => g.id);
         });

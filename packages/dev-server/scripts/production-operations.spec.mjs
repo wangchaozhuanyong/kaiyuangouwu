@@ -74,6 +74,8 @@ void test('release workflow ships the fixed live preflight inputs and migration 
     assert.match(workflow, /gzip\.compress\(Path\(path\)\.read_bytes\(\), mtime=0\)/u);
     assert.match(workflow, /\| base64 -d \| gzip -d >/u);
     assert.match(workflow, /len\(payload\.encode\('utf-8'\)\) <= 80_000/u);
+    assert.match(workflow, /git merge-base --is-ancestor "\$OPS_EXPECTED_RUNTIME_SHA" "\$OPS_SOURCE_SHA"/u);
+    assert.doesNotMatch(workflow, /git diff --name-only "\$OPS_EXPECTED_RUNTIME_SHA"/u);
 
     const transportedFiles = [
         'deploy/production-operations.cjs',
@@ -83,6 +85,10 @@ void test('release workflow ships the fixed live preflight inputs and migration 
         'deploy/storefront-configuration-guard.mjs',
         'deploy/usdt-migration-guard.cjs',
         'packages/dev-server/migrations/index.ts',
+        'packages/dev-server/scripts/store-autonomy-data-audit.mjs',
+        'packages/dev-server/scripts/store-isolation-data-preflight.mjs',
+        'packages/dev-server/scripts/store-isolation-ownership-evidence.mjs',
+        'packages/dev-server/scripts/store-isolation-customer-dependencies.mjs',
     ];
     const encodedBytes = transportedFiles.reduce(
         (total, file) =>
@@ -91,7 +97,7 @@ void test('release workflow ships the fixed live preflight inputs and migration 
                 .length,
         0,
     );
-    assert.ok(encodedBytes < 70_000, `Compressed production operation sources use ${encodedBytes} bytes`);
+    assert.ok(encodedBytes < 78_000, `Compressed production operation sources use ${encodedBytes} bytes`);
 });
 
 void test('read-only storefront inspection accepts an older running ancestor but rejects unrelated revisions', () => {
@@ -303,6 +309,7 @@ void test('release preflight and postflight accept only a reviewed Channel scope
             sourceSha,
             expectedPlanSha256: '',
             expectedChannelCodes: '__default_channel__,my-malaysia',
+            expectedRuntimeSha: '',
         },
     );
     assert.equal(
@@ -361,6 +368,141 @@ void test('key backup plans and verification are read-only; key writes require a
             OPS_EXPECTED_PLAN_SHA256: 'b'.repeat(64),
         }).expectedPlanSha256,
         'b'.repeat(64),
+    );
+});
+
+void test('store isolation audit requires one exact runtime SHA and rejects it for every other operation', () => {
+    const runtimeSha = 'b'.repeat(40);
+    assert.deepEqual(
+        operations.validateRequest({
+            OPS_OPERATION: 'audit-store-isolation-data',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+        }),
+        {
+            operation: 'audit-store-isolation-data',
+            sourceSha,
+            expectedPlanSha256: '',
+            expectedChannelCodes: '',
+            expectedRuntimeSha: runtimeSha,
+        },
+    );
+    assert.throws(() =>
+        operations.validateRequest({
+            OPS_OPERATION: 'audit-store-isolation-data',
+            OPS_SOURCE_SHA: sourceSha,
+        }),
+    );
+    assert.throws(() =>
+        operations.validateRequest({
+            OPS_OPERATION: 'diagnose',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+        }),
+    );
+});
+
+void test('store isolation audit validates sanitized output and stable runtime evidence', () => {
+    const runtimeSha = 'b'.repeat(40);
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'audit-store-isolation-data',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+    });
+    const plan = { markerSha: runtimeSha, currentRuntime: '/immutable/runtime', keepDirectories: [] };
+    const payload = {
+        format: 2,
+        schema: 'vendure-store-autonomy-audit',
+        mode: 'read-only-consistent-snapshot',
+        verdict: 'NO_GO',
+        coverageComplete: true,
+        checks: [],
+        structure: [],
+    };
+    const result = operations.runStoreIsolationAudit(request, {
+        inspect: () => structuredClone(plan),
+        health: () => ({
+            status: 'ok',
+            output: 'Result=success\nExecMainStatus=0\nActiveState=inactive',
+        }),
+        spawn: (_command, arguments_, options) => {
+            if (arguments_.includes('plan')) {
+                return {
+                    status: 0,
+                    stdout: `USDT_MIGRATION_PLAN ${JSON.stringify({
+                        databaseVersion: '8.4.0',
+                        pending: [],
+                        schema: { activeColumn: true },
+                    })}\nUSDT_RUNTIME_GUARD_OK operation=plan\n`,
+                    stderr: '',
+                };
+            }
+            assert.equal(options.env.STORE_ISOLATION_MODULE_ROOT, plan.currentRuntime);
+            assert.match(options.env.STORE_ISOLATION_AUDIT_KEY, /^[a-f0-9]{64}$/u);
+            assert.equal(options.env.STORE_ISOLATION_REQUIRE_EXPECTED_SCHEMA, '0');
+            return { status: 0, stdout: JSON.stringify(payload), stderr: 'PRIVATE_ERROR_NOT_FORWARDED' };
+        },
+        auditScript: '/fixed/audit.mjs',
+    });
+    assert.equal(result.runtimeSha, runtimeSha);
+    assert.equal(result.migrationState.pendingCount, 0);
+    assert.equal(result.audit.verdict, 'NO_GO');
+    assert.throws(() => operations.validateMigrationAuditOutput('invalid'));
+    assert.throws(() => operations.validateStoreAutonomyAuditPayload('{'));
+    let pendingHealthChecks = 0;
+    assert.throws(
+        () =>
+            operations.runStoreIsolationAudit(request, {
+                inspect: () => structuredClone(plan),
+                health: () => {
+                    pendingHealthChecks++;
+                    return {
+                        status: 'ok',
+                        output: 'Result=success\nExecMainStatus=0\nActiveState=inactive',
+                    };
+                },
+                spawn: (_command, arguments_) => {
+                    assert.ok(arguments_.includes('plan'));
+                    return {
+                        status: 0,
+                        stdout: `USDT_MIGRATION_PLAN ${JSON.stringify({
+                            databaseVersion: '8.4.0',
+                            pending: ['PendingMigration1789300800000'],
+                            schema: { activeColumn: true },
+                        })}\nUSDT_RUNTIME_GUARD_OK operation=plan\n`,
+                        stderr: '',
+                    };
+                },
+            }),
+        /pending migrations/u,
+    );
+    assert.equal(pendingHealthChecks, 2);
+    assert.throws(() =>
+        operations.validateStoreAutonomyAuditPayload(JSON.stringify({ ...payload, customerId: 123 })),
+    );
+    assert.throws(
+        () =>
+            operations.runStoreIsolationAudit(request, {
+                inspect: () => ({ ...plan, markerSha: 'c'.repeat(40) }),
+                health: () => ({
+                    status: 'ok',
+                    output: 'Result=success\nExecMainStatus=0\nActiveState=inactive',
+                }),
+                spawn: () => assert.fail('must not run'),
+            }),
+        /runtime SHA/u,
+    );
+    assert.throws(
+        () =>
+            operations.runStoreIsolationAudit(request, {
+                inspect: () => structuredClone(plan),
+                health: () => ({
+                    status: 'ok',
+                    output: 'Result=failed\nExecMainStatus=1\nActiveState=failed',
+                }),
+                spawn: () => assert.fail('must not run'),
+            }),
+        /not successful/u,
     );
 });
 

@@ -12,6 +12,10 @@ const ORDER_LIST_FIELDS = gql`
         totalQuantity
         totalWithTax
         currencyCode
+        salesChannel {
+            id
+            code
+        }
         customer {
             id
             firstName
@@ -43,6 +47,10 @@ const ORDER_LIST_FIELDS = gql`
                 id
                 name
                 sku
+                product {
+                    id
+                    name
+                }
                 options {
                     id
                     name
@@ -162,6 +170,10 @@ const AFTER_SALES_FIELDS = gql`
 
 export const GET_SALES_ORDERS = gql`
     query GetSalesOrders($options: OrderListOptions) {
+        activeChannel {
+            id
+            code
+        }
         orders(options: $options) {
             items {
                 ...SalesOrderListFields
@@ -175,6 +187,10 @@ export const GET_SALES_ORDERS = gql`
 
 export const GET_SALES_ORDER = gql`
     query GetSalesOrder($id: ID!) {
+        activeChannel {
+            id
+            code
+        }
         order(id: $id) {
             ...SalesOrderListFields
             nextStates

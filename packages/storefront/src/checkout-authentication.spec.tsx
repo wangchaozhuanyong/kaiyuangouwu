@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from './api';
-import { LoginPage } from './auth-pages';
+import { LoginPage, RegisterPage } from './auth-pages';
 import { resumeAuthenticatedCheckout } from './checkout-authentication';
 import { RouteGate } from './route-pages/shared';
 import { RouteName } from './storefront-router';
@@ -198,9 +198,67 @@ describe('guest Buy now and auth-page navigation', () => {
             expect(navigate).toHaveBeenCalledWith({
                 to: '/register',
                 search: { returnTo: 'purchase', id: 'selected-variant' },
+                replace: true,
             });
         } finally {
             act(() => root.unmount());
+        }
+    });
+
+    it('replaces both directions of the login and registration tab switch', () => {
+        const loginContainer = document.createElement('div');
+        const loginRoot = createRoot(loginContainer);
+        navigate.mockClear();
+        try {
+            act(() =>
+                loginRoot.render(
+                    <LoginPage
+                        api={{} as ShopApi}
+                        language="zh"
+                        storefrontName="Test store"
+                        onBack={vi.fn()}
+                        onSuccess={vi.fn()}
+                        onContentTarget={vi.fn()}
+                    />,
+                ),
+            );
+            act(() =>
+                [...loginContainer.querySelectorAll('button')]
+                    .find(button => button.textContent === '注册')
+                    ?.click(),
+            );
+            expect(navigate).toHaveBeenLastCalledWith({ to: '/register', search: {}, replace: true });
+        } finally {
+            act(() => loginRoot.unmount());
+        }
+
+        const registerContainer = document.createElement('div');
+        const registerRoot = createRoot(registerContainer);
+        navigate.mockClear();
+        try {
+            act(() =>
+                registerRoot.render(
+                    <RegisterPage
+                        api={
+                            {
+                                referralProgram: vi.fn().mockResolvedValue({ enabled: false }),
+                            } as unknown as ShopApi
+                        }
+                        language="zh"
+                        storefrontName="Test store"
+                        onBack={vi.fn()}
+                        onContentTarget={vi.fn()}
+                    />,
+                ),
+            );
+            act(() =>
+                [...registerContainer.querySelectorAll('button')]
+                    .find(button => button.textContent === '登录')
+                    ?.click(),
+            );
+            expect(navigate).toHaveBeenLastCalledWith({ to: '/login', search: {}, replace: true });
+        } finally {
+            act(() => registerRoot.unmount());
         }
     });
 });

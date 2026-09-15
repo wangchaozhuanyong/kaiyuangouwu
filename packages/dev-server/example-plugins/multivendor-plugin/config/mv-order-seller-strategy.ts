@@ -63,7 +63,7 @@ export class MultivendorSellerStrategy implements OrderSellerStrategy {
         }
     }
 
-    async splitOrder(ctx: RequestContext, order: Order): Promise<SplitOrderContents[]> {
+    splitOrder(ctx: RequestContext, order: Order): SplitOrderContents[] {
         const partialOrders = new Map<ID, SplitOrderContents>();
         for (const line of order.lines) {
             const sellerChannelId = line.sellerChannelId;
@@ -101,18 +101,18 @@ export class MultivendorSellerStrategy implements OrderSellerStrategy {
         if (!paymentMethod) {
             return;
         }
-        const defaultChannel = await this.channelService.getDefaultChannel();
         for (const sellerOrder of sellerOrders) {
-            const sellerChannel = sellerOrder.channels.find(c => !idsAreEqual(c.id, defaultChannel.id));
+            const sellerChannel = await this.orderService.getOrderSalesChannel(ctx, sellerOrder);
             if (!sellerChannel) {
                 throw new InternalServerError(
                     `Could not determine Seller Channel for Order ${sellerOrder.code}`,
                 );
             }
-            sellerOrder.surcharges = [await this.createPlatformFeeSurcharge(ctx, sellerOrder)];
-            await this.orderService.applyPriceAdjustments(ctx, sellerOrder);
-            await this.entityHydrator.hydrate(ctx, sellerChannel, { relations: ['seller'] });
-            const result = await this.orderService.addPaymentToOrder(ctx, sellerOrder.id, {
+            const sellerCtx = ctx.copy({ channel: sellerChannel, currencyCode: sellerOrder.currencyCode });
+            sellerOrder.surcharges = [await this.createPlatformFeeSurcharge(sellerCtx, sellerOrder)];
+            await this.orderService.applyPriceAdjustments(sellerCtx, sellerOrder);
+            await this.entityHydrator.hydrate(sellerCtx, sellerChannel, { relations: ['seller'] });
+            const result = await this.orderService.addPaymentToOrder(sellerCtx, sellerOrder.id, {
                 method: paymentMethod.code,
                 metadata: {
                     transfer_group: aggregateOrder.code,

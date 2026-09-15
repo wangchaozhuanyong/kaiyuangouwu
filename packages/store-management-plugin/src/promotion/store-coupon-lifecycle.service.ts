@@ -477,7 +477,12 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         if (coupon.status !== 'LOCKED' || coupon.lockedOrderId == null) {
             return this.toCustomerCouponView(ctx, coupon);
         }
-        const order = await this.orderService.findOne(ctx, coupon.lockedOrderId, ['lines', 'shippingLines']);
+        const order = await this.orderService.findOne(
+            ctx,
+            coupon.lockedOrderId,
+            ['lines', 'shippingLines'],
+            'business',
+        );
         await this.releaseLockedCoupon(ctx, coupon, order ?? null, '客户在购物车取消使用优惠券');
         await this.publishCustomerCouponChanged(ctx, customer);
         return this.toCustomerCouponView(ctx, coupon);
@@ -616,7 +621,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
     /** Caller holds cart (when present), then coupon. Keep allocation and ledger atomic. */
     private async isCouponOrderPaymentPending(ctx: RequestContext, orderId: ID): Promise<boolean> {
         if (await this.carts?.isOrderPaymentLocked(ctx, orderId)) return true;
-        const order = await this.orderService.findOne(ctx, orderId, ['payments']);
+        const order = await this.orderService.findOne(ctx, orderId, ['payments'], 'business');
         return (
             !!order &&
             (order.state === 'ArrangingPayment' ||
@@ -638,7 +643,12 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         if (!['AVAILABLE', 'RETURNED', 'LOCKED'].includes(coupon.status)) return;
         const orderId = coupon.lockedOrderId;
         if (coupon.status === 'LOCKED' && orderId != null) {
-            const order = await this.orderService.findOne(ctx, orderId, ['lines', 'shippingLines']);
+            const order = await this.orderService.findOne(
+                ctx,
+                orderId,
+                ['lines', 'shippingLines'],
+                'business',
+            );
             await this.releaseLockedCouponWithinCart(ctx, coupon, order ?? null, note);
         }
         const repository = this.connection.getRepository(ctx, CustomerCoupon);
@@ -768,10 +778,12 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                         return;
                     if (fresh.status === 'LOCKED' && fresh.lockExpiresAt && fresh.lockExpiresAt <= now) {
                         const order = fresh.lockedOrderId
-                            ? await this.orderService.findOne(txCtx, fresh.lockedOrderId, [
-                                  'lines',
-                                  'shippingLines',
-                              ])
+                            ? await this.orderService.findOne(
+                                  txCtx,
+                                  fresh.lockedOrderId,
+                                  ['lines', 'shippingLines'],
+                                  'business',
+                              )
                             : undefined;
                         await this.releaseLockedCoupon(txCtx, fresh, order ?? null, '购物车锁定超时自动释放');
                         released++;
@@ -801,7 +813,12 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
 
     async releaseCouponForRepair(ctx: RequestContext, coupon: CustomerCoupon): Promise<void> {
         const order = coupon.lockedOrderId
-            ? await this.orderService.findOne(ctx, coupon.lockedOrderId, ['lines', 'shippingLines'])
+            ? await this.orderService.findOne(
+                  ctx,
+                  coupon.lockedOrderId,
+                  ['lines', 'shippingLines'],
+                  'business',
+              )
             : undefined;
         await this.releaseLockedCoupon(ctx, coupon, order ?? null, '定时核对：释放失效订单占用');
         if (this.isExpired(coupon, new Date()))
@@ -1527,7 +1544,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         activePromotions: Promotion[],
         baseCouponCodes: string[],
     ) {
-        const trialOrder = await this.orderService.findOne(ctx, orderId);
+        const trialOrder = await this.orderService.findOne(ctx, orderId, undefined, 'business');
         if (!trialOrder) return 0;
         const trialPromotion = promotionWithoutCustomerEntitlement(promotion);
         const trialPromotions = activePromotions.map(active =>

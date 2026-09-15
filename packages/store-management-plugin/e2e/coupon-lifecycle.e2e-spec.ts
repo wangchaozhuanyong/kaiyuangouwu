@@ -922,12 +922,18 @@ describe('coupon lifecycle closed loop', () => {
         shopClient.setRequestHeader('Authorization', null);
         shopClient.setRequestHeader('vendure-token', token);
         try {
-            // Private storefronts require login before exposing another channel's campaigns.
-            await expect(shopClient.query(ACTIVE_COUPONS)).rejects.toThrow('not currently authorized');
+            // Public campaign browsing is allowed by the existing shared storefront interceptor.
+            // Claiming still requires authentication, and only this store's campaigns are visible.
+            const anonymous = await shopClient.query(ACTIVE_COUPONS);
+            expect(anonymous.activeStorefrontCoupons.map((item: any) => item.id)).toEqual([
+                merchantCampaignId,
+            ]);
+            await expect(shopClient.query(CLAIM, { campaignId: merchantCampaignId })).rejects.toThrow();
             await shopClient.asUserWithCredentials(
                 'coupon-audit-channel-isolation@example.com',
                 'CouponAudit123!',
             );
+            shopClient.setChannelToken(token);
             expect(
                 (await shopClient.query(ACTIVE_COUPONS)).activeStorefrontCoupons.some(
                     (item: any) => item.id === merchantCampaignId,

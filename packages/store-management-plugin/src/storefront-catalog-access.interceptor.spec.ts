@@ -49,7 +49,6 @@ describe('public storefront browsing boundary', () => {
     });
     it.each([
         'futureCatalogExport',
-        'activeOrder',
         'order',
         'myStorefrontReviews',
         'myAfterSalesRequests',
@@ -61,7 +60,6 @@ describe('public storefront browsing boundary', () => {
         'icloudReceivedMails',
     ])('keeps private and unreviewed queries protected: %s', field => expect(invoke(field).run).toThrow());
     it.each([
-        'addItemToOrder',
         'setCustomerAvatar',
         'createAfterSalesRequest',
         'createImageGeneration',
@@ -88,6 +86,46 @@ describe('public storefront browsing boundary', () => {
         'preserves account mutation: %s',
         field => expect(invoke(field, 'Mutation').run).not.toThrow(),
     );
+    it('passes anonymous cart operations to their existing resolver ownership checks', () => {
+        for (const field of [
+            'storefrontCart',
+            'activeOrder',
+            'eligibleShippingMethods',
+            'eligiblePaymentMethods',
+            'nextOrderStates',
+        ]) {
+            expect(invoke(field).run).not.toThrow();
+        }
+        for (const field of [
+            'applyStorefrontCartCommand',
+            'recoverStorefrontCartCommand',
+            'addStorefrontCartItem',
+            'setStorefrontCartLineQuantity',
+            'removeStorefrontCartLines',
+            'setStorefrontCartLinesSelected',
+            'setAllStorefrontCartLinesSelected',
+            'beginStorefrontCheckout',
+            'prepareStorefrontCartPayment',
+            'reopenStorefrontCart',
+            'addItemToOrder',
+            'adjustOrderLine',
+            'removeOrderLine',
+            'removeAllOrderLines',
+            'applyCouponCode',
+            'removeCouponCode',
+            'setCustomerForOrder',
+            'setOrderShippingAddress',
+            'setOrderBillingAddress',
+            'unsetOrderShippingAddress',
+            'unsetOrderBillingAddress',
+            'setOrderShippingMethod',
+            'setOrderCustomFields',
+            'transitionOrderToState',
+            'addPaymentToOrder',
+        ]) {
+            expect(invoke(field, 'Mutation').run).not.toThrow();
+        }
+    });
     it('accepts authenticated catalog reads and leaves Admin authorization unchanged', () => {
         expect(invoke('products', 'Query', 'customer-user').run).not.toThrow();
         expect(invoke('products', 'Query', undefined, 'admin').run).not.toThrow();

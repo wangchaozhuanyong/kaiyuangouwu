@@ -1,10 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
+    Asset,
+    AssetService,
     Customer,
     CustomerService,
+    isGraphQlErrorResult,
+    Permission,
     RequestContext,
     TransactionalConnection,
+    User,
     UserInputError,
 } from '@vendure/core';
 import {
@@ -12,6 +17,7 @@ import {
     ReferralWalletSpendService,
     ReferralWalletUsage,
 } from '@vendure/store-management-plugin';
+import { Readable } from 'node:stream';
 import { In, IsNull, MoreThan, MoreThanOrEqual } from 'typeorm';
 
 import {
@@ -67,7 +73,12 @@ import {
     type PromptOutputLanguage,
 } from './prompt/prompt-rules.service';
 import { ImagePrivateStorageService, UploadedImageFile } from './storage/image-private-storage.service';
-import { CreateImageGenerationInput, ImageAiUsageRecordListInput, OptimizeImagePromptInput } from './types';
+import {
+    CreateCatalogImageGenerationInput,
+    CreateImageGenerationInput,
+    ImageAiUsageRecordListInput,
+    OptimizeImagePromptInput,
+} from './types';
 
 @Injectable()
 export class ImageGenerationService {
@@ -83,12 +94,412 @@ export class ImageGenerationService {
         private readonly promptEngine: ImagePromptEngineService,
         private readonly rules: PromptRulesService,
         private readonly storage: ImagePrivateStorageService,
+        private readonly assetService: AssetService,
     ) {
         this.usageQuery = new ImageGenerationUsageQuery(connection);
     }
 
     registerEnqueuer(enqueue: (outputId: ID) => Promise<void>): void {
         this.enqueueOutput = enqueue;
+    }
+
+    async catalogConfig(ctx: RequestContext) {
+        this.assertCatalogImagePermissions(ctx);
+        const config = await this.configService.shopConfig(ctx);
+        const defaultModel = config.models.find(model => model.code === config.defaultModelCode) ?? null;
+        const unavailableReason = !config.enabled
+            ? '当前店铺尚未开启 AI 图片工坊，或中转站暂不可用'
+            : !defaultModel
+              ? '当前默认生图模型不可用，请超级管理员检查配置'
+              : null;
+        return {
+            enabled: !unavailableReason,
+            unavailableReason,
+            defaultModelCode: defaultModel?.code ?? config.defaultModelCode,
+            defaultModelName: defaultModel?.displayNameZh ?? config.defaultModelCode,
+            termsVersion: config.termsVersion,
+            termsZh: config.termsZh,
+            maxReferenceBytes: MAX_REFERENCE_BYTES,
+            acceptedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+            aspectRatio: '1:1',
+            resolution: '1K',
+            quantity: 1,
+        };
+    }
+
+    async uploadCatalogReference(
+        ctx: RequestContext,
+        upload: Promise<UploadedImageFile>,
+        termsAccepted: boolean,
+    ) {
+        this.assertCatalogImagePermissions(ctx);
+        if (!termsAccepted) throw new UserInputError('上传商品照片前需确认拥有图片使用权并同意服务条款');
+        const administratorUserId = this.activeAdministratorId(ctx);
+        const availability = await this.catalogConfig(ctx);
+        if (!availability.enabled)
+            throw new UserInputError(availability.unavailableReason ?? '后台商品图生成暂不可用');
+        const file = await upload;
+        const asset = await this.connection.withTransaction(ctx, async txCtx => {
+            await this.lockAdministrator(txCtx, administratorUserId);
+            const repository = this.connection.getRepository(txCtx, ImagePrivateAsset);
+            const now = Date.now();
+            const [minuteCount, dayCount, activeCount, activeSize] = await Promise.all([
+                repository.count({
+                    where: {
+                        channelId: txCtx.channelId,
+                        administratorUserId,
+                        kind: 'REFERENCE',
+                        createdAt: MoreThanOrEqual(new Date(now - 60_000)),
+                    },
+                }),
+                repository.count({
+                    where: {
+                        channelId: txCtx.channelId,
+                        administratorUserId,
+                        kind: 'REFERENCE',
+                        createdAt: MoreThanOrEqual(startOfBeijingDay(now)),
+                    },
+                }),
+                repository.count({
+                    where: {
+                        channelId: txCtx.channelId,
+                        administratorUserId,
+                        kind: 'REFERENCE',
+                        deletedAt: IsNull(),
+                        expiresAt: MoreThan(new Date()),
+                    },
+                }),
+                repository
+                    .createQueryBuilder('asset')
+                    .select('COALESCE(SUM(asset.byteSize), 0)', 'total')
+                    .where('asset.channelId = :channelId', { channelId: txCtx.channelId })
+                    .andWhere('asset.administratorUserId = :administratorUserId', {
+                        administratorUserId,
+                    })
+                    .andWhere('asset.kind = :kind', { kind: 'REFERENCE' })
+                    .andWhere('asset.deletedAt IS NULL')
+                    .andWhere('asset.expiresAt > :now', { now: new Date() })
+                    .getRawOne<{ total: string | number }>(),
+            ]);
+            if (minuteCount >= MAX_REFERENCE_UPLOADS_PER_MINUTE)
+                throw new UserInputError('商品照片每分钟最多上传 5 张，请稍后再试');
+            if (dayCount >= MAX_REFERENCE_UPLOADS_PER_DAY)
+                throw new UserInputError('今天的商品照片上传额度已用完');
+            if (activeCount >= MAX_ACTIVE_REFERENCE_ASSETS)
+                throw new UserInputError('最多保留 10 张有效商品照片');
+            const remainingBytes = MAX_ACTIVE_REFERENCE_BYTES - Number(activeSize?.total ?? 0);
+            if (remainingBytes <= 0) throw new UserInputError('商品照片总容量已达到 100MB');
+            return this.storage.storeAdminReference(
+                txCtx,
+                administratorUserId,
+                file,
+                Math.min(MAX_REFERENCE_BYTES, remainingBytes),
+            );
+        });
+        return this.catalogAssetView(ctx, asset, administratorUserId);
+    }
+
+    async releaseCatalogReference(ctx: RequestContext, assetId: ID) {
+        this.assertCatalogImagePermissions(ctx);
+        return this.storage.releaseAdminReference(ctx, assetId, this.activeAdministratorId(ctx));
+    }
+
+    async createCatalogGeneration(ctx: RequestContext, input: CreateCatalogImageGenerationInput) {
+        this.assertCatalogImagePermissions(ctx);
+        const administratorUserId = this.activeAdministratorId(ctx);
+        const normalized = this.validateCatalogCreateInput(input);
+        const repository = this.connection.getRepository(ctx, ImageGenerationJob);
+        const existing = await repository.findOne({
+            where: {
+                channelId: ctx.channelId,
+                administratorUserId,
+                origin: 'ADMIN_PRODUCT_IMAGE',
+                idempotencyKey: normalized.idempotencyKey,
+            },
+            relations: { outputs: { asset: true, catalogAsset: true }, referenceAsset: true },
+        });
+        if (existing) {
+            this.assertSameCatalogRequest(existing, normalized);
+            return this.catalogJobView(ctx, existing, administratorUserId);
+        }
+        const created = await this.connection.withTransaction(ctx, async txCtx => {
+            await this.lockAdministrator(txCtx, administratorUserId);
+            const raced = await this.connection.getRepository(txCtx, ImageGenerationJob).findOne({
+                where: {
+                    channelId: txCtx.channelId,
+                    administratorUserId,
+                    origin: 'ADMIN_PRODUCT_IMAGE',
+                    idempotencyKey: normalized.idempotencyKey,
+                },
+                relations: { outputs: { asset: true, catalogAsset: true }, referenceAsset: true },
+            });
+            if (raced) {
+                this.assertSameCatalogRequest(raced, normalized);
+                return raced;
+            }
+            const activeCount = await this.connection.getRepository(txCtx, ImageGenerationJob).count({
+                where: {
+                    channelId: txCtx.channelId,
+                    administratorUserId,
+                    origin: 'ADMIN_PRODUCT_IMAGE',
+                    state: In(['QUEUED', 'RUNNING', 'UNKNOWN']),
+                },
+            });
+            if (activeCount >= MAX_ACTIVE_GENERATION_JOBS)
+                throw new UserInputError(`同时进行的后台生图任务不能超过 ${MAX_ACTIVE_GENERATION_JOBS} 个`);
+            const config = await this.connection.getRepository(txCtx, ImageGenerationConfig).findOne({
+                where: { channelId: txCtx.channelId },
+            });
+            if (!config?.enabled) throw new UserInputError('当前店铺尚未开启 AI 图片工坊');
+            const model = await this.connection.getRepository(txCtx, ImageModelConfig).findOne({
+                where: { channelId: txCtx.channelId, code: config.defaultModelCode, enabled: true },
+            });
+            if (!model || !modelReady(model)) throw new UserInputError('当前默认生图模型不可用');
+            if (!supportsNativeResolution(model, '1K', '1:1'))
+                throw new UserInputError('当前默认模型不支持 1:1 / 1K 商品主图');
+            const providerScope = providerScopeForModel(model.protocol, model.providerModelId);
+            const credentialRoute = await this.configService.routeCredential(
+                txCtx,
+                providerScope,
+                model.id,
+                'IMAGE',
+            );
+            const credential = credentialRoute.credential;
+            const reference = await this.connection.getRepository(txCtx, ImagePrivateAsset).findOne({
+                where: {
+                    id: normalized.referenceAssetId,
+                    channelId: txCtx.channelId,
+                    administratorUserId,
+                    kind: 'REFERENCE',
+                    deletedAt: IsNull(),
+                    expiresAt: MoreThan(new Date()),
+                },
+            });
+            if (!reference) throw new UserInputError('商品照片不存在或已过期');
+            await this.storage.retainReferenceWhileActive(txCtx, reference.id);
+            const dailyCount = await this.connection.getRepository(txCtx, ImageGenerationJob).count({
+                where: {
+                    channelId: txCtx.channelId,
+                    administratorUserId,
+                    origin: 'ADMIN_PRODUCT_IMAGE',
+                    modelConfigId: model.id,
+                    createdAt: MoreThanOrEqual(startOfBeijingDay(Date.now())),
+                },
+            });
+            if (dailyCount >= model.dailyGenerationSafetyLimit)
+                throw new UserInputError('今天的后台商品图安全额度已用完');
+            const prompt = `商品名称：${normalized.productName}\n主图效果描述：${normalized.description}`;
+            const promptInput = {
+                prompt,
+                optimizedPrompt: '',
+                referenceAssetId: reference.id,
+                referenceAssetIds: [reference.id],
+                referenceInstruction:
+                    '必须忠实保留商品主体、外形、Logo、包装文字和原有颜色；不得改变品牌信息，不得添加新文字。',
+                referenceMode: 'PRODUCT' as const,
+                promptLanguage: 'zh' as const,
+            };
+            const promptSpec = this.rules.fallbackSpec(prompt, 'PRODUCT', 'zh');
+            const finalPrompt = this.compileFinalPrompt(promptInput, promptSpec);
+            this.promptEngine.assertSafe(finalPrompt);
+            const job = await this.connection.getRepository(txCtx, ImageGenerationJob).save(
+                new ImageGenerationJob({
+                    channelId: txCtx.channelId,
+                    customerId: null,
+                    administratorUserId,
+                    origin: 'ADMIN_PRODUCT_IMAGE',
+                    modelConfigId: model.id,
+                    referenceAssetId: reference.id,
+                    idempotencyKey: normalized.idempotencyKey,
+                    modelCodeSnapshot: model.code,
+                    modelNameSnapshot: model.displayNameZh,
+                    officialModelIdSnapshot: model.officialModelId,
+                    providerModelIdSnapshot: model.providerModelId,
+                    protocolSnapshot: model.protocol,
+                    providerScopeSnapshot: providerScope,
+                    providerCredentialFingerprint: this.configService.credentialFingerprint(credential),
+                    providerCredentialCodeSnapshot: credential.code,
+                    providerCredentialNameSnapshot: credential.name,
+                    providerCredentialLast4Snapshot: credential.apiKeyLast4,
+                    providerSelectionReason: credentialRoute.selectionReason,
+                    providerIdempotencySupportedSnapshot: model.supportsIdempotency,
+                    originalPrompt: prompt,
+                    finalPrompt,
+                    promptSpec: {
+                        ...promptSpec,
+                        catalogProductName: normalized.productName,
+                        catalogDescription: normalized.description,
+                        referenceAssetIds: [String(reference.id)],
+                        referenceInstruction: promptInput.referenceInstruction,
+                        inputSnapshot: { version: 1, optimizedPrompt: null },
+                    } as Record<string, any>,
+                    promptSkillHash: this.rules.sourceHash,
+                    referenceMode: 'PRODUCT',
+                    aspectRatio: '1:1',
+                    resolution: '1K',
+                    quantity: 1,
+                    unitPriceSnapshot: 0,
+                    pricingSnapshot: null,
+                    reservedAmount: 0,
+                    expectedChargeAmount: 0,
+                    freeQuantityReserved: 0,
+                    freeQuantityCaptured: 0,
+                    paidQuantityReserved: 0,
+                    quotaEventId: null,
+                    capturedAmount: 0,
+                    releasedAmount: 0,
+                    currencyCode: model.currencyCode,
+                    walletUsageId: null,
+                    state: 'QUEUED',
+                    termsVersion: config.termsVersion,
+                    termsAcceptedAt: new Date(),
+                    errorMessage: null,
+                    completedAt: null,
+                    customerDeletedAt: null,
+                }),
+            );
+            const output = await this.connection.getRepository(txCtx, ImageGenerationOutput).save(
+                new ImageGenerationOutput({
+                    jobId: job.id,
+                    outputIndex: 0,
+                    state: 'QUEUED',
+                    attemptCount: 0,
+                    providerIdempotencyKey: `catalog-image-${String(job.id)}-0`,
+                    providerRequestId: null,
+                    assetId: null,
+                    catalogAssetId: null,
+                    usedAt: null,
+                    errorMessage: null,
+                    failureCode: null,
+                    unknownAt: null,
+                    completedAt: null,
+                    walletSettled: false,
+                    billingMode: 'PENDING',
+                    chargeAmount: 0,
+                    refundedAt: null,
+                }),
+            );
+            await this.connection.getRepository(txCtx, ImageGenerationDispatch).save(
+                new ImageGenerationDispatch({
+                    outputId: output.id,
+                    state: 'PENDING',
+                    attemptCount: 0,
+                    nextAttemptAt: imageDispatchReadyAt(),
+                    dispatchedAt: null,
+                    lastError: null,
+                }),
+            );
+            job.outputs = [output];
+            job.referenceAsset = reference;
+            return job;
+        });
+        if (this.enqueueOutput) await this.enqueueOutput(created.outputs[0].id).catch(() => undefined);
+        return this.catalogGeneration(ctx, created.id);
+    }
+
+    async catalogGeneration(ctx: RequestContext, id: ID) {
+        this.assertCatalogImagePermissions(ctx);
+        const administratorUserId = this.activeAdministratorId(ctx);
+        const repository = this.connection.getRepository(ctx, ImageGenerationJob);
+        let job = await repository.findOne({
+            where: { id, channelId: ctx.channelId, administratorUserId, origin: 'ADMIN_PRODUCT_IMAGE' },
+            relations: { outputs: { asset: true, catalogAsset: true }, referenceAsset: true },
+            order: { outputs: { outputIndex: 'ASC' } },
+        });
+        if (!job) throw new UserInputError('找不到后台商品图任务');
+        const cutoff = this.staleOutputCutoff();
+        if (hasStaleImageOutput(job.outputs, cutoff)) {
+            await this.reconcileStaleOutputs(ctx, cutoff);
+            job = await repository.findOne({
+                where: { id, channelId: ctx.channelId, administratorUserId, origin: 'ADMIN_PRODUCT_IMAGE' },
+                relations: { outputs: { asset: true, catalogAsset: true }, referenceAsset: true },
+                order: { outputs: { outputIndex: 'ASC' } },
+            });
+            if (!job) throw new UserInputError('找不到后台商品图任务');
+        }
+        return this.catalogJobView(ctx, job, administratorUserId);
+    }
+
+    async catalogGenerations(ctx: RequestContext, skip = 0, take = 10) {
+        this.assertCatalogImagePermissions(ctx);
+        const administratorUserId = this.activeAdministratorId(ctx);
+        const options = {
+            where: {
+                channelId: ctx.channelId,
+                administratorUserId,
+                origin: 'ADMIN_PRODUCT_IMAGE' as const,
+            },
+            relations: { outputs: { asset: true, catalogAsset: true }, referenceAsset: true },
+            order: { createdAt: 'DESC', id: 'DESC', outputs: { outputIndex: 'ASC' } },
+            skip: Math.max(0, Math.floor(skip || 0)),
+            take: Math.min(20, Math.max(1, Math.floor(take || 10))),
+        } as const;
+        let [items, totalItems] = await this.connection
+            .getRepository(ctx, ImageGenerationJob)
+            .findAndCount(options);
+        const cutoff = this.staleOutputCutoff();
+        if (items.some(job => hasStaleImageOutput(job.outputs, cutoff))) {
+            await this.reconcileStaleOutputs(ctx, cutoff);
+            [items, totalItems] = await this.connection
+                .getRepository(ctx, ImageGenerationJob)
+                .findAndCount(options);
+        }
+        return {
+            items: items.map(job => this.catalogJobView(ctx, job, administratorUserId)),
+            totalItems,
+        };
+    }
+
+    async useCatalogOutput(ctx: RequestContext, outputId: ID): Promise<Asset> {
+        this.assertCatalogImagePermissions(ctx);
+        const administratorUserId = this.activeAdministratorId(ctx);
+        return this.connection.withTransaction(ctx, async txCtx => {
+            const repository = this.connection.getRepository(txCtx, ImageGenerationOutput);
+            const query = repository
+                .createQueryBuilder('output')
+                .innerJoinAndSelect('output.job', 'job')
+                .leftJoinAndSelect('output.asset', 'privateAsset')
+                .leftJoinAndSelect('output.catalogAsset', 'catalogAsset')
+                .where('output.id = :outputId', { outputId });
+            if (supportsGenerationLock(this.connection.rawConnection.options.type)) {
+                query.setLock('pessimistic_write');
+            }
+            const output = await query.getOne();
+            if (
+                !output ||
+                output.job.origin !== 'ADMIN_PRODUCT_IMAGE' ||
+                String(output.job.channelId) !== String(txCtx.channelId) ||
+                String(output.job.administratorUserId) !== String(administratorUserId)
+            ) {
+                throw new UserInputError('找不到可使用的商品图结果');
+            }
+            if (output.catalogAsset) return output.catalogAsset;
+            if (output.state !== 'SUCCEEDED' || !output.asset) {
+                throw new UserInputError('只有生成成功的图片才能作为商品主图');
+            }
+            const bytes = await this.storage.read(output.asset);
+            const extension =
+                output.asset.mimeType === 'image/png'
+                    ? 'png'
+                    : output.asset.mimeType === 'image/webp'
+                      ? 'webp'
+                      : 'jpg';
+            const created = await this.assetService.create(txCtx, {
+                file: Promise.resolve({
+                    filename: `ai-product-${String(output.job.id)}-${output.outputIndex + 1}.${extension}`,
+                    mimetype: output.asset.mimeType,
+                    encoding: '7bit',
+                    createReadStream: () => Readable.from(bytes),
+                }),
+                tags: ['AI商品图', '后台生成'],
+            });
+            if (isGraphQlErrorResult(created)) throw new UserInputError(created.message);
+            output.catalogAssetId = created.id;
+            output.catalogAsset = created;
+            output.usedAt = new Date();
+            await repository.save(output, { reload: false });
+            return created;
+        });
     }
 
     async create(ctx: RequestContext, input: CreateImageGenerationInput) {
@@ -525,6 +936,7 @@ export class ImageGenerationService {
         if (
             !output ||
             output.job.channelId.toString() !== ctx.channelId.toString() ||
+            output.job.customerId == null ||
             output.job.customerId.toString() !== customer.id.toString()
         )
             return false;
@@ -596,14 +1008,23 @@ export class ImageGenerationService {
         const [items, totalItems] = await this.connection
             .getRepository(ctx, ImageGenerationJob)
             .findAndCount({
-                where: { channelId: ctx.channelId, ...(state ? { state } : {}) },
+                where: {
+                    channelId: ctx.channelId,
+                    origin: 'CUSTOMER_STUDIO',
+                    ...(state ? { state } : {}),
+                },
                 relations: { outputs: { asset: true }, referenceAsset: true, customer: true },
                 order: { createdAt: 'DESC', id: 'DESC', outputs: { outputIndex: 'ASC' } },
                 skip: Math.max(0, Math.floor(skip || 0)),
                 take: Math.min(100, Math.max(1, Math.floor(take || 50))),
             });
         return {
-            items: await Promise.all(items.map(job => this.jobView(ctx, job, job.customerId))),
+            items: await Promise.all(
+                items.map(job => {
+                    if (!job.customerId) throw new UserInputError('客户生图任务缺少客户归属');
+                    return this.jobView(ctx, job, job.customerId);
+                }),
+            ),
             totalItems,
         };
     }
@@ -887,7 +1308,10 @@ export class ImageGenerationService {
             const job = output.job;
             let billingMode = 'PAID';
             let chargeAmount = job.unitPriceSnapshot;
-            if (job.freeQuantityCaptured < job.freeQuantityReserved && job.quotaEventId) {
+            if (job.origin === 'ADMIN_PRODUCT_IMAGE') {
+                billingMode = 'INTERNAL';
+                chargeAmount = 0;
+            } else if (job.freeQuantityCaptured < job.freeQuantityReserved && job.quotaEventId) {
                 await this.quota.capture(txCtx, job.quotaEventId, 1);
                 job.freeQuantityCaptured += 1;
                 billingMode = 'FREE';
@@ -1163,7 +1587,7 @@ export class ImageGenerationService {
                     failureCode: failureCode?.slice(0, 48) ?? output.failureCode,
                     completedAt,
                     walletSettled: true,
-                    billingMode: 'RELEASED',
+                    billingMode: job.origin === 'ADMIN_PRODUCT_IMAGE' ? 'INTERNAL' : 'RELEASED',
                     chargeAmount: 0,
                 },
             );
@@ -1175,7 +1599,7 @@ export class ImageGenerationService {
             output.failureCode = failureCode?.slice(0, 48) ?? output.failureCode;
             output.completedAt = completedAt;
             output.walletSettled = true;
-            output.billingMode = 'RELEASED';
+            output.billingMode = job.origin === 'ADMIN_PRODUCT_IMAGE' ? 'INTERNAL' : 'RELEASED';
             output.chargeAmount = 0;
             return true;
         });
@@ -1188,19 +1612,33 @@ export class ImageGenerationService {
         if (!job?.completedAt) return;
         const terminalReferenceAssetIds = storedReferenceAssetIds(job);
         const terminalCustomerId = job.customerId;
+        const terminalAdministratorUserId = job.administratorUserId;
         if (!terminalReferenceAssetIds.length) return;
         await this.connection.withTransaction(ctx, async txCtx => {
-            const customerQuery = this.connection
-                .getRepository(txCtx, Customer)
-                .createQueryBuilder('customer')
-                .where('customer.id = :id', { id: terminalCustomerId });
-            if (supportsGenerationLock(this.connection.rawConnection.options.type))
-                customerQuery.setLock('pessimistic_write');
-            await customerQuery.getOne();
+            if (job.origin === 'ADMIN_PRODUCT_IMAGE' && terminalAdministratorUserId) {
+                await this.lockAdministrator(txCtx, terminalAdministratorUserId);
+            } else if (terminalCustomerId) {
+                const customerQuery = this.connection
+                    .getRepository(txCtx, Customer)
+                    .createQueryBuilder('customer')
+                    .where('customer.id = :id', { id: terminalCustomerId });
+                if (supportsGenerationLock(this.connection.rawConnection.options.type))
+                    customerQuery.setLock('pessimistic_write');
+                await customerQuery.getOne();
+            }
+            if (job.origin === 'ADMIN_PRODUCT_IMAGE' && !terminalAdministratorUserId) return;
+            if (job.origin !== 'ADMIN_PRODUCT_IMAGE' && !terminalCustomerId) return;
+            const ownerWhere =
+                job.origin === 'ADMIN_PRODUCT_IMAGE'
+                    ? {
+                          administratorUserId: terminalAdministratorUserId as ID,
+                          origin: 'ADMIN_PRODUCT_IMAGE' as const,
+                      }
+                    : { customerId: terminalCustomerId as ID, origin: 'CUSTOMER_STUDIO' as const };
             const activeJobs = await this.connection.getRepository(txCtx, ImageGenerationJob).find({
                 where: {
                     channelId: txCtx.channelId,
-                    customerId: terminalCustomerId,
+                    ...ownerWhere,
                     state: In(['QUEUED', 'RUNNING', 'UNKNOWN']),
                 },
                 select: { id: true, referenceAssetId: true, promptSpec: true },
@@ -1313,6 +1751,93 @@ export class ImageGenerationService {
 
     private assetView(ctx: RequestContext, asset: ImagePrivateAsset, customerId: ID) {
         return { ...asset, previewUrl: this.storage.signedUrl(ctx, asset, customerId) };
+    }
+
+    private catalogAssetView(ctx: RequestContext, asset: ImagePrivateAsset, administratorUserId: ID) {
+        return { ...asset, previewUrl: this.storage.signedAdminUrl(ctx, asset, administratorUserId) };
+    }
+
+    private catalogJobView(ctx: RequestContext, job: ImageGenerationJob, administratorUserId: ID) {
+        const outputs = job.outputs ?? [];
+        return {
+            ...job,
+            productName: String(job.promptSpec?.catalogProductName ?? ''),
+            description: String(job.promptSpec?.catalogDescription ?? ''),
+            errorMessage:
+                outputs.map(publicOutputError).find((message): message is string => Boolean(message)) ?? null,
+            referenceAsset: job.referenceAsset
+                ? this.catalogAssetView(ctx, job.referenceAsset, administratorUserId)
+                : null,
+            outputs: outputs.map(output => ({
+                ...output,
+                providerRequestId: null,
+                errorMessage: publicOutputError(output),
+                width: output.asset?.width ?? null,
+                height: output.asset?.height ?? null,
+                imageUrl: output.asset
+                    ? this.storage.signedAdminUrl(ctx, output.asset, administratorUserId)
+                    : null,
+            })),
+        };
+    }
+
+    private validateCatalogCreateInput(input: CreateCatalogImageGenerationInput) {
+        const productName = input.productName.trim();
+        if (!productName || productName.length > 255)
+            throw new UserInputError('商品名称必须为 1 至 255 个字符');
+        const description = input.description.trim();
+        if (!description || description.length > 1_500)
+            throw new UserInputError('主图效果描述必须为 1 至 1500 个字符');
+        if (!input.referenceAssetId) throw new UserInputError('请先拍摄或选择商品照片');
+        if (!input.termsAccepted) throw new UserInputError('请先同意 AI 图片服务条款');
+        const idempotencyKey = input.idempotencyKey.trim();
+        if (!/^[a-zA-Z0-9._:-]{8,64}$/u.test(idempotencyKey)) throw new UserInputError('请求幂等键无效');
+        return { ...input, productName, description, idempotencyKey };
+    }
+
+    private assertSameCatalogRequest(
+        job: ImageGenerationJob,
+        input: ReturnType<ImageGenerationService['validateCatalogCreateInput']>,
+    ) {
+        if (
+            String(job.referenceAssetId) !== String(input.referenceAssetId) ||
+            String(job.promptSpec?.catalogProductName ?? '') !== input.productName ||
+            String(job.promptSpec?.catalogDescription ?? '') !== input.description
+        ) {
+            throw new UserInputError('请求幂等键已被其他商品图参数使用');
+        }
+    }
+
+    private assertCatalogImagePermissions(ctx: RequestContext): void {
+        const canEditProduct = ctx.userHasPermissions([
+            Permission.SuperAdmin,
+            Permission.CreateProduct,
+            Permission.UpdateProduct,
+            Permission.CreateCatalog,
+            Permission.UpdateCatalog,
+        ]);
+        const canCreateAsset = ctx.userHasPermissions([
+            Permission.SuperAdmin,
+            Permission.CreateAsset,
+            Permission.CreateCatalog,
+        ]);
+        if (!canEditProduct || !canCreateAsset)
+            throw new UserInputError('需要商品编辑和素材创建权限才能生成商品主图');
+    }
+
+    private activeAdministratorId(ctx: RequestContext): ID {
+        if (!ctx.activeUserId) throw new UserInputError('请先登录管理后台');
+        return ctx.activeUserId;
+    }
+
+    private async lockAdministrator(ctx: RequestContext, administratorUserId: ID): Promise<void> {
+        const query = this.connection
+            .getRepository(ctx, User)
+            .createQueryBuilder('user')
+            .where('user.id = :id', { id: administratorUserId });
+        if (supportsGenerationLock(this.connection.rawConnection.options.type))
+            query.setLock('pessimistic_write');
+        if (!(await query.getOne())) throw new UserInputError('找不到当前管理员');
     }
 
     private async activeCustomer(ctx: RequestContext): Promise<Customer> {

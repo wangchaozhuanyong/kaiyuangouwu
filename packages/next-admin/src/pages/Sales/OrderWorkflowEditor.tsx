@@ -34,7 +34,13 @@ import {
     TRANSITION_SALES_ORDER,
 } from '../../graphql/sales.graphql';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { formatMoney, getMutationError, getOrderStateLabel, majorInputToMoney } from './sales-utils';
+import {
+    canManageOrderInChannel,
+    formatMoney,
+    getMutationError,
+    getOrderStateLabel,
+    majorInputToMoney,
+} from './sales-utils';
 
 interface ResultPayload {
     __typename: string;
@@ -74,6 +80,7 @@ interface WorkflowPayment {
 }
 
 interface WorkflowOrder {
+    salesChannel: { id: string; code: string } | null;
     id: string;
     code: string;
     state: string;
@@ -96,6 +103,7 @@ interface WorkflowOrder {
 }
 
 interface OrderQueryData {
+    activeChannel: { id: string; code: string };
     order?: WorkflowOrder | null;
 }
 
@@ -508,6 +516,18 @@ export function DraftOrderEditor() {
                 message={toUserFacingError(orderQuery.error, '草稿订单不存在或加载失败')}
                 onBack={() => navigate('/sales/orders?tab=drafts')}
                 onRetry={() => void orderQuery.refetch()}
+            />
+        );
+
+    if (!canManageOrderInChannel(order, orderQuery.data?.activeChannel?.id))
+        return (
+            <WorkflowError
+                message={
+                    order.salesChannel
+                        ? `请通过顶部店铺选择器切换到销售店铺“${order.salesChannel.code}”后操作。`
+                        : '历史订单归属待核实，暂时只能查看。'
+                }
+                onBack={() => navigate(`/sales/orders/${order.id}`)}
             />
         );
 
@@ -1006,6 +1026,18 @@ export function ModifyOrderEditor() {
         return (
             <WorkflowError
                 message={`订单当前处于${getOrderStateLabel(order.state)}，必须先从订单详情将状态推进到“修改中”。`}
+                onBack={() => navigate(`/sales/orders/${order.id}`)}
+            />
+        );
+
+    if (!canManageOrderInChannel(order, orderQuery.data?.activeChannel?.id))
+        return (
+            <WorkflowError
+                message={
+                    order.salesChannel
+                        ? `请通过顶部店铺选择器切换到销售店铺“${order.salesChannel.code}”后操作。`
+                        : '历史订单归属待核实，暂时只能查看。'
+                }
                 onBack={() => navigate(`/sales/orders/${order.id}`)}
             />
         );

@@ -1,9 +1,10 @@
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
-import { Channel, Customer, EntityId, VendureEntity } from '@vendure/core';
+import { Channel, Customer, EntityId, User, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 
 @Entity({ name: 'image_private_asset' })
 @Index('IDX_image_private_asset_owner_created', ['customerId', 'createdAt'])
+@Index('IDX_image_private_asset_admin_created', ['administratorUserId', 'createdAt'])
 @Index('IDX_image_private_asset_expiry', ['expiresAt'])
 @Index('IDX_image_private_asset_storage_key', ['storageKey'], { unique: true })
 export class ImagePrivateAsset extends VendureEntity {
@@ -18,12 +19,19 @@ export class ImagePrivateAsset extends VendureEntity {
     @EntityId()
     channelId: ID;
 
-    @ManyToOne(() => Customer, { nullable: false, onDelete: 'CASCADE' })
+    @ManyToOne(() => Customer, { nullable: true, onDelete: 'CASCADE' })
     @JoinColumn({ name: 'customerId', foreignKeyConstraintName: 'FK_image_private_asset_customer' })
-    customer: Customer;
+    customer: Customer | null;
 
-    @EntityId()
-    customerId: ID;
+    @EntityId({ nullable: true })
+    customerId: ID | null;
+
+    @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'administratorUserId', foreignKeyConstraintName: 'FK_image_private_asset_admin' })
+    administratorUser: User | null;
+
+    @EntityId({ nullable: true })
+    administratorUserId: ID | null;
 
     @Column({ type: 'varchar', length: 16 })
     kind: string;

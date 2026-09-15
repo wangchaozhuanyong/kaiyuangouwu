@@ -5,6 +5,7 @@ import { OrderOperationsService, PHYSICAL_FULFILLMENT_TODO_STATES } from './orde
 describe('OrderOperationsService', () => {
     it('counts distinct physical orders in the active channel and fulfillment states', async () => {
         const queryBuilder = {
+            alias: 'order',
             innerJoin: vi.fn(),
             where: vi.fn(),
             andWhere: vi.fn(),
@@ -25,12 +26,9 @@ describe('OrderOperationsService', () => {
             3,
         );
 
-        expect(queryBuilder.innerJoin).toHaveBeenCalledWith(
-            'order.channels',
-            'channel',
-            'channel.id = :channelId',
-            { channelId: 'channel-2' },
-        );
+        expect(queryBuilder.andWhere).toHaveBeenCalledWith('order.salesChannelId = :orderSalesChannelId', {
+            orderSalesChannelId: 'channel-2',
+        });
         expect(queryBuilder.where).toHaveBeenCalledWith('order.active = :active', {
             active: false,
         });

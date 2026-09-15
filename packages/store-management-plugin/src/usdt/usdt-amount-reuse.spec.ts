@@ -1,4 +1,4 @@
-import { Channel, Payment } from '@vendure/core';
+import { Channel, Order, Payment } from '@vendure/core';
 import { DataSource, EntitySchema, EntitySchemaColumnOptions, getMetadataArgsStorage } from 'typeorm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -74,7 +74,13 @@ const channelSchema = new EntitySchema({
     tableName: 'channel',
     columns: { id: { type: Number, primary: true }, code: { type: String } },
 });
-type TestContext = { manager?: DataSource['manager'] };
+const orderSchema = new EntitySchema({
+    name: 'Order',
+    target: Order,
+    tableName: 'order',
+    columns: { id: { type: Number, primary: true }, salesChannelId: { type: Number, nullable: true } },
+});
+type TestContext = { channelId?: number; manager?: DataSource['manager'] };
 
 describe('USDT amount lifecycle on a real database', () => {
     let db: DataSource;
@@ -83,8 +89,8 @@ describe('USDT amount lifecycle on a real database', () => {
         addPaymentToOrder: vi.fn(),
         withOrderMutationTransaction: (_ctx: TestContext, work: (ctx: TestContext) => Promise<unknown>) =>
             db.options.type === 'sqljs'
-                ? db.transaction(manager => work({ manager }))
-                : db.transaction('READ COMMITTED', manager => work({ manager })),
+                ? db.transaction(manager => work({ ..._ctx, manager }))
+                : db.transaction('READ COMMITTED', manager => work({ ..._ctx, manager })),
     };
     const eventBus = { publish: vi.fn() };
     const chain = { scanIncomingTransfers: vi.fn(), solidifiedTransaction: vi.fn() };
@@ -104,7 +110,7 @@ describe('USDT amount lifecycle on a real database', () => {
                       password: '',
                       database: 'vendure_logic_repair',
                   }),
-            entities: [intentSchema, quoteSchema, channelSchema],
+            entities: [intentSchema, quoteSchema, channelSchema, orderSchema],
             synchronize: true,
             dropSchema: true,
         });
@@ -122,17 +128,29 @@ describe('USDT amount lifecycle on a real database', () => {
         const connection = {
             getRepository: (ctx: TestContext, entity: typeof StorefrontUsdtPaymentIntent) =>
                 entity === (Payment as unknown)
-                    ? { findOne: () => Promise.resolve({ id: 1, state: 'Settled' }) }
+                    ? {
+                          findOne: async ({ where }: { where: { transactionId: string } }) => {
+                              const paid = await (ctx.manager ?? db.manager)
+                                  .getRepository(StorefrontUsdtPaymentIntent)
+                                  .findOneByOrFail({
+                                      transactionId: where.transactionId.replace(/^tron:/u, ''),
+                                  });
+                              return { id: 1, state: 'Settled', order: { id: paid.orderId } };
+                          },
+                      }
                     : (ctx.manager ?? db.manager).getRepository(entity),
             getEntityOrThrow: (ctx: TestContext, entity: typeof StorefrontUsdtCheckoutQuote, id: number) =>
                 (ctx.manager ?? db.manager).getRepository(entity).findOneByOrFail({ id }),
             withTransaction: (_ctx: TestContext, work: (ctx: TestContext) => Promise<unknown>) =>
-                db.transaction(manager => work({ manager })),
+                db.transaction(manager => work({ ..._ctx, manager })),
         };
         service = new UsdtPaymentService(
             connection as never,
             orderService as never,
-            { create: () => Promise.resolve({}) } as never,
+            {
+                create: ({ channelOrToken }: { channelOrToken: Channel }) =>
+                    Promise.resolve({ channelId: channelOrToken.id }),
+            } as never,
             { requireConfigured: () => Promise.resolve(wallet) } as never,
             chain as never,
             eventBus as never,
@@ -143,9 +161,11 @@ describe('USDT amount lifecycle on a real database', () => {
     });
 
     async function quote(expiresAt = new Date(now.getTime() + 600_000)) {
+        const orderId = nextOrder++;
+        await db.getRepository(Order).save({ id: orderId, salesChannelId: 1 });
         return db.getRepository(StorefrontUsdtCheckoutQuote).save({
             channelId: 1,
-            orderId: nextOrder++,
+            orderId,
             usdtAmount: '13.850000',
             fiatCurrencyCode: 'CNY',
             fiatAmount: 10_000,
@@ -154,7 +174,7 @@ describe('USDT amount lifecycle on a real database', () => {
     }
     async function intent(options: Partial<StorefrontUsdtPaymentIntent> = {}) {
         const q = await quote(options.expiresAt);
-        const record = await service.ensureIntent({} as never, q);
+        const record = await service.ensureIntent({ channelId: q.channelId } as never, q);
         await db.getRepository(StorefrontUsdtPaymentIntent).update(record.id, {
             createdAt: new Date(now.getTime() - 300_000),
             ...options,
@@ -196,12 +216,25 @@ describe('USDT amount lifecycle on a real database', () => {
         }
     }
 
+    it.each([2, null])('rejects receipt replay if the persisted order owner is %s', async salesChannelId => {
+        const current = await intent();
+        const q = await db
+            .getRepository(StorefrontUsdtCheckoutQuote)
+            .findOneByOrFail({ id: current.quoteId });
+        await db.getRepository(Order).update(current.orderId, { salesChannelId });
+        await expect(service.ensureIntent({ channelId: 1 } as never, q)).rejects.toThrow();
+        expect(await db.getRepository(StorefrontUsdtPaymentIntent).count()).toBe(1);
+        expect(orderService.addPaymentToOrder).not.toHaveBeenCalled();
+    });
+
     it('reclaims 999 historical slots without deleting history and allocates the next quote', async () => {
         const expiresAt = new Date(now.getTime() - 3_600_000);
         await reserveSlots(999, expiresAt);
-        await expect(service.ensureIntent({} as never, await quote())).rejects.toThrow('已用完');
+        await expect(service.ensureIntent({ channelId: 1 } as never, await quote())).rejects.toThrow(
+            '已用完',
+        );
         await service.scanPendingPayments({} as never, now);
-        const next = await service.ensureIntent({} as never, await quote());
+        const next = await service.ensureIntent({ channelId: 1 } as never, await quote());
         expect(next.activeMatchKey).toBe(next.matchKey);
         expect(await db.getRepository(StorefrontUsdtPaymentIntent).count()).toBe(1000);
     }, 30_000);
@@ -212,7 +245,11 @@ describe('USDT amount lifecycle on a real database', () => {
             await reserveSlots(998, new Date(now.getTime() + 600_000));
             const quotes = await Promise.all([quote(), quote()]);
             const outcomes = await Promise.allSettled(
-                quotes.map(q => db.transaction(manager => service.ensureIntent({ manager } as never, q))),
+                quotes.map(q =>
+                    db.transaction(manager =>
+                        service.ensureIntent({ channelId: q.channelId, manager } as never, q),
+                    ),
+                ),
             );
             expect(outcomes.filter(result => result.status === 'fulfilled')).toHaveLength(1);
             const failed = outcomes.find(result => result.status === 'rejected');
@@ -311,7 +348,9 @@ describe('USDT amount lifecycle on a real database', () => {
         async () => {
             const q = await quote();
             const intents = await Promise.all(
-                Array.from({ length: 12 }, () => service.ensureIntent({} as never, q)),
+                Array.from({ length: 12 }, () =>
+                    service.ensureIntent({ channelId: q.channelId } as never, q),
+                ),
             );
             expect(new Set(intents.map(record => record.id)).size).toBe(1);
             expect(await db.getRepository(StorefrontUsdtPaymentIntent).count()).toBe(1);
@@ -325,10 +364,15 @@ describe('USDT amount lifecycle on a real database', () => {
             const quotes = await Promise.all(Array.from({ length: 12 }, () => quote()));
             for (const q of quotes.slice(6)) {
                 q.channelId = 2;
+                await db.getRepository(Order).update(q.orderId, { salesChannelId: 2 });
                 await db.getRepository(StorefrontUsdtCheckoutQuote).save(q);
             }
             const rows = await Promise.all(
-                quotes.map(q => db.transaction(manager => service.ensureIntent({ manager } as never, q))),
+                quotes.map(q =>
+                    db.transaction(manager =>
+                        service.ensureIntent({ channelId: q.channelId, manager } as never, q),
+                    ),
+                ),
             );
             expect(new Set(rows.map(row => row.activeMatchKey)).size).toBe(12);
             expect(await db.getRepository(StorefrontUsdtPaymentIntent).count()).toBe(12);

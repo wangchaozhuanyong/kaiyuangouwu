@@ -48,8 +48,7 @@ interface RequestContextStore {
 }
 
 interface RequestWithStores extends Request {
-    // eslint-disable-next-line @typescript-eslint/ban-types
-    [REQUEST_CONTEXT_MAP_KEY]?: Map<Function, RequestContextStore>;
+    [REQUEST_CONTEXT_MAP_KEY]?: Map<CallableFunction, RequestContextStore>;
     [REQUEST_CONTEXT_KEY]?: RequestContextStore;
 }
 
@@ -82,7 +81,6 @@ export function internal_setRequestContext(
     // or controller (for REST).
     let item: RequestContextStore | undefined;
     if (executionContext && typeof executionContext.getHandler === 'function') {
-        // eslint-disable-next-line @typescript-eslint/ban-types
         const map = req[REQUEST_CONTEXT_MAP_KEY] || new Map();
         item = map.get(executionContext.getHandler());
         const ctxHasTransaction = Object.getOwnPropertySymbols(ctx).includes(TRANSACTION_MANAGER_KEY);
@@ -119,7 +117,6 @@ export function internal_getRequestContext(
 ): RequestContext {
     let item: RequestContextStore | undefined;
     if (executionContext && typeof executionContext.getHandler === 'function') {
-        // eslint-disable-next-line @typescript-eslint/ban-types
         const map = req[REQUEST_CONTEXT_MAP_KEY];
         item = map?.get(executionContext.getHandler());
         // If we have a ctx associated with the current handler (resolver function), we
@@ -129,10 +126,13 @@ export function internal_getRequestContext(
         }
     }
     if (!item) {
-        item = req[REQUEST_CONTEXT_KEY] as RequestContextStore;
+        item = req[REQUEST_CONTEXT_KEY];
+    }
+    if (!item) {
+        throw new Error('RequestContext is not available for the current request');
     }
     const transactionalCtx =
-        item?.withTransactionManager &&
+        item.withTransactionManager &&
         ((item.withTransactionManager as any)[TRANSACTION_MANAGER_KEY] as EntityManager | undefined)
             ?.queryRunner?.isReleased === false
             ? item.withTransactionManager
@@ -325,8 +325,17 @@ export class RequestContext {
      * mutations to the copy itself will not affect the original, but deep mutations
      * (e.g. copy.channel.code = 'new') *will* also affect the original.
      */
-    copy(): RequestContext {
-        return Object.assign(Object.create(Object.getPrototypeOf(this)), this);
+    copy(options?: { channel: Channel; currencyCode?: CurrencyCode }): RequestContext {
+        // Trusted internal fan-out (for example seller-order settlement) must preserve the
+        // transaction and authenticated identity while operating in the explicit owner's store.
+        // This does not grant new permissions; API callers still require authorization.
+        return Object.assign(
+            Object.create(Object.getPrototypeOf(this)),
+            this,
+            options
+                ? { _channel: options.channel, _currencyCode: options.currencyCode ?? this.currencyCode }
+                : {},
+        );
     }
 
     /**

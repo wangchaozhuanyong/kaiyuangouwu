@@ -25,6 +25,7 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { canAddManualPayment } from './order-operation-availability';
 import {
+    canManageOrderInChannel,
     formatDateTime,
     formatMoney,
     getOrderStateLabel,
@@ -43,13 +44,15 @@ type ProtectedAction =
 export function OrderOperationsBlock({ context }: { context: NextAdminPageBlockContext }) {
     const orderId = entityId(context.entity?.id);
     const { hasAnyPermission } = useAdminPermissions();
-    const canUpdate = hasAnyPermission(['UpdateOrder']);
     const canReadPaymentMethods = hasAnyPermission(['ReadSettings', 'ReadPaymentMethod']);
     const query = useQuery<OrderOperationsData>(ORDER_OPERATIONS_QUERY, {
         variables: { id: orderId },
         skip: !orderId,
         fetchPolicy: 'cache-and-network',
     });
+    const canUpdate =
+        hasAnyPermission(['UpdateOrder']) &&
+        canManageOrderInChannel(query.data?.order, query.data?.activeChannel?.id);
     const paymentMethodsQuery = useQuery<PaymentMethodsForManualData>(PAYMENT_METHODS_FOR_MANUAL_QUERY, {
         skip: !canUpdate || !canReadPaymentMethods,
         fetchPolicy: 'cache-first',
@@ -257,10 +260,8 @@ export function OrderOperationsBlock({ context }: { context: NextAdminPageBlockC
                                     <b>{formatMoney(sellerOrder.totalWithTax, sellerOrder.currencyCode)}</b>
                                 </div>
                                 <p className="mt-2 text-slate-500">
-                                    {sellerOrder.channels
-                                        .map(channel => channel.seller?.name ?? channel.code)
-                                        .join('、')}{' '}
-                                    · {getOrderStateLabel(sellerOrder.state)}
+                                    {sellerOrder.salesChannel?.code ?? '归属待核实'} ·{' '}
+                                    {getOrderStateLabel(sellerOrder.state)}
                                 </p>
                                 <Link
                                     to={`/sales/orders/${sellerOrder.id}`}

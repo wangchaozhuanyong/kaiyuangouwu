@@ -168,6 +168,7 @@ describe('ImagePrivateStorageService reference lifecycle', () => {
         asset.providerMetadata = { revisedPrompt: 'private prompt' };
         const { service, save } = storageWith(asset);
 
+        if (!asset.customerId) throw new Error('customer reference fixture is missing its owner');
         await expect(service.deleteOwned(context(), asset.id, asset.customerId)).resolves.toBe(true);
 
         expect(asset.deletedAt).toBeInstanceOf(Date);

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
     buildStoreIsolationPreflight,
     collectStoreIsolationSnapshot,
+    createReadOnlyMysqlAdapter,
     scanDigitalDeliveryRoot,
     summarizeStockOwnership,
 } from './store-isolation-data-preflight.mjs';
@@ -136,6 +137,40 @@ test('stock joins count a shared variant once and preserve ambiguous ownership w
     ]);
     assert.throws(() => summarizeStockOwnership([...rows, { ...rows[0], stockOnHand: 8 }]), /Conflicting/u);
     assert.throws(() => summarizeStockOwnership([{ ...rows[0], stockOnHand: 'invalid' }]), /Unsafe/u);
+});
+
+test('MySQL audit setup and close always attempt rollback and close the owned connection', async () => {
+    const successfulCalls = [];
+    const connection = {
+        query: async sql => successfulCalls.push(sql),
+        end: async () => successfulCalls.push('END'),
+    };
+    const adapter = await createReadOnlyMysqlAdapter(connection);
+    await adapter.close();
+    assert.deepEqual(successfulCalls, [
+        'SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ',
+        'SET SESSION TRANSACTION READ ONLY',
+        'START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY',
+        'ROLLBACK',
+        'END',
+    ]);
+
+    const failedCalls = [];
+    const failingConnection = {
+        query: async sql => {
+            failedCalls.push(sql);
+            if (sql.startsWith('START TRANSACTION')) throw new Error('fixture start failure');
+        },
+        end: async () => failedCalls.push('END'),
+    };
+    await assert.rejects(createReadOnlyMysqlAdapter(failingConnection), /fixture start failure/u);
+    assert.deepEqual(failedCalls, [
+        'SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ',
+        'SET SESSION TRANSACTION READ ONLY',
+        'START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY',
+        'ROLLBACK',
+        'END',
+    ]);
 });
 
 test('digital preflight reports symlinks and rejects a linked root', async () => {

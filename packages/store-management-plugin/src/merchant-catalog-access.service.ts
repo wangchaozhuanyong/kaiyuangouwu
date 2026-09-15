@@ -197,11 +197,15 @@ export class MerchantCatalogAccessService {
         }
         const lines = await this.connection.getRepository(ctx, OrderLine).find({
             where: uniqueIds.map(id => ({ id })),
-            relations: ['order', 'order.channels'],
+            relations: ['order'],
         });
         if (
             lines.length !== uniqueIds.length ||
-            lines.some(line => !line.order.channels.some(channel => idsAreEqual(channel.id, ctx.channelId)))
+            lines.some(
+                line =>
+                    line.order.salesChannelId == null ||
+                    !idsAreEqual(line.order.salesChannelId, ctx.channelId),
+            )
         ) {
             throw new ForbiddenError();
         }
@@ -214,7 +218,7 @@ export class MerchantCatalogAccessService {
         }
         const fulfillments = await this.connection.getRepository(ctx, Fulfillment).find({
             where: uniqueIds.map(id => ({ id })),
-            relations: ['orders', 'orders.channels'],
+            relations: ['orders'],
         });
         if (
             fulfillments.length !== uniqueIds.length ||
@@ -222,7 +226,8 @@ export class MerchantCatalogAccessService {
                 fulfillment =>
                     fulfillment.orders.length === 0 ||
                     fulfillment.orders.some(
-                        order => !order.channels.some(channel => idsAreEqual(channel.id, ctx.channelId)),
+                        order =>
+                            order.salesChannelId == null || !idsAreEqual(order.salesChannelId, ctx.channelId),
                     ),
             )
         ) {
@@ -434,6 +439,13 @@ export class MerchantCatalogAccessService {
     ): Promise<void> {
         const uniqueIds = this.uniqueIds(ids);
         if (uniqueIds.length === 0) {
+            return;
+        }
+        if (entity === (Order as unknown as Type<T>)) {
+            const owned = await this.connection.getRepository(ctx, Order).count({
+                where: { id: In(uniqueIds), salesChannelId: ctx.channelId },
+            });
+            if (owned !== uniqueIds.length) throw new ForbiddenError();
             return;
         }
         const entities = await this.connection.findByIdsInChannel(ctx, entity, uniqueIds, ctx.channelId, {});

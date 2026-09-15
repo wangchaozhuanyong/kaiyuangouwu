@@ -30,7 +30,7 @@ interface BufferedOrderEvent {
 const REMINDER_INTERVAL = 30 * 60 * 1000;
 // Matches the Admin's pending fulfillment states, including partially handled orders.
 const PENDING_STATES = ['PaymentAuthorized', 'PaymentSettled', 'PartiallyShipped', 'PartiallyDelivered'];
-const ORDER_RELATIONS = { channels: true, lines: true, fulfillments: { lines: true } } as const;
+const ORDER_RELATIONS = { lines: true, fulfillments: { lines: true } } as const;
 
 function needsProcessing(order: Order): boolean {
     if (order.active || !order.orderPlacedAt || !PENDING_STATES.includes(order.state)) return false;
@@ -58,6 +58,7 @@ export class OrderEventsService implements OnApplicationBootstrap, OnApplication
     private readonly seen = new Set<string>();
     private readonly clients = new Set<{
         channelId: string;
+        platformRead: boolean;
         send: (event: AdminOrderEvent) => void;
         close: () => void;
     }>();
@@ -113,8 +114,9 @@ export class OrderEventsService implements OnApplicationBootstrap, OnApplication
         lastEventId: string | undefined,
         send: (event: AdminOrderEvent) => void,
         close: () => void,
+        platformRead = false,
     ) {
-        const client = { channelId, send, close };
+        const client = { channelId, send, close, platformRead };
         this.clients.add(client);
         const prefix = `${this.instance}:`;
         const after = lastEventId?.startsWith(prefix) ? Number(lastEventId.slice(prefix.length)) : NaN;
@@ -123,7 +125,7 @@ export class OrderEventsService implements OnApplicationBootstrap, OnApplication
                 ? this.recent.filter(
                       event =>
                           event.sequence > after &&
-                          event.channelIds.includes(channelId) &&
+                          (platformRead || event.channelIds.includes(channelId)) &&
                           (event.payload.kind === 'order-placed' || this.pending.has(event.payload.orderId)),
                   )
                 : [];
@@ -136,7 +138,7 @@ export class OrderEventsService implements OnApplicationBootstrap, OnApplication
 
     async publishPlacedOrder(orderId: string): Promise<void> {
         if (this.seen.has(orderId)) return;
-        // Load only when an actual placement event arrives, also resolving all assigned seller Channels.
+        // Load the persisted sale owner after commit; management assignments never grant notifications.
         const order = await this.connection.rawConnection.getRepository(Order).findOne({
             where: { id: orderId },
             relations: ORDER_RELATIONS,
@@ -259,7 +261,7 @@ export class OrderEventsService implements OnApplicationBootstrap, OnApplication
     }
 
     private publish(order: Order, kind: AdminOrderEvent['kind'], occurredAt: Date): void {
-        const channelIds = order.channels.map(channel => String(channel.id));
+        const channelIds = order.salesChannelId == null ? [] : [String(order.salesChannelId)];
         const payload: AdminOrderEvent = {
             version: 1,
             kind,
@@ -270,7 +272,7 @@ export class OrderEventsService implements OnApplicationBootstrap, OnApplication
         this.recent.push({ payload, channelIds, sequence: this.sequence });
         if (this.recent.length > 200) this.recent.shift();
         for (const client of this.clients) {
-            if (channelIds.includes(client.channelId)) {
+            if (client.platformRead || channelIds.includes(client.channelId)) {
                 try {
                     client.send(payload);
                 } catch {

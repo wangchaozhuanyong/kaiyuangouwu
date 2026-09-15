@@ -1,5 +1,5 @@
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
-import { Customer, ID, Order, RequestContext, TransactionalConnection } from '@vendure/core';
+import { CustomerStoreEntry, ID, Order, RequestContext, TransactionalConnection } from '@vendure/core';
 
 import { ReferralAccount } from '../entities/referral-account.entity';
 import { ReferralLedgerEntry } from '../entities/referral-ledger-entry.entity';
@@ -172,7 +172,7 @@ export class ReferralReportQuery {
         const orders = await this.connection
             .getRepository(ctx, Order)
             .createQueryBuilder('referralOrder')
-            .innerJoin('referralOrder.channels', 'orderChannel', 'orderChannel.id = :channelId', {
+            .innerJoin('referralOrder.salesChannel', 'orderChannel', 'orderChannel.id = :channelId', {
                 channelId: ctx.channelId,
             })
             .innerJoin(
@@ -216,7 +216,7 @@ export class ReferralReportQuery {
             const previousBuyers = await this.connection
                 .getRepository(ctx, Order)
                 .createQueryBuilder('referralOrder')
-                .innerJoin('referralOrder.channels', 'orderChannel', 'orderChannel.id = :channelId', {
+                .innerJoin('referralOrder.salesChannel', 'orderChannel', 'orderChannel.id = :channelId', {
                     channelId: ctx.channelId,
                 })
                 .where('referralOrder.customerId IN (:...buyerIds)', { buyerIds })
@@ -235,14 +235,12 @@ export class ReferralReportQuery {
         const [newCustomerCount, visitorCount, todayInvitedCount, todayInvitedPurchaserCount] =
             await Promise.all([
                 this.connection
-                    .getRepository(ctx, Customer)
-                    .createQueryBuilder('customer')
-                    .innerJoin('customer.channels', 'customerChannel', 'customerChannel.id = :channelId', {
-                        channelId: ctx.channelId,
-                    })
-                    .innerJoin('customer.user', 'customerUser')
-                    .where('customerUser.createdAt >= :utcStart', { utcStart })
-                    .andWhere('customerUser.createdAt < :utcEnd', { utcEnd })
+                    .getRepository(ctx, CustomerStoreEntry)
+                    .createQueryBuilder('storeEntry')
+                    .innerJoin('storeEntry.customer', 'customer', 'customer.deletedAt IS NULL')
+                    .where('storeEntry.channelId = :channelId', { channelId: ctx.channelId })
+                    .andWhere('storeEntry.firstSeenAt >= :start', { start })
+                    .andWhere('storeEntry.firstSeenAt < :end', { end })
                     .getCount(),
                 this.connection.getRepository(ctx, StorefrontDailyVisitor).count({
                     where: { channelId: ctx.channelId, businessDate },

@@ -35,6 +35,7 @@ export interface OrderLineLike {
     } | null;
     productVariant?: {
         name?: string | null;
+        product?: { name?: string | null } | null;
         sku?: string | null;
         options?: Array<{
             name?: string | null;
@@ -287,6 +288,16 @@ export interface OrderListSummary {
     remainingPhysicalQuantity: number;
 }
 
+export const getOrderProductDisplayName = (variant: OrderLineLike['productVariant']): string => {
+    const name = variant?.name?.trim() ?? '';
+    const product = variant?.product?.name?.trim();
+    return product && !name.startsWith(product)
+        ? name
+            ? `${product} · ${name}`
+            : product
+        : name || '无商品明细';
+};
+
 export const summarizeOrderListItem = (order: OrderListSummaryInput): OrderListSummary => {
     const firstLine = order.lines[0];
     const variant = firstLine?.productVariant;
@@ -306,7 +317,9 @@ export const summarizeOrderListItem = (order: OrderListSummaryInput): OrderListS
         remainingPhysicalQuantity > 0
             ? `${remainingPhysicalQuantity} 件待发`
             : fulfillmentKind === 'DIGITAL'
-              ? '无需履约'
+              ? order.state === 'Delivered'
+                  ? '已交付'
+                  : '无需物流'
               : order.state === 'Delivered'
                 ? '已交付'
                 : hasActiveFulfillment
@@ -316,7 +329,7 @@ export const summarizeOrderListItem = (order: OrderListSummaryInput): OrderListS
     const phone = order.customer?.phoneNumber?.trim();
 
     return {
-        productName: variant?.name?.trim() || '无商品明细',
+        productName: getOrderProductDisplayName(variant),
         additionalLineCount: Math.max(0, order.lines.length - 1),
         specification: specification || '-',
         sku: variant?.sku?.trim() || '-',
@@ -329,3 +342,11 @@ export const summarizeOrderListItem = (order: OrderListSummaryInput): OrderListS
         remainingPhysicalQuantity,
     };
 };
+
+/** Mutations operate in the sale owner even when the platform can read all orders. */
+export function canManageOrderInChannel(
+    order: { salesChannel?: { id: string } | null } | null | undefined,
+    activeChannelId: string | null | undefined,
+): boolean {
+    return Boolean(activeChannelId && order?.salesChannel?.id === activeChannelId);
+}

@@ -487,7 +487,12 @@ export class StorefrontCartService {
         if (!cart.checkoutOrder) {
             return new CartProjectionError('ORDER_MISSING', 'The pending checkout order no longer exists.');
         }
-        const order = await this.orderService.findOne(ctx, cart.checkoutOrder.id, ['lines', 'payments']);
+        const order = await this.orderService.findOne(
+            ctx,
+            cart.checkoutOrder.id,
+            ['lines', 'payments'],
+            'business',
+        );
         if (!order) {
             return new CartProjectionError('ORDER_MISSING', 'The pending checkout order no longer exists.');
         }
@@ -722,7 +727,7 @@ export class StorefrontCartService {
             await repository.update(cart.id, { projectedRevision: 0 });
             return;
         }
-        const order = await this.orderService.findOne(ctx, activeOrder.id, ['lines']);
+        const order = await this.orderService.findOne(ctx, activeOrder.id, ['lines'], 'business');
         if (!order) {
             return;
         }
@@ -777,7 +782,7 @@ export class StorefrontCartService {
             }
         }
         cart.checkoutOrder = cart.checkoutOrderId
-            ? ((await this.orderService.findOne(ctx, cart.checkoutOrderId)) ?? null)
+            ? ((await this.orderService.findOne(ctx, cart.checkoutOrderId, undefined, 'business')) ?? null)
             : null;
         return cart;
     }

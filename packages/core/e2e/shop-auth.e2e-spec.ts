@@ -360,13 +360,6 @@ describe('Shop auth & accounts', () => {
                     },
                 },
                 {
-                    // second entry because we register twice above
-                    type: HistoryEntryType.CUSTOMER_REGISTERED,
-                    data: {
-                        strategy: 'native',
-                    },
-                },
-                {
                     type: HistoryEntryType.CUSTOMER_VERIFIED,
                     data: {
                         strategy: 'native',

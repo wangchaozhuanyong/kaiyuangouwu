@@ -195,6 +195,21 @@ function AuthMethodDivider({ language }: { language: StorefrontLanguage }) {
     );
 }
 
+function useAuthNavigate(returnTo?: RouteState['returnTo'], returnVariantId?: string) {
+    const navigate = useNavigate();
+    return (route: AuthRoute, replace = false) => {
+        const routeState: RouteState = { ...route };
+        if (returnTo) {
+            routeState.returnTo = returnTo;
+            if (returnTo === 'purchase' && returnVariantId) {
+                routeState.id = returnVariantId;
+            }
+        }
+        const options = routeNavigateOptions(routeState);
+        void navigate((replace ? { ...options, replace: true } : options) as never);
+    };
+}
+
 export function LoginPage({
     returnTo,
     returnVariantId,
@@ -209,15 +224,7 @@ export function LoginPage({
     onSuccess,
     onContentTarget,
 }: AuthPageBaseProps & AuthLegalProps & AuthCompletionProps & AuthVisualProps & AuthMethodsProps) {
-    const navigate = useNavigate();
-    const navigateTo = (route: AuthRoute) =>
-        void navigate(
-            routeNavigateOptions({
-                ...route,
-                returnTo,
-                id: returnTo === 'purchase' ? returnVariantId : undefined,
-            }) as never,
-        );
+    const navigateTo = useAuthNavigate(returnTo, returnVariantId);
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
@@ -274,8 +281,8 @@ export function LoginPage({
             <AuthRouteTabs
                 active="login"
                 language={language}
-                onLogin={() => navigateTo({ name: 'login' })}
-                onRegister={() => navigateTo({ name: 'register' })}
+                onLogin={() => navigateTo({ name: 'login' }, true)}
+                onRegister={() => navigateTo({ name: 'register' }, true)}
             />
             <h1 className="visually-hidden">{isZh ? '登录' : 'Sign in'}</h1>
             {autoRegistrationEmail ? (
@@ -389,15 +396,7 @@ export function RegisterPage({
     onSuccess,
     onContentTarget,
 }: AuthPageBaseProps & AuthLegalProps & AuthVisualProps & AuthMethodsProps & Partial<AuthCompletionProps>) {
-    const navigate = useNavigate();
-    const navigateTo = (route: AuthRoute) =>
-        void navigate(
-            routeNavigateOptions({
-                ...route,
-                returnTo,
-                id: returnTo === 'purchase' ? returnVariantId : undefined,
-            }) as never,
-        );
+    const navigateTo = useAuthNavigate(returnTo, returnVariantId);
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     const [registeredEmail, setRegisteredEmail] = useState('');
@@ -597,8 +596,8 @@ export function RegisterPage({
                     <AuthRouteTabs
                         active="register"
                         language={language}
-                        onLogin={() => navigateTo({ name: 'login' })}
-                        onRegister={() => navigateTo({ name: 'register' })}
+                        onLogin={() => navigateTo({ name: 'login' }, true)}
+                        onRegister={() => navigateTo({ name: 'register' }, true)}
                     />
                     <h1 className="visually-hidden">{isZh ? '注册' : 'Register'}</h1>
                     {authSettings.emailPasswordEnabled ? (

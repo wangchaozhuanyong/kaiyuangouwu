@@ -78,6 +78,7 @@ export class ManualDigitalDelivery extends VendureEntity {
     @EntityId()
     orderLineId: ID;
 
-    @OneToMany(() => ManualDigitalDeliveryEvent, event => event.delivery)
+    // Timeline rows are appended independently; stale parent snapshots must not detach them.
+    @OneToMany(() => ManualDigitalDeliveryEvent, event => event.delivery, { persistence: false })
     events: ManualDigitalDeliveryEvent[];
 }

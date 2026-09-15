@@ -2,8 +2,8 @@ import { CustomerChannelAssignmentStrategy } from './customer-channel-assignment
 
 /**
  * @description
- * The default {@link CustomerChannelAssignmentStrategy}: Customers remain isolated to their
- * assigned Channels. Cross-Channel assignment must be explicitly enabled with a custom strategy.
+ * The default {@link CustomerChannelAssignmentStrategy}: authenticated Customer identities are
+ * shared. Store business data is scoped independently from this membership relationship.
  *
  * @docsCategory auth
  * @docsPage CustomerChannelAssignmentStrategy
@@ -11,6 +11,6 @@ import { CustomerChannelAssignmentStrategy } from './customer-channel-assignment
  */
 export class DefaultCustomerChannelAssignmentStrategy implements CustomerChannelAssignmentStrategy {
     canAssignCustomerToChannel(): boolean {
-        return false;
+        return true;
     }
 }

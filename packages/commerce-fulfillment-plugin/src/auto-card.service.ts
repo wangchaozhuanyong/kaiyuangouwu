@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import { ContentTranslationService, isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import {
+    assertOrderSalesChannel,
     EventBus,
     isGraphQlErrorResult,
     Logger,
@@ -118,7 +119,7 @@ export class AutoCardService {
 
     publicDeliveriesForOrder(ctx: RequestContext, orderId: ID): Promise<AutoCardDelivery[]> {
         return this.connection.getRepository(ctx, AutoCardDelivery).find({
-            where: { channelId: ctx.channelId, orderId },
+            where: { channelId: ctx.channelId, orderId, order: { salesChannelId: ctx.channelId } },
             select: {
                 id: true,
                 createdAt: true,
@@ -404,6 +405,7 @@ export class AutoCardService {
         const [items, totalItems] = await this.connection.getRepository(ctx, AutoCardDelivery).findAndCount({
             where: {
                 channelId: ctx.channelId,
+                order: { salesChannelId: ctx.channelId },
                 ...(options.state ? { state: options.state } : {}),
                 ...(options.orderId ? { orderId: options.orderId } : {}),
                 ...(options.productVariantId
@@ -483,6 +485,7 @@ export class AutoCardService {
         if (order.state !== 'PaymentSettled') {
             return [];
         }
+        assertOrderSalesChannel(ctx, order);
         const recipientEmail =
             order.customFields?.deliveryEmail?.trim() || order.customer?.emailAddress?.trim();
         if (!recipientEmail) {
@@ -492,9 +495,10 @@ export class AutoCardService {
         for (const line of order.lines.filter(isAutoCardOrderLine)) {
             const existing = await this.connection.getRepository(ctx, AutoCardDelivery).findOne({
                 where: { orderLineId: line.id },
-                relations: { poolItems: true, config: true },
+                relations: { poolItems: true, config: true, order: true },
             });
             if (existing) {
+                this.assertDeliveryScope(ctx, existing);
                 deliveries.push(existing);
                 const staleDispatch =
                     !existing.lastDispatchedAt ||
@@ -516,11 +520,12 @@ export class AutoCardService {
                     .getRepository(ctx, AutoCardDelivery)
                     .findOne({
                         where: { orderLineId: line.id },
-                        relations: { poolItems: true, config: true },
+                        relations: { poolItems: true, config: true, order: true },
                     });
                 if (!concurrentDelivery) {
                     throw error;
                 }
+                this.assertDeliveryScope(ctx, concurrentDelivery);
                 delivery = concurrentDelivery;
             }
             deliveries.push(delivery);
@@ -670,6 +675,7 @@ export class AutoCardService {
                 channelOrToken: item.channel,
             });
             try {
+                this.assertDeliveryScope(ctx, item);
                 let delivery = item;
                 if (delivery.state === 'SENT' && !delivery.fulfillmentId) {
                     await this.completeFulfillment(ctx, delivery);
@@ -837,6 +843,7 @@ export class AutoCardService {
         eventType: AutoCardDeliveryEventType,
         note: string,
     ): Promise<void> {
+        this.assertDeliveryScope(ctx, delivery);
         delivery.lastDispatchedAt = new Date();
         await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
         await this.addEvent(ctx, delivery, eventType, note);
@@ -844,6 +851,7 @@ export class AutoCardService {
     }
 
     private async completeFulfillment(ctx: RequestContext, delivery: AutoCardDelivery): Promise<void> {
+        this.assertDeliveryScope(ctx, delivery);
         if (delivery.fulfillmentId) return;
         const result = await this.orderService.createFulfillment(ctx, {
             lines: [{ orderLineId: delivery.orderLineId, quantity: delivery.quantity }],
@@ -953,7 +961,21 @@ export class AutoCardService {
             order: { events: { createdAt: 'ASC' } },
         });
         if (!delivery) throw new UserInputError('发卡记录不存在');
+        this.assertDeliveryScope(ctx, delivery);
         return delivery;
+    }
+
+    private assertDeliveryScope(ctx: RequestContext, delivery: AutoCardDelivery): void {
+        if (
+            !delivery.order ||
+            String(delivery.order.id) !== String(delivery.orderId) ||
+            String(delivery.channelId) !== String(ctx.channelId) ||
+            !delivery.config ||
+            String(delivery.config.channelId) !== String(ctx.channelId)
+        ) {
+            throw new UserInputError('发卡任务归属不一致，请核查');
+        }
+        assertOrderSalesChannel(ctx, delivery.order);
     }
 
     private async lockDeliveryOrThrow(ctx: RequestContext, id: ID): Promise<AutoCardDelivery> {

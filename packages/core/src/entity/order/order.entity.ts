@@ -7,7 +7,7 @@ import {
 } from '@vendure/common/lib/generated-types';
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
 import { summate } from '@vendure/common/lib/shared-utils';
-import { Column, Entity, Index, JoinTable, ManyToMany, ManyToOne, OneToMany } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, JoinTable, ManyToMany, ManyToOne, OneToMany } from 'typeorm';
 
 import { Calculated } from '../../common/calculated-decorator';
 import { InternalServerError } from '../../common/error/errors';
@@ -48,6 +48,18 @@ export class Order extends VendureEntity implements ChannelAware, HasCustomField
 
     @Column('varchar', { default: OrderType.Regular })
     type: OrderType;
+
+    /**
+     * The store which owns this sale, independent of management Channel membership.
+     * Null is reserved for unresolved historical records; business writes must reject it.
+     */
+    @Index('IDX_order_sales_channel')
+    @ManyToOne(type => Channel, { nullable: true, onDelete: 'RESTRICT' })
+    @JoinColumn({ name: 'salesChannelId', foreignKeyConstraintName: 'FK_order_sales_channel' })
+    salesChannel?: Channel;
+
+    @EntityId({ nullable: true })
+    salesChannelId: ID | null;
 
     @OneToMany(type => Order, sellerOrder => sellerOrder.aggregateOrder)
     sellerOrders: Order[];

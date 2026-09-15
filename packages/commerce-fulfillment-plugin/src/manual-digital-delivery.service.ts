@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
+    assertOrderSalesChannel,
     Asset,
     EventBus,
+    isGraphQlErrorResult,
     Logger,
     Order,
     OrderService,
@@ -10,7 +12,6 @@ import {
     RequestContextService,
     TransactionalConnection,
     UserInputError,
-    isGraphQlErrorResult,
 } from '@vendure/core';
 import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { In, IsNull, LessThanOrEqual } from 'typeorm';
@@ -71,6 +72,7 @@ export class ManualDigitalDeliveryService {
         if (manualServiceLines.length === 0) {
             return [];
         }
+        assertOrderSalesChannel(ctx, order);
         const recipientEmail = order.customFields?.deliveryEmail?.trim();
         if (!recipientEmail) {
             throw new Error('人工虚拟交付订单缺少交付邮箱');
@@ -78,8 +80,12 @@ export class ManualDigitalDeliveryService {
         const repository = this.connection.getRepository(ctx, ManualDigitalDelivery);
         const deliveries: ManualDigitalDelivery[] = [];
         for (const line of manualServiceLines) {
-            const existing = await repository.findOne({ where: { orderLineId: line.id } });
+            const existing = await repository.findOne({
+                where: { orderLineId: line.id },
+                relations: { order: true },
+            });
             if (existing) {
+                this.assertDeliveryScope(ctx, existing);
                 deliveries.push(existing);
                 continue;
             }
@@ -111,8 +117,12 @@ export class ManualDigitalDeliveryService {
                 delivery = await repository.save(candidate);
                 await this.addEvent(ctx, delivery, 'TASK_CREATED', '付款完成，已创建人工交付任务');
             } catch (error) {
-                const concurrent = await repository.findOne({ where: { orderLineId: line.id } });
+                const concurrent = await repository.findOne({
+                    where: { orderLineId: line.id },
+                    relations: { order: true },
+                });
                 if (!concurrent) throw error;
+                this.assertDeliveryScope(ctx, concurrent);
                 delivery = concurrent;
             }
             deliveries.push(delivery);
@@ -131,6 +141,7 @@ export class ManualDigitalDeliveryService {
             .findAndCount({
                 where: {
                     channelId: ctx.channelId,
+                    order: { salesChannelId: ctx.channelId },
                     ...(options.state ? { state: options.state as ManualDigitalDelivery['state'] } : {}),
                 },
                 relations: { order: true, events: true },
@@ -147,7 +158,7 @@ export class ManualDigitalDeliveryService {
 
     async forOrder(ctx: RequestContext, orderId: ID): Promise<ManualDigitalDelivery[]> {
         const items = await this.connection.getRepository(ctx, ManualDigitalDelivery).find({
-            where: { channelId: ctx.channelId, orderId },
+            where: { channelId: ctx.channelId, orderId, order: { salesChannelId: ctx.channelId } },
             relations: { events: true },
             order: { createdAt: 'ASC' },
         });
@@ -173,6 +184,7 @@ export class ManualDigitalDeliveryService {
 
     async publish(ctx: RequestContext, input: SaveManualDeliveryInput): Promise<ManualDigitalDelivery> {
         const delivery = await this.ownedDelivery(ctx, input.id);
+        this.assertOrderCanDeliver(delivery);
         if (!['WAITING_PROCESSING', 'DRAFT'].includes(delivery.state)) {
             throw new UserInputError('当前状态不能覆盖成品；邮件失败或已发布时只能重发原成品');
         }
@@ -198,6 +210,7 @@ export class ManualDigitalDeliveryService {
 
     async retry(ctx: RequestContext, id: ID): Promise<ManualDigitalDelivery> {
         const delivery = await this.ownedDelivery(ctx, id);
+        this.assertOrderCanDeliver(delivery);
         if (!delivery.encryptedPackages) {
             throw new UserInputError('尚未保存成品，不能发送');
         }
@@ -215,6 +228,7 @@ export class ManualDigitalDeliveryService {
 
     async emailPayload(ctx: RequestContext, id: ID) {
         const delivery = await this.ownedDelivery(ctx, id);
+        this.assertOrderCanDeliver(delivery);
         const packages = this.readPackages(delivery);
         if (packages.length !== delivery.quantity) {
             delivery.state = 'MANUAL_REVIEW';
@@ -291,7 +305,9 @@ export class ManualDigitalDeliveryService {
 
     async cancelOrder(ctx: RequestContext, orderId: ID): Promise<void> {
         const repository = this.connection.getRepository(ctx, ManualDigitalDelivery);
-        const deliveries = await repository.find({ where: { channelId: ctx.channelId, orderId } });
+        const deliveries = await repository.find({
+            where: { channelId: ctx.channelId, orderId, order: { salesChannelId: ctx.channelId } },
+        });
         for (const delivery of deliveries.filter(item => !['SENT', 'CANCELLED'].includes(item.state))) {
             delivery.state = 'CANCELLED';
             await repository.save(delivery);
@@ -319,6 +335,7 @@ export class ManualDigitalDeliveryService {
                 channelOrToken: delivery.channel,
             });
             try {
+                this.assertDeliveryScope(ctx, delivery);
                 if (['WAITING_PROCESSING', 'DRAFT'].includes(delivery.state)) {
                     await this.publishOverdue(ctx, delivery);
                     continue;
@@ -353,6 +370,7 @@ export class ManualDigitalDeliveryService {
     }
 
     private async completeFulfillment(ctx: RequestContext, delivery: ManualDigitalDelivery): Promise<void> {
+        this.assertDeliveryScope(ctx, delivery);
         if (delivery.fulfillmentId) {
             return;
         }
@@ -451,12 +469,49 @@ export class ManualDigitalDeliveryService {
     private async ownedDelivery(ctx: RequestContext, id: ID): Promise<ManualDigitalDelivery> {
         const delivery = await this.connection.getRepository(ctx, ManualDigitalDelivery).findOne({
             where: { id, channelId: ctx.channelId },
-            relations: { order: true, orderLine: true, events: true },
+            relations: { order: { payments: { refunds: true } }, orderLine: true, events: true },
         });
         if (!delivery) {
             throw new UserInputError('人工交付任务不存在');
         }
+        this.assertDeliveryScope(ctx, delivery);
         return delivery;
+    }
+
+    private assertDeliveryScope(ctx: RequestContext, delivery: ManualDigitalDelivery): void {
+        if (
+            !delivery.order ||
+            String(delivery.order.id) !== String(delivery.orderId) ||
+            String(delivery.channelId) !== String(ctx.channelId)
+        ) {
+            throw new UserInputError('人工交付任务归属不一致，请核查');
+        }
+        assertOrderSalesChannel(ctx, delivery.order);
+    }
+
+    private assertOrderCanDeliver(delivery: ManualDigitalDelivery): void {
+        if (
+            !['PaymentSettled', 'PartiallyShipped', 'Shipped', 'PartiallyDelivered', 'Delivered'].includes(
+                delivery.order.state,
+            ) ||
+            delivery.orderLine.quantity <= 0
+        ) {
+            throw new UserInputError('订单已取消或尚未完成付款，不能发送人工交付');
+        }
+        const payments = (delivery.order.payments ?? []).filter(payment => payment.state === 'Settled');
+        const paid = payments.reduce((total, payment) => total + payment.amount, 0);
+        // A pending full refund must also stop delivery until its outcome is known.
+        const returned = payments.reduce(
+            (total, payment) =>
+                total +
+                (payment.refunds ?? [])
+                    .filter(refund => ['Pending', 'Settled'].includes(refund.state))
+                    .reduce((sum, refund) => sum + refund.total, 0),
+            0,
+        );
+        if (!payments.length || (returned > 0 && returned >= paid)) {
+            throw new UserInputError('订单已全额退款或正在全额退款，不能发送人工交付');
+        }
     }
 
     private addEvent(

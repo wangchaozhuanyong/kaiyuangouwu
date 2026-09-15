@@ -25,6 +25,8 @@ import {
     TransferStoreDomainInput,
 } from './types';
 
+const NATIVE_DEFAULT_CHANNEL_CODE = '__default_channel__';
+
 @Injectable()
 export class StoreDomainService {
     private readonly cloudflare: CloudflareSaasDomainProvider | null;
@@ -65,6 +67,7 @@ export class StoreDomainService {
             repository.find({ where: { channelId: targetChannelId }, order: { createdAt: 'ASC' } }),
         ]);
         const sameChannel = String(domain.channelId) === String(targetChannelId);
+        const targetsNativeDefault = targetChannel.code === NATIVE_DEFAULT_CHANNEL_CODE;
         return {
             domain,
             sourceChannel: domain.channel,
@@ -75,8 +78,12 @@ export class StoreDomainService {
                 )?.domain ?? null,
             targetPrimaryDomain: targetDomains.find(candidate => candidate.isPrimary)?.domain ?? null,
             preservesVerification: true,
-            canTransfer: !sameChannel,
-            blocker: sameChannel ? '域名已经属于目标店铺' : null,
+            canTransfer: !sameChannel && !targetsNativeDefault,
+            blocker: sameChannel
+                ? '域名已经属于目标店铺'
+                : targetsNativeDefault
+                  ? '平台默认 Channel 不能绑定公开店铺域名'
+                  : null,
         };
     }
 
@@ -85,6 +92,7 @@ export class StoreDomainService {
         const domain = await this.findDomain(ctx, input.id);
         this.assertExpectedUpdatedAt(domain.updatedAt, input.expectedUpdatedAt);
         const targetChannel = await this.findChannel(ctx, input.targetChannelId);
+        this.assertPublicStoreChannel(targetChannel);
         if (String(domain.channelId) === String(targetChannel.id)) {
             throw new UserInputError('域名已经属于目标店铺');
         }
@@ -133,7 +141,8 @@ export class StoreDomainService {
             Permission.UpdateChannel,
             storeDomainPermission.Create,
         ]);
-        await this.assertChannelExists(ctx, input.channelId);
+        const channel = await this.findChannel(ctx, input.channelId);
+        this.assertPublicStoreChannel(channel);
         const domain = this.parseDomain(input.domain);
         const repository = this.connection.getRepository(ctx, StoreDomain);
         const existing = await repository.findOne({ where: { domain } });
@@ -453,12 +462,9 @@ export class StoreDomainService {
         }
     }
 
-    private async assertChannelExists(ctx: RequestContext, channelId: ID): Promise<void> {
-        const channel = await this.connection
-            .getRepository(ctx, Channel)
-            .findOne({ where: { id: channelId } });
-        if (!channel) {
-            throw new EntityNotFoundError(Channel.name, channelId);
+    private assertPublicStoreChannel(channel: Pick<Channel, 'code'>): void {
+        if (channel.code === NATIVE_DEFAULT_CHANNEL_CODE) {
+            throw new UserInputError('平台默认 Channel 不能绑定公开店铺域名');
         }
     }
 

@@ -451,7 +451,12 @@ export class ReferralService implements OnApplicationBootstrap {
         if (!activeOrder || activeOrder.state !== 'ArrangingPayment') {
             throw new UserInputError('请先提交订单再使用返利余额');
         }
-        const order = await this.orderService.findOne(ctx, activeOrder.id, ['customer', 'payments']);
+        const order = await this.orderService.findOne(
+            ctx,
+            activeOrder.id,
+            ['customer', 'payments'],
+            'business',
+        );
         if (!order || !order.customer || order.customer.id.toString() !== customer.id.toString()) {
             throw new UserInputError('找不到待支付订单');
         }
@@ -858,12 +863,12 @@ export class ReferralService implements OnApplicationBootstrap {
     }
 
     private async rewardSettledOrder(ctx: RequestContext, orderId: ID, settledAt: Date): Promise<void> {
-        const order = await this.orderService.findOne(ctx, orderId, [
-            'customer',
-            'payments',
-            'payments.refunds',
-            'shippingLines',
-        ]);
+        const order = await this.orderService.findOne(
+            ctx,
+            orderId,
+            ['customer', 'payments', 'payments.refunds', 'shippingLines'],
+            'business',
+        );
         if (!order?.customer || order.totalWithTax <= 0) return;
         const relationship = await this.connection.getRepository(ctx, ReferralRelationship).findOne({
             where: { channelId: ctx.channelId, inviteeCustomerId: order.customer.id },
@@ -973,7 +978,12 @@ export class ReferralService implements OnApplicationBootstrap {
             where: { id: rewardId.id },
         });
         if (!reward) return;
-        const order = await this.orderService.findOne(ctx, orderId, ['payments', 'payments.refunds']);
+        const order = await this.orderService.findOne(
+            ctx,
+            orderId,
+            ['payments', 'payments.refunds'],
+            'business',
+        );
         if (!order) return;
         const settledRefunds = (order.payments ?? [])
             .flatMap(payment =>

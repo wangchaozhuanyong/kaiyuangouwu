@@ -324,17 +324,17 @@ export class StorefrontRealtimeService implements OnApplicationBootstrap, OnAppl
         );
     }
 
-    private async publishOrderChange(orderId: ID, fallbackChannelId: ID): Promise<void> {
+    private async publishOrderChange(orderId: ID, _fallbackChannelId: ID): Promise<void> {
         const order = await this.connection.rawConnection.getRepository(Order).findOne({
             where: { id: orderId },
-            relations: { customer: true, channels: true },
+            relations: { customer: { user: true } },
         });
         const userId = order?.customer?.user?.id;
+        // Unresolved historical ownership must never fan out to management channels.
+        if (!order?.salesChannelId) return;
         this.publish({
             topics: ['cart', 'orders', 'coupons'],
-            channelIds: order?.channels?.length
-                ? order.channels.map(channel => channel.id)
-                : [fallbackChannelId],
+            channelIds: [order.salesChannelId],
             userIds: userId ? [userId] : undefined,
             orderIds: [orderId],
             entityType: 'Order',

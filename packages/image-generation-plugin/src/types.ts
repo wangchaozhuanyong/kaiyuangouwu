@@ -158,6 +158,14 @@ export interface CreateImageGenerationInput {
     termsAccepted: boolean;
 }
 
+export interface CreateCatalogImageGenerationInput {
+    referenceAssetId: ID;
+    productName: string;
+    description: string;
+    idempotencyKey: string;
+    termsAccepted: boolean;
+}
+
 export interface OptimizeImagePromptInput {
     optimizedPrompt?: string | null;
     prompt: string;

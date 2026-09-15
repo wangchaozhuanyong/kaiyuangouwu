@@ -14,7 +14,11 @@ function requestUrl(input: string | URL | Request): string {
 }
 
 function createService() {
-    const repository = { find: vi.fn().mockResolvedValue([]) };
+    const repository = {
+        find: vi.fn().mockResolvedValue([]),
+        findOne: vi.fn().mockResolvedValue(null),
+        save: vi.fn(),
+    };
     const connection = { getRepository: vi.fn().mockReturnValue(repository) };
     const service = new StoreDomainService(connection as any, {} as any, {} as any, {
         cnameTarget: 'stores.example.com',
@@ -214,6 +218,50 @@ describe('StoreDomainService atomic transfer', () => {
                 expectedUpdatedAt: state.transferred.updatedAt,
             }),
         ).rejects.toThrow('只有超级管理员');
+    });
+
+    it('refuses to transfer a public domain to the native default Channel', async () => {
+        const state = setupTransfer();
+        state.targetChannel.code = '__default_channel__';
+
+        const impact = await state.service.transferImpact(
+            state.ctx as any,
+            state.transferred.id,
+            state.targetChannel.id,
+        );
+        expect(impact).toMatchObject({
+            canTransfer: false,
+            blocker: '平台默认 Channel 不能绑定公开店铺域名',
+        });
+        await expect(
+            state.service.transfer(state.ctx as any, {
+                id: state.transferred.id,
+                targetChannelId: state.targetChannel.id,
+                expectedUpdatedAt: state.transferred.updatedAt,
+            }),
+        ).rejects.toThrow('平台默认 Channel 不能绑定公开店铺域名');
+        expect(state.domainRepository.update).not.toHaveBeenCalled();
+    });
+});
+
+describe('StoreDomainService public store boundary', () => {
+    it('refuses to create a public domain on the native default Channel', async () => {
+        const { repository, service } = createService();
+        repository.findOne.mockResolvedValue({ id: 'default', code: '__default_channel__' });
+        const ctx = {
+            channelId: 'default',
+            userHasPermissions: vi.fn((permissions: Permission[]) =>
+                permissions.includes(Permission.SuperAdmin),
+            ),
+        };
+
+        await expect(
+            service.create(ctx as any, {
+                channelId: 'default',
+                domain: 'shop.example.com',
+            }),
+        ).rejects.toThrow('平台默认 Channel 不能绑定公开店铺域名');
+        expect(repository.save).not.toHaveBeenCalled();
     });
 });
 

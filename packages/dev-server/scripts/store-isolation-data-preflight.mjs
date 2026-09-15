@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { lstat, readdir } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -507,10 +508,17 @@ export function buildStoreIsolationPreflight(snapshot, auditKey) {
     };
 }
 
-async function createAdapter(environment) {
+function runtimeRequire(environment) {
+    const moduleRoot = environment.STORE_ISOLATION_MODULE_ROOT?.trim();
+    return moduleRoot
+        ? createRequire(path.join(path.resolve(moduleRoot), 'package.json'))
+        : createRequire(import.meta.url);
+}
+
+export async function createStoreIsolationAdapter(environment) {
     const databaseType = String(environment.DB ?? 'mysql').toLowerCase();
     if (databaseType === 'sqlite' || databaseType === 'better-sqlite3') {
-        const { default: Database } = await import('better-sqlite3');
+        const Database = runtimeRequire(environment)('better-sqlite3');
         const databasePath = path.resolve(environment.DB_NAME || 'vendure.sqlite');
         const database = new Database(databasePath, { fileMustExist: true, readonly: true });
         database.exec('BEGIN');
@@ -528,6 +536,15 @@ async function createAdapter(environment) {
                     .prepare(`PRAGMA table_info(${quoted(tableName)})`)
                     .all()
                     .some(column => column.name === columnName),
+            columnMetadata: async (tableName, columnName) => {
+                const column = database
+                    .prepare(`PRAGMA table_info(${quoted(tableName)})`)
+                    .all()
+                    .find(item => item.name === columnName);
+                return column
+                    ? { dataType: String(column.type).toLowerCase(), datetimePrecision: null }
+                    : null;
+            },
             close: async () => {
                 database.exec('ROLLBACK');
                 database.close();
@@ -537,7 +554,7 @@ async function createAdapter(environment) {
     if (databaseType !== 'mysql' && databaseType !== 'mariadb') {
         throw new Error(`Unsupported preflight database type: ${databaseType}`);
     }
-    const mysql = await import('mysql2/promise');
+    const mysql = runtimeRequire(environment)('mysql2/promise');
     const connection = await mysql.createConnection({
         host: environment.DB_HOST || '127.0.0.1',
         port: Number(environment.DB_PORT || 3306),
@@ -546,9 +563,22 @@ async function createAdapter(environment) {
         database: environment.DB_NAME || 'vendure-dev',
         multipleStatements: false,
     });
-    await connection.query('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
-    await connection.query('SET SESSION TRANSACTION READ ONLY');
-    await connection.query('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY');
+    return createReadOnlyMysqlAdapter(connection);
+}
+
+export async function createReadOnlyMysqlAdapter(connection, { closeConnection = true } = {}) {
+    try {
+        await connection.query('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        await connection.query('SET SESSION TRANSACTION READ ONLY');
+        await connection.query('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY');
+    } catch (error) {
+        try {
+            await connection.query('ROLLBACK');
+        } finally {
+            if (closeConnection) await connection.end();
+        }
+        throw error;
+    }
     return {
         kind: 'mysql',
         query: async (sql, parameters = []) => {
@@ -571,16 +601,34 @@ async function createAdapter(environment) {
             );
             return rows.length > 0;
         },
+        columnMetadata: async (tableName, columnName) => {
+            const [rows] = await connection.query(
+                `SELECT DATA_TYPE AS dataType, DATETIME_PRECISION AS datetimePrecision
+                 FROM information_schema.columns
+                 WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1`,
+                [tableName, columnName],
+            );
+            return rows[0]
+                ? {
+                      dataType: String(rows[0].dataType).toLowerCase(),
+                      datetimePrecision:
+                          rows[0].datetimePrecision == null ? null : Number(rows[0].datetimePrecision),
+                  }
+                : null;
+        },
         close: async () => {
-            await connection.query('ROLLBACK');
-            await connection.end();
+            try {
+                await connection.query('ROLLBACK');
+            } finally {
+                if (closeConnection) await connection.end();
+            }
         },
     };
 }
 
 async function main() {
     await import('dotenv/config');
-    const adapter = await createAdapter(process.env);
+    const adapter = await createStoreIsolationAdapter(process.env);
     try {
         const snapshot = await collectStoreIsolationSnapshot(adapter, process.env.DIGITAL_DELIVERY_ROOT);
         const auditKey = process.env.STORE_ISOLATION_AUDIT_KEY?.trim() || randomBytes(32).toString('hex');

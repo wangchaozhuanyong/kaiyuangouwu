@@ -6,7 +6,7 @@ import { SelectQueryBuilder } from 'typeorm';
 
 import { RequestContext } from '../../api/common/request-context';
 import { ErrorResultUnion, isGraphQlErrorResult } from '../../common/error/error-result';
-import { EntityNotFoundError, InternalServerError } from '../../common/error/errors';
+import { EntityNotFoundError, InternalServerError, UserInputError } from '../../common/error/errors';
 import {
     IdentifierChangeTokenExpiredError,
     IdentifierChangeTokenInvalidError,
@@ -81,11 +81,9 @@ export class UserService {
             .where('user.deletedAt IS NULL');
 
         if (entity === 'customer') {
-            qb.innerJoin(Customer, 'customer', 'customer.userId = user.id')
-                .innerJoin('customer.channels', 'customerChannel')
-                .andWhere('customerChannel.id = :customerChannelId', {
-                    customerChannelId: ctx.channelId,
-                });
+            qb.innerJoin(Customer, 'customer', 'customer.userId = user.id').andWhere(
+                'customer.deletedAt IS NULL',
+            );
         } else {
             const table = `${this.configService.dbConnectionOptions.entityPrefix ?? ''}administrator`;
             qb.innerJoin(table, table, `${table}.userId = user.id`);
@@ -100,7 +98,11 @@ export class UserService {
                 identifier: emailAddress,
             });
         }
-        return qb.getOne().then(result => result ?? undefined);
+        const candidates = await qb.take(2).getMany();
+        if (candidates.length > 1) {
+            throw new UserInputError('账号存在重复身份记录，请联系平台核实');
+        }
+        return candidates[0];
     }
 
     /**
@@ -114,6 +116,7 @@ export class UserService {
     ): Promise<User | PasswordValidationError> {
         const user = new User();
         user.identifier = normalizeEmailAddress(identifier);
+        user.customerIdentifier = user.identifier;
         const customerRole = await this.roleService.getCustomerRole(ctx);
         user.roles = [customerRole];
         const addNativeAuthResult = await this.addNativeAuthenticationMethod(ctx, user, identifier, password);
@@ -214,7 +217,9 @@ export class UserService {
     async softDelete(ctx: RequestContext, userId: ID) {
         await this.deleteSessionsByUser(ctx, new User({ id: userId }));
         await this.connection.getEntityOrThrow(ctx, User, userId);
-        await this.connection.getRepository(ctx, User).update({ id: userId }, { deletedAt: new Date() });
+        await this.connection
+            .getRepository(ctx, User)
+            .update({ id: userId }, { deletedAt: new Date(), customerIdentifier: null });
     }
 
     /**
@@ -223,12 +228,21 @@ export class UserService {
      * flow.
      */
     async setVerificationToken(ctx: RequestContext, user: User): Promise<User> {
-        const nativeAuthMethod = user.getNativeAuthenticationMethod();
-        nativeAuthMethod.verificationToken =
-            await this.verificationTokenGenerator.generateVerificationToken(ctx);
-        user.verified = false;
-        await this.connection.getRepository(ctx, NativeAuthenticationMethod).save(nativeAuthMethod);
-        return this.connection.getRepository(ctx, User).save(user);
+        return this.connection.withTransaction(ctx, async txCtx => {
+            const current = await this.lockActiveUser(txCtx, user.id);
+            if (!current) throw new EntityNotFoundError('User', user.id);
+            user.verified = current.verified;
+            if (current.verified) return user;
+            const nativeAuthMethod = user.getNativeAuthenticationMethod();
+            nativeAuthMethod.verificationToken =
+                await this.verificationTokenGenerator.generateVerificationToken(txCtx);
+            await this.connection
+                .getRepository(txCtx, NativeAuthenticationMethod)
+                .update(nativeAuthMethod.id, {
+                    verificationToken: nativeAuthMethod.verificationToken,
+                });
+            return user;
+        });
     }
 
     /**
@@ -239,6 +253,16 @@ export class UserService {
      * If valid, the User will be set to `verified: true`.
      */
     async verifyUserByToken(
+        ctx: RequestContext,
+        verificationToken: string,
+        password?: string,
+    ): Promise<ErrorResultUnion<VerifyCustomerAccountResult, User>> {
+        return this.connection.withTransaction(ctx, txCtx =>
+            this.verifyUserByTokenInTransaction(txCtx, verificationToken, password),
+        );
+    }
+
+    private async verifyUserByTokenInTransaction(
         ctx: RequestContext,
         verificationToken: string,
         password?: string,
@@ -272,10 +296,23 @@ export class UserService {
                     }
                     nativeAuthMethod.passwordHash = await this.passwordCipher.hash(password);
                 }
+                if (
+                    !(await this.consumeNativeToken(
+                        ctx,
+                        user.id,
+                        nativeAuthMethod.id,
+                        'verificationToken',
+                        verificationToken,
+                        {
+                            passwordHash: nativeAuthMethod.passwordHash,
+                        },
+                    ))
+                )
+                    return new VerificationTokenInvalidError();
                 nativeAuthMethod.verificationToken = null;
                 user.verified = true;
-                await this.connection.getRepository(ctx, NativeAuthenticationMethod).save(nativeAuthMethod);
-                return this.connection.getRepository(ctx, User).save(user);
+                await this.connection.getRepository(ctx, User).update(user.id, { verified: true });
+                return user;
             } else {
                 return new VerificationTokenExpiredError();
             }
@@ -300,7 +337,9 @@ export class UserService {
         }
         nativeAuthMethod.passwordResetToken =
             await this.verificationTokenGenerator.generateVerificationToken(ctx);
-        await this.connection.getRepository(ctx, NativeAuthenticationMethod).save(nativeAuthMethod);
+        await this.connection.getRepository(ctx, NativeAuthenticationMethod).update(nativeAuthMethod.id, {
+            passwordResetToken: nativeAuthMethod.passwordResetToken,
+        });
         return user;
     }
 
@@ -318,6 +357,16 @@ export class UserService {
     ): Promise<
         User | PasswordResetTokenExpiredError | PasswordResetTokenInvalidError | PasswordValidationError
     > {
+        return this.connection.withTransaction(ctx, txCtx =>
+            this.resetPasswordByTokenInTransaction(txCtx, passwordResetToken, password),
+        );
+    }
+
+    private async resetPasswordByTokenInTransaction(
+        ctx: RequestContext,
+        passwordResetToken: string,
+        password: string,
+    ): ReturnType<UserService['resetPasswordByToken']> {
         const query = this.connection
             .getRepository(ctx, User)
             .createQueryBuilder('user')
@@ -341,8 +390,21 @@ export class UserService {
         if (isTokenValid) {
             const nativeAuthMethod = user.getNativeAuthenticationMethod();
             nativeAuthMethod.passwordHash = await this.passwordCipher.hash(password);
+            if (
+                !(await this.consumeNativeToken(
+                    ctx,
+                    user.id,
+                    nativeAuthMethod.id,
+                    'passwordResetToken',
+                    passwordResetToken,
+                    {
+                        passwordHash: nativeAuthMethod.passwordHash,
+                        verificationToken: null,
+                    },
+                ))
+            )
+                return new PasswordResetTokenInvalidError();
             nativeAuthMethod.passwordResetToken = null;
-            await this.connection.getRepository(ctx, NativeAuthenticationMethod).save(nativeAuthMethod);
             if (user.verified === false && this.configService.authOptions.requireVerification) {
                 // This code path represents an edge-case in which the Customer creates an account,
                 // but prior to verifying their email address, they start the password reset flow.
@@ -351,9 +413,9 @@ export class UserService {
                 // a verification.
                 user.verified = true;
             }
-            const savedUser = await this.connection.getRepository(ctx, User).save(user);
-            await this.deleteSessionsByUser(ctx, savedUser);
-            return savedUser;
+            await this.connection.getRepository(ctx, User).update(user.id, { verified: user.verified });
+            await this.deleteSessionsByUser(ctx, user);
+            return user;
         } else {
             return new PasswordResetTokenExpiredError();
         }
@@ -365,6 +427,7 @@ export class UserService {
      * an Administrator is setting a new email address.
      */
     async changeUserAndNativeIdentifier(ctx: RequestContext, userId: ID, newIdentifier: string) {
+        newIdentifier = normalizeEmailAddress(newIdentifier);
         const user = await this.getUserById(ctx, userId);
         if (!user) {
             return;
@@ -376,11 +439,18 @@ export class UserService {
             nativeAuthMethod.identifier = newIdentifier;
             nativeAuthMethod.identifierChangeToken = null;
             nativeAuthMethod.pendingIdentifier = null;
-            await this.connection
-                .getRepository(ctx, NativeAuthenticationMethod)
-                .save(nativeAuthMethod, { reload: false });
+            await this.connection.getRepository(ctx, NativeAuthenticationMethod).update(nativeAuthMethod.id, {
+                identifier: newIdentifier,
+                identifierChangeToken: null,
+                pendingIdentifier: null,
+                passwordResetToken: null,
+                verificationToken: null,
+            });
         }
         user.identifier = newIdentifier;
+        if (await this.connection.getRepository(ctx, Customer).exists({ where: { user: { id: user.id } } })) {
+            user.customerIdentifier = newIdentifier;
+        }
         await this.connection.getRepository(ctx, User).save(user, { reload: false });
     }
 
@@ -393,7 +463,10 @@ export class UserService {
         const nativeAuthMethod = user.getNativeAuthenticationMethod();
         nativeAuthMethod.identifierChangeToken =
             await this.verificationTokenGenerator.generateVerificationToken(ctx);
-        await this.connection.getRepository(ctx, NativeAuthenticationMethod).save(nativeAuthMethod);
+        await this.connection.getRepository(ctx, NativeAuthenticationMethod).update(nativeAuthMethod.id, {
+            identifierChangeToken: nativeAuthMethod.identifierChangeToken,
+            pendingIdentifier: nativeAuthMethod.pendingIdentifier,
+        });
         return user;
     }
 
@@ -410,6 +483,15 @@ export class UserService {
         | IdentifierChangeTokenInvalidError
         | IdentifierChangeTokenExpiredError
     > {
+        return this.connection.withTransaction(ctx, txCtx =>
+            this.changeIdentifierByTokenInTransaction(txCtx, token),
+        );
+    }
+
+    private async changeIdentifierByTokenInTransaction(
+        ctx: RequestContext,
+        token: string,
+    ): ReturnType<UserService['changeIdentifierByToken']> {
         const query = this.connection
             .getRepository(ctx, User)
             .createQueryBuilder('user')
@@ -432,16 +514,79 @@ export class UserService {
         if (!pendingIdentifier) {
             throw new InternalServerError('error.pending-identifier-missing');
         }
+        if (
+            !(await this.consumeNativeToken(
+                ctx,
+                user.id,
+                nativeAuthMethod.id,
+                'identifierChangeToken',
+                token,
+                {
+                    identifier: pendingIdentifier,
+                    pendingIdentifier: null,
+                    passwordResetToken: null,
+                    verificationToken: null,
+                },
+            ))
+        )
+            return new IdentifierChangeTokenInvalidError();
         const oldIdentifier = user.identifier;
         user.identifier = pendingIdentifier;
+        // This verified-token flow is scoped to Customer identities on the Shop API.
+        if (
+            ctx.apiType === 'shop' ||
+            (await this.connection.getRepository(ctx, Customer).exists({ where: { user: { id: user.id } } }))
+        ) {
+            user.customerIdentifier = normalizeEmailAddress(pendingIdentifier);
+        }
         nativeAuthMethod.identifier = pendingIdentifier;
         nativeAuthMethod.identifierChangeToken = null;
         nativeAuthMethod.pendingIdentifier = null;
-        await this.connection
-            .getRepository(ctx, NativeAuthenticationMethod)
-            .save(nativeAuthMethod, { reload: false });
-        await this.connection.getRepository(ctx, User).save(user, { reload: false });
+        await this.connection.getRepository(ctx, User).update(user.id, {
+            identifier: user.identifier,
+            customerIdentifier: user.customerIdentifier,
+        });
         return { user, oldIdentifier };
+    }
+
+    private async lockActiveUser(ctx: RequestContext, userId: ID): Promise<User | null> {
+        const query = this.connection
+            .getRepository(ctx, User)
+            .createQueryBuilder('tokenUser')
+            .where('tokenUser.id = :userId AND tokenUser.deletedAt IS NULL', { userId });
+        if (
+            ['mysql', 'mariadb', 'postgres', 'aurora-mysql', 'aurora-postgres'].includes(
+                this.connection.rawConnection.options.type,
+            )
+        ) {
+            query.setLock('pessimistic_write');
+        }
+        return query.getOne();
+    }
+
+    /** One transaction can consume a token; concurrent/replayed requests never replace its result. */
+    private async consumeNativeToken(
+        ctx: RequestContext,
+        userId: ID,
+        methodId: ID,
+        field: 'verificationToken' | 'passwordResetToken' | 'identifierChangeToken',
+        token: string,
+        changes: Partial<
+            Pick<
+                NativeAuthenticationMethod,
+                | 'passwordHash'
+                | 'identifier'
+                | 'pendingIdentifier'
+                | 'verificationToken'
+                | 'passwordResetToken'
+            >
+        >,
+    ): Promise<boolean> {
+        if (!(await this.lockActiveUser(ctx, userId))) return false;
+        const result = await this.connection
+            .getRepository(ctx, NativeAuthenticationMethod)
+            .update({ id: methodId, [field]: token }, { ...changes, [field]: null });
+        return result.affected === 1;
     }
 
     /**
@@ -491,7 +636,7 @@ export class UserService {
     }
 
     /**
-     * Customer account tokens are only valid in the Channel which owns the Customer. Admin flows
+     * Customer account tokens are global, but cannot be used as Administrator tokens. Admin flows
      * create and verify users before the Customer relation exists, so they intentionally remain
      * unscoped here and are protected by Admin API permissions.
      */
@@ -504,10 +649,8 @@ export class UserService {
         }
         return query
             .innerJoin(Customer, 'tokenCustomer', 'tokenCustomer.userId = user.id')
-            .innerJoin('tokenCustomer.channels', 'tokenCustomerChannel')
-            .andWhere('tokenCustomerChannel.id = :tokenCustomerChannelId', {
-                tokenCustomerChannelId: ctx.channelId,
-            });
+            .andWhere('tokenCustomer.deletedAt IS NULL')
+            .andWhere('user.deletedAt IS NULL');
     }
 
     private async validatePassword(

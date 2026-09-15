@@ -495,12 +495,23 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                 );
             }
             const referenceAssetIds = generationReferenceAssetIds(output.job);
+            const generationOwnerId =
+                output.job.origin === 'ADMIN_PRODUCT_IMAGE'
+                    ? output.job.administratorUserId
+                    : output.job.customerId;
+            if (!generationOwnerId) {
+                throw new DefinitiveImageProviderError('生图任务缺少所有者，已拒绝调用中转站');
+            }
+            const referenceOwner =
+                output.job.origin === 'ADMIN_PRODUCT_IMAGE'
+                    ? { administratorUserId: generationOwnerId }
+                    : { customerId: generationOwnerId };
             const loadedReferences = referenceAssetIds.length
                 ? await this.connection.getRepository(ctx, ImagePrivateAsset).find({
                       where: {
                           id: In(referenceAssetIds),
                           channelId: output.job.channelId,
-                          customerId: output.job.customerId,
+                          ...referenceOwner,
                           kind: 'REFERENCE',
                       },
                   })
@@ -557,13 +568,26 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                 .getRepository(ctx, ImageGenerationOutput)
                 .update({ id: output.id, state: 'RUNNING' }, { providerRequestId: output.providerRequestId });
             await this.updateDispatchStage(output.id, providerStage);
-            storedAsset = await this.storage.storeGenerated(
-                ctx,
-                output.job.customerId,
-                { ...result, metadata: { ...result.metadata, settlementTelemetry: result.telemetry } },
-                `ai-${String(output.job.id)}-${output.outputIndex + 1}.png`,
-                output.job.resolution,
-            );
+            const storedResult = {
+                ...result,
+                metadata: { ...result.metadata, settlementTelemetry: result.telemetry },
+            };
+            storedAsset =
+                output.job.origin === 'ADMIN_PRODUCT_IMAGE'
+                    ? await this.storage.storeAdminGenerated(
+                          ctx,
+                          generationOwnerId,
+                          storedResult,
+                          `catalog-ai-${String(output.job.id)}-${output.outputIndex + 1}.png`,
+                          output.job.resolution,
+                      )
+                    : await this.storage.storeGenerated(
+                          ctx,
+                          generationOwnerId,
+                          storedResult,
+                          `ai-${String(output.job.id)}-${output.outputIndex + 1}.png`,
+                          output.job.resolution,
+                      );
             providerStage = 'ASSET_STORED';
             await this.updateDispatchStage(output.id, 'ASSET_STORED', storedAsset.id);
             const generatedAsset = storedAsset;

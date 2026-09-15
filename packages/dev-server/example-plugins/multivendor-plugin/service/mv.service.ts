@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { CreateAdministratorInput, Permission } from '@vendure/common/lib/generated-types';
+import { Permission } from '@vendure/common/lib/generated-types';
 import { normalizeString } from '@vendure/common/lib/normalize-string';
 import {
     AdministratorService,
@@ -10,6 +10,7 @@ import {
     InternalServerError,
     isGraphQlErrorResult,
     manualFulfillmentHandler,
+    PaymentMethod,
     RequestContext,
     RequestContextService,
     RoleService,
@@ -24,6 +25,7 @@ import {
 } from '@vendure/core';
 
 import { multivendorShippingEligibilityChecker } from '../config/mv-shipping-eligibility-checker';
+import { CONNECTED_PAYMENT_METHOD_CODE } from '../constants';
 import { CreateSellerInput } from '../types';
 
 @Injectable()
@@ -45,6 +47,15 @@ export class MultivendorService {
         const channel = await this.createSellerChannelRoleAdmin(superAdminCtx, input);
         await this.createSellerShippingMethod(superAdminCtx, input.shopName, channel);
         await this.createSellerStockLocation(superAdminCtx, input.shopName, channel);
+        const paymentMethod = await this.connection.getRepository(superAdminCtx, PaymentMethod).findOne({
+            where: { code: CONNECTED_PAYMENT_METHOD_CODE },
+        });
+        if (paymentMethod) {
+            // All participants in this example reference one configured payment handler.
+            await this.channelService.assignToChannels(superAdminCtx, PaymentMethod, paymentMethod.id, [
+                channel.id,
+            ]);
+        }
         return channel;
     }
 

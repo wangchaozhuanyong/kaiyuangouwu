@@ -35,6 +35,7 @@ import { toUserFacingError } from '../../utils/user-facing-error';
 
 import { csvCell } from './sales-csv';
 import {
+    canManageOrderInChannel,
     formatAddress,
     formatDateTime,
     formatMoney,
@@ -86,6 +87,7 @@ interface SalesFulfillment {
 }
 
 interface SalesOrderItem {
+    salesChannel: { id: string; code: string } | null;
     id: string;
     createdAt: string;
     orderPlacedAt?: string | null;
@@ -118,6 +120,7 @@ interface SalesOrderItem {
 }
 
 interface SalesOrdersData {
+    activeChannel: { id: string; code: string };
     orders: { items: SalesOrderItem[]; totalItems: number };
     physicalFulfillmentTodoCount: number;
 }
@@ -238,9 +241,12 @@ export function SalesModule() {
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     const physicalTodoCount = data?.physicalFulfillmentTodoCount ?? 0;
     const selectableOrders = orders.filter(
-        order => FULFILLABLE_STATES.includes(order.state) && getRemainingPhysicalLines(order).length > 0,
+        order =>
+            canManageOrderInChannel(order, data?.activeChannel?.id) &&
+            FULFILLABLE_STATES.includes(order.state) &&
+            getRemainingPhysicalLines(order).length > 0,
     );
-    const selectedOrders = orders.filter(order => selectedOrderIds.includes(order.id));
+    const selectedOrders = selectableOrders.filter(order => selectedOrderIds.includes(order.id));
     const allSelectableChecked =
         selectableOrders.length > 0 && selectableOrders.every(order => selectedOrderIds.includes(order.id));
 
@@ -364,8 +370,20 @@ export function SalesModule() {
             setActionError('当前页没有可导出的订单');
             return;
         }
-        const header = ['订单号', '下单时间', '客户', '邮箱', '金额', '币种', '状态', '履约类型', '收货地址'];
+        const header = [
+            '销售店铺',
+            '订单号',
+            '下单时间',
+            '客户',
+            '邮箱',
+            '金额',
+            '币种',
+            '状态',
+            '履约类型',
+            '收货地址',
+        ];
         const rows = orders.map(order => [
+            order.salesChannel?.code ?? '归属待核实',
             order.code,
             formatDateTime(order.orderPlacedAt ?? order.createdAt),
             getCustomerName(order.customer),
@@ -699,6 +717,7 @@ export function SalesModule() {
                                                 const remainingLines = getRemainingPhysicalLines(order);
                                                 const canFulfill =
                                                     canUpdateOrder &&
+                                                    canManageOrderInChannel(order, data?.activeChannel?.id) &&
                                                     FULFILLABLE_STATES.includes(order.state) &&
                                                     remainingLines.length > 0;
                                                 const summary = summarizeOrderListItem(order);
@@ -747,6 +766,14 @@ export function SalesModule() {
                                                             >
                                                                 {order.code}
                                                             </button>
+                                                            <span
+                                                                className="block truncate text-[10px] text-slate-500"
+                                                                title={
+                                                                    order.salesChannel?.code ?? '归属待核实'
+                                                                }
+                                                            >
+                                                                {order.salesChannel?.code ?? '归属待核实'}
+                                                            </span>
                                                         </td>
                                                         <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
                                                             {formatDateTime(

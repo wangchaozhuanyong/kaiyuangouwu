@@ -25,7 +25,8 @@ function digitalOrder(paymentState = 'Settled') {
         state: 'PaymentSettled',
         active: false,
         totalWithTax: 100,
-        channels: [{ id: channelId }],
+        salesChannelId: channelId,
+        channels: [{ id: channelId }, { id: 'channel-2' }],
         payments: paymentState ? [{ state: paymentState, amount: 100, refunds: [] }] : [],
         lines: [
             {
@@ -140,7 +141,7 @@ describe('DigitalDeliveryService', () => {
         await expect(service.authorizeDownload(`${token}x`, requestHost)).resolves.toBeUndefined();
 
         const order = digitalOrder('Authorized');
-        order.channels = [{ id: 'channel-2' }];
+        order.salesChannelId = 'channel-2';
         const crossChannel = createService(order);
         await expect(crossChannel.service.authorizeDownload(token, requestHost)).resolves.toBeUndefined();
     });
@@ -174,3 +175,19 @@ describe('DigitalDeliveryService', () => {
         await expect(service.deliveriesForOrder(ctx, 'order-1')).resolves.toEqual([]);
     });
 });
+
+it.each(['channel-2', null])(
+    'blocks issuance and old links for sale owner %s despite channel membership',
+    async salesChannelId => {
+        const order = digitalOrder();
+        const { service } = createService(order);
+        const [delivery] = await service.deliveriesForOrder(ctx, order.id);
+        const downloadUrl = delivery.downloadUrl;
+        if (!downloadUrl) throw new Error('Expected a digital delivery download URL');
+        const token = downloadUrl.split('/').at(-1);
+        if (!token) throw new Error('Expected a digital delivery token');
+        order.salesChannelId = salesChannelId;
+        await expect(service.deliveriesForOrder(ctx, order.id)).rejects.toThrow();
+        await expect(service.authorizeDownload(token, requestHost)).resolves.toBeUndefined();
+    },
+);

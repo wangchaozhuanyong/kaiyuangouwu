@@ -70,6 +70,14 @@ export class CatalogImportWriter {
         stockLocations: Array<{ id: string; name: string }>,
         multiVariantProductKeys: Set<string>,
     ): Promise<void> {
+        if (
+            (row.expectedProductUpdatedAt || row.expectedVariantUpdatedAt) &&
+            row.beforeSnapshot?.previewTimestampPrecision !== 6
+        ) {
+            // Old previews may have rounded the source version to whole seconds. Increasing the
+            // column precision cannot recover it, including when the rounded value looks current.
+            throw new UserInputError('此预览由旧版本生成，版本时间精度不足，请重新创建预览');
+        }
         const typeError =
             catalogImportStoreError(row.normalizedData, ctx) ??
             catalogImportTypeError(ctx, row.normalizedData);
@@ -102,7 +110,6 @@ export class CatalogImportWriter {
             if (
                 row.expectedProductUpdatedAt &&
                 !productAlreadyHandled &&
-                row.resolution !== 'UPDATE_EXISTING' &&
                 product.updatedAt.getTime() !== row.expectedProductUpdatedAt.getTime()
             ) {
                 throw new UserInputError('商品在预览后被修改，请重新创建预览');
@@ -173,7 +180,6 @@ export class CatalogImportWriter {
             if (
                 row.expectedVariantUpdatedAt &&
                 !variantAlreadyHandled &&
-                row.resolution !== 'UPDATE_EXISTING' &&
                 variant.updatedAt.getTime() !== row.expectedVariantUpdatedAt.getTime()
             ) {
                 throw new UserInputError('SKU 在预览后被修改，请重新创建预览');

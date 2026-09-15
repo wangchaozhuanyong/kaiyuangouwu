@@ -8,6 +8,7 @@ import { ImageGenerationService } from './image-generation.service';
 import { ImagePromptEngineService } from './prompt/image-prompt-engine.service';
 import { UploadedImageFile } from './storage/image-private-storage.service';
 import {
+    CreateCatalogImageGenerationInput,
     CreateImageGenerationInput,
     ImageAiUsageRecordListInput,
     ImageProviderScope,
@@ -142,6 +143,101 @@ export class ImageGenerationAdminResolver {
         private readonly promptEngine: ImagePromptEngineService,
         private readonly reliability: ImageGenerationReliabilityService,
     ) {}
+
+    @Query()
+    @Allow(
+        Permission.SuperAdmin,
+        Permission.CreateProduct,
+        Permission.UpdateProduct,
+        Permission.CreateCatalog,
+        Permission.UpdateCatalog,
+    )
+    catalogImageStudioConfig(@Ctx() ctx: RequestContext) {
+        return this.generations.catalogConfig(ctx);
+    }
+
+    @Query()
+    @Allow(
+        Permission.SuperAdmin,
+        Permission.CreateProduct,
+        Permission.UpdateProduct,
+        Permission.CreateCatalog,
+        Permission.UpdateCatalog,
+    )
+    catalogImageGenerationJob(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.generations.catalogGeneration(ctx, id);
+    }
+
+    @Query()
+    @Allow(
+        Permission.SuperAdmin,
+        Permission.CreateProduct,
+        Permission.UpdateProduct,
+        Permission.CreateCatalog,
+        Permission.UpdateCatalog,
+    )
+    catalogImageGenerationJobs(
+        @Ctx() ctx: RequestContext,
+        @Args('skip') skip?: number,
+        @Args('take') take?: number,
+    ) {
+        return this.generations.catalogGenerations(ctx, skip, take);
+    }
+
+    @Mutation()
+    @Allow(
+        Permission.SuperAdmin,
+        Permission.CreateProduct,
+        Permission.UpdateProduct,
+        Permission.CreateCatalog,
+        Permission.UpdateCatalog,
+    )
+    uploadCatalogImageReference(
+        @Ctx() ctx: RequestContext,
+        @Args('file') file: Promise<UploadedImageFile>,
+        @Args('termsAccepted') termsAccepted: boolean,
+    ) {
+        return this.generations.uploadCatalogReference(ctx, file, termsAccepted);
+    }
+
+    @Mutation()
+    @Allow(
+        Permission.SuperAdmin,
+        Permission.CreateProduct,
+        Permission.UpdateProduct,
+        Permission.CreateCatalog,
+        Permission.UpdateCatalog,
+    )
+    releaseCatalogImageReference(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.generations.releaseCatalogReference(ctx, id);
+    }
+
+    @Mutation()
+    @Allow(
+        Permission.SuperAdmin,
+        Permission.CreateProduct,
+        Permission.UpdateProduct,
+        Permission.CreateCatalog,
+        Permission.UpdateCatalog,
+    )
+    createCatalogImageGeneration(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: CreateCatalogImageGenerationInput,
+    ) {
+        return this.generations.createCatalogGeneration(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(
+        Permission.SuperAdmin,
+        Permission.CreateProduct,
+        Permission.UpdateProduct,
+        Permission.CreateCatalog,
+        Permission.UpdateCatalog,
+    )
+    useCatalogImageOutput(@Ctx() ctx: RequestContext, @Args('outputId') outputId: ID) {
+        return this.generations.useCatalogOutput(ctx, outputId);
+    }
 
     @Query()
     @Allow(manageImageGenerationPermission.Read)

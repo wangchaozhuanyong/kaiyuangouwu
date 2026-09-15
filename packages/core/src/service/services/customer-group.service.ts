@@ -27,6 +27,7 @@ import { CustomerGroupChangeEvent } from '../../event-bus/events/customer-group-
 import { CustomerGroupEvent } from '../../event-bus/events/customer-group-event';
 import { CustomFieldRelationService } from '../helpers/custom-field-relation/custom-field-relation.service';
 import { ListQueryBuilder } from '../helpers/list-query-builder/list-query-builder';
+import { isPlatformAdminContext } from '../helpers/platform-admin-context';
 import { patchEntity } from '../helpers/utils/patch-entity';
 
 import { HistoryService } from './history.service';
@@ -54,7 +55,11 @@ export class CustomerGroupService {
         relations: RelationPaths<CustomerGroup> = [],
     ): Promise<PaginatedList<CustomerGroup>> {
         return this.listQueryBuilder
-            .build(CustomerGroup, options, { ctx, relations })
+            .build(CustomerGroup, options, {
+                ctx,
+                relations,
+                where: isPlatformAdminContext(ctx) ? {} : { channelId: ctx.channelId },
+            })
             .getManyAndCount()
             .then(([items, totalItems]) => ({ items, totalItems }));
     }
@@ -66,7 +71,13 @@ export class CustomerGroupService {
     ): Promise<CustomerGroup | undefined> {
         return this.connection
             .getRepository(ctx, CustomerGroup)
-            .findOne({ where: { id: customerGroupId }, relations })
+            .findOne({
+                where: {
+                    id: customerGroupId,
+                    ...(isPlatformAdminContext(ctx) ? {} : { channelId: ctx.channelId }),
+                },
+                relations,
+            })
             .then(result => result ?? undefined);
     }
 
@@ -79,35 +90,36 @@ export class CustomerGroupService {
         customerGroupId: ID,
         options?: CustomerListOptions,
     ): Promise<PaginatedList<Customer>> {
-        return this.listQueryBuilder
+        const query = this.listQueryBuilder
             .build(Customer, options, { ctx })
             .leftJoin('customer.groups', 'group')
             .leftJoin('customer.channels', 'channel')
             .andWhere('group.id = :groupId', { groupId: customerGroupId })
-            .andWhere('customer.deletedAt IS NULL', { groupId: customerGroupId })
-            .andWhere('channel.id =:channelId', { channelId: ctx.channelId })
-            .getManyAndCount()
-            .then(([items, totalItems]) => ({ items, totalItems }));
+            .andWhere('customer.deletedAt IS NULL', { groupId: customerGroupId });
+        if (!isPlatformAdminContext(ctx)) {
+            query.andWhere('group.channelId = :channelId AND channel.id = :channelId', {
+                channelId: ctx.channelId,
+            });
+        }
+        return query.getManyAndCount().then(([items, totalItems]) => ({ items, totalItems }));
     }
 
     async create(ctx: RequestContext, input: CreateCustomerGroupInput): Promise<CustomerGroup> {
-        const customerGroup = new CustomerGroup(input);
+        return this.connection.withTransaction(ctx, txCtx => this.createInTransaction(txCtx, input));
+    }
+
+    private async createInTransaction(
+        ctx: RequestContext,
+        input: CreateCustomerGroupInput,
+    ): Promise<CustomerGroup> {
+        const customerGroup = new CustomerGroup({ ...input, channelId: ctx.channelId });
 
         const newCustomerGroup = await this.connection.getRepository(ctx, CustomerGroup).save(customerGroup);
         if (input.customerIds) {
-            const customers = await this.getCustomersFromIds(ctx, input.customerIds);
-            for (const customer of customers) {
-                customer.groups = [...(customer.groups || []), newCustomerGroup];
-                await this.historyService.createHistoryEntryForCustomer({
-                    ctx,
-                    customerId: customer.id,
-                    type: HistoryEntryType.CUSTOMER_ADDED_TO_GROUP,
-                    data: {
-                        groupName: customerGroup.name,
-                    },
-                });
-            }
-            await this.connection.getRepository(ctx, Customer).save(customers);
+            await this.addCustomersToGroup(ctx, {
+                customerGroupId: newCustomerGroup.id,
+                customerIds: input.customerIds,
+            });
         }
         const savedCustomerGroup = await assertFound(this.findOne(ctx, newCustomerGroup.id));
         await this.customFieldRelationService.updateRelations(ctx, CustomerGroup, input, savedCustomerGroup);
@@ -116,7 +128,7 @@ export class CustomerGroupService {
     }
 
     async update(ctx: RequestContext, input: UpdateCustomerGroupInput): Promise<CustomerGroup> {
-        const customerGroup = await this.connection.getEntityOrThrow(ctx, CustomerGroup, input.id);
+        const customerGroup = await this.getOwnedGroup(ctx, input.id);
         const updatedCustomerGroup = patchEntity(customerGroup, input);
         await this.connection.getRepository(ctx, CustomerGroup).save(updatedCustomerGroup, { reload: false });
         await this.customFieldRelationService.updateRelations(
@@ -130,7 +142,7 @@ export class CustomerGroupService {
     }
 
     async delete(ctx: RequestContext, id: ID): Promise<DeletionResponse> {
-        const group = await this.connection.getEntityOrThrow(ctx, CustomerGroup, id);
+        const group = await this.getOwnedGroup(ctx, id);
         try {
             const deletedGroup = new CustomerGroup(group);
             await this.connection.getRepository(ctx, CustomerGroup).remove(group);
@@ -156,10 +168,25 @@ export class CustomerGroupService {
         ctx: RequestContext,
         input: MutationAddCustomersToGroupArgs,
     ): Promise<CustomerGroup> {
+        return this.connection.withTransaction(ctx, txCtx =>
+            this.addCustomersToGroupInTransaction(txCtx, input),
+        );
+    }
+
+    private async addCustomersToGroupInTransaction(
+        ctx: RequestContext,
+        input: MutationAddCustomersToGroupArgs,
+    ): Promise<CustomerGroup> {
+        const group = await this.getOwnedGroup(ctx, input.customerGroupId);
         const customers = await this.getCustomersFromIds(ctx, input.customerIds);
-        const group = await this.connection.getEntityOrThrow(ctx, CustomerGroup, input.customerGroupId);
         for (const customer of customers) {
             if (!customer.groups.map(g => g.id).includes(input.customerGroupId)) {
+                await this.connection
+                    .getRepository(ctx, Customer)
+                    .createQueryBuilder()
+                    .relation(Customer, 'groups')
+                    .of(customer)
+                    .add(group);
                 customer.groups.push(group);
                 await this.historyService.createHistoryEntryForCustomer({
                     ctx,
@@ -172,7 +199,6 @@ export class CustomerGroupService {
             }
         }
 
-        await this.connection.getRepository(ctx, Customer).save(customers, { reload: false });
         await this.eventBus.publish(new CustomerGroupChangeEvent(ctx, customers, group, 'assigned'));
 
         return assertFound(this.findOne(ctx, group.id));
@@ -182,12 +208,27 @@ export class CustomerGroupService {
         ctx: RequestContext,
         input: MutationRemoveCustomersFromGroupArgs,
     ): Promise<CustomerGroup> {
+        return this.connection.withTransaction(ctx, txCtx =>
+            this.removeCustomersFromGroupInTransaction(txCtx, input),
+        );
+    }
+
+    private async removeCustomersFromGroupInTransaction(
+        ctx: RequestContext,
+        input: MutationRemoveCustomersFromGroupArgs,
+    ): Promise<CustomerGroup> {
+        const group = await this.getOwnedGroup(ctx, input.customerGroupId);
         const customers = await this.getCustomersFromIds(ctx, input.customerIds);
-        const group = await this.connection.getEntityOrThrow(ctx, CustomerGroup, input.customerGroupId);
         for (const customer of customers) {
             if (!customer.groups.map(g => g.id).includes(input.customerGroupId)) {
                 throw new UserInputError('error.customer-does-not-belong-to-customer-group');
             }
+            await this.connection
+                .getRepository(ctx, Customer)
+                .createQueryBuilder()
+                .relation(Customer, 'groups')
+                .of(customer)
+                .remove(group);
             customer.groups = customer.groups.filter(g => !idsAreEqual(g.id, group.id));
             await this.historyService.createHistoryEntryForCustomer({
                 ctx,
@@ -198,16 +239,21 @@ export class CustomerGroupService {
                 },
             });
         }
-        await this.connection.getRepository(ctx, Customer).save(customers, { reload: false });
         await this.eventBus.publish(new CustomerGroupChangeEvent(ctx, customers, group, 'removed'));
         return assertFound(this.findOne(ctx, group.id));
     }
 
-    private getCustomersFromIds(ctx: RequestContext, ids: ID[]): Promise<Customer[]> | Customer[] {
+    private getOwnedGroup(ctx: RequestContext, id: ID): Promise<CustomerGroup> {
+        return this.connection.getEntityOrThrow(ctx, CustomerGroup, id, {
+            where: { channelId: ctx.channelId },
+        });
+    }
+
+    private async getCustomersFromIds(ctx: RequestContext, ids: ID[]): Promise<Customer[]> {
         if (ids.length === 0) {
             return new Array<Customer>();
         } // TypeORM throws error when list is empty
-        return this.connection
+        const customers = await this.connection
             .getRepository(ctx, Customer)
             .createQueryBuilder('customer')
             .leftJoin('customer.channels', 'channel')
@@ -216,5 +262,9 @@ export class CustomerGroupService {
             .andWhere('channel.id = :channelId', { channelId: ctx.channelId })
             .andWhere('customer.deletedAt is null')
             .getMany();
+        if (customers.length !== new Set(ids.map(String)).size) {
+            throw new UserInputError('包含当前店铺不可访问的会员');
+        }
+        return customers;
     }
 }

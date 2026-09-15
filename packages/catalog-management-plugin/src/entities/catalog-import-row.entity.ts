@@ -45,10 +45,10 @@ export class CatalogImportRow extends VendureEntity {
     @EntityId({ nullable: true })
     targetVariantId: ID | null;
 
-    @Column({ type: Date, nullable: true })
+    @Column({ type: Date, nullable: true, precision: 6 })
     expectedProductUpdatedAt: Date | null;
 
-    @Column({ type: Date, nullable: true })
+    @Column({ type: Date, nullable: true, precision: 6 })
     expectedVariantUpdatedAt: Date | null;
 
     @Column({ type: 'simple-json' })

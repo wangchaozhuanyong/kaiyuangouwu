@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Order, OrderLine, RequestContext, TransactionalConnection } from '@vendure/core';
+import {
+    assertOrderSalesChannel,
+    Order,
+    OrderLine,
+    RequestContext,
+    TransactionalConnection,
+} from '@vendure/core';
 
 import {
     DigitalDeliveryResource,
@@ -38,13 +44,12 @@ export class DigitalDeliveryService {
                 'lines',
                 'lines.productVariant',
                 'lines.productVariant.translations',
-                'channels',
                 'payments',
                 'payments.refunds',
                 'payments.refunds.lines',
             ],
-            channelId: ctx.channelId,
         });
+        assertOrderSalesChannel(ctx, order);
         return order.lines
             .filter(line => isFileDownloadOrderLine(line))
             .map(line => this.deliveryForLine(ctx, order, line));
@@ -63,13 +68,12 @@ export class DigitalDeliveryService {
             relations: [
                 'lines',
                 'lines.productVariant',
-                'channels',
                 'payments',
                 'payments.refunds',
                 'payments.refunds.lines',
             ],
         });
-        if (!order || !(order.channels ?? []).some(channel => String(channel.id) === payload.channelId)) {
+        if (!order || order.salesChannelId == null || String(order.salesChannelId) !== payload.channelId) {
             return;
         }
         const line = order.lines.find(item => String(item.id) === payload.orderLineId);

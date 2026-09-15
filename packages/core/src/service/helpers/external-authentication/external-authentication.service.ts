@@ -3,6 +3,7 @@ import { HistoryEntryType } from '@vendure/common/lib/generated-types';
 
 import { RequestContext } from '../../../api/common/request-context';
 import { UnverifiedExternalEmailError } from '../../../common/error/errors';
+import { normalizeEmailAddress } from '../../../common/utils';
 import { TransactionalConnection } from '../../../connection/transactional-connection';
 import { Administrator } from '../../../entity/administrator/administrator.entity';
 import { ExternalAuthenticationMethod } from '../../../entity/authentication-method/external-authentication-method.entity';
@@ -11,9 +12,11 @@ import { Role } from '../../../entity/role/role.entity';
 import { User } from '../../../entity/user/user.entity';
 import { AdministratorService } from '../../services/administrator.service';
 import { ChannelService } from '../../services/channel.service';
+import { CustomerStoreEntryService } from '../../services/customer-store-entry.service';
 import { CustomerService } from '../../services/customer.service';
 import { HistoryService } from '../../services/history.service';
 import { RoleService } from '../../services/role.service';
+import { UserService } from '../../services/user.service';
 
 /**
  * @description
@@ -31,6 +34,8 @@ export class ExternalAuthenticationService {
         private customerService: CustomerService,
         private administratorService: AdministratorService,
         private channelService: ChannelService,
+        private userService: UserService,
+        private storeEntryService: CustomerStoreEntryService,
     ) {}
 
     /**
@@ -38,15 +43,14 @@ export class ExternalAuthenticationService {
      * Looks up a User based on their identifier from an external authentication
      * provider, ensuring this User is associated with a Customer account.
      *
-     * By default, only customers in the currently-active Channel will be checked.
-     * By passing `false` as the `checkCurrentChannelOnly` argument, _all_ channels
-     * will be checked.
+     * Customers are shared by default. A custom integration can explicitly restrict its lookup
+     * to existing store membership with `checkCurrentChannelOnly`.
      */
     async findCustomerUser(
         ctx: RequestContext,
         strategy: string,
         externalIdentifier: string,
-        checkCurrentChannelOnly = true,
+        checkCurrentChannelOnly = false,
     ): Promise<User | undefined> {
         const user = await this.findUser(ctx, strategy, externalIdentifier);
 
@@ -107,6 +111,16 @@ export class ExternalAuthenticationService {
             verified?: boolean;
         },
     ): Promise<User> {
+        return this.connection.withTransaction(ctx, txCtx =>
+            this.createCustomerAndUserInTransaction(txCtx, config),
+        );
+    }
+
+    private async createCustomerAndUserInTransaction(
+        ctx: RequestContext,
+        config: Parameters<ExternalAuthenticationService['createCustomerAndUser']>[1],
+    ): Promise<User> {
+        config = { ...config, emailAddress: normalizeEmailAddress(config.emailAddress) };
         let user: User;
 
         const existingUser = await this.findExistingCustomerUserByEmailAddress(ctx, config.emailAddress);
@@ -124,6 +138,7 @@ export class ExternalAuthenticationService {
             const customerRole = await this.roleService.getCustomerRole(ctx);
             user = new User({
                 identifier: config.emailAddress,
+                customerIdentifier: config.emailAddress,
                 roles: [customerRole],
                 verified: config.verified || false,
                 authenticationMethods: [],
@@ -140,7 +155,7 @@ export class ExternalAuthenticationService {
         const savedUser = await this.connection.getRepository(ctx, User).save(user);
 
         let customer: Customer;
-        const existingCustomer = await this.customerService.findOneByUserId(ctx, savedUser.id);
+        const existingCustomer = await this.customerService.findOneByUserId(ctx, savedUser.id, false);
         if (existingCustomer) {
             customer = existingCustomer;
         } else {
@@ -151,8 +166,14 @@ export class ExternalAuthenticationService {
                 user: savedUser,
             });
         }
+        if (existingCustomer) {
+            // The authenticated-entry guard applies the configured assignment strategy after login.
+            // Do not overwrite the shared profile or grant membership while linking a provider.
+            return savedUser;
+        }
         await this.channelService.assignToCurrentChannel(customer, ctx);
         await this.connection.getRepository(ctx, Customer).save(customer);
+        await this.storeEntryService.recordRegistration(ctx, customer.id, savedUser.verified);
 
         await this.historyService.createHistoryEntryForCustomer({
             customerId: customer.id,
@@ -241,17 +262,7 @@ export class ExternalAuthenticationService {
     }
 
     private async findExistingCustomerUserByEmailAddress(ctx: RequestContext, emailAddress: string) {
-        const customer = await this.connection
-            .getRepository(ctx, Customer)
-            .createQueryBuilder('customer')
-            .leftJoinAndSelect('customer.user', 'user')
-            .leftJoin('customer.channels', 'channel')
-            .leftJoinAndSelect('user.authenticationMethods', 'authMethod')
-            .andWhere('customer.emailAddress = :emailAddress', { emailAddress })
-            .andWhere('user.deletedAt IS NULL')
-            .getOne();
-
-        return customer?.user;
+        return this.userService.getUserByEmailAddress(ctx, emailAddress, 'customer');
     }
 
     /**

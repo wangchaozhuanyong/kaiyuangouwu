@@ -110,6 +110,12 @@ import { AddIcloudRelayTables1788750000000 } from './1788750000000-add-icloud-re
 import { AlignIcloudRelaySchema1788751000000 } from './1788751000000-align-icloud-relay-schema';
 import { AddImageProviderAttemptLedger1789272000000 } from './1789272000000-add-image-provider-attempt-ledger';
 import { AddImageProviderBillingAudit1789300800000 } from './1789300800000-add-image-provider-billing-audit';
+import { AddAdminCatalogImageGeneration1789358400000 } from './1789358400000-add-admin-catalog-image-generation';
+import { AlignCatalogImportPreviewTimestamps1789387200000 } from './1789387200000-align-catalog-import-preview-timestamps';
+import { AddOrderSalesChannel1789390800000 } from './1789390800000-add-order-sales-channel';
+import { AddCustomerIdentityKey1789394400000 } from './1789394400000-add-customer-identity-key';
+import { AddCustomerGroupChannel1789398000000 } from './1789398000000-add-customer-group-channel';
+import { AddCustomerStoreEntry1789401600000 } from './1789401600000-add-customer-store-entry';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -224,4 +230,10 @@ export const devServerMigrations = [
     AlignIcloudRelaySchema1788751000000,
     AddImageProviderAttemptLedger1789272000000,
     AddImageProviderBillingAudit1789300800000,
+    AddAdminCatalogImageGeneration1789358400000,
+    AlignCatalogImportPreviewTimestamps1789387200000,
+    AddOrderSalesChannel1789390800000,
+    AddCustomerIdentityKey1789394400000,
+    AddCustomerGroupChannel1789398000000,
+    AddCustomerStoreEntry1789401600000,
 ];

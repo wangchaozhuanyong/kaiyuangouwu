@@ -14,11 +14,17 @@ export * from './helpers/order-calculator/order-calculator';
 export * from './helpers/order-calculator/prorate';
 export * from './helpers/order-merger/order-merger';
 export * from './helpers/order-modifier/order-modifier';
+export {
+    assertOrderSalesChannel,
+    orderBelongsToSalesChannel,
+    scopeOrderQuery,
+} from './helpers/order-sales-scope';
 export * from './helpers/order-splitter/order-splitter';
 export * from './helpers/order-state-machine/order-state';
 export * from './helpers/order-state-machine/order-state-machine';
 export * from './helpers/password-cipher/password-cipher';
 export * from './helpers/payment-state-machine/payment-state';
+export { isPlatformAdminContext } from './helpers/platform-admin-context';
 export * from './helpers/product-price-applicator/product-price-applicator';
 export * from './helpers/refund-state-machine/refund-state';
 export * from './helpers/request-context/request-context.service';
@@ -66,3 +72,7 @@ export * from './services/tax-category.service';
 export * from './services/tax-rate.service';
 export * from './services/user.service';
 export * from './services/zone.service';
+
+export * from './services/customer-store-entry.service';
+
+export * from './helpers/customer-channel-assignment/customer-channel-assignment.service';

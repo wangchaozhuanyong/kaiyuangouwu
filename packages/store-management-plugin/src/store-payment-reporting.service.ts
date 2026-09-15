@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID } from '@vendure/common/lib/shared-types';
-import { Order, Payment, Refund, RequestContext, TransactionalConnection } from '@vendure/core';
-import { SelectQueryBuilder } from 'typeorm';
+import { Payment, Refund, RequestContext, TransactionalConnection } from '@vendure/core';
 
 import { normalizeStoreReportOptions, StoreReportListOptions } from './store-reporting-options';
 
@@ -109,7 +107,7 @@ export class StorePaymentReportingService {
             .getRepository(ctx, Payment)
             .createQueryBuilder('payment')
             .innerJoin('payment.order', 'order')
-            .innerJoin('order.channels', 'channel')
+            .innerJoin('order.salesChannel', 'channel')
             .select('channel.id', 'channelId')
             .addSelect('channel.code', 'channelCode')
             .addSelect('payment.method', 'paymentMethodCode')
@@ -123,7 +121,6 @@ export class StorePaymentReportingService {
             .addGroupBy('channel.code')
             .addGroupBy('payment.method')
             .addGroupBy('order.currencyCode');
-        excludeDefaultChannelCopies(paymentQuery);
         if (channelId != null) paymentQuery.andWhere('channel.id = :channelId', { channelId });
         applyDateRange(paymentQuery, 'payment.createdAt', normalized.from, normalized.to);
 
@@ -132,7 +129,7 @@ export class StorePaymentReportingService {
             .createQueryBuilder('refund')
             .innerJoin('refund.payment', 'payment')
             .innerJoin('payment.order', 'order')
-            .innerJoin('order.channels', 'channel')
+            .innerJoin('order.salesChannel', 'channel')
             .select('channel.id', 'channelId')
             .addSelect('channel.code', 'channelCode')
             .addSelect('payment.method', 'paymentMethodCode')
@@ -146,7 +143,6 @@ export class StorePaymentReportingService {
             .addGroupBy('channel.code')
             .addGroupBy('payment.method')
             .addGroupBy('order.currencyCode');
-        excludeDefaultChannelCopies(refundQuery);
         if (channelId != null) refundQuery.andWhere('channel.id = :channelId', { channelId });
         applyDateRange(refundQuery, 'refund.createdAt', normalized.from, normalized.to);
 
@@ -168,7 +164,7 @@ export class StorePaymentReportingService {
             .getRepository(ctx, Payment)
             .createQueryBuilder('payment')
             .innerJoin('payment.order', 'order')
-            .innerJoin('order.channels', 'channel')
+            .innerJoin('order.salesChannel', 'channel')
             .leftJoin('payment.refunds', 'refund', 'refund.state = :settledRefundState', {
                 settledRefundState: SETTLED_REFUND_STATE,
             })
@@ -199,7 +195,6 @@ export class StorePaymentReportingService {
             .addOrderBy('payment.id', 'DESC')
             .offset(normalized.skip)
             .limit(normalized.take);
-        excludeDefaultChannelCopies(query);
         if (channelId != null) query.andWhere('channel.id = :channelId', { channelId });
         applyDateRange(query, 'payment.createdAt', normalized.from, normalized.to);
 
@@ -207,9 +202,8 @@ export class StorePaymentReportingService {
             .getRepository(ctx, Payment)
             .createQueryBuilder('payment')
             .innerJoin('payment.order', 'order')
-            .innerJoin('order.channels', 'channel')
+            .innerJoin('order.salesChannel', 'channel')
             .select('COUNT(payment.id)', 'totalItems');
-        excludeDefaultChannelCopies(countQuery);
         if (channelId != null) countQuery.andWhere('channel.id = :channelId', { channelId });
         applyDateRange(countQuery, 'payment.createdAt', normalized.from, normalized.to);
 
@@ -239,22 +233,6 @@ export class StorePaymentReportingService {
         });
         return { items, totalItems: Number(countRow?.totalItems ?? 0) };
     }
-}
-
-// Vendure also associates merchant orders with the default Channel. That administrative copy
-// is not another payment; retain default-only orders, but report merchant orders under their store.
-function excludeDefaultChannelCopies<T extends Payment | Refund>(query: SelectQueryBuilder<T>): void {
-    const merchantChannel = query
-        .subQuery()
-        .select('1')
-        .from(Order, 'merchantOrder')
-        .innerJoin('merchantOrder.channels', 'merchantChannel')
-        .where('merchantOrder.id = order.id')
-        .andWhere('merchantChannel.code <> :reportDefaultChannelCode')
-        .getQuery();
-    query.andWhere(`(channel.code <> :reportDefaultChannelCode OR NOT EXISTS ${merchantChannel})`, {
-        reportDefaultChannelCode: DEFAULT_CHANNEL_CODE,
-    });
 }
 
 export function paymentReportDate(value: Date | string): Date {
