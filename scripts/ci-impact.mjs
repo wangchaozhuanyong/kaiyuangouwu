@@ -100,7 +100,7 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
     const unknown = executable.filter(
         file =>
             !/^(packages\/|scripts\/|deploy\/|\.github\/|patches\/|e2e-common\/)/u.test(file) &&
-            !/^(package\.json|bun\.(lock|lockb)|bunfig\.toml|lerna\.json|tsconfig[^/]*\.json|\.(gitignore|npmrc|prettierignore))$/u.test(
+            !/^(package\.json|bun\.(lock|lockb)|bunfig\.toml|lerna\.json|tsconfig[^/]*\.json|schema-[^/]*\.json|\.(gitignore|npmrc|prettierignore))$/u.test(
                 file,
             ) &&
             !/^[^/]*(eslint|prettier)[^/]*$/u.test(file),
