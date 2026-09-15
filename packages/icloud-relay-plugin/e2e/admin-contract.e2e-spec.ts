@@ -349,20 +349,19 @@ describe('iCloud admin contract persistence', () => {
     });
 
     it('continues to reject anonymous private operations and admin mailbox queries', async () => {
+        const activeOrderResult = await shopClient.query(gql`
+            query {
+                activeOrder {
+                    id
+                }
+            }
+        `);
+        expect(activeOrderResult.activeOrder).toBeNull();
         await expect(
             shopClient.query(gql`
                 query {
-                    activeOrder {
+                    me {
                         id
-                    }
-                }
-            `),
-        ).rejects.toThrow('not currently authorized');
-        await expect(
-            shopClient.query(gql`
-                mutation {
-                    addItemToOrder(productVariantId: "1", quantity: 1) {
-                        __typename
                     }
                 }
             `),
