@@ -7,9 +7,11 @@ import { RequestContext } from '../../../api/common/request-context';
 import { ForbiddenError } from '../../../common/error/errors';
 import { ConfigService } from '../../../config/config.service';
 import { MockConfigService } from '../../../config/config.service.mock';
+import { TransactionalConnection } from '../../../connection/transactional-connection';
 import { Channel } from '../../../entity/channel/channel.entity';
 import { Customer } from '../../../entity/customer/customer.entity';
 import { ChannelService } from '../../services/channel.service';
+import { CustomerStoreEntryService } from '../../services/customer-store-entry.service';
 import { CustomerService } from '../../services/customer.service';
 
 import { CustomerChannelAssignmentService } from './customer-channel-assignment.service';
@@ -37,11 +39,25 @@ describe('CustomerChannelAssignmentService', () => {
     let findOneByUserId: ReturnType<typeof vi.fn>;
     let assignToChannels: ReturnType<typeof vi.fn>;
     let canAssignCustomerToChannel: ReturnType<typeof vi.fn>;
+    let recordAuthenticatedEntry: ReturnType<typeof vi.fn>;
+    let currentMember: Customer | undefined;
 
     beforeEach(async () => {
         findOneByUserId = vi.fn();
         assignToChannels = vi.fn().mockResolvedValue(undefined);
         canAssignCustomerToChannel = vi.fn().mockReturnValue(true);
+        recordAuthenticatedEntry = vi.fn().mockResolvedValue(undefined);
+        currentMember = undefined;
+        const createQueryBuilder = () => {
+            const query = {
+                where: vi.fn().mockReturnThis(),
+                innerJoin: vi.fn().mockReturnThis(),
+                setLock: vi.fn().mockReturnThis(),
+                getOneOrFail: vi.fn().mockResolvedValue(customer),
+                getOne: vi.fn(() => Promise.resolve(currentMember)),
+            };
+            return query;
+        };
 
         const module = await Test.createTestingModule({
             providers: [
@@ -49,6 +65,25 @@ describe('CustomerChannelAssignmentService', () => {
                 { provide: ConfigService, useClass: MockConfigService },
                 { provide: CustomerService, useValue: { findOneByUserId } },
                 { provide: ChannelService, useValue: { assignToChannels } },
+                {
+                    provide: TransactionalConnection,
+                    useValue: {
+                        rawConnection: { options: { type: 'mysql' } },
+                        getRepository: () => ({ createQueryBuilder }),
+                        withTransaction: (ctx: RequestContext, work: (tx: RequestContext) => unknown) =>
+                            work(ctx),
+                    },
+                },
+                {
+                    provide: CustomerStoreEntryService,
+                    useValue: {
+                        find: vi.fn().mockResolvedValue({
+                            source: 'AUTHENTICATED_ENTRY',
+                            firstSeenAt: new Date('2026-09-14T00:00:00Z'),
+                        }),
+                        recordAuthenticatedEntry,
+                    },
+                },
             ],
         }).compile();
 
@@ -64,6 +99,7 @@ describe('CustomerChannelAssignmentService', () => {
 
     /** member-filtered call (filterOnChannel=true) returns the member; the unfiltered call the entity. */
     function mockCustomer(opts: { isMember: boolean; exists: boolean }) {
+        currentMember = opts.isMember ? customer : undefined;
         findOneByUserId.mockImplementation((_ctx: RequestContext, _userId: ID, filterOnChannel = true) => {
             if (filterOnChannel) {
                 return opts.isMember ? customer : undefined;
@@ -82,6 +118,7 @@ describe('CustomerChannelAssignmentService', () => {
             expect(assignToChannels).toHaveBeenCalledWith(expect.anything(), Customer, customer.id, [
                 CHANNEL_ID,
             ]);
+            expect(recordAuthenticatedEntry).toHaveBeenCalledWith(expect.anything(), customer.id, false);
         });
 
         it('rejects a non-member when assignment is suppressed', async () => {
@@ -93,6 +130,7 @@ describe('CustomerChannelAssignmentService', () => {
             ).rejects.toBeInstanceOf(ForbiddenError);
 
             expect(assignToChannels).not.toHaveBeenCalled();
+            expect(recordAuthenticatedEntry).not.toHaveBeenCalled();
         });
 
         it('short-circuits an existing member without consulting the strategy', async () => {

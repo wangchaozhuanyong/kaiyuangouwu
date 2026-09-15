@@ -335,7 +335,7 @@ describe('complete cart domain on MySQL', () => {
                 `,
                 { id: couponId },
             ),
-        ).rejects.toThrow('Checkout is locked');
+        ).rejects.toThrow('订单正在付款');
         expect((await read()).checkoutOrder.totalWithTax).toBe(a.cart.checkoutOrder.totalWithTax);
         expect((await read()).revision).toBe(a.cart.revision);
         await connection.rawConnection

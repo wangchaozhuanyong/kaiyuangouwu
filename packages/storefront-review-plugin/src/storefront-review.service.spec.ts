@@ -8,6 +8,7 @@ function createHarness(
         fulfillmentType?: 'physical' | 'digital';
         existingReview?: any;
         reviewState?: string;
+        databaseType?: string;
     } = {},
 ) {
     const customer = {
@@ -60,11 +61,13 @@ function createHarness(
         getOne: vi.fn().mockResolvedValue(line),
     };
     const orderLineRepository = {
+        update: vi.fn().mockResolvedValue({ affected: 1 }),
         createQueryBuilder: vi.fn().mockReturnValue(orderLineQueryBuilder),
         findOne: vi.fn().mockResolvedValue(line),
         find: vi.fn().mockResolvedValue([line]),
     };
     const connection = {
+        rawConnection: { options: { type: overrides.databaseType ?? 'mysql' } },
         getRepository: vi.fn((_ctx: any, entity: any) => {
             if (entity.name === 'StorefrontReview') return reviewRepository;
             if (entity.name === 'OrderLine') return orderLineRepository;
@@ -98,7 +101,7 @@ function createHarness(
         channel: { id: 'channel-1' },
         languageCode: 'en',
     } as any;
-    return { service, ctx, reviewRepository, orderLineQueryBuilder };
+    return { service, ctx, reviewRepository, orderLineQueryBuilder, orderLineRepository };
 }
 
 const validInput = {
@@ -109,6 +112,25 @@ const validInput = {
 };
 
 describe('StorefrontReviewService', () => {
+    it.each(['sqlite', 'better-sqlite3', 'sqljs'])(
+        'uses a transaction write for %s review submissions',
+        async databaseType => {
+            const test = createHarness({ databaseType });
+            await expect(test.service.submit(test.ctx, validInput)).resolves.toMatchObject({
+                state: 'PENDING',
+            });
+            expect(test.orderLineRepository.update).toHaveBeenCalledWith({ id: 'line-1' }, { id: 'line-1' });
+            expect(test.orderLineQueryBuilder.setLock).not.toHaveBeenCalled();
+        },
+    );
+
+    it('does not swallow database lock errors', async () => {
+        const test = createHarness({ databaseType: 'sqlite' });
+        test.orderLineRepository.update.mockRejectedValueOnce(new Error('database unavailable'));
+        await expect(test.service.submit(test.ctx, validInput)).rejects.toThrow('database unavailable');
+        expect(test.reviewRepository.save).not.toHaveBeenCalled();
+    });
+
     it('returns an exact database aggregate for public product ratings', async () => {
         const test = createHarness();
 

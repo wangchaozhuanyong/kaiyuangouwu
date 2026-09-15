@@ -30,6 +30,7 @@ function createHarness(
         existingRequests?: any[];
         requestState?: string;
         requestApprovedAmount?: number;
+        databaseType?: string;
     } = {},
 ) {
     const customer = {
@@ -42,6 +43,7 @@ function createHarness(
     const order = {
         id: 'order-1',
         code: 'T001',
+        salesChannelId: 'channel-1',
         state: 'PaymentSettled',
         currencyCode: 'MYR',
         customer,
@@ -87,6 +89,7 @@ function createHarness(
     };
     const orderRepository = {
         createQueryBuilder: vi.fn().mockReturnValue(orderQueryBuilder),
+        update: vi.fn().mockResolvedValue({ affected: 1 }),
     };
     const refundRepository = {
         findOne: vi.fn().mockResolvedValue({
@@ -97,6 +100,7 @@ function createHarness(
         }),
     };
     const connection = {
+        rawConnection: { options: { type: overrides.databaseType ?? 'mysql' } },
         getEntityOrThrow: vi.fn().mockResolvedValue(order),
         getRepository: vi.fn((_ctx: any, entity: any) => {
             if (entity.name === 'AfterSalesRequest') return requestRepository;
@@ -140,10 +144,74 @@ function createHarness(
         refundRepository,
         eventRepository,
         orderQueryBuilder,
+        orderRepository,
     };
 }
 
 describe('AfterSalesService', () => {
+    it('accepts partial-delivery requests without completing or refunding them automatically', async () => {
+        const test = createHarness();
+        test.order.state = 'PartiallyDelivered';
+        const result = await test.service.create(test.ctx, {
+            orderId: 'order-1',
+            type: 'REFUND_ONLY',
+            reason: 'OTHER',
+            description: 'Mixed order partial delivery',
+            items: [{ orderLineId: 'line-1', quantity: 1 }],
+        });
+        expect(result).toMatchObject({ state: 'PENDING', requestedAmount: 4_900 });
+        expect(test.refundRepository.findOne).not.toHaveBeenCalled();
+    });
+
+    it.each(['AddingItems', 'ArrangingPayment', 'PaymentAuthorized', 'Cancelled'])(
+        'still rejects after-sales for %s orders',
+        async state => {
+            const test = createHarness();
+            test.order.state = state;
+            await expect(
+                test.service.create(test.ctx, {
+                    orderId: 'order-1',
+                    type: 'REFUND_ONLY',
+                    reason: 'OTHER',
+                    description: 'Ineligible order',
+                    items: [{ orderLineId: 'line-1', quantity: 1 }],
+                }),
+            ).rejects.toThrow('当前订单状态暂不支持申请售后');
+            expect(test.requestRepository.save).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['sqlite', 'better-sqlite3', 'sqljs'])(
+        'serializes %s requests with a transaction write',
+        async databaseType => {
+            const test = createHarness({ databaseType });
+            const result = await test.service.create(test.ctx, {
+                orderId: 'order-1',
+                type: 'REFUND_ONLY',
+                reason: 'OTHER',
+                description: 'Local request test',
+                items: [{ orderLineId: 'line-1', quantity: 1 }],
+            });
+            expect(result.state).toBe('PENDING');
+            expect(test.orderRepository.update).toHaveBeenCalledWith({ id: 'order-1' }, { id: 'order-1' });
+            expect(test.orderQueryBuilder.setLock).not.toHaveBeenCalled();
+        },
+    );
+
+    it('does not swallow database write errors', async () => {
+        const test = createHarness({ databaseType: 'sqlite' });
+        test.orderRepository.update.mockRejectedValueOnce(new Error('database unavailable'));
+        await expect(
+            test.service.create(test.ctx, {
+                orderId: 'order-1',
+                type: 'REFUND_ONLY',
+                reason: 'OTHER',
+                description: 'Local request test',
+                items: [{ orderLineId: 'line-1', quantity: 1 }],
+            }),
+        ).rejects.toThrow('database unavailable');
+        expect(test.requestRepository.save).not.toHaveBeenCalled();
+    });
     it('creates a customer-owned request with server-calculated amount snapshots and timeline', async () => {
         const test = createHarness();
 
@@ -379,3 +447,22 @@ describe('AfterSalesService', () => {
         ).toBeNull();
     });
 });
+
+it.each(['channel-2', null])(
+    'rejects after-sales for foreign or unknown sale owner %s before saving requests',
+    async salesChannelId => {
+        const test = createHarness();
+        test.order.salesChannelId = salesChannelId;
+        await expect(
+            test.service.create(test.ctx, {
+                orderId: test.order.id,
+                type: 'REFUND_ONLY',
+                reason: 'NOT_AS_DESCRIBED',
+                description: 'The received product differs from its description.',
+                items: [{ orderLineId: 'line-1', quantity: 1 }],
+            }),
+        ).rejects.toThrow();
+        expect(test.requestRepository.save).not.toHaveBeenCalled();
+        expect(test.savedEvents).toHaveLength(0);
+    },
+);

@@ -45,6 +45,7 @@ import { ChannelService } from './services/channel.service';
 import { CollectionService } from './services/collection.service';
 import { CountryService } from './services/country.service';
 import { CustomerGroupService } from './services/customer-group.service';
+import { CustomerStoreEntryService } from './services/customer-store-entry.service';
 import { CustomerService } from './services/customer.service';
 import { FacetValueService } from './services/facet-value.service';
 import { FacetService } from './services/facet.service';
@@ -85,6 +86,7 @@ const services = [
     CountryService,
     CustomerGroupService,
     CustomerService,
+    CustomerStoreEntryService,
     EntitySlugService,
     FacetService,
     FacetValueService,

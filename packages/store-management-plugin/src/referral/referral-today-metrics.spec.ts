@@ -1,4 +1,4 @@
-import { Customer, Order } from '@vendure/core';
+import { CustomerStoreEntry, Order } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ReferralProgramConfig } from '../entities/referral-program-config.entity';
@@ -19,7 +19,7 @@ function queryBuilder(result: { many?: any[]; rawMany?: any[]; count?: number })
 }
 
 describe('referral today metrics queries', () => {
-    it('uses account registration time and net settled order data', async () => {
+    it('uses per-store authenticated entry time and net settled order data', async () => {
         const todayOrdersQuery = queryBuilder({
             many: [
                 {
@@ -68,7 +68,7 @@ describe('referral today metrics queries', () => {
                 if (entity === Order) {
                     return { createQueryBuilder: vi.fn().mockImplementation(() => orderQueries.shift()) };
                 }
-                if (entity === Customer) {
+                if (entity === CustomerStoreEntry) {
                     return { createQueryBuilder: vi.fn().mockReturnValue(customerRegistrationsQuery) };
                 }
                 if (entity === StorefrontDailyVisitor) return { count: vi.fn().mockResolvedValue(3) };
@@ -103,11 +103,14 @@ describe('referral today metrics queries', () => {
             todayInvitedPurchaserCount: 1,
             salesByCurrency: [{ currencyCode: 'CNY', sales: 7_500 }],
         });
-        expect(customerRegistrationsQuery.where).toHaveBeenCalledWith('customerUser.createdAt >= :utcStart', {
-            utcStart: expect.any(String),
+        expect(customerRegistrationsQuery.where).toHaveBeenCalledWith('storeEntry.channelId = :channelId', {
+            channelId: 'channel-1',
         });
-        expect(customerRegistrationsQuery.andWhere).toHaveBeenCalledWith('customerUser.createdAt < :utcEnd', {
-            utcEnd: expect.any(String),
+        expect(customerRegistrationsQuery.andWhere).toHaveBeenCalledWith('storeEntry.firstSeenAt >= :start', {
+            start: expect.any(Date),
+        });
+        expect(customerRegistrationsQuery.andWhere).toHaveBeenCalledWith('storeEntry.firstSeenAt < :end', {
+            end: expect.any(Date),
         });
         const settledStateCall = todayOrdersQuery.where.mock.calls.find(([query]: [string]) =>
             query.includes('settledStates'),

@@ -1,7 +1,7 @@
+/* eslint-disable import/order -- Prettier organizes hyphenated entity paths before parent paths. */
 import { Injectable } from '@nestjs/common';
 import { ConfigurableOperationInput, OrderLineInput } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
-import { isObject } from '@vendure/common/lib/shared-utils';
 import { unique } from '@vendure/common/lib/unique';
 import { In, Not } from 'typeorm';
 
@@ -16,15 +16,17 @@ import { Instrument } from '../../common/instrument-decorator';
 import { ConfigService } from '../../config/config.service';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { Fulfillment } from '../../entity/fulfillment/fulfillment.entity';
-import { Order } from '../../entity/order/order.entity';
-import { OrderLine } from '../../entity/order-line/order-line.entity';
 import { FulfillmentLine } from '../../entity/order-line-reference/fulfillment-line.entity';
+import { OrderLine } from '../../entity/order-line/order-line.entity';
+import { Order } from '../../entity/order/order.entity';
 import { EventBus } from '../../event-bus/event-bus';
 import { FulfillmentEvent } from '../../event-bus/events/fulfillment-event';
 import { FulfillmentStateTransitionEvent } from '../../event-bus/events/fulfillment-state-transition-event';
 import { CustomFieldRelationService } from '../helpers/custom-field-relation/custom-field-relation.service';
 import { FulfillmentState } from '../helpers/fulfillment-state-machine/fulfillment-state';
 import { FulfillmentStateMachine } from '../helpers/fulfillment-state-machine/fulfillment-state-machine';
+import { assertOrderSalesChannel } from '../helpers/order-sales-scope';
+/* eslint-enable import/order */
 /**
  * @description
  * Contains methods relating to {@link Fulfillment} entities.
@@ -53,6 +55,7 @@ export class FulfillmentService {
         lines: OrderLineInput[],
         handler: ConfigurableOperationInput,
     ): Promise<Fulfillment | InvalidFulfillmentHandlerError | CreateFulfillmentError> {
+        orders.forEach(order => assertOrderSalesChannel(ctx, order));
         const fulfillmentHandler = this.configService.shippingOptions.fulfillmentHandlers.find(
             h => h.code === handler.code,
         );
@@ -68,10 +71,7 @@ export class FulfillmentService {
                 handler.arguments,
             );
         } catch (e: unknown) {
-            let message = 'No error message';
-            if (isObject(e)) {
-                message = (e as any).message || e.toString();
-            }
+            const message = e instanceof Error ? e.message : typeof e === 'string' ? e : 'No error message';
             return new CreateFulfillmentError({ fulfillmentHandlerError: message });
         }
 
@@ -168,12 +168,9 @@ export class FulfillmentService {
         // are atomic — see the equivalent comment on OrderService.transitionToState.
         // #4686.
         return this.connection.withTransaction(ctx, async txCtx => {
-            const fulfillment = await this.connection.getEntityOrThrow(
-                txCtx,
-                Fulfillment,
-                fulfillmentId,
-                { relations: ['lines'] },
-            );
+            const fulfillment = await this.connection.getEntityOrThrow(txCtx, Fulfillment, fulfillmentId, {
+                relations: ['lines'],
+            });
             const orderLinesIds = unique(fulfillment.lines.map(lines => lines.orderLineId));
             const orders = await this.connection
                 .getRepository(txCtx, Order)
@@ -181,6 +178,7 @@ export class FulfillmentService {
                 .leftJoinAndSelect('order.lines', 'line')
                 .where('line.id IN (:...lineIds)', { lineIds: orderLinesIds })
                 .getMany();
+            orders.forEach(order => assertOrderSalesChannel(txCtx, order));
             const fromState = fulfillment.state;
             let finalize: () => Promise<any>;
             try {

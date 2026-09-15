@@ -1,5 +1,12 @@
 import { Controller, Get, Req, Res } from '@nestjs/common';
-import { Allow, Ctx, Permission, RequestContext, SessionService } from '@vendure/core';
+import {
+    Allow,
+    Ctx,
+    isPlatformAdminContext,
+    Permission,
+    RequestContext,
+    SessionService,
+} from '@vendure/core';
 import type { Request, Response } from 'express';
 
 import { type AdminOrderEvent, OrderEventsService } from '../service/order-events.service';
@@ -21,6 +28,7 @@ export class OrderEventsController {
         }
         const sessionToken = ctx.session.token;
         const channelId = String(ctx.channelId);
+        const platformRead = isPlatformAdminContext(ctx);
         let closed = false;
         const resources: {
             remove?: () => unknown;
@@ -60,7 +68,9 @@ export class OrderEventsController {
                         !session ||
                         session.expires <= new Date() ||
                         !permission?.permissions.some(
-                            value => value === Permission.ReadOrder || value === Permission.SuperAdmin,
+                            value =>
+                                value === Permission.SuperAdmin ||
+                                (!platformRead && value === Permission.ReadOrder),
                         )
                     ) {
                         close();
@@ -85,7 +95,13 @@ export class OrderEventsController {
         res.setHeader('Cache-Control', 'no-cache, no-store, no-transform');
         res.setHeader('X-Accel-Buffering', 'no');
         res.flushHeaders();
-        const subscription = this.events.subscribe(channelId, req.get('Last-Event-ID'), send, close);
+        const subscription = this.events.subscribe(
+            channelId,
+            req.get('Last-Event-ID'),
+            send,
+            close,
+            platformRead,
+        );
         resources.remove = subscription.remove;
         for (const event of subscription.replay) send(event);
         pending = pending

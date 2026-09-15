@@ -154,7 +154,7 @@ export class StoreCurrencySettingsService {
     async createCheckoutUsdtQuote(ctx: RequestContext): Promise<StorefrontUsdtCheckoutQuoteView> {
         const activeOrderId = ctx.session?.activeOrderId;
         if (!activeOrderId) throw new UserInputError('当前没有可结算订单');
-        const order = await this.orderService.findOne(ctx, activeOrderId, ['payments']);
+        const order = await this.orderService.findOne(ctx, activeOrderId, ['payments'], 'business');
         if (!order || !['AddingItems', 'ArrangingPayment'].includes(order.state)) {
             throw new UserInputError('当前订单状态不能生成 USDT 报价');
         }

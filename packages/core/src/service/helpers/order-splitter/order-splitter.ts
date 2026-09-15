@@ -1,8 +1,10 @@
+/* eslint-disable import/order -- Prettier organizes hyphenated entity paths before parent paths. */
 import { Injectable } from '@nestjs/common';
 import { OrderType } from '@vendure/common/lib/generated-types';
 import { pick } from '@vendure/common/lib/pick';
 
 import { RequestContext } from '../../../api/common/request-context';
+import { EntityNotFoundError } from '../../../common/error/errors';
 import { ConfigService } from '../../../config/config.service';
 import { TransactionalConnection } from '../../../connection/transactional-connection';
 import { Channel } from '../../../entity/channel/channel.entity';
@@ -11,6 +13,7 @@ import { Order } from '../../../entity/order/order.entity';
 import { ShippingLine } from '../../../entity/shipping-line/shipping-line.entity';
 import { ChannelService } from '../../services/channel.service';
 import { OrderService } from '../../services/order.service';
+/* eslint-enable import/order */
 
 @Injectable()
 export class OrderSplitter {
@@ -33,6 +36,9 @@ export class OrderSplitter {
         order.type = OrderType.Aggregate;
         const sellerOrders: Order[] = [];
         for (const partialOrder of partialOrders) {
+            const salesChannel = await this.channelService.findOne(ctx, partialOrder.channelId);
+            if (!salesChannel) throw new EntityNotFoundError('Channel', partialOrder.channelId);
+            const sellerCtx = ctx.copy({ channel: salesChannel, currencyCode: order.currencyCode });
             const lines: OrderLine[] = [];
             for (const line of partialOrder.lines) {
                 lines.push(await this.duplicateOrderLine(ctx, line));
@@ -51,6 +57,7 @@ export class OrderSplitter {
             const sellerOrder = await this.connection.getRepository(ctx, Order).save(
                 new Order({
                     type: OrderType.Seller,
+                    salesChannelId: partialOrder.channelId,
                     aggregateOrderId: order.id,
                     code: await this.configService.orderOptions.orderCodeStrategy.generate(ctx),
                     active: false,
@@ -80,7 +87,7 @@ export class OrderSplitter {
                 .relation('sellerOrders')
                 .of(order)
                 .add(sellerOrder);
-            await this.orderService.applyPriceAdjustments(ctx, sellerOrder);
+            await this.orderService.applyPriceAdjustments(sellerCtx, sellerOrder);
             sellerOrders.push(sellerOrder);
         }
         await orderSellerStrategy.afterSellerOrdersCreated?.(ctx, order, sellerOrders);

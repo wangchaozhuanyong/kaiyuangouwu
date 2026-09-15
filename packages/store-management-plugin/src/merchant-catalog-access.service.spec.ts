@@ -5,6 +5,7 @@ import {
     Collection,
     ForbiddenError,
     Fulfillment,
+    Order,
     OrderLine,
     Product,
     ProductVariant,
@@ -23,10 +24,10 @@ function createService(options?: {
     channelIds?: string[];
     visibleEntityIds?: string[];
     sharedEntityIds?: string[];
-    orderLines?: Array<{ id: string; order: { channels: Array<{ id: string }> } }>;
+    orderLines?: Array<{ id: string; order: { salesChannelId: string; channels?: Array<{ id: string }> } }>;
     fulfillments?: Array<{
         id: string;
-        orders: Array<{ channels: Array<{ id: string }> }>;
+        orders: Array<{ salesChannelId: string; channels?: Array<{ id: string }> }>;
     }>;
 }) {
     const channelIds = options?.channelIds ?? ['store-a'];
@@ -49,6 +50,7 @@ function createService(options?: {
                 return { find: vi.fn().mockResolvedValue(options?.couponConfigs ?? []) };
             if (entity === StoreAdministratorAccess) return accessRepository;
             if (entity === User) return userRepository;
+            if (entity === Order) return { count: vi.fn().mockResolvedValue(visibleEntityIds.length) };
             if (entity === OrderLine) return orderLineRepository;
             if (entity === Fulfillment) return fulfillmentRepository;
             throw new Error(`Unexpected repository: ${String(entity)}`);
@@ -190,8 +192,15 @@ describe('MerchantCatalogAccessService', () => {
     it('allows fulfillment and note operations only for the active Channel', async () => {
         const own = createService({
             visibleEntityIds: ['order-a'],
-            orderLines: [{ id: 'line-a', order: { channels: [{ id: 'store-a' }] } }],
-            fulfillments: [{ id: 'fulfillment-a', orders: [{ channels: [{ id: 'store-a' }] }] }],
+            orderLines: [
+                { id: 'line-a', order: { salesChannelId: 'store-a', channels: [{ id: 'store-a' }] } },
+            ],
+            fulfillments: [
+                {
+                    id: 'fulfillment-a',
+                    orders: [{ salesChannelId: 'store-a', channels: [{ id: 'store-a' }] }],
+                },
+            ],
         });
 
         await expect(
@@ -213,16 +222,26 @@ describe('MerchantCatalogAccessService', () => {
 
         expect(own.orderLineRepository.find).toHaveBeenCalledWith({
             where: [{ id: 'line-a' }],
-            relations: ['order', 'order.channels'],
+            relations: ['order'],
         });
         expect(own.fulfillmentRepository.find).toHaveBeenCalledWith({
             where: [{ id: 'fulfillment-a' }],
-            relations: ['orders', 'orders.channels'],
+            relations: ['orders'],
         });
         const foreign = createService({
             visibleEntityIds: [],
-            orderLines: [{ id: 'line-b', order: { channels: [{ id: 'store-b' }] } }],
-            fulfillments: [{ id: 'fulfillment-b', orders: [{ channels: [{ id: 'store-b' }] }] }],
+            orderLines: [
+                {
+                    id: 'line-b',
+                    order: { salesChannelId: 'store-b', channels: [{ id: 'store-a' }, { id: 'store-b' }] },
+                },
+            ],
+            fulfillments: [
+                {
+                    id: 'fulfillment-b',
+                    orders: [{ salesChannelId: 'store-b', channels: [{ id: 'store-a' }, { id: 'store-b' }] }],
+                },
+            ],
         });
         await expect(
             foreign.service.assertRootFieldAccess(merchantContext, 'Mutation', 'addFulfillmentToOrder', {
@@ -273,7 +292,9 @@ describe('MerchantCatalogAccessService', () => {
     it('treats a default-store assignment as sharing when checking merchant edit access', async () => {
         const accessRepository = { findOne: vi.fn().mockResolvedValue({ userId: 'user-a' }) };
         const userRepository = {
-            findOne: vi.fn().mockResolvedValue({ roles: [{ channels: [{ id: 'store-a' }] }] }),
+            findOne: vi
+                .fn()
+                .mockResolvedValue({ roles: [{ salesChannelId: 'store-a', channels: [{ id: 'store-a' }] }] }),
         };
         const connection = {
             getRepository: vi.fn((_ctx, entity) =>

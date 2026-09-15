@@ -12,7 +12,7 @@ import {
     UserInputError,
     translateDeep,
 } from '@vendure/core';
-import { FindOptionsWhere, In, Like, LockNotSupportedOnGivenDriverError } from 'typeorm';
+import { FindOptionsWhere, In, Like } from 'typeorm';
 
 import { StorefrontReview } from './entities/storefront-review.entity';
 import { storefrontReviewStates } from './review.constants';
@@ -91,12 +91,12 @@ export class StorefrontReviewService {
             where: {
                 order: {
                     customerId: customer.id,
-                    channels: { id: ctx.channelId },
+                    salesChannelId: ctx.channelId,
                     state: In(DIGITAL_REVIEW_ORDER_STATES),
                 },
             },
             relations: {
-                order: { channels: true },
+                order: true,
                 productVariant: { translations: true, product: { translations: true } },
             },
             order: { order: { orderPlacedAt: 'DESC' } },
@@ -110,7 +110,7 @@ export class StorefrontReviewService {
             })
             .slice(0, 100)
             .map(line => {
-                const variant = translateDeep(line.productVariant, ctx.languageCode);
+                const variant = translateDeep(line.productVariant, ctx.languageCode, ['product']);
                 const fulfillmentType = this.fulfillmentType(line);
                 return {
                     orderLineId: line.id,
@@ -177,11 +177,11 @@ export class StorefrontReviewService {
                 id: input.orderLineId,
                 order: {
                     customerId: customer.id,
-                    channels: { id: ctx.channelId },
+                    salesChannelId: ctx.channelId,
                 },
             },
             relations: {
-                order: { channels: true },
+                order: true,
                 productVariant: { translations: true, product: { translations: true } },
             },
         });
@@ -206,7 +206,7 @@ export class StorefrontReviewService {
         if (existing) {
             throw new UserInputError('该订单商品已经提交过评价');
         }
-        const variant = translateDeep(line.productVariant, ctx.languageCode);
+        const variant = translateDeep(line.productVariant, ctx.languageCode, ['product']);
         const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ').trim();
         const review = await this.connection.getRepository(ctx, StorefrontReview).save(
             new StorefrontReview({
@@ -342,18 +342,17 @@ export class StorefrontReviewService {
     }
 
     private async lockOrderLine(ctx: RequestContext, orderLineId: ID): Promise<void> {
-        try {
-            await this.connection
-                .getRepository(ctx, OrderLine)
-                .createQueryBuilder('line')
-                .setLock('pessimistic_write')
-                .where('line.id = :orderLineId', { orderLineId })
-                .getOne();
-        } catch (error) {
-            if (!(error instanceof LockNotSupportedOnGivenDriverError)) {
-                throw error;
-            }
+        const repository = this.connection.getRepository(ctx, OrderLine);
+        if (['sqlite', 'better-sqlite3', 'sqljs'].includes(this.connection.rawConnection.options.type)) {
+            // Acquire SQLite's transaction write lock before checking uniqueness.
+            await repository.update({ id: orderLineId }, { id: orderLineId });
+            return;
         }
+        await repository
+            .createQueryBuilder('line')
+            .setLock('pessimistic_write')
+            .where('line.id = :orderLineId', { orderLineId })
+            .getOne();
     }
 
     private async getMineOrThrow(ctx: RequestContext, id: ID, customerId: ID): Promise<StorefrontReview> {

@@ -4,7 +4,7 @@
 
 const assert = require('node:assert/strict');
 const { execFileSync, spawnSync } = require('node:child_process');
-const { createHash } = require('node:crypto');
+const { createHash, randomBytes } = require('node:crypto');
 const {
     closeSync,
     constants,
@@ -53,6 +53,7 @@ function validateRequest(environment) {
             'verify-two-factor-backup',
             'verify-security-dependencies',
             'inspect-storefront-config',
+            'audit-store-isolation-data',
             'preflight-release',
             'postflight-release',
         ].includes(operation),
@@ -61,6 +62,7 @@ function validateRequest(environment) {
     assert.match(environment.OPS_SOURCE_SHA || '', /^[a-f0-9]{40}$/u, 'Invalid operations source SHA');
     const expectedPlanSha256 = environment.OPS_EXPECTED_PLAN_SHA256 || '';
     const expectedChannelCodes = environment.OPS_EXPECTED_CHANNEL_CODES || '';
+    const expectedRuntimeSha = environment.OPS_EXPECTED_RUNTIME_SHA || '';
     if (['retain-reviewed', 'backup-two-factor-reviewed'].includes(operation)) {
         assert.match(expectedPlanSha256, /^[a-f0-9]{64}$/u, 'A reviewed retention plan SHA-256 is required');
     } else {
@@ -79,11 +81,21 @@ function validateRequest(environment) {
             'Expected Channel codes are only valid for release validation',
         );
     }
+    if (operation === 'audit-store-isolation-data') {
+        assert.match(expectedRuntimeSha, /^[a-f0-9]{40}$/u, 'An exact expected runtime SHA is required');
+    } else {
+        assert.equal(
+            expectedRuntimeSha,
+            '',
+            'Expected runtime SHA is only valid for the store isolation audit',
+        );
+    }
     return {
         operation,
         sourceSha: environment.OPS_SOURCE_SHA,
         expectedPlanSha256,
         expectedChannelCodes,
+        expectedRuntimeSha,
     };
 }
 
@@ -325,7 +337,10 @@ function frontendRevisionEvidence(plan, pointerDirectory = '/var/www') {
                 .map(name => path.join(pointer, name))
                 .find(file => existsSync(file));
             if (marker) revision = JSON.parse(readFileSync(marker, 'utf8')).sourceSha;
-            else if (realpathSync(pointer) === path.join(plan.currentRuntime, 'packages', component, 'dist'))
+            else if (
+                realpathSync(pointer) ===
+                realpathSync(path.join(plan.currentRuntime, 'packages', component, 'dist'))
+            )
                 revision = plan.markerSha;
         } catch {
             /* Missing legacy pointers require a bootstrap full release. */
@@ -335,8 +350,207 @@ function frontendRevisionEvidence(plan, pointerDirectory = '/var/www') {
     return `PRODUCTION_FRONTEND_REVISIONS ${frontendVersions.join(' ')}\n`;
 }
 
+function validateStoreAutonomyAuditPayload(output) {
+    assert.ok(Buffer.byteLength(output) <= 60000, 'Store isolation audit output exceeds the evidence limit');
+    let payload;
+    try {
+        payload = JSON.parse(output);
+    } catch {
+        throw new Error('Store isolation audit did not return valid JSON');
+    }
+    assert.equal(payload?.format, 2, 'Unexpected store isolation audit format');
+    assert.equal(payload?.schema, 'vendure-store-autonomy-audit', 'Unexpected store isolation audit schema');
+    assert.equal(payload?.mode, 'read-only-consistent-snapshot', 'Store isolation audit was not read-only');
+    assert.ok(['GO', 'NO_GO', 'INCOMPLETE'].includes(payload?.verdict), 'Invalid store isolation verdict');
+    assert.equal(typeof payload?.coverageComplete, 'boolean', 'Missing audit coverage status');
+    assert.ok(Array.isArray(payload?.checks), 'Missing store isolation checks');
+    assert.ok(Array.isArray(payload?.structure), 'Missing store isolation structure checks');
+    const forbiddenKeys =
+        /^(?:email|identifier|address|token|password|credential|customerId|orderId|fileName|root)$/iu;
+    const visit = value => {
+        if (Array.isArray(value)) return value.forEach(visit);
+        if (!value || typeof value !== 'object') return;
+        for (const [key, child] of Object.entries(value)) {
+            assert.doesNotMatch(
+                key,
+                forbiddenKeys,
+                'Store isolation audit output contains a sensitive field',
+            );
+            visit(child);
+        }
+    };
+    visit(payload);
+    return payload;
+}
+
+function validateMigrationAuditOutput(output) {
+    assert.ok(Buffer.byteLength(output) <= 60000, 'Migration audit output exceeds the evidence limit');
+    const planLine = output.split('\n').find(line => line.startsWith('USDT_MIGRATION_PLAN '));
+    assert.ok(planLine, 'Migration audit plan is unavailable');
+    assert.ok(
+        output.endsWith('USDT_RUNTIME_GUARD_OK operation=plan\n'),
+        'Migration audit evidence is incomplete',
+    );
+    let plan;
+    try {
+        plan = JSON.parse(planLine.slice('USDT_MIGRATION_PLAN '.length));
+    } catch {
+        throw new Error('Migration audit plan is not valid JSON');
+    }
+    assert.match(plan?.databaseVersion || '', /^8\./u, 'Unexpected production database version');
+    assert.ok(Array.isArray(plan?.pending), 'Pending migration list is unavailable');
+    assert.ok(
+        plan.pending.every(name => /^[A-Za-z]+\w*\d{13}$/u.test(name)),
+        'Invalid pending migration name',
+    );
+    assert.ok(plan?.schema && typeof plan.schema === 'object', 'Migration schema state is unavailable');
+    return {
+        databaseVersion: plan.databaseVersion,
+        pendingCount: plan.pending.length,
+        pendingDigest: createHash('sha256').update(JSON.stringify(plan.pending)).digest('hex'),
+        schema: plan.schema,
+    };
+}
+
+function productionHealthSnapshot() {
+    return readCommand('systemctl', [
+        'show',
+        'vendure-production-healthcheck.service',
+        '--property=Result,ExecMainStatus,ActiveState',
+    ]);
+}
+
+function assertProductionHealthSnapshot(snapshot, stage) {
+    assert.equal(snapshot.status, 'ok', `Production health state is unavailable ${stage} the audit`);
+    assert.match(
+        snapshot.output,
+        /^Result=success$/mu,
+        `Production health check is not successful ${stage} the audit`,
+    );
+    assert.match(
+        snapshot.output,
+        /^ExecMainStatus=0$/mu,
+        `Production health command failed ${stage} the audit`,
+    );
+    assert.match(
+        snapshot.output,
+        /^ActiveState=(?:active|inactive)$/mu,
+        `Production health state is invalid ${stage} the audit`,
+    );
+}
+
+function runStoreIsolationAudit(
+    request,
+    {
+        inspect = inspectProductionReleases,
+        spawn = spawnSync,
+        health = productionHealthSnapshot,
+        auditScript = path.join(
+            __dirname,
+            'repository',
+            'packages',
+            'dev-server',
+            'scripts',
+            'store-autonomy-data-audit.mjs',
+        ),
+        migrationGuard = path.join(__dirname, 'usdt-migration-guard.cjs'),
+    } = {},
+) {
+    assert.equal(request.operation, 'audit-store-isolation-data');
+    const before = inspect();
+    assert.equal(
+        before.markerSha,
+        request.expectedRuntimeSha,
+        'Production runtime SHA changed or was not reviewed',
+    );
+    const healthBefore = health();
+    assertProductionHealthSnapshot(healthBefore, 'before');
+    let migrationState;
+    let payload;
+    let auditError;
+    try {
+        const migrationResult = spawn(
+            '/usr/bin/node',
+            [
+                '--env-file=/var/www/kaiyuangouwu/packages/dev-server/.env',
+                migrationGuard,
+                'plan',
+                before.currentRuntime,
+                '',
+                path.join(__dirname, 'repository'),
+            ],
+            {
+                encoding: 'utf8',
+                timeout: 120000,
+                maxBuffer: 65536,
+                stdio: ['ignore', 'pipe', 'pipe'],
+            },
+        );
+        assert.equal(migrationResult.status, 0, 'The fixed read-only migration audit failed');
+        migrationState = validateMigrationAuditOutput(String(migrationResult.stdout || ''));
+        assert.equal(migrationState.pendingCount, 0, 'Production database has pending migrations');
+        const result = spawn(
+            '/usr/bin/node',
+            ['--env-file=/var/www/kaiyuangouwu/packages/dev-server/.env', auditScript],
+            {
+                encoding: 'utf8',
+                timeout: 540000,
+                maxBuffer: 65536,
+                stdio: ['ignore', 'pipe', 'pipe'],
+                env: {
+                    ...process.env,
+                    STORE_ISOLATION_AUDIT_KEY: randomBytes(32).toString('hex'),
+                    STORE_ISOLATION_MODULE_ROOT: before.currentRuntime,
+                    // Baseline evidence must be collectible before the expand-only
+                    // ownership migrations run. Missing structure remains NO_GO in
+                    // the report; it is never treated as a successful audit.
+                    STORE_ISOLATION_REQUIRE_EXPECTED_SCHEMA: '0',
+                },
+            },
+        );
+        assert.equal(result.status, 0, 'The fixed read-only store isolation audit failed');
+        payload = validateStoreAutonomyAuditPayload(String(result.stdout || '').trim());
+    } catch (error) {
+        auditError = error;
+    }
+    let after;
+    let stateError;
+    try {
+        after = inspect();
+        assert.deepEqual(after, before, 'Production release state changed during the store isolation audit');
+    } catch (error) {
+        stateError = error;
+    }
+    let healthAfter;
+    try {
+        healthAfter = health();
+        assertProductionHealthSnapshot(healthAfter, 'after');
+    } catch (error) {
+        stateError ||= error;
+    }
+    if (stateError) throw stateError;
+    if (auditError) throw auditError;
+    return {
+        sourceSha: request.sourceSha,
+        runtimeSha: before.markerSha,
+        healthBefore,
+        healthAfter,
+        migrationState,
+        audit: payload,
+    };
+}
+
 function runLocked(environment = process.env) {
     const request = validateRequest(environment);
+    if (request.operation === 'audit-store-isolation-data') {
+        const result = runStoreIsolationAudit(request);
+        process.stdout.write(
+            `PRODUCTION_STORE_ISOLATION_REVISIONS source=${request.sourceSha} runtime=${result.runtimeSha}\n`,
+        );
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=audit-store-isolation-data\n');
+        return;
+    }
     if (request.operation === 'postflight-release') {
         const plan = inspectProductionReleases();
         assert.equal(
@@ -542,6 +756,9 @@ module.exports = {
     planDigest,
     retainReviewedPlan,
     storefrontInspectionFailure,
+    runStoreIsolationAudit,
+    validateMigrationAuditOutput,
+    validateStoreAutonomyAuditPayload,
     validateRequest,
     withProductionLock,
 };

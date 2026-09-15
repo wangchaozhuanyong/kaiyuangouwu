@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { OrderListSummaryInput } from './sales-utils';
 import {
     buildCompatibleRefundOrderInput,
+    canManageOrderInChannel,
+    getOrderProductDisplayName,
     getPaymentMethodLabel,
     summarizeOrderListItem,
 } from './sales-utils';
@@ -19,6 +21,17 @@ describe('payment method labels', () => {
         );
         expect(getPaymentMethodLabel('legacy-payment')).toBe('legacy-payment');
         expect(getPaymentMethodLabel('')).toBe('未标注支付方式');
+    });
+});
+
+describe('order product names', () => {
+    it('includes the product alongside a generic variant and avoids duplicated product names', () => {
+        expect(getOrderProductDisplayName({ name: '标准版', product: { name: '人工服务' } })).toBe(
+            '人工服务 · 标准版',
+        );
+        expect(getOrderProductDisplayName({ name: '人工服务 标准版', product: { name: '人工服务' } })).toBe(
+            '人工服务 标准版',
+        );
     });
 });
 
@@ -95,7 +108,7 @@ describe('summarizeOrderListItem', () => {
         );
 
         expect(summary.fulfillmentKind).toBe('DIGITAL');
-        expect(summary.fulfillmentLabel).toBe('无需履约');
+        expect(summary.fulfillmentLabel).toBe('无需物流');
         expect(summary.shippingAddress).toBe('-');
         expect(summary.contact).toBe(longEmail);
     });
@@ -160,4 +173,14 @@ describe('buildCompatibleRefundOrderInput', () => {
             adjustment: 0,
         });
     });
+});
+
+it('allows order operations only after selecting the persisted sale owner', () => {
+    const order = { salesChannel: { id: 'store-a' }, channels: [{ id: 'platform' }, { id: 'store-b' }] };
+    expect(canManageOrderInChannel(order, 'store-a')).toBe(true);
+    expect(canManageOrderInChannel(order, 'store-b')).toBe(false);
+    expect(canManageOrderInChannel(order, 'platform')).toBe(false);
+    expect(canManageOrderInChannel({ salesChannel: null }, 'platform')).toBe(false);
+    expect(canManageOrderInChannel(undefined, 'store-a')).toBe(false);
+    expect(canManageOrderInChannel(order, undefined)).toBe(false);
 });

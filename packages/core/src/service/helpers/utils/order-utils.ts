@@ -1,3 +1,4 @@
+/* eslint-disable import/order -- Prettier organizes hyphenated entity paths before parent paths. */
 import { OrderLineInput } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import { summate } from '@vendure/common/lib/shared-utils';
@@ -5,14 +6,15 @@ import { unique } from '@vendure/common/lib/unique';
 import { In } from 'typeorm';
 
 import { RequestContext } from '../../../api/common/request-context';
-import { EntityNotFoundError } from '../../../common/error/errors';
 import { idsAreEqual } from '../../../common/utils';
 import { TransactionalConnection } from '../../../connection/transactional-connection';
 import { FulfillmentLine } from '../../../entity/order-line-reference/fulfillment-line.entity';
 import { OrderLine } from '../../../entity/order-line/order-line.entity';
 import { Order } from '../../../entity/order/order.entity';
 import { FulfillmentState } from '../fulfillment-state-machine/fulfillment-state';
+import { assertOrderSalesChannel } from '../order-sales-scope';
 import { PaymentState } from '../payment-state-machine/payment-state';
+/* eslint-enable import/order */
 
 /**
  * Returns true if the Order total is covered by Payments in the specified state.
@@ -145,7 +147,7 @@ export async function getOrdersFromLines(
     const orders = new Map<ID, Order>();
     const lines = await connection.getRepository(ctx, OrderLine).find({
         where: { id: In(orderLinesInput.map(l => l.orderLineId)) },
-        relations: ['order', 'order.channels'],
+        relations: ['order'],
         order: { id: 'ASC' },
     });
     for (const line of lines) {
@@ -154,9 +156,7 @@ export async function getOrdersFromLines(
             continue;
         }
         const order = line.order;
-        if (!order.channels.some(channel => channel.id === ctx.channelId)) {
-            throw new EntityNotFoundError('Order', order.id);
-        }
+        assertOrderSalesChannel(ctx, order);
         if (!orders.has(order.id)) {
             orders.set(order.id, order);
         }

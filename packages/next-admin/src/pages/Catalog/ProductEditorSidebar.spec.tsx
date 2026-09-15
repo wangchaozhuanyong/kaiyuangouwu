@@ -12,6 +12,10 @@ vi.mock('../../components/FeatureHelp', () => ({
     FeatureHelpButton: () => null,
 }));
 
+vi.mock('../../hooks/use-admin-permissions', () => ({
+    useAdminPermissions: () => ({ permissions: ['SuperAdmin'], hasAnyPermission: () => true }),
+}));
+
 describe('ProductEditorSidebar', () => {
     it('keeps product identity and cross-tab summaries in one fixed panel', () => {
         vi.mocked(useProductEditor).mockReturnValue({
@@ -46,6 +50,7 @@ describe('ProductEditorSidebar', () => {
         expect(html).toContain('value="测试商品"');
         expect(html).toContain('value="test-product"');
         expect(html).toContain('Asset #asset-1');
+        expect(html).toContain('AI 生成主图');
         expect(html).toContain('待保存');
         expect(html).toContain('虚拟商品');
     });

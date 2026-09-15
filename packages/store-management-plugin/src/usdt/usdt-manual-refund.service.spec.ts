@@ -33,6 +33,7 @@ describe('UsdtManualRefundService', () => {
             code: 'ORDER-1',
             currencyCode: 'CNY',
             channels: [channel],
+            salesChannelId: channel.id,
         } as any;
         payment = new Payment({
             id: 'payment-1',
@@ -49,6 +50,7 @@ describe('UsdtManualRefundService', () => {
             order,
             orderId: order.id,
             paymentId: payment.id,
+            quote: { id: 'quote-1', channelId: channel.id, orderId: order.id },
             status: 'SETTLED',
             transactionId: inboundTransactionId,
         });
@@ -100,6 +102,17 @@ describe('UsdtManualRefundService', () => {
     });
 
     afterEach(() => vi.unstubAllEnvs());
+
+    it.each(['channel-2', null])(
+        'rejects mismatched order sale owner %s before chain lookup, including SuperAdmin',
+        async salesChannelId => {
+            payment.order.salesChannelId = salesChannelId;
+            const ctx = { ...createContext(), userHasPermissions: () => true };
+            await expect(service.record(ctx, validInput())).rejects.toThrow();
+            expect(tronClient.solidifiedUsdtTransfer).not.toHaveBeenCalled();
+            expect(orderService.refundOrder).not.toHaveBeenCalled();
+        },
+    );
 
     it('verifies the exact official transfer and stores a durable refund audit', async () => {
         const ctx = createContext();

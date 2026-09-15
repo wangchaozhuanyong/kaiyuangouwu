@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Order, RequestContext, TransactionalConnection } from '@vendure/core';
+import { Order, RequestContext, scopeOrderQuery, TransactionalConnection } from '@vendure/core';
 
 export const PHYSICAL_FULFILLMENT_TODO_STATES = [
     'PaymentAuthorized',
@@ -18,12 +18,9 @@ export class OrderOperationsService {
      * their content is already delivered, so state alone is not sufficient.
      */
     countPhysicalFulfillmentTodos(ctx: RequestContext): Promise<number> {
-        return this.connection
+        const query = this.connection
             .getRepository(ctx, Order)
             .createQueryBuilder('order')
-            .innerJoin('order.channels', 'channel', 'channel.id = :channelId', {
-                channelId: ctx.channelId,
-            })
             .innerJoin('order.lines', 'line')
             .where('order.active = :active', { active: false })
             .andWhere('order.state IN (:...states)', {
@@ -32,7 +29,7 @@ export class OrderOperationsService {
             .andWhere('line.customFields.fulfillmentTypeSnapshot = :fulfillmentType', {
                 fulfillmentType: 'physical',
             })
-            .distinct(true)
-            .getCount();
+            .distinct(true);
+        return scopeOrderQuery(ctx, query, 'read').getCount();
     }
 }

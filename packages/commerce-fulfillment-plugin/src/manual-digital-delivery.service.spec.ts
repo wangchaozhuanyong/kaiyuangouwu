@@ -22,8 +22,14 @@ function createHarness(state: ManualDigitalDelivery['state'] = 'DRAFT') {
         orderId: 'order-1',
         orderLineId: 'line-1',
         channelId: 'channel-1',
-        order: { id: 'order-1', code: 'ORDER-1' },
-        orderLine: { id: 'line-1' },
+        order: {
+            id: 'order-1',
+            code: 'ORDER-1',
+            salesChannelId: 'channel-1',
+            state: 'PaymentSettled',
+            payments: [{ state: 'Settled', amount: 1000, refunds: [] }],
+        },
+        orderLine: { id: 'line-1', quantity: 2 },
         events,
     });
     const deliveryRepository = {
@@ -74,6 +80,52 @@ function createHarness(state: ManualDigitalDelivery['state'] = 'DRAFT') {
 }
 
 describe('ManualDigitalDeliveryService invariants', () => {
+    it.each(['Pending', 'Settled'])(
+        'blocks publishing, retry and queued email after a full %s refund',
+        async refundState => {
+            const test = createHarness();
+            await test.service.publish(test.ctx, { id: test.delivery.id, packages: test.packages });
+            (test.delivery.order.payments[0] as any).refunds = [{ state: refundState, total: 1000 }];
+            test.eventBus.publish.mockClear();
+            test.delivery.state = 'DRAFT';
+            await expect(
+                test.service.publish(test.ctx, { id: test.delivery.id, packages: test.packages }),
+            ).rejects.toThrow('全额退款');
+            test.delivery.state = 'EMAIL_FAILED';
+            await expect(test.service.retry(test.ctx, test.delivery.id)).rejects.toThrow('全额退款');
+            test.delivery.state = 'SENDING';
+            await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).rejects.toThrow(
+                '全额退款',
+            );
+            expect(test.eventBus.publish).not.toHaveBeenCalled();
+        },
+    );
+
+    it('retains paid partial-refund compensation and ignores failed refunds', async () => {
+        const test = createHarness();
+        (test.delivery.order.payments[0] as any).refunds = [
+            { state: 'Settled', total: 200 },
+            { state: 'Failed', total: 800 },
+        ];
+        await expect(
+            test.service.publish(test.ctx, { id: test.delivery.id, packages: test.packages }),
+        ).resolves.toMatchObject({ state: 'SENDING' });
+    });
+
+    it('blocks cancelled orders and lines without creating a delivery event', async () => {
+        const test = createHarness();
+        test.delivery.order.state = 'Cancelled';
+        await expect(
+            test.service.publish(test.ctx, { id: test.delivery.id, packages: test.packages }),
+        ).rejects.toThrow('订单已取消');
+        test.delivery.order.state = 'PaymentSettled';
+        test.delivery.orderLine.quantity = 0;
+        await expect(
+            test.service.publish(test.ctx, { id: test.delivery.id, packages: test.packages }),
+        ).rejects.toThrow('订单已取消');
+        expect(test.eventBus.publish).not.toHaveBeenCalled();
+    });
+
     it.each(['CANCELLED', 'SENT'] as const)(
         'preserves terminal state %s after old queue results',
         async state => {
@@ -213,3 +265,16 @@ describe('ManualDigitalDeliveryService invariants', () => {
         expect(notification?.notification.payload).not.toHaveProperty('recipientEmail');
     });
 });
+
+it.each(['channel-2', null])(
+    'rejects mail for a task whose parent order sale owner is %s',
+    async salesChannelId => {
+        const test = createHarness('SENDING');
+        test.delivery.order.salesChannelId = salesChannelId;
+        await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).rejects.toThrow();
+        await expect(test.service.recordEmailResult(test.ctx, test.delivery.id, true)).rejects.toThrow();
+        expect(test.delivery.state).toBe('SENDING');
+        expect(test.events).toHaveLength(0);
+        expect(test.orderService.createFulfillment).not.toHaveBeenCalled();
+    },
+);

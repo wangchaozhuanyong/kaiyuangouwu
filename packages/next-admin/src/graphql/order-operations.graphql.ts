@@ -2,12 +2,20 @@ import { gql } from '@apollo/client';
 
 export const ORDER_OPERATIONS_QUERY = gql`
     query NextAdminOrderOperations($id: ID!) {
+        activeChannel {
+            id
+            code
+        }
         order(id: $id) {
             id
             code
             state
             totalWithTax
             currencyCode
+            salesChannel {
+                id
+                code
+            }
             payments {
                 id
                 createdAt
@@ -33,6 +41,10 @@ export const ORDER_OPERATIONS_QUERY = gql`
                 orderPlacedAt
                 currencyCode
                 totalWithTax
+                salesChannel {
+                    id
+                    code
+                }
                 channels {
                     id
                     code
@@ -188,12 +200,14 @@ export interface OrderOperationPayment {
 }
 
 export interface OrderOperationsData {
+    activeChannel: { id: string; code: string };
     order: {
         id: string;
         code: string;
         state: string;
         totalWithTax: number;
         currencyCode: string;
+        salesChannel: { id: string; code: string } | null;
         payments: OrderOperationPayment[];
         sellerOrders: Array<{
             id: string;
@@ -202,6 +216,7 @@ export interface OrderOperationsData {
             orderPlacedAt: string | null;
             currencyCode: string;
             totalWithTax: number;
+            salesChannel: { id: string; code: string } | null;
             channels: Array<{ id: string; code: string; seller: { id: string; name: string } | null }>;
         }> | null;
         storeCouponAllocations: Array<{

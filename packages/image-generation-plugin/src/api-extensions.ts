@@ -305,6 +305,70 @@ export const shopApiExtensions = gql`
 export const adminApiExtensions = gql`
     ${commonTypes}
 
+    type CatalogImageStudioConfig {
+        enabled: Boolean!
+        unavailableReason: String
+        defaultModelCode: String!
+        defaultModelName: String!
+        termsVersion: String!
+        termsZh: String!
+        maxReferenceBytes: Int!
+        acceptedMimeTypes: [String!]!
+        aspectRatio: String!
+        resolution: String!
+        quantity: Int!
+    }
+
+    input CreateCatalogImageGenerationInput {
+        referenceAssetId: ID!
+        productName: String!
+        description: String!
+        idempotencyKey: String!
+        termsAccepted: Boolean!
+    }
+
+    type CatalogImageGenerationOutput implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        outputIndex: Int!
+        state: ImageOutputState!
+        errorMessage: String
+        failureCode: String
+        completedAt: DateTime
+        billingMode: String!
+        width: Int
+        height: Int
+        imageUrl: String
+        catalogAssetId: ID
+        usedAt: DateTime
+    }
+
+    type CatalogImageGenerationJob implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        state: ImageGenerationState!
+        modelCodeSnapshot: String!
+        modelNameSnapshot: String!
+        productName: String!
+        description: String!
+        originalPrompt: String!
+        finalPrompt: String!
+        aspectRatio: String!
+        resolution: String!
+        quantity: Int!
+        errorMessage: String
+        completedAt: DateTime
+        referenceAsset: ImagePrivateAssetView
+        outputs: [CatalogImageGenerationOutput!]!
+    }
+
+    type CatalogImageGenerationJobList implements PaginatedList {
+        items: [CatalogImageGenerationJob!]!
+        totalItems: Int!
+    }
+
     type ImageGenerationAdminConfig {
         id: ID!
         enabled: Boolean!
@@ -333,7 +397,7 @@ export const adminApiExtensions = gql`
     }
 
     extend type ImageGenerationJob {
-        customer: Customer!
+        customer: Customer
         providerScopeSnapshot: String!
         providerCredentialCodeSnapshot: String!
         providerCredentialNameSnapshot: String!
@@ -516,7 +580,7 @@ export const adminApiExtensions = gql`
         id: ID!
         recordType: String!
         createdAt: DateTime!
-        customer: Customer!
+        customer: Customer
         channelId: ID!
         modelCode: String!
         credentialCode: String!
@@ -734,6 +798,9 @@ export const adminApiExtensions = gql`
     }
 
     extend type Query {
+        catalogImageStudioConfig: CatalogImageStudioConfig!
+        catalogImageGenerationJob(id: ID!): CatalogImageGenerationJob!
+        catalogImageGenerationJobs(skip: Int, take: Int): CatalogImageGenerationJobList!
         imageGenerationAdminConfig: ImageGenerationAdminConfig!
         imageProviderAdminConfigs: [ImageProviderAdminConfig!]!
         imagePromptRoutingConfig: ImagePromptRoutingConfig!
@@ -748,6 +815,10 @@ export const adminApiExtensions = gql`
     }
 
     extend type Mutation {
+        uploadCatalogImageReference(file: Upload!, termsAccepted: Boolean!): ImagePrivateAssetView!
+        releaseCatalogImageReference(id: ID!): Boolean!
+        createCatalogImageGeneration(input: CreateCatalogImageGenerationInput!): CatalogImageGenerationJob!
+        useCatalogImageOutput(outputId: ID!): Asset!
         saveImageGenerationConfig(input: SaveImageGenerationConfigInput!): ImageGenerationAdminConfig!
         saveImageProviderCredential(input: SaveImageProviderCredentialInput!): ImageProviderAdminConfig!
         saveImagePromptRoutingConfig(input: SaveImagePromptRoutingConfigInput!): ImagePromptRoutingConfig!

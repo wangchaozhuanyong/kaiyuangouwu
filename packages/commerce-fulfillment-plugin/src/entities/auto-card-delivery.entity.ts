@@ -90,6 +90,7 @@ export class AutoCardDelivery extends VendureEntity {
     @OneToMany(() => AutoCardPoolItem, item => item.delivery)
     poolItems: AutoCardPoolItem[];
 
-    @OneToMany(() => AutoCardDeliveryEvent, event => event.delivery)
+    // Timeline rows are appended independently; stale parent snapshots must not detach them.
+    @OneToMany(() => AutoCardDeliveryEvent, event => event.delivery, { persistence: false })
     events: AutoCardDeliveryEvent[];
 }

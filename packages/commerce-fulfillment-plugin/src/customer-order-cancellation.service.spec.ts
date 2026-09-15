@@ -5,6 +5,8 @@ import { CustomerOrderCancellationService } from './customer-order-cancellation.
 function physicalOrder(overrides: Record<string, unknown> = {}) {
     return {
         id: 'order-1',
+        salesChannelId: 'channel-1',
+        channels: [{ id: 'channel-1' }, { id: 'channel-2' }],
         state: 'PaymentAuthorized',
         customer: { user: { id: 'user-1' } },
         lines: [
@@ -107,3 +109,15 @@ describe('CustomerOrderCancellationService', () => {
         expect(failed.orderService.cancelOrder).not.toHaveBeenCalled();
     });
 });
+
+it.each(['channel-2', null])(
+    'does not cancel same-member orders with foreign or unknown sale owner %s',
+    async salesChannelId => {
+        const test = createService(physicalOrder({ salesChannelId }));
+        await expect(
+            test.service.cancelAuthorizedPhysicalOrder(test.ctx, 'order-1', 'Cancel'),
+        ).rejects.toThrow();
+        expect(test.orderService.cancelPayment).not.toHaveBeenCalled();
+        expect(test.orderService.cancelOrder).not.toHaveBeenCalled();
+    },
+);

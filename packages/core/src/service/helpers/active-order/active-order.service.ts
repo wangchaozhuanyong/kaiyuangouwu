@@ -4,10 +4,10 @@ import { RequestContext } from '../../../api/common/request-context';
 import { InternalServerError, UserInputError } from '../../../common/error/errors';
 import { idsAreEqual } from '../../../common/utils';
 import { ConfigService } from '../../../config/config.service';
-import { TransactionalConnection } from '../../../connection/transactional-connection';
 import { Order } from '../../../entity/order/order.entity';
 import { OrderService } from '../../services/order.service';
 import { SessionService } from '../../services/session.service';
+import { isActiveOrderForUser } from '../order-sales-scope';
 
 /**
  * @description
@@ -20,7 +20,6 @@ export class ActiveOrderService {
     constructor(
         private sessionService: SessionService,
         private orderService: OrderService,
-        private connection: TransactionalConnection,
         private configService: ConfigService,
     ) {}
 
@@ -40,21 +39,7 @@ export class ActiveOrderService {
         if (!ctx.session) {
             throw new InternalServerError('error.no-active-session');
         }
-        let order = ctx.session.activeOrderId
-            ? await this.connection
-                  .getRepository(ctx, Order)
-                  .createQueryBuilder('order')
-                  .leftJoin('order.channels', 'channel')
-                  .where('order.id = :orderId', { orderId: ctx.session.activeOrderId })
-                  .andWhere('channel.id = :channelId', { channelId: ctx.channelId })
-                  .getOne()
-            : undefined;
-        if (order && order.active === false) {
-            // edge case where an inactive order may not have been
-            // removed from the session, i.e. the regular process was interrupted
-            await this.sessionService.unsetActiveOrder(ctx, ctx.session);
-            order = undefined;
-        }
+        let order = await this.orderService.getActiveOrderFromSession(ctx);
         if (!order) {
             if (ctx.activeUserId) {
                 order = await this.orderService.getActiveOrderForUser(ctx, ctx.activeUserId);
@@ -101,10 +86,21 @@ export class ActiveOrderService {
                 const strategyInput = input?.[strategy.name] ?? {};
                 order = await strategy.determineActiveOrder(ctx, strategyInput);
                 if (order) {
+                    // Re-read the authoritative owner/member for every strategy, including custom ones.
+                    order = await this.orderService.findOne(ctx, order.id, ['customer', 'customer.user']);
+                    if (order && !isActiveOrderForUser(ctx, order, ctx.activeUserId)) order = undefined;
+                }
+                if (order) {
                     break;
                 }
                 if (createIfNotExists && typeof strategy.createActiveOrder === 'function') {
                     order = await strategy.createActiveOrder(ctx, strategyInput);
+                    if (order) {
+                        order = await this.orderService.findOne(ctx, order.id, ['customer', 'customer.user']);
+                        if (!order || !isActiveOrderForUser(ctx, order, ctx.activeUserId)) {
+                            throw new UserInputError('error.order-could-not-be-determined-or-created');
+                        }
+                    }
                 }
                 if (order) {
                     break;

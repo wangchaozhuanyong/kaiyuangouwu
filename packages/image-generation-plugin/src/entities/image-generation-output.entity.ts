@@ -1,5 +1,5 @@
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
-import { EntityId, Money, VendureEntity } from '@vendure/core';
+import { Asset, EntityId, Money, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne, VersionColumn } from 'typeorm';
 
 import { ImageGenerationJob } from './image-generation-job.entity';
@@ -41,6 +41,19 @@ export class ImageGenerationOutput extends VendureEntity {
 
     @EntityId({ nullable: true })
     assetId: ID | null;
+
+    @ManyToOne(() => Asset, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({
+        name: 'catalogAssetId',
+        foreignKeyConstraintName: 'FK_image_generation_output_catalog_asset',
+    })
+    catalogAsset: Asset | null;
+
+    @EntityId({ nullable: true })
+    catalogAssetId: ID | null;
+
+    @Column({ type: Date, nullable: true })
+    usedAt: Date | null;
 
     @Column({ type: 'varchar', length: 500, nullable: true })
     errorMessage: string | null;

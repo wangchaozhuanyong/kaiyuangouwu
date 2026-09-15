@@ -62,13 +62,16 @@ import { IdentifierChangeRequestEvent } from '../../event-bus/events/identifier-
 import { PasswordResetEvent } from '../../event-bus/events/password-reset-event';
 import { PasswordResetVerifiedEvent } from '../../event-bus/events/password-reset-verified-event';
 import { CustomFieldRelationService } from '../helpers/custom-field-relation/custom-field-relation.service';
+import { isCustomerIdentityConflict } from '../helpers/customer-identity-conflict';
 import { ListQueryBuilder } from '../helpers/list-query-builder/list-query-builder';
+import { isPlatformAdminContext } from '../helpers/platform-admin-context';
 import { TranslatorService } from '../helpers/translator/translator.service';
 import { addressToLine } from '../helpers/utils/address-to-line';
 import { patchEntity } from '../helpers/utils/patch-entity';
 
 import { ChannelService } from './channel.service';
 import { CountryService } from './country.service';
+import { CustomerStoreEntryService } from './customer-store-entry.service';
 import { HistoryService } from './history.service';
 import { UserService } from './user.service';
 
@@ -92,6 +95,7 @@ export class CustomerService {
         private channelService: ChannelService,
         private customFieldRelationService: CustomFieldRelationService,
         private translator: TranslatorService,
+        private customerStoreEntryService: CustomerStoreEntryService,
     ) {}
 
     findAll(
@@ -111,7 +115,7 @@ export class CustomerService {
         return this.listQueryBuilder
             .build(Customer, options, {
                 relations,
-                channelId: ctx.channelId,
+                channelId: isPlatformAdminContext(ctx) ? undefined : ctx.channelId,
                 where: { deletedAt: IsNull() },
                 ctx,
                 customPropertyMap,
@@ -125,6 +129,12 @@ export class CustomerService {
         id: ID,
         relations: RelationPaths<Customer> = [],
     ): Promise<Customer | undefined> {
+        if (isPlatformAdminContext(ctx)) {
+            return this.connection
+                .getRepository(ctx, Customer)
+                .findOne({ where: { id, deletedAt: IsNull() }, relations })
+                .then(customer => customer ?? undefined);
+        }
         return this.connection
             .findOneInChannel(ctx, Customer, id, ctx.channelId, {
                 relations,
@@ -158,22 +168,24 @@ export class CustomerService {
      * Returns all {@link Address} entities associated with the specified Customer.
      */
     findAddressesByCustomerId(ctx: RequestContext, customerId: ID): Promise<Address[]> {
-        return this.connection
+        const query = this.connection
             .getRepository(ctx, Address)
             .createQueryBuilder('address')
             .leftJoinAndSelect('address.country', 'country')
             .leftJoinAndSelect('country.translations', 'countryTranslation')
             .innerJoin('address.customer', 'addressCustomer')
-            .innerJoin('addressCustomer.channels', 'addressCustomerChannel')
-            .where('address.customer = :id', { id: customerId })
-            .andWhere('addressCustomerChannel.id = :channelId', { channelId: ctx.channelId })
-            .getMany()
-            .then(addresses => {
-                addresses.forEach(address => {
-                    address.country = this.translator.translate(address.country, ctx);
-                });
-                return addresses;
+            .where('address.customer = :id', { id: customerId });
+        if (!isPlatformAdminContext(ctx)) {
+            query
+                .innerJoin('addressCustomer.channels', 'addressCustomerChannel')
+                .andWhere('addressCustomerChannel.id = :channelId', { channelId: ctx.channelId });
+        }
+        return query.getMany().then(addresses => {
+            addresses.forEach(address => {
+                address.country = this.translator.translate(address.country, ctx);
             });
+            return addresses;
+        });
     }
 
     /**
@@ -194,7 +206,9 @@ export class CustomerService {
             },
         );
         if (customerWithGroups) {
-            return customerWithGroups.groups;
+            return customerWithGroups.groups.filter(
+                group => group.channelId != null && idsAreEqual(group.channelId, ctx.channelId),
+            );
         } else {
             return [];
         }
@@ -216,8 +230,26 @@ export class CustomerService {
         input: CreateCustomerInput,
         password?: string,
     ): Promise<ErrorResultUnion<CreateCustomerResult, Customer>> {
+        try {
+            return await this.connection.withTransaction(ctx, txCtx =>
+                this.createInTransaction(txCtx, input, password),
+            );
+        } catch (error) {
+            if (isCustomerIdentityConflict(error)) return new EmailAddressConflictAdminError();
+            throw error;
+        }
+    }
+
+    private async createInTransaction(
+        ctx: RequestContext,
+        input: CreateCustomerInput,
+        password?: string,
+    ): Promise<ErrorResultUnion<CreateCustomerResult, Customer>> {
         input.emailAddress = normalizeEmailAddress(input.emailAddress);
         const customer = new Customer(input);
+        if (await this.userService.getUserByEmailAddress(ctx, input.emailAddress, 'customer')) {
+            return new EmailAddressConflictAdminError();
+        }
 
         const existingCustomerInChannel = await this.connection
             .getRepository(ctx, Customer)
@@ -257,6 +289,11 @@ export class CustomerService {
         await this.eventBus.publish(new AccountRegistrationEvent(ctx, customer.user));
         await this.channelService.assignToCurrentChannel(customer, ctx, false);
         const createdCustomer = await this.connection.getRepository(ctx, Customer).save(customer);
+        await this.customerStoreEntryService.recordRegistration(
+            ctx,
+            createdCustomer.id,
+            !!customer.user?.verified,
+        );
         await this.customFieldRelationService.updateRelations(ctx, Customer, input, createdCustomer);
         await this.historyService.createHistoryEntryForCustomer({
             ctx,
@@ -290,11 +327,18 @@ export class CustomerService {
         ctx: RequestContext,
         input: UpdateCustomerInput | (UpdateCustomerShopInput & { id: ID }),
     ): Promise<ErrorResultUnion<UpdateCustomerResult, Customer>> {
+        return this.connection.withTransaction(ctx, txCtx => this.updateInTransaction(txCtx, input));
+    }
+
+    private async updateInTransaction(
+        ctx: RequestContext,
+        input: UpdateCustomerInput | (UpdateCustomerShopInput & { id: ID }),
+    ): Promise<ErrorResultUnion<UpdateCustomerResult, Customer>> {
         const hasEmailAddress = (i: any): i is UpdateCustomerInput & { emailAddress: string } =>
             Object.hasOwnProperty.call(i, 'emailAddress');
 
         const customer = await this.connection.getEntityOrThrow(ctx, Customer, input.id, {
-            channelId: ctx.channelId,
+            channelId: isPlatformAdminContext(ctx) ? undefined : ctx.channelId,
         });
 
         if (hasEmailAddress(input)) {
@@ -366,22 +410,51 @@ export class CustomerService {
         ctx: RequestContext,
         input: RegisterCustomerInput,
     ): Promise<RegisterCustomerAccountResult | EmailAddressConflictError | PasswordValidationError> {
+        try {
+            return await this.connection.withTransaction(ctx, txCtx =>
+                this.registerCustomerAccountInTransaction(txCtx, input),
+            );
+        } catch (error) {
+            // The entire losing registration was rolled back, including any provisional User/auth rows.
+            if (isCustomerIdentityConflict(error)) return { success: true };
+            throw error;
+        }
+    }
+
+    private async registerCustomerAccountInTransaction(
+        ctx: RequestContext,
+        input: RegisterCustomerInput,
+    ): Promise<RegisterCustomerAccountResult | EmailAddressConflictError | PasswordValidationError> {
         if (!this.configService.authOptions.requireVerification) {
             if (!input.password) {
                 return new MissingPasswordError();
             }
         }
-        let user = await this.userService.getUserByEmailAddress(ctx, input.emailAddress);
-        const hasNativeAuthMethod = !!user?.authenticationMethods.find(
-            m => m instanceof NativeAuthenticationMethod,
+        const existingUser = await this.userService.getUserByEmailAddress(
+            ctx,
+            input.emailAddress,
+            'customer',
         );
-        if (user && user.verified) {
-            if (hasNativeAuthMethod) {
-                // If the user has already been verified and has already
-                // registered with the native authentication strategy, do nothing.
-                return { success: true };
+        if (existingUser) {
+            if (
+                !existingUser.verified &&
+                existingUser.authenticationMethods.some(m => m instanceof NativeAuthenticationMethod)
+            ) {
+                const refreshed = await this.userService.setVerificationToken(ctx, existingUser);
+                if (!refreshed.verified)
+                    await this.eventBus.publish(new AccountRegistrationEvent(ctx, refreshed));
             }
+            // An email submitted on a public form is not proof of account ownership.
+            // Do not edit profiles, attach another auth method, or establish store membership.
+            return { success: true };
         }
+        const createdUser = await this.userService.createCustomerUser(
+            ctx,
+            input.emailAddress,
+            input.password || undefined,
+        );
+        if (isGraphQlErrorResult(createdUser)) return createdUser;
+        let user = createdUser;
         const customFields = (input as any).customFields;
         const customer = await this.createOrUpdate(ctx, {
             emailAddress: input.emailAddress,
@@ -402,31 +475,6 @@ export class CustomerService {
                 strategy: NATIVE_AUTH_STRATEGY_NAME,
             },
         });
-        if (!user) {
-            const customerUser = await this.userService.createCustomerUser(
-                ctx,
-                input.emailAddress,
-                input.password || undefined,
-            );
-            if (isGraphQlErrorResult(customerUser)) {
-                return customerUser;
-            } else {
-                user = customerUser;
-            }
-        }
-        if (!hasNativeAuthMethod) {
-            const addAuthenticationResult = await this.userService.addNativeAuthenticationMethod(
-                ctx,
-                user,
-                input.emailAddress,
-                input.password || undefined,
-            );
-            if (isGraphQlErrorResult(addAuthenticationResult)) {
-                return addAuthenticationResult;
-            } else {
-                user = addAuthenticationResult;
-            }
-        }
         if (!user.verified) {
             user = await this.userService.setVerificationToken(ctx, user);
         }
@@ -434,6 +482,7 @@ export class CustomerService {
         customer.user = user;
         await this.connection.getRepository(ctx, User).save(user, { reload: false });
         await this.connection.getRepository(ctx, Customer).save(customer, { reload: false });
+        await this.customerStoreEntryService.recordRegistration(ctx, customer.id, user.verified);
         if (!user.verified) {
             await this.eventBus.publish(new AccountRegistrationEvent(ctx, user));
         } else {
@@ -457,8 +506,9 @@ export class CustomerService {
     async refreshVerificationToken(ctx: RequestContext, emailAddress: string): Promise<void> {
         const user = await this.userService.getUserByEmailAddress(ctx, emailAddress);
         if (user && !user.verified) {
-            await this.userService.setVerificationToken(ctx, user);
-            await this.eventBus.publish(new AccountRegistrationEvent(ctx, user));
+            const refreshed = await this.userService.setVerificationToken(ctx, user);
+            if (!refreshed.verified)
+                await this.eventBus.publish(new AccountRegistrationEvent(ctx, refreshed));
         }
     }
 
@@ -476,7 +526,7 @@ export class CustomerService {
         if (isGraphQlErrorResult(result)) {
             return result;
         }
-        const customer = await this.findOneByUserId(ctx, result.id, true);
+        const customer = await this.findOneByUserId(ctx, result.id, false);
         if (!customer) {
             throw new InternalServerError('error.cannot-locate-customer-for-user');
         }
@@ -488,7 +538,7 @@ export class CustomerService {
                 strategy: NATIVE_AUTH_STRATEGY_NAME,
             },
         });
-        const user = assertFound(this.findOneByUserId(ctx, result.id));
+        const user = assertFound(this.findOneByUserId(ctx, result.id, false));
         await this.eventBus.publish(new AccountVerifiedEvent(ctx, customer));
         return user;
     }
@@ -502,7 +552,7 @@ export class CustomerService {
         const user = await this.userService.setPasswordResetToken(ctx, emailAddress);
         if (user) {
             await this.eventBus.publish(new PasswordResetEvent(ctx, user));
-            const customer = await this.findOneByUserId(ctx, user.id);
+            const customer = await this.findOneByUserId(ctx, user.id, false);
             if (!customer) {
                 throw new InternalServerError('error.cannot-locate-customer-for-user');
             }
@@ -531,7 +581,7 @@ export class CustomerService {
         if (isGraphQlErrorResult(result)) {
             return result;
         }
-        const customer = await this.findOneByUserId(ctx, result.id);
+        const customer = await this.findOneByUserId(ctx, result.id, false);
         if (!customer) {
             throw new InternalServerError('error.cannot-locate-customer-for-user');
         }
@@ -552,6 +602,16 @@ export class CustomerService {
      * Customer.
      */
     async requestUpdateEmailAddress(
+        ctx: RequestContext,
+        userId: ID,
+        newEmailAddress: string,
+    ): Promise<boolean | EmailAddressConflictError> {
+        return this.connection.withTransaction(ctx, txCtx =>
+            this.requestUpdateEmailAddressInTransaction(txCtx, userId, newEmailAddress),
+        );
+    }
+
+    private async requestUpdateEmailAddressInTransaction(
         ctx: RequestContext,
         userId: ID,
         newEmailAddress: string,
@@ -590,6 +650,7 @@ export class CustomerService {
         } else {
             const oldIdentifier = user.identifier;
             user.identifier = normalizedEmailAddress;
+            user.customerIdentifier = normalizedEmailAddress;
             customer.emailAddress = normalizedEmailAddress;
             await this.connection.getRepository(ctx, User).save(user, { reload: false });
             await this.connection.getRepository(ctx, Customer).save(customer, { reload: false });
@@ -616,6 +677,15 @@ export class CustomerService {
         ctx: RequestContext,
         token: string,
     ): Promise<boolean | IdentifierChangeTokenInvalidError | IdentifierChangeTokenExpiredError> {
+        return this.connection.withTransaction(ctx, txCtx =>
+            this.updateEmailAddressInTransaction(txCtx, token),
+        );
+    }
+
+    private async updateEmailAddressInTransaction(
+        ctx: RequestContext,
+        token: string,
+    ): Promise<boolean | IdentifierChangeTokenInvalidError | IdentifierChangeTokenExpiredError> {
         const result = await this.userService.changeIdentifierByToken(ctx, token);
         if (isGraphQlErrorResult(result)) {
             return result;
@@ -624,7 +694,7 @@ export class CustomerService {
         if (!user) {
             return false;
         }
-        const customer = await this.findOneByUserId(ctx, user.id);
+        const customer = await this.findOneByUserId(ctx, user.id, false);
         if (!customer) {
             return false;
         }
@@ -685,7 +755,7 @@ export class CustomerService {
         const customer = await this.connection.getEntityOrThrow(ctx, Customer, customerId, {
             where: { deletedAt: IsNull() },
             relations: ['addresses'],
-            channelId: ctx.channelId,
+            channelId: isPlatformAdminContext(ctx) ? undefined : ctx.channelId,
         });
 
         const country = await this.countryService.findOneByCode(ctx, input.countryCode);
@@ -778,7 +848,7 @@ export class CustomerService {
 
     async softDelete(ctx: RequestContext, customerId: ID): Promise<DeletionResponse> {
         const customer = await this.connection.getEntityOrThrow(ctx, Customer, customerId, {
-            channelId: ctx.channelId,
+            channelId: isPlatformAdminContext(ctx) ? undefined : ctx.channelId,
         });
         await this.connection
             .getRepository(ctx, Customer)
@@ -846,7 +916,7 @@ export class CustomerService {
 
     async addNoteToCustomer(ctx: RequestContext, input: AddNoteToCustomerInput): Promise<Customer> {
         const customer = await this.connection.getEntityOrThrow(ctx, Customer, input.id, {
-            channelId: ctx.channelId,
+            channelId: isPlatformAdminContext(ctx) ? undefined : ctx.channelId,
         });
         await this.historyService.createHistoryEntryForCustomer(
             {

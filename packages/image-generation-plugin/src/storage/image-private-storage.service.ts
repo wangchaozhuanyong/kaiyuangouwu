@@ -82,7 +82,35 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
         const uploaded = await readUpload(upload, Math.min(MAX_REFERENCE_BYTES, maxBytes));
         const bytes = await processCustomerImage(uploaded, 'reference');
         if (bytes.length > maxBytes) throw new UserInputError('参考图总容量不足，请删除旧参考图后重试');
-        return this.store(ctx, customerId, 'REFERENCE', bytes, upload.filename, null, REFERENCE_RETENTION_MS);
+        return this.store(
+            ctx,
+            { customerId },
+            'REFERENCE',
+            bytes,
+            upload.filename,
+            null,
+            REFERENCE_RETENTION_MS,
+        );
+    }
+
+    async storeAdminReference(
+        ctx: RequestContext,
+        administratorUserId: ID,
+        upload: UploadedImageFile,
+        maxBytes = MAX_REFERENCE_BYTES,
+    ): Promise<ImagePrivateAsset> {
+        const uploaded = await readUpload(upload, Math.min(MAX_REFERENCE_BYTES, maxBytes));
+        const bytes = await processCustomerImage(uploaded, 'reference');
+        if (bytes.length > maxBytes) throw new UserInputError('参考图总容量不足，请删除旧参考图后重试');
+        return this.store(
+            ctx,
+            { administratorUserId },
+            'REFERENCE',
+            bytes,
+            upload.filename,
+            null,
+            REFERENCE_RETENTION_MS,
+        );
     }
 
     async storeGenerated(
@@ -95,7 +123,27 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
         if (result.bytes.length > MAX_GENERATED_BYTES) throw new UserInputError('生成图片超过 25MB');
         return this.store(
             ctx,
-            customerId,
+            { customerId },
+            'OUTPUT',
+            await processCustomerImage(result.bytes, 'output'),
+            outputName,
+            result.metadata ?? null,
+            OUTPUT_RETENTION_MS,
+            resolution,
+        );
+    }
+
+    async storeAdminGenerated(
+        ctx: RequestContext,
+        administratorUserId: ID,
+        result: ProviderGenerationResult,
+        outputName: string,
+        resolution: ImageResolution,
+    ): Promise<ImagePrivateAsset> {
+        if (result.bytes.length > MAX_GENERATED_BYTES) throw new UserInputError('生成图片超过 25MB');
+        return this.store(
+            ctx,
+            { administratorUserId },
             'OUTPUT',
             await processCustomerImage(result.bytes, 'output'),
             outputName,
@@ -148,6 +196,34 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
         return `/image-generation/private/${encoded}.${this.signature(encoded)}`;
     }
 
+    signedAdminUrl(
+        ctx: RequestContext,
+        asset: ImagePrivateAsset,
+        administratorUserId: ID,
+        download = false,
+    ): string | null {
+        const host = normalizePrivateImageHost(
+            ctx.req?.headers?.['x-forwarded-host'] ?? ctx.req?.headers?.host,
+        );
+        if (
+            !host ||
+            asset.deletedAt ||
+            asset.expiresAt.getTime() <= Date.now() ||
+            String(asset.administratorUserId) !== String(administratorUserId)
+        )
+            return null;
+        const payload = {
+            assetId: String(asset.id),
+            administratorUserId: String(administratorUserId),
+            channelId: String(asset.channelId),
+            host,
+            expiresAt: Math.floor(Date.now() / 1000) + LINK_TTL_SECONDS,
+            download,
+        };
+        const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+        return `/image-generation/private/${encoded}.${this.signature(encoded)}`;
+    }
+
     async authorize(
         token: string,
         requestHost: unknown,
@@ -163,6 +239,7 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
             const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as {
                 assetId?: string;
                 customerId?: string;
+                administratorUserId?: string;
                 channelId?: string;
                 host?: string;
                 expiresAt?: number;
@@ -170,7 +247,7 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
             };
             if (
                 !payload.assetId ||
-                !payload.customerId ||
+                (!payload.customerId && !payload.administratorUserId) ||
                 !payload.channelId ||
                 !payload.host ||
                 normalizePrivateImageHost(requestHost) !== payload.host ||
@@ -182,7 +259,9 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
             const asset = await this.connection.rawConnection.getRepository(ImagePrivateAsset).findOne({
                 where: {
                     id: payload.assetId as ID,
-                    customerId: payload.customerId as ID,
+                    ...(payload.customerId
+                        ? { customerId: payload.customerId as ID }
+                        : { administratorUserId: payload.administratorUserId as ID }),
                     channelId: payload.channelId as ID,
                 },
             });
@@ -254,6 +333,46 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
                         .getRepository(ctx, ImagePrivateAsset)
                         .update({ id: released.id }, { providerMetadata: null });
                 })
+                .catch(() => undefined);
+        }
+        return true;
+    }
+
+    async releaseAdminReference(ctx: RequestContext, assetId: ID, administratorUserId: ID): Promise<boolean> {
+        const released = await this.connection.withTransaction(ctx, async txCtx => {
+            const repository = this.connection.getRepository(txCtx, ImagePrivateAsset);
+            const asset = await repository.findOne({
+                where: {
+                    id: assetId,
+                    channelId: txCtx.channelId,
+                    administratorUserId,
+                    kind: 'REFERENCE',
+                },
+            });
+            if (!asset || asset.deletedAt) return null;
+            const jobs = await this.connection.getRepository(txCtx, ImageGenerationJob).find({
+                where: {
+                    channelId: txCtx.channelId,
+                    administratorUserId,
+                    origin: 'ADMIN_PRODUCT_IMAGE',
+                },
+                select: { id: true, referenceAssetId: true, promptSpec: true },
+            });
+            if (jobs.some(job => storedReferenceAssetIds(job).includes(String(assetId)))) return false;
+            asset.deletedAt = new Date();
+            asset.originalName = 'deleted';
+            asset.providerMetadata = { storageDeletionPending: true };
+            await repository.save(asset, { reload: false });
+            return asset;
+        });
+        if (released === false) return false;
+        if (released) {
+            await this.removeFile(released.storageKey)
+                .then(() =>
+                    this.connection
+                        .getRepository(ctx, ImagePrivateAsset)
+                        .update({ id: released.id }, { providerMetadata: null }),
+                )
                 .catch(() => undefined);
         }
         return true;
@@ -394,7 +513,7 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
 
     private async store(
         ctx: RequestContext,
-        customerId: ID,
+        owner: { customerId?: ID; administratorUserId?: ID },
         kind: 'REFERENCE' | 'OUTPUT',
         bytes: Buffer,
         originalName: string,
@@ -453,7 +572,8 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
             return await this.connection.getRepository(ctx, ImagePrivateAsset).save(
                 new ImagePrivateAsset({
                     channelId: ctx.channelId,
-                    customerId,
+                    customerId: owner.customerId ?? null,
+                    administratorUserId: owner.administratorUserId ?? null,
                     kind,
                     storageKey,
                     originalName: safeFileName(originalName),

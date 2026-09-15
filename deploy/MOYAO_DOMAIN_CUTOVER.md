@@ -6,7 +6,7 @@
 
 | 入口                   | Vendure 归属                                          | 用途           |
 | ---------------------- | ----------------------------------------------------- | -------------- |
-| `moyaoai.com`          | MOYAO AI 主 Channel（当前预设 `__default_channel__`） | 主网店         |
+| `moyaoai.com`          | MOYAO AI 专用 Channel（计划 code `moyao-ai`）         | 主网店         |
 | `www.moyaoai.com`      | 301 到 `moyaoai.com`                                  | 主网店别名     |
 | `damatong.net`         | 美宜佳 Channel（上线前必须确认实际 code/id）          | 美宜佳店铺     |
 | `www.damatong.net`     | 301 到 `damatong.net`                                 | 美宜佳别名     |
@@ -14,6 +14,8 @@
 | `console.damatong.net` | 301 到 `console.moyaoai.com`                          | 旧后台兼容入口 |
 
 两个前台复用同一套 Storefront 构建和同一套 Vendure 服务，但请求 Host 先由 Store Domain 插件解析为 Channel。商品、价格、库存、订单、客户、品牌和页面配置都按 Channel 读取；不维护第二份前台数据库，也不依靠前端硬编码 Channel Token。
+
+Vendure 内置 `__default_channel__` 只作为系统保留 Channel，不绑定公开店铺域名，也不承载 MOYAO AI 或美宜佳的新增业务数据。`moyao-ai` 必须在生产只读快照确认 code 未占用、历史归属可以确定后再创建和切换。
 
 ## 后台到客户端同步链
 
@@ -27,7 +29,8 @@
 
 ## 上线前硬门禁
 
-- 从生产 Admin API 只读确认 MOYAO AI 与美宜佳各自唯一的 Channel code/id、StoreProfile 和管理员权限；没有美宜佳 Channel 时先按现有开店流程创建，禁止把名称相近的 Channel 当作目标。
+- 先运行 `audit-store-isolation-data` 保存生产只读快照，确认默认 Channel、目标 `moyao-ai` code、域名及历史订单 Channel 关系；快照仍为 `NO_GO` 时禁止执行结构迁移。
+- 从生产 Admin API 只读确认 MOYAO AI 与美宜佳各自唯一的 Channel code/id、StoreProfile 和管理员权限；缺少专用 Channel 时按现有开店流程创建，禁止把名称相近的 Channel 当作目标。
 - 对美宜佳商品源做字段级确认：SKU、名称、价格、库存、上下架、图片、删除策略和冲突优先级。现有外部美宜佳/Pospal 自动化不是 Vendure 数据源，未完成映射与一次 dry-run 对账前不得开启写入。
 - 备份 MySQL，并保存 StoreDomain、StoreProfile、Channel、商品/价格/库存数量及当前主域快照。
 - 证书 `/etc/letsencrypt/live/moyaoai.com/` 必须实际覆盖 `moyaoai.com`、`www.moyaoai.com`、`console.moyaoai.com`、`damatong.net`、`www.damatong.net`、`console.damatong.net`；证书未覆盖时禁止加载新 Nginx 配置。
@@ -36,13 +39,15 @@
 
 ## 无串店切换顺序
 
-1. 部署并运行数据库迁移，但暂不改 DNS；启动新 API/Worker 后检查 `/health`。
-2. 对 MOYAO AI 主 Channel 运行 `sync-moyao-brand.mjs --dry-run`，审核目标 profile/channel 和素材哈希；再以 `--apply --allow-remote` 执行并完成中英文 Shop API 反查。
-3. 在后台先添加并验证 `moyaoai.com`，确认它属于 MOYAO AI 主 Channel；此时仍不移走 `damatong.net`。
-4. 只读检查美宜佳 Channel 的商品、价格、库存、配送/税区、支付和 StoreProfile；缺任一门禁就停止。
-5. 查看 `damatong.net` 转移影响，核对来源/目标 Channel 与替代主域；使用最新 `updatedAt` 执行原子转移到美宜佳 Channel。
-6. 安装双域名 Nginx 配置，先 `nginx -t`，再 reload；随后切换 Cloudflare DNS。不要在域名转移成功前把 `moyaoai.com` 当作唯一可回退入口。
-7. 分别从公网验证两个 Host 的首页、Shop API、品牌、随机 SKU/价格/库存、购物车隔离和 SSE；统一后台必须能切换两个 Channel 并看到与各自前台一致的数据。
+1. 在现网旧结构上先运行生产只读快照，人工确认历史订单的唯一归属和默认 Channel 分离映射；存在无法确定的订单就保持 `HOLD`。
+2. 创建并核验 MOYAO AI 专用 `moyao-ai` Channel，准备经审核的数据回填方案；不得让公开域名继续指向默认 Channel。
+3. 部署并运行数据库迁移及经审核的精确回填，但暂不改 DNS；启动新 API/Worker 后检查 `/health`。
+4. 对 `moyao-ai` 运行 `sync-moyao-brand.mjs --channel-code moyao-ai --dry-run`，审核目标 profile/channel 和素材哈希；再以 `--apply --allow-remote` 执行并完成中英文 Shop API 反查。
+5. 在后台先添加并验证 `moyaoai.com`，确认它属于 `moyao-ai`；此时仍不移走 `damatong.net`。
+6. 只读检查美宜佳 Channel 的商品、价格、库存、配送/税区、支付和 StoreProfile；缺任一门禁就停止。
+7. 查看 `damatong.net` 转移影响，核对来源/目标 Channel 与替代主域；使用最新 `updatedAt` 执行原子转移到美宜佳 Channel。
+8. 安装双域名 Nginx 配置，先 `nginx -t`，再 reload；随后切换 Cloudflare DNS。不要在域名转移成功前把 `moyaoai.com` 当作唯一可回退入口。
+9. 分别从公网验证两个 Host 的首页、Shop API、品牌、随机 SKU/价格/库存、购物车隔离和 SSE；统一后台必须能切换两个 Channel 并看到与各自前台一致的数据。
 
 ## 验收查询
 

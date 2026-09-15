@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+    assertOrderSalesChannel,
     isGraphQlErrorResult,
     Order,
     OrderService,
@@ -19,7 +20,11 @@ export class CustomerOrderCancellationService {
         private readonly orderService: OrderService,
     ) {}
 
-    async cancelAuthorizedPhysicalOrder(ctx: RequestContext, orderId: string, reason: string): Promise<Order> {
+    async cancelAuthorizedPhysicalOrder(
+        ctx: RequestContext,
+        orderId: string,
+        reason: string,
+    ): Promise<Order> {
         const normalizedReason = reason.trim();
         if (!normalizedReason) {
             throw new UserInputError(ctx.translate('message.commerce-order-cancel-reason-required'));
@@ -29,7 +34,6 @@ export class CustomerOrderCancellationService {
         }
 
         const order = await this.connection.getEntityOrThrow(ctx, Order, orderId, {
-            channelId: ctx.channelId,
             relations: [
                 'customer',
                 'customer.user',
@@ -39,6 +43,7 @@ export class CustomerOrderCancellationService {
                 'fulfillments',
             ],
         });
+        assertOrderSalesChannel(ctx, order);
         if (!ctx.activeUserId || String(order.customer?.user?.id) !== String(ctx.activeUserId)) {
             throw new UserInputError(ctx.translate('message.commerce-order-cancel-not-owned'));
         }

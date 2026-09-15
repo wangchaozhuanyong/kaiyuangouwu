@@ -1,3 +1,4 @@
+/* eslint-disable import/order -- Prettier organizes hyphenated entity paths before parent paths. */
 import { Address } from './address/address.entity';
 import { Administrator } from './administrator/administrator.entity';
 import { ApiKeyTranslation } from './api-key/api-key-translation.entity';
@@ -12,6 +13,7 @@ import { CollectionAsset } from './collection/collection-asset.entity';
 import { CollectionTranslation } from './collection/collection-translation.entity';
 import { Collection } from './collection/collection.entity';
 import { CustomerGroup } from './customer-group/customer-group.entity';
+import { CustomerStoreEntry } from './customer-store-entry/customer-store-entry.entity';
 import { Customer } from './customer/customer.entity';
 import { FacetValueTranslation } from './facet-value/facet-value-translation.entity';
 import { FacetValue } from './facet-value/facet-value.entity';
@@ -73,6 +75,7 @@ import { TaxCategory } from './tax-category/tax-category.entity';
 import { TaxRate } from './tax-rate/tax-rate.entity';
 import { User } from './user/user.entity';
 import { Zone } from './zone/zone.entity';
+/* eslint-enable import/order */
 
 /**
  * A map of all the core database entities.
@@ -96,6 +99,7 @@ export const coreEntitiesMap = {
     Country,
     Customer,
     CustomerGroup,
+    CustomerStoreEntry,
     CustomerHistoryEntry,
     ExternalAuthenticationMethod,
     Facet,

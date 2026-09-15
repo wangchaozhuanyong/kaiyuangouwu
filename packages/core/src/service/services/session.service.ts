@@ -112,10 +112,7 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
         sessionToken?: string,
     ): Promise<AuthenticatedSession> {
         const token = sessionToken ?? (await this.generateSessionToken());
-        const guestOrder =
-            ctx.session && ctx.session.activeOrderId
-                ? await this.orderService.findOne(ctx, ctx.session.activeOrderId)
-                : undefined;
+        const guestOrder = await this.orderService.getActiveOrderFromSession(ctx, user.id);
         const existingOrder = await this.orderService.getActiveOrderForUser(ctx, user.id);
         const activeOrder = await this.orderService.mergeOrders(ctx, user, guestOrder, existingOrder);
 

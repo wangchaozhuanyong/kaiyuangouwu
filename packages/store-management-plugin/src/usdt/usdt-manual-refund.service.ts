@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
+    assertOrderSalesChannel,
     ForbiddenError,
     idsAreEqual,
     isGraphQlErrorResult,
@@ -213,9 +214,10 @@ export class UsdtManualRefundService {
     private async requirePaymentContext(ctx: RequestContext, paymentId: ID): Promise<UsdtPaymentContext> {
         const payment = await this.connection.getRepository(ctx, Payment).findOne({
             where: { id: paymentId },
-            relations: { order: { channels: true }, refunds: true },
+            relations: { order: true, refunds: true },
         });
         if (!payment) throw new UserInputError('找不到该支付记录');
+        assertOrderSalesChannel(ctx, payment.order);
         if (payment.method !== USDT_TRC20_PAYMENT_METHOD_CODE) {
             throw new UserInputError('该支付不是 USDT-TRC20 支付');
         }
@@ -230,6 +232,14 @@ export class UsdtManualRefundService {
         });
         if (!intent || !idsAreEqual(intent.orderId, payment.order.id)) {
             throw new UserInputError('该支付缺少已确认的 USDT 链上到账记录');
+        }
+        if (
+            !idsAreEqual(intent.channelId, payment.order.salesChannelId) ||
+            !intent.quote ||
+            !idsAreEqual(intent.quote.channelId, intent.channelId) ||
+            !idsAreEqual(intent.quote.orderId, intent.orderId)
+        ) {
+            throw new UserInputError('USDT 到账记录与订单店铺归属不一致，请人工核对');
         }
         return { payment, intent };
     }

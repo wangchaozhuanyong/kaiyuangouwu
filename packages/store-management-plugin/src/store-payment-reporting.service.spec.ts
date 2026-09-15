@@ -85,9 +85,8 @@ describe('StorePaymentReportingService', () => {
             channelId: 'channel-1',
         });
         for (const query of [paymentQuery, refundQuery]) {
-            expect(query.andWhere).toHaveBeenCalledWith(expect.stringContaining('OR NOT EXISTS'), {
-                reportDefaultChannelCode: '__default_channel__',
-            });
+            expect(query.innerJoin).toHaveBeenCalledWith('order.salesChannel', 'channel');
+            expect(query.innerJoin).not.toHaveBeenCalledWith('order.channels', 'channel');
         }
         expect(result[0]).toMatchObject({ grossAmount: 5000, refundedAmount: 0, netAmount: 5000 });
     });
@@ -148,9 +147,8 @@ describe('StorePaymentReportingService', () => {
         expect(detailsQuery.offset).toHaveBeenCalledWith(50);
         expect(detailsQuery.limit).toHaveBeenCalledWith(100);
         for (const query of [detailsQuery, countQuery]) {
-            expect(query.andWhere).toHaveBeenCalledWith(expect.stringContaining('OR NOT EXISTS'), {
-                reportDefaultChannelCode: '__default_channel__',
-            });
+            expect(query.innerJoin).toHaveBeenCalledWith('order.salesChannel', 'channel');
+            expect(query.innerJoin).not.toHaveBeenCalledWith('order.channels', 'channel');
         }
         expect(result).toEqual({
             totalItems: 2,

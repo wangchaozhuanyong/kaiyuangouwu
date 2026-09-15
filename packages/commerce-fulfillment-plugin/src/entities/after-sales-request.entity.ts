@@ -73,7 +73,8 @@ export class AfterSalesRequest extends VendureEntity {
     @OneToMany(() => AfterSalesItem, item => item.request)
     items: AfterSalesItem[];
 
-    @OneToMany(() => AfterSalesEvent, event => event.request)
+    // Timeline rows are appended independently; stale parent snapshots must not detach them.
+    @OneToMany(() => AfterSalesEvent, event => event.request, { persistence: false })
     events: AfterSalesEvent[];
 
     @ManyToOne(() => Channel, { onDelete: 'CASCADE', nullable: false })

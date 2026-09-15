@@ -54,12 +54,14 @@ import { toUserFacingError } from '../../utils/user-facing-error';
 import { OrderProfitExpensePanel } from './OrderProfitExpensePanel';
 import {
     buildCompatibleRefundOrderInput,
+    canManageOrderInChannel,
     formatAddress,
     formatDateTime,
     formatMoney,
     getCustomerName,
     getFulfillmentStateLabel,
     getMutationError,
+    getOrderProductDisplayName,
     getOrderStateClass,
     getOrderStateLabel,
     getPaymentMethodLabel,
@@ -82,6 +84,7 @@ interface OrderLineItem {
         id: string;
         name: string;
         sku: string;
+        product?: { name: string } | null;
         customFields?: { fulfillmentType?: string | null; digitalDeliveryMode?: string | null } | null;
     };
     customFields?: {
@@ -151,6 +154,7 @@ interface SalesOrderDetail {
     } | null;
     shippingAddress?: AddressItem | null;
     billingAddress?: AddressItem | null;
+    salesChannel: { id: string; code: string } | null;
     channels: Array<{ id: string; code: string; token: string }>;
     shippingLines: Array<{
         id: string;
@@ -177,6 +181,7 @@ interface AddressItem {
 }
 
 interface OrderQueryData {
+    activeChannel: { id: string; code: string };
     order?: SalesOrderDetail | null;
     fulfillmentHandlers: Array<{
         code: string;
@@ -219,9 +224,7 @@ export function OrderEditor() {
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
     const { hasAnyPermission } = useAdminPermissions();
-    const canUpdateOrder = hasAnyPermission(['UpdateOrder']);
     const canReadProfitExpenses = hasAnyPermission(['ReadCatalogOperations']);
-    const canUpdateProfitExpenses = canUpdateOrder && hasAnyPermission(['UpdateCatalogOperations']);
     const orderCustomFieldDefinitions = useCustomFieldDefinitions('Order');
     const orderDetailDocument = useMemo(
         () => addCustomFieldsToDocument(GET_SALES_ORDER, 'Order', orderCustomFieldDefinitions, ['order']),
@@ -272,6 +275,9 @@ export function OrderEditor() {
     }>(SET_SALES_ORDER_CUSTOM_FIELDS);
 
     const order = data?.order;
+    const inSalesStore = canManageOrderInChannel(order, data?.activeChannel?.id);
+    const canUpdateOrder = inSalesStore && hasAnyPermission(['UpdateOrder']);
+    const canUpdateProfitExpenses = canUpdateOrder && hasAnyPermission(['UpdateCatalogOperations']);
     /* oxlint-disable react/set-state-in-effect */
     useEffect(() => {
         if (!order) return;
@@ -780,7 +786,9 @@ export function OrderEditor() {
                                                             {line.featuredAsset?.preview ? (
                                                                 <img
                                                                     src={line.featuredAsset.preview}
-                                                                    alt={line.productVariant.name}
+                                                                    alt={getOrderProductDisplayName(
+                                                                        line.productVariant,
+                                                                    )}
                                                                     className="h-full w-full object-cover"
                                                                 />
                                                             ) : (
@@ -791,9 +799,11 @@ export function OrderEditor() {
                                                     <td className="h-[52px] max-w-64 px-3 py-0">
                                                         <span
                                                             className="block truncate font-semibold text-slate-900"
-                                                            title={line.productVariant.name}
+                                                            title={getOrderProductDisplayName(
+                                                                line.productVariant,
+                                                            )}
                                                         >
-                                                            {line.productVariant.name}
+                                                            {getOrderProductDisplayName(line.productVariant)}
                                                         </span>
                                                     </td>
                                                     <td className="h-[52px] max-w-44 px-3 py-0 font-mono text-[10px] text-slate-500">
@@ -1186,10 +1196,17 @@ export function OrderEditor() {
                                 </h2>
                                 <div className="mt-3 space-y-2 text-xs text-slate-600">
                                     <div>
-                                        <span className="text-slate-400">渠道：</span>
-                                        {order.channels
-                                            .map(channel => getChannelDisplayName(channel.code))
-                                            .join('、') || '未返回'}
+                                        <span className="text-slate-400">销售店铺：</span>
+                                        {order.salesChannel
+                                            ? getChannelDisplayName(order.salesChannel.code)
+                                            : '归属待核实'}
+                                        {!inSalesStore && (
+                                            <p className="mt-2 text-amber-700">
+                                                {order.salesChannel
+                                                    ? '请通过顶部店铺选择器切换到销售店铺后操作订单。'
+                                                    : '历史订单归属尚未核实，暂时只能查看。'}
+                                            </p>
+                                        )}
                                     </div>
                                     <div>
                                         <span className="text-slate-400">配送：</span>

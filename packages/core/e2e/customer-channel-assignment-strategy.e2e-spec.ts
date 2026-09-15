@@ -1,4 +1,3 @@
-import { ErrorCode } from '@vendure/common/lib/generated-shop-types';
 import { CurrencyCode, LanguageCode } from '@vendure/common/lib/generated-types';
 import { CustomerChannelAssignmentStrategy, mergeConfig, RequestContext } from '@vendure/core';
 import { createTestEnvironment, E2E_DEFAULT_CHANNEL_TOKEN } from '@vendure/testing';
@@ -111,7 +110,7 @@ describe('CustomerChannelAssignmentStrategy', () => {
         expect(await channelMembers(NO_AUTOJOIN_CHANNEL_TOKEN)).not.toContain(customer.emailAddress);
     });
 
-    it('does not authenticate a customer directly through an unassigned channel', async () => {
+    it('authenticates shared identity but still denies entry to a restricted store', async () => {
         shopClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
         await shopClient.asAnonymousUser();
         shopClient.setChannelToken(NO_AUTOJOIN_CHANNEL_TOKEN);
@@ -120,7 +119,8 @@ describe('CustomerChannelAssignmentStrategy', () => {
             password: 'test',
         });
 
-        expect('errorCode' in login ? login.errorCode : undefined).toBe(ErrorCode.INVALID_CREDENTIALS_ERROR);
+        expect('id' in login).toBe(true);
+        await expect(shopClient.query(MeDocument)).rejects.toThrow();
         expect(await channelMembers(NO_AUTOJOIN_CHANNEL_TOKEN)).not.toContain(customer.emailAddress);
     });
 

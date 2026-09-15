@@ -1,8 +1,8 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
 import { ForbiddenError, internal_getRequestContext, parseContext } from '@vendure/core';
 
-// Public browsing and account bootstrap are explicit. Customer data, mutations
-// and new Shop API fields still require their existing authorization.
+// Anonymous pass-through is explicit. Resolver permissions and services still
+// enforce cart ownership and customer-data authorization after this global gate.
 const publicQueries = new Set([
     'products',
     'product',
@@ -32,6 +32,11 @@ const publicQueries = new Set([
     'storefrontContent',
     'validateReferralInviteCode',
     'referralProgram',
+    'storefrontCart',
+    'activeOrder',
+    'eligibleShippingMethods',
+    'eligiblePaymentMethods',
+    'nextOrderStates',
 ]);
 const publicMutations = new Set([
     'recordStorefrontPageView',
@@ -44,6 +49,31 @@ const publicMutations = new Set([
     'refreshCustomerVerification',
     'requestPasswordReset',
     'resetPassword',
+    'applyStorefrontCartCommand',
+    'recoverStorefrontCartCommand',
+    'addStorefrontCartItem',
+    'setStorefrontCartLineQuantity',
+    'removeStorefrontCartLines',
+    'setStorefrontCartLinesSelected',
+    'setAllStorefrontCartLinesSelected',
+    'beginStorefrontCheckout',
+    'prepareStorefrontCartPayment',
+    'reopenStorefrontCart',
+    'addItemToOrder',
+    'adjustOrderLine',
+    'removeOrderLine',
+    'removeAllOrderLines',
+    'applyCouponCode',
+    'removeCouponCode',
+    'setCustomerForOrder',
+    'setOrderShippingAddress',
+    'setOrderBillingAddress',
+    'unsetOrderShippingAddress',
+    'unsetOrderBillingAddress',
+    'setOrderShippingMethod',
+    'setOrderCustomFields',
+    'transitionOrderToState',
+    'addPaymentToOrder',
 ]);
 
 @Injectable()

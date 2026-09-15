@@ -18,6 +18,7 @@ function order(id = '1') {
         active: false,
         state: 'PaymentSettled',
         orderPlacedAt: new Date(),
+        salesChannelId: 'a',
         channels: [{ id: 'a' }, { id: 'seller' }],
         lines: [{ id: 'line', quantity: 2 }],
         fulfillments: [] as Array<{ state: string; lines: Array<{ orderLineId: string; quantity: number }> }>,
@@ -50,7 +51,7 @@ afterEach(async () => {
 });
 
 describe('order placement push', () => {
-    it('does one startup recovery read, then no idle queries, and routes real events only to assigned Channels', async () => {
+    it('does one startup recovery read, then no idle queries, and routes real events only to the sale owner', async () => {
         const { service, source, findOne, find } = harness();
         await service.onApplicationBootstrap();
         const store = vi.fn();
@@ -65,7 +66,7 @@ describe('order placement push', () => {
         source.next({ order: { id: '1' } });
         await flush();
         expect(store).toHaveBeenCalledTimes(1);
-        expect(seller).toHaveBeenCalledTimes(1);
+        expect(seller).not.toHaveBeenCalled();
         expect(unrelated).not.toHaveBeenCalled();
         expect(Object.keys(store.mock.calls[0][0]).sort()).toEqual([
             'id',
@@ -259,4 +260,21 @@ describe('pending order reminders', () => {
         expect(send).toHaveBeenCalledTimes(1);
         expect(findOne).toHaveBeenCalledTimes(2);
     });
+});
+
+it('reserves aggregate live events and replay for explicitly authorized platform readers', async () => {
+    const { service, findOne } = harness();
+    const aggregate = vi.fn();
+    const member = vi.fn();
+    const platformCursor = service.subscribe('platform', undefined, aggregate, vi.fn(), true).cursor;
+    service.subscribe('platform', undefined, member, vi.fn());
+    await service.publishPlacedOrder('1');
+    expect(aggregate).toHaveBeenCalledTimes(1);
+    expect(member).not.toHaveBeenCalled();
+    expect(service.subscribe('seller', platformCursor, vi.fn(), vi.fn()).replay).toEqual([]);
+    expect(service.subscribe('platform', platformCursor, vi.fn(), vi.fn(), true).replay).toHaveLength(1);
+    findOne.mockResolvedValue({ ...order('legacy'), salesChannelId: null });
+    await service.publishPlacedOrder('legacy');
+    expect(aggregate).toHaveBeenCalledTimes(2);
+    expect(member).not.toHaveBeenCalled();
 });

@@ -4270,6 +4270,8 @@ export type Order = Node & {
   payments?: Maybe<Array<Payment>>;
   /** Promotions applied to the order. Only gets populated after the payment process has completed. */
   promotions: Array<Promotion>;
+  /** The actual selling store. Null means historical ownership awaits review. */
+  salesChannel?: Maybe<Channel>;
   sellerOrders?: Maybe<Array<Order>>;
   shipping: Scalars['Money']['output'];
   shippingAddress?: Maybe<OrderAddress>;

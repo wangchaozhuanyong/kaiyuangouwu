@@ -1,6 +1,6 @@
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
-import { Channel, Customer, EntityId, Money, VendureEntity } from '@vendure/core';
+import { Channel, Customer, EntityId, Money, User, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, VersionColumn } from 'typeorm';
 import type { ImagePricingSnapshot } from '../image-billing-quote';
 import type { ImageResolution } from '../types';
@@ -14,6 +14,10 @@ import { ImagePrivateAsset } from './image-private-asset.entity';
     unique: true,
 })
 @Index('IDX_image_generation_job_customer_created', ['customerId', 'createdAt'])
+@Index('IDX_image_generation_job_admin_idempotency', ['channelId', 'administratorUserId', 'idempotencyKey'], {
+    unique: true,
+})
+@Index('IDX_image_generation_job_admin_created', ['administratorUserId', 'createdAt'])
 @Index('IDX_image_generation_job_state_created', ['state', 'createdAt'])
 export class ImageGenerationJob extends VendureEntity {
     constructor(input?: DeepPartial<ImageGenerationJob>) {
@@ -27,12 +31,22 @@ export class ImageGenerationJob extends VendureEntity {
     @EntityId()
     channelId: ID;
 
-    @ManyToOne(() => Customer, { nullable: false, onDelete: 'CASCADE' })
+    @ManyToOne(() => Customer, { nullable: true, onDelete: 'CASCADE' })
     @JoinColumn({ name: 'customerId', foreignKeyConstraintName: 'FK_image_generation_job_customer' })
-    customer: Customer;
+    customer: Customer | null;
 
-    @EntityId()
-    customerId: ID;
+    @EntityId({ nullable: true })
+    customerId: ID | null;
+
+    @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'administratorUserId', foreignKeyConstraintName: 'FK_image_generation_job_admin' })
+    administratorUser: User | null;
+
+    @EntityId({ nullable: true })
+    administratorUserId: ID | null;
+
+    @Column({ type: 'varchar', length: 32, default: 'CUSTOMER_STUDIO' })
+    origin: 'CUSTOMER_STUDIO' | 'ADMIN_PRODUCT_IMAGE';
 
     @ManyToOne(() => ImageModelConfig, { nullable: false, onDelete: 'RESTRICT' })
     @JoinColumn({ name: 'modelConfigId', foreignKeyConstraintName: 'FK_image_generation_job_model' })

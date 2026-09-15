@@ -336,6 +336,90 @@ const UPLOAD_REFERENCE = gql`
     }
 `;
 
+const CATALOG_IMAGE_CONFIG = gql`
+    query CatalogImageStudioConfigE2E {
+        catalogImageStudioConfig {
+            enabled
+            unavailableReason
+            defaultModelCode
+            defaultModelName
+            termsVersion
+            maxReferenceBytes
+            aspectRatio
+            resolution
+            quantity
+        }
+    }
+`;
+
+const UPLOAD_CATALOG_REFERENCE = gql`
+    mutation UploadCatalogImageReferenceE2E($file: Upload!) {
+        uploadCatalogImageReference(file: $file, termsAccepted: true) {
+            id
+            mimeType
+            previewUrl
+        }
+    }
+`;
+
+const CREATE_CATALOG_IMAGE = gql`
+    mutation CreateCatalogImageGenerationE2E($input: CreateCatalogImageGenerationInput!) {
+        createCatalogImageGeneration(input: $input) {
+            id
+            state
+            productName
+            description
+            outputs {
+                id
+                state
+                billingMode
+                imageUrl
+                catalogAssetId
+            }
+        }
+    }
+`;
+
+const CATALOG_IMAGE_JOB = gql`
+    query CatalogImageGenerationJobE2E($id: ID!) {
+        catalogImageGenerationJob(id: $id) {
+            id
+            state
+            productName
+            description
+            outputs {
+                id
+                state
+                billingMode
+                imageUrl
+                catalogAssetId
+            }
+        }
+    }
+`;
+
+const USE_CATALOG_IMAGE = gql`
+    mutation UseCatalogImageOutputE2E($outputId: ID!) {
+        useCatalogImageOutput(outputId: $outputId) {
+            id
+            name
+            preview
+            source
+        }
+    }
+`;
+
+const CATALOG_ASSET = gql`
+    query CatalogAssetE2E($id: ID!) {
+        asset(id: $id) {
+            id
+            name
+            preview
+            source
+        }
+    }
+`;
+
 const MY_JOB = gql`
     query MyImageGenerationJobE2E($id: ID!) {
         myImageGenerationJob(id: $id) {
@@ -765,6 +849,78 @@ describe('AI image generation full flow', () => {
         if (originalMasterKey == null) delete process.env.IMAGE_GENERATION_MASTER_KEY;
         else process.env.IMAGE_GENERATION_MASTER_KEY = originalMasterKey;
         await rm(storageRoot, { recursive: true, force: true });
+    });
+
+    it('generates an internal admin product image and materializes one reusable Channel asset', async () => {
+        const publicConfig = (await adminClient.query(CATALOG_IMAGE_CONFIG)).catalogImageStudioConfig;
+        expect(publicConfig).toMatchObject({
+            enabled: true,
+            defaultModelCode: 'OPENAI_HIGH_QUALITY',
+            aspectRatio: '1:1',
+            resolution: '1K',
+            quantity: 1,
+            maxReferenceBytes: 10 * 1024 * 1024,
+        });
+        expect(publicConfig).not.toHaveProperty('apiKey');
+        expect(publicConfig).not.toHaveProperty('baseUrl');
+
+        const uploaded = await adminClient.fileUploadMutation({
+            mutation: UPLOAD_CATALOG_REFERENCE,
+            filePaths: [referenceFixture],
+            mapVariables: () => ({ file: null }),
+        });
+        expect(uploaded.uploadCatalogImageReference).toMatchObject({ mimeType: 'image/png' });
+        expect(uploaded.uploadCatalogImageReference.previewUrl).toMatch(/^\/image-generation\/private\//u);
+        const input = {
+            referenceAssetId: uploaded.uploadCatalogImageReference.id,
+            productName: '后台测试保温杯',
+            description: '保持包装和 Logo，清理背景，生成正方形商品主图',
+            idempotencyKey: 'catalog-image-e2e-0001',
+            termsAccepted: true,
+        };
+        providerFailure = false;
+        providerSawReference = false;
+        const first = (await adminClient.query(CREATE_CATALOG_IMAGE, { input })).createCatalogImageGeneration;
+        const repeated = (await adminClient.query(CREATE_CATALOG_IMAGE, { input }))
+            .createCatalogImageGeneration;
+        expect(repeated.id).toBe(first.id);
+        const completed = await waitForCatalogImageJob(first.id);
+        expect(completed).toMatchObject({
+            state: 'SUCCEEDED',
+            productName: '后台测试保温杯',
+            outputs: [expect.objectContaining({ state: 'SUCCEEDED', billingMode: 'INTERNAL' })],
+        });
+        expect(completed.outputs[0].imageUrl).toMatch(/^\/image-generation\/private\//u);
+        expect(providerSawReference).toBe(true);
+
+        const firstUse = (await adminClient.query(USE_CATALOG_IMAGE, { outputId: completed.outputs[0].id }))
+            .useCatalogImageOutput;
+        const repeatedUse = (
+            await adminClient.query(USE_CATALOG_IMAGE, { outputId: completed.outputs[0].id })
+        ).useCatalogImageOutput;
+        expect(repeatedUse.id).toBe(firstUse.id);
+        const connection = server.app.get(TransactionalConnection);
+        expect((await adminClient.query(CATALOG_ASSET, { id: firstUse.id })).asset).toMatchObject({
+            id: firstUse.id,
+            preview: firstUse.preview,
+        });
+        const persistedJob = await connection.rawConnection
+            .getRepository(ImageGenerationJob)
+            .findOneByOrFail({
+                id: server.app.get(ConfigService).entityOptions.entityIdStrategy.decodeId(first.id),
+            });
+        expect(persistedJob).toMatchObject({
+            origin: 'ADMIN_PRODUCT_IMAGE',
+            customerId: null,
+            capturedAmount: 0,
+            reservedAmount: 0,
+        });
+        const providerCosts = await connection.rawConnection.getRepository(ImageGenerationCostEvent).find({
+            where: { jobIdSnapshot: String(persistedJob.id) },
+        });
+        expect(providerCosts).toEqual(
+            expect.arrayContaining([expect.objectContaining({ outcome: 'SUCCEEDED' })]),
+        );
     });
 
     it('optimizes, recommends, generates, stores, settles, refunds, and releases on failure', async () => {
@@ -3152,15 +3308,11 @@ describe('AI image generation full flow', () => {
             const pendingCosts = await connection.rawConnection
                 .getRepository(ImageGenerationCostEvent)
                 .find({ where: { outputIdSnapshot: String(output.id) } });
-            if (config.dbConnectionOptions.type === 'mysql') {
-                expect(pendingCosts).toHaveLength(1);
-                expect(pendingCosts[0]).toMatchObject({
-                    outcome: 'UNKNOWN',
-                    providerStage: 'REQUEST_STARTED',
-                });
-            } else {
-                expect(pendingCosts).toHaveLength(0);
-            }
+            expect(pendingCosts).toHaveLength(1);
+            expect(pendingCosts[0]).toMatchObject({
+                outcome: 'UNKNOWN',
+                providerStage: 'REQUEST_STARTED',
+            });
             const beforeWallet = await connection.rawConnection
                 .getRepository(ReferralWallet)
                 .findOneByOrFail({ customerId: job.customerId, currencyCode: CurrencyCode.USD });
@@ -3251,6 +3403,18 @@ async function waitForJob(id: string, terminalStates: string[]) {
         result = await shopClient.query(MY_JOB, { id });
     }
     expect(terminalStates).toContain(result.myImageGenerationJob.state);
+    return result;
+}
+
+async function waitForCatalogImageJob(id: string) {
+    const deadline = Date.now() + 12_000;
+    let result = (await adminClient.query(CATALOG_IMAGE_JOB, { id })).catalogImageGenerationJob;
+    while (!['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(result.state) && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await server.app.get(ImageGenerationQueueService).reconcileUnknown();
+        result = (await adminClient.query(CATALOG_IMAGE_JOB, { id })).catalogImageGenerationJob;
+    }
+    expect(result.state).toBe('SUCCEEDED');
     return result;
 }
 

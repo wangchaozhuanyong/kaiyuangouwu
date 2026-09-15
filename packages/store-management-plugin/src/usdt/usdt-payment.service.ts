@@ -1,13 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import {
+    assertOrderSalesChannel,
     Channel,
     EventBus,
     isGraphQlErrorResult,
+    Order,
     OrderService,
     Payment,
     RequestContext,
     RequestContextService,
     TransactionalConnection,
+    UserInputError,
 } from '@vendure/core';
 import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { createHash, randomInt } from 'node:crypto';
@@ -260,9 +263,13 @@ export class UsdtPaymentService {
         ctx: RequestContext,
         quote: StorefrontUsdtCheckoutQuote,
     ): Promise<StorefrontUsdtPaymentIntent> {
+        await this.assertQuoteScope(ctx, quote);
         const repository = this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent);
         const existing = await repository.findOne({ where: { quoteId: quote.id } });
-        if (existing) return existing;
+        if (existing) {
+            this.assertIntentScope(existing, quote);
+            return existing;
+        }
         const wallet = await this.storeWallets.requireConfigured(ctx, quote.channelId);
 
         const baseAmount = normalizeUsdtAmount(quote.usdtAmount);
@@ -310,9 +317,30 @@ export class UsdtPaymentService {
                 .updateEntity(false)
                 .execute();
             const allocated = await findIntentForQuote(repository, quote.id);
-            if (allocated) return allocated;
+            if (allocated) {
+                this.assertIntentScope(allocated, quote);
+                return allocated;
+            }
         }
         throw new Error('当前 USDT 专属付款金额已用完，请稍后重新生成报价');
+    }
+
+    private async assertQuoteScope(ctx: RequestContext, quote: StorefrontUsdtCheckoutQuote): Promise<void> {
+        if (String(quote.channelId) !== String(ctx.channelId)) {
+            throw new UserInputError('USDT 报价不属于当前店铺');
+        }
+        const order = await this.connection.getEntityOrThrow(ctx, Order, quote.orderId);
+        assertOrderSalesChannel(ctx, order);
+    }
+
+    private assertIntentScope(intent: StorefrontUsdtPaymentIntent, quote: StorefrontUsdtCheckoutQuote): void {
+        if (
+            String(intent.channelId) !== String(quote.channelId) ||
+            String(intent.orderId) !== String(quote.orderId) ||
+            String(intent.quoteId) !== String(quote.id)
+        ) {
+            throw new UserInputError('USDT 付款请求与报价归属不一致，请人工核对');
+        }
     }
 
     async scanPendingPayments(ctx: RequestContext, now = new Date()): Promise<UsdtPaymentScanResult> {
@@ -555,6 +583,8 @@ export class UsdtPaymentService {
                     StorefrontUsdtCheckoutQuote,
                     locked.quoteId,
                 );
+                this.assertIntentScope(locked, quote);
+                await this.assertQuoteScope(ctx, quote);
                 const proof = createUsdtPaymentProof({
                     channelId: String(locked.channelId),
                     quoteId: String(locked.quoteId),
@@ -591,8 +621,13 @@ export class UsdtPaymentService {
 
                 const payment = await this.connection.getRepository(ctx, Payment).findOne({
                     where: { transactionId: `tron:${transfer.transactionId}` },
+                    relations: { order: true },
                 });
-                if (!payment || payment.state !== 'Settled') {
+                if (
+                    !payment ||
+                    payment.state !== 'Settled' ||
+                    String(payment.order?.id) !== String(locked.orderId)
+                ) {
                     throw new Error('USDT payment was not persisted in the Settled state');
                 }
                 locked.paymentId = payment.id;

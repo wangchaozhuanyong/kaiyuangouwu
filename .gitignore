@@ -420,3 +420,4 @@ backups/
 **/.angular/cache/
 playwright-report/
 test-results/
+reports/

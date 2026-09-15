@@ -1,4 +1,5 @@
 import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
+import { getMetadataArgsStorage } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AutoCardService } from './auto-card.service';
@@ -35,6 +36,12 @@ function createHarness(input: { delivery?: any; candidates?: any[]; affected?: n
             poolItems: [],
             events: [],
         } as any);
+    delivery.channelId ??= 'channel-1';
+    delivery.orderId ??= 'order-1';
+    delivery.order ??= { id: delivery.orderId };
+    delivery.order.salesChannelId ??= delivery.channelId;
+    delivery.config ??= { id: delivery.configId };
+    delivery.config.channelId ??= delivery.channelId;
     const candidates = input.candidates ?? [
         { id: 'pool-1', sequence: 1, state: 'AVAILABLE' },
         { id: 'pool-2', sequence: 2, state: 'AVAILABLE' },
@@ -111,6 +118,13 @@ function createHarness(input: { delivery?: any; candidates?: any[]; affected?: n
 }
 
 describe('AutoCardService allocation invariants', () => {
+    it('never reconciles append-only event rows from a stale delivery snapshot', () => {
+        const relation = getMetadataArgsStorage().relations.find(
+            item => item.target === AutoCardDelivery && item.propertyName === 'events',
+        );
+        expect(relation?.options.persistence).toBe(false);
+    });
+
     it('allocates the requested quantity in pool sequence order', async () => {
         const test = createHarness({});
 
@@ -217,6 +231,7 @@ describe('AutoCardService allocation invariants', () => {
         const test = createHarness({ delivery: existing });
         const order = {
             id: 'order-1',
+            salesChannelId: 'channel-1',
             state: 'PaymentSettled',
             customFields: { deliveryEmail: 'buyer@example.com' },
             customer: { emailAddress: 'customer@example.com' },
@@ -294,3 +309,16 @@ describe('AutoCardService allocation invariants', () => {
         );
     });
 });
+
+it.each(['channel-2', null])(
+    'blocks card allocation for a task whose parent sale owner is %s',
+    async salesChannelId => {
+        const test = createHarness({});
+        test.delivery.order.salesChannelId = salesChannelId;
+        await expect(
+            (test.service as any).allocateExistingDelivery(test.ctx, test.delivery),
+        ).rejects.toThrow();
+        expect(test.eventBus.publish).not.toHaveBeenCalled();
+        expect(test.delivery.poolItems).toHaveLength(0);
+    },
+);

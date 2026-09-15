@@ -5,6 +5,7 @@ import {
     FacetService,
     FacetValueService,
     Permission,
+    Product,
     ProductService,
     ProductVariant,
     ProductVariantService,
@@ -603,13 +604,16 @@ export class CatalogImportService {
                 },
             );
             const snapshot = await this.snapshotVariant(ctx, variant, row.job);
+            const product = await this.connection.getEntityOrThrow(ctx, Product, variant.productId, {
+                channelId: ctx.channelId,
+            });
             row.action = 'UPDATE';
             row.resolution = 'UPDATE_EXISTING';
             row.targetProductId = variant.productId;
             row.targetVariantId = variant.id;
-            row.expectedProductUpdatedAt = null;
+            row.expectedProductUpdatedAt = product.updatedAt;
             row.expectedVariantUpdatedAt = variant.updatedAt;
-            row.beforeSnapshot = snapshot;
+            row.beforeSnapshot = { ...snapshot, previewTimestampPrecision: 6 };
             row.plannedChanges = this.diffRow(
                 row.normalizedData,
                 snapshot,
@@ -833,7 +837,11 @@ export class CatalogImportService {
         binding?: CatalogSourceBinding,
         suppliersByName: Map<string, CatalogSupplier> = new Map(),
     ): Promise<PlannedRow> {
-        return this.preview.planRow(ctx, row, input, catalogIndex, binding, suppliersByName);
+        const plan = await this.preview.planRow(ctx, row, input, catalogIndex, binding, suppliersByName);
+        if (plan.expectedProductUpdatedAt || plan.expectedVariantUpdatedAt) {
+            plan.beforeSnapshot = { ...plan.beforeSnapshot, previewTimestampPrecision: 6 };
+        }
+        return plan;
     }
 
     private async snapshotVariant(

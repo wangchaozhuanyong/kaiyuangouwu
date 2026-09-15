@@ -1,5 +1,5 @@
 import { DeepPartial } from '@vendure/common/lib/shared-types';
-import { Column, Entity, JoinTable, ManyToMany, OneToMany } from 'typeorm';
+import { Column, Entity, Index, JoinTable, ManyToMany, OneToMany } from 'typeorm';
 
 import { InternalServerError } from '../../common/error/errors';
 import { SoftDeletable } from '../../common/types/common-types';
@@ -29,6 +29,11 @@ export class User extends VendureEntity implements HasCustomFields, SoftDeletabl
 
     @Column()
     identifier: string;
+
+    /** Unique active customer login identity; administrators and unresolved legacy users remain null. */
+    @Index('IDX_user_customer_identifier', { unique: true })
+    @Column({ type: 'varchar', length: 255, nullable: true })
+    customerIdentifier: string | null;
 
     @OneToMany(type => AuthenticationMethod, method => method.user)
     authenticationMethods: AuthenticationMethod[];

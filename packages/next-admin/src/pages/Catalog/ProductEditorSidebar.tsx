@@ -1,9 +1,22 @@
-import { Boxes, Image as ImageIcon, Link2, Package, Tag, X } from 'lucide-react';
+import { Boxes, Image as ImageIcon, Link2, Package, Sparkles, Tag, X } from 'lucide-react';
+import { useState } from 'react';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { ProductAiImageDialog } from './ProductAiImageDialog';
 import { useProductEditor } from './ProductEditorContext';
 
 export function ProductEditorSidebar() {
+    const [aiDialogOpen, setAiDialogOpen] = useState(false);
+    const { hasAnyPermission } = useAdminPermissions();
+    const canEditProduct = hasAnyPermission([
+        'SuperAdmin',
+        'CreateProduct',
+        'UpdateProduct',
+        'CreateCatalog',
+        'UpdateCatalog',
+    ]);
+    const canCreateAsset = hasAnyPermission(['SuperAdmin', 'CreateAsset', 'CreateCatalog']);
     const {
         isCreateMode,
         productData,
@@ -77,6 +90,17 @@ export function ProductEditorSidebar() {
                                     disabled={saving}
                                     onUploaded={setUploadedFeaturedAsset}
                                 />
+                                {canEditProduct && canCreateAsset && (
+                                    <button
+                                        type="button"
+                                        disabled={saving}
+                                        onClick={() => setAiDialogOpen(true)}
+                                        className="inline-flex items-center gap-1 text-[11px] font-bold text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <Sparkles className="h-3.5 w-3.5" />
+                                        AI 生成主图
+                                    </button>
+                                )}
                                 {featuredAssetId && (
                                     <button
                                         type="button"
@@ -242,6 +266,14 @@ export function ProductEditorSidebar() {
                     </span>
                 </div>
             </div>
+            {aiDialogOpen && (
+                <ProductAiImageDialog
+                    open
+                    productName={productName}
+                    onClose={() => setAiDialogOpen(false)}
+                    onUse={asset => setUploadedFeaturedAsset([asset])}
+                />
+            )}
         </aside>
     );
 }

@@ -2,7 +2,9 @@ import { ID } from '@vendure/common/lib/shared-types';
 
 import { RequestContext } from '../../api/common/request-context';
 
-/** Every store, including the default store, reads only its explicitly assigned catalog. */
-export function catalogReadChannelId(ctx: RequestContext): ID {
-    return ctx.channelId;
+import { isPlatformAdminContext } from './platform-admin-context';
+
+/** The platform owner's admin catalog is an aggregate; channel membership only grants sales access. */
+export function catalogReadChannelId(ctx: RequestContext): ID | undefined {
+    return isPlatformAdminContext(ctx) ? undefined : ctx.channelId;
 }

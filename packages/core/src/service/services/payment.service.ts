@@ -29,6 +29,7 @@ import { Refund } from '../../entity/refund/refund.entity';
 import { EventBus } from '../../event-bus/event-bus';
 import { PaymentStateTransitionEvent } from '../../event-bus/events/payment-state-transition-event';
 import { RefundStateTransitionEvent } from '../../event-bus/events/refund-state-transition-event';
+import { assertOrderSalesChannel } from '../helpers/order-sales-scope';
 import { PaymentState } from '../helpers/payment-state-machine/payment-state';
 import { PaymentStateMachine } from '../helpers/payment-state-machine/payment-state-machine';
 import { RefundStateMachine } from '../helpers/refund-state-machine/refund-state-machine';
@@ -144,6 +145,7 @@ export class PaymentService {
             return this.cancelPayment(ctx, paymentId);
         }
         const payment = await this.findOneOrThrow(ctx, paymentId);
+        assertOrderSalesChannel(ctx, payment.order);
         const fromState = payment.state;
         return this.transitionStateAndSave(ctx, payment, fromState, state);
     }
@@ -167,6 +169,7 @@ export class PaymentService {
         method: string,
         metadata: any,
     ): Promise<Payment | IneligiblePaymentMethodError> {
+        assertOrderSalesChannel(ctx, order);
         const { paymentMethod, handler, checker } = await this.paymentMethodService.getMethodAndOperations(
             ctx,
             method,
@@ -234,6 +237,7 @@ export class PaymentService {
         const payment = await this.connection.getEntityOrThrow(ctx, Payment, paymentId, {
             relations: ['order'],
         });
+        assertOrderSalesChannel(ctx, payment.order);
         const { paymentMethod, handler } = await this.paymentMethodService.getMethodAndOperations(
             ctx,
             payment.method,
@@ -261,6 +265,7 @@ export class PaymentService {
         const payment = await this.connection.getEntityOrThrow(ctx, Payment, paymentId, {
             relations: ['order'],
         });
+        assertOrderSalesChannel(ctx, payment.order);
         const { paymentMethod, handler } = await this.paymentMethodService.getMethodAndOperations(
             ctx,
             payment.method,
@@ -332,6 +337,7 @@ export class PaymentService {
      * updating the Order state too.
      */
     async createManualPayment(ctx: RequestContext, order: Order, amount: number, input: ManualPaymentInput) {
+        assertOrderSalesChannel(ctx, order);
         const initialState = 'Created';
         let endState: PaymentState = 'Settled';
         // Wrapped in withTransaction so the payment create, state transition, save,
@@ -384,6 +390,7 @@ export class PaymentService {
         const orderWithRefunds = await this.connection.getEntityOrThrow(ctx, Order, order.id, {
             relations: ['payments', 'payments.refunds'],
         });
+        assertOrderSalesChannel(ctx, orderWithRefunds);
 
         if (input.amount) {
             const paymentToRefund = orderWithRefunds.payments.find(p =>
@@ -428,8 +435,8 @@ export class PaymentService {
                 state: 'Pending',
                 metadata: {},
                 items: orderLinesTotal, // deprecated
-                adjustment: input.adjustment, // deprecated
-                shipping: input.shipping, // deprecated
+                adjustment: input.adjustment ?? 0, // deprecated
+                shipping: input.shipping ?? 0, // deprecated
             });
             let paymentMethod: PaymentMethod | undefined;
             let handler: PaymentMethodHandler | undefined;

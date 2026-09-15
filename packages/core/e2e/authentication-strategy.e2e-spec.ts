@@ -242,7 +242,8 @@ describe('AuthenticationStrategy', () => {
             expect(customers3.items).toEqual(EXPECTED_CUSTOMERS);
         });
 
-        it('registerCustomerAccount with external email', async () => {
+        it('does not attach native credentials through a public external-email registration', async () => {
+            const beforeHistory = await adminClient.query(getCustomerHistoryDocument, { id: newCustomerId });
             const successErrorGuard: ErrorResultGuard<{ success: boolean }> = createErrorResultGuard(
                 input => input.success != null,
             );
@@ -259,28 +260,17 @@ describe('AuthenticationStrategy', () => {
                 id: newCustomerId,
             });
 
-            expect(customer?.user?.authenticationMethods.length).toBe(3);
+            expect(customer?.user?.authenticationMethods.length).toBe(2);
             expect(customer?.user?.authenticationMethods.map(m => m.strategy)).toEqual([
                 'test_strategy',
                 'test_strategy2',
-                'native',
             ]);
 
             const { customer: customer2 } = await adminClient.query(getCustomerHistoryDocument, {
                 id: newCustomerId,
-                options: {
-                    skip: 4,
-                },
             });
 
-            expect(customer2?.history.items.map(pick(['type', 'data']))).toEqual([
-                {
-                    type: HistoryEntryType.CUSTOMER_REGISTERED,
-                    data: {
-                        strategy: 'native',
-                    },
-                },
-            ]);
+            expect(customer2?.history.items).toEqual(beforeHistory.customer?.history.items);
         });
 
         // https://github.com/vendurehq/vendure/issues/926

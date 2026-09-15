@@ -82,6 +82,12 @@ export class ReferralWalletSpendService {
 
     reserve(ctx: RequestContext, input: ReserveReferralWalletInput): Promise<ReferralWalletUsage> {
         this.validateMoney(input.amount);
+        input = {
+            ...input,
+            idempotencyKey: normalizedToken(input.idempotencyKey, 255, '幂等键'),
+            resourceType: normalizedToken(input.resourceType, 48, '资源类型'),
+            resourceId: normalizedToken(input.resourceId, 128, '资源编号'),
+        };
         return this.connection.withTransaction(ctx, async txCtx => {
             const usageRepository = this.connection.getRepository(txCtx, ReferralWalletUsage);
             const duplicate = await usageRepository.findOne({
@@ -103,11 +109,16 @@ export class ReferralWalletSpendService {
             const wallet = await this.getOrCreateWallet(txCtx, account, customer, input.currencyCode);
             await this.lockRow(txCtx, ReferralWallet, wallet.id);
 
-            const raced = await usageRepository.findOne({ where: { idempotencyKey: input.idempotencyKey } });
+            const raced = await usageRepository.findOne({
+                where: { idempotencyKey: input.idempotencyKey },
+                // The wallet lock may have waited for another reservation to commit. A locking
+                // read must see that receipt even under MySQL's REPEATABLE READ isolation.
+                ...this.currentReadLock(),
+            });
             if (raced) return this.assertSameReservation(txCtx, raced, input);
             const freshWallet = await this.connection
                 .getRepository(txCtx, ReferralWallet)
-                .findOneByOrFail({ id: wallet.id });
+                .findOneOrFail({ where: { id: wallet.id }, ...this.currentReadLock() });
             if (freshWallet.availableBalance < input.amount) throw new UserInputError('返利可用余额不足');
 
             const usage = await usageRepository.save(
@@ -172,26 +183,30 @@ export class ReferralWalletSpendService {
                 : action === 'REFUND'
                   ? 'WALLET_USAGE_REFUNDED'
                   : 'WALLET_USAGE_RELEASED';
-        const ledgerIdempotencyKey = `${eventType}:${String(input.usageId)}:${normalizedToken(input.operationKey, 96, '操作键')}`;
+        const operationKey = normalizedToken(input.operationKey, 96, '操作键');
+        const ledgerIdempotencyKey = `${eventType}:${String(input.usageId)}:${operationKey}`;
         return this.connection.withTransaction(ctx, async txCtx => {
             const ledgerRepository = this.connection.getRepository(txCtx, ReferralLedgerEntry);
-            const duplicate = await ledgerRepository.findOne({
-                where: { idempotencyKey: ledgerIdempotencyKey },
-            });
             const usageRepository = this.connection.getRepository(txCtx, ReferralWalletUsage);
-            if (duplicate) return usageRepository.findOneByOrFail({ id: input.usageId });
-
-            await this.lockRow(txCtx, ReferralWalletUsage, input.usageId);
-            const raced = await ledgerRepository.findOne({ where: { idempotencyKey: ledgerIdempotencyKey } });
-            if (raced) return usageRepository.findOneByOrFail({ id: input.usageId });
+            // All settlement paths first resolve and lock the same store-owned usage. Replays
+            // cannot bypass ownership, and concurrent calls read the committed receipt below.
             const usage = await usageRepository.findOne({
                 where: { id: input.usageId, channelId: txCtx.channelId },
+                ...this.currentReadLock(),
             });
             if (!usage) throw new UserInputError('找不到余额预占记录');
-            await this.lockRow(txCtx, ReferralWallet, usage.walletId);
             const wallet = await this.connection
                 .getRepository(txCtx, ReferralWallet)
-                .findOneByOrFail({ id: usage.walletId });
+                .findOneOrFail({ where: { id: usage.walletId }, ...this.currentReadLock() });
+            this.assertUsageWallet(ctx, usage, wallet);
+            const duplicate = await ledgerRepository.findOne({
+                where: { idempotencyKey: ledgerIdempotencyKey },
+                ...this.currentReadLock(),
+            });
+            if (duplicate) {
+                this.assertSameSettlement(usage, duplicate, input, action, operationKey);
+                return usage;
+            }
             const settlement = calculateReferralWalletSettlement(usage, wallet, action, input.amount);
             usage.capturedAmount = settlement.capturedAmount;
             usage.releasedAmount = settlement.releasedAmount;
@@ -208,10 +223,63 @@ export class ReferralWalletSpendService {
                 reservedDelta: settlement.reservedDelta,
                 actorId: input.actorId,
                 actorType: input.actorType,
-                metadata: { usageId: String(usage.id), operationKey: input.operationKey, ...input.metadata },
+                metadata: {
+                    ...input.metadata,
+                    usageId: String(usage.id),
+                    operationKey,
+                    amount: input.amount,
+                },
             });
             return usage;
         });
+    }
+
+    private assertSameSettlement(
+        usage: ReferralWalletUsage,
+        ledger: ReferralLedgerEntry,
+        input: SettleReferralWalletInput,
+        action: ReferralWalletSettlementAction,
+        operationKey: string,
+    ): void {
+        const expectedAvailableDelta = action === 'CAPTURE' ? 0 : input.amount;
+        const expectedReservedDelta = action === 'REFUND' ? 0 : -input.amount;
+        const metadata = ledger.metadata ?? {};
+        if (
+            String(ledger.channelId) !== String(usage.channelId) ||
+            String(ledger.walletId) !== String(usage.walletId) ||
+            String(ledger.customerId) !== String(usage.customerId) ||
+            ledger.currencyCode !== usage.currencyCode ||
+            metadata.usageId !== String(usage.id) ||
+            typeof metadata.operationKey !== 'string' ||
+            metadata.operationKey.trim() !== operationKey ||
+            ledger.eventType !==
+                (action === 'CAPTURE'
+                    ? 'WALLET_USAGE_CAPTURED'
+                    : action === 'REFUND'
+                      ? 'WALLET_USAGE_REFUNDED'
+                      : 'WALLET_USAGE_RELEASED') ||
+            ledger.availableDelta !== expectedAvailableDelta ||
+            ledger.reservedDelta !== expectedReservedDelta
+        ) {
+            throw new UserInputError('幂等操作与原始余额结算请求不一致');
+        }
+    }
+
+    private assertUsageWallet(ctx: RequestContext, usage: ReferralWalletUsage, wallet: ReferralWallet): void {
+        if (
+            String(usage.channelId) !== String(ctx.channelId) ||
+            String(wallet.channelId) !== String(usage.channelId) ||
+            String(wallet.customerId) !== String(usage.customerId) ||
+            wallet.currencyCode !== usage.currencyCode
+        ) {
+            throw new UserInputError('余额预占记录与账户归属不一致');
+        }
+    }
+
+    private currentReadLock(): { lock?: { mode: 'pessimistic_write' } } {
+        return supportsWalletLock(this.connection.rawConnection.options.type)
+            ? { lock: { mode: 'pessimistic_write' } }
+            : {};
     }
 
     private async writeLedger(

@@ -73,6 +73,8 @@ type Mutation {
 
 type Order {
     nextStates: [String!]!
+    "The actual selling store. Null means historical ownership awaits review."
+    salesChannel: Channel
 }
 
 input OrderFilterParameter {

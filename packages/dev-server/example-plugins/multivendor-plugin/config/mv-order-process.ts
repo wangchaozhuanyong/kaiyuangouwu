@@ -1,7 +1,6 @@
 import { OrderType } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
-    ChannelService,
     CustomOrderProcess,
     idsAreEqual,
     Order,
@@ -11,22 +10,16 @@ import {
     orderItemsAreShipped,
     OrderService,
     RequestContext,
-    RequestContextService,
     TransactionalConnection,
-    User,
 } from '@vendure/core';
 
 let connection: TransactionalConnection;
 let orderService: OrderService;
-let channelService: ChannelService;
-let requestContextService: RequestContextService;
 
 export const multivendorOrderProcess: CustomOrderProcess<any> = {
     init(injector) {
         connection = injector.get(TransactionalConnection);
         orderService = injector.get(OrderService);
-        channelService = injector.get(ChannelService);
-        requestContextService = injector.get(RequestContextService);
     },
 
     async onTransitionStart(fromState, toState, data) {
@@ -74,16 +67,11 @@ export const multivendorOrderProcess: CustomOrderProcess<any> = {
         if (order.type === OrderType.Seller) {
             const aggregateOrder = await orderService.getAggregateOrder(ctx, order);
             if (aggregateOrder) {
-                // Create a new RequestContext on the default Channel, since the current
-                // RequestContext may be scoped to the Seller channel, and will not be able to
-                // update the AggregateOrder.
-                const defaultChannel = await channelService.getDefaultChannel();
-                const defaultChannelCtx = await requestContextService.create({
-                    apiType: 'admin',
-                    channelOrToken: defaultChannel,
-                    req: ctx.req,
-                    languageCode: ctx.languageCode,
-                    user: ctx.activeUserId ? new User({ id: ctx.activeUserId }) : undefined,
+                const salesChannel = await orderService.getOrderSalesChannel(ctx, aggregateOrder);
+                if (!salesChannel) throw new Error('Aggregate order sales ownership requires review');
+                const aggregateCtx = ctx.copy({
+                    channel: salesChannel,
+                    currencyCode: aggregateOrder.currencyCode,
                 });
 
                 // This part is responsible for automatically updating the state of the aggregate Order
@@ -94,21 +82,17 @@ export const multivendorOrderProcess: CustomOrderProcess<any> = {
 
                 const sellerOrderStates = [...otherSellerOrders.map(so => so.state), toState];
                 if (sellerOrderStates.every(state => state === 'Shipped')) {
-                    await orderService.transitionToState(defaultChannelCtx, aggregateOrder.id, 'Shipped');
+                    await orderService.transitionToState(aggregateCtx, aggregateOrder.id, 'Shipped');
                 } else if (sellerOrderStates.every(state => state === 'Delivered')) {
-                    await orderService.transitionToState(defaultChannelCtx, aggregateOrder.id, 'Delivered');
+                    await orderService.transitionToState(aggregateCtx, aggregateOrder.id, 'Delivered');
                 } else if (sellerOrderStates.some(state => state === 'Delivered')) {
                     await orderService.transitionToState(
-                        defaultChannelCtx,
+                        aggregateCtx,
                         aggregateOrder.id,
                         'PartiallyDelivered',
                     );
                 } else if (sellerOrderStates.some(state => state === 'Shipped')) {
-                    await orderService.transitionToState(
-                        defaultChannelCtx,
-                        aggregateOrder.id,
-                        'PartiallyShipped',
-                    );
+                    await orderService.transitionToState(aggregateCtx, aggregateOrder.id, 'PartiallyShipped');
                 }
             }
         }

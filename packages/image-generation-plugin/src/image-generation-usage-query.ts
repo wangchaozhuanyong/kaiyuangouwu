@@ -47,6 +47,7 @@ export class ImageGenerationUsageQuery {
                 query.andWhere('job.providerCredentialCodeSnapshot = :credentialCode', options);
             }
             if (options.state) query.andWhere('job.state = :state', options);
+            if (options.billingMode === 'INTERNAL') query.andWhere("job.origin = 'ADMIN_PRODUCT_IMAGE'");
             if (options.billingMode === 'FREE') query.andWhere('job.freeQuantityReserved > 0');
             if (options.billingMode === 'PAID') query.andWhere('job.paidQuantityReserved > 0');
             if (options.billingMode === 'MIXED') {
@@ -258,13 +259,16 @@ export class ImageGenerationUsageQuery {
         costs: ImageGenerationCostEvent[],
         refundInfo?: { amount: number; count: number },
     ) {
-        const billingMode = refundInfo
-            ? 'REFUNDED'
-            : job.freeQuantityReserved > 0 && job.paidQuantityReserved > 0
-              ? 'MIXED'
-              : job.paidQuantityReserved > 0
-                ? 'PAID'
-                : 'FREE';
+        const billingMode =
+            job.origin === 'ADMIN_PRODUCT_IMAGE'
+                ? 'INTERNAL'
+                : refundInfo
+                  ? 'REFUNDED'
+                  : job.freeQuantityReserved > 0 && job.paidQuantityReserved > 0
+                    ? 'MIXED'
+                    : job.paidQuantityReserved > 0
+                      ? 'PAID'
+                      : 'FREE';
         return {
             id: job.id,
             recordType: 'IMAGE_GENERATION',

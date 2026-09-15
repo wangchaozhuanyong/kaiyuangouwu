@@ -110,6 +110,7 @@ import { ListQueryBuilder } from '../helpers/list-query-builder/list-query-build
 import { OrderCalculator } from '../helpers/order-calculator/order-calculator';
 import { OrderMerger } from '../helpers/order-merger/order-merger';
 import { OrderModifier } from '../helpers/order-modifier/order-modifier';
+import { assertOrderSalesChannel, isActiveOrderForUser, scopeOrderQuery } from '../helpers/order-sales-scope';
 import { OrderState } from '../helpers/order-state-machine/order-state';
 import { OrderStateMachine } from '../helpers/order-state-machine/order-state-machine';
 import { PaymentState } from '../helpers/payment-state-machine/payment-state';
@@ -215,23 +216,22 @@ export class OrderService {
         options?: OrderListOptions,
         relations?: RelationPaths<Order>,
     ): Promise<PaginatedList<Order>> {
-        return this.listQueryBuilder
-            .build(Order, options, {
-                ctx,
-                relations: relations ?? [
-                    'lines',
-                    'customer',
-                    'lines.productVariant',
-                    'channels',
-                    'shippingLines',
-                    'payments',
-                ],
-                channelId: ctx.channelId,
-                customPropertyMap: {
-                    customerLastName: 'customer.lastName',
-                    transactionId: 'payments.transactionId',
-                },
-            })
+        const query = this.listQueryBuilder.build(Order, options, {
+            ctx,
+            relations: relations ?? [
+                'lines',
+                'customer',
+                'lines.productVariant',
+                'channels',
+                'shippingLines',
+                'payments',
+            ],
+            customPropertyMap: {
+                customerLastName: 'customer.lastName',
+                transactionId: 'payments.transactionId',
+            },
+        });
+        return scopeOrderQuery(ctx, query, 'read')
             .getManyAndCount()
             .then(([items, totalItems]) => {
                 return {
@@ -245,6 +245,7 @@ export class OrderService {
         ctx: RequestContext,
         orderId: ID,
         relations?: RelationPaths<Order>,
+        access: 'read' | 'business' = 'read',
     ): Promise<Order | undefined> {
         const qb = this.connection.getRepository(ctx, Order).createQueryBuilder('order');
         const effectiveRelations = relations ?? [
@@ -291,10 +292,8 @@ export class OrderService {
         qb.setFindOptions({
             relations: orderRelations,
             relationLoadStrategy: 'query',
-        })
-            .leftJoin('order.channels', 'channel')
-            .where('order.id = :orderId', { orderId })
-            .andWhere('channel.id = :channelId', { channelId: ctx.channelId });
+        }).where('order.id = :orderId', { orderId });
+        scopeOrderQuery(ctx, qb, access);
 
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         FindOptionsUtils.joinEagerRelations(qb, qb.alias, qb.expressionMap.mainAlias!.metadata);
@@ -367,14 +366,14 @@ export class OrderService {
         options?: ListQueryOptions<Order>,
         relations?: RelationPaths<Order>,
     ): Promise<PaginatedList<Order>> {
-        return this.listQueryBuilder
+        const query = this.listQueryBuilder
             .build(Order, options, {
                 relations: relations ?? ['lines', 'customer', 'channels', 'shippingLines'],
-                channelId: ctx.channelId,
                 ctx,
             })
             .andWhere('order.state != :draftState', { draftState: 'Draft' })
-            .andWhere('order.customer.id = :customerId', { customerId })
+            .andWhere('order.customer.id = :customerId', { customerId });
+        return scopeOrderQuery(ctx, query, 'read')
             .getManyAndCount()
             .then(([items, totalItems]) => {
                 return {
@@ -449,6 +448,12 @@ export class OrderService {
             .loadMany();
     }
 
+    async getOrderSalesChannel(ctx: RequestContext, order: Order): Promise<Channel | undefined> {
+        return order.salesChannelId == null
+            ? undefined
+            : this.channelService.findOne(ctx, order.salesChannelId);
+    }
+
     /**
      * @description
      * Returns any Order associated with the specified User's Customer account
@@ -457,22 +462,29 @@ export class OrderService {
     async getActiveOrderForUser(ctx: RequestContext, userId: ID): Promise<Order | undefined> {
         const customer = await this.customerService.findOneByUserId(ctx, userId);
         if (customer) {
-            const activeOrder = await this.connection
+            const query = this.connection
                 .getRepository(ctx, Order)
                 .createQueryBuilder('order')
-                .innerJoinAndSelect('order.channels', 'channel', 'channel.id = :channelId', {
-                    channelId: ctx.channelId,
-                })
                 .leftJoinAndSelect('order.customer', 'customer')
                 .leftJoinAndSelect('order.shippingLines', 'shippingLines')
                 .where('order.active = :active', { active: true })
                 .andWhere('order.customer.id = :customerId', { customerId: customer.id })
-                .orderBy('order.createdAt', 'DESC')
-                .getOne();
+                .orderBy('order.createdAt', 'DESC');
+            const activeOrder = await scopeOrderQuery(ctx, query).getOne();
             if (activeOrder) {
                 return this.findOne(ctx, activeOrder.id);
             }
         }
+    }
+
+    /** Resolve a server-side session pointer without treating platform visibility as cart ownership. */
+    async getActiveOrderFromSession(
+        ctx: RequestContext,
+        userId = ctx.activeUserId,
+    ): Promise<Order | undefined> {
+        if (!ctx.session?.activeOrderId) return;
+        const order = await this.findOne(ctx, ctx.session.activeOrderId, ['customer', 'customer.user']);
+        return order && isActiveOrderForUser(ctx, order, userId) ? order : undefined;
     }
 
     /**
@@ -516,6 +528,7 @@ export class OrderService {
     private async createEmptyOrderEntity(ctx: RequestContext) {
         return new Order({
             type: OrderType.Regular,
+            salesChannelId: ctx.channelId,
             code: await this.configService.orderOptions.orderCodeStrategy.generate(ctx),
             state: this.orderStateMachine.getInitialState(),
             lines: [],
@@ -563,9 +576,14 @@ export class OrderService {
         }
 
         // ensure the customer is assigned to the same channels as the order
-        const channelIds = order.channels.map(c => c.id);
+        if (order.salesChannelId == null) {
+            throw new UserInputError('Order sales Channel is unresolved');
+        }
+        const channelIds = [order.salesChannelId];
         const customerChannelIds = targetCustomer.channels.map(c => c.id);
-        const missingChannelIds = channelIds.filter(id => !customerChannelIds.includes(id));
+        const missingChannelIds = channelIds.filter(
+            id => !customerChannelIds.some(customerChannelId => idsAreEqual(customerChannelId, id)),
+        );
         if (missingChannelIds.length) {
             throw new UserInputError(`error.target-customer-not-assigned-to-order-channels`, {
                 channelIds: missingChannelIds.join(', '),
@@ -1994,6 +2012,7 @@ export class OrderService {
 
     /** Serialize all refund writers for an order, including separate payment records. */
     async lockOrderForRefund(ctx: RequestContext, orderId: ID): Promise<void> {
+        await this.getOrderOrThrow(ctx, orderId, []);
         await this.connection
             .getRepository(ctx, Order)
             .createQueryBuilder()
@@ -2021,6 +2040,7 @@ export class OrderService {
         const payment = await this.connection.getEntityOrThrow(ctx, Payment, input.paymentId, {
             relations: ['order'],
         });
+        assertOrderSalesChannel(ctx, payment.order);
         if (orders && orders.length && !idsAreEqual(payment.order.id, orders[0].id)) {
             return new PaymentOrderMismatchError();
         }
@@ -2090,6 +2110,7 @@ export class OrderService {
             orderIdOrOrder instanceof Order
                 ? orderIdOrOrder
                 : await this.getOrderOrThrow(ctx, orderIdOrOrder);
+        assertOrderSalesChannel(ctx, order);
         order.customer = customer;
         await this.connection.getRepository(ctx, Order).save(order, { reload: false });
         let updatedOrder = order;
@@ -2201,6 +2222,8 @@ export class OrderService {
         guestOrder?: Order,
         existingOrder?: Order,
     ): Promise<Order | undefined> {
+        if (guestOrder) assertOrderSalesChannel(ctx, guestOrder);
+        if (existingOrder) assertOrderSalesChannel(ctx, existingOrder);
         if (guestOrder && guestOrder.customer) {
             // In this case the "guest order" is actually an order of an existing Customer,
             // so we do not want to merge at all. See https://github.com/vendurehq/vendure/issues/263
@@ -2340,6 +2363,7 @@ export class OrderService {
         if (!order) {
             throw new EntityNotFoundError('Order', orderId);
         }
+        assertOrderSalesChannel(ctx, order);
         return order;
     }
 

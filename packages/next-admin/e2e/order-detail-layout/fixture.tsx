@@ -69,6 +69,7 @@ const order = {
     },
     shippingAddress: address,
     billingAddress: address,
+    salesChannel: params.has('unknown-owner') ? null : { id: 'fixture-channel', code: '布局验收店铺' },
     channels: [{ id: 'fixture-channel', code: '布局验收店铺', token: 'fixture-channel' }],
     shippingLines: [
         {
@@ -147,6 +148,10 @@ const fields: CustomFieldDefinition[] = [
         description: [{ languageCode: 'zh_Hans', value: '用于接收数字商品交付信息' }],
     },
 ];
+const activeChannel = {
+    id: params.has('platform') ? 'platform' : 'fixture-channel',
+    code: params.has('platform') ? '__default_channel__' : '布局验收店铺',
+};
 const client = new ApolloClient({
     cache: new InMemoryCache(),
     link: new ApolloLink(
@@ -154,14 +159,18 @@ const client = new ApolloClient({
             new Observable(observer => {
                 if (operation.operationName === 'GetSalesOrder') {
                     observer.next({
-                        data: { order, fulfillmentHandlers: [{ code: 'manual-fulfillment', args: [] }] },
+                        data: {
+                            order,
+                            activeChannel,
+                            fulfillmentHandlers: [{ code: 'manual-fulfillment', args: [] }],
+                        },
                     });
                 } else if (operation.operationName === 'NextAdminOrderOperations') {
                     if (params.has('payment-error')) {
                         observer.error(new Error('模拟支付明细读取失败'));
                         return;
                     }
-                    observer.next({ data: { order } });
+                    observer.next({ data: { order, activeChannel } });
                 } else if (operation.operationName === 'NextAdminPaymentMethodsForManualPayment') {
                     observer.next({
                         data: {

@@ -163,6 +163,52 @@ export const uploadAdminFiles = async <T>(
     );
 };
 
+/** Upload one file to an arbitrary Admin API Upload variable. */
+export const uploadAdminFile = async <T>(
+    query: string,
+    file: File,
+    variables: Record<string, unknown>,
+    fileVariablePath = 'variables.file',
+    options?: { channelToken?: string },
+): Promise<T> => {
+    return runAdminActionWithFeedback(
+        {
+            action: '上传',
+            target: `文件“${file.name || '未命名'}”`,
+            failure: '管理服务未接受文件上传请求',
+            resolution: ['检查文件格式、大小和当前账号权限后重试'],
+        },
+        async () => {
+            const channelContext = channelRequestContext(
+                options?.channelToken ?? getActiveChannelToken() ?? '',
+            );
+            const formData = new FormData();
+            formData.append('operations', JSON.stringify({ query, variables }));
+            formData.append('map', JSON.stringify({ 0: [fileVariablePath] }));
+            formData.append('0', file, file.name);
+            const token = getAuthToken();
+            const response = await vendureFetch(getLocalizedAdminApiUrl(), {
+                method: 'POST',
+                headers: {
+                    'Apollo-Require-Preflight': 'true',
+                    ...channelContext.headers,
+                    ...(token ? { authorization: `Bearer ${token}` } : {}),
+                },
+                body: formData,
+            });
+            const result = (await response.json()) as GraphqlUploadResponse<T>;
+            if (!response.ok || result.errors?.length) {
+                throw new Error(
+                    result.errors?.map(error => error.message).join('；') ||
+                        `上传请求失败 (${response.status})`,
+                );
+            }
+            if (!result.data) throw new Error('上传成功但后端未返回数据');
+            return result.data;
+        },
+    );
+};
+
 // 指向 Vendure 真实的 Admin GraphQL API，并同时支持 Cookie 与 Bearer Token。
 const httpLink = createHttpLink({
     uri: () => getLocalizedAdminApiUrl(),
