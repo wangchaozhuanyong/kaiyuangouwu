@@ -1,4 +1,4 @@
-import { RequestContext, TransactionalConnection } from '@vendure/core';
+import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { IcloudAccessCodeService } from './icloud-access-code.service';
@@ -51,5 +51,86 @@ describe('batch virtual mailbox import', () => {
             ['fourth@example.com', '备注四'],
             ['bare@example.com', null],
         ]);
+    });
+});
+
+function mutationService(options: {
+    mail: { id: string; primaryAccountId: string; virtualEmailId: string | null } | null;
+    virtual?: { id: string; primaryAccountId: string } | null;
+}) {
+    const execute = vi.fn().mockResolvedValue(undefined);
+    const queryBuilder: Record<string, ReturnType<typeof vi.fn>> = {};
+    for (const method of ['subQuery', 'select', 'from', 'where', 'update', 'set']) {
+        queryBuilder[method] = vi.fn(() => queryBuilder);
+    }
+    queryBuilder.getQuery = vi.fn(() => '(SELECT COUNT(*))');
+    queryBuilder.execute = execute;
+    const mailRepo = {
+        findOne: vi.fn().mockResolvedValue(options.mail),
+        save: vi.fn().mockImplementation(mail => Promise.resolve({ ...mail })),
+        delete: vi.fn().mockResolvedValue({ affected: 1 }),
+    };
+    const virtualRepo = {
+        findOne: vi.fn().mockResolvedValue(options.virtual ?? null),
+        createQueryBuilder: vi.fn(() => queryBuilder),
+    };
+    const primaryRepo = {
+        findOne: vi.fn().mockResolvedValue({ id: options.mail?.primaryAccountId }),
+    };
+    const repos: Record<string, unknown> = {
+        IcloudPrimaryAccount: primaryRepo,
+        IcloudReceivedMail: mailRepo,
+        IcloudVirtualEmail: virtualRepo,
+    };
+    const connection = {
+        rawConnection: { options: { type: 'sqljs' } },
+        withTransaction: async (ctx: RequestContext, work: (ctx: RequestContext) => Promise<unknown>) =>
+            work(ctx),
+        getRepository: (_ctx: unknown, entity: { name: string }) => repos[entity.name],
+    };
+    const service = new IcloudAdminService(
+        connection as unknown as TransactionalConnection,
+        {} as IcloudCipherService,
+        new IcloudAccessCodeService(),
+        {} as IcloudImapSyncService,
+        {} as IcloudMailHistoryService,
+    );
+    return { execute, mailRepo, service, virtualRepo };
+}
+
+describe('received mail ownership integrity', () => {
+    it('rejects assigning a mail to a virtual mailbox owned by another primary account', async () => {
+        const { mailRepo, service } = mutationService({
+            mail: { id: 'mail-1', primaryAccountId: 'primary-1', virtualEmailId: 'alias-old' },
+            virtual: { id: 'alias-other', primaryAccountId: 'primary-2' },
+        });
+
+        await expect(
+            service.reassignMail({} as RequestContext, 'mail-1', 'alias-other'),
+        ).rejects.toBeInstanceOf(UserInputError);
+        expect(mailRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('recounts both the previous and target virtual mailbox after reassignment', async () => {
+        const { execute, mailRepo, service } = mutationService({
+            mail: { id: 'mail-1', primaryAccountId: 'primary-1', virtualEmailId: 'alias-old' },
+            virtual: { id: 'alias-new', primaryAccountId: 'primary-1' },
+        });
+
+        await service.reassignMail({} as RequestContext, 'mail-1', 'alias-new');
+
+        expect(mailRepo.save).toHaveBeenCalledWith(expect.objectContaining({ virtualEmailId: 'alias-new' }));
+        expect(execute).toHaveBeenCalledTimes(2);
+    });
+
+    it('recounts the former virtual mailbox after deleting an assigned mail', async () => {
+        const { execute, mailRepo, service } = mutationService({
+            mail: { id: 'mail-1', primaryAccountId: 'primary-1', virtualEmailId: 'alias-old' },
+        });
+
+        await service.deleteMail({} as RequestContext, 'mail-1');
+
+        expect(mailRepo.delete).toHaveBeenCalledWith({ id: 'mail-1' });
+        expect(execute).toHaveBeenCalledOnce();
     });
 });

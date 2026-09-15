@@ -19,7 +19,7 @@ import { IcloudAccessCodeService } from './icloud-access-code.service';
 import { IcloudCipherService } from './icloud-cipher.service';
 import { IcloudImapSyncService, SyncAccountResult, TestConnectionResult } from './icloud-imap-sync.service';
 import { IcloudMailHistoryService } from './icloud-mail-history.service';
-import { lockMailAccount } from './icloud-mail-storage';
+import { lockMailAccount, refreshMailCounts } from './icloud-mail-storage';
 import { updateIcloudRecord } from './icloud-record-update';
 
 export interface PrimaryAccountView {
@@ -454,26 +454,65 @@ export class IcloudAdminService {
     }
 
     async reassignMail(ctx: RequestContext, mailId: ID, virtualEmailId: ID): Promise<IcloudReceivedMail> {
+        return this.connection.withTransaction(ctx, transactionCtx =>
+            this.reassignMailInTransaction(transactionCtx, mailId, virtualEmailId),
+        );
+    }
+
+    private async reassignMailInTransaction(
+        ctx: RequestContext,
+        mailId: ID,
+        virtualEmailId: ID,
+    ): Promise<IcloudReceivedMail> {
         const mailRepo = this.connection.getRepository(ctx, IcloudReceivedMail);
         const virtualRepo = this.connection.getRepository(ctx, IcloudVirtualEmail);
 
+        const initialMail = await mailRepo.findOne({ where: { id: mailId } });
+        if (!initialMail) throw new UserInputError('邮件不存在');
+        await lockMailAccount(ctx, this.connection, initialMail.primaryAccountId);
         const mail = await mailRepo.findOne({ where: { id: mailId } });
         if (!mail) throw new UserInputError('邮件不存在');
 
         const virtual = await virtualRepo.findOne({ where: { id: virtualEmailId } });
         if (!virtual) throw new UserInputError('指定的虚拟邮箱不存在');
+        if (String(virtual.primaryAccountId) !== String(mail.primaryAccountId)) {
+            throw new UserInputError('只能将邮件分配到同一主邮箱下的虚拟邮箱');
+        }
+
+        const previousVirtualEmailId = mail.virtualEmailId;
+        if (String(previousVirtualEmailId ?? '') === String(virtual.id)) return mail;
 
         mail.virtualEmailId = virtual.id;
         const saved = await mailRepo.save(mail);
 
-        await virtualRepo.increment({ id: virtual.id }, 'mailCount', 1);
+        await refreshMailCounts(
+            ctx,
+            this.connection,
+            mail.primaryAccountId,
+            [previousVirtualEmailId, virtual.id].filter((id): id is ID => id !== null),
+        );
 
         return saved;
     }
 
     async deleteMail(ctx: RequestContext, mailId: ID): Promise<boolean> {
-        const repo = this.connection.getRepository(ctx, IcloudReceivedMail);
-        await repo.delete({ id: mailId });
+        return this.connection.withTransaction(ctx, transactionCtx =>
+            this.deleteMailInTransaction(transactionCtx, mailId),
+        );
+    }
+
+    private async deleteMailInTransaction(ctx: RequestContext, mailId: ID): Promise<boolean> {
+        const mailRepo = this.connection.getRepository(ctx, IcloudReceivedMail);
+        const initialMail = await mailRepo.findOne({ where: { id: mailId } });
+        if (!initialMail) return true;
+
+        await lockMailAccount(ctx, this.connection, initialMail.primaryAccountId);
+        const mail = await mailRepo.findOne({ where: { id: mailId } });
+        if (!mail) return true;
+        await mailRepo.delete({ id: mailId });
+        if (mail.virtualEmailId !== null) {
+            await refreshMailCounts(ctx, this.connection, mail.primaryAccountId, [mail.virtualEmailId]);
+        }
         return true;
     }
 
