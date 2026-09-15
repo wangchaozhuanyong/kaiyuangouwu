@@ -2,8 +2,9 @@ import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
 import { Channel, Customer, EntityId, Money, User, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, VersionColumn } from 'typeorm';
-import type { ImagePricingSnapshot } from '../image-billing-quote';
-import type { ImageResolution } from '../types';
+
+import { ImagePricingSnapshot } from '../image-billing-quote';
+import { ImageResolution } from '../types';
 
 import { ImageGenerationOutput } from './image-generation-output.entity';
 import { ImageModelConfig } from './image-model-config.entity';
