@@ -48,6 +48,7 @@ const sourceFiles = [...new Set([...changedFiles, ...untrackedFiles])]
     .filter(Boolean)
     .filter(file => !selectedFiles || selectedFiles.has(file))
     .filter(file => supportedExtensions.has(path.extname(file)))
+    .filter(file => !path.basename(file).startsWith('generated'))
     .sort();
 
 const groups = new Map();
