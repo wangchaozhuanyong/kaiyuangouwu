@@ -215,7 +215,12 @@ describe('populate() function', () => {
                 }
             `;
             adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
-            expect((await adminClient.query(adminCatalogQuery, { id: imported.id })).product).toBeNull();
+            const defaultAdminProduct = (await adminClient.query(adminCatalogQuery, { id: imported.id }))
+                .product;
+            expect(defaultAdminProduct?.channels.map(channel => channel.id)).toEqual([channel2.id]);
+            expect(defaultAdminProduct?.variants[0].channels.map(channel => channel.id)).toEqual([
+                channel2.id,
+            ]);
             adminClient.setChannelToken(channel2.token);
             const { product } = await adminClient.query(adminCatalogQuery, { id: imported.id });
             expect(product?.channels.map(channel => channel.id)).toEqual([channel2.id]);

@@ -81,19 +81,43 @@ function fixture() {
         },
     };
     const query: any = {};
-    for (const methodName of ['leftJoinAndSelect', 'leftJoin', 'innerJoin', 'where', 'andWhere', 'addSelect'])
+    for (const methodName of [
+        'leftJoinAndSelect',
+        'leftJoin',
+        'innerJoin',
+        'where',
+        'andWhere',
+        'addSelect',
+        'setLock',
+    ])
         query[methodName] = () => query;
     query.getOne = vi.fn().mockResolvedValue(user);
     const savePassword = vi.fn().mockResolvedValue(method);
-    const userRepository = { createQueryBuilder: () => query, save: vi.fn().mockResolvedValue(user) };
+    const userRepository = {
+        createQueryBuilder: () => query,
+        save: vi.fn().mockResolvedValue(user),
+        update: vi.fn().mockResolvedValue({ affected: 1 }),
+    };
     const connection = {
+        withTransaction: (transactionCtx: RequestContext, work: (txCtx: RequestContext) => any) =>
+            work(transactionCtx),
         getRepository: (_ctx: RequestContext, entity: unknown) =>
             entity === AuthenticatedSession
                 ? sessionRepository
                 : entity === NativeAuthenticationMethod
-                  ? { save: savePassword }
+                  ? {
+                        save: savePassword,
+                        update: vi.fn().mockImplementation((_criteria: any, values: any) => {
+                            Object.assign(method, values);
+                            return Promise.resolve({ affected: 1 });
+                        }),
+                    }
                   : userRepository,
-        rawConnection: { subscribers: [], getRepository: () => sessionRepository },
+        rawConnection: {
+            subscribers: [],
+            getRepository: () => sessionRepository,
+            options: { type: 'sqljs' },
+        },
     };
     const validate = vi.fn().mockReturnValue(true);
     const config = {
