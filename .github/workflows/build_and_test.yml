@@ -270,7 +270,7 @@ jobs:
                   GH_TOKEN: ${{ github.token }}
               run: node deploy/build-artifact.mjs restore-tests "$RUNNER_TEMP/compiled-input" "$GITHUB_RUN_ID"
             - name: Build missing test prerequisites
-              if: steps.compiled.outputs.restored != 'true'
+              if: steps.compiled.outputs.restored != 'true' || needs.detect-changes.outputs.translation == 'true'
               run: node scripts/ci-run.mjs prepare-tests
             - name: Build local application plugins
               if: needs.detect-changes.outputs.full == 'true' && steps.compiled.outputs.restored != 'true'
@@ -309,6 +309,11 @@ jobs:
               env:
                   TRANSLATION_TEST_POSTGRES: '1'
               run: bunx vitest run migrations/translation-outbox.spec.ts
+            - name: Build translation acceptance harness and local plugins
+              if: needs.detect-changes.outputs.translation == 'true'
+              run: |
+                  bun run --cwd packages/testing build
+                  bun run --cwd packages/dev-server build:local-plugins
             - name: Translation outbox Admin and Shop API acceptance
               if: needs.detect-changes.outputs.translation == 'true'
               env:
