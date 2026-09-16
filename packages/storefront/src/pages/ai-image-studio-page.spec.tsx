@@ -215,6 +215,10 @@ async function type(container: Element, value: string) {
 describe('AI studio complete customer workflows', () => {
     it('preserves the draft, quantity and consent while switching views and restoring scroll positions', async () => {
         const { container } = await setup({ history: [job(1)] });
+        expect(container.querySelector('.ai-studio-composer label')?.classList.contains('sr-only')).toBe(
+            true,
+        );
+        expect(container.querySelector('textarea')?.placeholder).toContain('描述你想生成的图片');
         await type(container, '保留这段商品描述');
         await click(button(container, '生成张数'));
         await click(button(document.body, '2 张'));

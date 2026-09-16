@@ -1028,8 +1028,7 @@
     border-top: 1px solid var(--line);
 }
 
-.ai-studio-shell.ai-studio-workflow
-    :is(.ai-studio-prompt-label, .ai-studio-options h3, .ai-studio-history h3) {
+.ai-studio-shell.ai-studio-workflow :is(.ai-studio-options h3, .ai-studio-history h3) {
     margin: 0 0 12px;
     display: block;
     font-size: 17px;
