@@ -63,7 +63,11 @@ export class AuthGuard implements CanActivate {
             const session = await this.getSession(req, res, hasOwnerPermission, info);
             requestContext = await this.requestContextService.fromRequest(req, info, permissions, session);
 
-            const requestContextShouldBeReinitialized = await this.setActiveChannel(requestContext, session);
+            const requestContextShouldBeReinitialized = await this.setActiveChannel(
+                requestContext,
+                session,
+                req,
+            );
             if (requestContextShouldBeReinitialized) {
                 requestContext = await this.requestContextService.fromRequest(
                     req,
@@ -90,6 +94,7 @@ export class AuthGuard implements CanActivate {
     private async setActiveChannel(
         requestContext: RequestContext,
         session?: CachedSession,
+        req?: Request,
     ): Promise<boolean> {
         if (!session) {
             return false;
@@ -101,10 +106,22 @@ export class AuthGuard implements CanActivate {
         if (!activeChannelShouldBeSet) {
             return false;
         }
-        if (requestContext.activeUserId) {
-            await this.customerChannelAssignmentService.tryAssignToActiveChannel(requestContext);
+        const runChannelAssignment = async () => {
+            if (requestContext.activeUserId) {
+                await this.customerChannelAssignmentService.tryAssignToActiveChannel(requestContext);
+            }
+            await this.sessionService.setActiveChannel(session, requestContext.channel);
+        };
+        if (req) {
+            const cacheKey = `_activeChannelPromise_${requestContext.channelId}_${session.id}`;
+            const reqWithStore = req as Record<string, any>;
+            if (!reqWithStore[cacheKey]) {
+                reqWithStore[cacheKey] = runChannelAssignment();
+            }
+            await reqWithStore[cacheKey];
+            return true;
         }
-        await this.sessionService.setActiveChannel(session, requestContext.channel);
+        await runChannelAssignment();
         return true;
     }
 
