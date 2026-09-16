@@ -40,4 +40,5 @@ export const nestTestAliases = {
 export const sharedTestConfig = {
     testTimeout: process.env.CI ? 30 * 1000 : 15 * 1000,
     maxWorkers: process.env.CI ? 1 : undefined,
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.codex-worktrees/**', '**/artifacts/**'],
 };

@@ -103,7 +103,14 @@ export class TransactionWrapper {
                 return true;
             } catch (err: any) {
                 lastError = err;
-                if (err instanceof TransactionAlreadyStartedError) {
+                const message = typeof err?.message === 'string' ? err.message : '';
+                if (
+                    err instanceof TransactionAlreadyStartedError ||
+                    message.includes('cannot start a transaction within a transaction') ||
+                    message.includes('SQLITE_BUSY') ||
+                    message.includes('database is locked')
+                ) {
+                    (queryRunner as any).isTransactionActive = false;
                     return false;
                 }
                 throw err;
