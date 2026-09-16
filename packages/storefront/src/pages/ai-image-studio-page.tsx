@@ -1110,7 +1110,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                         hidden={activeView !== 'CREATE'}
                     >
                         <section className="ai-studio-composer">
-                            <label className="ai-studio-prompt-label" htmlFor={`${viewId}-prompt`}>
+                            <label className="sr-only" htmlFor={`${viewId}-prompt`}>
                                 {isZh ? '描述你想生成的图片' : 'Describe the image you want to create'}
                             </label>
                             <div className="ai-studio-prompt-wrap">
@@ -1125,8 +1125,8 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                     }}
                                     placeholder={
                                         isZh
-                                            ? '例如：一只白色保温杯放在浅色木桌上，晨光从左侧照入，干净高级的电商摄影…'
-                                            : 'Example: A white insulated bottle on a light wood table, soft morning light from the left, clean premium ecommerce photography…'
+                                            ? '描述你想生成的图片，例如：一只白色保温杯放在浅色木桌上，晨光从左侧照入，干净高级的电商摄影…'
+                                            : 'Describe the image you want to create, e.g. A white insulated bottle on a light wood table, soft morning light from the left, clean premium ecommerce photography…'
                                     }
                                 />
                                 <div className="ai-studio-prompt-count">
