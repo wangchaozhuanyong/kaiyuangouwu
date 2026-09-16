@@ -226,4 +226,34 @@ describe('whole-page readiness', () => {
         expect(host.querySelector('[role=status]')).toBeNull();
         expect(host.textContent).toContain('New destination');
     });
+
+    it('does not set aria-hidden on stage and blurs descendant focus when stage is unreleased', () => {
+        render(
+            <div>
+                <button type="button" id="test-btn">
+                    Action
+                </button>
+            </div>,
+            true,
+        );
+        const stageElement = host.querySelector('.page-readiness-stage');
+        expect(stageElement?.getAttribute('aria-hidden')).toBeNull();
+        expect(stageElement?.hasAttribute('inert')).toBe(true);
+
+        const button = host.querySelector<HTMLButtonElement>('#test-btn');
+        expect(button).not.toBeNull();
+        button?.focus();
+        expect(document.activeElement).toBe(button);
+
+        render(
+            <div>
+                <button type="button" id="test-btn">
+                    Action
+                </button>
+            </div>,
+            true,
+            'second',
+        );
+        expect(document.activeElement).not.toBe(button);
+    });
 });

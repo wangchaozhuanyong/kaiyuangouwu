@@ -205,6 +205,11 @@ export function PageReadinessBoundary(props: PageReadinessProps) {
     }, [attempt, navigationKey, requestKey]);
 
     useLayoutEffect(() => wake.current(), [pending, online]);
+    useLayoutEffect(() => {
+        if (!released && stage.current?.contains(document.activeElement)) {
+            (document.activeElement as HTMLElement)?.blur?.();
+        }
+    });
 
     return (
         <div className="page-readiness" data-page-readiness={phase}>
@@ -212,7 +217,6 @@ export function PageReadinessBoundary(props: PageReadinessProps) {
                 ref={stage}
                 className="page-readiness-stage"
                 inert={!released}
-                aria-hidden={!released || undefined}
                 style={released ? undefined : { opacity: 0, pointerEvents: 'none' }}
             >
                 {children}

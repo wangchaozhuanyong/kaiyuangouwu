@@ -10,6 +10,7 @@ const browsingRoutes = new Set<RouteName>([
     'recommendations',
     'announcements',
     'not-found',
+    'two-factor',
 ]);
 
 const accountRoutes = new Set<RouteName>([
