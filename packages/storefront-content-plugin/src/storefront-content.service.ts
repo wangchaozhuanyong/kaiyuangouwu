@@ -125,15 +125,13 @@ export class StorefrontContentService {
         heroAutoplayIntervalSeconds: number;
         configuredBlockTypes: StorefrontContentBlockType[];
     }> {
-        const [settings, blocks] = await Promise.all([
-            this.connection.getRepository(ctx, StorefrontContentSettings).findOne({
-                where: { channelId: ctx.channelId },
-            }),
-            this.connection.getRepository(ctx, StorefrontContentBlock).find({
-                where: { channelId: ctx.channelId, code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
-                select: { type: true },
-            }),
-        ]);
+        const settings = await this.connection.getRepository(ctx, StorefrontContentSettings).findOne({
+            where: { channelId: ctx.channelId },
+        });
+        const blocks = await this.connection.getRepository(ctx, StorefrontContentBlock).find({
+            where: { channelId: ctx.channelId, code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
+            select: { type: true },
+        });
         return {
             heroAutoplayIntervalSeconds:
                 settings?.heroAutoplayIntervalSeconds ?? DEFAULT_HERO_AUTOPLAY_INTERVAL_SECONDS,
