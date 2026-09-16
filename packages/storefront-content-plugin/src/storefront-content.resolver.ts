@@ -31,10 +31,8 @@ export class StorefrontContentShopResolver {
     @Query()
     @Allow(Permission.Public)
     async storefrontContentSettings(@Ctx() ctx: RequestContext) {
-        const [settings, auth] = await Promise.all([
-            this.storefrontContentService.getSettings(ctx),
-            this.storefrontAuthSettingsService.get(ctx),
-        ]);
+        const settings = await this.storefrontContentService.getSettings(ctx);
+        const auth = await this.storefrontAuthSettingsService.get(ctx);
         return { ...settings, auth };
     }
 }
@@ -61,10 +59,8 @@ export class StorefrontContentAdminResolver {
     @Query()
     @Allow(storefrontContentPermission.Read)
     async storefrontContentSettings(@Ctx() ctx: RequestContext) {
-        const [settings, auth] = await Promise.all([
-            this.storefrontContentService.getSettings(ctx),
-            this.storefrontAuthSettingsService.get(ctx),
-        ]);
+        const settings = await this.storefrontContentService.getSettings(ctx);
+        const auth = await this.storefrontAuthSettingsService.get(ctx);
         return { ...settings, auth };
     }
 
