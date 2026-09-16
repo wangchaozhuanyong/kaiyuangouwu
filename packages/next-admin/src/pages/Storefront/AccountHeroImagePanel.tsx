@@ -19,15 +19,19 @@ export function AccountHeroImagePanel({
     disabled: boolean;
     onSave: (asset: StorefrontAssetRef | null) => Promise<void>;
 }) {
-    const [draft, setDraft] = useState<StorefrontAssetRef | null>(block?.imageAsset ?? null);
+    const [draft, setDraft] = useState<StorefrontAssetRef | null | undefined>(undefined);
     const [clearLegacyUrl, setClearLegacyUrl] = useState(false);
     const [saving, setSaving] = useState(false);
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
-    const sourceAssetId = block?.imageAsset?.id ?? null;
+    const sourceAsset = block?.imageAsset ?? null;
+    const sourceAssetId = sourceAsset?.id ?? null;
     const legacyUrl = block?.imageUrl?.trim() || null;
-    const customPreview = draft?.preview ?? (clearLegacyUrl ? null : legacyUrl);
-    const dirty = draft?.id !== sourceAssetId || Boolean(clearLegacyUrl && legacyUrl);
+    const currentAsset = draft !== undefined ? draft : sourceAsset;
+    const customPreview = currentAsset?.preview ?? (clearLegacyUrl ? null : legacyUrl);
+    const dirty =
+        draft !== undefined &&
+        ((draft?.id ?? null) !== sourceAssetId || Boolean(clearLegacyUrl && legacyUrl));
 
     useUnsavedChangesWarning(dirty || saving, '个人中心头图尚未保存，离开后将放弃本次选择。');
 
@@ -37,8 +41,10 @@ export function AccountHeroImagePanel({
         setNotice('');
         setError('');
         try {
-            await onSave(draft);
-            setNotice(draft ? '已保存到当前店铺。' : '已恢复前台默认头图。');
+            await onSave(currentAsset);
+            setDraft(undefined);
+            setClearLegacyUrl(false);
+            setNotice(currentAsset ? '已保存到当前店铺。' : '已恢复前台默认头图。');
         } catch (reason) {
             setError(toUserFacingError(reason, '个人中心头图保存失败，请重试'));
         } finally {
@@ -103,7 +109,7 @@ export function AccountHeroImagePanel({
                 <div className="mt-4">
                     <AssetPicker
                         label="头图素材"
-                        value={draft}
+                        value={currentAsset}
                         fallbackUrl={clearLegacyUrl ? null : legacyUrl}
                         onChange={asset => {
                             setDraft(asset);
@@ -137,7 +143,7 @@ export function AccountHeroImagePanel({
                     </button>
                     <button
                         type="button"
-                        disabled={disabled || saving || (!customPreview && !draft)}
+                        disabled={disabled || saving || (!customPreview && !currentAsset)}
                         onClick={() => {
                             setDraft(null);
                             setClearLegacyUrl(Boolean(legacyUrl));
