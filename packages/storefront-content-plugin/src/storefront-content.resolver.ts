@@ -22,12 +22,20 @@ export class StorefrontContentShopResolver {
         private readonly storefrontAuthSettingsService: StorefrontAuthSettingsService,
     ) {}
 
+    /**
+     * Resolves published storefront content blocks for the current channel and language.
+     */
     @Query()
     @Allow(Permission.Public)
     storefrontContent(@Ctx() ctx: RequestContext) {
         return this.storefrontContentService.findPublished(ctx);
     }
 
+    /**
+     * Resolves storefront content and authentication settings for the current channel.
+     * Content settings and auth configurations are sequentialized to ensure transactional
+     * safety under single-connection database drivers such as SQLite/SQL.js.
+     */
     @Query()
     @Allow(Permission.Public)
     async storefrontContentSettings(@Ctx() ctx: RequestContext) {
