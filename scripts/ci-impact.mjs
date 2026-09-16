@@ -61,7 +61,9 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
     const shared =
         full ||
         dependencies ||
-        executable.some(file => /^(tsconfig[^/]*\.json|e2e-common\/|lerna\.json)/u.test(file));
+        executable.some(file =>
+            /^(tsconfig[^/]*\.json|e2e-common\/|lerna\.json|vitest\.shared\.[^/]+)/u.test(file),
+        );
     const migration =
         full || executable.some(file => /migrations?\/|\.entity\.ts$|check-migration-registry/u.test(file));
     const byName = new Map(inventory.map(pkg => [pkg.name, pkg.directory]));
@@ -97,12 +99,13 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
     const packages = sorted([...selected].filter(name => !STATIC_APPS.includes(name)));
     const known = new Set(inventory.map(pkg => pkg.directory));
     const unknownPackage = inventory.length > 0 && changedPackages.some(name => !known.has(name));
+    const isRootConfigFile = file =>
+        /^(package\.json|bun\.(lock|lockb)|bunfig\.toml|lerna\.json|tsconfig[^/]*\.json)$/u.test(file) ||
+        /^(schema-[^/]*\.json|vitest\.shared\.[^/]+|\.(gitignore|npmrc|prettierignore))$/u.test(file);
     const unknown = executable.filter(
         file =>
             !/^(packages\/|scripts\/|deploy\/|\.github\/|patches\/|e2e-common\/)/u.test(file) &&
-            !/^(package\.json|bun\.(lock|lockb)|bunfig\.toml|lerna\.json|tsconfig[^/]*\.json|schema-[^/]*\.json|\.(gitignore|npmrc|prettierignore))$/u.test(
-                file,
-            ) &&
+            !isRootConfigFile(file) &&
             !/^[^/]*(eslint|prettier)[^/]*$/u.test(file),
     );
     assert.ok(
