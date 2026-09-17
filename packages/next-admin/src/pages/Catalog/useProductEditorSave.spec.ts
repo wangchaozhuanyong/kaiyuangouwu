@@ -1,6 +1,11 @@
 import type { DocumentNode } from 'graphql';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { UPDATE_PRODUCT, UPDATE_PRODUCT_VARIANTS } from '../../graphql/catalog.graphql';
+import {
+    ADD_OPTION_GROUP_TO_PRODUCT,
+    CREATE_PRODUCT_VARIANTS,
+    UPDATE_PRODUCT,
+    UPDATE_PRODUCT_VARIANTS,
+} from '../../graphql/catalog.graphql';
 import type { ProductDetailRecord } from './product-editor-types';
 import { useProductEditorSave } from './useProductEditorSave';
 
@@ -434,5 +439,55 @@ describe('product save orchestration', () => {
 
         expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('重复的规格选项组合'));
         for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+    });
+
+    it('allows saving a single product with 1 new variant and no templates selected', async () => {
+        const input = fixture();
+        input.draft.selectedOptionGroupIds = [];
+        input.draft.variants = [
+            {
+                sku: 'SINGLE-1',
+                name: '单品',
+                price: '15.00',
+                stockOnHand: 10,
+                stockAllocated: 0,
+                enabled: true,
+                digitalDeliveryMode: 'manual_service',
+                digitalStockPolicy: 'limited',
+                optionIds: [],
+                isNew: true,
+            },
+        ];
+
+        await useProductEditorSave(input).handleSave();
+
+        expect(input.controls.showError).not.toHaveBeenCalled();
+        expect(mocks.mutations.get(CREATE_PRODUCT_VARIANTS)).toHaveBeenCalledTimes(1);
+    });
+
+    it('allows saving a single product with 1 variant even if option templates are selected without matrix', async () => {
+        const input = fixture();
+        input.draft.selectedOptionGroupIds = ['group-1']; // user clicked template but didn't generate matrix
+        input.draft.variants = [
+            {
+                sku: 'SINGLE-1',
+                name: '单品',
+                price: '15.00',
+                stockOnHand: 10,
+                stockAllocated: 0,
+                enabled: true,
+                digitalDeliveryMode: 'manual_service',
+                digitalStockPolicy: 'limited',
+                optionIds: [],
+                isNew: true,
+            },
+        ];
+
+        await useProductEditorSave(input).handleSave();
+
+        expect(input.controls.showError).not.toHaveBeenCalled();
+        expect(mocks.mutations.get(CREATE_PRODUCT_VARIANTS)).toHaveBeenCalledTimes(1);
+        // Effective option groups synced should NOT include group-1 for single product
+        expect(mocks.mutations.get(ADD_OPTION_GROUP_TO_PRODUCT)).not.toHaveBeenCalled();
     });
 });

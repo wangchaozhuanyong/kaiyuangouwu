@@ -205,8 +205,11 @@ export function useProductEditorSave({
     const [removeProductsFromChannel] = useMutation(REMOVE_PRODUCTS_FROM_CHANNEL);
 
     const syncProductOptionGroups = async (targetProductId: string, originalGroupIds: string[]) => {
-        const addedGroupIds = selectedOptionGroupIds.filter(id => !originalGroupIds.includes(id));
-        const removedGroupIds = originalGroupIds.filter(id => !selectedOptionGroupIds.includes(id));
+        const isSingleProductWithoutOptions =
+            variants.length <= 1 && (variants[0]?.optionIds.length ?? 0) === 0;
+        const effectiveGroupIds = isSingleProductWithoutOptions ? [] : selectedOptionGroupIds;
+        const addedGroupIds = effectiveGroupIds.filter(id => !originalGroupIds.includes(id));
+        const removedGroupIds = originalGroupIds.filter(id => !effectiveGroupIds.includes(id));
         for (const optionGroupId of addedGroupIds) {
             await addOptionGroupToProduct({ variables: { productId: targetProductId, optionGroupId } });
         }
@@ -373,8 +376,10 @@ export function useProductEditorSave({
             return false;
         }
 
-        const hasNewVariants = isCreateMode ? variants.length > 1 : variants.some(v => v.isNew);
-        if (selectedOptionGroupIds.length === 0 && hasNewVariants) {
+        const hasNewMultipleVariants = isCreateMode
+            ? variants.length > 1
+            : variants.length > 1 && variants.some(v => v.isNew);
+        if (selectedOptionGroupIds.length === 0 && hasNewMultipleVariants) {
             setActiveTab('VARIANTS');
             showError(
                 '普通单品未关联规格模板时仅支持 1 个销售规格。如需多个规格，请先选择规格模板生成 SKU 矩阵，或删除多余规格行。',
@@ -382,7 +387,12 @@ export function useProductEditorSave({
             return false;
         }
 
-        if (selectedOptionGroupIds.length > 0 && (isCreateMode || variants.some(v => v.isNew))) {
+        const isMultiSpecMode = variants.length > 1 || variants.some(v => v.optionIds.length > 0);
+        if (
+            selectedOptionGroupIds.length > 0 &&
+            isMultiSpecMode &&
+            (isCreateMode || variants.some(v => v.isNew))
+        ) {
             const emptyOptionIndex = variants.findIndex(v => v.optionIds.length === 0);
             if (emptyOptionIndex !== -1) {
                 setActiveTab('VARIANTS');
