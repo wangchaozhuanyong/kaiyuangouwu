@@ -151,4 +151,16 @@ describe('category navigation responsive spacing', () => {
             /html\[lang='en'\] \.primary-categories button\s*\{[^}]*width:\s*80px;[^}]*min-width:\s*80px;[^}]*height:\s*92px;/,
         );
     });
+
+    it('keeps Chinese category labels single-line and fixes category buttons to 76px', () => {
+        expect(stylesheet).toMatch(
+            /\.primary-category-label\s*\{[^}]*white-space:\s*nowrap;[^}]*text-overflow:\s*ellipsis;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.primary-categories button\s*\{[^}]*width:\s*76px;[^}]*min-width:\s*76px;[^}]*max-width:\s*76px;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.category-page \.primary-category-strip \.primary-categories button\s*\{[^}]*width:\s*76px;[^}]*min-width:\s*76px;[^}]*max-width:\s*76px;/,
+        );
+    });
 });
