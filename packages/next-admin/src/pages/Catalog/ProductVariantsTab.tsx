@@ -6,6 +6,7 @@ import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from './LookupPager';
 import { ProductAutoCardSetupPanel } from './ProductAutoCardSetupPanel';
 import { useProductEditor } from './ProductEditorContext';
+import { QuickCreateOptionGroupModal } from './QuickCreateOptionGroupModal';
 import { isSystemImportOptionGroup } from './catalog-option-groups';
 
 export function ProductVariantsTab() {
@@ -40,6 +41,11 @@ export function ProductVariantsTab() {
         refetchProduct,
         isCreateMode,
         productData,
+        isOptionTemplatesOpen,
+        setIsOptionTemplatesOpen,
+        isQuickCreateSpecOpen,
+        setIsQuickCreateSpecOpen,
+        handleApplyOptionGroup,
     } = useProductEditor();
 
     if (!isCreateMode && !productData?.product) return null;
@@ -50,6 +56,9 @@ export function ProductVariantsTab() {
     );
     const selectedReusableOptionGroupIds = selectedOptionGroupIds.filter(id =>
         selectableOptionGroupIds.has(id),
+    );
+    const productSystemOptionGroups = Object.values(knownOptionGroups).filter(
+        group => isSystemImportOptionGroup(group) && selectedOptionGroupIds.includes(group.id),
     );
 
     return (
@@ -165,7 +174,7 @@ export function ProductVariantsTab() {
                         <p className="text-xs text-slate-400 mt-0.5">
                             {effectiveFulfillmentType === 'digital'
                                 ? '在同一页完成销售价、交付方式、卡密格式和库存导入'
-                                : '单一商品添加一行即可；有颜色、容量等区分时再添加多行'}
+                                : '普通单品维护一行即可；如有颜色、容量或多包装等区分，请展开下方【规格模板】生成多规格'}
                         </p>
                     </div>
                     <button
@@ -177,7 +186,11 @@ export function ProductVariantsTab() {
                     </button>
                 </div>
 
-                <details className="border-b border-slate-100 bg-slate-50/40">
+                <details
+                    open={isOptionTemplatesOpen}
+                    onToggle={event => setIsOptionTemplatesOpen(event.currentTarget.open)}
+                    className="border-b border-slate-100 bg-slate-50/40"
+                >
                     <summary className="cursor-pointer list-none p-4 sm:p-5">
                         <div className="flex items-center justify-between gap-3">
                             <div>
@@ -185,11 +198,15 @@ export function ProductVariantsTab() {
                                     按颜色、容量等批量生成规格（可选）
                                 </div>
                                 <div className="mt-0.5 text-[11px] text-slate-400">
-                                    普通单品不需要使用。已选 {selectedReusableOptionGroupIds.length} 个模板。
+                                    普通单品不需要使用。已选 {selectedReusableOptionGroupIds.length}{' '}
+                                    个通用模板
+                                    {productSystemOptionGroups.length > 0 &&
+                                        `（含 ${productSystemOptionGroups.length} 个专属规格）`}
+                                    。
                                 </div>
                             </div>
                             <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">
-                                展开设置
+                                {isOptionTemplatesOpen ? '收起设置' : '展开设置'}
                             </span>
                         </div>
                     </summary>
@@ -201,14 +218,23 @@ export function ProductVariantsTab() {
                                     例如“颜色”有红、蓝两个选项，会生成两行待填的销售规格。
                                 </div>
                             </div>
-                            <button
-                                type="button"
-                                onClick={handleGenerateVariantMatrix}
-                                disabled={selectedReusableOptionGroupIds.length === 0}
-                                className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                生成 SKU 矩阵
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsQuickCreateSpecOpen(true)}
+                                    className="flex items-center gap-1 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50 cursor-pointer transition-colors shadow-2xs"
+                                >
+                                    <Plus className="h-3.5 w-3.5" /> 快速新建规格
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleGenerateVariantMatrix}
+                                    disabled={selectedReusableOptionGroupIds.length === 0}
+                                    className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                                >
+                                    生成 SKU 矩阵
+                                </button>
+                            </div>
                         </div>
                         <div className="relative max-w-md">
                             <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
@@ -223,6 +249,29 @@ export function ProductVariantsTab() {
                                 className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-500"
                             />
                         </div>
+                        {productSystemOptionGroups.length > 0 && (
+                            <div className="space-y-1.5 rounded-lg border border-blue-200 bg-blue-50/60 p-3">
+                                <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                                    <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-800">
+                                        商品专属规格
+                                    </span>
+                                    来自导入或专设，已直接绑定当前商品：
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {productSystemOptionGroups.map(group => (
+                                        <div
+                                            key={group.id}
+                                            className="flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs text-slate-800 shadow-2xs"
+                                        >
+                                            <span className="font-bold">{group.name || '导入规格'}</span>
+                                            <span className="text-[11px] text-blue-700 font-mono">
+                                                ({group.options.map(o => o.name).join(' / ') || '无选项'})
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         {optionGroupsError ? (
                             <div className="rounded-lg bg-rose-50 p-3 text-[11px] text-rose-700">
                                 {toUserFacingError(optionGroupsError, '规格模板读取失败，请稍后重试')}
@@ -580,6 +629,17 @@ export function ProductVariantsTab() {
                     productSaving={saving}
                     onSaveProduct={handleSave}
                     onRefreshProduct={refetchProduct}
+                />
+            )}
+
+            {isQuickCreateSpecOpen && (
+                <QuickCreateOptionGroupModal
+                    isOpen={isQuickCreateSpecOpen}
+                    onClose={() => setIsQuickCreateSpecOpen(false)}
+                    onCreated={handleApplyOptionGroup}
+                    isSingleVariantWithoutOptions={
+                        variants.length === 1 && variants[0].optionIds.length === 0
+                    }
                 />
             )}
         </div>

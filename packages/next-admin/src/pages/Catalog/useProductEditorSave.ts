@@ -373,6 +373,44 @@ export function useProductEditorSave({
             return false;
         }
 
+        const hasNewVariants = isCreateMode ? variants.length > 1 : variants.some(v => v.isNew);
+        if (selectedOptionGroupIds.length === 0 && hasNewVariants) {
+            setActiveTab('VARIANTS');
+            showError(
+                '普通单品未关联规格模板时仅支持 1 个销售规格。如需多个规格，请先选择规格模板生成 SKU 矩阵，或删除多余规格行。',
+            );
+            return false;
+        }
+
+        if (selectedOptionGroupIds.length > 0 && (isCreateMode || variants.some(v => v.isNew))) {
+            const emptyOptionIndex = variants.findIndex(v => v.optionIds.length === 0);
+            if (emptyOptionIndex !== -1) {
+                setActiveTab('VARIANTS');
+                const target = variants[emptyOptionIndex];
+                const label =
+                    target?.name?.trim() ||
+                    (target?.sku?.trim() ? `SKU ${target.sku.trim()}` : `第 ${emptyOptionIndex + 1} 行规格`);
+                showError(
+                    `已启用规格模板，但规格“${label}”未绑定任何规格选项（如原单品行）。请删除无选项规格行后再保存。`,
+                );
+                return false;
+            }
+        }
+
+        if (variants.length > 1 && (isCreateMode || variants.some(v => v.isNew))) {
+            const optionCombKeys = variants
+                .filter(v => v.optionIds.length > 0)
+                .map(v => [...v.optionIds].sort().join(':'));
+            const duplicateKeyIndex = optionCombKeys.findIndex(
+                (key, idx) => optionCombKeys.indexOf(key) !== idx,
+            );
+            if (duplicateKeyIndex !== -1) {
+                setActiveTab('VARIANTS');
+                showError('所选规格存在重复的规格选项组合，请检查并删除重复行后再保存。');
+                return false;
+            }
+        }
+
         return true;
     };
 

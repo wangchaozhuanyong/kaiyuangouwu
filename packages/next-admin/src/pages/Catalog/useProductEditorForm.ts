@@ -97,6 +97,8 @@ export function useProductEditorForm() {
     const [optionGroupPage, setOptionGroupPage] = useState(0);
     const [optionGroupPageSize, setOptionGroupPageSize] = usePageSize(setOptionGroupPage);
     const [knownOptionGroups, setKnownOptionGroups] = useState<Record<string, OptionGroupItem>>({});
+    const [isOptionTemplatesOpen, setIsOptionTemplatesOpen] = useState(false);
+    const [isQuickCreateSpecOpen, setIsQuickCreateSpecOpen] = useState(false);
 
     // 表单校验错误信息
     const [formErrors, setFormErrors] = useState<ProductEditorFormErrors>({});
@@ -178,6 +180,9 @@ export function useProductEditorForm() {
             setSelectedFacetValueIds(draft.selectedFacetValueIds);
             setSelectedCollectionIds(draft.selectedCollectionIds);
             setSelectedOptionGroupIds(draft.selectedOptionGroupIds);
+            if (draft.selectedOptionGroupIds.length > 0) {
+                setIsOptionTemplatesOpen(true);
+            }
             setVariants(draft.variants);
             setDynamicCustomFieldValues(draft.dynamicCustomFields ?? {});
             setFeaturedAssetPreview(p.featuredAsset?.preview ?? null);
@@ -205,6 +210,7 @@ export function useProductEditorForm() {
             setSelectedOptionGroupIds([]);
             setKnownOptionGroups({});
             setVariants([]);
+            setIsOptionTemplatesOpen(false);
         }
     }, [fixedFulfillmentType, productData, isCreateMode, productExtensionFields]);
 
@@ -368,6 +374,18 @@ export function useProductEditorForm() {
 
     const handleAddVariant = () => {
         removeUnusedSystemOptionGroups();
+        if (variants.length >= 1) {
+            setIsOptionTemplatesOpen(true);
+            if (selectedOptionGroupIds.length === 0) {
+                setIsQuickCreateSpecOpen(true);
+                showNotice('当前商品未配置规格模板。已为您打开快速新建规格窗口，请填写规格名称与选项。');
+            } else {
+                showNotice(
+                    '当前已选择规格模板，请在已展开的面板中点击【生成 SKU 矩阵】批量生成各选项组合，或点击【+ 快速新建规格】。',
+                );
+            }
+            return;
+        }
         setVariants(prev => [
             ...prev,
             {
@@ -383,6 +401,87 @@ export function useProductEditorForm() {
                 isNew: true,
             },
         ]);
+    };
+
+    const handleApplyOptionGroup = (newGroup: OptionGroupItem) => {
+        setKnownOptionGroups(current => ({ ...current, [newGroup.id]: newGroup }));
+        setSelectedOptionGroupIds(current =>
+            current.includes(newGroup.id) ? current : [...current, newGroup.id],
+        );
+        setIsOptionTemplatesOpen(true);
+        void refetchOptionGroups();
+
+        if (newGroup.options.length === 0) {
+            showNotice(`已创建规格模板“${newGroup.name}”`);
+            return;
+        }
+
+        if (variants.length === 1 && variants[0].optionIds.length === 0) {
+            const firstOpt = newGroup.options[0];
+            const updatedFirstVariant: ProductVariantState = {
+                ...variants[0],
+                optionIds: [firstOpt.id],
+                name: variants[0].name.trim()
+                    ? `${variants[0].name.trim()} (${firstOpt.name})`
+                    : `${productName.trim()} ${firstOpt.name}`.trim(),
+            };
+            const restVariants: ProductVariantState[] = newGroup.options.slice(1).map(opt => ({
+                sku: '',
+                name: `${productName.trim()} ${opt.name}`.trim(),
+                price: '',
+                stockOnHand: '',
+                stockAllocated: 0,
+                enabled: true,
+                digitalDeliveryMode: 'manual_service',
+                digitalStockPolicy: 'limited',
+                optionIds: [opt.id],
+                isNew: true,
+            }));
+            setVariants([updatedFirstVariant, ...restVariants]);
+            showNotice(
+                `已为当前商品应用规格“${newGroup.name}”，原单品自动转为“${firstOpt.name}”，已为您新增 ${restVariants.length} 个规格行供填写！`,
+            );
+        } else if (variants.length === 0) {
+            const generated: ProductVariantState[] = newGroup.options.map(opt => ({
+                sku: '',
+                name: `${productName.trim()} ${opt.name}`.trim(),
+                price: '',
+                stockOnHand: '',
+                stockAllocated: 0,
+                enabled: true,
+                digitalDeliveryMode: 'manual_service',
+                digitalStockPolicy: 'limited',
+                optionIds: [opt.id],
+                isNew: true,
+            }));
+            setVariants(generated);
+            showNotice(`已生成 ${generated.length} 个“${newGroup.name}”规格行`);
+        } else {
+            const existingKeys = new Set(variants.map(variant => [...variant.optionIds].sort().join(':')));
+            const newRows: ProductVariantState[] = [];
+            for (const opt of newGroup.options) {
+                if (!existingKeys.has(opt.id)) {
+                    newRows.push({
+                        sku: '',
+                        name: `${productName.trim()} ${opt.name}`.trim(),
+                        price: '',
+                        stockOnHand: '',
+                        stockAllocated: 0,
+                        enabled: true,
+                        digitalDeliveryMode: 'manual_service',
+                        digitalStockPolicy: 'limited',
+                        optionIds: [opt.id],
+                        isNew: true,
+                    });
+                }
+            }
+            if (newRows.length > 0) {
+                setVariants(prev => [...prev, ...newRows]);
+                showNotice(`已为商品追加 ${newRows.length} 个“${newGroup.name}”新规格行`);
+            } else {
+                showNotice(`已创建规格模板“${newGroup.name}”并已勾选`);
+            }
+        }
     };
 
     const handleGenerateVariantMatrix = () => {
@@ -416,6 +515,34 @@ export function useProductEditorForm() {
         if (combinations.length > 100) {
             showError(
                 `当前规格组合将生成 ${combinations.length} 个 SKU，超过单次 100 个的安全限制，请减少规格选项`,
+            );
+            return;
+        }
+
+        if (variants.length === 1 && variants[0].optionIds.length === 0) {
+            const firstComb = combinations[0];
+            const updatedFirst: ProductVariantState = {
+                ...variants[0],
+                optionIds: firstComb.map(option => option.id),
+                name: variants[0].name.trim()
+                    ? `${variants[0].name.trim()} (${firstComb.map(option => option.name).join(' / ')})`
+                    : `${productName.trim()} ${firstComb.map(option => option.name).join(' / ')}`.trim(),
+            };
+            const restGenerated = combinations.slice(1).map((combination): ProductVariantState => ({
+                sku: '',
+                name: `${productName.trim()} ${combination.map(option => option.name).join(' / ')}`.trim(),
+                price: '',
+                stockOnHand: '',
+                stockAllocated: 0,
+                enabled: true,
+                digitalDeliveryMode: 'manual_service',
+                digitalStockPolicy: 'limited',
+                optionIds: combination.map(option => option.id),
+                isNew: true,
+            }));
+            setVariants([updatedFirst, ...restGenerated]);
+            showNotice(
+                `已将现有单品升级为“${firstComb.map(option => option.name).join(' / ')}”，并生成了 ${restGenerated.length} 个新规格组合，请补充编码和价格后保存`,
             );
             return;
         }
@@ -576,6 +703,11 @@ export function useProductEditorForm() {
         setOptionGroupPage,
         knownOptionGroups,
         setKnownOptionGroups,
+        isOptionTemplatesOpen,
+        setIsOptionTemplatesOpen,
+        isQuickCreateSpecOpen,
+        setIsQuickCreateSpecOpen,
+        handleApplyOptionGroup,
         formErrors,
         setFormErrors,
         notification,

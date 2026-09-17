@@ -196,7 +196,13 @@ export const CREATE_OPTION_GROUP = gql`
     mutation CreateCatalogOptionGroup($input: CreateProductOptionGroupInput!) {
         createProductOptionGroup(input: $input) {
             id
+            code
             name
+            options {
+                id
+                code
+                name
+            }
         }
     }
 `;

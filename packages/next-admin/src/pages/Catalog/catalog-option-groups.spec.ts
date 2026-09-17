@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { findUnusedSystemOptionGroupIds, isSystemImportOptionGroup } from './catalog-option-groups';
+import {
+    findUnusedSystemOptionGroupIds,
+    isSystemImportOptionGroup,
+    splitOptionValues,
+    toOptionGroupCode,
+} from './catalog-option-groups';
 
 describe('catalog option group visibility', () => {
     it('identifies importer-owned groups without hiding ordinary templates', () => {
@@ -18,5 +23,15 @@ describe('catalog option group visibility', () => {
         expect(findUnusedSystemOptionGroupIds(groups, [{ optionIds: ['used-option'] }])).toEqual([
             'unused-import',
         ]);
+    });
+
+    it('splits option values properly across chinese/english commas and newlines', () => {
+        expect(splitOptionValues('单盒, 整条，原箱\n散装')).toEqual(['单盒', '整条', '原箱', '散装']);
+        expect(splitOptionValues('单盒, 单盒, 整条')).toEqual(['单盒', '整条']);
+    });
+
+    it('generates predictable option group and option codes', () => {
+        expect(toOptionGroupCode('售卖包装', 'spec-group')).toMatch(/^spec-group-/);
+        expect(toOptionGroupCode('Flavor', 'flavor-group')).toBe('flavor');
     });
 });
