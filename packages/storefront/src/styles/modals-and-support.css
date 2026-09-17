@@ -429,12 +429,15 @@
     color: #0f2344;
     display: grid;
     place-items: center;
+    flex-shrink: 0;
+    overflow: hidden;
 }
 
 .support-channel-icon img {
     width: 20px;
     height: 20px;
     display: block;
+    object-fit: contain;
 }
 
 .support-channel-row[data-channel='wechat'] .support-channel-icon,
