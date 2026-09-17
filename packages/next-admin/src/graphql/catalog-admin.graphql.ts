@@ -182,6 +182,16 @@ export const DELETE_COLLECTION = gql`
     }
 `;
 
+export const MOVE_COLLECTION = gql`
+    mutation MoveCatalogCollection($input: MoveCollectionInput!) {
+        moveCollection(input: $input) {
+            id
+            position
+            parentId
+        }
+    }
+`;
+
 export const CREATE_OPTION_GROUP = gql`
     mutation CreateCatalogOptionGroup($input: CreateProductOptionGroupInput!) {
         createProductOptionGroup(input: $input) {

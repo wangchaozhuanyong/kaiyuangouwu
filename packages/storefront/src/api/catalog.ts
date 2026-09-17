@@ -235,7 +235,7 @@ export class CatalogApi extends BaseDomainApi {
         const result = await this.request<{ collections: { items: CollectionSummary[] } }>(
             `
             query StorefrontCollections {
-                collections(options: { take: 50, topLevelOnly: true, sort: { position: ASC } }) {
+                collections(options: { take: 100, topLevelOnly: true, sort: { position: ASC } }) {
                     items {
                         id
                         name
@@ -260,6 +260,13 @@ export class CatalogApi extends BaseDomainApi {
             undefined,
             signal,
         );
-        return result.collections.items;
+        const items = result.collections?.items ?? [];
+        return items
+            .slice()
+            .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+            .map(item => ({
+                ...item,
+                children: (item.children ?? []).slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
+            }));
     }
 }

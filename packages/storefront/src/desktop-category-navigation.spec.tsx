@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { CatalogApi } from './api/catalog';
 import { DesktopCategoryNavigation } from './components/common/desktop-category-navigation';
 import { RouteState } from './storefront-router';
 import { StorefrontContext, type StorefrontContextValue } from './StorefrontContext';
@@ -78,5 +79,77 @@ describe('desktop catalog category navigation', () => {
         expect(loading).toContain('正在加载分类');
         expect(loading).toContain('全部商品');
         expect(renderCategories({ name: 'category' }, { error: 'offline' })).toContain('重新加载分类');
+    });
+
+    it('renders categories in strict ascending order of position', () => {
+        const orderedCollections: CollectionSummary[] = [
+            { ...child, id: 'cat-a', name: '首位分类', position: 0, children: [] },
+            { ...child, id: 'cat-b', name: '次位分类', position: 1, children: [] },
+            { ...child, id: 'cat-c', name: '末位分类', position: 2, children: [] },
+        ];
+        const html = renderCategories({ name: 'category' }, { collections: orderedCollections });
+        const idxA = html.indexOf('首位分类');
+        const idxB = html.indexOf('次位分类');
+        const idxC = html.indexOf('末位分类');
+        expect(idxA).toBeGreaterThan(-1);
+        expect(idxB).toBeGreaterThan(idxA);
+        expect(idxC).toBeGreaterThan(idxB);
+    });
+
+    it('CatalogApi.collections sorts both top-level and children collections by position: ASC', async () => {
+        const mockRequest = vi.fn().mockResolvedValue({
+            collections: {
+                items: [
+                    {
+                        id: 'cat-2',
+                        name: '分类2',
+                        slug: 'cat-2',
+                        description: '',
+                        position: 5,
+                        parentId: 'root',
+                        featuredAsset: null,
+                        children: [
+                            {
+                                id: 'child-2b',
+                                name: '子2B',
+                                slug: 'c2b',
+                                description: '',
+                                position: 2,
+                                parentId: 'cat-2',
+                                featuredAsset: null,
+                            },
+                            {
+                                id: 'child-2a',
+                                name: '子2A',
+                                slug: 'c2a',
+                                description: '',
+                                position: 1,
+                                parentId: 'cat-2',
+                                featuredAsset: null,
+                            },
+                        ],
+                    },
+                    {
+                        id: 'cat-1',
+                        name: '分类1',
+                        slug: 'cat-1',
+                        description: '',
+                        position: 1,
+                        parentId: 'root',
+                        featuredAsset: null,
+                        children: [],
+                    },
+                ],
+            },
+        });
+
+        const api = new CatalogApi({
+            market: { code: 'MY', locale: 'zh-CN', currencyCode: 'MYR' } as any,
+            request: mockRequest,
+        } as any);
+
+        const result = await api.collections();
+        expect(result.map(c => c.id)).toEqual(['cat-1', 'cat-2']);
+        expect(result[1].children?.map(c => c.id)).toEqual(['child-2a', 'child-2b']);
     });
 });

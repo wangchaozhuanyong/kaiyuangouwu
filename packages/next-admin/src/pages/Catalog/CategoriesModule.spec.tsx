@@ -54,10 +54,32 @@ interface RenderCategoriesOptions {
     canReadAssets?: boolean;
     assetError?: boolean;
     saveError?: boolean;
+    moveError?: boolean;
     optionGroups?: TestOptionGroup[];
     linkedProducts?: TestLinkedProduct[];
     initialEntry?: string;
     nestedCategories?: boolean;
+    customCollections?: Array<{
+        __typename: string;
+        id: string;
+        name: string;
+        slug: string;
+        description: string;
+        isPrivate: boolean;
+        parentId: string | null;
+        position: number;
+        productVariantCount: number;
+        inheritFilters: boolean;
+        filters: Array<{ code: string; args: Array<{ name: string; value: string }> }>;
+        featuredAsset: typeof oldImage | null;
+        translations: Array<{
+            id: string;
+            languageCode: string;
+            name: string;
+            slug: string;
+            description: string;
+        }>;
+    }>;
 }
 
 afterEach(async () => {
@@ -68,10 +90,12 @@ async function renderCategories({
     canReadAssets = true,
     assetError = false,
     saveError = false,
+    moveError = false,
     optionGroups = [],
     linkedProducts = [],
     initialEntry = '/catalog/categories',
     nestedCategories = false,
+    customCollections,
 }: RenderCategoriesOptions = {}) {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     let featuredAsset: typeof oldImage | null = oldImage;
@@ -84,62 +108,63 @@ async function renderCategories({
                 new Observable(observer => {
                     requests(operation.operationName, operation.variables);
                     if (operation.operationName === 'GetCatalogTaxonomy') {
+                        const items = customCollections ?? [
+                            {
+                                __typename: 'Collection',
+                                id: 'category-1',
+                                name: '茶叶',
+                                slug: 'tea',
+                                description: '',
+                                isPrivate: false,
+                                parentId: null,
+                                position: 0,
+                                productVariantCount: 0,
+                                inheritFilters: true,
+                                filters: [],
+                                featuredAsset,
+                                translations: [
+                                    {
+                                        id: 'translation-1',
+                                        languageCode: 'zh_Hans',
+                                        name: '茶叶',
+                                        slug: 'tea',
+                                        description: '',
+                                    },
+                                ],
+                            },
+                            ...(nestedCategories
+                                ? [
+                                      {
+                                          __typename: 'Collection',
+                                          id: 'category-child',
+                                          name: '绿茶',
+                                          slug: 'green-tea',
+                                          description: '',
+                                          isPrivate: false,
+                                          parentId: 'category-1',
+                                          position: 0,
+                                          productVariantCount: 0,
+                                          inheritFilters: true,
+                                          filters: [],
+                                          featuredAsset: null,
+                                          translations: [
+                                              {
+                                                  id: 'translation-child',
+                                                  languageCode: 'zh_Hans',
+                                                  name: '绿茶',
+                                                  slug: 'green-tea',
+                                                  description: '',
+                                              },
+                                          ],
+                                      },
+                                  ]
+                                : []),
+                        ];
                         observer.next({
                             data: {
                                 collections: {
-                                    totalItems: nestedCategories ? 2 : 1,
-                                    items: [
-                                        {
-                                            __typename: 'Collection',
-                                            id: 'category-1',
-                                            name: '茶叶',
-                                            slug: 'tea',
-                                            description: '',
-                                            isPrivate: false,
-                                            parentId: null,
-                                            position: 0,
-                                            productVariantCount: 0,
-                                            inheritFilters: true,
-                                            filters: [],
-                                            featuredAsset,
-                                            translations: [
-                                                {
-                                                    id: 'translation-1',
-                                                    languageCode: 'zh_Hans',
-                                                    name: '茶叶',
-                                                    slug: 'tea',
-                                                    description: '',
-                                                },
-                                            ],
-                                        },
-                                        ...(nestedCategories
-                                            ? [
-                                                  {
-                                                      __typename: 'Collection',
-                                                      id: 'category-child',
-                                                      name: '绿茶',
-                                                      slug: 'green-tea',
-                                                      description: '',
-                                                      isPrivate: false,
-                                                      parentId: 'category-1',
-                                                      position: 0,
-                                                      productVariantCount: 0,
-                                                      inheritFilters: true,
-                                                      filters: [],
-                                                      featuredAsset: null,
-                                                      translations: [
-                                                          {
-                                                              id: 'translation-child',
-                                                              languageCode: 'zh_Hans',
-                                                              name: '绿茶',
-                                                              slug: 'green-tea',
-                                                              description: '',
-                                                          },
-                                                      ],
-                                                  },
-                                              ]
-                                            : []),
-                                    ],
+                                    totalItems: items.length,
+                                    items,
                                 },
                                 productOptionGroups: {
                                     totalItems: optionGroups.length,
@@ -191,6 +216,21 @@ async function renderCategories({
                                 : 'createCollection';
                         observer.next({
                             data: { [field]: { __typename: 'Collection', id: 'category-1', name: '茶叶' } },
+                        });
+                    } else if (operation.operationName === 'MoveCatalogCollection') {
+                        if (moveError) {
+                            observer.error(new Error('分类排序调整失败，请稍后重试'));
+                            return;
+                        }
+                        observer.next({
+                            data: {
+                                moveCollection: {
+                                    __typename: 'Collection',
+                                    id: operation.variables.input.collectionId,
+                                    position: operation.variables.input.index,
+                                    parentId: operation.variables.input.parentId,
+                                },
+                            },
                         });
                     } else {
                         observer.error(new Error(`Unexpected operation: ${operation.operationName}`));
@@ -435,5 +475,239 @@ describe('option group usage', () => {
                 }),
             }),
         );
+    });
+
+    describe('category drag and keyboard reordering', () => {
+        const createCategoryFixture = (
+            id: string,
+            name: string,
+            position: number,
+            parentId: string | null = null,
+        ) => ({
+            __typename: 'Collection',
+            id,
+            name,
+            slug: id,
+            description: '',
+            isPrivate: false,
+            parentId,
+            position,
+            productVariantCount: 1,
+            inheritFilters: true,
+            filters: [],
+            featuredAsset: null,
+            translations: [
+                {
+                    id: `tr-${id}`,
+                    languageCode: 'zh_Hans',
+                    name,
+                    slug: id,
+                    description: '',
+                },
+            ],
+        });
+
+        it('disables grip handle when there is only one category in the level', async () => {
+            const { container } = await renderCategories({
+                customCollections: [createCategoryFixture('cat-1', '单一分类', 0)],
+            });
+            const handle = container.querySelector<HTMLButtonElement>(
+                'button[aria-label="拖动分类 单一分类 排序"]',
+            );
+            expect(handle).not.toBeNull();
+            expect(handle?.disabled).toBe(true);
+            expect(handle?.getAttribute('title')).toContain('同级至少需要2个分类才可排序');
+        });
+
+        it('reorders top-level categories using keyboard ArrowDown and triggers MoveCatalogCollection', async () => {
+            const collections = [
+                createCategoryFixture('cat-1', '精品白酒', 0, 'root'),
+                createCategoryFixture('cat-2', '坦克咖啡', 1, 'root'),
+                createCategoryFixture('cat-3', '签证留学', 2, 'root'),
+            ];
+            const { container, requests } = await renderCategories({
+                customCollections: collections,
+            });
+
+            const handle = container.querySelector<HTMLButtonElement>(
+                'button[aria-label="拖动分类 精品白酒 排序"]',
+            );
+            expect(handle).not.toBeNull();
+            expect(handle?.disabled).toBe(false);
+
+            await act(async () => {
+                handle?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+            });
+
+            expect(requests).toHaveBeenCalledWith(
+                'MoveCatalogCollection',
+                expect.objectContaining({
+                    input: {
+                        collectionId: 'cat-1',
+                        parentId: 'root',
+                        index: 1,
+                    },
+                }),
+            );
+            expect(container.textContent).toContain('已调整分类《精品白酒》排序');
+        });
+
+        it('reorders top-level categories using keyboard ArrowUp and triggers MoveCatalogCollection', async () => {
+            const collections = [
+                createCategoryFixture('cat-1', '精品白酒', 0, 'root'),
+                createCategoryFixture('cat-2', '坦克咖啡', 1, 'root'),
+            ];
+            const { container, requests } = await renderCategories({
+                customCollections: collections,
+            });
+
+            const handle = container.querySelector<HTMLButtonElement>(
+                'button[aria-label="拖动分类 坦克咖啡 排序"]',
+            );
+            expect(handle).not.toBeNull();
+
+            await act(async () => {
+                handle?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+            });
+
+            expect(requests).toHaveBeenCalledWith(
+                'MoveCatalogCollection',
+                expect.objectContaining({
+                    input: {
+                        collectionId: 'cat-2',
+                        parentId: 'root',
+                        index: 0,
+                    },
+                }),
+            );
+        });
+
+        it('reorders subcategories within their parent category using keyboard', async () => {
+            const collections = [
+                createCategoryFixture('parent-1', '精品茶饮', 0, 'root'),
+                createCategoryFixture('child-1', '龙井绿茶', 0, 'parent-1'),
+                createCategoryFixture('child-2', '大红袍乌龙', 1, 'parent-1'),
+            ];
+            const { container, requests, click } = await renderCategories({
+                customCollections: collections,
+            });
+
+            // First expand parent-1
+            await click('展开一级分类 精品茶饮');
+
+            const childHandle = container.querySelector<HTMLButtonElement>(
+                'button[aria-label="拖动分类 龙井绿茶 排序"]',
+            );
+            expect(childHandle).not.toBeNull();
+
+            await act(async () => {
+                childHandle?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+            });
+
+            expect(requests).toHaveBeenCalledWith(
+                'MoveCatalogCollection',
+                expect.objectContaining({
+                    input: {
+                        collectionId: 'child-1',
+                        parentId: 'parent-1',
+                        index: 1,
+                    },
+                }),
+            );
+        });
+
+        it('supports drag and drop reordering between siblings', async () => {
+            const collections = [
+                createCategoryFixture('cat-1', '分类A', 0, 'root'),
+                createCategoryFixture('cat-2', '分类B', 1, 'root'),
+            ];
+            const { container, requests } = await renderCategories({
+                customCollections: collections,
+            });
+
+            const handleA = container.querySelector<HTMLButtonElement>(
+                'button[aria-label="拖动分类 分类A 排序"]',
+            );
+            const targetRowB = container.querySelector<HTMLDivElement>('div[data-collection-id="cat-2"]');
+            expect(handleA).not.toBeNull();
+            expect(targetRowB).not.toBeNull();
+
+            if (targetRowB) {
+                targetRowB.getBoundingClientRect = () => ({
+                    top: 0,
+                    bottom: 60,
+                    height: 60,
+                    left: 0,
+                    right: 300,
+                    width: 300,
+                    x: 0,
+                    y: 0,
+                    toJSON: () => {},
+                });
+            }
+
+            const dataTransfer = {
+                data: {} as Record<string, string>,
+                setData: (k: string, v: string) => {
+                    dataTransfer.data[k] = v;
+                },
+                getData: (k: string) => dataTransfer.data[k],
+                setDragImage: () => {},
+                effectAllowed: 'all',
+                dropEffect: 'none',
+            };
+
+            const createDragEvent = (type: string, clientY = 0) => {
+                const event = new Event(type, { bubbles: true, cancelable: true });
+                Object.assign(event, { dataTransfer, clientY });
+                return event;
+            };
+
+            await act(async () => {
+                handleA?.dispatchEvent(createDragEvent('dragstart', 0));
+            });
+
+            // Drag over bottom half of B (clientY: 50 > midpoint 30) -> placement 'after'
+            await act(async () => {
+                targetRowB?.dispatchEvent(createDragEvent('dragover', 50));
+            });
+
+            expect(targetRowB?.querySelector('[data-drop-position="after"]')).not.toBeNull();
+
+            await act(async () => {
+                targetRowB?.dispatchEvent(createDragEvent('drop', 50));
+            });
+
+            expect(requests).toHaveBeenCalledWith(
+                'MoveCatalogCollection',
+                expect.objectContaining({
+                    input: {
+                        collectionId: 'cat-1',
+                        parentId: 'root',
+                        index: 1,
+                    },
+                }),
+            );
+        });
+
+        it('rolls back and displays error when MoveCatalogCollection fails', async () => {
+            const collections = [
+                createCategoryFixture('cat-1', '精品白酒', 0, 'root'),
+                createCategoryFixture('cat-2', '坦克咖啡', 1, 'root'),
+            ];
+            const { container } = await renderCategories({
+                customCollections: collections,
+                moveError: true,
+            });
+
+            const handle = container.querySelector<HTMLButtonElement>(
+                'button[aria-label="拖动分类 精品白酒 排序"]',
+            );
+            await act(async () => {
+                handle?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+            });
+
+            expect(container.textContent).toContain('分类排序调整失败，请稍后重试');
+        });
     });
 });
