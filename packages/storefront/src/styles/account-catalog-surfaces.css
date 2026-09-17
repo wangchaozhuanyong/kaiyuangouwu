@@ -510,13 +510,17 @@
     justify-content: flex-start;
 }
 .category-page .primary-categories button {
-    width: 68px;
+    width: auto;
     min-width: 68px;
+    max-width: 90px;
+    padding-inline: 4px;
 }
 @media (max-width: 1023px) {
     .category-page .primary-category-strip .primary-categories button {
-        width: min(68px, calc((100% - 12px) / 4));
-        min-width: 0;
+        width: auto;
+        min-width: 68px;
+        max-width: 90px;
+        padding-inline: 4px;
     }
     html[lang='en'] .category-page .primary-categories button {
         width: min(80px, calc((100% - 12px) / 4));

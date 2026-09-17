@@ -316,7 +316,7 @@ export function ProductVariantImage({ variant, alt }: { variant: ProductVariant;
     );
 }
 
-export { SafeImage } from '../safe-image';
+export { isImageAlreadyDecoded, markImageDecoded, SafeImage } from '../safe-image';
 
 export function OrderImage({ order }: { order: OrderSummary }) {
     const variant = order.lines[0]?.productVariant;
