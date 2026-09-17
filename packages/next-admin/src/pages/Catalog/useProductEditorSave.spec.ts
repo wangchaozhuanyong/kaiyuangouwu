@@ -340,4 +340,99 @@ describe('product save orchestration', () => {
         expect(input.controls.showNotice).not.toHaveBeenCalled();
         expect(input.controls.setSaving).toHaveBeenLastCalledWith(false);
     });
+
+    it('rejects adding new variants when product has no option templates selected', async () => {
+        const input = fixture();
+        input.draft.variants.push({
+            sku: 'SKU-NEW',
+            name: '新规格',
+            price: '20.00',
+            stockOnHand: 5,
+            stockAllocated: 0,
+            enabled: true,
+            digitalDeliveryMode: 'manual_service',
+            digitalStockPolicy: 'limited',
+            optionIds: [],
+            isNew: true,
+        });
+
+        await useProductEditorSave(input).handleSave();
+
+        expect(input.controls.showError).toHaveBeenCalledWith(
+            expect.stringContaining('普通单品未关联规格模板时仅支持 1 个销售规格'),
+        );
+        for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+    });
+
+    it('rejects saving when option templates exist but variant has no options', async () => {
+        const input = fixture();
+        input.draft.selectedOptionGroupIds = ['group-1'];
+        input.draft.variants = [
+            {
+                id: 'variant-1',
+                sku: 'SKU-1',
+                name: '旧单品',
+                price: '10.00',
+                stockOnHand: 5,
+                stockAllocated: 0,
+                enabled: true,
+                digitalDeliveryMode: 'manual_service',
+                digitalStockPolicy: 'limited',
+                optionIds: [],
+            },
+            {
+                sku: 'SKU-2',
+                name: '新规格',
+                price: '20.00',
+                stockOnHand: 5,
+                stockAllocated: 0,
+                enabled: true,
+                digitalDeliveryMode: 'manual_service',
+                digitalStockPolicy: 'limited',
+                optionIds: ['opt-1'],
+                isNew: true,
+            },
+        ];
+
+        await useProductEditorSave(input).handleSave();
+
+        expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('未绑定任何规格选项'));
+        for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+    });
+
+    it('rejects saving when multiple new variants share identical option combination', async () => {
+        const input = fixture();
+        input.draft.selectedOptionGroupIds = ['group-1'];
+        input.draft.variants = [
+            {
+                sku: 'SKU-1',
+                name: '规格1',
+                price: '10.00',
+                stockOnHand: 5,
+                stockAllocated: 0,
+                enabled: true,
+                digitalDeliveryMode: 'manual_service',
+                digitalStockPolicy: 'limited',
+                optionIds: ['opt-1'],
+                isNew: true,
+            },
+            {
+                sku: 'SKU-2',
+                name: '规格2',
+                price: '20.00',
+                stockOnHand: 5,
+                stockAllocated: 0,
+                enabled: true,
+                digitalDeliveryMode: 'manual_service',
+                digitalStockPolicy: 'limited',
+                optionIds: ['opt-1'],
+                isNew: true,
+            },
+        ];
+
+        await useProductEditorSave(input).handleSave();
+
+        expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('重复的规格选项组合'));
+        for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+    });
 });

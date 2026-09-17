@@ -16,3 +16,19 @@ export const findUnusedSystemOptionGroupIds = (
         )
         .map(group => group.id);
 };
+
+export const splitOptionValues = (value: string): string[] =>
+    value
+        .split(/[，,\n]/)
+        .map(item => item.trim())
+        .filter((item, index, all) => item.length > 0 && all.indexOf(item) === index);
+
+export const toOptionGroupCode = (value: string, prefix = 'option-group', index = 0): string => {
+    const normalized = value
+        .trim()
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    return normalized || `${prefix}-${Date.now().toString(36)}${index ? `-${index + 1}` : ''}`;
+};

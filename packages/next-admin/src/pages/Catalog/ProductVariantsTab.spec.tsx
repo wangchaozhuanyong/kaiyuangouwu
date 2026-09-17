@@ -10,8 +10,8 @@ const editorState = vi.hoisted(() => ({
     activeCurrencyCode: 'CNY',
     effectiveFulfillmentType: 'physical',
     variants: [],
-    selectedOptionGroupIds: [],
-    knownOptionGroups: {},
+    selectedOptionGroupIds: [] as string[],
+    knownOptionGroups: {} as Record<string, any>,
     optionGroupSearch: '',
     optionGroupPage: 0,
     optionGroupPageSize: 20,
@@ -30,6 +30,11 @@ const editorState = vi.hoisted(() => ({
     formErrors: {},
     isCreateMode: false,
     productData: { product: { id: 'product-1' } },
+    isOptionTemplatesOpen: false,
+    setIsOptionTemplatesOpen: vi.fn(),
+    isQuickCreateSpecOpen: false,
+    setIsQuickCreateSpecOpen: vi.fn(),
+    handleApplyOptionGroup: vi.fn(),
 }));
 
 vi.mock('./ProductEditorContext', () => ({ useProductEditor: () => editorState }));
@@ -65,4 +70,30 @@ describe('ProductVariantsTab explicit store assignments', () => {
             expect(container.textContent).toContain(`已发布 ${ids.length} 个店铺`);
         },
     );
+
+    it('renders quick create button and displays imported exclusive specification badges', () => {
+        editorState.selectedOptionGroupIds = ['import-group-1'];
+        editorState.knownOptionGroups = {
+            'import-group-1': {
+                id: 'import-group-1',
+                code: 'import-sku-5905',
+                name: '导入规格',
+                options: [
+                    { id: 'opt-box', code: 'box', name: '单盒' },
+                    { id: 'opt-carton', code: 'carton', name: '整条' },
+                ],
+            },
+        };
+
+        const container = document.createElement('div');
+        container.innerHTML = renderToStaticMarkup(
+            <FeatureHelpProvider>
+                <ProductVariantsTab />
+            </FeatureHelpProvider>,
+        );
+
+        expect(container.textContent).toContain('快速新建规格');
+        expect(container.textContent).toContain('商品专属规格');
+        expect(container.textContent).toContain('单盒 / 整条');
+    });
 });
