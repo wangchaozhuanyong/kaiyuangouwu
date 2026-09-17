@@ -53,5 +53,41 @@ describe('ProductEditorSidebar', () => {
         expect(html).toContain('AI 生成主图');
         expect(html).toContain('待保存');
         expect(html).toContain('虚拟商品');
+        expect(html).toContain('aspect-square');
+        expect(html).toContain('object-contain');
+        expect(html).not.toContain('aspect-[4/3]');
+    });
+
+    it('renders 1:1 aspect-square placeholder when no featured asset is selected', () => {
+        vi.mocked(useProductEditor).mockReturnValue({
+            isCreateMode: true,
+            productData: undefined,
+            productName: '',
+            setProductName: vi.fn(),
+            slug: '',
+            setSlug: vi.fn(),
+            enabled: true,
+            setEnabled: vi.fn(),
+            featuredAssetId: null,
+            setFeaturedAssetId: vi.fn(),
+            featuredAssetPreview: null,
+            setFeaturedAssetPreview: vi.fn(),
+            setIsAssetPickerOpen: vi.fn(),
+            setAssetPickerMode: vi.fn(),
+            effectiveFulfillmentType: 'digital',
+            variants: [],
+            selectedFacetValueIds: [],
+            selectedCollectionIds: [],
+            formErrors: {},
+            setFormErrors: vi.fn(),
+            isDirty: false,
+            saving: false,
+        } as never);
+
+        const html = renderToStaticMarkup(<ProductEditorSidebar />);
+
+        expect(html).toContain('选择商品主图');
+        expect(html).toContain('aspect-square');
+        expect(html).not.toContain('aspect-[4/3]');
     });
 });

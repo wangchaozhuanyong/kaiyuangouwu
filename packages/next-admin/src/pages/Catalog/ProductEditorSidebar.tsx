@@ -117,11 +117,11 @@ export function ProductEditorSidebar() {
                             </div>
                         </div>
                         {featuredAssetPreview ? (
-                            <div className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                            <div className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                                 <img
                                     src={featuredAssetPreview}
                                     alt="商品主图预览"
-                                    className="h-full w-full object-cover"
+                                    className="h-full w-full object-contain"
                                 />
                                 <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-linear-to-t from-slate-950/80 to-transparent px-3 pb-2.5 pt-8 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                                     <span className="truncate text-[10px]">Asset #{featuredAssetId}</span>
@@ -148,7 +148,7 @@ export function ProductEditorSidebar() {
                                     setAssetPickerMode('FEATURED');
                                     setIsAssetPickerOpen(true);
                                 }}
-                                className="flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-4 text-center transition-colors hover:border-blue-400 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-4 text-center transition-colors hover:border-blue-400 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 <ImageIcon className="h-7 w-7 text-slate-300" />
                                 <span className="text-xs font-bold text-slate-600">选择商品主图</span>
