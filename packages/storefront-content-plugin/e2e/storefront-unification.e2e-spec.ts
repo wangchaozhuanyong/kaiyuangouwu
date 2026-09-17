@@ -576,13 +576,13 @@ describe('unified storefront Admin API to Shop API', () => {
                                 );
                                 const overlay = await page.locator('.auth-hero').evaluate(hero => ({
                                     background: getComputedStyle(hero, '::after').backgroundImage,
-                                    pointerEvents: getComputedStyle(hero, '::after').pointerEvents,
+                                    display: getComputedStyle(hero, '::after').display,
                                     color: getComputedStyle(hero)
                                         .getPropertyValue('--auth-hero-overlay-color')
                                         .trim(),
                                 }));
-                                expect(overlay.background).toContain('linear-gradient');
-                                expect(overlay.pointerEvents).toBe('none');
+                                expect(['none', '']).toContain(overlay.background);
+                                expect(overlay.display).toBe('none');
                                 expect(overlay.color.toLowerCase()).toBe(index === 0 ? '#203346' : '#f6f2ea');
                                 const heroBox = await page.locator('.auth-hero').boundingBox();
                                 const copyBox = await page.locator('.auth-hero-copy').boundingBox();

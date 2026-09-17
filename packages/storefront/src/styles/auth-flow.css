@@ -1989,18 +1989,9 @@
 
 /* Managed copy sits directly inside the image; content and colors remain store-managed. */
 .auth-page .auth-hero-managed::after {
-    position: absolute;
-    inset: auto 0 0;
-    height: 55%;
-    display: block;
-    background: linear-gradient(
-        180deg,
-        transparent,
-        color-mix(in srgb, var(--auth-hero-overlay-color) 82%, transparent) 55%,
-        color-mix(in srgb, var(--auth-hero-overlay-color) 96%, transparent)
-    );
-    content: '';
-    pointer-events: none;
+    display: none;
+    background: none;
+    content: none;
 }
 
 .auth-hero-managed .auth-hero-tags {
@@ -2013,10 +2004,18 @@
     align-self: auto;
     justify-items: start;
     gap: 6px;
-    background: none;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
+    background: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+.auth-page .auth-hero-message-managed .auth-hero-copy > h2,
+.auth-page .auth-hero-message-managed .auth-hero-copy > p {
+    background: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
 }
 
 .auth-page .auth-hero-message-managed .auth-hero-kicker:empty,
@@ -2094,11 +2093,12 @@
         max-width: 100%;
         margin: 0;
         display: -webkit-box;
-        color: color-mix(in srgb, var(--auth-hero-text-color) 90%, transparent);
+        color: var(--auth-hero-text-color);
         font-size: 13px;
         line-height: 1.4;
         text-align: left;
         -webkit-line-clamp: 2;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.4);
     }
 
     .auth-page .auth-hero-message-managed .auth-hero-tags {
@@ -2192,7 +2192,8 @@
 }
 
 .auth-page .auth-hero-message-managed h2 {
-    text-shadow: none;
+    color: var(--auth-hero-text-color);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.65), 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 
 .auth-page .auth-hero-message-managed .auth-hero-eyebrow,
