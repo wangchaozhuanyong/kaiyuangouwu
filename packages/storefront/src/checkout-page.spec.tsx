@@ -784,7 +784,6 @@ describe('CheckoutPage submission authentication and recovery', () => {
             code: 'standard-shipping',
             name: '标准快递',
             description: '全场统一运费',
-            price: 500,
             priceWithTax: 500,
             metadata: {},
         };
@@ -793,7 +792,6 @@ describe('CheckoutPage submission authentication and recovery', () => {
             code: 'free-shipping-200',
             name: '满200RM包邮',
             description: '满额免邮',
-            price: 0,
             priceWithTax: 0,
             metadata: {},
         };
@@ -802,7 +800,6 @@ describe('CheckoutPage submission authentication and recovery', () => {
             code: 'store-pickup',
             name: '上门自提',
             description: '门店自提',
-            price: 0,
             priceWithTax: 0,
             metadata: {},
         };
@@ -824,7 +821,6 @@ describe('CheckoutPage submission authentication and recovery', () => {
                 code: 'express-shipping',
                 name: '特快专递',
                 description: '次日达',
-                price: 1500,
                 priceWithTax: 1500,
                 metadata: {},
             };
