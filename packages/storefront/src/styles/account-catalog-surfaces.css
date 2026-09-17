@@ -510,17 +510,19 @@
     justify-content: flex-start;
 }
 .category-page .primary-categories button {
-    width: auto;
-    min-width: 68px;
-    max-width: 90px;
-    padding-inline: 4px;
+    width: 76px;
+    min-width: 76px;
+    max-width: 76px;
+    flex: 0 0 76px;
+    padding-inline: 2px;
 }
 @media (max-width: 1023px) {
     .category-page .primary-category-strip .primary-categories button {
-        width: auto;
-        min-width: 68px;
-        max-width: 90px;
-        padding-inline: 4px;
+        width: 76px;
+        min-width: 76px;
+        max-width: 76px;
+        flex: 0 0 76px;
+        padding-inline: 2px;
     }
     html[lang='en'] .category-page .primary-categories button {
         width: min(80px, calc((100% - 12px) / 4));
