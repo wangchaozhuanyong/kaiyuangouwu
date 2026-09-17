@@ -157,6 +157,28 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
                                 ],
                             },
                         });
+                    } else if (operation.operationName === 'GetCatalogChannelAssignments') {
+                        observer.next({
+                            data: {
+                                catalogProductChannelAssignments: {
+                                    totalItems: 1,
+                                    channels: [
+                                        { id: 'channel-default', code: '__default_channel__', isDefault: true },
+                                        { id: 'channel-branch-1', code: 'branch-store', isDefault: false },
+                                    ],
+                                    items: [
+                                        {
+                                            id: 'product-1',
+                                            name: '白利群2',
+                                            enabled: true,
+                                            channels: [
+                                                { id: 'channel-default', code: '__default_channel__', isDefault: true },
+                                            ],
+                                        },
+                                    ],
+                                },
+                            },
+                        });
                     } else {
                         observer.error(new Error(`Unexpected operation: ${operation.operationName}`));
                         return;
@@ -219,6 +241,31 @@ describe('CatalogModule category columns', () => {
         expect(headers).toContain('二级分类');
         expect(cells).toContain('正品烟草');
         expect(cells).toContain('香烟');
+    });
+
+    it('renders sales channels column and detects unassigned products', async () => {
+        const container = await renderCatalog({ channelCode: '__default_channel__' });
+        const headers = Array.from(container.querySelectorAll('thead th')).map(header =>
+            header.textContent?.trim(),
+        );
+
+        expect(headers).toContain('销售店铺');
+        expect(container.textContent).toContain('仅默认店铺 (未分发)');
+        expect(container.textContent).toContain('店铺分配看板');
+    });
+
+    it('supports selecting products and reveals floating bulk channel bar', async () => {
+        const container = await renderCatalog({ channelCode: '__default_channel__' });
+        const selectAllCheckbox = container.querySelector<HTMLInputElement>('thead th input[type="checkbox"]');
+        expect(selectAllCheckbox).not.toBeNull();
+
+        await act(async () => {
+            selectAllCheckbox!.click();
+        });
+
+        expect(container.textContent).toContain('已勾选 1 个商品');
+        expect(container.textContent).toContain('批量上架到店铺');
+        expect(container.textContent).toContain('从店铺下架');
     });
 });
 
