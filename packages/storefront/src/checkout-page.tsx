@@ -373,6 +373,10 @@ export function CheckoutPage({
             setShippingPickerOpen(false);
             return;
         }
+        const previousShippingId = selectedShippingId;
+        // 0ms 乐观响应：立即切换选中态与高亮
+        setSelectedShippingId(shippingMethodId);
+        shippingSelectionRef.current = shippingMethodId;
         setShippingUpdating(true);
         setShippingError(null);
         const requestKey = shippingKey;
@@ -382,12 +386,12 @@ export function CheckoutPage({
                 await api.setShippingMethod(shippingMethodId);
                 const latestCart = await api.cart();
                 if (!shippingMountedRef.current || currentShippingKeyRef.current !== requestKey) return;
-                shippingSelectionRef.current = shippingMethodId;
-                setSelectedShippingId(shippingMethodId);
                 shippingCallbacksRef.current.onCartChange(latestCart);
                 setShippingPickerOpen(false);
             } catch (requestError) {
                 if (!shippingMountedRef.current || currentShippingKeyRef.current !== requestKey) return;
+                setSelectedShippingId(previousShippingId);
+                shippingSelectionRef.current = previousShippingId;
                 setPreparedShippingKey('');
                 setShippingError(
                     requestError instanceof Error
@@ -1002,12 +1006,24 @@ export function CheckoutPage({
                                             <strong className="flex items-center gap-1.5">
                                                 <span>{method.name}</span>
                                                 {isFree && (
-                                                    <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                                                    <span
+                                                        className={[
+                                                            'inline-flex items-center rounded-full border',
+                                                            'border-emerald-200 bg-emerald-50 px-2 py-0.5',
+                                                            'text-[10.5px] font-bold text-emerald-700',
+                                                        ].join(' ')}
+                                                    >
                                                         {isZh ? '免运费' : 'Free'}
                                                     </span>
                                                 )}
                                                 {isPickup && !isFree && (
-                                                    <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
+                                                    <span
+                                                        className={[
+                                                            'inline-flex items-center rounded-full border',
+                                                            'border-blue-200 bg-blue-50 px-2 py-0.5',
+                                                            'text-[10.5px] font-bold text-blue-700',
+                                                        ].join(' ')}
+                                                    >
                                                         {isZh ? '门店自提' : 'Pickup'}
                                                     </span>
                                                 )}
@@ -1028,7 +1044,9 @@ export function CheckoutPage({
                             })}
                         </fieldset>
                         {shippingUpdating && (
-                            <p role="status">{isZh ? '正在更新配送方式…' : 'Updating delivery…'}</p>
+                            <p role="status" className="mt-3 text-center text-xs text-blue-600 animate-pulse">
+                                {isZh ? '正在同步配送与运费…' : 'Updating delivery…'}
+                            </p>
                         )}
                         {shippingError && (
                             <>

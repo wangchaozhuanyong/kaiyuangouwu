@@ -211,6 +211,26 @@ export function ProductVariantsTab() {
                         </div>
                     </summary>
                     <div className="space-y-3 border-t border-slate-100 p-4 sm:p-5">
+                        {variants.length <= 1 &&
+                            (variants[0]?.optionIds.length ?? 0) === 0 &&
+                            selectedReusableOptionGroupIds.length > 0 && (
+                                <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                                    <div>
+                                        <strong className="font-bold">
+                                            💡 当前为普通单品（1 个销售规格）：
+                                        </strong>
+                                        未生成矩阵时将直接按普通单品保存，不会强制关联选中的模板。若需多规格，请点击右侧【生成
+                                        SKU 矩阵】。
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedOptionGroupIds([])}
+                                        className="shrink-0 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-amber-800 hover:bg-slate-50 dark:border-amber-700 dark:bg-slate-800 dark:text-amber-300 dark:hover:bg-slate-700 cursor-pointer shadow-2xs"
+                                    >
+                                        清空已选模板
+                                    </button>
+                                </div>
+                            )}
                         <div className="flex items-center justify-between gap-3">
                             <div>
                                 <div className="text-xs font-bold text-slate-800">选择规格模板</div>
