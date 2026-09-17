@@ -28,7 +28,6 @@ import {
 } from '@vendure/dashboard';
 import {
     ArrowDown,
-    ArrowRight,
     ArrowUp,
     Headphones,
     KeyRound,
@@ -257,9 +256,9 @@ function StorefrontClientPluginPage() {
                             </span>
                         </div>
                     ) : (
-                        <div className="grid gap-3 2xl:grid-cols-2">
+                        <div className="grid gap-3 md:grid-cols-2">
                             {!valid ? (
-                                <Alert variant="destructive" className="2xl:col-span-2">
+                                <Alert variant="destructive" className="col-span-full">
                                     <AlertDescription>
                                         插件配置不完整，请选择有效位置；使用“指定分类”时至少选择一个分类。
                                     </AlertDescription>
@@ -426,35 +425,17 @@ function InstalledPluginEditor({
         });
     return (
         <article className="rounded-lg border bg-background p-4">
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.7fr)_auto] lg:items-center">
-                <div className="min-w-0">
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                        <Puzzle className="size-4 text-primary" aria-hidden="true" />
+                        <Puzzle className="size-4 shrink-0 text-primary" aria-hidden="true" />
                         <strong className="text-sm">{name}</strong>
+                        <Badge variant="outline">顺序 {index + 1}</Badge>
                         {version ? <Badge variant="outline">v{version}</Badge> : null}
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-                    <span className="mt-1 block text-xs text-muted-foreground">{code}</span>
+                    <p className="mt-1 text-xs text-muted-foreground line-clamp-1">{description}</p>
                 </div>
-                <div>
-                    <span className="mb-1.5 block text-sm font-medium">客户端显示位置</span>
-                    <Select value={placement} onValueChange={value => value && onPlacementChange(value)}>
-                        <SelectTrigger className="w-full">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {clientPluginPlacementOptions.map(option => (
-                                <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <span className="mt-1 block text-xs text-muted-foreground">
-                        {selectedPlacement?.description}
-                    </span>
-                </div>
-                <div className="flex items-center justify-end gap-1">
+                <div className="flex shrink-0 items-center gap-0.5">
                     <Button
                         type="button"
                         size="icon"
@@ -475,7 +456,6 @@ function InstalledPluginEditor({
                     >
                         <ArrowDown className="size-4" />
                     </Button>
-                    <ArrowRight className="mx-1 size-4 text-muted-foreground" aria-hidden="true" />
                     <Button
                         type="button"
                         size="icon"
@@ -487,6 +467,24 @@ function InstalledPluginEditor({
                     </Button>
                 </div>
             </div>
+            <div className="mt-3">
+                <span className="mb-1 block text-xs font-medium">展示位置</span>
+                <Select value={placement} onValueChange={value => value && onPlacementChange(value)}>
+                    <SelectTrigger className="w-full">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {clientPluginPlacementOptions.map(option => (
+                            <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                    {selectedPlacement?.description}
+                </span>
+            </div>
             <div className="mt-4 border-t pt-4">
                 {placement === 'BUSINESS_SERVICES_MAIN' ? (
                     <div className="rounded-md border border-dashed p-4">
@@ -496,7 +494,7 @@ function InstalledPluginEditor({
                         </span>
                     </div>
                 ) : (
-                    <div className="grid gap-4 lg:grid-cols-[minmax(220px,0.35fr)_minmax(0,1fr)]">
+                    <div className="space-y-4">
                         <div>
                             <span className="mb-1.5 block text-sm font-medium">显示分类范围</span>
                             <Select
