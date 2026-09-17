@@ -291,7 +291,16 @@ img {
 }
 
 .safe-image {
+    /* Let the browser paint cached and progressively decoded images immediately. */
+    opacity: 1;
+    transition: transform 220ms ease;
+}
+
+.safe-image-frame.has-placeholder .safe-image:not(.is-loaded) {
     opacity: 0;
+}
+
+.safe-image-frame.has-placeholder .safe-image {
     transition:
         opacity 180ms ease,
         transform 220ms ease;

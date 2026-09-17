@@ -39,6 +39,19 @@ export function SafeImage(props: SafeImageProps) {
     );
 }
 
+const decodedImageUrls = new Set<string>();
+
+export function isImageAlreadyDecoded(src?: string | null, fallbackSrc?: string | null): boolean {
+    if (typeof window === 'undefined') return false;
+    if (src && decodedImageUrls.has(src)) return true;
+    if (fallbackSrc && decodedImageUrls.has(fallbackSrc)) return true;
+    return false;
+}
+
+export function markImageDecoded(url?: string | null): void {
+    if (url) decodedImageUrls.add(url);
+}
+
 function SafeImageSource({
     src,
     fallbackSrc,
@@ -58,14 +71,14 @@ function SafeImageSource({
     const [failed, setFailed] = useState(false);
     const [fallbackHeight, setFallbackHeight] = useState<number>();
     const [timedOut, setTimedOut] = useState(false);
-    const [loadedCandidate, setLoadedCandidate] = useState('');
-    const imageRef = useRef<HTMLImageElement>(null);
-    const active = useRef(true);
-    const exceededBudget = useRef(false);
     const sources = imageSources(currentSrc, responsive ? imageKind : undefined, imageProps.sizes);
     const sourceKey = [sources.src, sources.srcSet ?? imageProps.srcSet ?? '', sources.sizes ?? ''].join(
         '\u0000',
     );
+    const [loadedCandidate, setLoadedCandidate] = useState('');
+    const imageRef = useRef<HTMLImageElement>(null);
+    const active = useRef(true);
+    const exceededBudget = useRef(false);
     const latestSourceKey = useRef(sourceKey);
     latestSourceKey.current = sourceKey;
     const loaded = loadedCandidate.startsWith(sourceKey + '\u0001') && !failed;
@@ -92,6 +105,9 @@ function SafeImageSource({
     function reveal(image: HTMLImageElement, onDecoded?: () => void) {
         if (!image.complete || image.naturalWidth === 0) return;
         const candidate = imageCandidateIdentity(image);
+        markImageDecoded(image.currentSrc || image.src);
+        markImageDecoded(sources.src);
+        markImageDecoded(currentSrc);
         void decodeImageElement(image)
             .then(() => {
                 if (
@@ -101,6 +117,9 @@ function SafeImageSource({
                     imageCandidateIdentity(image) !== candidate
                 )
                     return;
+                markImageDecoded(image.currentSrc || image.src);
+                markImageDecoded(sources.src);
+                markImageDecoded(currentSrc);
                 setLoadedCandidate(sourceKey + '\u0001' + candidate);
                 setTimedOut(false);
                 onReady(image.currentSrc || image.src);

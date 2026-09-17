@@ -465,7 +465,11 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                                     copy.noDatabase,
                                     copy.noUpload,
                                     copy.localGeneration,
-                                    copy.persistentLocal,
+                                    vault.exists
+                                        ? isZh
+                                            ? '已启用本地加密保存（AES-GCM）'
+                                            : 'Encrypted saving is active (AES-GCM)'
+                                        : copy.persistentLocal,
                                 ].map(item => (
                                     <li className="flex list-none items-start gap-2" key={item}>
                                         <Check
@@ -481,7 +485,11 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                                     className="mr-1 inline size-4 align-text-bottom"
                                     aria-hidden="true"
                                 />
-                                {copy.publicDevice}
+                                {vault.exists
+                                    ? isZh
+                                        ? '已启用加密保存，锁定或离开页面后需口令解锁。请下载加密备份防丢。解锁期间仍应防范恶意脚本和浏览器扩展，仅在可信设备上使用。'
+                                        : 'Encrypted saving is active. Passphrase is required after idle or leaving. Download an encrypted backup. Malicious scripts or extensions can still read data while unlocked. Use a trusted device.'
+                                    : copy.publicDevice}
                             </p>
                         </div>
                     ) : null}

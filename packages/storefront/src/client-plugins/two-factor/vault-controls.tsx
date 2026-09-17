@@ -46,10 +46,20 @@ export function VaultControls({
                       : text('当前为临时模式', 'Temporary mode')}
             </strong>
             <p className="my-2 text-sm text-slate-600">
-                {text(
-                    '闲置 5 分钟、离开页面或退出登录后清除当前解锁状态。临时账号不会保留；加密账号下次需口令解锁。',
-                    'Locks after 5 minutes idle, leaving or signing out. Temporary entries are lost; saved entries need your passphrase.',
-                )}
+                {vault.unlocked
+                    ? text(
+                          '已启用本地加密保护。闲置 5 分钟、离开页面或退出登录后将自动锁定；离开设备前也可点击“立即上锁”。',
+                          'Local encryption active. Locks automatically after 5 minutes idle, leaving or signing out; you can also lock manually before leaving.',
+                      )
+                    : vault.exists
+                      ? text(
+                            '账号数据已安全锁定隐藏。请输入独立口令解锁以查看和管理。',
+                            'Accounts are securely locked. Enter your passphrase to unlock and manage.',
+                        )
+                      : text(
+                            '临时账号仅保存在当前页面内存中，闲置 5 分钟、离开页面或刷新将清除。建议启用加密保存。',
+                            'Temporary accounts stay in memory only and clear after 5 minutes idle or leaving. Enable encrypted saving to persist.',
+                        )}
             </p>
             {vault.legacy && (
                 <p className="text-sm text-amber-800" role="status">
@@ -80,7 +90,7 @@ export function VaultControls({
                         {text('下载加密备份', 'Download encrypted backup')}
                     </button>
                     <button type="button" className={buttonClass} onClick={vault.lock}>
-                        {text('立即锁定', 'Lock now')}
+                        {text('立即上锁', 'Lock now')}
                     </button>
                 </div>
             ) : vault.available && !vault.exists && !showSetup ? (
