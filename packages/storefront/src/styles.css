@@ -301,13 +301,14 @@ img {
 }
 
 .safe-image-frame.has-placeholder .safe-image {
-    transition:
-        opacity 180ms ease,
-        transform 220ms ease;
+    transition: opacity 180ms ease, transform 220ms ease;
 }
 
 .safe-image.is-loaded {
     opacity: 1;
+}
+.safe-image-frame.is-loaded .safe-image {
+    transition: transform 220ms ease;
 }
 .safe-image-frame.is-priority .safe-image {
     transition: none;
@@ -323,10 +324,11 @@ img {
     background-position: center;
     transition: opacity 180ms ease;
 }
-.safe-image-frame.is-loaded > .safe-image-fallback {
-    opacity: 0;
-}
+.safe-image-frame.is-loaded > .safe-image-fallback,
 .safe-image-frame.is-priority > .safe-image-fallback {
+    opacity: 0;
+    display: none;
+    pointer-events: none;
     transition: none;
 }
 .safe-image-fallback > svg {
