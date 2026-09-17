@@ -232,35 +232,11 @@
     background: #071c22;
 }
 
-.auth-hero::after {
-    position: absolute;
-    z-index: 1;
-    inset: 0;
-    background:
-        radial-gradient(
-            ellipse 70% 100% at 22% 44%,
-            color-mix(in srgb, var(--auth-hero-overlay-color) 22%, transparent) 0%,
-            transparent 70%
-        ),
-        linear-gradient(
-            110deg,
-            color-mix(in srgb, var(--auth-hero-overlay-color) 76%, transparent) 0%,
-            color-mix(in srgb, var(--auth-hero-overlay-color) 28%, transparent) 58%,
-            color-mix(in srgb, var(--auth-hero-overlay-color) 52%, transparent) 100%
-        );
-    content: '';
-    pointer-events: none;
-}
-
+.auth-hero::after,
 .auth-hero::before {
-    position: absolute;
-    z-index: 2;
-    inset: 0;
-    background-image: radial-gradient(rgba(255, 255, 255, 0.28) 0.7px, transparent 0.7px);
-    background-size: 18px 18px;
-    content: '';
-    opacity: 0.11;
-    pointer-events: none;
+    display: none;
+    background: none;
+    content: none;
 }
 
 .auth-hero > .safe-image-frame {
