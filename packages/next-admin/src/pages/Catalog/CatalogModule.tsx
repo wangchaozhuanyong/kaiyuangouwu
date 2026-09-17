@@ -14,7 +14,6 @@ import {
     Plus,
     RefreshCw,
     Search,
-    Store,
     Trash2,
     X,
     Layers3,
@@ -301,9 +300,14 @@ export function CatalogModule() {
     const [assignProductsToChannel, { loading: bulkAssigning }] = useMutation(ASSIGN_PRODUCTS_TO_CHANNEL);
     const [removeProductsFromChannel, { loading: bulkRemoving }] = useMutation(REMOVE_PRODUCTS_FROM_CHANNEL);
 
-    useEffect(() => {
+    const [prevFilterKey, setPrevFilterKey] = useState(
+        `${page}-${pageSize}-${statusFilter}-${categoryId}-${searchTerm}-${channelParameter}`,
+    );
+    const currentFilterKey = `${page}-${pageSize}-${statusFilter}-${categoryId}-${searchTerm}-${channelParameter}`;
+    if (prevFilterKey !== currentFilterKey) {
+        setPrevFilterKey(currentFilterKey);
         setSelectedProductIds([]);
-    }, [page, pageSize, statusFilter, categoryId, searchTerm, channelParameter]);
+    }
 
     const [deleteProductMutation, { loading: deleting }] = useMutation<{
         deleteProduct: { result: string; message?: string };
@@ -324,7 +328,7 @@ export function CatalogModule() {
 
     const totalItems = data?.products?.totalItems ?? 0;
     const totalPages = Math.ceil(totalItems / pageSize) || 1;
-    const productList = data?.products?.items ?? [];
+    const productList = useMemo(() => data?.products?.items ?? [], [data?.products?.items]);
     const displayProducts = useMemo(() => {
         if (channelParameter === 'ALL') return productList;
         return productList.filter(product => {

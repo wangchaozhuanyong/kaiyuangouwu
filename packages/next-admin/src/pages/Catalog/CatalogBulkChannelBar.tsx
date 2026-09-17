@@ -1,4 +1,4 @@
-import { Check, Loader2, MinusCircle, PlusCircle, Store, X } from 'lucide-react';
+import { Loader2, MinusCircle, PlusCircle, Store, X } from 'lucide-react';
 import { useState } from 'react';
 
 import { getChannelDisplayName } from '../../utils/channel-display';

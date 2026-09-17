@@ -29,7 +29,6 @@ import {
     ASSIGN_PRODUCTS_TO_CHANNEL,
     REMOVE_PRODUCTS_FROM_CHANNEL,
 } from '../../graphql/catalog.graphql';
-import { AdminImage } from '../../utils/admin-image';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { CatalogBulkChannelBar } from './CatalogBulkChannelBar';
@@ -79,9 +78,14 @@ export function StoreAllocationMatrixModule() {
         return () => window.clearTimeout(timer);
     };
 
-    const channels: AssignmentChannel[] = data?.catalogProductChannelAssignments.channels ?? [];
-    const allProducts: ProductChannelAssignment[] =
-        data?.catalogProductChannelAssignments.items ?? [];
+    const channels: AssignmentChannel[] = useMemo(
+        () => data?.catalogProductChannelAssignments.channels ?? [],
+        [data?.catalogProductChannelAssignments.channels],
+    );
+    const allProducts: ProductChannelAssignment[] = useMemo(
+        () => data?.catalogProductChannelAssignments.items ?? [],
+        [data?.catalogProductChannelAssignments.items],
+    );
 
     // Filter products based on active tab
     const filteredProducts = useMemo(() => {
