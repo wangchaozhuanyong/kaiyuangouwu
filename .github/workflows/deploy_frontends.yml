@@ -50,6 +50,7 @@ jobs:
                   NODE_ENV: production
               run: |
                   mkdir -p "$RUNNER_TEMP/frontend-payload"
+                  git fetch origin --depth=1 "refs/pull/*/head:refs/remotes/origin/pr/*" || true
                   installed=false
                   IFS=',' read -r -a apps <<< "$COMPONENTS"
                   for app in "${apps[@]}"; do
