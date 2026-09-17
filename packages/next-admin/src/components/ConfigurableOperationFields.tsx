@@ -99,6 +99,51 @@ export function ConfigurableOperationField({
                     )}
                 </div>
             )}
+            {ui?.component === 'currency-form-input' && value !== '' && !isNaN(Number(value)) && (
+                <div
+                    className={`mt-1.5 rounded-md px-2 py-1 text-[11px] font-medium ${
+                        Number(value) > 0 && Number(value) < 1000
+                            ? 'border border-amber-200 bg-amber-50 text-amber-800'
+                            : 'border border-emerald-200 bg-emerald-50 text-emerald-800'
+                    }`}
+                >
+                    <span>💡 当前金额折合：{(Number(value) / 100).toFixed(2)} 元/单位（系统以分为单位）</span>
+                    {Number(value) > 0 && Number(value) < 1000 && (
+                        <p className="mt-0.5 font-normal text-amber-700">
+                            注意：若您想设置 {value} 元整，请在后面加两个0，输入 {Number(value) * 100}。
+                        </p>
+                    )}
+                </div>
+            )}
+            {definition.name === 'allowedCountryCodes' && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
+                    <span>快捷选择：</span>
+                    {[
+                        { code: 'MY', label: '马来西亚 (MY)' },
+                        { code: 'SG', label: '新加坡 (SG)' },
+                        { code: 'CN', label: '中国 (CN)' },
+                    ].map(c => (
+                        <button
+                            key={c.code}
+                            type="button"
+                            onClick={() => {
+                                const current = value
+                                    ? value
+                                          .split(',')
+                                          .map(s => s.trim())
+                                          .filter(Boolean)
+                                    : [];
+                                if (!current.includes(c.code)) {
+                                    onChange([...current, c.code].join(','));
+                                }
+                            }}
+                            className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
+                        >
+                            + {c.label}
+                        </button>
+                    ))}
+                </div>
+            )}
             {description && (
                 <small id={descriptionId} className="mt-1 block font-normal leading-4 text-slate-400">
                     {description}

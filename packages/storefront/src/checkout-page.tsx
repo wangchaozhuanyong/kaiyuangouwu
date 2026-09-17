@@ -236,11 +236,12 @@ export function CheckoutPage({
                             isZh ? '当前地址没有可用配送方式' : 'No delivery is available for this address',
                         );
                     }
-                    const selected =
-                        methods.find(method => method.id === shippingSelectionRef.current) ??
-                        methods.find(method => method.code === preferredShippingCode) ??
-                        methods.find(method => method.code === defaultShippingCode) ??
-                        methods[0];
+                    const selected = selectBestShippingMethod(
+                        methods,
+                        shippingSelectionRef.current,
+                        preferredShippingCode,
+                        defaultShippingCode,
+                    );
                     await api.setShippingMethod(selected.id);
                     if (cancelled) return;
                     const latestCart = await api.cart();
@@ -982,30 +983,49 @@ export function CheckoutPage({
                             disabled={shippingUpdating || submitting || cartPending || cartUnknown}
                         >
                             <legend className="sr-only">{isZh ? '配送方式' : 'Delivery'}</legend>
-                            {shippingMethods.map(method => (
-                                <label key={method.id}>
-                                    <input
-                                        type="radio"
-                                        name="shippingMethod"
-                                        value={method.id}
-                                        checked={selectedShippingId === method.id}
-                                        onChange={() => void selectShippingMethod(method.id)}
-                                    />
-                                    <span>
-                                        <strong>{method.name}</strong>
-                                        {method.description && <small>{method.description}</small>}
-                                        <small className={checkoutPageClassName('shipping-method-meta')}>
-                                            {shippingMethodDetails(
-                                                method,
-                                                order.currencyCode,
-                                                locale,
-                                                language,
-                                            )}
-                                        </small>
-                                    </span>
-                                    <b>{formatMoney(method.priceWithTax, order.currencyCode, locale)}</b>
-                                </label>
-                            ))}
+                            {shippingMethods.map(method => {
+                                const isFree = method.priceWithTax === 0;
+                                const isPickup =
+                                    method.code.includes('pickup') ||
+                                    method.name.includes('自提') ||
+                                    method.name.includes('自取');
+                                return (
+                                    <label key={method.id}>
+                                        <input
+                                            type="radio"
+                                            name="shippingMethod"
+                                            value={method.id}
+                                            checked={selectedShippingId === method.id}
+                                            onChange={() => void selectShippingMethod(method.id)}
+                                        />
+                                        <span>
+                                            <strong className="flex items-center gap-1.5">
+                                                <span>{method.name}</span>
+                                                {isFree && (
+                                                    <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                                                        {isZh ? '免运费' : 'Free'}
+                                                    </span>
+                                                )}
+                                                {isPickup && !isFree && (
+                                                    <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
+                                                        {isZh ? '门店自提' : 'Pickup'}
+                                                    </span>
+                                                )}
+                                            </strong>
+                                            {method.description && <small>{method.description}</small>}
+                                            <small className={checkoutPageClassName('shipping-method-meta')}>
+                                                {shippingMethodDetails(
+                                                    method,
+                                                    order.currencyCode,
+                                                    locale,
+                                                    language,
+                                                )}
+                                            </small>
+                                        </span>
+                                        <b>{formatMoney(method.priceWithTax, order.currencyCode, locale)}</b>
+                                    </label>
+                                );
+                            })}
                         </fieldset>
                         {shippingUpdating && (
                             <p role="status">{isZh ? '正在更新配送方式…' : 'Updating delivery…'}</p>
@@ -1336,6 +1356,38 @@ function promotionIdFromAdjustmentSource(adjustmentSource: string): string {
 function normalizeDeliveryEmail(value: string): string | null {
     const email = value.trim().toLowerCase();
     return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email) ? email : null;
+}
+
+export function selectBestShippingMethod(
+    methods: ShippingMethod[],
+    currentSelectedId?: string | null,
+    preferredCode?: string | null,
+    defaultCode?: string | null,
+): ShippingMethod {
+    if (!methods.length) {
+        throw new Error('No shipping methods available');
+    }
+    if (currentSelectedId) {
+        const found = methods.find(method => method.id === currentSelectedId);
+        if (found) return found;
+    }
+    const freeMethod = methods.find(method => method.priceWithTax === 0);
+    if (preferredCode) {
+        const preferred = methods.find(method => method.code === preferredCode);
+        if (preferred) {
+            if (freeMethod && preferred.priceWithTax > 0) {
+                return freeMethod;
+            }
+            return preferred;
+        }
+    }
+    if (freeMethod) return freeMethod;
+    if (defaultCode) {
+        const defaultMethod = methods.find(method => method.code === defaultCode);
+        if (defaultMethod) return defaultMethod;
+    }
+    const sorted = [...methods].sort((a, b) => a.priceWithTax - b.priceWithTax);
+    return sorted[0];
 }
 
 function shippingMethodDetails(

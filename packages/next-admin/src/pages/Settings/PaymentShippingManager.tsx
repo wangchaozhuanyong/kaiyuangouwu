@@ -1,5 +1,5 @@
 import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
-import { Beaker, CreditCard, Pencil, Plus, Trash2, Truck, X } from 'lucide-react';
+import { Beaker, CreditCard, Info, Pencil, Plus, Sparkles, Trash2, Truck, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
@@ -38,6 +38,12 @@ import {
 } from '../../utils/configurable-operation-localization';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { UsdtPaymentSetupPanel } from './UsdtPaymentSetupPanel';
+import {
+    SHIPPING_PRESETS,
+    formatFulfillmentHandlerSummary,
+    formatShippingCalculatorSummary,
+    formatShippingCheckerSummary,
+} from './shipping-manager-utils';
 import {
     USDT_PAYMENT_HANDLER_CODE,
     USDT_PAYMENT_METHOD_CODE,
@@ -336,17 +342,57 @@ export function PaymentShippingManager({
                                 </button>
                             )}
                         </div>
+                        <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-3.5">
+                            <div className="flex items-start gap-2.5">
+                                <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                                <div className="space-y-1 text-xs text-slate-600">
+                                    <p className="font-semibold text-slate-800">
+                                        💡 配送设置与客户端展示指引
+                                    </p>
+                                    <p className="leading-relaxed">
+                                        •{' '}
+                                        <strong className="text-slate-700">满额免邮无需单独建两个方式</strong>
+                                        ：选择「实物小计免邮门槛计算器」（新增时可直接套用【标准快递】模板），在一条规则内填写基础运费和免邮门槛，买家购物车达标时客户端自动变为
+                                        0 元免邮。
+                                    </p>
+                                    <p className="leading-relaxed">
+                                        • <strong className="text-slate-700">支持多种提货方式</strong>
+                                        ：可同时配置「标准快递」和「上门自提（0元）」，买家在结算时可自主选择，系统会自动优先推荐免邮或最实惠的选项。
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                         <div className="divide-y divide-slate-100">
                             {data.shippingMethods.items.map(item => (
                                 <div key={item.id} className="flex items-center justify-between gap-4 p-5">
-                                    <div className="min-w-0">
-                                        <strong className="text-xs text-slate-900">{item.name}</strong>
-                                        <p className="mt-1 font-mono text-[9px] text-slate-400">
-                                            {item.code} · {item.calculator.code} ·{' '}
-                                            {item.fulfillmentHandlerCode}
-                                        </p>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <strong className="text-xs font-bold text-slate-900">
+                                                {item.name}
+                                            </strong>
+                                            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">
+                                                {item.code}
+                                            </span>
+                                        </div>
+                                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                            <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                                                {formatShippingCalculatorSummary(
+                                                    item.calculator,
+                                                    data.activeChannel.defaultCurrencyCode,
+                                                )}
+                                            </span>
+                                            <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-700/10">
+                                                {formatShippingCheckerSummary(item.checker)}
+                                            </span>
+                                            <span className="inline-flex items-center rounded-md bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10">
+                                                {formatFulfillmentHandlerSummary(
+                                                    item.fulfillmentHandlerCode,
+                                                    data.fulfillmentHandlers,
+                                                )}
+                                            </span>
+                                        </div>
                                         {item.description && (
-                                            <p className="mt-1 line-clamp-2 text-[10px] text-slate-500">
+                                            <p className="mt-1.5 line-clamp-2 text-[11px] text-slate-500">
                                                 {item.description}
                                             </p>
                                         )}
@@ -505,6 +551,129 @@ function MethodEditorDialog({
     const fulfillmentDefinition = data.fulfillmentHandlers.find(
         definition => definition.code === fulfillmentHandler,
     );
+
+    const applyShippingPreset = (presetKey: 'standard-threshold' | 'pickup-in-store' | 'free-shipping') => {
+        const defaultCurrency = data.activeChannel.defaultCurrencyCode || 'MYR';
+        const defaultFulfillment = data.fulfillmentHandlers.some(d => d.code === 'manual-fulfillment')
+            ? 'manual-fulfillment'
+            : (data.fulfillmentHandlers[0]?.code ?? 'manual-fulfillment');
+
+        if (presetKey === 'standard-threshold') {
+            setCode('standard-shipping');
+            setName('标准快递');
+            setDescription('普通快递配送，实物商品满额即享免运费');
+            setFulfillmentHandler(defaultFulfillment);
+
+            const hasDestChecker = data.shippingEligibilityCheckers.some(
+                d => d.code === 'supported-destination-eligibility-checker',
+            );
+            if (hasDestChecker) {
+                setCheckerCode('supported-destination-eligibility-checker');
+                setCheckerArgs({ allowedCountryCodes: 'MY', blockedPostalPrefixes: '' });
+            } else {
+                const fallbackChecker =
+                    data.shippingEligibilityCheckers[0]?.code ?? 'default-shipping-eligibility-checker';
+                setCheckerCode(fallbackChecker);
+                setCheckerArgs(defaultArgs(fallbackChecker, data.shippingEligibilityCheckers));
+            }
+
+            const hasPhysicalCalc = data.shippingCalculators.some(
+                d => d.code === 'physical-subtotal-shipping-calculator',
+            );
+            if (hasPhysicalCalc) {
+                setCalculatorCode('physical-subtotal-shipping-calculator');
+                setCalculatorArgs({
+                    baseRate: '500',
+                    freeAbove: '20000',
+                    currencyCode: defaultCurrency,
+                    taxRate: '0',
+                    priceIncludesTax: 'false',
+                    estimateMinDays: '1',
+                    estimateMaxDays: '3',
+                });
+            } else {
+                setCalculatorCode('default-shipping-calculator');
+                setCalculatorArgs({
+                    rate: '500',
+                    taxRate: '0',
+                    includesTax: 'include',
+                });
+            }
+        } else if (presetKey === 'pickup-in-store') {
+            setCode('pickup-in-store');
+            setName('上门自提');
+            setDescription('买家自行前往门店或自提点取货，免运费');
+            setFulfillmentHandler(defaultFulfillment);
+
+            const defaultChecker =
+                data.shippingEligibilityCheckers.find(
+                    d => d.code === 'default-shipping-eligibility-checker',
+                ) ?? data.shippingEligibilityCheckers[0];
+            if (defaultChecker) {
+                setCheckerCode(defaultChecker.code);
+                setCheckerArgs(defaultArgs(defaultChecker.code, data.shippingEligibilityCheckers));
+            }
+
+            const defaultCalc =
+                data.shippingCalculators.find(d => d.code === 'default-shipping-calculator') ??
+                data.shippingCalculators[0];
+            if (defaultCalc?.code === 'default-shipping-calculator') {
+                setCalculatorCode('default-shipping-calculator');
+                setCalculatorArgs({ rate: '0', taxRate: '0', includesTax: 'include' });
+            } else if (defaultCalc?.code === 'physical-subtotal-shipping-calculator') {
+                setCalculatorCode('physical-subtotal-shipping-calculator');
+                setCalculatorArgs({
+                    baseRate: '0',
+                    freeAbove: '0',
+                    currencyCode: defaultCurrency,
+                    taxRate: '0',
+                    priceIncludesTax: 'false',
+                    estimateMinDays: '0',
+                    estimateMaxDays: '0',
+                });
+            } else if (defaultCalc) {
+                setCalculatorCode(defaultCalc.code);
+                setCalculatorArgs(defaultArgs(defaultCalc.code, data.shippingCalculators));
+            }
+        } else if (presetKey === 'free-shipping') {
+            setCode('free-shipping');
+            setName('全场包邮');
+            setDescription('全场实物商品免运费配送');
+            setFulfillmentHandler(defaultFulfillment);
+
+            const defaultChecker =
+                data.shippingEligibilityCheckers.find(
+                    d => d.code === 'default-shipping-eligibility-checker',
+                ) ?? data.shippingEligibilityCheckers[0];
+            if (defaultChecker) {
+                setCheckerCode(defaultChecker.code);
+                setCheckerArgs(defaultArgs(defaultChecker.code, data.shippingEligibilityCheckers));
+            }
+
+            const defaultCalc =
+                data.shippingCalculators.find(d => d.code === 'default-shipping-calculator') ??
+                data.shippingCalculators[0];
+            if (defaultCalc?.code === 'default-shipping-calculator') {
+                setCalculatorCode('default-shipping-calculator');
+                setCalculatorArgs({ rate: '0', taxRate: '0', includesTax: 'include' });
+            } else if (defaultCalc?.code === 'physical-subtotal-shipping-calculator') {
+                setCalculatorCode('physical-subtotal-shipping-calculator');
+                setCalculatorArgs({
+                    baseRate: '0',
+                    freeAbove: '0',
+                    currencyCode: defaultCurrency,
+                    taxRate: '0',
+                    priceIncludesTax: 'false',
+                    estimateMinDays: '1',
+                    estimateMaxDays: '3',
+                });
+            } else if (defaultCalc) {
+                setCalculatorCode(defaultCalc.code);
+                setCalculatorArgs(defaultArgs(defaultCalc.code, data.shippingCalculators));
+            }
+        }
+    };
+
     const submit = async () => {
         if (!code.trim() || !name.trim()) return onError('请填写配置代码和显示名称');
         const customFieldErrors = validateCustomFieldValues(
@@ -603,6 +772,41 @@ function MethodEditorDialog({
                     </button>
                 </header>
                 <div className="space-y-5 p-5">
+                    {state.kind === 'shipping' && (
+                        <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3.5">
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                                    <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+                                    快捷套用常用模板
+                                </span>
+                                <span className="text-[10px] text-blue-700">
+                                    点击自动填充推荐参数，无需猜测计算器设置
+                                </span>
+                            </div>
+                            <div className="mt-2.5 grid gap-2 sm:grid-cols-3">
+                                {SHIPPING_PRESETS.map(preset => (
+                                    <button
+                                        key={preset.key}
+                                        type="button"
+                                        onClick={() => applyShippingPreset(preset.key)}
+                                        className="flex flex-col items-start rounded-lg border border-blue-200 bg-white p-2.5 text-left transition hover:border-blue-400 hover:bg-blue-50/50 hover:shadow-sm active:scale-[0.99]"
+                                    >
+                                        <div className="flex w-full items-center justify-between gap-1">
+                                            <span className="text-xs font-bold text-slate-800">
+                                                {preset.title}
+                                            </span>
+                                            <span className="shrink-0 rounded bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700">
+                                                {preset.badge}
+                                            </span>
+                                        </div>
+                                        <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-slate-500">
+                                            {preset.description}
+                                        </p>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                     <div className="grid gap-3 sm:grid-cols-2">
                         <Field label="配置代码 *">
                             <input

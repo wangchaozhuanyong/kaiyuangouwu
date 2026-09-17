@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApi, ShopApiError } from './api';
-import { CheckoutPage } from './checkout-page';
+import { CheckoutPage, selectBestShippingMethod } from './checkout-page';
 import { checkoutPageStyles } from './tailwind/checkout-page-styles';
 import {
     ActiveCustomer,
@@ -776,5 +776,65 @@ describe('CheckoutPage submission authentication and recovery', () => {
         } finally {
             act(() => root.unmount());
         }
+    });
+
+    describe('selectBestShippingMethod', () => {
+        const standardShipping: ShippingMethod = {
+            id: 'sm-standard',
+            code: 'standard-shipping',
+            name: '标准快递',
+            description: '全场统一运费',
+            priceWithTax: 500,
+            metadata: {},
+        };
+        const freeShipping: ShippingMethod = {
+            id: 'sm-free',
+            code: 'free-shipping-200',
+            name: '满200RM包邮',
+            description: '满额免邮',
+            priceWithTax: 0,
+            metadata: {},
+        };
+        const pickupShipping: ShippingMethod = {
+            id: 'sm-pickup',
+            code: 'store-pickup',
+            name: '上门自提',
+            description: '门店自提',
+            priceWithTax: 0,
+            metadata: {},
+        };
+
+        it('automatically prioritizes 0-cost free shipping over paid shipping', () => {
+            const selected = selectBestShippingMethod([standardShipping, freeShipping]);
+            expect(selected.id).toBe('sm-free');
+            expect(selected.priceWithTax).toBe(0);
+        });
+
+        it('respects user manual selection if already chosen in current session', () => {
+            const selected = selectBestShippingMethod([standardShipping, freeShipping], 'sm-standard');
+            expect(selected.id).toBe('sm-standard');
+        });
+
+        it('selects the lowest priced shipping method when multiple paid methods exist', () => {
+            const expressShipping: ShippingMethod = {
+                id: 'sm-express',
+                code: 'express-shipping',
+                name: '特快专递',
+                description: '次日达',
+                priceWithTax: 1500,
+                metadata: {},
+            };
+            const selected = selectBestShippingMethod([expressShipping, standardShipping]);
+            expect(selected.id).toBe('sm-standard');
+        });
+
+        it('prioritizes free shipping even if preferredCode points to a paid method', () => {
+            const selected = selectBestShippingMethod(
+                [standardShipping, freeShipping],
+                null,
+                'standard-shipping',
+            );
+            expect(selected.id).toBe('sm-free');
+        });
     });
 });
