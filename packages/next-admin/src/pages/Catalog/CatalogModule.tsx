@@ -16,6 +16,7 @@ import {
     Search,
     Trash2,
     X,
+    Layers3,
 } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -27,14 +28,21 @@ import { SearchInput } from '../../components/SearchInput';
 import { SortableTableHeader } from '../../components/SortableTableHeader';
 import { NextAdminActions } from '../../extensions/extension-hosts';
 import {
+    GET_CATALOG_CHANNEL_ASSIGNMENTS,
+    type AssignmentChannel,
+    type CatalogChannelAssignmentsData,
+} from '../../graphql/catalog-channel-assignments.graphql';
+import {
     CATALOG_PRODUCT_OPERATIONS_QUERY,
     type CatalogProductOperationsResult,
 } from '../../graphql/catalog-operations.graphql';
 import {
+    ASSIGN_PRODUCTS_TO_CHANNEL,
     DELETE_PRODUCT,
     GET_CATALOG_CHANNELS,
     GET_COLLECTIONS,
     GET_PRODUCTS,
+    REMOVE_PRODUCTS_FROM_CHANNEL,
 } from '../../graphql/catalog.graphql';
 import {
     STORE_COMMERCE_MODE_QUERY,
@@ -49,10 +57,12 @@ import { AdminImage } from '../../utils/admin-image';
 import {
     getCatalogEmptyStateDescription,
     getChannelDisplayLabel,
+    getChannelDisplayName,
     isDefaultChannelCode,
 } from '../../utils/channel-display';
 import { collectionHierarchySummary } from '../../utils/commerce-mode';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { CatalogBulkChannelBar } from './CatalogBulkChannelBar';
 
 interface ProductVariantItem {
     id: string;
@@ -185,12 +195,18 @@ export function CatalogModule() {
         defaultDirection: 'DESC',
     });
     const statusParameter = searchParams.get('status');
+    const channelParameter = searchParams.get('channel') ?? 'ALL';
     const categoryId = searchParams.get('category') ?? '';
     const statusFilter: 'ALL' | 'ENABLED' | 'DISABLED' =
         statusParameter === 'enabled' ? 'ENABLED' : statusParameter === 'disabled' ? 'DISABLED' : 'ALL';
     const setStatusFilter = (status: 'ALL' | 'ENABLED' | 'DISABLED') => {
         setFilter('status', status.toLowerCase(), 'all');
     };
+    const setChannelFilter = (channel: string) => {
+        setFilter('channel', channel, 'ALL');
+    };
+
+    const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
 
     const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(
         null,
@@ -259,6 +275,40 @@ export function CatalogModule() {
         fetchPolicy: 'cache-and-network',
     });
 
+    const channelAssignmentsQuery = useQuery<CatalogChannelAssignmentsData>(
+        GET_CATALOG_CHANNEL_ASSIGNMENTS,
+        {
+            variables: {
+                options: {
+                    take: 100,
+                    filter: productIds.length > 0 ? { id: { in: productIds } } : undefined,
+                },
+            },
+            skip: productIds.length === 0,
+            fetchPolicy: 'cache-and-network',
+        },
+    );
+
+    const channelAssignmentsByProduct = useMemo(() => {
+        const map = new Map<string, AssignmentChannel[]>();
+        for (const item of channelAssignmentsQuery.data?.catalogProductChannelAssignments.items ?? []) {
+            map.set(item.id, item.channels);
+        }
+        return map;
+    }, [channelAssignmentsQuery.data]);
+
+    const [assignProductsToChannel, { loading: bulkAssigning }] = useMutation(ASSIGN_PRODUCTS_TO_CHANNEL);
+    const [removeProductsFromChannel, { loading: bulkRemoving }] = useMutation(REMOVE_PRODUCTS_FROM_CHANNEL);
+
+    const [prevFilterKey, setPrevFilterKey] = useState(
+        `${page}-${pageSize}-${statusFilter}-${categoryId}-${searchTerm}-${channelParameter}`,
+    );
+    const currentFilterKey = `${page}-${pageSize}-${statusFilter}-${categoryId}-${searchTerm}-${channelParameter}`;
+    if (prevFilterKey !== currentFilterKey) {
+        setPrevFilterKey(currentFilterKey);
+        setSelectedProductIds([]);
+    }
+
     const [deleteProductMutation, { loading: deleting }] = useMutation<{
         deleteProduct: { result: string; message?: string };
     }>(DELETE_PRODUCT, {
@@ -278,7 +328,91 @@ export function CatalogModule() {
 
     const totalItems = data?.products?.totalItems ?? 0;
     const totalPages = Math.ceil(totalItems / pageSize) || 1;
-    const productList = data?.products?.items ?? [];
+    const productList = useMemo(() => data?.products?.items ?? [], [data?.products?.items]);
+    const displayProducts = useMemo(() => {
+        if (channelParameter === 'ALL') return productList;
+        return productList.filter(product => {
+            const assigned = channelAssignmentsByProduct.get(product.id) ?? [];
+            if (channelParameter === 'UNASSIGNED') {
+                return assigned.length <= 1 && assigned.some(c => c.isDefault);
+            }
+            if (channelParameter === 'MULTI_STORE') {
+                return assigned.length > 1;
+            }
+            return assigned.some(c => c.id === channelParameter);
+        });
+    }, [productList, channelParameter, channelAssignmentsByProduct]);
+
+    const handleBulkAssign = async (targetChannelId: string, priceFactor: number) => {
+        if (!selectedProductIds.length) return;
+        const targetChannel = activeChannelQuery.data?.channels.items.find(c => c.id === targetChannelId);
+        const targetName = targetChannel ? getChannelDisplayName(targetChannel.code) : '';
+        try {
+            await assignProductsToChannel({
+                variables: {
+                    input: {
+                        productIds: selectedProductIds,
+                        channelId: targetChannelId,
+                        priceFactor,
+                    },
+                },
+            });
+            showNotice(`已将选中的 ${selectedProductIds.length} 个商品批量上架至「${targetName}」`);
+            setSelectedProductIds([]);
+            void refetch();
+            void channelAssignmentsQuery.refetch();
+        } catch (err) {
+            showNotice(toUserFacingError(err, '批量上架失败'), 'error');
+        }
+    };
+
+    const handleBulkRemove = async (targetChannelId: string) => {
+        if (!selectedProductIds.length) return;
+        const targetChannel = activeChannelQuery.data?.channels.items.find(c => c.id === targetChannelId);
+        const targetName = targetChannel ? getChannelDisplayName(targetChannel.code) : '';
+
+        const eligibleIds: string[] = [];
+        let skippedCount = 0;
+        for (const id of selectedProductIds) {
+            const assigned = channelAssignmentsByProduct.get(id) ?? [];
+            if (assigned.some(c => c.id === targetChannelId)) {
+                if (assigned.length > 1) {
+                    eligibleIds.push(id);
+                } else {
+                    skippedCount++;
+                }
+            }
+        }
+
+        if (eligibleIds.length === 0) {
+            showNotice(
+                skippedCount > 0
+                    ? `所选商品仅属于「${targetName}」，必须至少保留在一个店铺中，无法下架。`
+                    : `所选商品未在上架状态，无需下架。`,
+                'error',
+            );
+            return;
+        }
+
+        try {
+            await removeProductsFromChannel({
+                variables: {
+                    input: {
+                        productIds: eligibleIds,
+                        channelId: targetChannelId,
+                    },
+                },
+            });
+            showNotice(
+                `已从「${targetName}」下架 ${eligibleIds.length} 个商品${skippedCount > 0 ? `（自动跳过 ${skippedCount} 个唯一归属该店的商品）` : ''}`,
+            );
+            setSelectedProductIds([]);
+            void refetch();
+            void channelAssignmentsQuery.refetch();
+        } catch (err) {
+            showNotice(toUserFacingError(err, '批量下架失败'), 'error');
+        }
+    };
     const operationsByProduct = new Map(
         (operationsQuery.data?.catalogProductOperations ?? []).map(summary => [summary.productId, summary]),
     );
@@ -340,6 +474,14 @@ export function CatalogModule() {
                 </div>
 
                 <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:gap-3 [&>button]:shrink-0">
+                    <button
+                        type="button"
+                        onClick={() => navigate('/catalog/allocation')}
+                        className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 cursor-pointer"
+                    >
+                        <Layers3 className="h-3.5 w-3.5 text-blue-600" />
+                        <span>店铺分配看板</span>
+                    </button>
                     <NextAdminActions pageId="product-list" collapseOnMobile />
                     <button
                         type="button"
@@ -437,6 +579,21 @@ export function CatalogModule() {
 
                         <div className="flex flex-wrap items-center gap-2">
                             <select
+                                value={channelParameter}
+                                onChange={event => setChannelFilter(event.target.value)}
+                                aria-label="按所属店铺筛选"
+                                className="max-w-44 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                                <option value="ALL">全部店铺</option>
+                                <option value="UNASSIGNED">⚠️ 仅默认店铺 (未分发)</option>
+                                <option value="MULTI_STORE">多店铺在售</option>
+                                {(activeChannelQuery.data?.channels.items ?? []).map(channel => (
+                                    <option key={channel.id} value={channel.id}>
+                                        已上架: {getChannelDisplayName(channel.code)}
+                                    </option>
+                                ))}
+                            </select>
+                            <select
                                 value={categoryId}
                                 onChange={event => setFilter('category', event.target.value)}
                                 aria-label="按商品分类筛选"
@@ -477,6 +634,19 @@ export function CatalogModule() {
                         </div>
                     </div>
 
+                    {selectedProductIds.length > 0 && (
+                        <div className="border-b border-blue-100 bg-blue-50/50 p-3">
+                            <CatalogBulkChannelBar
+                                selectedCount={selectedProductIds.length}
+                                channels={activeChannelQuery.data?.channels.items ?? []}
+                                onAssign={handleBulkAssign}
+                                onRemove={handleBulkRemove}
+                                onClearSelection={() => setSelectedProductIds([])}
+                                busy={bulkAssigning || bulkRemoving}
+                            />
+                        </div>
+                    )}
+
                     {/* Table Data / Loading / Empty State */}
                     <div className="overflow-x-auto flex-1 relative">
                         {/* 加载态：骨架屏 */}
@@ -497,7 +667,7 @@ export function CatalogModule() {
                         )}
 
                         {/* 空状态：真实无数据 */}
-                        {!loading && !error && productList.length === 0 && (
+                        {!loading && !error && displayProducts.length === 0 && (
                             <div className="flex flex-col items-center justify-center p-16 text-center space-y-3">
                                 <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
                                     <Package className="w-6 h-6" />
@@ -507,7 +677,10 @@ export function CatalogModule() {
                                     {getCatalogEmptyStateDescription({
                                         channelCode: activeChannel?.code,
                                         searchTerm,
-                                        hasFilters: statusFilter !== 'ALL' || Boolean(categoryId),
+                                        hasFilters:
+                                            statusFilter !== 'ALL' ||
+                                            Boolean(categoryId) ||
+                                            channelParameter !== 'ALL',
                                     })}
                                 </p>
                                 <div className="mt-2 flex flex-wrap justify-center gap-2">
@@ -533,13 +706,65 @@ export function CatalogModule() {
                         )}
 
                         {/* 真实数据列表 */}
-                        {productList.length > 0 && (
-                            <table className="w-full min-w-[2060px] border-collapse text-left text-xs">
+                        {displayProducts.length > 0 && (
+                            <table className="w-full min-w-[2280px] border-collapse text-left text-xs">
                                 <thead>
                                     <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-500 font-bold whitespace-nowrap">
                                         <th
                                             scope="col"
-                                            className="sticky left-0 z-20 w-14 bg-slate-50 px-3 py-3"
+                                            className="sticky left-0 z-20 w-10 bg-slate-50 px-3 py-3"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                aria-label="全选本页商品"
+                                                checked={
+                                                    displayProducts.length > 0 &&
+                                                    displayProducts.every(p =>
+                                                        selectedProductIds.includes(p.id),
+                                                    )
+                                                }
+                                                ref={el => {
+                                                    if (el) {
+                                                        const someSelected = displayProducts.some(p =>
+                                                            selectedProductIds.includes(p.id),
+                                                        );
+                                                        const allSelected =
+                                                            displayProducts.length > 0 &&
+                                                            displayProducts.every(p =>
+                                                                selectedProductIds.includes(p.id),
+                                                            );
+                                                        el.indeterminate = someSelected && !allSelected;
+                                                    }
+                                                }}
+                                                onChange={() => {
+                                                    const allSelected =
+                                                        displayProducts.length > 0 &&
+                                                        displayProducts.every(p =>
+                                                            selectedProductIds.includes(p.id),
+                                                        );
+                                                    if (allSelected) {
+                                                        setSelectedProductIds(prev =>
+                                                            prev.filter(
+                                                                id =>
+                                                                    !displayProducts.some(
+                                                                        p => p.id === id,
+                                                                    ),
+                                                            ),
+                                                        );
+                                                    } else {
+                                                        const combined = new Set([
+                                                            ...selectedProductIds,
+                                                            ...displayProducts.map(p => p.id),
+                                                        ]);
+                                                        setSelectedProductIds(Array.from(combined));
+                                                    }
+                                                }}
+                                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                            />
+                                        </th>
+                                        <th
+                                            scope="col"
+                                            className="sticky left-10 z-20 w-14 bg-slate-50 px-3 py-3"
                                         >
                                             主图
                                         </th>
@@ -549,7 +774,7 @@ export function CatalogModule() {
                                             activeSortField={sortField}
                                             sortDirection={sortDirection}
                                             onSort={toggleSort}
-                                            className="sticky left-14 z-20 w-60 bg-slate-50 px-3 py-3"
+                                            className="sticky left-24 z-20 w-60 bg-slate-50 px-3 py-3"
                                         />
                                         <SortableTableHeader
                                             label="SPU Slug"
@@ -564,6 +789,9 @@ export function CatalogModule() {
                                         </th>
                                         <th scope="col" className="w-48 px-3 py-3">
                                             二级分类
+                                        </th>
+                                        <th scope="col" className="w-56 px-3 py-3">
+                                            销售店铺
                                         </th>
                                         <th scope="col" className="w-28 px-3 py-3">
                                             商品类型
@@ -602,7 +830,7 @@ export function CatalogModule() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                                    {productList.map(product => {
+                                    {displayProducts.map(product => {
                                         const operations = operationsByProduct.get(product.id);
                                         const variants = product.variants || [];
                                         const pricedVariants = variants.filter(
@@ -653,8 +881,25 @@ export function CatalogModule() {
                                                 key={product.id}
                                                 className="group h-[52px] transition-colors hover:bg-slate-50/80"
                                             >
+                                                {/* Checkbox */}
+                                                <td className="sticky left-0 z-10 h-[52px] w-10 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                                    <input
+                                                        type="checkbox"
+                                                        aria-label={`选择商品 ${product.name}`}
+                                                        checked={selectedProductIds.includes(product.id)}
+                                                        onChange={() => {
+                                                            setSelectedProductIds(prev =>
+                                                                prev.includes(product.id)
+                                                                    ? prev.filter(id => id !== product.id)
+                                                                    : [...prev, product.id],
+                                                            );
+                                                        }}
+                                                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                    />
+                                                </td>
+
                                                 {/* Featured Asset (真实素材) */}
-                                                <td className="sticky left-0 z-10 h-[52px] bg-white px-3 py-0 group-hover:bg-slate-50">
+                                                <td className="sticky left-10 z-10 h-[52px] w-14 bg-white px-3 py-0 group-hover:bg-slate-50">
                                                     <button
                                                         type="button"
                                                         onClick={() =>
@@ -680,7 +925,7 @@ export function CatalogModule() {
                                                 </td>
 
                                                 {/* Name */}
-                                                <td className="sticky left-14 z-10 h-[52px] max-w-60 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                                <td className="sticky left-24 z-10 h-[52px] max-w-60 bg-white px-3 py-0 group-hover:bg-slate-50">
                                                     <button
                                                         type="button"
                                                         onClick={() =>
@@ -728,6 +973,66 @@ export function CatalogModule() {
                                                             +{categories.secondLevel.extraCount}
                                                         </span>
                                                     )}
+                                                </td>
+
+                                                {/* 销售店铺 */}
+                                                <td className="h-[52px] px-3 py-0 whitespace-nowrap">
+                                                    {(() => {
+                                                        const assigned = channelAssignmentsByProduct.get(
+                                                            product.id,
+                                                        );
+                                                        if (
+                                                            !assigned &&
+                                                            channelAssignmentsQuery.loading
+                                                        ) {
+                                                            return (
+                                                                <span className="text-[11px] text-slate-400 animate-pulse">
+                                                                    读取中…
+                                                                </span>
+                                                            );
+                                                        }
+                                                        if (!assigned || assigned.length === 0) {
+                                                            return (
+                                                                <span className="text-[11px] text-slate-400 italic">
+                                                                    未分配
+                                                                </span>
+                                                            );
+                                                        }
+                                                        const isOnlyDefault =
+                                                            assigned.length === 1 &&
+                                                            assigned[0].isDefault;
+                                                        return (
+                                                            <div className="flex flex-wrap items-center gap-1 max-w-56">
+                                                                {isOnlyDefault ? (
+                                                                    <span
+                                                                        className="inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800 border border-amber-200"
+                                                                        title="该商品仅在默认主店铺中，尚未分发到任何分店"
+                                                                    >
+                                                                        <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+                                                                        仅默认店铺 (未分发)
+                                                                    </span>
+                                                                ) : (
+                                                                    assigned.map(ch => (
+                                                                        <span
+                                                                            key={ch.id}
+                                                                            className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                                                                                ch.isDefault
+                                                                                    ? 'bg-slate-100 text-slate-700 border border-slate-200'
+                                                                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                                            }`}
+                                                                            title={
+                                                                                ch.isDefault
+                                                                                    ? '默认店铺'
+                                                                                    : `分店: ${getChannelDisplayName(ch.code)}`
+                                                                            }
+                                                                        >
+                                                                            {getChannelDisplayName(ch.code)}
+                                                                        </span>
+                                                                    ))
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </td>
 
                                                 {/* Product type */}

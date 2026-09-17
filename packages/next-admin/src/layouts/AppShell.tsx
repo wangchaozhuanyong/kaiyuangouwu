@@ -9,6 +9,7 @@ import {
     CornerDownLeft,
     FolderTree,
     KeyRound,
+    Layers3,
     LayoutDashboard,
     LogOut,
     Megaphone,
@@ -461,6 +462,7 @@ export function AppShell() {
             '/dashboard': '工作台',
             '/profile': '个人中心',
             '/catalog/list': '商品列表',
+            '/catalog/allocation': '店铺分配看板',
             '/catalog/products/new': '发布新商品',
             '/catalog/categories': '分类与属性',
             '/catalog/inventory': '库存与仓库',
@@ -578,6 +580,7 @@ export function AppShell() {
             [
                 { title: '工作台经营大盘与待办', path: '/dashboard', cat: '工作台', icon: LayoutDashboard },
                 { title: '商品列表与多条件筛选', path: '/catalog/list', cat: '商品', icon: Package },
+                { title: '商品多店铺分配中心看板', path: '/catalog/allocation', cat: '商品', icon: Layers3 },
                 {
                     title: '分类树、多规格模板与标签',
                     path: '/catalog/categories',
@@ -832,6 +835,13 @@ export function AppShell() {
                                 className={navItemClass}
                             >
                                 商品列表
+                            </NavLink>
+                            <NavLink
+                                allowed={canAccessPath('/catalog/allocation')}
+                                to="/catalog/allocation"
+                                className={navItemClass}
+                            >
+                                店铺分配看板
                             </NavLink>
                             <NavLink
                                 allowed={canAccessPath('/catalog/categories')}

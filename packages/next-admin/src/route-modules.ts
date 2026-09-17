@@ -2,6 +2,7 @@ export const routeModuleLoaders = {
     profile: () => import('./pages/Auth/ProfileModule'),
     dashboard: () => import('./pages/Dashboard/DashboardModule'),
     catalog: () => import('./pages/Catalog/CatalogModule'),
+    storeAllocation: () => import('./pages/Catalog/StoreAllocationMatrixModule'),
     suppliers: () => import('./pages/Catalog/SuppliersModule'),
     productEditor: () => import('./pages/Catalog/ProductEditor'),
     categories: () => import('./pages/Catalog/CategoriesModule'),
@@ -46,6 +47,7 @@ export function getRouteModuleKey(target: string): RouteModuleKey | null {
     if (pathname === '/catalog/inventory') return 'inventory';
     if (pathname === '/catalog/card-pool') return 'cardPool';
     if (pathname === '/catalog/assets') return 'assets';
+    if (pathname === '/catalog/allocation') return 'storeAllocation';
     if (pathname.startsWith('/catalog')) return 'catalog';
     if (/^\/sales\/orders\/draft\/[^/]+$/.test(pathname)) return 'orderWorkflow';
     if (/^\/sales\/orders\/[^/]+\/modify$/.test(pathname)) return 'orderWorkflow';

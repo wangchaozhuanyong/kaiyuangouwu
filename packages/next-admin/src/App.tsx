@@ -25,6 +25,9 @@ const DashboardModule = lazy(() =>
 const CatalogModule = lazy(() =>
     routeModuleLoaders.catalog().then(module => ({ default: module.CatalogModule })),
 );
+const StoreAllocationMatrixModule = lazy(() =>
+    routeModuleLoaders.storeAllocation().then(module => ({ default: module.StoreAllocationMatrixModule })),
+);
 const ProductEditor = lazy(() =>
     routeModuleLoaders.productEditor().then(module => ({ default: module.ProductEditor })),
 );
@@ -219,6 +222,7 @@ function App() {
                         <Route path="catalog">
                             <Route index element={<Navigate to="list" replace />} />
                             <Route path="list" element={<CatalogModule />} />
+                            <Route path="allocation" element={<StoreAllocationMatrixModule />} />
                             <Route path="products/new" element={<ProductEditor />} />
                             <Route path="products/:id" element={<ProductEditor />} />
                             <Route path="categories" element={<CategoriesModule />} />
