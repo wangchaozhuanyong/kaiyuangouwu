@@ -8,6 +8,7 @@ import {
     Edit3,
     Eye,
     FolderTree,
+    GripVertical,
     Plus,
     RefreshCw,
     Search,
@@ -16,7 +17,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import {
@@ -47,6 +48,7 @@ import {
     DELETE_OPTION_GROUP,
     DELETE_PRODUCT_OPTION,
     GET_CATALOG_TAXONOMY,
+    MOVE_COLLECTION,
     PREVIEW_COLLECTION_VARIANTS,
     UPDATE_COLLECTION,
     UPDATE_FACET,
@@ -276,6 +278,7 @@ export function CategoriesModule() {
     const [deleteCollection] = useMutation<{ deleteCollection: { result: string; message?: string } }>(
         DELETE_COLLECTION,
     );
+    const [moveCollection] = useMutation(MOVE_COLLECTION);
     const [createOptionGroup] = useMutation(CREATE_OPTION_GROUP);
     const [updateOptionGroup] = useMutation(UPDATE_OPTION_GROUP);
     const [deleteOptionGroup] = useMutation<{
@@ -295,9 +298,25 @@ export function CategoriesModule() {
         deleteFacetValues: Array<{ result: string; message?: string }>;
     }>(DELETE_FACET_VALUE);
 
-    const collections = data?.collections.items ?? EMPTY_COLLECTIONS;
+    type Placement = 'before' | 'after';
+    const [draggingId, setDraggingId] = useState<string | null>(null);
+    const [dropTarget, setDropTarget] = useState<{ id: string; placement: Placement } | null>(null);
+    const [isReordering, setIsReordering] = useState(false);
+    const [optimisticCollections, setOptimisticCollections] = useState<CollectionItem[] | null>(null);
+    const dragSourceRef = useRef<{ id: string; parentId: string | null } | null>(null);
+    const keyboardHandleRef = useRef<HTMLButtonElement | null>(null);
+
+    const serverCollections = data?.collections.items ?? EMPTY_COLLECTIONS;
+    const collections = optimisticCollections ?? serverCollections;
     const optionGroups = data?.productOptionGroups.items ?? EMPTY_OPTION_GROUPS;
     const facets = data?.facets.items ?? EMPTY_FACETS;
+
+    useEffect(() => {
+        if (isReordering || !keyboardHandleRef.current) return;
+        const handle = keyboardHandleRef.current;
+        keyboardHandleRef.current = null;
+        if (handle.isConnected && document.activeElement === document.body) handle.focus();
+    }, [isReordering, collections]);
     useEffect(() => {
         setExpandedCollectionIds(new Set());
     }, [data?.activeChannel.id]);
@@ -371,6 +390,73 @@ export function CategoriesModule() {
     const showError = (message: string) => {
         setActionError(message);
         setNotification('');
+    };
+
+    const clearDrag = () => {
+        dragSourceRef.current = null;
+        setDraggingId(null);
+        setDropTarget(null);
+    };
+
+    const placementAt = (event: DragEvent<HTMLDivElement>): Placement => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    };
+
+    const handleReorder = async (
+        sourceId: string,
+        targetId: string,
+        placement: Placement,
+        siblings: CollectionTreeNode[],
+    ) => {
+        if (sourceId === targetId || isReordering) return;
+        const sourceNode = siblings.find(item => item.id === sourceId);
+        if (!sourceNode) return;
+
+        const remaining = siblings.filter(item => item.id !== sourceId);
+        const targetIdx = remaining.findIndex(item => item.id === targetId);
+        if (targetIdx === -1) return;
+
+        const finalIndex = placement === 'before' ? targetIdx : targetIdx + 1;
+        const currentIdx = siblings.findIndex(item => item.id === sourceId);
+        if (finalIndex === currentIdx) return;
+
+        const newSiblings = [...remaining];
+        newSiblings.splice(finalIndex, 0, sourceNode);
+        const updatedMap = new Map(newSiblings.map((item, idx) => [item.id, idx]));
+
+        setOptimisticCollections(prev => {
+            const base = prev ?? serverCollections;
+            return base.map(item => {
+                const newPos = updatedMap.get(item.id);
+                return newPos !== undefined ? { ...item, position: newPos } : item;
+            });
+        });
+
+        const rootParentId = collections.find(c => c.parentId)?.parentId || '1';
+        const targetParentId = sourceNode.parentId || rootParentId;
+
+        try {
+            setIsReordering(true);
+            await moveCollection({
+                variables: {
+                    input: {
+                        collectionId: sourceId,
+                        parentId: targetParentId,
+                        index: finalIndex,
+                    },
+                },
+            });
+            await refetch();
+            setOptimisticCollections(null);
+            showNotice(`已调整分类《${sourceNode.name}》排序`);
+        } catch (moveError) {
+            setOptimisticCollections(null);
+            await refetch();
+            showError(toUserFacingError(moveError, '分类排序调整失败，请稍后重试'));
+        } finally {
+            setIsReordering(false);
+        }
     };
 
     const openEditor = (item: EditableItem | null = null) => {
@@ -694,18 +780,112 @@ export function CategoriesModule() {
         }
     };
 
-    const renderCollection = (node: CollectionTreeNode, depth = 0) => {
+    const renderCollection = (
+        node: CollectionTreeNode,
+        depth = 0,
+        siblings: CollectionTreeNode[] = collectionTree,
+        index = 0,
+    ) => {
         const isTopLevel = depth === 0;
         const hasChildren = node.children.length > 0;
         const isExpanded = !isTopLevel || visibleExpandedCollectionIds.has(node.id);
+        const locked = isReordering || siblings.length < 2;
 
         return (
-            <div key={node.id} className="space-y-1">
+            <div
+                key={node.id}
+                data-collection-id={node.id}
+                className={`relative space-y-1 ${draggingId === node.id && !locked ? 'opacity-40' : ''}`}
+                onDragOver={event => {
+                    if (locked || !dragSourceRef.current) return;
+                    const source = dragSourceRef.current;
+                    if ((source.parentId ?? '') !== (node.parentId ?? '')) return;
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                    if (source.id === node.id) {
+                        setDropTarget(null);
+                        return;
+                    }
+                    const placement = placementAt(event);
+                    setDropTarget(current =>
+                        current?.id === node.id && current.placement === placement
+                            ? current
+                            : { id: node.id, placement },
+                    );
+                }}
+                onDragLeave={event => {
+                    if (
+                        event.relatedTarget instanceof Node &&
+                        event.currentTarget.contains(event.relatedTarget)
+                    ) {
+                        return;
+                    }
+                    setDropTarget(current => (current?.id === node.id ? null : current));
+                }}
+                onDrop={event => {
+                    if (locked || !dragSourceRef.current) return;
+                    const source = dragSourceRef.current;
+                    if ((source.parentId ?? '') !== (node.parentId ?? '')) return;
+                    event.preventDefault();
+                    const placement = placementAt(event);
+                    clearDrag();
+                    void handleReorder(source.id, node.id, placement, siblings);
+                }}
+            >
+                {dropTarget?.id === node.id && !locked && (
+                    <div
+                        aria-hidden="true"
+                        data-drop-position={dropTarget.placement}
+                        className={`pointer-events-none absolute inset-x-2 z-10 h-0.5 rounded bg-blue-500 ${dropTarget.placement === 'before' ? 'top-0' : 'bottom-0'}`}
+                    />
+                )}
                 <div
                     className={`flex min-h-12 items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 ${isTopLevel ? 'shadow-2xs' : ''}`}
                     style={{ marginLeft: Math.min(depth, 3) * 20 }}
                 >
                     <div className="flex min-w-0 items-center gap-2">
+                        <button
+                            type="button"
+                            draggable={!locked}
+                            disabled={locked}
+                            aria-label={`拖动分类 ${node.name} 排序`}
+                            aria-keyshortcuts="ArrowUp ArrowDown"
+                            title={locked ? '同级至少需要2个分类才可排序' : '拖拽排序，也可使用上下方向键'}
+                            className="flex h-8 w-5 shrink-0 cursor-grab items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-blue-600 focus-visible:outline-2 focus-visible:outline-blue-500 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-40"
+                            onDragStart={event => {
+                                if (locked) {
+                                    event.preventDefault();
+                                    return;
+                                }
+                                dragSourceRef.current = { id: node.id, parentId: node.parentId ?? null };
+                                setDraggingId(node.id);
+                                event.dataTransfer.effectAllowed = 'move';
+                                event.dataTransfer.setData('text/plain', node.id);
+                                const element =
+                                    event.currentTarget.closest<HTMLElement>('[data-collection-id]');
+                                if (element) {
+                                    event.dataTransfer.setDragImage(element, 24, element.clientHeight / 2);
+                                }
+                            }}
+                            onDragEnd={clearDrag}
+                            onKeyDown={event => {
+                                if (locked || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+                                event.preventDefault();
+                                const direction = event.key === 'ArrowUp' ? -1 : 1;
+                                const adjacent = siblings[index + direction];
+                                if (adjacent) {
+                                    keyboardHandleRef.current = event.currentTarget;
+                                    void handleReorder(
+                                        node.id,
+                                        adjacent.id,
+                                        direction === -1 ? 'before' : 'after',
+                                        siblings,
+                                    );
+                                }
+                            }}
+                        >
+                            <GripVertical className="h-4 w-4" />
+                        </button>
                         {isTopLevel && hasChildren ? (
                             <button
                                 type="button"
@@ -773,7 +953,9 @@ export function CategoriesModule() {
                 </div>
                 {hasChildren && isExpanded && (
                     <div id={`collection-children-${node.id}`} className="space-y-1">
-                        {node.children.map(child => renderCollection(child, depth + 1))}
+                        {node.children.map((child, childIndex) =>
+                            renderCollection(child, depth + 1, node.children, childIndex),
+                        )}
                     </div>
                 )}
             </div>
@@ -914,8 +1096,10 @@ export function CategoriesModule() {
                                 </button>
                             </div>
                         </div>
-                        <div className="space-y-3 bg-slate-50/50 p-3 sm:p-5">
-                            {collectionTree.map(node => renderCollection(node))}
+                        <div className="space-y-3 bg-slate-50/50 p-3 sm:p-5" aria-busy={isReordering}>
+                            {collectionTree.map((node, index) =>
+                                renderCollection(node, 0, collectionTree, index),
+                            )}
                         </div>
                     </div>
                 ) : activeTab === 'OPTION_TEMPLATES' ? (
