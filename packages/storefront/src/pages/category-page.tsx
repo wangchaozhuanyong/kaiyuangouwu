@@ -350,13 +350,15 @@ export function CategoryPage() {
                                                 });
                                             }}
                                         >
-                                            <span className="primary-category-image" aria-hidden="true">
+                                            <span className="primary-category-image">
                                                 {image ? (
                                                     <SafeImage
                                                         src={image}
                                                         alt=""
                                                         imageKind="thumbnail"
                                                         loading={index < 6 ? 'eager' : 'lazy'}
+                                                        fetchPriority={index < 6 ? 'high' : 'auto'}
+                                                        showFallbackIcon={false}
                                                     />
                                                 ) : (
                                                     <span className="primary-category-placeholder">
@@ -438,13 +440,14 @@ export function CategoryPage() {
                                                 setAllCategoriesOpen(false);
                                             }}
                                         >
-                                            <span className="all-primary-category-image" aria-hidden="true">
+                                            <span className="all-primary-category-image">
                                                 {image ? (
                                                     <SafeImage
                                                         src={image}
                                                         alt=""
                                                         imageKind="thumbnail"
                                                         loading="lazy"
+                                                        showFallbackIcon={false}
                                                     />
                                                 ) : (
                                                     <span className="primary-category-placeholder">

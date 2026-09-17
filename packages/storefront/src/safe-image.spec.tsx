@@ -138,10 +138,14 @@ describe('SafeImage', () => {
         expect(markup).toContain('storefront-thumbnail-320');
     });
 
-    it('does not assume a previously rendered URL is ready in a new image element', async () => {
+    it('reuses session decoded status so new image elements mount ready without flash while unseen images wait', async () => {
         const host = document.createElement('div');
         const root = createRoot(host);
         try {
+            act(() => root.render(<SafeImage src="/unseen.webp" alt="Unseen" />));
+            const unseen = requiredImage(host);
+            expect(unseen.classList.contains('is-loaded')).toBe(false);
+
             act(() => root.render(<SafeImage src="/same.webp" alt="One" />));
             const first = requiredImage(host);
             Object.defineProperties(first, { complete: { value: true }, naturalWidth: { value: 320 } });
@@ -151,7 +155,7 @@ describe('SafeImage', () => {
             });
             expect(first.classList.contains('is-loaded')).toBe(true);
             act(() => root.render(<SafeImage key="new" src="/same.webp" alt="Two" />));
-            expect(host.querySelector('img')?.classList.contains('is-loaded')).toBe(false);
+            expect(host.querySelector('img')?.classList.contains('is-loaded')).toBe(true);
         } finally {
             act(() => root.unmount());
         }

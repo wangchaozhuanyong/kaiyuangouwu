@@ -309,6 +309,9 @@ img {
 .safe-image.is-loaded {
     opacity: 1;
 }
+.safe-image-frame.is-loaded .safe-image {
+    transition: transform 220ms ease;
+}
 .safe-image-frame.is-priority .safe-image {
     transition: none;
 }
@@ -325,8 +328,12 @@ img {
 }
 .safe-image-frame.is-loaded > .safe-image-fallback {
     opacity: 0;
+    display: none;
+    pointer-events: none;
+    transition: none;
 }
 .safe-image-frame.is-priority > .safe-image-fallback {
+    display: none;
     transition: none;
 }
 .safe-image-fallback > svg {

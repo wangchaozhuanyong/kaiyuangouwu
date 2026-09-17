@@ -41,15 +41,24 @@ export function SafeImage(props: SafeImageProps) {
 
 const decodedImageUrls = new Set<string>();
 
-export function isImageAlreadyDecoded(src?: string | null, fallbackSrc?: string | null): boolean {
+export function isImageAlreadyDecoded(
+    src?: string | null,
+    fallbackSrc?: string | null,
+    sourceKey?: string | null,
+): boolean {
     if (typeof window === 'undefined') return false;
     if (src && decodedImageUrls.has(src)) return true;
     if (fallbackSrc && decodedImageUrls.has(fallbackSrc)) return true;
+    if (sourceKey && decodedImageUrls.has(sourceKey)) return true;
     return false;
 }
 
 export function markImageDecoded(url?: string | null): void {
     if (url) decodedImageUrls.add(url);
+}
+
+export function clearDecodedImageCache(): void {
+    decodedImageUrls.clear();
 }
 
 function SafeImageSource({
@@ -75,7 +84,10 @@ function SafeImageSource({
     const sourceKey = [sources.src, sources.srcSet ?? imageProps.srcSet ?? '', sources.sizes ?? ''].join(
         '\u0000',
     );
-    const [loadedCandidate, setLoadedCandidate] = useState('');
+    const initiallyDecoded = isImageAlreadyDecoded(sources.src, currentSrc, sourceKey);
+    const [loadedCandidate, setLoadedCandidate] = useState(() =>
+        initiallyDecoded ? sourceKey + '\u0001cached' : '',
+    );
     const imageRef = useRef<HTMLImageElement>(null);
     const active = useRef(true);
     const exceededBudget = useRef(false);
@@ -108,6 +120,8 @@ function SafeImageSource({
         markImageDecoded(image.currentSrc || image.src);
         markImageDecoded(sources.src);
         markImageDecoded(currentSrc);
+        markImageDecoded(sourceKey);
+        markImageDecoded(candidate);
         void decodeImageElement(image)
             .then(() => {
                 if (
@@ -120,6 +134,8 @@ function SafeImageSource({
                 markImageDecoded(image.currentSrc || image.src);
                 markImageDecoded(sources.src);
                 markImageDecoded(currentSrc);
+                markImageDecoded(sourceKey);
+                markImageDecoded(candidate);
                 setLoadedCandidate(sourceKey + '\u0001' + candidate);
                 setTimedOut(false);
                 onReady(image.currentSrc || image.src);
@@ -144,7 +160,20 @@ function SafeImageSource({
             setTimedOut(true);
         };
         image?.addEventListener(IMAGE_WAIT_EXPIRED_EVENT, expire);
-        if (image?.complete && image.naturalWidth > 0) reveal(image);
+        if (image?.complete && image.naturalWidth > 0) {
+            const candidate = imageCandidateIdentity(image);
+            markImageDecoded(image.currentSrc || image.src);
+            markImageDecoded(sources.src);
+            markImageDecoded(currentSrc);
+            markImageDecoded(sourceKey);
+            markImageDecoded(candidate);
+            if (!loadedCandidate.startsWith(sourceKey + '\u0001')) {
+                setLoadedCandidate(sourceKey + '\u0001' + candidate);
+                setTimedOut(false);
+                onReady(image.currentSrc || image.src);
+            }
+            reveal(image);
+        }
         return () => {
             active.current = false;
             image?.removeEventListener(IMAGE_WAIT_EXPIRED_EVENT, expire);
