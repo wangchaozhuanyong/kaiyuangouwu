@@ -258,9 +258,9 @@ export function ClientPluginsModule() {
                     />
                 ) : (
                     draft && (
-                        <div className="grid gap-6 lg:grid-cols-12 items-start">
+                        <div className="grid gap-6 xl:grid-cols-12 items-start">
                             {/* Left column: Installed Plugins */}
-                            <section className="rounded-xl border border-slate-200 bg-white lg:col-span-7 xl:col-span-7">
+                            <section className="rounded-xl border border-slate-200 bg-white xl:col-span-7">
                                 <div className="border-b border-slate-100 p-4">
                                     <div className="flex items-center justify-between">
                                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -279,7 +279,7 @@ export function ClientPluginsModule() {
                                     </p>
                                 </div>
                                 {draft.items.length ? (
-                                    <div className="space-y-3 p-4">
+                                    <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
                                         {draft.items.map((item, index) => {
                                             const code = pluginCode(item) ?? '';
                                             const definition = catalog.find(value => value.code === code);
@@ -320,7 +320,7 @@ export function ClientPluginsModule() {
                                             );
                                         })}
                                         {validation && (
-                                            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+                                            <div className="col-span-full rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
                                                 <strong>配置未完成：</strong>
                                                 {validation}
                                             </div>
@@ -340,7 +340,7 @@ export function ClientPluginsModule() {
                             </section>
 
                             {/* Right column: Available Plugin Catalog */}
-                            <section className="rounded-xl border border-slate-200 bg-white lg:col-span-5 xl:col-span-5">
+                            <section className="rounded-xl border border-slate-200 bg-white xl:col-span-5">
                                 <div className="border-b border-slate-100 p-4">
                                     <div className="flex items-center justify-between">
                                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -355,7 +355,7 @@ export function ClientPluginsModule() {
                                         平台已发布的开箱即用插件，可按需添加到当前店铺
                                     </p>
                                 </div>
-                                <div className="grid gap-3 p-4 sm:grid-cols-1 xl:grid-cols-2">
+                                <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-2">
                                     {catalog.map(definition => (
                                         <PluginCard
                                             key={definition.code}
@@ -502,7 +502,7 @@ function InstalledEditor({
                     <IconButton label="移除" disabled={false} onClick={onRemove} icon={Trash2} danger />
                 </div>
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="mt-4 grid gap-3">
                 <Field label="展示位置">
                     <select
                         value={placement ?? ''}
