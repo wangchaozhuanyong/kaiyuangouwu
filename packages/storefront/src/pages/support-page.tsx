@@ -139,20 +139,23 @@ export function SupportContent({
             ) : null}
             {content.subtitle.trim() ? <p className="support-page-intro">{content.subtitle.trim()}</p> : null}
             <section className="support-hours-card" aria-labelledby="support-hours-title">
-                <div className="support-hours-rail" aria-hidden="true">
-                    <Clock3 />
+                <div className="support-hours-heading">
+                    <div className="support-hours-title-wrap">
+                        <div className="support-hours-rail" aria-hidden="true">
+                            <Clock3 size={18} />
+                        </div>
+                        <h2 id="support-hours-title">{isZh ? '客服服务时间' : 'Customer-service hours'}</h2>
+                    </div>
+                    <span>{service.days}</span>
                 </div>
                 <div className="support-hours-main">
-                    <div className="support-hours-heading">
-                        <h2 id="support-hours-title">{isZh ? '客服服务时间' : 'Customer-service hours'}</h2>
-                        <span>{service.days}</span>
-                    </div>
                     <strong className="support-hours-time">{service.time}</strong>
-                    <i aria-hidden="true" />
-                    <div className="support-hours-note">
-                        <MessageCircle aria-hidden="true" />
-                        <p>{service.note}</p>
-                    </div>
+                    {service.note ? (
+                        <div className="support-hours-note">
+                            <MessageCircle size={15} aria-hidden="true" />
+                            <p>{service.note}</p>
+                        </div>
+                    ) : null}
                 </div>
             </section>
 

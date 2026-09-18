@@ -321,7 +321,7 @@
         min-width: 0;
         max-width: none;
         height: 106px;
-        grid-template-columns: minmax(0, 1fr) 48px;
+        grid-template-columns: minmax(0, 1fr) 108px;
         border-radius: var(--radius-md);
         box-shadow: none;
     }
@@ -355,9 +355,15 @@
         line-height: 1.5;
         white-space: normal;
     }
+    .desktop-store-layout .home-page .coupon-ticket-action {
+        padding: 0 12px;
+    }
     .desktop-store-layout .home-page .coupon-claim-btn {
-        width: 36px;
-        height: 36px;
+        width: auto;
+        min-width: 84px;
+        height: 32px;
+        padding: 0 14px;
+        font-size: 12px;
     }
     .desktop-store-layout .home-page .flash-sale-section {
         position: relative;
