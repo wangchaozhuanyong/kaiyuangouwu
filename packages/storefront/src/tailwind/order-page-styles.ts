@@ -110,7 +110,7 @@ export const orderPageStyles: PageStyleMap = {
     'order-product-bottom':
         '[min-width:0] [display:flex] [align-items:flex-end] [justify-content:space-between] [gap:8px]',
     'order-product-content':
-        '[height:76px] [min-width:0] [display:grid] [grid-template-rows:auto_minmax(0,_1fr)_auto] [align-items:start] [gap:3px]',
+        '[height:76px] [min-width:0] [display:flex] [flex-direction:column] [justify-content:space-between] [gap:3px]',
     'order-product-heading':
         '[min-width:0] [display:grid] [grid-template-columns:minmax(0,_1fr)_auto] [align-items:baseline] [gap:8px]',
     'order-product-price':
@@ -120,8 +120,8 @@ export const orderPageStyles: PageStyleMap = {
     'order-product-spec':
         '[min-width:0] [font-size:11.5px] [line-height:1.35] [color:var(--muted)] [overflow:hidden] [white-space:nowrap] [text-overflow:ellipsis]',
     'order-product-tag':
-        '[height:18px] [padding:0_6px] [border:1px_solid_#e2e8f0] [border-radius:4px] [background:#f8fafc] [color:#475569] [font-size:10px] [line-height:16px] [font-weight:500] [white-space:nowrap] [&.is-service]:[border-color:rgba(16,_185,_129,_0.2)] [&.is-service]:[background:#f0fdf4] [&.is-service]:[color:#0f8a62]',
-    'order-product-tags': '[min-width:0] [display:flex] [align-items:center] [gap:5px] [overflow:hidden]',
+        '[font-size:11px] [line-height:1.35] [font-weight:500] [color:#0284c7] [white-space:nowrap] [&.is-service]:[color:#0f8a62]',
+    'order-product-tags': '[min-width:0] [display:flex] [align-items:center] [gap:6px] [overflow:hidden]',
     'order-product-title':
         '[min-width:0] [font-size:14px] [font-weight:var(--font-weight-semibold)] [color:var(--text)] [line-height:1.35] [overflow:hidden] [white-space:nowrap] [text-overflow:ellipsis]',
     'order-search':

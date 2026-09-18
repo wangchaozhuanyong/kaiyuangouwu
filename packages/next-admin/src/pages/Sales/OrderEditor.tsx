@@ -49,6 +49,7 @@ import {
     TRANSITION_SALES_ORDER,
 } from '../../graphql/sales.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useAdminReturn } from '../../hooks/use-admin-return';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { isInputMethodKey } from '../../utils/input-method';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -223,6 +224,7 @@ const historyLabel = (entry: HistoryItem) => {
 
 export function OrderEditor() {
     const navigate = useNavigate();
+    const { returnToList } = useAdminReturn('/sales/orders');
     const { id } = useParams<{ id: string }>();
     const { hasAnyPermission } = useAdminPermissions();
     const canReadProfitExpenses = hasAnyPermission(['ReadCatalogOperations']);
@@ -564,7 +566,7 @@ export function OrderEditor() {
                     <div className="mt-4 flex justify-center gap-2">
                         <button
                             type="button"
-                            onClick={() => navigate('/sales/orders')}
+                            onClick={returnToList}
                             className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold"
                         >
                             返回列表
@@ -590,7 +592,7 @@ export function OrderEditor() {
                     </h1>
                     <button
                         type="button"
-                        onClick={() => navigate('/sales/orders')}
+                        onClick={returnToList}
                         className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
                     >
                         返回订单列表
@@ -606,7 +608,7 @@ export function OrderEditor() {
                     <div className="flex min-w-0 items-center gap-3">
                         <button
                             type="button"
-                            onClick={() => navigate('/sales/orders')}
+                            onClick={returnToList}
                             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100"
                             aria-label="返回订单列表"
                         >

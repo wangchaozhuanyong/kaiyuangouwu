@@ -218,16 +218,16 @@
 
 .product-row-badge,
 .category-product-list .product-row-badge {
-    font-size: 10px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 500;
     color: #0284c7;
-    background: #f0f9ff;
-    padding: 1.5px 6px;
-    border-radius: 4px;
+    background: transparent;
+    padding: 0;
+    border: 0;
     display: inline-block;
     width: fit-content;
-    border: 1px solid #e0f2fe;
-    margin-top: 2px;
+    line-height: 1.35;
+    margin-top: 0;
 }
 
 .category-product-list .product-row-warranty {

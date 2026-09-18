@@ -13,34 +13,15 @@ export const PORTAL_HTML = `<!DOCTYPE html>
     <title>邮件验证码查询中心</title>
     <style>
         :root {
-            --primary: #2563eb;
-            --primary-hover: #1d4ed8;
-            --primary-light: #eff6ff;
-            --primary-border: #bfdbfe;
+            --primary: #b33928;
+            --primary-hover: #9c2e1f;
+            --primary-light: #fcf4f2;
+            --primary-border: #f3d4ce;
             --success: #16a34a;
             --success-light: #f0fdf4;
             --error: #dc2626;
             --error-light: #fef2f2;
             --warning: #d97706;
-            --bg: #f8fafc;
-            --card-bg: #ffffff;
-            --text: #0f172a;
-            --text-secondary: #64748b;
-            --text-muted: #94a3b8;
-            --border: #e2e8f0;
-            --border-hover: #cbd5e1;
-            --radius-sm: 8px;
-            --radius: 12px;
-            --radius-lg: 16px;
-            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-            --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
-        }
-        html[data-storefront-preset='modern-oriental'] {
-            --primary: #b33928;
-            --primary-hover: #9c2e1f;
-            --primary-light: #fcf4f2;
-            --primary-border: #f3d4ce;
             --bg: #f5f2eb;
             --card-bg: #fffdf8;
             --text: #2c2523;
@@ -48,45 +29,80 @@ export const PORTAL_HTML = `<!DOCTYPE html>
             --text-muted: #9b918c;
             --border: #e5dec9;
             --border-hover: #d2c8af;
+            --radius-sm: 8px;
+            --radius: 12px;
+            --radius-lg: 16px;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
         }
-        html[data-storefront-preset='modern-oriental'] .top-nav {
-            background: #fffdf8;
-            border-bottom-color: var(--border);
+        html[data-storefront-preset='classic'] {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --primary-light: #eff6ff;
+            --primary-border: #bfdbfe;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #0f172a;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --border: #e2e8f0;
+            --border-hover: #cbd5e1;
         }
-        html[data-storefront-preset='modern-oriental'] .nav-back-link {
+        .top-nav {
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border);
+        }
+        .nav-back-link {
             background: #ebe6dc;
             color: var(--text-secondary);
         }
-        html[data-storefront-preset='modern-oriental'] .nav-back-link:hover {
+        html[data-storefront-preset='classic'] .nav-back-link {
+            background: #f1f5f9;
+        }
+        .nav-back-link:hover {
             background: var(--primary-light);
             color: var(--primary);
         }
-        html[data-storefront-preset='modern-oriental'] .code-input {
+        .code-input {
             background: #faf7f2;
             border-color: var(--border);
         }
-        html[data-storefront-preset='modern-oriental'] .code-input:focus {
-            background: #fffdf8;
+        html[data-storefront-preset='classic'] .code-input {
+            background: #f8fafc;
+        }
+        .code-input:focus {
+            background: var(--card-bg);
             border-color: var(--primary);
             box-shadow: 0 0 0 3.5px rgba(179, 57, 40, 0.12);
         }
-        html[data-storefront-preset='modern-oriental'] .clear-btn {
+        html[data-storefront-preset='classic'] .code-input:focus {
+            box-shadow: 0 0 0 3.5px rgba(37, 99, 235, 0.12);
+        }
+        .clear-btn {
             background: #e5dec9;
             color: var(--text-secondary);
         }
-        html[data-storefront-preset='modern-oriental'] .clear-btn:hover {
+        html[data-storefront-preset='classic'] .clear-btn {
+            background: #e2e8f0;
+        }
+        .clear-btn:hover {
             background: #d2c8af;
             color: var(--text);
         }
-        html[data-storefront-preset='modern-oriental'] .query-btn {
+        .query-btn {
             background: linear-gradient(135deg, #b33928 0%, #9c2e1f 100%);
             box-shadow: 0 4px 12px rgba(179, 57, 40, 0.25);
         }
-        html[data-storefront-preset='modern-oriental'] .query-btn:hover {
+        html[data-storefront-preset='classic'] .query-btn {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+        }
+        .query-btn:hover {
             box-shadow: 0 6px 16px rgba(179, 57, 40, 0.35);
         }
-        html[data-storefront-preset='modern-oriental'] .empty-autorefresh-btn {
-            background: #fffdf8;
+        .empty-autorefresh-btn {
+            background: var(--card-bg);
             border-color: var(--border);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -888,7 +904,7 @@ export const PORTAL_HTML = `<!DOCTYPE html>
     <main class="container">
         <!-- Hero Header -->
         <section class="hero-section">
-            <div class="hero-badge">⚡ <span data-portal-store-name>店铺</span> · 邮件中继服务</div>
+            <div class="hero-badge">⚡ <span data-portal-store-name>大马通</span> · 邮件中继服务</div>
             <h1 class="hero-title">邮件验证码实时查询中心</h1>
             <p class="hero-subtitle">输入专属查询码，实时查收验证码</p>
         </section>
@@ -1008,7 +1024,7 @@ export const PORTAL_HTML = `<!DOCTYPE html>
         <!-- Footer -->
         <footer class="portal-footer">
             <p>🛡️ 数据经端到端加密与单向中继保护，仅凭对应查询码可读取邮件</p>
-            <p>© <span data-portal-store-name>店铺</span> · <a href="/services">智能商业服务平台</a> · <a href="/support">联系客服</a></p>
+            <p>© <span data-portal-store-name>大马通</span> · <a href="/services">智能商业服务平台</a> · <a href="/support">联系客服</a></p>
         </footer>
     </main>
 

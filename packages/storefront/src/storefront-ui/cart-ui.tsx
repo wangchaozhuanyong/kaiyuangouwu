@@ -307,6 +307,26 @@ export function SwipeableCartLine({
     const stockError = quantityStockMessage(variant, line.quantity, language);
     const stock = productAvailability(variant).stock;
     const productName = variant?.name ?? (isZh ? '商品' : 'item');
+    const fulfillmentType = variant?.customFields?.fulfillmentType;
+    const deliveryMode = variant?.customFields?.digitalDeliveryMode;
+    const fulfillmentLabel =
+        fulfillmentType === 'physical'
+            ? isZh
+                ? '实物商品 · 需要配送'
+                : 'Physical · Delivery'
+            : fulfillmentType === 'digital'
+              ? deliveryMode === 'auto_card'
+                  ? isZh
+                      ? '数字商品 · 自动发货'
+                      : 'Digital · Auto delivery'
+                  : deliveryMode === 'file_download'
+                    ? isZh
+                        ? '数字商品 · 付款后下载'
+                        : 'Digital · Download'
+                    : isZh
+                      ? '数字商品 · 人工服务'
+                      : 'Digital · Manual service'
+              : null;
     const frontRef = useRef<HTMLDivElement>(null);
     const actionsRef = useRef<HTMLDivElement>(null);
     const gestureRef = useRef({
@@ -540,6 +560,7 @@ export function SwipeableCartLine({
                         <ChevronLeft aria-hidden="true" />
                     </button>
                     <strong>{variant?.name ?? (isZh ? '商品已失效' : 'Unavailable item')}</strong>
+                    {fulfillmentLabel ? <span className="cart-line-tag">{fulfillmentLabel}</span> : null}
                     {stockError && (
                         <small className="cart-stock-error" role="status">
                             {stockError}

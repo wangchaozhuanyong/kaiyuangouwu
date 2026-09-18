@@ -12,7 +12,7 @@ import {
     UserRound,
 } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
@@ -33,6 +33,7 @@ import {
     SET_DRAFT_ORDER_SHIPPING_METHOD,
     TRANSITION_SALES_ORDER,
 } from '../../graphql/sales.graphql';
+import { useAdminReturn } from '../../hooks/use-admin-return';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
     canManageOrderInChannel,
@@ -244,7 +245,9 @@ function VariantSearch({
 
 export function DraftOrderEditor() {
     const { id } = useParams<{ id: string }>();
+    const location = useLocation();
     const navigate = useNavigate();
+    const { returnToList } = useAdminReturn('/sales/orders?tab=drafts');
     const requestConfirmation = useConfirmDialog();
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
@@ -503,7 +506,7 @@ export function DraftOrderEditor() {
             if (response.data?.deleteDraftOrder.result !== 'DELETED') {
                 throw new Error(response.data?.deleteDraftOrder.message || '草稿未删除');
             }
-            navigate('/sales/orders?tab=drafts');
+            returnToList();
         } catch (error) {
             fail(error, '草稿删除失败');
         }
@@ -514,7 +517,7 @@ export function DraftOrderEditor() {
         return (
             <WorkflowError
                 message={toUserFacingError(orderQuery.error, '草稿订单不存在或加载失败')}
-                onBack={() => navigate('/sales/orders?tab=drafts')}
+                onBack={returnToList}
                 onRetry={() => void orderQuery.refetch()}
             />
         );
@@ -527,7 +530,7 @@ export function DraftOrderEditor() {
                         ? `请通过顶部店铺选择器切换到销售店铺“${order.salesChannel.code}”后操作。`
                         : '历史订单归属待核实，暂时只能查看。'
                 }
-                onBack={() => navigate(`/sales/orders/${order.id}`)}
+                onBack={() => navigate(`/sales/orders/${order.id}`, { state: location.state })}
             />
         );
 
@@ -536,7 +539,7 @@ export function DraftOrderEditor() {
             <WorkflowHeader
                 title={`草稿订单 ${order.code}`}
                 subtitle={`状态：${getOrderStateLabel(order.state)} · 所有修改直接写入草稿`}
-                onBack={() => navigate('/sales/orders?tab=drafts')}
+                onBack={returnToList}
                 actions={
                     <button
                         type="button"
@@ -841,7 +844,9 @@ interface PreviewOrder {
 
 export function ModifyOrderEditor() {
     const { id } = useParams<{ id: string }>();
+    const location = useLocation();
     const navigate = useNavigate();
+    const { returnToList } = useAdminReturn('/sales/orders');
     const requestConfirmation = useConfirmDialog();
     const orderQuery = useQuery<OrderQueryData>(GET_SALES_ORDER, {
         variables: { id },
@@ -1007,7 +1012,7 @@ export function ModifyOrderEditor() {
             const response = await modifyOrder({ variables: { input: buildInput(false, refunds) } });
             const result = response.data?.modifyOrder;
             if (result?.__typename !== 'Order') throw new Error(getMutationError(result));
-            navigate(`/sales/orders/${order.id}`);
+            navigate(`/sales/orders/${order.id}`, { state: location.state });
         } catch (error) {
             setActionError(toUserFacingError(error, '订单修改提交失败'));
         }
@@ -1018,7 +1023,7 @@ export function ModifyOrderEditor() {
         return (
             <WorkflowError
                 message={toUserFacingError(orderQuery.error, '订单不存在或加载失败')}
-                onBack={() => navigate('/sales/orders')}
+                onBack={returnToList}
                 onRetry={() => void orderQuery.refetch()}
             />
         );
@@ -1026,7 +1031,7 @@ export function ModifyOrderEditor() {
         return (
             <WorkflowError
                 message={`订单当前处于${getOrderStateLabel(order.state)}，必须先从订单详情将状态推进到“修改中”。`}
-                onBack={() => navigate(`/sales/orders/${order.id}`)}
+                onBack={() => navigate(`/sales/orders/${order.id}`, { state: location.state })}
             />
         );
 
@@ -1038,7 +1043,7 @@ export function ModifyOrderEditor() {
                         ? `请通过顶部店铺选择器切换到销售店铺“${order.salesChannel.code}”后操作。`
                         : '历史订单归属待核实，暂时只能查看。'
                 }
-                onBack={() => navigate(`/sales/orders/${order.id}`)}
+                onBack={() => navigate(`/sales/orders/${order.id}`, { state: location.state })}
             />
         );
 
@@ -1047,7 +1052,7 @@ export function ModifyOrderEditor() {
             <WorkflowHeader
                 title={`修改订单 ${order.code}`}
                 subtitle="先预览金额和退款影响，再写入真实订单"
-                onBack={() => navigate(`/sales/orders/${order.id}`)}
+                onBack={() => navigate(`/sales/orders/${order.id}`, { state: location.state })}
             />
             <div className="flex-1 overflow-y-auto p-5 sm:p-6">
                 <div className="mx-auto grid w-full max-w-none items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">

@@ -12,6 +12,7 @@ import {
     type FulfillmentType,
     type RefundPolicy,
 } from '../../graphql/commerce.graphql';
+import { useAdminReturn } from '../../hooks/use-admin-return';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { useUrlTab } from '../../hooks/use-url-tab';
@@ -319,8 +320,9 @@ export function useProductEditorForm() {
         hasUnsavedChanges && !saving,
         '当前商品还有未保存的修改，离开后这些内容将丢失。确定离开吗？',
     );
+    const { returnToList } = useAdminReturn('/catalog/list');
     const leaveToProductList = () => {
-        if (confirmLeave()) navigate('/catalog/list');
+        if (confirmLeave()) returnToList();
     };
 
     // Mutations

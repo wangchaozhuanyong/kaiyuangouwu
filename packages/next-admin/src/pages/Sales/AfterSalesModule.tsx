@@ -14,7 +14,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
@@ -144,6 +144,7 @@ const reasonLabels: Record<string, string> = {
 };
 
 export function AfterSalesModule() {
+    const location = useLocation();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useUrlTab<AfterSalesTab>(AFTER_SALES_TABS, 'all');
     const [page, setPage] = useState(0);
@@ -445,7 +446,14 @@ export function AfterSalesModule() {
                                                         <button
                                                             type="button"
                                                             onClick={() =>
-                                                                navigate(`/sales/orders/${request.order.id}`)
+                                                                navigate(
+                                                                    `/sales/orders/${request.order.id}`,
+                                                                    {
+                                                                        state: {
+                                                                            returnTo: `${location.pathname}${location.search}`,
+                                                                        },
+                                                                    },
+                                                                )
                                                             }
                                                             className="block max-w-40 truncate whitespace-nowrap font-mono text-[10px] text-blue-600 hover:underline"
                                                             title={request.order.code}
@@ -596,7 +604,11 @@ export function AfterSalesModule() {
                                     <div className="text-[10px] font-semibold text-slate-400">关联订单</div>
                                     <button
                                         type="button"
-                                        onClick={() => navigate(`/sales/orders/${selectedRequest.order.id}`)}
+                                        onClick={() =>
+                                            navigate(`/sales/orders/${selectedRequest.order.id}`, {
+                                                state: { returnTo: `${location.pathname}${location.search}` },
+                                            })
+                                        }
                                         className="mt-2 font-mono text-sm font-semibold text-blue-700 hover:underline"
                                     >
                                         {selectedRequest.order.code}
