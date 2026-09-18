@@ -21,10 +21,6 @@ const TwoFactorPage = lazyRouteComponent(
     () => import('../client-plugins/two-factor/isolated-entry'),
     'CustomerTwoFactorEntry',
 );
-const MailQueryPage = lazyRouteComponent(
-    () => import('../client-plugins/mail-query/mail-query-page'),
-    'MailQueryPage',
-);
 
 export function ServicesRoutePage() {
     const runtime = useRuntime();
@@ -68,18 +64,6 @@ export function TwoFactorRoutePage() {
             language={runtime.language}
             onBack={runtime.goBack}
             onSignIn={() => runtime.navigate({ name: 'login' })}
-            onNotify={runtime.notify}
-        />
-    );
-}
-
-export function MailQueryRoutePage() {
-    const runtime = useRuntime();
-    return (
-        <MailQueryPage
-            api={runtime.api}
-            language={runtime.language}
-            onBack={runtime.goBack}
             onNotify={runtime.notify}
         />
     );
@@ -151,6 +135,5 @@ export function SupportRoutePage() {
 export const preloadServicesRoutePage = registerRoutePreload(ServicesRoutePage, BusinessServicesPage);
 export const preloadImageStudioRoutePage = registerRoutePreload(ImageStudioRoutePage, AiImageStudioPage);
 export const preloadTwoFactorRoutePage = registerRoutePreload(TwoFactorRoutePage, TwoFactorPage);
-export const preloadMailQueryRoutePage = registerRoutePreload(MailQueryRoutePage, MailQueryPage);
 export const preloadReviewsRoutePage = registerRoutePreload(ReviewsRoutePage, ReviewCenterPage);
 export const preloadSupportRoutePage = registerRoutePreload(SupportRoutePage, SupportPage);

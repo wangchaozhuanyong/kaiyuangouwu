@@ -26,7 +26,6 @@ export type RouteName =
     | 'reviews'
     | 'image-studio'
     | 'two-factor'
-    | 'mail-query'
     | 'login'
     | 'register'
     | 'verify-account'
@@ -112,7 +111,6 @@ const routePaths: Record<RouteName, string> = {
     reviews: '/reviews',
     'image-studio': '/image-studio',
     'two-factor': '/two-factor',
-    'mail-query': '/mail-query',
     login: '/login',
     register: '/register',
     'verify-account': '/verify-account',

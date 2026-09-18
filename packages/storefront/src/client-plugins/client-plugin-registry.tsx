@@ -121,13 +121,15 @@ function TwoFactorEntryPlugin({ language, onNavigate }: Readonly<ClientPluginCom
     );
 }
 
-function MailQueryEntryPlugin({ language, onNavigate }: Readonly<ClientPluginComponentProps>) {
+function MailQueryEntryPlugin({ language }: Readonly<ClientPluginComponentProps>) {
     const isZh = language === 'zh';
     return (
         <button
             type="button"
             className="category-client-plugin category-client-plugin-mail-query"
-            onClick={() => onNavigate({ name: 'mail-query' })}
+            onClick={() => {
+                window.location.href = '/mail-query';
+            }}
         >
             <span className="category-client-plugin-icon" aria-hidden="true">
                 <Mail />

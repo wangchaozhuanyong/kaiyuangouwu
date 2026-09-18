@@ -72,7 +72,6 @@ import {
     StorefrontRealtimeConnectionError,
 } from './api/helpers';
 import { ImageStudioApi } from './api/image-studio';
-import { MailQueryApi, type IcloudMailItem, type IcloudQueryResult } from './api/mail-query';
 import { RealtimeApi } from './api/realtime';
 import { ReferralsApi } from './api/referrals';
 import { publishAuthSessionChange } from './auth-session-sync';
@@ -85,7 +84,6 @@ export {
     ShopApiTimeoutError,
     StorefrontRealtimeConnectionError,
 };
-export type { IcloudMailItem, IcloudQueryResult };
 
 export class ShopApi {
     private readonly authTokens: AuthTokenState;
@@ -95,7 +93,6 @@ export class ShopApi {
     private readonly accountApi: AccountApi;
     private readonly referralsApi: ReferralsApi;
     private readonly imageStudioApi: ImageStudioApi;
-    private readonly mailQueryApi: MailQueryApi;
     private readonly cartCheckoutApi: CartCheckoutApi;
     private readonly realtimeApi: RealtimeApi;
 
@@ -126,7 +123,6 @@ export class ShopApi {
         this.accountApi = new AccountApi(ctx);
         this.referralsApi = new ReferralsApi(ctx);
         this.imageStudioApi = new ImageStudioApi(ctx);
-        this.mailQueryApi = new MailQueryApi(ctx);
         this.cartCheckoutApi = new CartCheckoutApi(ctx);
         this.realtimeApi = new RealtimeApi(ctx);
     }
@@ -631,10 +627,6 @@ export class ShopApi {
     private assertOrder(result: Order & ErrorResult): Order {
         this.assertNoError(result);
         return result;
-    }
-
-    async queryMails(code: string, signal?: AbortSignal): Promise<IcloudQueryResult> {
-        return this.mailQueryApi.queryMails(code, signal);
     }
 
     private assertNoError(result: ErrorResult): void {
