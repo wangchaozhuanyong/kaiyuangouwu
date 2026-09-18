@@ -21,7 +21,7 @@ import {
     X,
 } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -198,6 +198,7 @@ const formatDateTime = (value: string) => {
 };
 
 export function InventoryWarehouseModule() {
+    const location = useLocation();
     const requestConfirmation = useConfirmDialog();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useUrlTab<InventoryTab>(INVENTORY_TABS, 'all');
@@ -1131,6 +1132,11 @@ export function InventoryWarehouseModule() {
                                                             onClick={() =>
                                                                 navigate(
                                                                     `/catalog/products/${variant.product.id}?tab=variants`,
+                                                                    {
+                                                                        state: {
+                                                                            returnTo: `${location.pathname}${location.search}`,
+                                                                        },
+                                                                    },
                                                                 )
                                                             }
                                                             className="whitespace-nowrap rounded bg-blue-50 px-3 py-1.5 text-[10px] font-bold text-blue-700 hover:bg-blue-100"
@@ -1460,6 +1466,11 @@ export function InventoryWarehouseModule() {
                                                         onClick={() =>
                                                             navigate(
                                                                 `/catalog/products/${lot.productId}?tab=variants`,
+                                                                {
+                                                                    state: {
+                                                                        returnTo: `${location.pathname}${location.search}`,
+                                                                    },
+                                                                },
                                                             )
                                                         }
                                                         className="font-bold text-slate-500 hover:underline"

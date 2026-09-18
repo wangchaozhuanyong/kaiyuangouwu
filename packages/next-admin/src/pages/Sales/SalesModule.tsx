@@ -11,12 +11,13 @@ import {
     PackageCheck,
     Plus,
     RefreshCw,
+    RotateCcw,
     Search,
     Truck,
     X,
 } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SearchInput } from '../../components/SearchInput';
@@ -185,7 +186,9 @@ export function SalesModule() {
         'tab',
         ORDER_TAB_RESET_PARAMETERS,
     );
-    const { page, pageSize, setPageSize, searchTerm, setPage, setSearchTerm } = useUrlListState();
+    const location = useLocation();
+    const { isFiltered, page, pageSize, setPageSize, searchTerm, setPage, setSearchTerm, resetFilters } =
+        useUrlListState();
     const { sortDirection, sortField, toggleSort } = useUrlSortState({
         fields: ORDER_SORT_FIELDS,
         defaultField: 'orderPlacedAt',
@@ -260,7 +263,9 @@ export function SalesModule() {
             const response = await createDraftOrder();
             const draft = response.data?.createDraftOrder;
             if (!draft?.id) throw new Error('后端没有返回草稿订单 ID');
-            navigate(`/sales/orders/draft/${draft.id}`);
+            navigate(`/sales/orders/draft/${draft.id}`, {
+                state: { returnTo: `${location.pathname}${location.search}` },
+            });
         } catch (mutationError) {
             setActionError(toUserFacingError(mutationError, '草稿订单创建失败'));
         }
@@ -577,6 +582,18 @@ export function SalesModule() {
                                     </button>
                                 )}
                             </div>
+
+                            {isFiltered && (
+                                <button
+                                    type="button"
+                                    onClick={resetFilters}
+                                    className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
+                                    title="清空搜索与筛选条件"
+                                >
+                                    <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
+                                    <span>重置筛选</span>
+                                </button>
+                            )}
                             <div className="flex items-center gap-3">
                                 <span className="text-xs text-slate-500">
                                     已选{' '}
@@ -759,7 +776,11 @@ export function SalesModule() {
                                                             <button
                                                                 type="button"
                                                                 onClick={() =>
-                                                                    navigate(`/sales/orders/${order.id}`)
+                                                                    navigate(`/sales/orders/${order.id}`, {
+                                                                        state: {
+                                                                            returnTo: `${location.pathname}${location.search}`,
+                                                                        },
+                                                                    })
                                                                 }
                                                                 className="block max-w-44 truncate whitespace-nowrap font-mono text-xs font-bold text-slate-950 hover:text-blue-700"
                                                                 title={order.code}
@@ -881,7 +902,11 @@ export function SalesModule() {
                                                             <button
                                                                 type="button"
                                                                 onClick={() =>
-                                                                    navigate(`/sales/orders/${order.id}`)
+                                                                    navigate(`/sales/orders/${order.id}`, {
+                                                                        state: {
+                                                                            returnTo: `${location.pathname}${location.search}`,
+                                                                        },
+                                                                    })
                                                                 }
                                                                 className="whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-[10px] font-semibold text-blue-700 transition hover:bg-blue-100 active:scale-[0.98]"
                                                             >

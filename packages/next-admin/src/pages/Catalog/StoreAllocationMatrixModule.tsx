@@ -15,7 +15,8 @@ import {
     X,
 } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useAdminReturn } from '../../hooks/use-admin-return';
 
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SearchInput } from '../../components/SearchInput';
@@ -25,10 +26,7 @@ import {
     type CatalogChannelAssignmentsData,
     type ProductChannelAssignment,
 } from '../../graphql/catalog-channel-assignments.graphql';
-import {
-    ASSIGN_PRODUCTS_TO_CHANNEL,
-    REMOVE_PRODUCTS_FROM_CHANNEL,
-} from '../../graphql/catalog.graphql';
+import { ASSIGN_PRODUCTS_TO_CHANNEL, REMOVE_PRODUCTS_FROM_CHANNEL } from '../../graphql/catalog.graphql';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { CatalogBulkChannelBar } from './CatalogBulkChannelBar';
@@ -36,14 +34,14 @@ import { CatalogBulkChannelBar } from './CatalogBulkChannelBar';
 type FilterTab = 'all' | 'unassigned' | 'multi' | string;
 
 export function StoreAllocationMatrixModule() {
+    const location = useLocation();
     const navigate = useNavigate();
+    const { returnToList } = useAdminReturn('/catalog/list');
     const [searchTerm, setSearchTerm] = useState('');
     const deferredSearch = useDeferredValue(searchTerm.trim());
     const [activeTab, setActiveTab] = useState<FilterTab>('all');
     const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
-    const [updatingCell, setUpdatingCell] = useState<{ productId: string; channelId: string } | null>(
-        null,
-    );
+    const [updatingCell, setUpdatingCell] = useState<{ productId: string; channelId: string } | null>(null);
     const [notification, setNotification] = useState<{
         type: 'success' | 'error' | 'warning';
         message: string;
@@ -67,10 +65,7 @@ export function StoreAllocationMatrixModule() {
     const [assignMutation, { loading: assigning }] = useMutation(ASSIGN_PRODUCTS_TO_CHANNEL);
     const [removeMutation, { loading: removing }] = useMutation(REMOVE_PRODUCTS_FROM_CHANNEL);
 
-    const showNotice = (
-        message: string,
-        type: 'success' | 'error' | 'warning' = 'success',
-    ) => {
+    const showNotice = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
         setNotification({ type, message });
         const timer = window.setTimeout(() => {
             setNotification(prev => (prev?.message === message ? null : prev));
@@ -250,17 +245,14 @@ export function StoreAllocationMatrixModule() {
 
     // Selection helpers
     const allFilteredSelected =
-        filteredProducts.length > 0 &&
-        filteredProducts.every(p => selectedProductIds.includes(p.id));
+        filteredProducts.length > 0 && filteredProducts.every(p => selectedProductIds.includes(p.id));
 
     const isIndeterminate =
         filteredProducts.some(p => selectedProductIds.includes(p.id)) && !allFilteredSelected;
 
     const toggleSelectAll = () => {
         if (allFilteredSelected) {
-            setSelectedProductIds(prev =>
-                prev.filter(id => !filteredProducts.some(p => p.id === id)),
-            );
+            setSelectedProductIds(prev => prev.filter(id => !filteredProducts.some(p => p.id === id)));
         } else {
             const combined = new Set([...selectedProductIds, ...filteredProducts.map(p => p.id)]);
             setSelectedProductIds(Array.from(combined));
@@ -280,7 +272,7 @@ export function StoreAllocationMatrixModule() {
                 <div className="flex items-center gap-3">
                     <button
                         type="button"
-                        onClick={() => navigate('/catalog/list')}
+                        onClick={returnToList}
                         aria-label="返回商品管理"
                         className="rounded-lg border border-slate-200 p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
                     >
@@ -310,7 +302,7 @@ export function StoreAllocationMatrixModule() {
                     </button>
                     <button
                         type="button"
-                        onClick={() => navigate('/catalog/list')}
+                        onClick={returnToList}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50 cursor-pointer"
                     >
                         <Package className="h-3.5 w-3.5 text-slate-500" />
@@ -361,9 +353,7 @@ export function StoreAllocationMatrixModule() {
                             <span className="text-xs font-bold text-slate-500">商品总数</span>
                             <Package className="h-4 w-4 text-blue-500" />
                         </div>
-                        <div className="mt-2 text-2xl font-extrabold text-slate-900">
-                            {metrics.total}
-                        </div>
+                        <div className="mt-2 text-2xl font-extrabold text-slate-900">{metrics.total}</div>
                         <p className="mt-1 text-[11px] text-slate-400">主库当前可供分配商品</p>
                     </div>
 
@@ -403,14 +393,19 @@ export function StoreAllocationMatrixModule() {
                                 }`}
                             >
                                 <div className="flex items-center justify-between">
-                                    <span className="truncate text-xs font-bold text-slate-700" title={getChannelDisplayName(channel.code)}>
+                                    <span
+                                        className="truncate text-xs font-bold text-slate-700"
+                                        title={getChannelDisplayName(channel.code)}
+                                    >
                                         {getChannelDisplayName(channel.code)}
                                     </span>
                                     <Store className="h-4 w-4 text-slate-400 shrink-0" />
                                 </div>
                                 <div className="mt-2 flex items-baseline justify-between">
                                     <span className="text-2xl font-extrabold text-slate-900">{count}</span>
-                                    <span className="text-[11px] font-semibold text-slate-500">{percent}% 上架率</span>
+                                    <span className="text-[11px] font-semibold text-slate-500">
+                                        {percent}% 上架率
+                                    </span>
                                 </div>
                                 <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
                                     <div
@@ -643,7 +638,14 @@ export function StoreAllocationMatrixModule() {
                                                             <button
                                                                 type="button"
                                                                 onClick={() =>
-                                                                    navigate(`/catalog/products/${product.id}`)
+                                                                    navigate(
+                                                                        `/catalog/products/${product.id}`,
+                                                                        {
+                                                                            state: {
+                                                                                returnTo: `${location.pathname}${location.search}`,
+                                                                            },
+                                                                        },
+                                                                    )
                                                                 }
                                                                 className="block truncate text-left font-bold text-slate-900 hover:text-blue-600 cursor-pointer"
                                                                 title={product.name}
@@ -658,7 +660,8 @@ export function StoreAllocationMatrixModule() {
                                                                     </span>
                                                                 ) : (
                                                                     <span className="text-[10px] text-slate-400">
-                                                                        已上架 {product.channels.length} 个店铺
+                                                                        已上架 {product.channels.length}{' '}
+                                                                        个店铺
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -700,7 +703,9 @@ export function StoreAllocationMatrixModule() {
                                                                 onClick={() =>
                                                                     void handleToggleChannel(product, channel)
                                                                 }
-                                                                disabled={isCellUpdating || assigning || removing}
+                                                                disabled={
+                                                                    isCellUpdating || assigning || removing
+                                                                }
                                                                 className={`group/btn inline-flex items-center justify-center gap-1 rounded-full px-3 py-1 text-xs font-bold transition-all shadow-2xs cursor-pointer ${
                                                                     isAssigned
                                                                         ? 'border border-emerald-300 bg-emerald-50 text-emerald-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700'
@@ -717,9 +722,13 @@ export function StoreAllocationMatrixModule() {
                                                                 ) : isAssigned ? (
                                                                     <>
                                                                         <Check className="h-3 w-3 group-hover/btn:hidden text-emerald-600" />
-                                                                        <span className="group-hover/btn:hidden">已在售</span>
+                                                                        <span className="group-hover/btn:hidden">
+                                                                            已在售
+                                                                        </span>
                                                                         <X className="hidden h-3 w-3 group-hover/btn:inline text-rose-600" />
-                                                                        <span className="hidden group-hover/btn:inline">下架</span>
+                                                                        <span className="hidden group-hover/btn:inline">
+                                                                            下架
+                                                                        </span>
                                                                     </>
                                                                 ) : (
                                                                     <>

@@ -11,7 +11,7 @@ import {
     RefreshCw,
 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 
 import {
@@ -27,6 +27,7 @@ import { formatDateTime } from './sales-utils';
 const PAGE_SIZE = 50;
 
 export function ProfitReportModule() {
+    const location = useLocation();
     const navigate = useNavigate();
     const { hasAnyPermission } = useAdminPermissions();
     const canImportExpenses =
@@ -221,7 +222,13 @@ export function ProfitReportModule() {
                                             <Cell>
                                                 <button
                                                     type="button"
-                                                    onClick={() => navigate(`/sales/orders/${item.id}`)}
+                                                    onClick={() =>
+                                                        navigate(`/sales/orders/${item.id}`, {
+                                                            state: {
+                                                                returnTo: `${location.pathname}${location.search}`,
+                                                            },
+                                                        })
+                                                    }
                                                     className="font-bold text-blue-700 hover:underline"
                                                 >
                                                     {item.code}
@@ -279,13 +286,25 @@ export function ProfitReportModule() {
                                                 value={item.carrierShippingCostMicrounits}
                                                 currency={item.currencyCode}
                                                 label="物流成本"
-                                                onEdit={() => navigate(`/sales/orders/${item.id}`)}
+                                                onEdit={() =>
+                                                    navigate(`/sales/orders/${item.id}`, {
+                                                        state: {
+                                                            returnTo: `${location.pathname}${location.search}`,
+                                                        },
+                                                    })
+                                                }
                                             />
                                             <ExpenseCell
                                                 value={item.paymentFeeMicrounits}
                                                 currency={item.currencyCode}
                                                 label="手续费"
-                                                onEdit={() => navigate(`/sales/orders/${item.id}`)}
+                                                onEdit={() =>
+                                                    navigate(`/sales/orders/${item.id}`, {
+                                                        state: {
+                                                            returnTo: `${location.pathname}${location.search}`,
+                                                        },
+                                                    })
+                                                }
                                             />
                                             <MoneyCell
                                                 value={item.netProfitMicrounits}

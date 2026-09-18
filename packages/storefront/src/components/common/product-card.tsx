@@ -9,7 +9,6 @@ import {
     PriceDisplay,
     ProductImage,
     sanitizeProductSubtitle,
-    trimText,
 } from '../../storefront-ui/product-display';
 import { MarketConfig, Product, StorefrontLanguage } from '../../types';
 
@@ -92,15 +91,9 @@ export function ProductCard({
                     {subtitle}
                 </span>
             ) : null}
-            <div className="mt-1 flex flex-wrap items-center gap-1.5 px-2.5">
-                <span className="inline-flex items-center rounded border border-[#e0f2fe] bg-[#f0f9ff] px-1.5 py-[1px] text-[10px] font-semibold text-[#0284c7]">
-                    {smartInfo.primary}
-                </span>
-                {smartInfo.secondary ? (
-                    <span className="inline-flex items-center text-[10.5px] text-[#94a3b8]">
-                        {smartInfo.secondary}
-                    </span>
-                ) : null}
+            <div className="mt-1 flex flex-wrap items-center gap-2 px-2.5 text-left text-[11px] leading-[1.35]">
+                <span className="font-medium text-[#0284c7]">{smartInfo.primary}</span>
+                {smartInfo.secondary ? <span className="text-[#94a3b8]">{smartInfo.secondary}</span> : null}
             </div>
 
             <footer className="mt-auto flex min-h-[34px] items-center justify-between gap-2 px-2.5 pt-2">

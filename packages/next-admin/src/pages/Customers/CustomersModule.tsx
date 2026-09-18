@@ -13,6 +13,7 @@ import {
     MapPin,
     Plus,
     RefreshCw,
+    RotateCcw,
     Search,
     ShoppingBag,
     Tag,
@@ -22,7 +23,7 @@ import {
     X,
 } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { sensitiveActionContext } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -189,8 +190,19 @@ export function CustomersModule() {
     const canCreateCustomer = hasAnyPermission(['CreateCustomer']);
     const canDeleteCustomer = hasAnyPermission(['DeleteCustomer']);
     const canUpdateCustomer = hasAnyPermission(['UpdateCustomer']);
-    const { page, pageSize, setPageSize, searchParams, searchTerm, setFilter, setPage, setSearchTerm } =
-        useUrlListState();
+    const location = useLocation();
+    const {
+        isFiltered,
+        page,
+        pageSize,
+        resetFilters,
+        searchParams,
+        searchTerm,
+        setFilter,
+        setPage,
+        setPageSize,
+        setSearchTerm,
+    } = useUrlListState();
     const { sortDirection, sortField, toggleSort } = useUrlSortState({
         fields: CUSTOMER_SORT_FIELDS,
         defaultField: 'createdAt',
@@ -451,28 +463,41 @@ export function CustomersModule() {
 
                 <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="relative min-w-0 flex-1 lg:max-w-md">
-                            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                            <SearchInput
-                                type="search"
-                                autoComplete="off"
-                                disabled={groupManagerOpen}
-                                value={searchTerm}
-                                onValueChange={setSearchTerm}
-                                aria-label="搜索客户"
-                                placeholder="搜索姓名、手机号或邮箱"
-                                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                            />
-                            {searchTerm && (
+                        <div className="flex flex-1 items-center gap-2 lg:max-w-xl">
+                            <div className="relative min-w-0 flex-1">
+                                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                <SearchInput
+                                    type="search"
+                                    autoComplete="off"
+                                    disabled={groupManagerOpen}
+                                    value={searchTerm}
+                                    onValueChange={setSearchTerm}
+                                    aria-label="搜索客户"
+                                    placeholder="搜索姓名、手机号或邮箱"
+                                    className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                />
+                                {searchTerm && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSearchTerm('');
+                                        }}
+                                        className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700"
+                                        aria-label="清空搜索"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                )}
+                            </div>
+                            {isFiltered && (
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setSearchTerm('');
-                                    }}
-                                    className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700"
-                                    aria-label="清空搜索"
+                                    onClick={resetFilters}
+                                    className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
+                                    title="清空搜索与筛选条件"
                                 >
-                                    <X className="h-4 w-4" />
+                                    <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
+                                    <span>重置筛选</span>
                                 </button>
                             )}
                         </div>
@@ -791,8 +816,16 @@ export function CustomersModule() {
                     await refresh();
                 }}
                 onError={setActionError}
-                onViewOrders={email => navigate(`/sales/orders?search=${encodeURIComponent(email)}`)}
-                onViewOrder={id => navigate(`/sales/orders/${id}`)}
+                onViewOrders={email =>
+                    navigate(`/sales/orders?search=${encodeURIComponent(email)}`, {
+                        state: { returnTo: `${location.pathname}${location.search}` },
+                    })
+                }
+                onViewOrder={id =>
+                    navigate(`/sales/orders/${id}`, {
+                        state: { returnTo: `${location.pathname}${location.search}` },
+                    })
+                }
             />
             <GroupManager
                 open={groupManagerOpen}

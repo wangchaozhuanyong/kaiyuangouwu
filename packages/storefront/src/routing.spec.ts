@@ -163,10 +163,12 @@ describe('storefront routing', () => {
         expect(routeFromHash('#/flash-sale').name).toBe('flash-sale');
         expect(routeFromHash('#/recommendations').name).toBe('recommendations');
         expect(routeFromHash('#/two-factor').name).toBe('two-factor');
+        expect(routeFromHash('#/mail-query').name).toBe('mail-query');
     });
 
-    it('does not wait for a customer session before opening the public 2FA tool', () => {
+    it('does not wait for a customer session before opening the public 2FA tool or mail query', () => {
         expect(customerResolvedRoutes).not.toContain('two-factor');
+        expect(customerResolvedRoutes).not.toContain('mail-query');
     });
 
     it('preserves email verification and password reset tokens', () => {
