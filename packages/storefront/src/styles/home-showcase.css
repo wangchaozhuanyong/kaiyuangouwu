@@ -416,28 +416,32 @@ html[lang='en'] .quick-grid b {
 
 /* Coupon Ticket Card */
 .coupon-ticket-card {
-    --coupon-accent: #d33c30;
-    --coupon-surface: #fff1f0;
-    --coupon-border: #efaaa4;
-    flex: 0 0 180px;
-    min-width: 175px;
-    max-width: 200px;
-    height: 72px;
+    --coupon-accent: #e11d48;
+    --coupon-surface: #fff1f2;
+    --coupon-border: #fecdd3;
+    flex: 0 0 216px;
+    min-width: 204px;
+    max-width: 236px;
+    height: 76px;
     overflow: hidden;
     border: 1px solid var(--coupon-border);
-    border-radius: 10px;
+    border-radius: 12px;
     background: var(--coupon-surface);
     color: var(--coupon-accent);
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 34px;
+    grid-template-columns: minmax(0, 1fr) 78px;
     align-items: stretch;
     position: relative;
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.045);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
     scroll-snap-align: start;
     transition:
         transform 180ms ease,
         box-shadow 180ms ease,
         opacity 200ms ease;
+}
+
+.coupon-ticket-card:hover {
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07);
 }
 
 .coupon-ticket-card:active {
@@ -451,38 +455,38 @@ html[lang='en'] .quick-grid b {
 
 /* Theme variations */
 .coupon-ticket-gold {
-    --coupon-accent: #a76516;
-    --coupon-surface: #fff7e8;
-    --coupon-border: #e2b46e;
+    --coupon-accent: #b45309;
+    --coupon-surface: #fffbeb;
+    --coupon-border: #fed7aa;
 }
 
 .coupon-ticket-rose {
-    --coupon-accent: #d33c30;
-    --coupon-surface: #fff1f0;
-    --coupon-border: #efaaa4;
+    --coupon-accent: #e11d48;
+    --coupon-surface: #fff1f2;
+    --coupon-border: #fecdd3;
 }
 
 .coupon-ticket-blue {
-    --coupon-accent: #2563a8;
-    --coupon-surface: #f0f6ff;
-    --coupon-border: #91b7e2;
+    --coupon-accent: #1d4ed8;
+    --coupon-surface: #eff6ff;
+    --coupon-border: #bfdbfe;
 }
 
 .coupon-ticket-emerald {
-    --coupon-accent: #187451;
-    --coupon-surface: #f0faf6;
-    --coupon-border: #8bc5ae;
+    --coupon-accent: #047857;
+    --coupon-surface: #ecfdf5;
+    --coupon-border: #a7f3d0;
 }
 
 /* Main content */
 .coupon-ticket-main {
     min-width: 0;
-    padding: 7px 1px 7px 6px;
+    padding: 8px 8px 8px 12px;
     display: grid;
-    grid-template-columns: 52px minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr);
     grid-template-rows: auto auto;
     align-items: center;
-    column-gap: 6px;
+    column-gap: 8px;
 }
 
 .coupon-ticket-top {
@@ -497,68 +501,59 @@ html[lang='en'] .quick-grid b {
 .coupon-ticket-tag {
     max-width: 100%;
     overflow: hidden;
-    color: #0f172a;
-    font-size: 10px;
-    font-weight: var(--font-weight-bold);
-    line-height: 1.25;
+    color: #1e293b;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.3;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .coupon-ticket-value {
-    width: 52px;
-    height: 52px;
+    min-width: 44px;
     margin: 0;
     grid-column: 1;
     grid-row: 1 / 3;
     position: relative;
-    color: #ffffff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    color: var(--coupon-accent);
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: flex-start;
     gap: 1px;
     line-height: 1;
-    isolation: isolate;
 }
 
 .coupon-ticket-value.is-unit-before {
-    flex-direction: column;
-    gap: 0;
+    flex-direction: row;
+    align-items: baseline;
 }
 
 .coupon-ticket-seal {
-    width: 100%;
-    height: 100%;
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    fill: var(--coupon-accent);
-    stroke: var(--coupon-accent);
-    stroke-width: 1.4;
+    display: none;
 }
 
 .coupon-ticket-value .coupon-num {
     color: inherit;
-    font-size: 20px;
+    font-size: 24px;
     font-weight: 900;
-    letter-spacing: -0.045em;
+    letter-spacing: -0.04em;
     font-family: var(--font-number, system-ui, -apple-system, sans-serif);
     font-variant-numeric: tabular-nums;
+    line-height: 1;
 }
 
 .coupon-ticket-value .coupon-unit {
     color: inherit;
-    font-size: 9px;
+    font-size: 10.5px;
     font-weight: 800;
 }
 
 .coupon-ticket-value.is-unit-before .coupon-num {
-    font-size: 20px;
+    font-size: 24px;
 }
 
 .coupon-ticket-value.is-unit-before .coupon-unit {
-    margin-bottom: 1px;
-    font-size: 9px;
+    font-size: 10.5px;
 }
 
 .coupon-ticket-desc {
@@ -569,8 +564,8 @@ html[lang='en'] .quick-grid b {
     align-self: start;
     overflow: hidden;
     color: #64748b;
-    font-size: 9.5px;
-    line-height: 1.2;
+    font-size: 10px;
+    line-height: 1.3;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -581,47 +576,66 @@ html[lang='en'] .quick-grid b {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 4px 0 0;
+    padding: 0 8px;
+    border-left: 1px dashed var(--coupon-border);
+    position: relative;
 }
 
 .coupon-claim-btn {
-    width: 28px;
+    min-width: 62px;
     height: 28px;
-    padding: 0;
-    border: 1.5px solid currentColor;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.68);
-    color: var(--coupon-accent) !important;
-    display: flex;
+    padding: 0 8px;
+    border: none;
+    border-radius: 999px;
+    background: var(--coupon-accent);
+    color: #ffffff !important;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     transition:
         transform 150ms ease,
+        box-shadow 150ms ease,
+        background-color 150ms ease,
         opacity 180ms ease;
-    box-shadow: none;
 }
 
 .coupon-btn-text-wrap {
-    display: flex;
+    display: inline-flex;
     flex-direction: row;
     align-items: center;
     justify-content: center;
     gap: 3px;
     font-size: 11px;
-    font-weight: var(--font-weight-bold);
-    line-height: 1.2;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
 }
 
-.coupon-claim-btn:active {
-    transform: scale(0.92);
+.coupon-claim-btn:hover:not(:disabled) {
+    opacity: 0.93;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.16);
+}
+
+.coupon-claim-btn:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+.coupon-claim-btn.is-claiming {
+    opacity: 0.78;
+    cursor: wait;
 }
 
 .coupon-claim-btn.is-claimed {
-    background: rgba(255, 255, 255, 0.55) !important;
+    background: rgba(100, 116, 139, 0.12) !important;
+    color: #64748b !important;
+    border: 1px solid rgba(100, 116, 139, 0.2);
     cursor: default;
     box-shadow: none;
-    opacity: 0.72;
+    opacity: 0.88;
+    transform: none;
 }
 
 .content-warning {

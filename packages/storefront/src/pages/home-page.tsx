@@ -1,6 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
 import {
-    Badge,
     Bell,
     Check,
     ChevronDown,
@@ -324,7 +323,11 @@ function HomepageCouponHub({
         setClaimingId(coupon.id);
         const error = await onClaim(coupon.campaignId);
         setClaimingId(null);
-        if (error && onToast) onToast(error);
+        if (error) {
+            if (onToast) onToast(error);
+        } else {
+            if (onToast) onToast(isZh ? '优惠券领取成功' : 'Coupon claimed successfully');
+        }
     };
 
     return (
@@ -377,7 +380,6 @@ function HomepageCouponHub({
                                             coupon.unitBefore ? ' is-unit-before' : ''
                                         }`}
                                     >
-                                        <Badge className="coupon-ticket-seal" aria-hidden="true" />
                                         {coupon.unitBefore ? (
                                             <>
                                                 <small className="coupon-unit">{coupon.unit}</small>
@@ -398,7 +400,7 @@ function HomepageCouponHub({
                                 <div className="coupon-ticket-action">
                                     <button
                                         type="button"
-                                        className={`coupon-claim-btn ${!canClaim ? 'is-claimed' : ''}`}
+                                        className={`coupon-claim-btn ${!canClaim ? 'is-claimed' : ''}${claimingId === coupon.id ? ' is-claiming' : ''}`}
                                         onClick={() => void handleClaim(coupon)}
                                         disabled={!canClaim || loading || claimingId !== null}
                                         aria-label={
@@ -411,11 +413,18 @@ function HomepageCouponHub({
                                                   : `Claim ${coupon.title}`
                                         }
                                     >
-                                        {!canClaim ? (
-                                            <Check size={16} strokeWidth={2.6} aria-hidden="true" />
-                                        ) : (
-                                            <ChevronRight size={17} strokeWidth={2.4} aria-hidden="true" />
-                                        )}
+                                        <span className="coupon-btn-text-wrap">
+                                            {claimingId === coupon.id ? (
+                                                <span>{isZh ? '领取中' : 'Claiming'}</span>
+                                            ) : !canClaim ? (
+                                                <>
+                                                    <span>{isZh ? '已领取' : 'Claimed'}</span>
+                                                    <Check size={12} strokeWidth={2.4} aria-hidden="true" />
+                                                </>
+                                            ) : (
+                                                <span>{isZh ? '立即领取' : 'Claim'}</span>
+                                            )}
+                                        </span>
                                     </button>
                                 </div>
                             </div>

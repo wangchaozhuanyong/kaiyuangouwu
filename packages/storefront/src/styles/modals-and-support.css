@@ -278,30 +278,13 @@
     min-width: 0;
     overflow: hidden;
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: 16px;
     background: #fff;
-    box-shadow: var(--shadow-sm);
-    display: grid;
-    grid-template-columns: 48px minmax(0, 1fr);
-}
-
-.support-hours-rail {
-    min-height: 150px;
-    background: #0f2344;
-    color: #fff;
-    display: grid;
-    place-items: center;
-}
-
-.support-hours-rail svg {
-    width: 24px;
-    height: 24px;
-    stroke-width: 2;
-}
-
-.support-hours-main {
-    min-width: 0;
-    padding: 15px 16px 14px;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .support-hours-heading {
@@ -311,20 +294,45 @@
     gap: 12px;
 }
 
+.support-hours-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.support-hours-rail {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: var(--accent-soft, #f0fdf4);
+    color: var(--accent, #0d9488);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.support-hours-rail svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2;
+}
+
 .support-hours-heading h2 {
     min-width: 0;
     margin: 0;
     font-size: 15px;
     font-weight: var(--font-weight-bold);
+    color: var(--text, #0f172a);
     letter-spacing: -0.015em;
 }
 
 .support-hours-heading span {
-    min-width: 44px;
-    padding: 4px 9px;
-    border-radius: 8px;
-    background: var(--accent-soft);
-    color: var(--accent-ink);
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--accent-soft, #f0fdf4);
+    color: var(--accent-ink, #0f766e);
     font-size: 12px;
     font-weight: var(--font-weight-bold);
     line-height: 1.2;
@@ -332,43 +340,48 @@
     white-space: nowrap;
 }
 
+.support-hours-main {
+    min-width: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
 .support-hours-time {
-    margin-top: 8px;
+    margin-top: 2px;
     display: block;
-    color: #0f2344;
+    color: var(--text, #0f172a);
     font-family: var(--font-numeric);
-    font-size: clamp(25px, 7vw, 30px);
+    font-size: clamp(24px, 6vw, 28px);
     font-weight: var(--font-weight-bold);
-    line-height: 1.12;
-    letter-spacing: -0.035em;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
     font-variant-numeric: tabular-nums;
 }
 
 .support-hours-main > i {
-    width: 42px;
-    height: 3px;
-    margin-top: 9px;
-    border-radius: 999px;
-    background: var(--accent);
-    display: block;
+    display: none;
 }
 
 .support-hours-note {
     min-width: 0;
-    margin-top: 13px;
-    padding-top: 12px;
-    border-top: 1px solid var(--line);
-    color: var(--muted);
-    display: grid;
-    grid-template-columns: 18px minmax(0, 1fr);
-    align-items: start;
-    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #f1f5f9;
+    color: #475569;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
 }
 
 .support-hours-note svg {
-    width: 18px;
-    height: 18px;
-    margin-top: 1px;
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+    flex-shrink: 0;
+    color: var(--muted, #64748b);
     stroke-width: 1.8;
 }
 
@@ -376,7 +389,8 @@
     min-width: 0;
     margin: 0;
     font-size: 12px;
-    line-height: 1.55;
+    line-height: 1.6;
+    color: #64748b;
 }
 
 .support-channel-list {
@@ -712,8 +726,10 @@
 
 .support-evaluation-header {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 12px;
     margin-bottom: 16px;
     padding-bottom: 12px;
     border-bottom: 1px solid #f1f5f9;
@@ -738,6 +754,8 @@
 .support-evaluation-header span {
     font-size: 12px;
     color: #64748b;
+    margin-left: auto;
+    text-align: right;
 }
 
 .support-evaluation-form {
@@ -902,12 +920,7 @@
     }
 
     .support-hours-card {
-        grid-template-columns: 42px minmax(0, 1fr);
-    }
-
-    .support-hours-main {
-        padding-right: 13px;
-        padding-left: 13px;
+        padding: 14px;
     }
 
     .support-channel-row {
