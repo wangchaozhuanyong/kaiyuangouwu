@@ -12,11 +12,13 @@ import {
     type MarketConfig,
 } from '../types';
 
+import { clearStudioCache } from './ai-image-studio-cache';
 import { AiImageStudioPage } from './ai-image-studio-page';
 
 const cleanups: Array<() => void> = [];
 afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
+    clearStudioCache();
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -706,5 +708,60 @@ describe('AI studio complete customer workflows', () => {
         if (!remove) throw new Error('Missing remove reference button');
         await click(remove);
         expect(api.releaseImageReference).toHaveBeenCalledWith('ref-1');
+    });
+    it('renders instantly from session cache without showing loading skeleton on subsequent visits', async () => {
+        const { container } = await setup({ balance: 2500 });
+        expect(container.textContent).toContain('fixture');
+        expect(container.querySelector('.skeleton-route-header')).toBeNull();
+
+        // Type a prompt
+        await type(container, '国潮风古风茶饮海报');
+
+        // Unmount component (simulating navigation away)
+        const currentContainer = container;
+        cleanups.splice(0).forEach(cleanup => cleanup());
+        currentContainer.remove();
+
+        // Mount again (simulating navigation back into studio)
+        const nextContainer = document.createElement('div');
+        document.body.append(nextContainer);
+        const root = createRoot(nextContainer);
+        cleanups.push(() => {
+            root.unmount();
+            nextContainer.remove();
+        });
+
+        await act(async () =>
+            root.render(
+                <AiImageStudioPage
+                    api={
+                        {
+                            imageStudioConfig: vi.fn().mockReturnValue(new Promise(() => undefined)),
+                            imageStudioWallet: vi.fn().mockReturnValue(new Promise(() => undefined)),
+                            imagePromptQuotaStatus: vi.fn().mockReturnValue(new Promise(() => undefined)),
+                            imageModelQuotaStatus: vi.fn().mockReturnValue(new Promise(() => undefined)),
+                            myImageGenerationJobs: vi.fn().mockReturnValue(new Promise(() => undefined)),
+                            previewImageGenerationPrompt: vi
+                                .fn()
+                                .mockResolvedValue({ length: 10, limit: 8000, valid: true }),
+                        } as unknown as ShopApi
+                    }
+                    customer={{ id: 'customer-1' } as ActiveCustomer}
+                    market={market}
+                    displayCurrencyCode="CNY"
+                    language="zh"
+                    onBack={() => undefined}
+                    onSignIn={() => undefined}
+                    onNotify={() => undefined}
+                />,
+            ),
+        );
+        await act(async () => vi.advanceTimersByTimeAsync(180));
+
+        // Instant render: NO skeleton loader rendered, content and draft prompt immediately visible
+        expect(nextContainer.querySelector('.skeleton-route-header')).toBeNull();
+        expect(nextContainer.textContent).toContain('fixture');
+        const nextTextarea = nextContainer.querySelector<HTMLTextAreaElement>('textarea');
+        expect(nextTextarea?.value).toBe('国潮风古风茶饮海报');
     });
 });

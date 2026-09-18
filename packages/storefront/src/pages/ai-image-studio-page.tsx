@@ -46,6 +46,7 @@ import {
     StorefrontLanguage,
 } from '../types';
 
+import { getStudioCachedData, setStudioCachedData, updateStudioDraftCache } from './ai-image-studio-cache';
 import { ImageStudioDesktopSettings } from './ai-image-studio-desktop-settings';
 import {
     formatImageDimensions,
@@ -130,30 +131,47 @@ type ReferenceUploadItem = {
 export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const { api, customer, market, displayCurrencyCode, language, onBack, onSignIn, onNotify } = props;
     const isZh = language === 'zh';
-    const [config, setConfig] = useState<ImageStudioConfig | null>(null);
-    const [balance, setBalance] = useState(0);
-    const [walletCurrencyCode, setWalletCurrencyCode] = useState(market.currencyCode);
-    const [promptQuota, setPromptQuota] = useState<ImagePromptQuotaStatus | null>(null);
-    const [modelQuotas, setModelQuotas] = useState<ImageModelQuotaStatus[]>([]);
-    const [jobs, setJobs] = useState<ImageGenerationJob[]>([]);
-    const [historyIds, setHistoryIds] = useState<string[]>([]);
-    const [historyTotal, setHistoryTotal] = useState(0);
+    const initialCached = getStudioCachedData(market.code, customer?.id);
+    const [config, setConfig] = useState<ImageStudioConfig | null>(() => initialCached?.config ?? null);
+    const [balance, setBalance] = useState(() => initialCached?.balance ?? 0);
+    const [walletCurrencyCode, setWalletCurrencyCode] = useState(
+        () => initialCached?.walletCurrencyCode || market.currencyCode,
+    );
+    const [promptQuota, setPromptQuota] = useState<ImagePromptQuotaStatus | null>(
+        () => initialCached?.promptQuota ?? null,
+    );
+    const [modelQuotas, setModelQuotas] = useState<ImageModelQuotaStatus[]>(
+        () => initialCached?.modelQuotas ?? [],
+    );
+    const [jobs, setJobs] = useState<ImageGenerationJob[]>(() => initialCached?.jobs ?? []);
+    const [historyIds, setHistoryIds] = useState<string[]>(() => initialCached?.historyIds ?? []);
+    const [historyTotal, setHistoryTotal] = useState(() => initialCached?.historyTotal ?? 0);
     const [historyLoading, setHistoryLoading] = useState(false);
     const [historyError, setHistoryError] = useState('');
     const historyLimit = useRef(20);
     const historyEpoch = useRef(0);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(() => !initialCached?.config);
     const [loadError, setLoadError] = useState('');
     const [refreshWarning, setRefreshWarning] = useState('');
-    const [prompt, setPrompt] = useState('');
-    const [originalPrompt, setOriginalPrompt] = useState('');
-    const [optimized, setOptimized] = useState(false);
-    const [optimizationReason, setOptimizationReason] = useState('');
+    const [prompt, setPrompt] = useState(() => initialCached?.draft.prompt ?? '');
+    const [originalPrompt, setOriginalPrompt] = useState(() => initialCached?.draft.originalPrompt ?? '');
+    const [optimized, setOptimized] = useState(() => initialCached?.draft.optimized ?? false);
+    const [optimizationReason, setOptimizationReason] = useState(
+        () => initialCached?.draft.optimizationReason ?? '',
+    );
     const [lastOptimizerModelId, setLastOptimizerModelId] = useState<string | null>(null);
-    const [modelCode, setModelCode] = useState('');
-    const [aspectRatio, setAspectRatio] = useState('1:1');
-    const [resolution, setResolution] = useState<ImageResolution>('1K');
-    const [quantity, setQuantity] = useState(1);
+    const [modelCode, setModelCode] = useState(
+        () =>
+            initialCached?.draft.modelCode ||
+            initialCached?.config?.defaultModelCode ||
+            initialCached?.config?.models[0]?.code ||
+            '',
+    );
+    const [aspectRatio, setAspectRatio] = useState(() => initialCached?.draft.aspectRatio || '1:1');
+    const [resolution, setResolution] = useState<ImageResolution>(
+        () => initialCached?.draft.resolution || '1K',
+    );
+    const [quantity, setQuantity] = useState(() => initialCached?.draft.quantity || 1);
     // The storefront defaults the consent row to checked while keeping it editable.
     const [termsAccepted, setTermsAccepted] = useState(true);
     const [referenceItems, setReferenceItems] = useState<ReferenceUploadItem[]>([]);
@@ -215,6 +233,34 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         referenceMode,
         referenceInstruction,
     ]);
+    const configRef = useRef<ImageStudioConfig | null>(config);
+    useEffect(() => {
+        configRef.current = config;
+    }, [config]);
+
+    useEffect(() => {
+        updateStudioDraftCache(market.code, customer?.id, {
+            prompt,
+            originalPrompt,
+            optimized,
+            optimizationReason,
+            modelCode,
+            aspectRatio,
+            resolution,
+            quantity,
+        });
+    }, [
+        aspectRatio,
+        customer?.id,
+        market.code,
+        modelCode,
+        optimizationReason,
+        optimized,
+        originalPrompt,
+        prompt,
+        quantity,
+        resolution,
+    ]);
     const loadHistory = useCallback(
         async (more = false) => {
             if (!customer) return;
@@ -248,27 +294,41 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 }
                 historyLimit.current = limit;
                 setHistoryTotal(total);
-                setHistoryIds([...new Set(items.map(item => item.id))]);
-                setJobs(current => [
-                    ...new Map([...current, ...items].map(item => [item.id, item])).values(),
-                ]);
+                const nextIds = [...new Set(items.map(item => item.id))];
+                setHistoryIds(nextIds);
+                setJobs(current => {
+                    const nextJobs = [
+                        ...new Map([...current, ...items].map(item => [item.id, item])).values(),
+                    ];
+                    if (customer) {
+                        setStudioCachedData(market.code, customer.id, {
+                            jobs: nextJobs,
+                            historyIds: nextIds,
+                            historyTotal: total,
+                        });
+                    }
+                    return nextJobs;
+                });
             } catch (error) {
                 if (epoch === historyEpoch.current) setHistoryError(customerErrorMessage(error, isZh));
             } finally {
                 if (epoch === historyEpoch.current) setHistoryLoading(false);
             }
         },
-        [api, customer, historyFilter],
+        [api, customer, historyFilter, isZh, market.code],
     );
     useEffect(() => {
         historyLimit.current = 20;
-        setHistoryIds([]);
-        setHistoryTotal(0);
+        const cached = getStudioCachedData(market.code, customer?.id);
+        if (!cached?.historyIds?.length) {
+            setHistoryIds([]);
+            setHistoryTotal(0);
+        }
         void loadHistory();
         return () => {
             historyEpoch.current += 1;
         };
-    }, [loadHistory, market.code, market.currencyCode, isZh]);
+    }, [customer?.id, loadHistory, market.code, market.currencyCode, isZh]);
 
     const revokeReferencePreview = useCallback((url: string) => {
         if (!url || !localReferencePreviewUrlsRef.current.has(url)) return;
@@ -287,7 +347,11 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         try {
             const studioConfig = await api.imageStudioConfig();
             if (epoch !== loadEpoch.current) return;
+            if (!studioConfig) {
+                throw new Error(isZh ? '无法获取图片工坊配置' : 'Could not load image studio configuration');
+            }
             setConfig(studioConfig);
+            configRef.current = studioConfig;
             setModelCode(
                 current => current || studioConfig.defaultModelCode || studioConfig.models[0]?.code || '',
             );
@@ -297,6 +361,16 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 setJobs([]);
                 setPromptQuota(null);
                 setModelQuotas([]);
+                setStudioCachedData(market.code, null, {
+                    config: studioConfig,
+                    balance: 0,
+                    walletCurrencyCode: market.currencyCode,
+                    promptQuota: null,
+                    modelQuotas: [],
+                    jobs: [],
+                    historyIds: [],
+                    historyTotal: 0,
+                });
                 return;
             }
             const [wallet, loadedPromptQuota, loadedModelQuotas] = await Promise.allSettled([
@@ -305,17 +379,31 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 api.imageModelQuotaStatus(),
             ]);
             if (epoch !== loadEpoch.current) return;
+            let currentBalance = 0;
+            let currentCurrency = market.currencyCode;
             if (wallet.status === 'fulfilled') {
-                setBalance(wallet.value.availableBalance);
-                setWalletCurrencyCode(wallet.value.currencyCode);
+                currentBalance = wallet.value.availableBalance;
+                currentCurrency = wallet.value.currencyCode;
+                setBalance(currentBalance);
+                setWalletCurrencyCode(currentCurrency);
             }
-            setPromptQuota(
-                usablePromptQuota(
-                    loadedPromptQuota.status === 'fulfilled' ? loadedPromptQuota.value : null,
-                    wallet.status === 'fulfilled',
-                ),
+            const currentPromptQuota = usablePromptQuota(
+                loadedPromptQuota.status === 'fulfilled' ? loadedPromptQuota.value : null,
+                wallet.status === 'fulfilled',
             );
-            if (loadedModelQuotas.status === 'fulfilled') setModelQuotas(loadedModelQuotas.value);
+            setPromptQuota(currentPromptQuota);
+            let currentModelQuotas: ImageModelQuotaStatus[] = [];
+            if (loadedModelQuotas.status === 'fulfilled') {
+                currentModelQuotas = loadedModelQuotas.value;
+                setModelQuotas(currentModelQuotas);
+            }
+            setStudioCachedData(market.code, customer.id, {
+                config: studioConfig,
+                balance: currentBalance,
+                walletCurrencyCode: currentCurrency,
+                promptQuota: currentPromptQuota,
+                modelQuotas: currentModelQuotas,
+            });
             if ([wallet, loadedPromptQuota, loadedModelQuotas].some(result => result.status === 'rejected')) {
                 setRefreshWarning(
                     isZh
@@ -324,15 +412,24 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 );
             }
         } catch (error) {
-            if (epoch === loadEpoch.current) setLoadError(customerErrorMessage(error, isZh));
+            if (epoch === loadEpoch.current) {
+                if (configRef.current) {
+                    setRefreshWarning(customerErrorMessage(error, isZh));
+                } else {
+                    setLoadError(customerErrorMessage(error, isZh));
+                }
+            }
         } finally {
             if (epoch === loadEpoch.current) setLoading(false);
         }
-    }, [api, customer, isZh, market.currencyCode]);
+    }, [api, customer, isZh, market.code, market.currencyCode]);
 
     useEffect(() => {
         jobsRef.current = jobs;
-    }, [jobs]);
+        if (config) {
+            setStudioCachedData(market.code, customer?.id, { jobs });
+        }
+    }, [config, customer?.id, jobs, market.code]);
 
     const refreshActiveJobs = useCallback(async () => {
         if (!customer) return;
@@ -381,15 +478,20 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     }, [api, customer, isZh, loadHistory]);
 
     useEffect(() => {
+        const cached = getStudioCachedData(market.code, customer?.id);
         settlementEpoch.current += 1;
-        setLoading(true);
-        setConfig(null);
-        setBalance(0);
-        setWalletCurrencyCode(market.currencyCode);
-        setPromptQuota(null);
-        setModelQuotas([]);
+        if (!cached?.config) {
+            setLoading(true);
+            setConfig(null);
+            setBalance(0);
+            setWalletCurrencyCode(market.currencyCode);
+            setPromptQuota(null);
+            setModelQuotas([]);
+            setJobs([]);
+        } else {
+            setLoading(false);
+        }
         setLastOptimizerModelId(null);
-        setJobs([]);
         setSelectedJobId(null);
         setBusy('');
         setActionError('');
@@ -401,7 +503,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             settlementEpoch.current += 1;
             loadEpoch.current += 1;
         };
-    }, [load, market.currencyCode]);
+    }, [customer?.id, load, market.code, market.currencyCode]);
     useEffect(() => {
         // Consent and private reference assets belong to a customer session;
         // never carry either across logout/login changes.
