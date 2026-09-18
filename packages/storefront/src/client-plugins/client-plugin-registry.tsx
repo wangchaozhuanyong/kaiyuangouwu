@@ -1,7 +1,10 @@
 import { Headphones, KeyRound, Mail, TicketPercent, WandSparkles } from 'lucide-react';
-import { type ComponentType } from 'react';
+import { type ComponentType, useCallback, useContext, useEffect } from 'react';
 
+import { preloadImageStudioData } from '../pages/ai-image-studio-cache';
+import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { type RouteState } from '../storefront-router';
+import { StorefrontContext } from '../StorefrontContext';
 import { type StorefrontContentBlock, type StorefrontContentItem, type StorefrontLanguage } from '../types';
 
 export const clientPluginPlacements = [
@@ -75,11 +78,31 @@ function SupportEntryPlugin({ language, onNavigate }: Readonly<ClientPluginCompo
 
 function AiImageStudioEntryPlugin({ language, onNavigate }: Readonly<ClientPluginComponentProps>) {
     const isZh = language === 'zh';
+    const storefront = useContext(StorefrontContext);
+
+    const handleWarmup = useCallback(() => {
+        void preloadStorefrontRouteComponent('image-studio');
+        if (storefront?.api && storefront.market) {
+            void preloadImageStudioData(storefront.api, storefront.customer, storefront.market);
+        }
+    }, [storefront]);
+
+    useEffect(() => {
+        if (!storefront) return;
+        const timer = setTimeout(() => {
+            handleWarmup();
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [handleWarmup, storefront]);
+
     return (
         <button
             type="button"
             className="category-client-plugin category-client-plugin-image-studio"
             onClick={() => onNavigate({ name: 'image-studio' })}
+            onMouseEnter={handleWarmup}
+            onTouchStart={handleWarmup}
+            onFocus={handleWarmup}
         >
             <span className="category-client-plugin-icon" aria-hidden="true">
                 <WandSparkles />
