@@ -1,5 +1,5 @@
 import { useRouter } from '@tanstack/react-router';
-import { ChevronRight, Clock3, Headphones, MessageCircle, QrCode } from 'lucide-react';
+import { ChevronRight, Clock3, Copy, Headphones, MessageCircle, QrCode, Star, ThumbsUp } from 'lucide-react';
 import { useState } from 'react';
 
 import '../styles/modals-and-support.css';
@@ -25,6 +25,8 @@ import { StorefrontContentBlock, StorefrontLanguage } from '../types';
 export interface SupportPageProps {
     content?: StorefrontContentBlock;
     language: StorefrontLanguage;
+    orderCode?: string;
+    onNotify?: (message: string) => void;
 }
 
 const channelIcons: Record<SupportChannelKey, string> = {
@@ -38,7 +40,7 @@ const channelIcons: Record<SupportChannelKey, string> = {
 export function SupportPage() {
     const router = useRouter();
     const goBack = () => router.history.back();
-    const { content, language } = SupportPageContext.useValue();
+    const { content, language, orderCode, onNotify } = SupportPageContext.useValue();
     const isZh = language === 'zh';
     return (
         <Subpage
@@ -48,7 +50,12 @@ export function SupportPage() {
             surfaceColor={content?.backgroundColor}
         >
             {content ? (
-                <SupportContent content={content} language={language} />
+                <SupportContent
+                    content={content}
+                    language={language}
+                    orderCode={orderCode}
+                    onNotify={onNotify}
+                />
             ) : (
                 <EmptyState
                     icon={<Headphones />}
@@ -67,9 +74,13 @@ export function SupportPage() {
 export function SupportContent({
     content,
     language,
+    orderCode,
+    onNotify,
 }: Readonly<{
     content: StorefrontContentBlock;
     language: StorefrontLanguage;
+    orderCode?: string;
+    onNotify?: (message: string) => void;
 }>) {
     const [qrChannel, setQrChannel] = useState<StorefrontSupportChannel | null>(null);
     const [qrImageFailed, setQrImageFailed] = useState(false);
@@ -98,6 +109,34 @@ export function SupportContent({
 
     return (
         <div className="support-center-content">
+            {orderCode ? (
+                <section className="support-order-banner" aria-label={isZh ? '咨询订单' : 'Inquiry Order'}>
+                    <div className="support-order-banner-main">
+                        <span className="support-order-banner-badge">
+                            {isZh ? '当前咨询订单' : 'Active Order'}
+                        </span>
+                        <strong className="support-order-banner-code">{orderCode}</strong>
+                        <p className="support-order-banner-tip">
+                            {isZh
+                                ? '向客服咨询时可直接出示此订单号，客服将快速为您查询与处理售后/物流'
+                                : 'Provide this order number when chatting with support for priority resolution'}
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        className="support-order-banner-copy"
+                        onClick={() => {
+                            if (navigator.clipboard) {
+                                void navigator.clipboard.writeText(orderCode);
+                                onNotify?.(isZh ? `订单号已复制：${orderCode}` : 'Order number copied');
+                            }
+                        }}
+                    >
+                        <Copy size={15} aria-hidden="true" />
+                        <span>{isZh ? '复制单号' : 'Copy'}</span>
+                    </button>
+                </section>
+            ) : null}
             {content.subtitle.trim() ? <p className="support-page-intro">{content.subtitle.trim()}</p> : null}
             <section className="support-hours-card" aria-labelledby="support-hours-title">
                 <div className="support-hours-rail" aria-hidden="true">
@@ -182,6 +221,8 @@ export function SupportContent({
                 </div>
             )}
 
+            <CustomerServiceEvaluationSection language={language} orderCode={orderCode} onNotify={onNotify} />
+
             {qrChannel?.item.imageUrl ? (
                 <Sheet
                     title={qrChannel.item.label || (isZh ? '微信客服' : 'WeChat support')}
@@ -240,5 +281,173 @@ export function SupportContent({
                 </Sheet>
             ) : null}
         </div>
+    );
+}
+
+function CustomerServiceEvaluationSection({
+    language,
+    orderCode,
+    onNotify,
+}: {
+    language: StorefrontLanguage;
+    orderCode?: string;
+    onNotify?: (message: string) => void;
+}) {
+    const isZh = language === 'zh';
+    const storageKey = `vendure_cs_evaluation_${orderCode || 'general'}`;
+    const [rating, setRating] = useState(5);
+    const [selectedTags, setSelectedTags] = useState<string[]>([]);
+    const [comment, setComment] = useState('');
+    const [submitted, setSubmitted] = useState(() => {
+        try {
+            return Boolean(localStorage.getItem(storageKey));
+        } catch {
+            return false;
+        }
+    });
+
+    const tags = isZh
+        ? ['响应迅速', '态度热情', '耐心专业', '问题已解决', '处理高效']
+        : ['Fast response', 'Friendly', 'Professional', 'Problem solved', 'Efficient'];
+
+    const ratingLabels = isZh
+        ? ['', '非常不满意', '不满意', '一般', '满意', '非常满意']
+        : ['', 'Very dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very satisfied'];
+
+    const toggleTag = (tag: string) => {
+        setSelectedTags(prev => (prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]));
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            localStorage.setItem(
+                storageKey,
+                JSON.stringify({
+                    rating,
+                    tags: selectedTags,
+                    comment,
+                    orderCode,
+                    createdAt: new Date().toISOString(),
+                }),
+            );
+        } catch {
+            /* ignore storage quota error */
+        }
+        setSubmitted(true);
+        onNotify?.(
+            isZh ? '感谢您的评价，我们将持续优化服务质量！' : 'Thank you! Your feedback has been recorded.',
+        );
+    };
+
+    return (
+        <section
+            className="support-evaluation-card"
+            aria-label={isZh ? '客服服务评价' : 'Customer service evaluation'}
+        >
+            <header className="support-evaluation-header">
+                <div className="support-evaluation-title">
+                    <ThumbsUp size={18} aria-hidden="true" />
+                    <strong>{isZh ? '客服服务评价' : 'Customer service evaluation'}</strong>
+                </div>
+                <span>{isZh ? '您的反馈是我们进步的动力' : 'Help us improve our service'}</span>
+            </header>
+
+            {submitted ? (
+                <div className="support-evaluation-success">
+                    <div className="evaluation-stars-display">
+                        {[1, 2, 3, 4, 5].map(star => (
+                            <Star
+                                key={star}
+                                size={20}
+                                className={star <= rating ? 'is-active' : ''}
+                                fill={star <= rating ? 'currentColor' : 'none'}
+                            />
+                        ))}
+                    </div>
+                    <strong>
+                        {isZh ? '已收到您的服务评价，感谢支持！' : 'Thank you for rating our service!'}
+                    </strong>
+                    {orderCode ? (
+                        <small>{isZh ? `关联订单号：${orderCode}` : `Order: ${orderCode}`}</small>
+                    ) : null}
+                    <button
+                        type="button"
+                        className="support-evaluation-edit-btn"
+                        onClick={() => setSubmitted(false)}
+                    >
+                        {isZh ? '修改评价' : 'Edit evaluation'}
+                    </button>
+                </div>
+            ) : (
+                <form className="support-evaluation-form" onSubmit={handleSubmit}>
+                    {orderCode ? (
+                        <div className="support-evaluation-order-badge">
+                            <span>{isZh ? '当前服务订单：' : 'Order: '}</span>
+                            <b>{orderCode}</b>
+                        </div>
+                    ) : null}
+
+                    <div className="support-rating-row">
+                        <div
+                            className="support-stars"
+                            role="radiogroup"
+                            aria-label={isZh ? '服务评分' : 'Rating'}
+                        >
+                            {[1, 2, 3, 4, 5].map(star => (
+                                <button
+                                    type="button"
+                                    key={star}
+                                    className={`support-star-btn ${star <= rating ? 'is-active' : ''}`}
+                                    onClick={() => setRating(star)}
+                                    aria-label={`${star} star`}
+                                >
+                                    <Star
+                                        size={24}
+                                        fill={star <= rating ? 'currentColor' : 'none'}
+                                        aria-hidden="true"
+                                    />
+                                </button>
+                            ))}
+                        </div>
+                        <span className="support-rating-text">{ratingLabels[rating] || ''}</span>
+                    </div>
+
+                    <div className="support-evaluation-tags">
+                        {tags.map(tag => {
+                            const active = selectedTags.includes(tag);
+                            return (
+                                <button
+                                    type="button"
+                                    key={tag}
+                                    className={`support-tag-btn ${active ? 'is-active' : ''}`}
+                                    onClick={() => toggleTag(tag)}
+                                    aria-pressed={active}
+                                >
+                                    {tag}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <textarea
+                        className="support-evaluation-textarea"
+                        placeholder={
+                            isZh
+                                ? '请填写您对本次客服服务的建议或体验（选填）'
+                                : 'Share details about your customer service experience (optional)'
+                        }
+                        rows={3}
+                        value={comment}
+                        onChange={e => setComment(e.target.value)}
+                        maxLength={500}
+                    />
+
+                    <button type="submit" className="support-evaluation-submit-btn">
+                        {isZh ? '提交客服评价' : 'Submit feedback'}
+                    </button>
+                </form>
+            )}
+        </section>
     );
 }

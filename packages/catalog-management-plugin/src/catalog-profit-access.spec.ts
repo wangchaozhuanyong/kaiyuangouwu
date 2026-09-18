@@ -103,8 +103,8 @@ describe('catalog profit access and expense writes', () => {
             to: '2026-09-10',
             currencyCode: CurrencyCode.MYR,
         });
-        expect(result.items.map(item => item.code)).toEqual(['ORDER-3']);
-        expect(result.summary.settledRevenueMicrounits).toBe(10_000);
+        expect(result.items.map(item => item.code)).toEqual(['ORDER-1', 'ORDER-2', 'ORDER-3']);
+        expect(result.summary.settledRevenueMicrounits).toBe(30_000);
         expect(methods.find).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: expect.objectContaining({ channels: { id: 9 } }),

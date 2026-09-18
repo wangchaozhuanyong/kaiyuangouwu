@@ -94,8 +94,15 @@ describe('ConfirmDialogProvider sensitive action bridge', () => {
         });
 
         expect(container.textContent).toContain('验证当前管理员密码');
+        const dialogForm = container.querySelector<HTMLFormElement>('section[role="alertdialog"] form');
+        expect(dialogForm).not.toBeNull();
+        const usernameInput = dialogForm?.querySelector<HTMLInputElement>('input[autoComplete="username"]');
+        expect(usernameInput).not.toBeNull();
+        expect(usernameInput?.readOnly).toBe(true);
+
         const passwordInput = container.querySelector<HTMLInputElement>('input[type="password"]');
         expect(passwordInput).not.toBeNull();
+        expect(passwordInput?.form).toBe(dialogForm);
         expect(passwordInput?.placeholder).toBe('仅用于本次操作校验，不会保存');
 
         await act(async () => {
@@ -112,6 +119,73 @@ describe('ConfirmDialogProvider sensitive action bridge', () => {
         expect(requestHeaders).toHaveLength(2);
         expect(requestHeaders[1]?.[SENSITIVE_ACTION_PASSWORD_HEADER]).toBe('Current123!');
         expect(container.querySelector('input[type="password"]')).toBeNull();
+    });
+
+    it('isolates password prompt inside form and keeps external search input outside the dialog scope', async () => {
+        const client = new ApolloClient({
+            link: sensitiveActionPasswordLink.concat(
+                new ApolloLink(
+                    () =>
+                        new Observable(observer => {
+                            observer.next({
+                                errors: [
+                                    {
+                                        message: '请输入当前账号密码后继续',
+                                        extensions: {
+                                            code: SENSITIVE_ACTION_PASSWORD_REQUIRED,
+                                        },
+                                    },
+                                ],
+                            });
+                            observer.complete();
+                        }),
+                ),
+            ),
+            cache: new InMemoryCache(),
+        });
+
+        await act(async () => {
+            root.render(
+                <ConfirmDialogProvider>
+                    <div>
+                        <input
+                            type="search"
+                            name="option-group-search"
+                            autoComplete="off"
+                            aria-label="搜索规格模板"
+                            defaultValue=""
+                        />
+                        <button
+                            type="button"
+                            onClick={() => {
+                                client.mutate({
+                                    mutation: DELETE_MUTATION,
+                                    variables: { id: 'seller-2' },
+                                });
+                            }}
+                        >
+                            删除
+                        </button>
+                    </div>
+                </ConfirmDialogProvider>,
+            );
+        });
+
+        const externalSearch = container.querySelector<HTMLInputElement>('input[aria-label="搜索规格模板"]')!;
+        expect(externalSearch).not.toBeNull();
+        expect(externalSearch.form).toBeNull();
+
+        await act(async () => {
+            container.querySelector<HTMLButtonElement>('button')?.click();
+            await Promise.resolve();
+        });
+
+        const dialogForm = container.querySelector<HTMLFormElement>('section[role="alertdialog"] form')!;
+        expect(dialogForm).not.toBeNull();
+        const passwordInput = container.querySelector<HTMLInputElement>('input[type="password"]')!;
+        expect(passwordInput.form).toBe(dialogForm);
+        expect(externalSearch.form).toBeNull();
+        expect(externalSearch.value).toBe('');
     });
 });
 

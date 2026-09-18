@@ -114,6 +114,11 @@ export function OptionGroupProductsDialog({
                     <div className="relative">
                         <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                         <input
+                            type="search"
+                            name="option-group-products-search"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            spellCheck={false}
                             aria-label="搜索关联商品"
                             value={search}
                             onChange={event => {

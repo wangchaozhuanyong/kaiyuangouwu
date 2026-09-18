@@ -8,15 +8,16 @@ import {
     CreditCard,
     FileText,
     Image as ImageIcon,
+    Mail,
     MapPin,
     MessageSquare,
     PackageCheck,
     PencilLine,
+    Phone,
     Printer,
     RefreshCw,
     RotateCcw,
     Send,
-    Store,
     Truck,
     User,
     X,
@@ -698,8 +699,8 @@ export function OrderEditor() {
                 </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto p-5 sm:p-6">
-                <div className="mx-auto w-full max-w-none space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6">
+                <div className="mx-auto w-full max-w-[1536px] space-y-4">
                     {notification && (
                         <div
                             role="status"
@@ -732,10 +733,10 @@ export function OrderEditor() {
                         </div>
                     )}
 
-                    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+                    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
                         <div className="min-w-0 space-y-4">
                             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
-                                <header className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 px-5 py-4">
+                                <header className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-5">
                                     <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                                         <PackageCheck className="h-4 w-4 text-blue-600" />
                                         商品明细
@@ -746,33 +747,39 @@ export function OrderEditor() {
                                     </span>
                                 </header>
                                 <div className="mobile-scrollbar-hidden overflow-x-auto">
-                                    <table className="w-full min-w-[720px] border-collapse text-left text-xs">
+                                    <table className="w-full min-w-[640px] border-collapse text-left text-xs">
                                         <thead>
                                             <tr className="border-b border-slate-100 text-slate-400">
-                                                <th scope="col" className="w-14 whitespace-nowrap px-3 py-3">
+                                                <th scope="col" className="w-14 whitespace-nowrap px-4 py-3">
                                                     主图
                                                 </th>
-                                                <th scope="col" className="w-64 whitespace-nowrap px-3 py-3">
+                                                <th
+                                                    scope="col"
+                                                    className="min-w-[180px] whitespace-nowrap px-4 py-3"
+                                                >
                                                     商品名称
                                                 </th>
-                                                <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
+                                                <th scope="col" className="w-36 whitespace-nowrap px-4 py-3">
                                                     SKU
                                                 </th>
-                                                <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
+                                                <th scope="col" className="w-24 whitespace-nowrap px-4 py-3">
                                                     商品类型
                                                 </th>
-                                                <th scope="col" className="w-32 whitespace-nowrap px-3 py-3">
+                                                <th
+                                                    scope="col"
+                                                    className="w-28 whitespace-nowrap px-4 py-3 text-right"
+                                                >
                                                     含税单价
                                                 </th>
                                                 <th
                                                     scope="col"
-                                                    className="w-20 whitespace-nowrap px-3 py-3 text-center"
+                                                    className="w-16 whitespace-nowrap px-4 py-3 text-center"
                                                 >
                                                     数量
                                                 </th>
                                                 <th
                                                     scope="col"
-                                                    className="w-32 whitespace-nowrap px-3 py-3 text-right"
+                                                    className="w-28 whitespace-nowrap px-4 py-3 text-right"
                                                 >
                                                     小计
                                                 </th>
@@ -780,9 +787,9 @@ export function OrderEditor() {
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
                                             {order.lines.map(line => (
-                                                <tr key={line.id} className="h-[52px] hover:bg-slate-50/80">
-                                                    <td className="h-[52px] px-3 py-0">
-                                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100">
+                                                <tr key={line.id} className="hover:bg-slate-50">
+                                                    <td className="px-4 py-2.5">
+                                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100">
                                                             {line.featuredAsset?.preview ? (
                                                                 <img
                                                                     src={line.featuredAsset.preview}
@@ -796,7 +803,7 @@ export function OrderEditor() {
                                                             )}
                                                         </div>
                                                     </td>
-                                                    <td className="h-[52px] max-w-64 px-3 py-0">
+                                                    <td className="px-4 py-2.5">
                                                         <span
                                                             className="block truncate font-semibold text-slate-900"
                                                             title={getOrderProductDisplayName(
@@ -806,7 +813,7 @@ export function OrderEditor() {
                                                             {getOrderProductDisplayName(line.productVariant)}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] max-w-44 px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                    <td className="px-4 py-2.5 font-mono text-[11px] text-slate-500">
                                                         <span
                                                             className="block truncate"
                                                             title={line.productVariant.sku}
@@ -814,22 +821,22 @@ export function OrderEditor() {
                                                             {line.productVariant.sku}
                                                         </span>
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] text-slate-500">
+                                                    <td className="whitespace-nowrap px-4 py-2.5 text-[11px] text-slate-500">
                                                         {line.customFields?.fulfillmentTypeSnapshot ===
                                                         'digital'
                                                             ? '虚拟交付'
                                                             : '实物配送'}
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono tabular-nums">
+                                                    <td className="whitespace-nowrap px-4 py-2.5 text-right font-mono tabular-nums">
                                                         {formatMoney(
                                                             line.proratedUnitPriceWithTax,
                                                             order.currencyCode,
                                                         )}
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 text-center font-mono font-semibold">
+                                                    <td className="whitespace-nowrap px-4 py-2.5 text-center font-mono font-semibold">
                                                         {line.quantity}
                                                     </td>
-                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 text-right font-mono font-semibold tabular-nums">
+                                                    <td className="whitespace-nowrap px-4 py-2.5 text-right font-mono font-semibold tabular-nums text-slate-900">
                                                         {formatMoney(
                                                             line.discountedLinePriceWithTax,
                                                             order.currencyCode,
@@ -842,144 +849,174 @@ export function OrderEditor() {
                                 </div>
                             </section>
 
-                            <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-                                <div className="flex items-center justify-between">
-                                    <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                                        <Truck className="h-4 w-4 text-blue-600" />
-                                        履约与物流
-                                        <FeatureHelpButton topic="sales.fulfillment" title="履约与物流" />
-                                    </h2>
-                                    {remainingPhysicalLines.length > 0 && (
-                                        <span className="rounded bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
-                                            {remainingPhysicalLines.reduce(
-                                                (sum, line) => sum + line.quantity,
-                                                0,
-                                            )}{' '}
-                                            件实物待发
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="mt-2 space-y-2">
-                                    {(order.fulfillments ?? []).length === 0 ? (
-                                        <div className="text-xs text-slate-500">当前没有履约记录</div>
-                                    ) : (
-                                        order.fulfillments?.map(fulfillment => (
-                                            <div
-                                                key={fulfillment.id}
-                                                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"
-                                            >
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-mono text-xs font-semibold text-slate-900">
-                                                            #{fulfillment.id}
-                                                        </span>
-                                                        <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
-                                                            {getFulfillmentStateLabel(fulfillment.state)}
-                                                        </span>
-                                                    </div>
-                                                    <div className="mt-1 text-[11px] text-slate-500">
-                                                        {fulfillment.method || fulfillment.handlerCode} ·{' '}
-                                                        {fulfillment.trackingCode || '无物流单号'}
-                                                    </div>
-                                                </div>
-                                                {canUpdateOrder &&
-                                                    fulfillment.nextStates.includes('Delivered') && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                handleFulfillmentDelivered(fulfillment)
-                                                            }
-                                                            disabled={transitioningFulfillment}
-                                                            className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                                                        >
-                                                            <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
-                                                            确认送达
-                                                        </button>
-                                                    )}
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </section>
-
-                            <NextAdminPageBlocks
-                                pageId="order-detail"
-                                entity={order as unknown as Record<string, unknown>}
-                                fallback={
-                                    <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
+                            {/* 履约与物流 + 支付与退款 双栏并排 */}
+                            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                <section className="flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
+                                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                                         <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                                            <CreditCard className="h-4 w-4 text-blue-600" />
-                                            支付与退款
-                                            <FeatureHelpButton topic="sales.payment" title="支付与退款" />
+                                            <Truck className="h-4 w-4 text-blue-600" />
+                                            履约与物流
+                                            <FeatureHelpButton topic="sales.fulfillment" title="履约与物流" />
                                         </h2>
-                                        <div className="mt-4 space-y-3">
-                                            {(order.payments ?? []).length === 0 ? (
-                                                <div className="rounded-lg bg-slate-50 p-4 text-center text-xs text-slate-500">
-                                                    当前没有支付记录
-                                                </div>
-                                            ) : (
-                                                order.payments?.map(payment => (
-                                                    <div
-                                                        key={payment.id}
-                                                        className="rounded-xl border border-slate-200 p-3"
-                                                    >
-                                                        <div className="flex flex-wrap items-center justify-between gap-2">
-                                                            <div>
-                                                                <span className="font-semibold text-slate-900">
-                                                                    {getPaymentMethodLabel(payment.method)}
-                                                                </span>
-                                                                <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
-                                                                    {getPaymentStateLabel(payment.state)}
-                                                                </span>
-                                                            </div>
-                                                            <span className="font-mono text-sm font-semibold tabular-nums">
-                                                                {formatMoney(
-                                                                    payment.amount,
-                                                                    order.currencyCode,
-                                                                )}
+                                        {remainingPhysicalLines.length > 0 ? (
+                                            <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700">
+                                                {remainingPhysicalLines.reduce(
+                                                    (sum, line) => sum + line.quantity,
+                                                    0,
+                                                )}{' '}
+                                                件待发
+                                            </span>
+                                        ) : (order.fulfillments ?? []).length > 0 ? (
+                                            <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                                全部已履约
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                    <div className="mt-3 flex-1 space-y-2">
+                                        {(order.fulfillments ?? []).length === 0 ? (
+                                            <div className="flex h-24 items-center justify-center rounded-lg bg-slate-50 text-xs text-slate-400">
+                                                当前没有履约记录
+                                            </div>
+                                        ) : (
+                                            order.fulfillments?.map(fulfillment => (
+                                                <div
+                                                    key={fulfillment.id}
+                                                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3"
+                                                >
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-mono text-xs font-semibold text-slate-900">
+                                                                #{fulfillment.id}
+                                                            </span>
+                                                            <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                                                                {getFulfillmentStateLabel(fulfillment.state)}
                                                             </span>
                                                         </div>
-                                                        <div className="mt-1 font-mono text-[10px] text-slate-400">
-                                                            流水号：{payment.transactionId || '后端未返回'}
+                                                        <div className="mt-1 text-[11px] text-slate-600">
+                                                            <span>
+                                                                {fulfillment.method ||
+                                                                    fulfillment.handlerCode}
+                                                            </span>
+                                                            <span className="mx-1 text-slate-300">·</span>
+                                                            <span className="font-mono text-slate-500">
+                                                                {fulfillment.trackingCode || '无物流单号'}
+                                                            </span>
                                                         </div>
-                                                        {payment.refunds.length > 0 && (
-                                                            <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
-                                                                {payment.refunds.map(refund => (
-                                                                    <div
-                                                                        key={refund.id}
-                                                                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[11px] text-rose-700"
-                                                                    >
-                                                                        <span>
-                                                                            退款 #{refund.id} ·{' '}
-                                                                            {getRefundStateLabel(
-                                                                                refund.state,
-                                                                            )}{' '}
-                                                                            · {refund.reason || '未填写原因'}
-                                                                        </span>
-                                                                        <strong className="font-mono">
-                                                                            {formatMoney(
-                                                                                refund.total,
-                                                                                order.currencyCode,
-                                                                            )}
-                                                                        </strong>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
                                                     </div>
-                                                ))
-                                            )}
-                                        </div>
-                                    </section>
-                                }
-                            />
+                                                    {canUpdateOrder &&
+                                                        fulfillment.nextStates.includes('Delivered') && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    handleFulfillmentDelivered(fulfillment)
+                                                                }
+                                                                disabled={transitioningFulfillment}
+                                                                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 disabled:opacity-50"
+                                                            >
+                                                                <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
+                                                                确认送达
+                                                            </button>
+                                                        )}
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </section>
+
+                                <NextAdminPageBlocks
+                                    pageId="order-detail"
+                                    entity={order as unknown as Record<string, unknown>}
+                                    fallback={
+                                        <section className="flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
+                                            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                                                <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                                                    <CreditCard className="h-4 w-4 text-blue-600" />
+                                                    支付与退款
+                                                    <FeatureHelpButton
+                                                        topic="sales.payment"
+                                                        title="支付与退款"
+                                                    />
+                                                </h2>
+                                                {(order.payments ?? []).length > 0 && (
+                                                    <span className="text-[11px] font-medium text-slate-500">
+                                                        {order.payments?.length} 笔记录
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="mt-3 flex-1 space-y-2.5">
+                                                {(order.payments ?? []).length === 0 ? (
+                                                    <div className="flex h-24 items-center justify-center rounded-lg bg-slate-50 text-xs text-slate-400">
+                                                        当前没有支付记录
+                                                    </div>
+                                                ) : (
+                                                    order.payments?.map(payment => (
+                                                        <div
+                                                            key={payment.id}
+                                                            className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+                                                        >
+                                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-xs font-semibold text-slate-900">
+                                                                        {getPaymentMethodLabel(
+                                                                            payment.method,
+                                                                        )}
+                                                                    </span>
+                                                                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                                                                        {getPaymentStateLabel(payment.state)}
+                                                                    </span>
+                                                                </div>
+                                                                <span className="font-mono text-sm font-semibold tabular-nums text-slate-900">
+                                                                    {formatMoney(
+                                                                        payment.amount,
+                                                                        order.currencyCode,
+                                                                    )}
+                                                                </span>
+                                                            </div>
+                                                            <div className="mt-1 font-mono text-[10px] text-slate-400">
+                                                                流水号：
+                                                                {payment.transactionId || '后端未返回'}
+                                                            </div>
+                                                            {payment.refunds.length > 0 && (
+                                                                <div className="mt-2.5 space-y-1.5 border-t border-slate-200 pt-2">
+                                                                    {payment.refunds.map(refund => (
+                                                                        <div
+                                                                            key={refund.id}
+                                                                            className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-rose-50 px-2.5 py-1.5 text-[11px] text-rose-700"
+                                                                        >
+                                                                            <span className="truncate">
+                                                                                退款 #{refund.id} ·{' '}
+                                                                                {getRefundStateLabel(
+                                                                                    refund.state,
+                                                                                )}{' '}
+                                                                                ·{' '}
+                                                                                {refund.reason ||
+                                                                                    '未填写原因'}
+                                                                            </span>
+                                                                            <strong className="font-mono shrink-0">
+                                                                                {formatMoney(
+                                                                                    refund.total,
+                                                                                    order.currencyCode,
+                                                                                )}
+                                                                            </strong>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </section>
+                                    }
+                                />
+                            </div>
 
                             <div
-                                className="grid items-start gap-4 md:grid-cols-2"
+                                className="grid items-start gap-4 lg:grid-cols-2"
                                 aria-label="订单补充资料与费用"
                             >
                                 {orderCustomFieldDefinitions.length > 0 && (
-                                    <div className="min-w-0 [&_textarea]:h-16 [&_textarea]:min-h-16 [&_textarea]:resize-y">
+                                    <div className="min-w-0 [&_textarea]:h-14 [&_textarea]:min-h-14 [&_textarea]:resize-y">
                                         <DynamicCustomFieldsForm
                                             fields={orderCustomFieldDefinitions}
                                             values={orderCustomFieldValues}
@@ -1017,19 +1054,26 @@ export function OrderEditor() {
                                 )}
                             </div>
 
-                            <div className="grid items-start gap-4 md:grid-cols-2" aria-label="订单跟进记录">
+                            <div className="grid items-start gap-4 lg:grid-cols-2" aria-label="订单跟进记录">
                                 <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-                                    <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                                        <MessageSquare className="h-4 w-4 text-blue-600" />
-                                        内部备注
-                                        <FeatureHelpButton topic="sales.orders" title="订单内部备注" />
-                                    </h2>
-                                    <p className="mt-1 text-[10px] text-slate-400">
-                                        当前读取最近 {order.history.items.length} / {order.history.totalItems}{' '}
-                                        条订单历史中的备注
-                                    </p>
+                                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                                        <div>
+                                            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                                                <MessageSquare className="h-4 w-4 text-blue-600" />
+                                                内部备注
+                                                <FeatureHelpButton
+                                                    topic="sales.orders"
+                                                    title="订单内部备注"
+                                                />
+                                            </h2>
+                                            <p className="mt-0.5 text-[10px] text-slate-400">
+                                                仅管理员可见，共 {order.history.items.length} /{' '}
+                                                {order.history.totalItems} 条记录
+                                            </p>
+                                        </div>
+                                    </div>
                                     {canUpdateOrder && (
-                                        <div className="mt-4 flex gap-2">
+                                        <div className="mt-3 flex gap-2">
                                             <input
                                                 value={newNote}
                                                 onChange={event => setNewNote(event.target.value)}
@@ -1055,9 +1099,9 @@ export function OrderEditor() {
                                             </button>
                                         </div>
                                     )}
-                                    <div className="mt-4 space-y-2">
+                                    <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
                                         {notes.length === 0 ? (
-                                            <div className="rounded-lg bg-slate-50 p-4 text-center text-xs text-slate-500">
+                                            <div className="rounded-lg bg-slate-50 p-4 text-center text-xs text-slate-400">
                                                 还没有内部备注
                                             </div>
                                         ) : (
@@ -1067,7 +1111,7 @@ export function OrderEditor() {
                                                     className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs"
                                                 >
                                                     <div className="flex flex-wrap justify-between gap-2 text-[10px] text-slate-400">
-                                                        <span>
+                                                        <span className="font-medium text-slate-600">
                                                             {[
                                                                 note.administrator?.lastName,
                                                                 note.administrator?.firstName,
@@ -1077,7 +1121,7 @@ export function OrderEditor() {
                                                         </span>
                                                         <span>{formatDateTime(note.createdAt)}</span>
                                                     </div>
-                                                    <p className="mt-1.5 leading-5 text-slate-800">
+                                                    <p className="mt-1 leading-5 text-slate-800">
                                                         {String(note.data.note ?? '')}
                                                     </p>
                                                 </div>
@@ -1087,22 +1131,26 @@ export function OrderEditor() {
                                 </section>
 
                                 <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-                                    <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                                        <Clock3 className="h-4 w-4 text-blue-600" />
-                                        订单时间线（最近 20 条）
-                                        <FeatureHelpButton topic="sales.orders" title="订单时间线" />
-                                    </h2>
-                                    <div className="mt-4 space-y-3">
+                                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                                        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                                            <Clock3 className="h-4 w-4 text-blue-600" />
+                                            订单时间线
+                                            <FeatureHelpButton topic="sales.orders" title="订单时间线" />
+                                        </h2>
+                                        <span className="text-[10px] text-slate-400">
+                                            最近 {timeline.length} 条
+                                        </span>
+                                    </div>
+                                    <div className="mt-3 max-h-72 overflow-y-auto pr-1">
                                         {timeline.length === 0 ? (
-                                            <div className="text-xs text-slate-500">当前没有状态记录</div>
+                                            <div className="py-6 text-center text-xs text-slate-400">
+                                                当前没有状态记录
+                                            </div>
                                         ) : (
-                                            timeline.map(entry => (
-                                                <div
-                                                    key={entry.id}
-                                                    className="grid grid-cols-[0.75rem_1fr] gap-3"
-                                                >
-                                                    <div className="mt-1.5 h-2.5 w-2.5 rounded-full bg-slate-300" />
-                                                    <div>
+                                            <div className="relative ml-2 space-y-3 border-l-2 border-slate-100 py-1 pl-4">
+                                                {timeline.map(entry => (
+                                                    <div key={entry.id} className="relative">
+                                                        <div className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full border-2 border-white bg-blue-500 shadow-2xs" />
                                                         <div className="text-xs font-medium text-slate-800">
                                                             {historyLabel(entry)}
                                                         </div>
@@ -1110,8 +1158,8 @@ export function OrderEditor() {
                                                             {formatDateTime(entry.createdAt)}
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ))
+                                                ))}
+                                            </div>
                                         )}
                                     </div>
                                 </section>
@@ -1119,12 +1167,17 @@ export function OrderEditor() {
                         </div>
 
                         <aside className="min-w-0 space-y-4">
-                            <section className="rounded-xl bg-slate-900 p-5 text-white shadow-sm">
-                                <h2 className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-                                    金额汇总
-                                    <FeatureHelpButton topic="sales.totals" title="金额汇总" />
-                                </h2>
-                                <div className="mt-4 space-y-2 text-xs">
+                            <section className="rounded-xl bg-slate-950 p-4.5 text-white shadow-sm sm:p-5">
+                                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                                    <h2 className="flex items-center gap-2 text-xs font-semibold text-slate-200">
+                                        金额汇总
+                                        <FeatureHelpButton topic="sales.totals" title="金额汇总" />
+                                    </h2>
+                                    <span className="font-mono text-[11px] text-slate-400">
+                                        {order.currencyCode}
+                                    </span>
+                                </div>
+                                <div className="mt-3 space-y-2 text-xs">
                                     <div className="flex justify-between text-slate-300">
                                         <span>商品小计</span>
                                         <span className="font-mono">
@@ -1140,79 +1193,178 @@ export function OrderEditor() {
                                     {order.discounts.map((discount, index) => (
                                         <div
                                             key={`${discount.description}-${index}`}
-                                            className="flex justify-between text-emerald-300"
+                                            className="flex justify-between text-emerald-400"
                                         >
                                             <span className="truncate pr-2">
-                                                {discount.description || '优惠'}
+                                                {discount.description || '优惠折扣'}
                                             </span>
                                             <span className="font-mono">
-                                                {formatMoney(discount.amountWithTax, order.currencyCode)}
+                                                -{formatMoney(discount.amountWithTax, order.currencyCode)}
                                             </span>
                                         </div>
                                     ))}
-                                    <div className="mt-3 flex justify-between border-t border-white/10 pt-3 text-sm font-semibold">
-                                        <span>订单合计</span>
-                                        <span className="font-mono text-lg tabular-nums">
+                                    <div className="mt-3 flex items-baseline justify-between border-t border-white/10 pt-3 text-sm font-semibold">
+                                        <span className="text-slate-200">订单合计</span>
+                                        <span className="font-mono text-xl font-bold tabular-nums text-white">
                                             {formatMoney(order.totalWithTax, order.currencyCode)}
                                         </span>
                                     </div>
                                 </div>
                             </section>
+
                             <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-                                <h2 className="flex items-center gap-2 text-xs font-semibold text-slate-900">
-                                    <User className="h-4 w-4 text-blue-600" />
-                                    买家信息
-                                    <FeatureHelpButton topic="sales.orders" title="买家信息" />
-                                </h2>
-                                <div className="mt-3 space-y-1.5 text-xs">
-                                    <div className="font-semibold text-slate-900">
-                                        {getCustomerName(order.customer)}
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                                    <h2 className="flex items-center gap-2 text-xs font-semibold text-slate-900">
+                                        <User className="h-4 w-4 text-blue-600" />
+                                        买家信息
+                                        <FeatureHelpButton topic="sales.orders" title="买家信息" />
+                                    </h2>
+                                </div>
+                                <div className="mt-3 space-y-2 text-xs">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700">
+                                            {getCustomerName(order.customer).slice(0, 1) || '客'}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="truncate font-semibold text-slate-900">
+                                                {getCustomerName(order.customer)}
+                                            </div>
+                                            {order.customer?.id && (
+                                                <div className="font-mono text-[10px] text-slate-400">
+                                                    客户ID: {order.customer.id}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="break-all text-slate-500">
-                                        {order.customer?.emailAddress ?? '未留邮箱'}
-                                    </div>
-                                    <div className="text-slate-500">
-                                        {order.customer?.phoneNumber ||
-                                            order.shippingAddress?.phoneNumber ||
-                                            '未留联系电话'}
+                                    <div className="space-y-1.5 border-t border-slate-100 pt-2 text-slate-600">
+                                        <div className="flex items-center gap-2 text-[11px]">
+                                            <Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                            {order.customer?.emailAddress ? (
+                                                <a
+                                                    href={`mailto:${order.customer.emailAddress}`}
+                                                    className="truncate text-blue-600 hover:underline"
+                                                    title={order.customer.emailAddress}
+                                                >
+                                                    {order.customer.emailAddress}
+                                                </a>
+                                            ) : (
+                                                <span className="text-slate-400">未留邮箱</span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2 text-[11px]">
+                                            <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                            {order.customer?.phoneNumber ||
+                                            order.shippingAddress?.phoneNumber ? (
+                                                <a
+                                                    href={`tel:${order.customer?.phoneNumber || order.shippingAddress?.phoneNumber}`}
+                                                    className="text-slate-700 hover:text-blue-600"
+                                                >
+                                                    {order.customer?.phoneNumber ||
+                                                        order.shippingAddress?.phoneNumber}
+                                                </a>
+                                            ) : (
+                                                <span className="text-slate-400">未留联系电话</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </section>
-                            <AddressCard
-                                title="收货地址"
-                                icon={<MapPin className="h-4 w-4 text-blue-600" />}
-                                address={order.shippingAddress}
-                            />
-                            <AddressCard
-                                title="账单地址"
-                                icon={<FileText className="h-4 w-4 text-blue-600" />}
-                                address={order.billingAddress}
-                            />
+
                             <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-                                <h2 className="flex items-center gap-2 text-xs font-semibold text-slate-900">
-                                    <Store className="h-4 w-4 text-blue-600" />
-                                    渠道与配送
-                                    <FeatureHelpButton topic="sales.orders" title="渠道与配送" />
-                                </h2>
-                                <div className="mt-3 space-y-2 text-xs text-slate-600">
-                                    <div>
-                                        <span className="text-slate-400">销售店铺：</span>
-                                        {order.salesChannel
-                                            ? getChannelDisplayName(order.salesChannel.code)
-                                            : '归属待核实'}
-                                        {!inSalesStore && (
-                                            <p className="mt-2 text-amber-700">
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                                    <h2 className="flex items-center gap-2 text-xs font-semibold text-slate-900">
+                                        <MapPin className="h-4 w-4 text-blue-600" />
+                                        交付与配送
+                                        <FeatureHelpButton topic="sales.orders" title="交付与配送" />
+                                    </h2>
+                                </div>
+                                <div className="mt-3 space-y-3 text-xs">
+                                    <div className="space-y-1.5 rounded-lg bg-slate-50 p-2.5 text-[11px]">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-slate-500">销售店铺</span>
+                                            <span className="font-semibold text-slate-800">
                                                 {order.salesChannel
-                                                    ? '请通过顶部店铺选择器切换到销售店铺后操作订单。'
-                                                    : '历史订单归属尚未核实，暂时只能查看。'}
-                                            </p>
+                                                    ? getChannelDisplayName(order.salesChannel.code)
+                                                    : '归属待核实'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-slate-500">配送方式</span>
+                                            <span className="font-medium text-slate-700">
+                                                {order.shippingLines
+                                                    .map(line => line.shippingMethod.name)
+                                                    .join('、') || '无需配送'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {!inSalesStore && (
+                                        <div className="rounded-lg bg-amber-50 p-2.5 text-[11px] text-amber-800">
+                                            {order.salesChannel
+                                                ? '请通过顶部店铺选择器切换到销售店铺后操作订单。'
+                                                : '历史订单归属尚未核实，暂时只能查看。'}
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <div className="mb-1.5 flex items-center justify-between">
+                                            <span className="text-[11px] font-semibold text-slate-700">
+                                                收货地址
+                                            </span>
+                                        </div>
+                                        {order.shippingAddress ? (
+                                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs leading-5 text-slate-600">
+                                                <div className="font-semibold text-slate-900">
+                                                    {order.shippingAddress.fullName || '未填写姓名'}
+                                                    {order.shippingAddress.phoneNumber && (
+                                                        <span className="ml-2 font-normal text-slate-500">
+                                                            {order.shippingAddress.phoneNumber}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {order.shippingAddress.company && (
+                                                    <div className="text-[11px] text-slate-500">
+                                                        {order.shippingAddress.company}
+                                                    </div>
+                                                )}
+                                                <div className="mt-1 text-slate-700">
+                                                    {formatAddress(order.shippingAddress)}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-xs text-slate-400">未填写收货地址</div>
                                         )}
                                     </div>
-                                    <div>
-                                        <span className="text-slate-400">配送：</span>
-                                        {order.shippingLines
-                                            .map(line => line.shippingMethod.name)
-                                            .join('、') || '无需配送'}
+
+                                    <div className="border-t border-slate-100 pt-2">
+                                        <div className="mb-1 flex items-center justify-between">
+                                            <span className="text-[11px] font-semibold text-slate-700">
+                                                账单地址
+                                            </span>
+                                            {(!order.billingAddress ||
+                                                (!order.billingAddress.fullName &&
+                                                    !order.billingAddress.streetLine1) ||
+                                                (order.billingAddress.fullName ===
+                                                    order.shippingAddress?.fullName &&
+                                                    order.billingAddress.streetLine1 ===
+                                                        order.shippingAddress?.streetLine1)) && (
+                                                <span className="text-[10px] text-slate-400">同收货地址</span>
+                                            )}
+                                        </div>
+                                        {order.billingAddress &&
+                                        (order.billingAddress.fullName || order.billingAddress.streetLine1) &&
+                                        (order.billingAddress.fullName !== order.shippingAddress?.fullName ||
+                                            order.billingAddress.streetLine1 !==
+                                                order.shippingAddress?.streetLine1) ? (
+                                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs leading-5 text-slate-600">
+                                                <div className="font-semibold text-slate-900">
+                                                    {order.billingAddress.fullName || '未填写姓名'}
+                                                </div>
+                                                <div className="mt-1 text-slate-700">
+                                                    {formatAddress(order.billingAddress)}
+                                                </div>
+                                            </div>
+                                        ) : null}
                                     </div>
                                 </div>
                             </section>
@@ -1356,35 +1508,6 @@ export function OrderEditor() {
     );
 }
 
-function AddressCard({
-    title,
-    icon,
-    address,
-}: {
-    title: string;
-    icon: React.ReactNode;
-    address?: AddressItem | null;
-}) {
-    return (
-        <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-            <h2 className="flex items-center gap-2 text-xs font-semibold text-slate-900">
-                {icon}
-                {title}
-            </h2>
-            {address ? (
-                <div className="mt-3 space-y-1 text-xs leading-5 text-slate-600">
-                    <div className="font-semibold text-slate-900">{address.fullName || '未填写姓名'}</div>
-                    {address.company && <div>{address.company}</div>}
-                    <div>{formatAddress(address)}</div>
-                    {address.phoneNumber && <div>{address.phoneNumber}</div>}
-                </div>
-            ) : (
-                <div className="mt-3 text-xs text-slate-400">未填写</div>
-            )}
-        </section>
-    );
-}
-
 function ActionDialog({
     title,
     description,
@@ -1419,58 +1542,64 @@ function ActionDialog({
                 className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl"
                 onClick={event => event.stopPropagation()}
             >
-                <header className="flex items-start justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
-                    <div>
-                        <h2
-                            id={`dialog-${title}`}
-                            className="flex items-center gap-2 text-base font-semibold text-slate-950"
-                        >
-                            {icon}
-                            {title}
-                        </h2>
-                        <p className="mt-1.5 text-xs leading-5 text-slate-500">{description}</p>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        disabled={busy}
-                        className="text-slate-400 hover:text-slate-700"
-                        aria-label="关闭"
-                    >
-                        <X className="h-5 w-5" />
-                    </button>
-                </header>
-                <div className="p-6">
-                    {children}
-                    {error && (
-                        <div
-                            role="alert"
-                            className="mt-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs leading-5 text-rose-700"
-                        >
-                            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                            {error}
+                <form
+                    onSubmit={event => {
+                        event.preventDefault();
+                        if (!busy) onConfirm();
+                    }}
+                >
+                    <header className="flex items-start justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
+                        <div>
+                            <h2
+                                id={`dialog-${title}`}
+                                className="flex items-center gap-2 text-base font-semibold text-slate-950"
+                            >
+                                {icon}
+                                {title}
+                            </h2>
+                            <p className="mt-1.5 text-xs leading-5 text-slate-500">{description}</p>
                         </div>
-                    )}
-                </div>
-                <footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        disabled={busy}
-                        className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700"
-                    >
-                        取消
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onConfirm}
-                        disabled={busy}
-                        className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                    >
-                        {busy && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
-                        {confirmLabel}
-                    </button>
-                </footer>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            disabled={busy}
+                            className="text-slate-400 hover:text-slate-700"
+                            aria-label="关闭"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+                    </header>
+                    <div className="p-6">
+                        {children}
+                        {error && (
+                            <div
+                                role="alert"
+                                className="mt-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs leading-5 text-rose-700"
+                            >
+                                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                                {error}
+                            </div>
+                        )}
+                    </div>
+                    <footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            disabled={busy}
+                            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700"
+                        >
+                            取消
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={busy}
+                            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                        >
+                            {busy && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
+                            {confirmLabel}
+                        </button>
+                    </footer>
+                </form>
             </AccessibleDialogSurface>
         </div>
     );

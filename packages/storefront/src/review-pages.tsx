@@ -166,8 +166,8 @@ export function ReviewCenterPage({
                         ) : (
                             <p className="review-center-hint">
                                 {isZh
-                                    ? '完成实物订单或付款后的数字商品会出现在这里'
-                                    : 'Delivered physical items and paid digital items appear here'}
+                                    ? '付款成功的商品均可在此评价，欢迎分享真实体验'
+                                    : 'Paid items will appear here for you to share your experience'}
                             </p>
                         )}
                     </section>

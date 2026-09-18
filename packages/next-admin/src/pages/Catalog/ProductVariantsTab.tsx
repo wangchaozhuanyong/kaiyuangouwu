@@ -71,14 +71,8 @@ export function ProductVariantsTab() {
                 <div className="mt-3 grid gap-2 text-xs text-slate-700 sm:grid-cols-3">
                     {[
                         ['1', '添加规格', '单一商品只添加一个；颜色、容量等多规格再用模板。'],
-                        ['2', '填销售资料', '填规格名称、SKU 内部编码、销售价和库存。'],
-                        [
-                            '3',
-                            '填采购成本',
-                            isCreateMode
-                                ? '先保存商品，然后在本页下方的“SKU 成本与库存”填写。'
-                                : '在本页下方的“SKU 成本与库存”直接填写。',
-                        ],
+                        ['2', '填销售与成本价', '直接在表格中填写销售价与采购成本，实时核算毛利率。'],
+                        ['3', '统一保存', '点击右上角“保存商品”即可全部入库生效，无需单独保存每个模块。'],
                     ].map(([step, title, description]) => (
                         <div key={step} className="rounded-lg border border-blue-100 bg-white p-3">
                             <div className="flex items-center gap-2 font-bold text-slate-900">
@@ -367,7 +361,13 @@ export function ProductVariantsTab() {
                                         SKU 编码（内部编号） <span className="text-rose-500">*</span>
                                     </th>
                                     <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        成本价 ({activeCurrencyCode})
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
                                         销售价 ({activeCurrencyCode}) <span className="text-rose-500">*</span>
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        毛利率
                                     </th>
                                     {effectiveFulfillmentType === 'digital' ? (
                                         <>
@@ -451,6 +451,31 @@ export function ProductVariantsTab() {
                                                 )}
                                             </td>
 
+                                            {/* Cost Price */}
+                                            <td className="h-[52px] px-3 py-2">
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-slate-400 font-mono">
+                                                        {activeCurrencyCode}
+                                                    </span>
+                                                    <input
+                                                        type="number"
+                                                        aria-label={`第 ${index + 1} 行成本价`}
+                                                        step="0.01"
+                                                        min="0"
+                                                        value={variant.costPrice ?? ''}
+                                                        onChange={e =>
+                                                            handleVariantFieldChange(
+                                                                index,
+                                                                'costPrice',
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        placeholder="0.00"
+                                                        className="w-24 font-mono border border-slate-300 rounded px-2 py-1 bg-white text-slate-800 focus:border-blue-500"
+                                                    />
+                                                </div>
+                                            </td>
+
                                             {/* Price */}
                                             <td className="h-[52px] px-3 py-2">
                                                 <div className="flex items-center gap-1">
@@ -479,6 +504,31 @@ export function ProductVariantsTab() {
                                                         {rowError.price}
                                                     </div>
                                                 )}
+                                            </td>
+
+                                            {/* Margin */}
+                                            <td className="h-[52px] px-3 py-2 whitespace-nowrap">
+                                                {(() => {
+                                                    const cost = parseFloat(variant.costPrice || '');
+                                                    const price = parseFloat(variant.price || '');
+                                                    if (!isNaN(cost) && !isNaN(price) && price > 0) {
+                                                        const margin = ((price - cost) / price) * 100;
+                                                        return (
+                                                            <span
+                                                                className={`inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[11px] font-bold ${
+                                                                    margin >= 0
+                                                                        ? 'bg-emerald-50 text-emerald-700'
+                                                                        : 'bg-rose-50 text-rose-700'
+                                                                }`}
+                                                            >
+                                                                {margin.toFixed(1)}%
+                                                            </span>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <span className="text-slate-300 font-mono">—</span>
+                                                    );
+                                                })()}
                                             </td>
 
                                             {effectiveFulfillmentType === 'digital' ? (
@@ -628,16 +678,12 @@ export function ProductVariantsTab() {
                         </table>
                     </div>
                 )}
-                {effectiveFulfillmentType === 'physical' && variants.length > 0 && (
-                    <div className="border-t border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-900 sm:px-5">
-                        <strong>采购成本在哪里？</strong>{' '}
-                        {isCreateMode ? (
-                            '先保存商品，保存成功后会在本页下方出现“SKU 成本与库存”。'
-                        ) : (
-                            <a href="#sku-cost-inventory" className="font-bold text-amber-950 underline">
-                                点击跳到下方“SKU 成本与库存”填写
-                            </a>
-                        )}
+                {variants.length > 0 && (
+                    <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-2.5 text-xs text-slate-500 sm:px-5 flex flex-wrap items-center justify-between gap-2">
+                        <span>💡 销售价与成本价填写后，点击右上角【保存商品】即可统一保存生效。</span>
+                        <span className="text-[11px] text-slate-400">
+                            商品出入库、盘点与多仓调拨请前往【库存与仓储】模块。
+                        </span>
                     </div>
                 )}
             </div>

@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from './api';
 import { DesktopLayoutContext } from './desktop-layout';
-import { LogisticsPage, OrderDetailPage, OrdersPage } from './order-pages';
+import { LogisticsPage, LogisticsTrackingSheet, OrderDetailPage, OrdersPage } from './order-pages';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
 import { orderPageStyles } from './tailwind/order-page-styles';
 import { ActiveCustomer, MarketConfig, Order, StorefrontLanguage } from './types';
@@ -322,11 +322,57 @@ describe('OrderDetailPage fulfillment actions', () => {
         expect(markup).not.toContain('取消订单');
     });
 
-    it('offers the after-sales entry for settled orders', () => {
+    it('offers the after-sales entry and 再来一单 button for settled orders', () => {
         const markup = renderDetail(order);
 
         expect(markup).toContain('申请售后');
+        expect(markup).toContain('再来一单');
         expect(markup).not.toContain('取消订单');
+    });
+
+    it('treats TestPaymentSettled as fully activated orders in status hint', () => {
+        const markup = renderDetail({
+            ...order,
+            state: 'TestPaymentSettled',
+        });
+
+        expect(markup).toContain('订单已付款成功（测试模式），可正常测试发货、物流、评价及客服全流程');
+        expect(markup).toContain('再来一单');
+        expect(markup).toContain('申请售后');
+    });
+
+    it('renders LogisticsTrackingSheet with carrier info, tracking code, timeline, and customer support entry', () => {
+        const shippedOrder: Order = {
+            ...order,
+            state: 'Shipped',
+            fulfillments: [
+                {
+                    id: 'fulfillment-ship-1',
+                    state: 'Shipped',
+                    method: 'standard',
+                    trackingCode: 'SF1234567890',
+                    createdAt: '2026-08-17T00:00:00.000Z',
+                    updatedAt: '2026-08-18T03:42:00.000Z',
+                },
+            ],
+        };
+
+        const markup = renderToStaticMarkup(
+            createElement(LogisticsTrackingSheet, {
+                order: shippedOrder,
+                locale: 'zh-CN',
+                language: 'zh',
+                onClose: vi.fn(),
+                onContactSupport: vi.fn(),
+            }),
+        );
+
+        expect(markup).toContain('物流跟踪轨迹');
+        expect(markup).toContain('SF1234567890');
+        expect(markup).toContain('运单号');
+        expect(markup).toContain('复制');
+        expect(markup).toContain('运输派送中');
+        expect(markup).toContain('遇到物流问题？联系客服处理');
     });
 
     it('uses the Shop API fulfillment method to label digital delivery', () => {

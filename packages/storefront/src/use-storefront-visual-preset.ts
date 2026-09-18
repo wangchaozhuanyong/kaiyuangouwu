@@ -33,6 +33,17 @@ export function useStorefrontVisualPreset(
     });
     // Theme loading stays independent of route rendering, so slow requests never unmount a form.
     const presetId = normalizeStorefrontVisualPreset(enabled ? query.data?.presetId : undefined);
-    useLayoutEffect(() => applyStorefrontVisualPreset(document.documentElement, presetId), [presetId]);
+    useLayoutEffect(() => {
+        const cleanup = applyStorefrontVisualPreset(document.documentElement, presetId);
+        if (query.data?.presetId) {
+            try {
+                sessionStorage.setItem('__storefront_preset__', presetId);
+                localStorage.setItem('__storefront_preset__', presetId);
+            } catch {
+                // Storage may be unavailable in private browsing mode
+            }
+        }
+        return cleanup;
+    }, [presetId, query.data?.presetId]);
     return { presetId };
 }

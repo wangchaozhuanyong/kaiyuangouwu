@@ -4,6 +4,13 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 (function() {
     'use strict';
 
+    try {
+        const cachedPreset = sessionStorage.getItem('__storefront_preset__') || localStorage.getItem('__storefront_preset__');
+        if (cachedPreset === 'modern-oriental' || cachedPreset === 'classic') {
+            document.documentElement.setAttribute('data-storefront-preset', cachedPreset);
+        }
+    } catch (e) {}
+
     const API_ENDPOINT = '/shop-api';
     const STORAGE_KEY = 'icloud_relay_recent_queries';
     let currentQueryCode = '';

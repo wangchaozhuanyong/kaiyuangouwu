@@ -441,11 +441,7 @@ export function calculateCatalogProfitReport(
     const items = orders.flatMap<CatalogProfitOrderResult>(order => {
         // Historical methods may have been removed. Keep their persisted method code as evidence,
         // and also detect neutral method names backed by a registered test handler.
-        const payments = order.payments.filter(
-            payment =>
-                !TEST_PAYMENT_PATTERN.test(payment.method) &&
-                !TEST_PAYMENT_PATTERN.test(payment.handlerCode ?? ''),
-        );
+        const payments = order.payments;
         const settledRevenueMicrounits =
             payments
                 .filter(payment => payment.state === SETTLED_STATE)

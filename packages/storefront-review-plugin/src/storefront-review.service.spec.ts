@@ -189,12 +189,22 @@ describe('StorefrontReviewService', () => {
         expect(test.orderLineQueryBuilder.setLock).toHaveBeenCalledWith('pessimistic_write');
     });
 
-    it('requires physical orders to be delivered', async () => {
+    it('allows physical orders to be reviewed once paid or shipped', async () => {
         const test = createHarness({ orderState: 'Shipped' });
 
-        await expect(test.service.submit(test.ctx, validInput)).rejects.toThrow(
-            '实物商品需在订单完成后才能评价',
-        );
+        await expect(test.service.submit(test.ctx, validInput)).resolves.toMatchObject({ state: 'PENDING' });
+    });
+
+    it('rejects uncompleted payment orders from review', async () => {
+        const test = createHarness({ orderState: 'ArrangingPayment' });
+
+        await expect(test.service.submit(test.ctx, validInput)).rejects.toThrow('订单付款成功后即可参与评价');
+    });
+
+    it('allows paid test payment orders to be reviewed', async () => {
+        const test = createHarness({ orderState: 'TestPaymentSettled' });
+
+        await expect(test.service.submit(test.ctx, validInput)).resolves.toMatchObject({ state: 'PENDING' });
     });
 
     it('allows paid digital products to be reviewed', async () => {

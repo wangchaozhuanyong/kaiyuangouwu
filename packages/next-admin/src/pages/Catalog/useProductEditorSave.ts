@@ -7,6 +7,7 @@ import {
     localizedCustomFieldInputFromValues,
     validateCustomFieldValues,
 } from '../../custom-fields/custom-field-utils';
+import { UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION } from '../../graphql/catalog-operations.graphql';
 import {
     ADD_OPTION_GROUP_TO_PRODUCT,
     ASSIGN_PRODUCTS_TO_CHANNEL,
@@ -41,7 +42,12 @@ interface ProductEditorSaveInput {
     activeCurrencyCode: string;
     data: Pick<
         ReturnType<typeof useProductEditorData>,
-        'productData' | 'catalogChannelsData' | 'refetchCollections' | 'refetchProduct'
+        | 'productData'
+        | 'catalogChannelsData'
+        | 'refetchCollections'
+        | 'refetchProduct'
+        | 'defaultStockLocationId'
+        | 'refetchWorkspace'
     >;
     productId: string | undefined;
     productExtensionFields: Parameters<typeof validateCustomFieldValues>[0];
@@ -76,6 +82,7 @@ const comparableVariant = (variant: ProductEditorSaveDraft['variants'][number]) 
     sku: variant.sku,
     name: variant.name,
     price: variant.price,
+    costPrice: variant.costPrice ?? '',
     stockOnHand: variant.stockOnHand,
     enabled: variant.enabled,
     digitalDeliveryMode: variant.digitalDeliveryMode,
@@ -569,9 +576,52 @@ export function useProductEditorSave({
                             ],
                         }));
 
-                        await createVariantsMutation({
+                        const createdResult = await createVariantsMutation({
                             variables: { input: variantsInput },
                         });
+
+                        const createdList =
+                            (
+                                createdResult?.data as {
+                                    createProductVariants?: Array<{ id: string; sku: string }>;
+                                }
+                            )?.createProductVariants ?? [];
+
+                        if (data.defaultStockLocationId && createdList.length > 0) {
+                            const costUpdates = variants
+                                .map(v => {
+                                    const created = createdList.find(c => c.sku === v.sku.trim());
+                                    return {
+                                        id: created?.id,
+                                        costPrice: v.costPrice?.trim(),
+                                    };
+                                })
+                                .filter((item): item is { id: string; costPrice: string } =>
+                                    Boolean(item.id && item.costPrice),
+                                );
+
+                            if (costUpdates.length > 0) {
+                                await Promise.all(
+                                    costUpdates.map(item =>
+                                        client.mutate({
+                                            mutation: UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION,
+                                            variables: {
+                                                input: {
+                                                    productVariantId: item.id,
+                                                    stockLocationId: data.defaultStockLocationId,
+                                                    currencyCode: activeCurrencyCode,
+                                                    purchaseCostMicrounits: Math.round(
+                                                        parseFloat(item.costPrice) * 1_000,
+                                                    ),
+                                                },
+                                            },
+                                        }),
+                                    ),
+                                ).catch(() => {
+                                    // 采购成本为非阻塞扩展写入
+                                });
+                            }
+                        }
                     } catch (err: unknown) {
                         // SPU 已创建但规格失败，如实告知用户，不能冒充成功
                         navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
@@ -717,6 +767,33 @@ export function useProductEditorSave({
                             context: changesVariantEnabledState ? enabledMutationContext : undefined,
                         });
                         completedStages.push('现有 SKU');
+
+                        const variantsWithCostChanges = changedExistingVariants.filter(v => {
+                            const original = baselineDraft?.variants.find(o => o.id === v.id);
+                            return (v.costPrice ?? '') !== (original?.costPrice ?? '');
+                        });
+
+                        if (data.defaultStockLocationId && variantsWithCostChanges.length > 0) {
+                            await Promise.all(
+                                variantsWithCostChanges.map(v =>
+                                    client.mutate({
+                                        mutation: UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION,
+                                        variables: {
+                                            input: {
+                                                productVariantId: v.id,
+                                                stockLocationId: data.defaultStockLocationId,
+                                                currencyCode: activeCurrencyCode,
+                                                purchaseCostMicrounits: v.costPrice?.trim()
+                                                    ? Math.round(parseFloat(v.costPrice) * 1_000)
+                                                    : null,
+                                            },
+                                        },
+                                    }),
+                                ),
+                            ).catch(() => {
+                                // 采购成本为非阻塞扩展写入
+                            });
+                        }
                     } catch (err: unknown) {
                         throw new Error(`[现有 SKU 变体更新失败] ${toUserFacingError(err, '请稍后重试')}`);
                     }
@@ -724,7 +801,7 @@ export function useProductEditorSave({
 
                 if (newVariants.length > 0) {
                     try {
-                        await createVariantsMutation({
+                        const newVariantsResult = await createVariantsMutation({
                             variables: {
                                 input: newVariants.map(v => ({
                                     productId,
@@ -742,6 +819,49 @@ export function useProductEditorSave({
                                 })),
                             },
                         });
+
+                        const createdNewList =
+                            (
+                                newVariantsResult?.data as {
+                                    createProductVariants?: Array<{ id: string; sku: string }>;
+                                }
+                            )?.createProductVariants ?? [];
+
+                        if (data.defaultStockLocationId && createdNewList.length > 0) {
+                            const newCostUpdates = newVariants
+                                .map(v => {
+                                    const created = createdNewList.find(c => c.sku === v.sku.trim());
+                                    return {
+                                        id: created?.id,
+                                        costPrice: v.costPrice?.trim(),
+                                    };
+                                })
+                                .filter((item): item is { id: string; costPrice: string } =>
+                                    Boolean(item.id && item.costPrice),
+                                );
+
+                            if (newCostUpdates.length > 0) {
+                                await Promise.all(
+                                    newCostUpdates.map(item =>
+                                        client.mutate({
+                                            mutation: UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION,
+                                            variables: {
+                                                input: {
+                                                    productVariantId: item.id,
+                                                    stockLocationId: data.defaultStockLocationId,
+                                                    currencyCode: activeCurrencyCode,
+                                                    purchaseCostMicrounits: Math.round(
+                                                        parseFloat(item.costPrice) * 1_000,
+                                                    ),
+                                                },
+                                            },
+                                        }),
+                                    ),
+                                ).catch(() => {
+                                    // 采购成本为非阻塞扩展写入
+                                });
+                            }
+                        }
                         completedStages.push('新增 SKU');
                     } catch (err: unknown) {
                         throw new Error(`[新 SKU 变体创建失败] ${toUserFacingError(err, '请稍后重试')}`);
@@ -770,6 +890,7 @@ export function useProductEditorSave({
                 }
 
                 await refetchProduct();
+                await data.refetchWorkspace?.();
                 showNotice(
                     completedStages.length > 0
                         ? `商品《${productName}》已保存（${completedStages.join('、')}）！`

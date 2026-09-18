@@ -139,12 +139,12 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
     const save = async () => {
         if (!stockLocationId || !dirtyIds.length) return;
         try {
-            const input = dirtyIds.map(id =>
+            const inputs = dirtyIds.map(id =>
                 operationInput(drafts[id], stockLocationId, workspace.currencyCode),
             );
-            await saveOperations({ variables: { input } });
+            await Promise.all(inputs.map(input => saveOperations({ variables: { input } })));
             setDirtyIds([]);
-            setNotice(`已保存 ${input.length} 个 SKU 的采购、价格和库存资料`);
+            setNotice(`已保存 ${inputs.length} 个 SKU 的经营与采购资料`);
             setError('');
             await query.refetch();
         } catch (cause) {
@@ -192,11 +192,11 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        <Boxes className="h-4 w-4 text-blue-600" /> SKU 成本与库存
-                        <FeatureHelpButton topic="catalog.inventory" title="SKU 成本与库存" />
+                        <Boxes className="h-4 w-4 text-blue-600" /> SKU 供应链与供货商扩展（可选）
+                        <FeatureHelpButton topic="catalog.inventory" title="SKU 供应链与供货商扩展" />
                     </h2>
                     <p className="mt-1 text-xs text-slate-500">
-                        常用字段直接显示：填采购成本和当前库存；供货商、批次和保质期按需要填写。
+                        采购成本可在上方主表格直接填写并统一保存；供货商、批次和保质期可按需在此维护。
                     </p>
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
@@ -223,7 +223,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                         <Save className="h-4 w-4" />
                         {saveState.loading
                             ? '保存中…'
-                            : `保存成本与库存${dirtyIds.length ? ` (${dirtyIds.length})` : ''}`}
+                            : `保存供应链信息${dirtyIds.length ? ` (${dirtyIds.length})` : ''}`}
                     </button>
                 </div>
             </div>
@@ -261,18 +261,24 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                 <div className="grid gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 xl:grid-cols-3">
                                     <TextField
                                         label={`采购成本 (${workspace.currencyCode})`}
-                                        description="这个 SKU 每个销售单位的采购成本，用于计算毛利；不是销售价。"
+                                        description="这个 SKU 每个销售单位的采购成本，用于计算毛利；与上方主表格同步。"
                                         type="number"
                                         value={draft.purchaseCost}
                                         onChange={purchaseCost => updateDraft(variant.id, { purchaseCost })}
                                     />
-                                    <TextField
-                                        label="当前仓库库存"
-                                        description="当前仓库实际在库数量；保存修改会生成库存调整流水。"
-                                        type="number"
-                                        value={draft.stockOnHand}
-                                        onChange={stockOnHand => updateDraft(variant.id, { stockOnHand })}
-                                    />
+                                    <div className="flex flex-col justify-center rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2">
+                                        <span className="text-xs font-bold text-slate-600">
+                                            当前仓库实际在库
+                                        </span>
+                                        <div className="mt-1 flex items-baseline gap-2">
+                                            <span className="font-mono text-base font-bold text-slate-800">
+                                                {draft.stockOnHand || 0}
+                                            </span>
+                                            <span className="text-[11px] text-slate-400">
+                                                入库与调拨请前往【库存与仓储】模块
+                                            </span>
+                                        </div>
+                                    </div>
                                     <label className="text-xs font-bold text-slate-600">
                                         供货商
                                         <span className="mt-0.5 block text-[10px] font-normal leading-4 text-slate-400">
@@ -868,6 +874,9 @@ interface ProductVariantCustomFieldsData {
 
 export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdminPageBlockContext }) {
     const productId = stringId(context.entity?.id);
+    const productName =
+        (typeof context.entity?.name === 'string' && context.entity.name) ||
+        ((context.entity?.translations as Array<{ name?: string }>)?.[0]?.name ?? '');
     const definitions = useCustomFieldDefinitions('ProductVariant');
     const { hasAnyPermission } = useAdminPermissions();
     const visibleDefinitions = useMemo(
@@ -918,7 +927,13 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
     /* oxlint-enable react/set-state-in-effect */
 
     if (!productId || visibleDefinitions.length === 0) return null;
-    if (query.loading && !query.data) return <PanelState label="正在读取 SKU 扩展字段…" />;
+    if (query.loading && !query.data) {
+        return (
+            <PanelState
+                label={productName ? `正在读取《${productName}》的 SKU 扩展字段…` : '正在读取 SKU 扩展字段…'}
+            />
+        );
+    }
     if (query.error || !query.data?.product) {
         return <PanelState tone="error" label="SKU 扩展字段加载失败" action={() => void query.refetch()} />;
     }
@@ -980,6 +995,11 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         其他 SKU 资料（可选）
+                        {productName && (
+                            <span className="rounded bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                                商品：{productName}
+                            </span>
+                        )}
                         <FeatureHelpButton topic="catalog.sku-custom-fields" title="其他 SKU 资料" />
                     </h2>
                     <p className="mt-1 text-xs text-slate-500">
@@ -994,6 +1014,7 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
                     >
                         {variants.map(variant => (
                             <option key={variant.id} value={variant.id}>
+                                {productName ? `【${productName}】` : ''}
                                 {variant.name} · {variant.sku}
                             </option>
                         ))}
@@ -1012,7 +1033,11 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
             {notice && <InlineNotice tone="success" message={notice} />}
             {error && <InlineNotice tone="error" message={error} />}
             <DynamicCustomFieldsForm
-                title={`SKU 扩展字段${selected ? ` · ${selected.sku}` : ''}`}
+                title={
+                    productName
+                        ? `商品《${productName}》· 规格【${selected?.name || '规格'}】(${selected?.sku})`
+                        : `SKU 扩展字段${selected ? ` · ${selected.sku}` : ''}`
+                }
                 helpTopic="catalog.sku-custom-fields"
                 fields={visibleDefinitions}
                 values={values}

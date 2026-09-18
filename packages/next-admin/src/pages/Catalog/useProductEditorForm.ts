@@ -143,6 +143,9 @@ export function useProductEditorForm() {
         optionGroupsLoading,
         optionGroupsError,
         refetchOptionGroups,
+        workspaceVariants,
+        defaultStockLocationId,
+        refetchWorkspace,
     } = useProductEditorData({
         productId,
         isCreateMode,
@@ -167,7 +170,12 @@ export function useProductEditorForm() {
     useEffect(() => {
         if (productData?.product) {
             const p = productData.product;
-            const draft = productEditorDraft(p, fixedFulfillmentType, productExtensionFields);
+            const draft = productEditorDraft(
+                p,
+                fixedFulfillmentType,
+                productExtensionFields,
+                workspaceVariants,
+            );
             setProductName(draft.productName);
             setSlug(draft.slug);
             setEnabled(draft.enabled ?? true);
@@ -212,7 +220,7 @@ export function useProductEditorForm() {
             setVariants([]);
             setIsOptionTemplatesOpen(false);
         }
-    }, [fixedFulfillmentType, productData, isCreateMode, productExtensionFields]);
+    }, [fixedFulfillmentType, productData, isCreateMode, productExtensionFields, workspaceVariants]);
 
     useEffect(() => {
         if (fixedFulfillmentType) setFulfillmentType(fixedFulfillmentType);
@@ -392,6 +400,7 @@ export function useProductEditorForm() {
                 sku: '',
                 name: '',
                 price: '',
+                costPrice: '',
                 stockOnHand: '',
                 stockAllocated: 0,
                 enabled: true,
@@ -429,6 +438,7 @@ export function useProductEditorForm() {
                 sku: '',
                 name: `${productName.trim()} ${opt.name}`.trim(),
                 price: '',
+                costPrice: '',
                 stockOnHand: '',
                 stockAllocated: 0,
                 enabled: true,
@@ -446,6 +456,7 @@ export function useProductEditorForm() {
                 sku: '',
                 name: `${productName.trim()} ${opt.name}`.trim(),
                 price: '',
+                costPrice: '',
                 stockOnHand: '',
                 stockAllocated: 0,
                 enabled: true,
@@ -465,6 +476,7 @@ export function useProductEditorForm() {
                         sku: '',
                         name: `${productName.trim()} ${opt.name}`.trim(),
                         price: '',
+                        costPrice: '',
                         stockOnHand: '',
                         stockAllocated: 0,
                         enabled: true,
@@ -531,7 +543,8 @@ export function useProductEditorForm() {
             const restGenerated = combinations.slice(1).map((combination): ProductVariantState => ({
                 sku: '',
                 name: `${productName.trim()} ${combination.map(option => option.name).join(' / ')}`.trim(),
-                price: '',
+                price: variants[0].price || '',
+                costPrice: variants[0].costPrice || '',
                 stockOnHand: '',
                 stockAllocated: 0,
                 enabled: true,
@@ -562,6 +575,7 @@ export function useProductEditorForm() {
                 sku: '',
                 name: combination.map(option => option.name).join(' / '),
                 price: '',
+                costPrice: '',
                 stockOnHand: '',
                 stockAllocated: 0,
                 enabled: true,
@@ -617,7 +631,14 @@ export function useProductEditorForm() {
         draft: currentEditorDraft,
         baselineDraft: isCreateMode ? null : baselineEditorDraft,
         activeCurrencyCode,
-        data: { productData, catalogChannelsData, refetchCollections, refetchProduct },
+        data: {
+            productData,
+            catalogChannelsData,
+            refetchCollections,
+            refetchProduct,
+            defaultStockLocationId,
+            refetchWorkspace,
+        },
         productId,
         productExtensionFields,
         controls: {

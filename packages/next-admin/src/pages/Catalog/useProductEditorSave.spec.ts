@@ -1,7 +1,9 @@
 import type { DocumentNode } from 'graphql';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION } from '../../graphql/catalog-operations.graphql';
 import {
     ADD_OPTION_GROUP_TO_PRODUCT,
+    CREATE_PRODUCT,
     CREATE_PRODUCT_VARIANTS,
     UPDATE_PRODUCT,
     UPDATE_PRODUCT_VARIANTS,
@@ -12,6 +14,7 @@ import { useProductEditorSave } from './useProductEditorSave';
 const mocks = vi.hoisted(() => ({
     mutations: new Map<DocumentNode, ReturnType<typeof vi.fn>>(),
     query: vi.fn(),
+    mutate: vi.fn().mockResolvedValue({}),
 }));
 vi.mock('@apollo/client/react', () => ({
     useMutation: (document: DocumentNode) => {
@@ -20,7 +23,7 @@ vi.mock('@apollo/client/react', () => ({
     },
 }));
 vi.mock('../../apollo', () => ({
-    client: { query: mocks.query },
+    client: { query: mocks.query, mutate: mocks.mutate },
     sensitiveActionContext: vi.fn(),
 }));
 
@@ -134,6 +137,8 @@ function fixture(): SaveInput {
             catalogChannelsData: undefined,
             refetchProduct: vi.fn().mockResolvedValue({ data: { product } }),
             refetchCollections: vi.fn().mockResolvedValue({}),
+            defaultStockLocationId: 'stock-loc-1',
+            refetchWorkspace: vi.fn().mockResolvedValue({}),
         },
         controls: {
             requestConfirmation: vi.fn().mockResolvedValue(null),
@@ -152,6 +157,7 @@ describe('product save orchestration', () => {
     beforeEach(() => {
         mocks.mutations.clear();
         mocks.query.mockReset();
+        mocks.mutate.mockReset();
     });
 
     it('rejects duplicate SKU codes before making any write', async () => {
@@ -489,5 +495,80 @@ describe('product save orchestration', () => {
         expect(mocks.mutations.get(CREATE_PRODUCT_VARIANTS)).toHaveBeenCalledTimes(1);
         // Effective option groups synced should NOT include group-1 for single product
         expect(mocks.mutations.get(ADD_OPTION_GROUP_TO_PRODUCT)).not.toHaveBeenCalled();
+    });
+
+    it('persists variant cost price changes to variant cost records', async () => {
+        const input = fixture();
+        input.draft.variants[0].costPrice = '25.50';
+        input.data.defaultStockLocationId = 'stock-loc-1';
+
+        await useProductEditorSave(input).handleSave();
+
+        expect(input.controls.showError).not.toHaveBeenCalled();
+        expect(mocks.mutate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                mutation: UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION,
+                variables: {
+                    input: expect.objectContaining({
+                        productVariantId: 'variant-1',
+                        stockLocationId: 'stock-loc-1',
+                        currencyCode: 'MYR',
+                        purchaseCostMicrounits: 25500,
+                    }),
+                },
+            }),
+        );
+    });
+
+    it('persists cost price when creating new product variants', async () => {
+        const input = fixture();
+        input.productId = 'new';
+        input.draft.variants = [
+            {
+                sku: 'NEW-COST-SKU',
+                name: '带成本的新品',
+                price: '99.00',
+                costPrice: '45.00',
+                stockOnHand: 50,
+                stockAllocated: 0,
+                enabled: true,
+                digitalDeliveryMode: 'manual_service',
+                digitalStockPolicy: 'limited',
+                optionIds: [],
+                isNew: true,
+            },
+        ];
+        input.data.defaultStockLocationId = 'stock-loc-1';
+
+        mocks.mutations.set(
+            CREATE_PRODUCT,
+            vi.fn().mockResolvedValue({
+                data: { createProduct: { id: 'created-prod-1' } },
+            }),
+        );
+        mocks.mutations.set(
+            CREATE_PRODUCT_VARIANTS,
+            vi.fn().mockResolvedValue({
+                data: {
+                    createProductVariants: [{ id: 'created-var-1', sku: 'NEW-COST-SKU' }],
+                },
+            }),
+        );
+
+        await useProductEditorSave(input).handleSave();
+
+        expect(mocks.mutate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                mutation: UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION,
+                variables: {
+                    input: expect.objectContaining({
+                        productVariantId: 'created-var-1',
+                        stockLocationId: 'stock-loc-1',
+                        currencyCode: 'MYR',
+                        purchaseCostMicrounits: 45000,
+                    }),
+                },
+            }),
+        );
     });
 });

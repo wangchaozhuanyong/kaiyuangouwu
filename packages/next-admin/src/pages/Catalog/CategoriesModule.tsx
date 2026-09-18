@@ -318,6 +318,7 @@ export function CategoriesModule() {
         if (handle.isConnected && document.activeElement === document.body) handle.focus();
     }, [isReordering, collections]);
     useEffect(() => {
+        // oxlint-disable-next-line react/set-state-in-effect
         setExpandedCollectionIds(new Set());
     }, [data?.activeChannel.id]);
     // 内容翻译插件要求所有原生目录内容都从简体中文源语言写入。
@@ -1117,6 +1118,11 @@ export function CategoriesModule() {
                             <div className="relative w-full sm:max-w-xs">
                                 <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                                 <input
+                                    type="search"
+                                    name="option-group-search"
+                                    autoComplete="off"
+                                    autoCorrect="off"
+                                    spellCheck={false}
                                     aria-label="搜索规格模板"
                                     value={optionGroupSearch}
                                     onChange={event => {

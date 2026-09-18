@@ -26,6 +26,7 @@ export type RouteName =
     | 'reviews'
     | 'image-studio'
     | 'two-factor'
+    | 'mail-query'
     | 'login'
     | 'register'
     | 'verify-account'
@@ -48,6 +49,7 @@ export interface RouteState {
     checkoutOrderId?: string;
     editAddress?: boolean;
     id?: string;
+    orderCode?: string;
     tab?: OrderTab;
     token?: string;
     term?: string;
@@ -110,6 +112,7 @@ const routePaths: Record<RouteName, string> = {
     reviews: '/reviews',
     'image-studio': '/image-studio',
     'two-factor': '/two-factor',
+    'mail-query': '/mail-query',
     login: '/login',
     register: '/register',
     'verify-account': '/verify-account',
@@ -173,6 +176,7 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
         checkoutOrderId: stringValue('checkoutOrderId'),
         editAddress: search.editAddress === true || search.editAddress === 'true' || undefined,
         id: stringValue('id'),
+        orderCode: stringValue('orderCode'),
         tab: orderTabs.includes(tab as OrderTab) ? (tab as OrderTab) : undefined,
         token: stringValue('token'),
         term: stringValue('term'),
@@ -222,6 +226,7 @@ export function routeHref(route: RouteState): string {
     if (search.checkoutOrderId) params.set('checkoutOrderId', search.checkoutOrderId);
     if (search.editAddress) params.set('editAddress', 'true');
     if (search.id) params.set('id', search.id);
+    if (search.orderCode) params.set('orderCode', search.orderCode);
     if (search.tab) params.set('tab', search.tab);
     if (search.token) params.set('token', search.token);
     if (search.term) params.set('term', search.term);

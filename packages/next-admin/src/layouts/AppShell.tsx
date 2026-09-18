@@ -1614,7 +1614,14 @@ export function AppShell() {
                         <div className="flex items-center px-4 border-b border-slate-100">
                             <Search className="w-5 h-5 text-blue-500" />
                             <input
-                                type="text"
+                                type="search"
+                                autoComplete="off"
+                                autoCorrect="off"
+                                spellCheck={false}
+                                data-1p-ignore="true"
+                                data-bwignore="true"
+                                data-lpignore="true"
+                                data-form-type="other"
                                 value={cmdSearchQuery}
                                 onChange={e => {
                                     setCmdSearchQuery(e.target.value);
