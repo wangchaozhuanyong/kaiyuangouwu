@@ -497,4 +497,91 @@ describe('CatalogOperationsService', () => {
         await expect(service.matchingProductIds({} as never, {})).resolves.toEqual(['product-1']);
         expect(exportRows).toHaveBeenCalledOnce();
     });
+
+    it('safely handles unpopulated stockLocation, missing collections and missing translations in exportRows', async () => {
+        const { service, productVariantService, connection } = createService();
+        vi.spyOn(service, 'stockLocations').mockResolvedValue([{ id: 'stock-1', name: '主仓库' }]);
+        productVariantService.findAll = vi.fn().mockResolvedValue({
+            items: [
+                {
+                    id: 'variant-1',
+                    sku: 'SKU-SAFE-1',
+                    price: 200,
+                    currencyCode: CurrencyCode.CNY,
+                    enabled: true,
+                },
+            ],
+            totalItems: 1,
+        });
+        const mockRepo = {
+            find: vi.fn((query: any) => {
+                if (query?.relations?.includes('product')) {
+                    return Promise.resolve([
+                        {
+                            id: 'variant-1',
+                            sku: 'SKU-SAFE-1',
+                            price: 200,
+                            currencyCode: CurrencyCode.CNY,
+                            enabled: true,
+                            product: {
+                                id: 'product-1',
+                                enabled: true,
+                                createdAt: new Date(),
+                                translations: [],
+                                facetValues: [],
+                            },
+                            // collections and stockLevels may be unpopulated or missing
+                            collections: undefined,
+                            stockLevels: [
+                                {
+                                    stockLocationId: 'stock-1',
+                                    stockLocation: undefined, // unpopulated relation!
+                                    stockOnHand: 15,
+                                    stockAllocated: 2,
+                                },
+                            ],
+                        },
+                    ]);
+                }
+                return Promise.resolve([]);
+            }),
+        };
+        connection.getRepository = vi.fn(() => mockRepo);
+        const suppliersAssociations = vi.fn().mockResolvedValue([]);
+        (service as any).suppliers = { associations: suppliersAssociations };
+
+        const result = await service.exportRows({
+            channel: { code: 'default' },
+            languageCode: 'zh_Hans',
+        } as never);
+        expect(result.items).toHaveLength(1);
+        expect(result.items[0].stockLevels).toEqual([
+            {
+                stockLocationId: 'stock-1',
+                stockLocationName: '主仓库', // correctly resolved from locationNameById!
+                stockOnHand: 15,
+                stockAllocated: 2,
+                stockAvailable: 13,
+                minimumStock: null,
+                maximumStock: null,
+            },
+        ]);
+        expect(result.items[0].categories).toEqual([]);
+    });
+
+    it('falls back to basic counts in integritySummary if an exception occurs during exportRows scan', async () => {
+        const { service, productService, productVariantService } = createService();
+        productService.findAll = vi.fn().mockResolvedValue({ totalItems: 10 });
+        productVariantService.findAll = vi.fn().mockResolvedValue({ totalItems: 25 });
+        vi.spyOn(service, 'exportRows').mockRejectedValue(new Error('Database disk error'));
+
+        const summary = await service.integritySummary({} as never);
+        expect(summary).toEqual({
+            totalProducts: 10,
+            totalVariants: 25,
+            productsWithoutVariants: 0,
+            variantsWithoutCategory: 0,
+            variantsWithoutCost: 0,
+        });
+    });
 });

@@ -5,7 +5,7 @@ import { normalizeStorefrontAssetUrl, storefrontWebpUrl } from './responsive-ima
 import { DEFAULT_STOREFRONT_NAMES } from './storefront-utils';
 
 export type RouteSkeletonVariant =
-    'home' | 'catalog' | 'detail' | 'services' | 'account' | 'checkout' | 'default';
+    'home' | 'catalog' | 'detail' | 'services' | 'account' | 'checkout' | 'studio' | 'default';
 
 function isZh(language?: string): boolean {
     if (language) return language === 'zh' || language.startsWith('zh_');
@@ -23,7 +23,8 @@ export function pageSkeletonVariantForPathname(pathname: string): RouteSkeletonV
         return 'catalog';
     }
     if (/^\/(?:product|order-detail|order-confirmation)(?:\/|$)/u.test(pathname)) return 'detail';
-    if (/^\/(?:services|support|image-studio)(?:\/|$)/u.test(pathname)) return 'services';
+    if (/^\/(?:services|support)(?:\/|$)/u.test(pathname)) return 'services';
+    if (/^\/image-studio(?:\/|$)/u.test(pathname)) return 'studio';
     if (
         /^\/(?:account|orders|logistics|addresses|account-security|coupons|referral|notifications|announcements|reviews)(?:\/|$)/u.test(
             pathname,
@@ -100,6 +101,27 @@ export function PageSkeleton({
                 <>
                     <SkeletonBar className="skeleton-checkout-card" />
                     <SkeletonBar className="skeleton-checkout-action" />
+                </>
+            ) : variant === 'studio' ? (
+                <>
+                    <SkeletonBar className="skeleton-route-header" />
+                    <div className="skeleton-studio-composer" aria-hidden="true">
+                        <SkeletonBar className="skeleton-studio-title" />
+                        <SkeletonBar className="skeleton-studio-textarea" />
+                        <span className="skeleton-studio-row">
+                            <SkeletonBar />
+                            <SkeletonBar />
+                        </span>
+                    </div>
+                    <div className="skeleton-studio-options" aria-hidden="true">
+                        <SkeletonBar className="skeleton-studio-options-title" />
+                        <span className="skeleton-studio-options-row">
+                            <SkeletonBar />
+                            <SkeletonBar />
+                            <SkeletonBar />
+                        </span>
+                    </div>
+                    <SkeletonBar className="skeleton-studio-action" />
                 </>
             ) : (
                 <>

@@ -9,8 +9,10 @@ import { AppErrorBoundary } from './components/AppErrorBoundary';
 import './index.css';
 import { ThemeProvider } from './theme/ThemeProvider';
 import { registerBuildPreloadRecovery } from './utils/build-recovery';
+import { initGlobalAutofillShield } from './utils/global-autofill-shield';
 
 registerBuildPreloadRecovery();
+initGlobalAutofillShield();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('管理后台挂载节点不存在');

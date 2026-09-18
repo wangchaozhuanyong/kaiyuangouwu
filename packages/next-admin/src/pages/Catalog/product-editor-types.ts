@@ -26,6 +26,7 @@ export interface ProductVariantState {
     sku: string;
     name: string;
     price: string;
+    costPrice?: string;
     stockOnHand: number | '';
     stockAllocated: number;
     enabled: boolean;

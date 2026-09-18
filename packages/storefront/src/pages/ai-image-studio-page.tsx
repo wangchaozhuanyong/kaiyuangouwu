@@ -1018,7 +1018,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     return (
         <Subpage title={isZh ? 'AI 图片工坊' : 'AI Image Studio'} language={language} onBack={onBack}>
             {loading ? (
-                <PageSkeleton label={isZh ? '正在加载图片工坊' : 'Loading image studio'} />
+                <PageSkeleton variant="studio" label={isZh ? '正在加载图片工坊' : 'Loading image studio'} />
             ) : loadError ? (
                 <EmptyState
                     icon={<CircleAlert />}

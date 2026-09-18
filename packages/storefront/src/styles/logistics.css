@@ -957,3 +957,251 @@
 .address-form-fields {
     display: contents;
 }
+
+/* ==========================================================================
+   Interactive Logistics Tracking Sheet (Drawer)
+   ========================================================================== */
+.logistics-sheet-content {
+    padding: 16px 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.logistics-sheet-tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.logistics-tab-btn {
+    padding: 6px 14px;
+    border: 1px solid var(--line, #e2e8f0);
+    border-radius: 20px;
+    background: #f8fafc;
+    font-size: 13px;
+    color: #475569;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 150ms ease;
+}
+
+.logistics-tab-btn.is-active {
+    background: var(--accent, #0d9488);
+    border-color: var(--accent, #0d9488);
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.logistics-info-card {
+    padding: 16px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid var(--line, #e2e8f0);
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.logistics-carrier-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.logistics-carrier-icon {
+    color: var(--accent, #0d9488);
+    flex-shrink: 0;
+}
+
+.logistics-carrier-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.logistics-carrier-text strong {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.logistics-carrier-text span {
+    font-size: 12px;
+    color: var(--accent, #0d9488);
+    font-weight: 600;
+}
+
+.logistics-tracking-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: #ffffff;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.tracking-code-label {
+    font-size: 12px;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.tracking-code-val {
+    font-family: var(--font-mono, monospace);
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: 0.5px;
+    flex: 1;
+}
+
+.tracking-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 150ms ease;
+    white-space: nowrap;
+}
+
+.tracking-copy-btn:hover {
+    background: #f1f5f9;
+    border-color: #0d9488;
+    color: #0d9488;
+}
+
+.logistics-no-code {
+    margin: 0;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.logistics-timeline {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 0;
+    position: relative;
+}
+
+.logistics-timeline::before {
+    content: '';
+    position: absolute;
+    top: 14px;
+    bottom: 24px;
+    left: 9px;
+    width: 2px;
+    background: #e2e8f0;
+    z-index: 1;
+}
+
+.timeline-step {
+    display: flex;
+    gap: 16px;
+    position: relative;
+    padding-bottom: 20px;
+    z-index: 2;
+}
+
+.timeline-step:last-child {
+    padding-bottom: 0;
+}
+
+.timeline-dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 2px solid #cbd5e1;
+    flex-shrink: 0;
+    transition: all 200ms ease;
+}
+
+.timeline-step.is-active .timeline-dot {
+    background: var(--accent, #0d9488);
+    border-color: #ffffff;
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.25);
+}
+
+.timeline-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+}
+
+.timeline-body strong {
+    font-size: 14px;
+    color: #0f172a;
+    line-height: 1.3;
+}
+
+.timeline-step.is-active .timeline-body strong {
+    color: var(--accent, #0d9488);
+    font-weight: 700;
+}
+
+.timeline-body p {
+    margin: 0;
+    font-size: 12.5px;
+    color: #64748b;
+    line-height: 1.4;
+}
+
+.timeline-body time {
+    margin-top: 2px;
+    font-size: 11px;
+    color: #94a3b8;
+    font-family: var(--font-mono, monospace);
+}
+
+.logistics-sheet-support {
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.logistics-support-btn {
+    width: 100%;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+    color: #334155;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 150ms ease;
+}
+
+.logistics-support-btn:hover {
+    background: #f1f5f9;
+    border-color: #0d9488;
+    color: #0d9488;
+}
+
+.logistics-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 32px 16px;
+    color: #94a3b8;
+    text-align: center;
+}
+

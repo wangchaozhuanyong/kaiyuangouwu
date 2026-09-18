@@ -10,13 +10,13 @@ import {
     ChevronRight,
     Edit3,
     Image as ImageIcon,
+    Layers3,
     Package,
     Plus,
     RefreshCw,
     Search,
     Trash2,
     X,
-    Layers3,
 } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -275,19 +275,16 @@ export function CatalogModule() {
         fetchPolicy: 'cache-and-network',
     });
 
-    const channelAssignmentsQuery = useQuery<CatalogChannelAssignmentsData>(
-        GET_CATALOG_CHANNEL_ASSIGNMENTS,
-        {
-            variables: {
-                options: {
-                    take: 100,
-                    filter: productIds.length > 0 ? { id: { in: productIds } } : undefined,
-                },
+    const channelAssignmentsQuery = useQuery<CatalogChannelAssignmentsData>(GET_CATALOG_CHANNEL_ASSIGNMENTS, {
+        variables: {
+            options: {
+                take: 100,
+                filter: productIds.length > 0 ? { id: { in: productIds } } : undefined,
             },
-            skip: productIds.length === 0,
-            fetchPolicy: 'cache-and-network',
         },
-    );
+        skip: productIds.length === 0,
+        fetchPolicy: 'cache-and-network',
+    });
 
     const channelAssignmentsByProduct = useMemo(() => {
         const map = new Map<string, AssignmentChannel[]>();
@@ -745,10 +742,7 @@ export function CatalogModule() {
                                                     if (allSelected) {
                                                         setSelectedProductIds(prev =>
                                                             prev.filter(
-                                                                id =>
-                                                                    !displayProducts.some(
-                                                                        p => p.id === id,
-                                                                    ),
+                                                                id => !displayProducts.some(p => p.id === id),
                                                             ),
                                                         );
                                                     } else {
@@ -981,10 +975,7 @@ export function CatalogModule() {
                                                         const assigned = channelAssignmentsByProduct.get(
                                                             product.id,
                                                         );
-                                                        if (
-                                                            !assigned &&
-                                                            channelAssignmentsQuery.loading
-                                                        ) {
+                                                        if (!assigned && channelAssignmentsQuery.loading) {
                                                             return (
                                                                 <span className="text-[11px] text-slate-400 animate-pulse">
                                                                     读取中…
@@ -999,8 +990,7 @@ export function CatalogModule() {
                                                             );
                                                         }
                                                         const isOnlyDefault =
-                                                            assigned.length === 1 &&
-                                                            assigned[0].isDefault;
+                                                            assigned.length === 1 && assigned[0].isDefault;
                                                         return (
                                                             <div className="flex flex-wrap items-center gap-1 max-w-56">
                                                                 {isOnlyDefault ? (
@@ -1287,40 +1277,58 @@ export function CatalogModule() {
                             这是标记删除，不会物理擦除数据库记录；当前后台没有恢复入口。
                         </p>
 
-                        <label className="block text-xs font-bold text-slate-700">
-                            当前管理员密码 *
+                        <form
+                            onSubmit={event => {
+                                event.preventDefault();
+                                if (deleting || !deletePassword) return;
+                                void handleDeleteConfirm();
+                            }}
+                            className="space-y-4"
+                        >
                             <input
-                                type="password"
-                                autoComplete="current-password"
-                                value={deletePassword}
-                                onChange={event => setDeletePassword(event.target.value)}
-                                placeholder="输入密码确认本人操作"
-                                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100"
+                                type="text"
+                                name="username"
+                                autoComplete="username"
+                                tabIndex={-1}
+                                aria-hidden="true"
+                                className="sr-only pointer-events-none absolute h-0 w-0 opacity-0 -z-10"
+                                readOnly
                             />
-                        </label>
+                            <label className="block text-xs font-bold text-slate-700">
+                                当前管理员密码 *
+                                <input
+                                    type="password"
+                                    name="current-password"
+                                    autoComplete="current-password"
+                                    value={deletePassword}
+                                    onChange={event => setDeletePassword(event.target.value)}
+                                    placeholder="输入密码确认本人操作"
+                                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100"
+                                />
+                            </label>
 
-                        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setProductToDelete(null);
-                                    setDeletePassword('');
-                                }}
-                                disabled={deleting}
-                                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold cursor-pointer"
-                            >
-                                取消
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleDeleteConfirm}
-                                disabled={deleting || !deletePassword}
-                                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {deleting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                                <span>确认删除</span>
-                            </button>
-                        </div>
+                            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setProductToDelete(null);
+                                        setDeletePassword('');
+                                    }}
+                                    disabled={deleting}
+                                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold cursor-pointer"
+                                >
+                                    取消
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={deleting || !deletePassword}
+                                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {deleting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                                    <span>确认删除</span>
+                                </button>
+                            </div>
+                        </form>
                     </AccessibleDialogSurface>
                 </div>
             )}

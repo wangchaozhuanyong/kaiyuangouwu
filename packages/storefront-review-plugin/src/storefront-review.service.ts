@@ -27,7 +27,14 @@ import {
 const TITLE_MAX_LENGTH = 120;
 const BODY_MAX_LENGTH = 2_000;
 const RESPONSE_MAX_LENGTH = 2_000;
-const DIGITAL_REVIEW_ORDER_STATES = ['PaymentSettled', 'PartiallyShipped', 'Shipped', 'Delivered'];
+const ELIGIBLE_REVIEW_ORDER_STATES = [
+    'PaymentSettled',
+    'TestPaymentSettled',
+    'PartiallyShipped',
+    'Shipped',
+    'PartiallyDelivered',
+    'Delivered',
+];
 
 export interface StorefrontReviewList {
     items: StorefrontReview[];
@@ -92,7 +99,7 @@ export class StorefrontReviewService {
                 order: {
                     customerId: customer.id,
                     salesChannelId: ctx.channelId,
-                    state: In(DIGITAL_REVIEW_ORDER_STATES),
+                    state: In(ELIGIBLE_REVIEW_ORDER_STATES),
                 },
             },
             relations: {
@@ -104,10 +111,6 @@ export class StorefrontReviewService {
         });
         return lines
             .filter(line => !reviewedLineIds.has(String(line.id)))
-            .filter(line => {
-                const fulfillmentType = this.fulfillmentType(line);
-                return fulfillmentType === 'digital' || line.order.state === 'Delivered';
-            })
             .slice(0, 100)
             .map(line => {
                 const variant = translateDeep(line.productVariant, ctx.languageCode, ['product']);
@@ -188,17 +191,9 @@ export class StorefrontReviewService {
         if (!line) {
             throw new UserInputError('订单商品不存在或当前账号无权评价');
         }
-        const fulfillmentType = this.fulfillmentType(line);
-        const eligible =
-            fulfillmentType === 'digital'
-                ? DIGITAL_REVIEW_ORDER_STATES.includes(line.order.state)
-                : line.order.state === 'Delivered';
+        const eligible = ELIGIBLE_REVIEW_ORDER_STATES.includes(line.order.state);
         if (!eligible) {
-            throw new UserInputError(
-                fulfillmentType === 'digital'
-                    ? '数字商品需在付款后才能评价'
-                    : '实物商品需在订单完成后才能评价',
-            );
+            throw new UserInputError('订单付款成功后即可参与评价');
         }
         const existing = await this.connection.getRepository(ctx, StorefrontReview).findOne({
             where: { orderLineId: line.id },

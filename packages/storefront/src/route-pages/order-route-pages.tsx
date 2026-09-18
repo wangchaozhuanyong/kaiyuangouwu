@@ -123,6 +123,7 @@ export function OrderDetailRoutePage() {
                     onCancelOrder={runtime.cancelAuthorizedOrder}
                     onCreateAfterSales={runtime.createAfterSalesRequest}
                     onUnavailable={() => runtime.notify(isZh ? '当前商品不可用' : 'Unavailable')}
+                    onNotify={runtime.notify}
                 />
             </AuthPageBoundary>
         </RouteGate>

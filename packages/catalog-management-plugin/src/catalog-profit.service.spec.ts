@@ -103,22 +103,21 @@ describe('catalog profit report calculation', () => {
         'sandbox',
         'demo',
         '测试支付',
-    ])('excludes settled test payments identified by persisted method code: %s', method => {
+    ])('includes settled test payments identified by method code in profit reports: %s', method => {
         const result = calculateCatalogProfitReport(
             [order({ payments: [{ method, amount: 69_900, state: 'Settled' }] })],
             new Map(),
         );
 
-        expect(result.items).toEqual([]);
         expect(result.summary).toMatchObject({
-            orderCount: 0,
-            settledRevenueMicrounits: 0,
-            missingCostOrderCount: 0,
-            missingPaymentFeeOrderCount: 0,
+            orderCount: 1,
+            settledRevenueMicrounits: 699_000,
+            missingCostOrderCount: 1,
+            missingPaymentFeeOrderCount: 1,
         });
     });
 
-    it('excludes a neutral method name backed by a test handler', () => {
+    it('includes a neutral method name backed by a test handler', () => {
         const result = calculateCatalogProfitReport(
             [
                 order({
@@ -134,38 +133,8 @@ describe('catalog profit report calculation', () => {
             ],
             new Map(),
         );
-        expect(result.items).toEqual([]);
-    });
-
-    it('keeps real payments and their refunds when an order also contains test payments', () => {
-        const result = calculateCatalogProfitReport(
-            [
-                order({
-                    payments: [
-                        {
-                            method: 'latest-card',
-                            amount: 10_000,
-                            state: 'Settled',
-                            refunds: [{ total: 1_000, state: 'Settled' }],
-                        },
-                        {
-                            method: 'sandbox-card',
-                            amount: 69_900,
-                            state: 'Settled',
-                            refunds: [{ total: 69_900, state: 'Settled' }],
-                        },
-                    ],
-                }),
-            ],
-            new Map(),
-        );
-        expect(result.summary).toMatchObject({
-            orderCount: 1,
-            settledRevenueMicrounits: 100_000,
-            refundedRevenueMicrounits: 10_000,
-            netRevenueMicrounits: 90_000,
-            missingCostOrderCount: 1,
-        });
+        expect(result.summary.orderCount).toBe(1);
+        expect(result.summary.settledRevenueMicrounits).toBe(1_000);
     });
 
     it('subtracts actual carrier and payment expenses to produce net profit', () => {

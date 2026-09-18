@@ -325,6 +325,18 @@ export const CATALOG_EXPORT_CONTEXT_QUERY = gql`
     }
 `;
 
+export const CATALOG_CREATION_CONTEXT_QUERY = gql`
+    query NextAdminCatalogCreationContext {
+        catalogProductCreationContext {
+            currencyCode
+            stockLocations {
+                id
+                name
+            }
+        }
+    }
+`;
+
 export const CATALOG_INTEGRITY_SUMMARY_QUERY = gql`
     query NextAdminCatalogIntegritySummary {
         catalogIntegritySummary {

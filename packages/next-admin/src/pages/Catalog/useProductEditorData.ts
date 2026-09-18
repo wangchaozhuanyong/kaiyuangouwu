@@ -1,6 +1,11 @@
 import { useQuery } from '@apollo/client/react';
 import type { DocumentNode } from 'graphql';
 import { useEffect, useMemo, useRef } from 'react';
+import { GET_STOCK_LOCATIONS } from '../../graphql/catalog-admin.graphql';
+import {
+    CATALOG_PRODUCT_WORKSPACE_QUERY,
+    type CatalogWorkspaceResult,
+} from '../../graphql/catalog-operations.graphql';
 import {
     GET_ACTIVE_CHANNEL,
     GET_ASSETS,
@@ -108,6 +113,30 @@ export function useProductEditorData({
             ? { ...rawProductData, product: { ...rawProductData.product, channels: assignment.channels } }
             : rawProductData;
     }, [rawProductData]);
+
+    const {
+        data: workspaceData,
+        loading: workspaceLoading,
+        error: workspaceError,
+        refetch: refetchWorkspace,
+    } = useQuery<CatalogWorkspaceResult>(CATALOG_PRODUCT_WORKSPACE_QUERY, {
+        variables: { productId },
+        skip: !productId || isCreateMode,
+        fetchPolicy: 'cache-and-network',
+    });
+
+    const { data: stockLocationsData } = useQuery<{
+        stockLocations: { items: Array<{ id: string; name: string }>; totalItems: number };
+    }>(GET_STOCK_LOCATIONS, {
+        fetchPolicy: 'cache-first',
+    });
+
+    const defaultStockLocationId =
+        workspaceData?.catalogProductWorkspace?.stockLocations[0]?.id ||
+        stockLocationsData?.stockLocations.items[0]?.id ||
+        '1';
+
+    const workspaceVariants = workspaceData?.catalogProductWorkspace?.variants;
 
     const {
         data: facetsData,
@@ -318,5 +347,8 @@ export function useProductEditorData({
         optionGroupsLoading,
         optionGroupsError,
         refetchOptionGroups,
+        defaultStockLocationId,
+        workspaceVariants,
+        refetchWorkspace,
     };
 }

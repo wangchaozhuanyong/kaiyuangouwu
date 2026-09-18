@@ -11,6 +11,10 @@ export function SearchInput({
     onValueChange,
     onCompositionStart,
     onCompositionEnd,
+    type = 'search',
+    autoComplete = 'off',
+    autoCorrect = 'off',
+    spellCheck = false,
     ...props
 }: SearchInputProps) {
     const [draft, setDraft] = useState(value);
@@ -40,6 +44,14 @@ export function SearchInput({
 
     return (
         <input
+            type={type}
+            autoComplete={autoComplete}
+            autoCorrect={autoCorrect}
+            spellCheck={spellCheck}
+            data-1p-ignore="true"
+            data-bwignore="true"
+            data-lpignore="true"
+            data-form-type="other"
             {...props}
             value={draft}
             onChange={event => {

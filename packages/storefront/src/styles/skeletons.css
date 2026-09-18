@@ -172,6 +172,65 @@
     border-radius: var(--radius-sm, 10px);
 }
 
+.skeleton-studio-composer,
+.skeleton-studio-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    background: var(--surface, #ffffff);
+    border-radius: var(--radius-md, 12px);
+    border: 1px solid var(--border-subtle, #e2e8f0);
+}
+
+.skeleton-studio-title {
+    width: 35%;
+    height: 20px;
+    border-radius: var(--radius-xs, 6px);
+}
+
+.skeleton-studio-textarea {
+    width: 100%;
+    height: 96px;
+    border-radius: var(--radius-sm, 8px);
+}
+
+.skeleton-studio-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.skeleton-studio-row > span {
+    width: 80px;
+    height: 32px;
+    border-radius: var(--radius-sm, 6px);
+}
+
+.skeleton-studio-options-title {
+    width: 25%;
+    height: 18px;
+    border-radius: var(--radius-xs, 6px);
+}
+
+.skeleton-studio-options-row {
+    display: flex;
+    gap: 10px;
+}
+
+.skeleton-studio-options-row > span {
+    flex: 1;
+    height: 40px;
+    border-radius: var(--radius-sm, 8px);
+}
+
+.skeleton-studio-action {
+    width: 100%;
+    height: 48px;
+    margin-top: 12px;
+    border-radius: var(--radius-sm, 10px);
+}
+
 .list-skeleton {
     display: grid;
     gap: 12px;

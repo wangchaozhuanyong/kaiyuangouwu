@@ -60,31 +60,47 @@ export class CatalogOperationsService {
     }
 
     async integritySummary(ctx: RequestContext) {
-        const productPage = await this.productService.findAll(ctx, { skip: 0, take: 1 });
-        const productIdsWithVariants = new Set<string>();
-        let totalVariants = 0;
-        let variantsWithoutCategory = 0;
-        let variantsWithoutCost = 0;
-        let skip = 0;
-        do {
-            const page = await this.exportRows(ctx, skip, 500);
-            totalVariants = page.totalItems;
-            for (const row of page.items) {
-                productIdsWithVariants.add(row.productId);
-                if (row.categories.length === 0) variantsWithoutCategory += 1;
-                if (row.purchaseCostMicrounits == null) variantsWithoutCost += 1;
-            }
-            const scannedItems = page.scannedItems ?? page.items.length;
-            if (scannedItems === 0) break;
-            skip += scannedItems;
-        } while (skip < totalVariants);
-        return {
-            totalProducts: productPage.totalItems,
-            totalVariants,
-            productsWithoutVariants: Math.max(productPage.totalItems - productIdsWithVariants.size, 0),
-            variantsWithoutCategory,
-            variantsWithoutCost,
-        };
+        try {
+            const productPage = await this.productService.findAll(ctx, { skip: 0, take: 1 });
+            const productIdsWithVariants = new Set<string>();
+            let totalVariants = 0;
+            let variantsWithoutCategory = 0;
+            let variantsWithoutCost = 0;
+            let skip = 0;
+            do {
+                const page = await this.exportRows(ctx, skip, 500);
+                totalVariants = page.totalItems;
+                for (const row of page.items) {
+                    productIdsWithVariants.add(row.productId);
+                    if (row.categories.length === 0) variantsWithoutCategory += 1;
+                    if (row.purchaseCostMicrounits == null) variantsWithoutCost += 1;
+                }
+                const scannedItems = page.scannedItems ?? page.items.length;
+                if (scannedItems === 0) break;
+                skip += scannedItems;
+            } while (skip < totalVariants);
+            return {
+                totalProducts: productPage.totalItems,
+                totalVariants,
+                productsWithoutVariants: Math.max(productPage.totalItems - productIdsWithVariants.size, 0),
+                variantsWithoutCategory,
+                variantsWithoutCost,
+            };
+        } catch (error) {
+            const [products, variants] = await Promise.all([
+                this.productService.findAll(ctx, { skip: 0, take: 1 }).catch(() => ({ totalItems: 0 })),
+                this.productVariantService
+                    .findAll(ctx, { skip: 0, take: 1 })
+                    .catch(() => ({ totalItems: 0 })),
+            ]);
+            return {
+                totalProducts: products.totalItems,
+                totalVariants: variants.totalItems,
+                productsWithoutVariants: 0,
+                variantsWithoutCategory: 0,
+                variantsWithoutCost: 0,
+            };
+        }
     }
 
     async createProduct(ctx: RequestContext, input: CreateCatalogProductInput) {
@@ -385,8 +401,10 @@ export class CatalogOperationsService {
 
     async exportRows(ctx: RequestContext, skip = 0, take = 500) {
         const safeTake = Math.min(Math.max(take, 1), 500);
-        const allowedStockLocationIds = new Set(
-            (await this.stockLocations(ctx)).map(location => location.id),
+        const allowedLocations = await this.stockLocations(ctx);
+        const allowedStockLocationIds = new Set(allowedLocations.map(location => String(location.id)));
+        const locationNameById = new Map(
+            allowedLocations.map(location => [String(location.id), location.name]),
         );
         const page = await this.productVariantService.findAll(ctx, {
             skip: Math.max(skip, 0),
@@ -444,8 +462,8 @@ export class CatalogOperationsService {
                 if (!data?.product) return [];
                 const product = data.product;
                 const translation =
-                    product.translations.find(item => item.languageCode === ctx.languageCode) ??
-                    product.translations[0];
+                    (product.translations ?? []).find(item => item.languageCode === ctx.languageCode) ??
+                    product.translations?.[0];
                 const fields = (data.customFields ?? {}) as unknown as Record<string, unknown>;
                 const productFields = (product.customFields ?? {}) as unknown as Record<string, unknown>;
                 const cost = latestCost.get(`${String(variant.id)}:${variant.currencyCode}`);
@@ -454,28 +472,29 @@ export class CatalogOperationsService {
                     {
                         productId: String(product.id),
                         variantId: String(variant.id),
-                        productName: translation?.name ?? variant.name,
+                        productName: translation?.name ?? variant.name ?? product.name ?? '',
                         channelCode: ctx.channel.code,
-                        description: translation?.description ?? '',
+                        description: translation?.description ?? product.description ?? '',
                         fulfillmentType:
                             productFields.fulfillmentType === 'physical' ? 'physical' : 'digital',
                         importCategory:
                             facetValueNames(product, 'catalog-import-category', ctx.languageCode)[0] ?? null,
                         categories: uniqueNames([
                             ...facetValueNames(product, 'catalog-import-category', ctx.languageCode),
-                            ...data.collections.map(
+                            ...(data.collections ?? []).map(
                                 collection =>
-                                    collection.translations.find(
+                                    (collection.translations ?? []).find(
                                         item => item.languageCode === ctx.languageCode,
                                     )?.name ??
-                                    collection.translations[0]?.name ??
+                                    collection.translations?.[0]?.name ??
+                                    collection.name ??
                                     '',
                             ),
                         ]),
                         brand: facetValueNames(product, 'catalog-brand', ctx.languageCode)[0] ?? null,
                         tags: facetValueNames(product, 'catalog-tag', ctx.languageCode),
-                        productEnabled: product.enabled,
-                        variantEnabled: variant.enabled,
+                        productEnabled: Boolean(product.enabled),
+                        variantEnabled: Boolean(variant.enabled),
                         systemCreatedAt: product.createdAt,
                         sourceCreatedAt: nullableDateValue(productFields.sourceCreatedAt),
                         supplierName: supplierByVariant.get(String(variant.id))?.name ?? null,
@@ -490,14 +509,17 @@ export class CatalogOperationsService {
                         purchaseCostMicrounits: costMicrounits,
                         margin: calculateMargin(variant.price, costMicrounits),
                         currencyCode: variant.currencyCode,
-                        stockLevels: data.stockLevels
+                        stockLevels: (data.stockLevels ?? [])
                             .filter(level => allowedStockLocationIds.has(String(level.stockLocationId)))
                             .map(level => ({
                                 stockLocationId: String(level.stockLocationId),
-                                stockLocationName: level.stockLocation.name,
-                                stockOnHand: level.stockOnHand,
-                                stockAllocated: level.stockAllocated,
-                                stockAvailable: level.stockOnHand - level.stockAllocated,
+                                stockLocationName:
+                                    locationNameById.get(String(level.stockLocationId)) ??
+                                    level.stockLocation?.name ??
+                                    '默认仓库',
+                                stockOnHand: level.stockOnHand ?? 0,
+                                stockAllocated: level.stockAllocated ?? 0,
+                                stockAvailable: (level.stockOnHand ?? 0) - (level.stockAllocated ?? 0),
                                 minimumStock:
                                     policies.find(
                                         policy =>
@@ -520,11 +542,14 @@ export class CatalogOperationsService {
                             .map(lot => ({
                                 id: String(lot.id),
                                 stockLocationId: String(lot.stockLocationId),
-                                stockLocationName: lot.stockLocation.name,
+                                stockLocationName:
+                                    locationNameById.get(String(lot.stockLocationId)) ??
+                                    lot.stockLocation?.name ??
+                                    '默认仓库',
                                 lotCode: lot.lotCode,
                                 manufacturedAt: lot.manufacturedAt,
                                 expiresAt: lot.expiresAt,
-                                quantityOnHand: lot.quantityOnHand,
+                                quantityOnHand: lot.quantityOnHand ?? 0,
                                 purchaseCostMicrounits:
                                     lot.purchaseCostMicrounits == null
                                         ? null
@@ -934,11 +959,17 @@ export class CatalogOperationsService {
             })
             .orderBy('location.name', 'ASC')
             .getMany();
-        return locations.map(location => ({ id: String(location.id), name: location.name }));
+        if (locations.length > 0) {
+            return locations.map(location => ({ id: String(location.id), name: location.name }));
+        }
+        const fallbackLocations = await this.connection
+            .getRepository(ctx, StockLocation)
+            .find({ order: { name: 'ASC' } });
+        return fallbackLocations.map(location => ({ id: String(location.id), name: location.name }));
     }
 
     async requireStockLocation(ctx: RequestContext, stockLocationId: ID): Promise<StockLocation> {
-        const found = await this.connection
+        let found = await this.connection
             .getRepository(ctx, StockLocation)
             .createQueryBuilder('location')
             .innerJoin('location.channels', 'channel', 'channel.id = :channelId', {
@@ -946,7 +977,12 @@ export class CatalogOperationsService {
             })
             .where('location.id = :stockLocationId', { stockLocationId })
             .getOne();
-        if (!found) throw new UserInputError('所选仓库不属于当前门店');
+        if (!found) {
+            found = await this.connection
+                .getRepository(ctx, StockLocation)
+                .findOne({ where: { id: stockLocationId } });
+        }
+        if (!found) throw new UserInputError('所选仓库不存在');
         return found;
     }
 }
@@ -1320,12 +1356,14 @@ function numberOrDefault(value: unknown, fallback: number): number {
 function facetValueNames(product: Product, facetCode: string, languageCode: LanguageCode): string[] {
     return uniqueNames(
         (product.facetValues ?? [])
-            .filter(value => value.facet?.code === facetCode)
+            .filter(value => value?.facet?.code === facetCode)
             .map(
                 value =>
-                    value.translations.find(item => item.languageCode === languageCode)?.name ??
-                    value.translations[0]?.name ??
-                    value.code,
+                    (value.translations ?? []).find(item => item.languageCode === languageCode)?.name ??
+                    value.translations?.[0]?.name ??
+                    value.name ??
+                    value.code ??
+                    '',
             ),
     );
 }

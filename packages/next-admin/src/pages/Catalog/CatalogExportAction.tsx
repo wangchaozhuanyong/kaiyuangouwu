@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
+    CATALOG_CREATION_CONTEXT_QUERY,
     CATALOG_EXPORT_CONTEXT_QUERY,
     CATALOG_EXPORT_ROWS_QUERY,
     CATALOG_INTEGRITY_SUMMARY_QUERY,
@@ -39,7 +40,7 @@ export function CatalogExportAction() {
         setOpen(true);
         setError('');
         try {
-            const [result, context] = await Promise.all([
+            const [summaryResult, contextResult] = await Promise.allSettled([
                 client.query<{ catalogIntegritySummary: IntegritySummary }>({
                     query: CATALOG_INTEGRITY_SUMMARY_QUERY,
                     fetchPolicy: 'network-only',
@@ -49,19 +50,48 @@ export function CatalogExportAction() {
                     fetchPolicy: 'network-only',
                 }),
             ]);
-            if (!result.data?.catalogIntegritySummary) {
-                throw new Error('商品完整性接口未返回统计数据');
+
+            let nextLocations: Array<{ id: string; name: string }> = [];
+            if (contextResult.status === 'fulfilled' && contextResult.value.data?.stockLocations?.items) {
+                nextLocations = contextResult.value.data.stockLocations.items;
             }
-            setSummary(result.data.catalogIntegritySummary);
-            const nextLocations = context.data?.stockLocations.items ?? [];
+
+            if (nextLocations.length === 0) {
+                try {
+                    const fallbackContext = await client.query<{
+                        catalogProductCreationContext: {
+                            stockLocations: Array<{ id: string; name: string }>;
+                        };
+                    }>({
+                        query: CATALOG_CREATION_CONTEXT_QUERY,
+                        fetchPolicy: 'network-only',
+                    });
+                    const fallbackItems =
+                        fallbackContext.data?.catalogProductCreationContext?.stockLocations ?? [];
+                    if (fallbackItems.length > 0) {
+                        nextLocations = fallbackItems;
+                    }
+                } catch {
+                    // ignore fallback error
+                }
+            }
+
             setLocations(nextLocations);
             setStockLocationId(current =>
                 nextLocations.some(location => location.id === current)
                     ? current
                     : (nextLocations[0]?.id ?? ''),
             );
+
+            if (summaryResult.status === 'fulfilled' && summaryResult.value.data?.catalogIntegritySummary) {
+                setSummary(summaryResult.value.data.catalogIntegritySummary);
+            }
+
+            if (nextLocations.length === 0) {
+                setError('未检测到可用仓库，请先在系统设置中配置仓库后再导出商品。');
+            }
         } catch (cause) {
-            setError(toUserFacingError(cause, '商品完整性检查失败，当前暂停导出'));
+            setError(toUserFacingError(cause, '初始化导出检查失败，当前暂停导出'));
         }
     };
 
@@ -168,7 +198,7 @@ export function CatalogExportAction() {
                                     主表的库存量和上下限来自该仓库；库存是绝对值。
                                 </span>
                             </label>
-                            {!summary && !error && (
+                            {!summary && !error && !loading && (
                                 <p className="py-6 text-center text-sm text-slate-500" role="status">
                                     正在检查商品完整性…
                                 </p>
@@ -216,13 +246,13 @@ export function CatalogExportAction() {
                             )}
                             <div className="grid gap-3 border-t pt-4 sm:grid-cols-2">
                                 <ExportButton
-                                    disabled={!summary || !stockLocationId || loading}
+                                    disabled={!stockLocationId || loading}
                                     onClick={() => void exportRows('xlsx')}
                                 >
                                     导出可回导 XLSX
                                 </ExportButton>
                                 <ExportButton
-                                    disabled={!summary || !stockLocationId || loading}
+                                    disabled={!stockLocationId || loading}
                                     onClick={() => void exportRows('csv')}
                                     secondary
                                 >

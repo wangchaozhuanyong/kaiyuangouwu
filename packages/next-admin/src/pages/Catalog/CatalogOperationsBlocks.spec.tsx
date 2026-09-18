@@ -59,4 +59,41 @@ describe('ProductVariantCustomFieldsBlock', () => {
 
         expect(html).toBe('');
     });
+
+    it('renders the product name in header when product name is provided', () => {
+        const html = renderToStaticMarkup(
+            <MockedProvider>
+                <CustomFieldsContext.Provider
+                    value={{
+                        availableLanguages: ['zh_Hans', 'en'],
+                        entities: [
+                            {
+                                entityName: 'ProductVariant',
+                                customFields: [
+                                    {
+                                        name: 'testCustomField',
+                                        type: 'string',
+                                        list: false,
+                                    },
+                                ],
+                            },
+                        ],
+                    }}
+                >
+                    <ProductVariantCustomFieldsBlock
+                        context={
+                            {
+                                entity: {
+                                    id: '11',
+                                    name: '黄鹤楼1916',
+                                },
+                            } as never
+                        }
+                    />
+                </CustomFieldsContext.Provider>
+            </MockedProvider>,
+        );
+
+        expect(html).toContain('黄鹤楼1916');
+    });
 });
