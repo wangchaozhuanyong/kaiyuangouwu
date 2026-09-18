@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ShopApi } from '../api';
-import type { ActiveCustomer, ImageStudioConfig, MarketConfig } from '../types';
+
+import { ShopApi } from '../api';
+import { type ActiveCustomer, type ImageStudioConfig, type MarketConfig } from '../types';
 
 import {
     clearStudioCache,
