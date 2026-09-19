@@ -3309,6 +3309,12 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     flex-shrink: 0;
     padding: 8px 10px 12px;
     gap: 12px;
+    transition: opacity 0.18s ease-out;
+}
+
+.category-product-list.is-updating {
+    opacity: 0.65;
+    pointer-events: none;
 }
 
 .category-pagination-status {

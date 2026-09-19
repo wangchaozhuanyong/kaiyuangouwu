@@ -12,8 +12,9 @@ import { DesktopHeader } from './components/common/desktop-header';
 import { DesktopLayoutContext, useDesktopViewport } from './desktop-layout';
 import { type useStorefrontAppState } from './hooks/useStorefrontAppState';
 import { PageReadinessBoundary } from './page-readiness';
-import { RouteTransitionLoader } from './route-loading';
+import { PageSkeleton, RouteTransitionLoader } from './route-loading';
 import { isBrowsingStorefrontRoute, isPublicStorefrontRoute } from './storefront-access';
+import { routePageIdentity } from './storefront-router';
 import { StorefrontContext } from './StorefrontContext';
 import { StorefrontUpdatePrompt } from './StorefrontUpdatePrompt';
 
@@ -43,17 +44,19 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     const waitingForAccount = !customer && customerLoadState !== 'ready';
     const accountFailed = customerLoadState === 'error' || customerLoadState === 'paused';
     const showNavigation = isBrowsingStorefrontRoute(displayedRoute.name) || Boolean(customer);
+    const activeRoute = storefrontContextValue.route ?? displayedRoute;
+    const pageIdentity = routePageIdentity(activeRoute);
 
     return (
         <StorefrontContext.Provider value={storefrontContextValue}>
             <DesktopLayoutContext.Provider value={desktop}>
                 <PageReadinessBoundary
-                    requestKey={JSON.stringify([language, storefrontContextValue.route ?? displayedRoute])}
+                    requestKey={JSON.stringify([language, pageIdentity])}
                     navigationKey={JSON.stringify([
                         storefrontContextValue.storefrontCode,
                         language,
                         customer?.id,
-                        storefrontContextValue.route ?? displayedRoute,
+                        pageIdentity,
                     ])}
                     pending={Boolean(state.pageDataPending || state.isNavigationPending)}
                     online={online}
@@ -95,11 +98,15 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                             <div id="storefront-content" tabIndex={-1}>
                                 <Suspense
                                     fallback={
-                                        <RouteTransitionLoader
-                                            language={language}
-                                            logoUrl={logoUrl}
-                                            storefrontName={storefrontName}
-                                        />
+                                        displayedRoute.name === 'category' ? (
+                                            <PageSkeleton variant="catalog" language={language} root />
+                                        ) : (
+                                            <RouteTransitionLoader
+                                                language={language}
+                                                logoUrl={logoUrl}
+                                                storefrontName={storefrontName}
+                                            />
+                                        )
                                     }
                                 >
                                     {protectedRoute && waitingForAccount ? (

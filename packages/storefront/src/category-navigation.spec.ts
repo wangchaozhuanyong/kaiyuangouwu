@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { categoryTargetSelection, centeredHorizontalScrollLeft } from './category-navigation';
+import { routePageIdentity } from './storefront-router';
 import { readStorefrontStylesheet } from './test-stylesheet';
 
 describe('content category target navigation', () => {
@@ -162,5 +163,36 @@ describe('category navigation responsive spacing', () => {
         expect(stylesheet).toMatch(
             /\.category-page \.primary-category-strip \.primary-categories button\s*\{[^}]*width:\s*76px;[^}]*min-width:\s*76px;[^}]*max-width:\s*76px;/,
         );
+    });
+});
+
+describe('routePageIdentity for category navigation transitions', () => {
+    it('normalizes in-page category switches to a stable page identity', () => {
+        expect(routePageIdentity({ name: 'category' })).toBe('category');
+        expect(routePageIdentity({ name: 'category', collectionId: 'cat-baijiu' })).toBe('category');
+        expect(
+            routePageIdentity({
+                name: 'category',
+                collectionId: 'cat-coffee',
+                childId: 'sub-instant',
+                sort: 'price-asc',
+                fulfillment: 'physical',
+                inStockOnly: true,
+                minPrice: '10',
+                maxPrice: '100',
+            }),
+        ).toBe('category');
+    });
+
+    it('differentiates distinct whole-page destinations', () => {
+        expect(routePageIdentity({ name: 'home' })).toBe('home');
+        expect(routePageIdentity({ name: 'category' })).toBe('category');
+        expect(routePageIdentity({ name: 'services' })).toBe('services');
+        expect(routePageIdentity({ name: 'cart' })).toBe('cart');
+        expect(routePageIdentity({ name: 'account' })).toBe('account');
+        expect(routePageIdentity({ name: 'product', id: 'prod-1' })).toBe('product:prod-1');
+        expect(routePageIdentity({ name: 'product', id: 'prod-2' })).toBe('product:prod-2');
+        expect(routePageIdentity({ name: 'order-detail', id: 'ord-1' })).toBe('order-detail:ord-1');
+        expect(routePageIdentity({ name: 'legal', id: 'privacy' })).toBe('legal:privacy');
     });
 });

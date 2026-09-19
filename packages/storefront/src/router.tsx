@@ -1,9 +1,9 @@
 // Release alignment: perf-unified-architecture-20260911
-import { createBrowserHistory, createRouter } from '@tanstack/react-router';
+import { createBrowserHistory, createRouter, useRouterState } from '@tanstack/react-router';
 import { useContext } from 'react';
 
 import { preloadStorefrontRouteComponent } from './route-component-preload';
-import { RouteTransitionLoader } from './route-loading';
+import { PageSkeleton, pageSkeletonVariantForPathname, RouteTransitionLoader } from './route-loading';
 import { routeTree } from './routeTree.gen';
 import {
     getStorefrontScrollRestorationKey,
@@ -58,6 +58,11 @@ function StorefrontPendingPage() {
     const storefrontName =
         typeof storefront?.storefrontName === 'string' ? storefront.storefrontName : undefined;
     const logoUrl = typeof storefront?.logoUrl === 'string' ? storefront.logoUrl : null;
+    const location = useRouterState({ select: s => s.location });
+    const variant = pageSkeletonVariantForPathname(location.pathname);
+    if (variant === 'catalog') {
+        return <PageSkeleton variant="catalog" language={language} root />;
+    }
     return <RouteTransitionLoader language={language} logoUrl={logoUrl} storefrontName={storefrontName} />;
 }
 

@@ -25,8 +25,10 @@ vi.mock('./components/common/bottom-navigation', () => ({
     BottomNavigation: () => <div>CATALOG_NAVIGATION</div>,
     shouldShowBottomNavigation: () => true,
 }));
-vi.mock('./StorefrontUpdatePrompt', () => ({ StorefrontUpdatePrompt: () => null }));
-vi.mock('./route-loading', () => ({ RouteTransitionLoader: () => <div>CHECKING_ACCOUNT</div> }));
+vi.mock('./route-loading', () => ({
+    RouteTransitionLoader: () => <div>CHECKING_ACCOUNT</div>,
+    PageSkeleton: () => <div>CATALOG_SKELETON</div>,
+}));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -105,5 +107,16 @@ describe('catalog rendering boundary', () => {
         render({ displayedRoute: { name: 'legal', id: 'privacy' } });
         expect(element.textContent).toContain('PAGE_CONTENT');
         expect(element.textContent).not.toContain('CATALOG_NAVIGATION');
+    });
+    it('keeps category page mounted when switching between categories without triggering loading card', () => {
+        render({ displayedRoute: { name: 'category', collectionId: 'baijiu' } });
+        expect(element.textContent).toContain('PAGE_CONTENT');
+        expect(element.textContent).toContain('CATALOG_NAVIGATION');
+        expect(element.textContent).not.toContain('CHECKING_ACCOUNT');
+
+        render({ displayedRoute: { name: 'category', collectionId: 'coffee', childId: 'instant' } });
+        expect(element.textContent).toContain('PAGE_CONTENT');
+        expect(element.textContent).toContain('CATALOG_NAVIGATION');
+        expect(element.textContent).not.toContain('CHECKING_ACCOUNT');
     });
 });

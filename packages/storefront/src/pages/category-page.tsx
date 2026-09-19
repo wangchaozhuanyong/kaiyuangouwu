@@ -279,11 +279,7 @@ export function CategoryPage() {
           : null;
 
     return (
-        <main
-            className="page category-page"
-            aria-label={isZh ? '商品' : 'Products'}
-            data-page-pending={categoryLoading || catalogQuery.isPlaceholderData ? 'query' : undefined}
-        >
+        <main className="page category-page" aria-label={isZh ? '商品' : 'Products'}>
             <div className="category-navigation-shell">
                 <header className="topbar category-topbar">
                     <button
@@ -612,7 +608,16 @@ export function CategoryPage() {
                         />
                     ) : categoryProducts.length ? (
                         <>
-                            <div className="category-product-list">
+                            <div
+                                className={`category-product-list${
+                                    catalogQuery.isPlaceholderData ||
+                                    (catalogQuery.isFetching &&
+                                        !catalogQuery.isFetchingNextPage &&
+                                        !categoryLoading)
+                                        ? ' is-updating'
+                                        : ''
+                                }`}
+                            >
                                 {visibleProducts.map(product => (
                                     <ProductRow
                                         key={product.id}
