@@ -487,7 +487,9 @@ export function CheckoutPage({
                 setCustomerPrepared(true);
             }
             if (paymentCurrencyCode) await api.setPaymentCurrencyForOrder(paymentCurrencyCode);
-            const session = await api.preparePayment(cart.revision);
+            const latestCart = await api.cart();
+            onCartChange(latestCart);
+            const session = await api.preparePayment(latestCart.revision);
             onSessionChange(session);
             if (typeof api.prefetchEligiblePaymentMethods === 'function') {
                 try {

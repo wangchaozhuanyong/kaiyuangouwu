@@ -506,7 +506,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         );
         expect(api.setShippingAddress).not.toHaveBeenCalled();
         expect(api.prepareShipping).toHaveBeenCalledTimes(1);
-        expect(api.cart).not.toHaveBeenCalled();
+        expect(api.cart).toHaveBeenCalledTimes(1);
         expect(api.prefetchEligiblePaymentMethods).toHaveBeenCalledWith('order-1');
         expect(navigate).toHaveBeenCalledWith({ to: '/payment', search: {}, replace: true });
     });
