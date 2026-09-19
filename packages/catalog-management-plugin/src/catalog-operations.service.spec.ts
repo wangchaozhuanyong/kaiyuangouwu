@@ -1,7 +1,17 @@
-import { CurrencyCode, LanguageCode, Permission, SortOrder } from '@vendure/common/lib/generated-types';
+import {
+    CurrencyCode,
+    GlobalFlag,
+    LanguageCode,
+    Permission,
+    SortOrder,
+} from '@vendure/common/lib/generated-types';
 import { describe, expect, it, vi } from 'vitest';
 
-import { CatalogOperationsService } from './catalog-operations.service';
+import {
+    buildInventoryAlertOverview,
+    CatalogOperationsService,
+    DEFAULT_REPLENISHMENT_THRESHOLD,
+} from './catalog-operations.service';
 import { manageCatalogOperationsPermission } from './constants';
 
 function createService() {
@@ -22,7 +32,7 @@ function createService() {
     const connection = {
         withTransaction: vi.fn((_ctx, work) => Promise.resolve(work(txCtx))),
         getEntityOrThrow: vi.fn(),
-        getRepository: vi.fn(() => collectionRepository),
+        getRepository: vi.fn((): any => collectionRepository),
     };
     const productService = {
         create: vi.fn(() => Promise.resolve({ id: 'product-new', name: '新商品' })),
@@ -31,6 +41,7 @@ function createService() {
     };
     const productVariantService = {
         create: vi.fn(),
+        findAll: vi.fn(),
         getVariantsByProductId: vi.fn(() =>
             Promise.resolve({
                 items: [{ id: 'variant-1' }],
@@ -70,6 +81,35 @@ const variantInput = {
     currencyCode: 'CNY' as const,
 };
 
+function inventoryRow(variantId: string, stockLevels: Array<ReturnType<typeof stockLevel>>) {
+    return {
+        productId: `product-${variantId}`,
+        productName: `商品 ${variantId}`,
+        variantId,
+        variantName: `规格 ${variantId}`,
+        sku: `SKU-${variantId}`,
+        productEnabled: true,
+        variantEnabled: true,
+        trackInventory: GlobalFlag.INHERIT,
+        stockLevels,
+    };
+}
+
+function stockLevel(
+    stockLocationId: string,
+    stockOnHand: number,
+    stockAllocated: number,
+    minimumStock: number | null,
+) {
+    return {
+        stockLocationId,
+        stockLocationName: `仓库 ${stockLocationId}`,
+        stockOnHand,
+        stockAllocated,
+        minimumStock,
+    };
+}
+
 function authorizedContext(
     permissions = [Permission.UpdateProduct, manageCatalogOperationsPermission.Update],
 ) {
@@ -80,6 +120,119 @@ function authorizedContext(
 }
 
 describe('CatalogOperationsService', () => {
+    it('builds full-store alerts once per SKU and separates out-of-stock from low stock', () => {
+        const overview = buildInventoryAlertOverview(
+            [
+                inventoryRow('low', [stockLevel('a', 8, 4, null), stockLevel('b', 20, 1, 3)]),
+                inventoryRow('out', [stockLevel('a', 2, 3, 5), stockLevel('b', 0, 0, null)]),
+                inventoryRow('healthy', [stockLevel('a', 20, 2, 5)]),
+            ],
+            true,
+        );
+
+        expect(overview.defaultReplenishmentThreshold).toBe(DEFAULT_REPLENISHMENT_THRESHOLD);
+        expect(overview.lowStockSkuCount).toBe(1);
+        expect(overview.outOfStockSkuCount).toBe(1);
+        expect(overview.items.map(item => item.variantId)).toEqual(['low', 'out', 'healthy']);
+        expect(overview.items[0]).toMatchObject({
+            stockOnHand: 28,
+            stockAllocated: 5,
+            stockAvailable: 23,
+            status: 'LOW_STOCK',
+        });
+        expect(overview.items[0].locations[0]).toMatchObject({
+            stockAvailable: 4,
+            replenishmentThreshold: 5,
+            usesDefaultThreshold: true,
+            status: 'LOW_STOCK',
+        });
+    });
+
+    it('excludes disabled and non-tracked SKUs from replenishment alerts', () => {
+        const explicitUntracked = inventoryRow('untracked', [stockLevel('a', 0, 0, null)]);
+        explicitUntracked.trackInventory = GlobalFlag.FALSE;
+        const inheritedUntracked = inventoryRow('inherited', [stockLevel('a', 0, 0, null)]);
+        const disabled = inventoryRow('disabled', [stockLevel('a', 0, 0, null)]);
+        disabled.variantEnabled = false;
+
+        expect(buildInventoryAlertOverview([explicitUntracked, disabled], true).items).toEqual([]);
+        expect(buildInventoryAlertOverview([inheritedUntracked], false).items).toEqual([]);
+    });
+
+    it('deduplicates repeated catalog rows by SKU while retaining their warehouse details', () => {
+        const first = inventoryRow('first', [stockLevel('a', 4, 0, 5)]);
+        const duplicate = inventoryRow('duplicate', [stockLevel('b', 8, 1, 5)]);
+        duplicate.sku = first.sku;
+
+        const overview = buildInventoryAlertOverview([first, duplicate], true);
+
+        expect(overview.items).toHaveLength(1);
+        expect(overview.lowStockSkuCount).toBe(1);
+        expect(overview.items[0]).toMatchObject({
+            sku: first.sku,
+            stockOnHand: 12,
+            stockAllocated: 1,
+            stockAvailable: 11,
+        });
+        expect(overview.items[0].locations.map(level => level.productVariantId)).toEqual([
+            'first',
+            'duplicate',
+        ]);
+    });
+
+    it('treats an active tracked SKU without a warehouse row as out of stock', () => {
+        const overview = buildInventoryAlertOverview([inventoryRow('missing-location', [])], true);
+
+        expect(overview.outOfStockSkuCount).toBe(1);
+        expect(overview.items[0]).toMatchObject({
+            variantId: 'missing-location',
+            stockAvailable: 0,
+            status: 'OUT_OF_STOCK',
+            locations: [],
+        });
+    });
+
+    it('updates only the current-store replenishment threshold and preserves the stock ceiling', async () => {
+        const { connection, service } = createService();
+        vi.spyOn(service, 'stockLocations').mockResolvedValue([{ id: 'stock-1', name: '主仓' }]);
+        connection.getEntityOrThrow.mockResolvedValue({ id: 'variant-1' });
+        connection.getRepository
+            .mockImplementationOnce(
+                () => ({ findOne: vi.fn().mockResolvedValue({ id: 'level-1' }) }) as never,
+            )
+            .mockImplementationOnce(
+                () => ({ findOne: vi.fn().mockResolvedValue({ maximumStock: 20 }) }) as never,
+            );
+        const savePolicy = vi.spyOn(service, 'savePolicy').mockResolvedValue({} as never);
+
+        await expect(
+            service.updateInventoryThreshold({ channelId: 'channel-1' } as never, {
+                productVariantId: 'variant-1',
+                stockLocationId: 'stock-1',
+                threshold: 7,
+            }),
+        ).resolves.toEqual({
+            productVariantId: 'variant-1',
+            stockLocationId: 'stock-1',
+            replenishmentThreshold: 7,
+            usesDefaultThreshold: false,
+        });
+        expect(savePolicy).toHaveBeenCalledWith(expect.anything(), 'variant-1', 'stock-1', 7, 20);
+    });
+
+    it('rejects replenishment updates for a warehouse outside the active store', async () => {
+        const { service } = createService();
+        vi.spyOn(service, 'stockLocations').mockResolvedValue([]);
+
+        await expect(
+            service.updateInventoryThreshold({ channelId: 'channel-1' } as never, {
+                productVariantId: 'variant-1',
+                stockLocationId: 'other-store-stock',
+                threshold: 5,
+            }),
+        ).rejects.toThrow('所选库存点不属于当前店铺');
+    });
+
     it('creates the product, first SKU, cost, stock policy and category in one transaction', async () => {
         const {
             collectionRepository,
@@ -344,7 +497,7 @@ describe('CatalogOperationsService', () => {
             id: 'variant-1',
             customFields: { shelfLifeDays: 30 },
         });
-        connection.getRepository.mockReturnValue(lotRepository as never);
+        connection.getRepository.mockReturnValue(lotRepository);
 
         const saved = await service.saveLot({ channelId: 'channel-1' } as never, {
             productVariantId: 'variant-1',

@@ -92,6 +92,13 @@ export interface UpdateCatalogVariantOperationsInput {
     supplierId?: ID | null;
 }
 
+export interface UpdateCatalogInventoryThresholdInput {
+    productVariantId: ID;
+    stockLocationId: ID;
+    /** Null removes the warehouse override and falls back to the platform default. */
+    threshold?: number | null;
+}
+
 export interface CatalogSupplierListOptions {
     skip?: number | null;
     take?: number | null;

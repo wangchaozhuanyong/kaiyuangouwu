@@ -193,6 +193,49 @@ export const SAVE_CATALOG_INVENTORY_LOT_MUTATION = gql`
     }
 `;
 
+export const CATALOG_INVENTORY_ALERT_OVERVIEW_QUERY = gql`
+    query NextAdminCatalogInventoryAlertOverview {
+        catalogInventoryAlertOverview {
+            defaultReplenishmentThreshold
+            lowStockSkuCount
+            outOfStockSkuCount
+            items {
+                productId
+                productName
+                variantId
+                variantName
+                sku
+                stockOnHand
+                stockAllocated
+                stockAvailable
+                status
+                locations {
+                    productVariantId
+                    stockLocationId
+                    stockLocationName
+                    stockOnHand
+                    stockAllocated
+                    stockAvailable
+                    replenishmentThreshold
+                    usesDefaultThreshold
+                    status
+                }
+            }
+        }
+    }
+`;
+
+export const UPDATE_CATALOG_INVENTORY_THRESHOLD_MUTATION = gql`
+    mutation NextAdminUpdateCatalogInventoryThreshold($input: UpdateCatalogInventoryThresholdInput!) {
+        updateCatalogInventoryThreshold(input: $input) {
+            productVariantId
+            stockLocationId
+            replenishmentThreshold
+            usesDefaultThreshold
+        }
+    }
+`;
+
 const CATALOG_SUPPLIER_FIELDS = gql`
     fragment NextAdminCatalogSupplierFields on CatalogSupplier {
         id

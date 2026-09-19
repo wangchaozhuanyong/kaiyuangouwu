@@ -9,6 +9,7 @@ import {
     Boxes,
     CalendarClock,
     CheckCircle2,
+    ChevronDown,
     ChevronLeft,
     ChevronRight,
     Edit3,
@@ -39,7 +40,9 @@ import {
 } from '../../graphql/catalog-admin.graphql';
 import {
     CATALOG_EXPORT_ROWS_QUERY,
+    CATALOG_INVENTORY_ALERT_OVERVIEW_QUERY,
     SAVE_CATALOG_INVENTORY_LOT_MUTATION,
+    UPDATE_CATALOG_INVENTORY_THRESHOLD_MUTATION,
 } from '../../graphql/catalog-operations.graphql';
 import { UPDATE_PRODUCT_VARIANTS } from '../../graphql/catalog.graphql';
 import { usePageSize } from '../../hooks/use-page-size';
@@ -61,6 +64,7 @@ const INVENTORY_TABS = {
     warehouses: 'WAREHOUSES',
 } as const;
 type StockStatus = 'NORMAL' | 'LOW_STOCK' | 'OUT_OF_STOCK' | 'NOT_TRACKED';
+type InventoryAlertStatus = Exclude<StockStatus, 'NOT_TRACKED'>;
 
 // oxlint-disable-next-line react/only-export-components -- exported for focused regression tests
 export function inventoryStockStatus(
@@ -114,6 +118,40 @@ interface ProductVariantItem {
 interface InventoryData {
     productVariants: { items: ProductVariantItem[]; totalItems: number };
     globalSettings: { outOfStockThreshold: number; trackInventory: boolean };
+}
+
+interface InventoryAlertLocation {
+    productVariantId: string;
+    stockLocationId: string;
+    stockLocationName: string;
+    stockOnHand: number;
+    stockAllocated: number;
+    stockAvailable: number;
+    replenishmentThreshold: number;
+    usesDefaultThreshold: boolean;
+    status: InventoryAlertStatus;
+}
+
+interface InventoryAlertItem {
+    productId: string;
+    productName: string;
+    variantId: string;
+    variantName: string;
+    sku: string;
+    stockOnHand: number;
+    stockAllocated: number;
+    stockAvailable: number;
+    status: InventoryAlertStatus;
+    locations: InventoryAlertLocation[];
+}
+
+interface InventoryAlertData {
+    catalogInventoryAlertOverview: {
+        defaultReplenishmentThreshold: number;
+        lowStockSkuCount: number;
+        outOfStockSkuCount: number;
+        items: InventoryAlertItem[];
+    };
 }
 
 interface StockLocationsData {
@@ -228,6 +266,9 @@ export function InventoryWarehouseModule() {
     const [bulkPrice, setBulkPrice] = useState('');
     const [bulkUpdating, setBulkUpdating] = useState(false);
     const [lotDraft, setLotDraft] = useState<InventoryLotDraft | null>(null);
+    const [expandedAlertSkuIds, setExpandedAlertSkuIds] = useState<Set<string>>(() => new Set());
+    const [thresholdDrafts, setThresholdDrafts] = useState<Record<string, string>>({});
+    const [savingThresholdKey, setSavingThresholdKey] = useState<string | null>(null);
     const loadingAllLocationsRef = useRef(false);
 
     const { data, loading, error, refetch } = useQuery<InventoryData>(GET_INVENTORY_OVERVIEW, {
@@ -264,6 +305,10 @@ export function InventoryWarehouseModule() {
     }>(CATALOG_EXPORT_ROWS_QUERY, {
         variables: { skip: page * pageSize, take: pageSize },
         skip: activeTab !== 'LOTS',
+        fetchPolicy: 'cache-and-network',
+        notifyOnNetworkStatusChange: true,
+    });
+    const alertQuery = useQuery<InventoryAlertData>(CATALOG_INVENTORY_ALERT_OVERVIEW_QUERY, {
         fetchPolicy: 'cache-and-network',
         notifyOnNetworkStatusChange: true,
     });
@@ -309,31 +354,49 @@ export function InventoryWarehouseModule() {
         updateProductVariants: Array<{ id: string } | null>;
     }>(UPDATE_PRODUCT_VARIANTS);
     const [saveInventoryLot, saveInventoryLotState] = useMutation(SAVE_CATALOG_INVENTORY_LOT_MUTATION);
+    const [updateInventoryThreshold] = useMutation(UPDATE_CATALOG_INVENTORY_THRESHOLD_MUTATION);
 
     const variants = data?.productVariants.items ?? EMPTY_VARIANTS;
     const locations = locationData?.stockLocations.items ?? EMPTY_LOCATIONS;
-    const globalThreshold = data?.globalSettings.outOfStockThreshold ?? 0;
     const globalTrackInventory = data?.globalSettings.trackInventory ?? true;
+    const alertOverview = alertQuery.data?.catalogInventoryAlertOverview;
+    const defaultReplenishmentThreshold = alertOverview?.defaultReplenishmentThreshold ?? 5;
+    const alertLocationByKey = useMemo(
+        () =>
+            new Map(
+                (alertOverview?.items ?? []).flatMap(item =>
+                    item.locations.map(
+                        level => [`${level.productVariantId}:${level.stockLocationId}`, level] as const,
+                    ),
+                ),
+            ),
+        [alertOverview?.items],
+    );
     const totalVariants = data?.productVariants.totalItems ?? 0;
     const totalPages = Math.max(1, Math.ceil(totalVariants / pageSize));
     const refetchAll = async () => {
         await Promise.all([
             refetch(),
+            alertQuery.refetch(),
             locationQuery.refetch(),
             ...(activeTab === 'LOTS' ? [lotQuery.refetch()] : []),
         ]);
     };
-    const pageLoading = loading || locationsLoading || (activeTab === 'LOTS' && lotQuery.loading);
-    const pageError = error ?? locationError ?? (activeTab === 'LOTS' ? lotQuery.error : undefined);
+    const pageLoading =
+        loading ||
+        locationsLoading ||
+        (activeTab === 'LOTS' && lotQuery.loading) ||
+        (['LOW_STOCK', 'OUT_OF_STOCK'].includes(activeTab) && alertQuery.loading);
+    const pageError =
+        error ?? locationError ?? alertQuery.error ?? (activeTab === 'LOTS' ? lotQuery.error : undefined);
 
     const stockList = useMemo<StockRow[]>(
         () =>
             variants.flatMap(variant => {
-                const threshold = variant.useGlobalOutOfStockThreshold
-                    ? globalThreshold
-                    : variant.outOfStockThreshold;
                 return variant.stockLevels.map(level => {
-                    const available = Math.max(0, level.stockOnHand - level.stockAllocated);
+                    const alertLocation = alertLocationByKey.get(`${variant.id}:${level.stockLocationId}`);
+                    const threshold = alertLocation?.replenishmentThreshold ?? defaultReplenishmentThreshold;
+                    const available = level.stockOnHand - level.stockAllocated;
                     const status = inventoryStockStatus(
                         variant.trackInventory,
                         globalTrackInventory,
@@ -356,7 +419,7 @@ export function InventoryWarehouseModule() {
                     };
                 });
             }),
-        [globalThreshold, globalTrackInventory, variants],
+        [alertLocationByKey, defaultReplenishmentThreshold, globalTrackInventory, variants],
     );
 
     const movementLogs = useMemo<MovementRow[]>(
@@ -390,11 +453,18 @@ export function InventoryWarehouseModule() {
     const lotTotalVariants = lotQuery.data?.catalogExportRows.totalItems ?? 0;
     const lotTotalPages = Math.max(1, Math.ceil(lotTotalVariants / pageSize));
 
-    const filteredStockList = stockList.filter(stock => {
-        if (activeTab === 'LOW_STOCK' && stock.status !== 'LOW_STOCK') return false;
-        if (activeTab === 'OUT_OF_STOCK' && stock.status !== 'OUT_OF_STOCK') return false;
-        return true;
-    });
+    const filteredStockList = stockList;
+    const alertItems = useMemo(() => {
+        const targetStatus = activeTab === 'OUT_OF_STOCK' ? 'OUT_OF_STOCK' : 'LOW_STOCK';
+        const search = deferredSearchTerm.toLocaleLowerCase();
+        return (alertOverview?.items ?? []).filter(item => {
+            if (item.status !== targetStatus) return false;
+            if (!search) return true;
+            return [item.productName, item.variantName, item.sku].some(value =>
+                value.toLocaleLowerCase().includes(search),
+            );
+        });
+    }, [activeTab, alertOverview?.items, deferredSearchTerm]);
 
     const showNotice = (message: string) => {
         setNotification(message);
@@ -404,6 +474,57 @@ export function InventoryWarehouseModule() {
     const showError = (message: string) => {
         setActionError(message);
         setNotification('');
+    };
+
+    const toggleAlertSku = (variantId: string) => {
+        setExpandedAlertSkuIds(current => {
+            const next = new Set(current);
+            if (next.has(variantId)) next.delete(variantId);
+            else next.add(variantId);
+            return next;
+        });
+    };
+
+    const handleThresholdSave = async (
+        item: InventoryAlertItem,
+        level: InventoryAlertLocation,
+        useDefault: boolean,
+    ) => {
+        const key = `${level.productVariantId}:${level.stockLocationId}`;
+        const rawValue = thresholdDrafts[key] ?? String(level.replenishmentThreshold);
+        const threshold = Number(rawValue);
+        if (!useDefault && (!Number.isInteger(threshold) || threshold < 0)) {
+            showError('补货预警值必须是不小于 0 的整数');
+            return;
+        }
+        setSavingThresholdKey(key);
+        setActionError('');
+        try {
+            await updateInventoryThreshold({
+                variables: {
+                    input: {
+                        productVariantId: level.productVariantId,
+                        stockLocationId: level.stockLocationId,
+                        threshold: useDefault ? null : threshold,
+                    },
+                },
+            });
+            setThresholdDrafts(current => {
+                const next = { ...current };
+                delete next[key];
+                return next;
+            });
+            await Promise.all([alertQuery.refetch(), refetch()]);
+            showNotice(
+                useDefault
+                    ? `${item.sku} / ${level.stockLocationName} 已恢复默认预警值 ${defaultReplenishmentThreshold}`
+                    : `${item.sku} / ${level.stockLocationName} 的补货预警值已更新为 ${threshold}`,
+            );
+        } catch (thresholdError) {
+            showError(toUserFacingError(thresholdError, '补货预警值保存失败，请稍后重试'));
+        } finally {
+            setSavingThresholdKey(null);
+        }
     };
 
     const openNewLot = () => {
@@ -742,13 +863,13 @@ export function InventoryWarehouseModule() {
         setSelectedVariantIds([]);
     };
 
-    const lowStockCount = stockList.filter(stock => stock.status === 'LOW_STOCK').length;
-    const outOfStockCount = stockList.filter(stock => stock.status === 'OUT_OF_STOCK').length;
+    const lowStockCount = alertOverview?.lowStockSkuCount;
+    const outOfStockCount = alertOverview?.outOfStockSkuCount;
     const tabs: Array<[InventoryTab, typeof Boxes, string]> = [
         ['SKU_OPERATIONS', Boxes, 'SKU 运营 (' + totalVariants + ')'],
         ['ALL', Boxes, '库存总览 (' + totalVariants + ' 个 SKU)'],
-        ['LOW_STOCK', AlertTriangle, '本页低库存 (' + lowStockCount + ')'],
-        ['OUT_OF_STOCK', ShieldAlert, '本页缺货 (' + outOfStockCount + ')'],
+        ['LOW_STOCK', AlertTriangle, `全店低库存 (${lowStockCount ?? '…'})`],
+        ['OUT_OF_STOCK', ShieldAlert, `全店缺货 (${outOfStockCount ?? '…'})`],
         ['MOVEMENTS_LOG', ArrowRightLeft, '本页流水 (' + movementLogs.length + ')'],
         ['LOTS', CalendarClock, '批次与效期 (' + lotRows.length + ')'],
         ['WAREHOUSES', Warehouse, '库存点 (' + locations.length + ')'],
@@ -1164,7 +1285,7 @@ export function InventoryWarehouseModule() {
                             onPageChange={changePage}
                         />
                     </div>
-                ) : ['ALL', 'LOW_STOCK', 'OUT_OF_STOCK'].includes(activeTab) ? (
+                ) : activeTab === 'ALL' ? (
                     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
                         <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/50 p-4">
                             <div className="relative">
@@ -1181,7 +1302,7 @@ export function InventoryWarehouseModule() {
                                 />
                             </div>
                             <div className="text-xs text-slate-400">
-                                本页{' '}
+                                当前页{' '}
                                 <strong className="font-mono text-slate-700">
                                     {filteredStockList.length}
                                 </strong>{' '}
@@ -1245,7 +1366,7 @@ export function InventoryWarehouseModule() {
                                                 可售
                                             </th>
                                             <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
-                                                缺货阈值
+                                                补货预警值
                                             </th>
                                             <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
                                                 状态
@@ -1357,6 +1478,50 @@ export function InventoryWarehouseModule() {
                             onPageChange={changePage}
                         />
                     </div>
+                ) : ['LOW_STOCK', 'OUT_OF_STOCK'].includes(activeTab) ? (
+                    <InventoryAlertPanel
+                        items={alertItems}
+                        loading={alertQuery.loading}
+                        searchTerm={searchTerm}
+                        onSearchChange={value => {
+                            setSearchTerm(value);
+                            setPage(0);
+                        }}
+                        defaultThreshold={defaultReplenishmentThreshold}
+                        expandedSkuIds={expandedAlertSkuIds}
+                        onToggle={toggleAlertSku}
+                        thresholdDrafts={thresholdDrafts}
+                        onThresholdDraftChange={(key, value) =>
+                            setThresholdDrafts(current => ({ ...current, [key]: value }))
+                        }
+                        savingThresholdKey={savingThresholdKey}
+                        onThresholdSave={(item, level, useDefault) =>
+                            void handleThresholdSave(item, level, useDefault)
+                        }
+                        onAdjust={(item, level) => {
+                            setSelectedStock({
+                                id: `${level.productVariantId}:${level.stockLocationId}`,
+                                variantId: level.productVariantId,
+                                locationId: level.stockLocationId,
+                                productName: item.productName,
+                                variantName: item.variantName,
+                                sku: item.sku,
+                                warehouse: level.stockLocationName,
+                                stockOnHand: level.stockOnHand,
+                                stockAllocated: level.stockAllocated,
+                                stockAvailable: level.stockAvailable,
+                                safetyThreshold: level.replenishmentThreshold,
+                                status: level.status,
+                            });
+                            setAdjustAmount('');
+                            setActionError('');
+                        }}
+                        onEditProduct={item =>
+                            navigate(`/catalog/products/${item.productId}?tab=variants`, {
+                                state: { returnTo: `${location.pathname}${location.search}` },
+                            })
+                        }
+                    />
                 ) : activeTab === 'LOTS' ? (
                     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
                         <div className="border-b border-amber-100 bg-amber-50 p-3 text-[11px] text-amber-800">
@@ -1866,6 +2031,336 @@ export function InventoryWarehouseModule() {
                 />
             )}
         </div>
+    );
+}
+
+function InventoryAlertPanel({
+    items,
+    loading,
+    searchTerm,
+    onSearchChange,
+    defaultThreshold,
+    expandedSkuIds,
+    onToggle,
+    thresholdDrafts,
+    onThresholdDraftChange,
+    savingThresholdKey,
+    onThresholdSave,
+    onAdjust,
+    onEditProduct,
+}: {
+    items: InventoryAlertItem[];
+    loading: boolean;
+    searchTerm: string;
+    onSearchChange: (value: string) => void;
+    defaultThreshold: number;
+    expandedSkuIds: Set<string>;
+    onToggle: (variantId: string) => void;
+    thresholdDrafts: Record<string, string>;
+    onThresholdDraftChange: (key: string, value: string) => void;
+    savingThresholdKey: string | null;
+    onThresholdSave: (item: InventoryAlertItem, level: InventoryAlertLocation, useDefault: boolean) => void;
+    onAdjust: (item: InventoryAlertItem, level: InventoryAlertLocation) => void;
+    onEditProduct: (item: InventoryAlertItem) => void;
+}) {
+    return (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
+            <div className="grid gap-px border-b border-slate-200 bg-slate-200 sm:grid-cols-3">
+                <div className="bg-blue-50 p-3 text-xs text-blue-900">
+                    <strong>可售库存 = 在手库存 − 已锁定库存</strong>
+                    <p className="mt-1 text-[11px] text-blue-700">计算结果保留真实负数，不再显示成 0。</p>
+                </div>
+                <div className="bg-amber-50 p-3 text-xs text-amber-900">
+                    <strong>低库存</strong>
+                    <p className="mt-1 text-[11px] text-amber-700">
+                        可售大于 0，且至少一个仓库达到补货预警值。
+                    </p>
+                </div>
+                <div className="bg-rose-50 p-3 text-xs text-rose-900">
+                    <strong>缺货</strong>
+                    <p className="mt-1 text-[11px] text-rose-700">SKU 全仓可售合计小于或等于 0。</p>
+                </div>
+            </div>
+            <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="relative w-full sm:w-80">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <input
+                        value={searchTerm}
+                        onChange={event => onSearchChange(event.target.value)}
+                        aria-label="搜索全店库存预警"
+                        placeholder="按商品 / 规格 / SKU 搜索全店预警..."
+                        className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-4 text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                </div>
+                <div className="text-xs text-slate-500">
+                    按 SKU 去重，当前显示 <strong className="font-mono text-slate-900">{items.length}</strong>{' '}
+                    个；未单独设置时使用默认预警值{' '}
+                    <strong className="font-mono text-slate-900">{defaultThreshold}</strong>
+                </div>
+            </div>
+            {loading && items.length === 0 ? (
+                <div className="space-y-3 p-6" aria-label="正在读取全店库存预警">
+                    {[1, 2, 3].map(item => (
+                        <div key={item} className="h-14 animate-pulse rounded-lg bg-slate-100" />
+                    ))}
+                </div>
+            ) : items.length === 0 ? (
+                <div className="space-y-2 p-16 text-center text-xs text-slate-400">
+                    <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-300" />
+                    <p>当前全店没有符合条件的库存预警</p>
+                </div>
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[1040px] border-collapse text-left text-xs">
+                        <thead className="border-b border-slate-200 bg-slate-50 font-bold text-slate-500">
+                            <tr>
+                                <th scope="col" className="w-12 px-3 py-3" aria-label="展开仓库明细" />
+                                <th scope="col" className="w-64 px-3 py-3">
+                                    商品 / 规格
+                                </th>
+                                <th scope="col" className="w-44 px-3 py-3">
+                                    SKU
+                                </th>
+                                <th scope="col" className="w-24 px-3 py-3">
+                                    全仓在手
+                                </th>
+                                <th scope="col" className="w-24 px-3 py-3">
+                                    全仓锁定
+                                </th>
+                                <th scope="col" className="w-24 px-3 py-3">
+                                    全仓可售
+                                </th>
+                                <th scope="col" className="w-24 px-3 py-3">
+                                    状态
+                                </th>
+                                <th scope="col" className="w-28 px-3 py-3 text-right">
+                                    操作
+                                </th>
+                            </tr>
+                        </thead>
+                        {items.map(item => {
+                            const expanded = expandedSkuIds.has(item.variantId);
+                            return (
+                                <tbody
+                                    key={item.variantId}
+                                    className="border-b border-slate-100 last:border-0"
+                                >
+                                    <tr className="h-[58px] hover:bg-slate-50/80">
+                                        <td className="px-3 py-0">
+                                            <button
+                                                type="button"
+                                                onClick={() => onToggle(item.variantId)}
+                                                className="rounded p-1 text-slate-500 hover:bg-slate-100"
+                                                aria-label={`${expanded ? '收起' : '展开'} ${item.sku} 的仓库明细`}
+                                                aria-expanded={expanded}
+                                            >
+                                                {expanded ? (
+                                                    <ChevronDown className="h-4 w-4" />
+                                                ) : (
+                                                    <ChevronRight className="h-4 w-4" />
+                                                )}
+                                            </button>
+                                        </td>
+                                        <td className="max-w-64 px-3 py-0">
+                                            <span
+                                                className="block truncate font-bold text-slate-900"
+                                                title={item.productName}
+                                            >
+                                                {item.productName}
+                                            </span>
+                                            <span
+                                                className="block truncate text-[11px] text-slate-500"
+                                                title={item.variantName}
+                                            >
+                                                {item.variantName}
+                                            </span>
+                                        </td>
+                                        <td className="max-w-44 px-3 py-0 font-mono text-[11px] text-slate-700">
+                                            <span className="block truncate" title={item.sku}>
+                                                {item.sku}
+                                            </span>
+                                        </td>
+                                        <td className="px-3 py-0 font-mono font-bold text-slate-900">
+                                            {item.stockOnHand}
+                                        </td>
+                                        <td className="px-3 py-0 font-mono text-amber-700">
+                                            {item.stockAllocated}
+                                        </td>
+                                        <td
+                                            className={`px-3 py-0 font-mono font-bold ${item.stockAvailable <= 0 ? 'text-rose-700' : 'text-amber-700'}`}
+                                        >
+                                            {item.stockAvailable}
+                                        </td>
+                                        <td className="px-3 py-0">
+                                            <InventoryAlertBadge status={item.status} />
+                                        </td>
+                                        <td className="px-3 py-0 text-right">
+                                            <button
+                                                type="button"
+                                                onClick={() => onEditProduct(item)}
+                                                className="rounded bg-blue-50 px-3 py-1.5 text-[10px] font-bold text-blue-700 hover:bg-blue-100"
+                                            >
+                                                编辑商品
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {expanded && (
+                                        <tr>
+                                            <td colSpan={8} className="bg-slate-50/70 px-5 py-4">
+                                                {item.locations.length === 0 ? (
+                                                    <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-rose-800">
+                                                        该 SKU 尚未关联库存点，请进入商品编辑页建立库存记录。
+                                                    </div>
+                                                ) : (
+                                                    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                                                        <table className="w-full min-w-[920px] text-left text-[11px]">
+                                                            <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+                                                                <tr>
+                                                                    <th className="px-3 py-2">库存点</th>
+                                                                    <th className="px-3 py-2">在手</th>
+                                                                    <th className="px-3 py-2">锁定</th>
+                                                                    <th className="px-3 py-2">可售</th>
+                                                                    <th className="px-3 py-2">补货预警值</th>
+                                                                    <th className="px-3 py-2">状态</th>
+                                                                    <th className="px-3 py-2 text-right">
+                                                                        操作
+                                                                    </th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-slate-100">
+                                                                {item.locations.map(level => {
+                                                                    const key = `${level.productVariantId}:${level.stockLocationId}`;
+                                                                    const saving = savingThresholdKey === key;
+                                                                    return (
+                                                                        <tr key={key} className="h-[54px]">
+                                                                            <td className="px-3 py-0 font-bold text-slate-800">
+                                                                                {level.stockLocationName}
+                                                                            </td>
+                                                                            <td className="px-3 py-0 font-mono">
+                                                                                {level.stockOnHand}
+                                                                            </td>
+                                                                            <td className="px-3 py-0 font-mono text-amber-700">
+                                                                                {level.stockAllocated}
+                                                                            </td>
+                                                                            <td
+                                                                                className={`px-3 py-0 font-mono font-bold ${level.stockAvailable <= 0 ? 'text-rose-700' : 'text-slate-900'}`}
+                                                                            >
+                                                                                {level.stockAvailable}
+                                                                            </td>
+                                                                            <td className="px-3 py-0">
+                                                                                <div className="flex items-center gap-1.5">
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        min="0"
+                                                                                        step="1"
+                                                                                        value={
+                                                                                            thresholdDrafts[
+                                                                                                key
+                                                                                            ] ??
+                                                                                            String(
+                                                                                                level.replenishmentThreshold,
+                                                                                            )
+                                                                                        }
+                                                                                        onChange={event =>
+                                                                                            onThresholdDraftChange(
+                                                                                                key,
+                                                                                                event.target
+                                                                                                    .value,
+                                                                                            )
+                                                                                        }
+                                                                                        disabled={saving}
+                                                                                        aria-label={`${item.sku} ${level.stockLocationName} 补货预警值`}
+                                                                                        className="w-20 rounded border border-slate-300 px-2 py-1 font-mono outline-none focus:ring-1 focus:ring-blue-500"
+                                                                                    />
+                                                                                    {level.usesDefaultThreshold && (
+                                                                                        <span className="whitespace-nowrap text-[10px] text-slate-400">
+                                                                                            默认
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </td>
+                                                                            <td className="px-3 py-0">
+                                                                                <InventoryAlertBadge
+                                                                                    status={level.status}
+                                                                                />
+                                                                            </td>
+                                                                            <td className="px-3 py-0 text-right whitespace-nowrap">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={saving}
+                                                                                    onClick={() =>
+                                                                                        onThresholdSave(
+                                                                                            item,
+                                                                                            level,
+                                                                                            false,
+                                                                                        )
+                                                                                    }
+                                                                                    className="mr-2 font-bold text-blue-700 disabled:opacity-40"
+                                                                                >
+                                                                                    {saving
+                                                                                        ? '保存中…'
+                                                                                        : '保存预警值'}
+                                                                                </button>
+                                                                                {!level.usesDefaultThreshold && (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        disabled={saving}
+                                                                                        onClick={() =>
+                                                                                            onThresholdSave(
+                                                                                                item,
+                                                                                                level,
+                                                                                                true,
+                                                                                            )
+                                                                                        }
+                                                                                        className="mr-2 font-bold text-slate-500 disabled:opacity-40"
+                                                                                    >
+                                                                                        恢复默认{' '}
+                                                                                        {defaultThreshold}
+                                                                                    </button>
+                                                                                )}
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() =>
+                                                                                        onAdjust(item, level)
+                                                                                    }
+                                                                                    className="font-bold text-emerald-700"
+                                                                                >
+                                                                                    盘点调整
+                                                                                </button>
+                                                                            </td>
+                                                                        </tr>
+                                                                    );
+                                                                })}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            );
+                        })}
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function InventoryAlertBadge({ status }: { status: InventoryAlertStatus }) {
+    return status === 'OUT_OF_STOCK' ? (
+        <span className="whitespace-nowrap rounded bg-rose-100 px-2 py-0.5 font-bold text-rose-800">
+            缺货
+        </span>
+    ) : status === 'LOW_STOCK' ? (
+        <span className="whitespace-nowrap rounded bg-amber-100 px-2 py-0.5 font-bold text-amber-800">
+            需补货
+        </span>
+    ) : (
+        <span className="whitespace-nowrap rounded bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">
+            充足
+        </span>
     );
 }
 

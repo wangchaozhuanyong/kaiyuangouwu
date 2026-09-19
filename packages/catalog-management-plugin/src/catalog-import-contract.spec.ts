@@ -29,6 +29,12 @@ describe('catalog import privacy contract', () => {
         expect(schema).toContain('createCatalogProduct');
         expect(schema).toContain('catalogProductCreationContext');
         expect(schema).toContain('catalogIntegritySummary');
+        expect(schema).toContain('catalogInventoryAlertOverview');
+        expect(schema).toContain('lowStockSkuCount: Int!');
+        expect(schema).toContain('outOfStockSkuCount: Int!');
+        expect(schema).toContain('replenishmentThreshold: Int!');
+        expect(schema).toContain('usesDefaultThreshold: Boolean!');
+        expect(schema).toContain('updateCatalogInventoryThreshold');
         expect(schema).toContain('catalogSuppliers');
         expect(schema).toContain('supplier: String!');
         expect(schema).toContain('rows: [CatalogNormalizedRowInput!]!');

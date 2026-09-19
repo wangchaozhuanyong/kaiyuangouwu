@@ -258,6 +258,57 @@ export const adminApiExtensions = gql`
         totalItems: Int!
     }
 
+    enum CatalogInventoryAlertStatus {
+        NORMAL
+        LOW_STOCK
+        OUT_OF_STOCK
+    }
+
+    type CatalogInventoryAlertLocation {
+        productVariantId: ID!
+        stockLocationId: ID!
+        stockLocationName: String!
+        stockOnHand: Int!
+        stockAllocated: Int!
+        stockAvailable: Int!
+        replenishmentThreshold: Int!
+        usesDefaultThreshold: Boolean!
+        status: CatalogInventoryAlertStatus!
+    }
+
+    type CatalogInventoryAlertItem {
+        productId: ID!
+        productName: String!
+        variantId: ID!
+        variantName: String!
+        sku: String!
+        stockOnHand: Int!
+        stockAllocated: Int!
+        stockAvailable: Int!
+        status: CatalogInventoryAlertStatus!
+        locations: [CatalogInventoryAlertLocation!]!
+    }
+
+    type CatalogInventoryAlertOverview {
+        defaultReplenishmentThreshold: Int!
+        lowStockSkuCount: Int!
+        outOfStockSkuCount: Int!
+        items: [CatalogInventoryAlertItem!]!
+    }
+
+    input UpdateCatalogInventoryThresholdInput {
+        productVariantId: ID!
+        stockLocationId: ID!
+        threshold: Int
+    }
+
+    type CatalogInventoryThresholdUpdate {
+        productVariantId: ID!
+        stockLocationId: ID!
+        replenishmentThreshold: Int!
+        usesDefaultThreshold: Boolean!
+    }
+
     type CatalogProductSummary {
         productId: ID!
     }
@@ -667,6 +718,7 @@ export const adminApiExtensions = gql`
         catalogProfitReport(input: CatalogProfitReportInput!): CatalogProfitReport!
         catalogProducts(filter: CatalogProductSummaryFilterInput, options: ProductListOptions): ProductList!
         catalogExportRows(skip: Int, take: Int): CatalogExportPage!
+        catalogInventoryAlertOverview: CatalogInventoryAlertOverview!
         catalogSuppliers(options: CatalogSupplierListOptions): CatalogSupplierList!
         catalogSupplier(id: ID!): CatalogSupplier!
         catalogSupplierVariants(supplierId: ID!, skip: Int, take: Int): CatalogSupplierVariantList!
@@ -682,6 +734,9 @@ export const adminApiExtensions = gql`
         executeCatalogImport(id: ID!): CatalogImportJob!
         rollbackCatalogImport(id: ID!): CatalogImportJob!
         updateCatalogVariantOperations(input: UpdateCatalogVariantOperationsInput!): CatalogProductWorkspace!
+        updateCatalogInventoryThreshold(
+            input: UpdateCatalogInventoryThresholdInput!
+        ): CatalogInventoryThresholdUpdate!
         createCatalogProductVariant(input: CreateCatalogProductVariantInput!): CatalogProductWorkspace!
         createCatalogProduct(input: CreateCatalogProductInput!): Product!
         saveCatalogProduct(input: SaveCatalogProductInput!): Product!

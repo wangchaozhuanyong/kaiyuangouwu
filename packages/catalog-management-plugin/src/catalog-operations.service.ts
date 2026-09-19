@@ -38,8 +38,122 @@ import {
     CreateCatalogProductVariantInput,
     SaveCatalogProductInput,
     SaveInventoryLotInput,
+    UpdateCatalogInventoryThresholdInput,
     UpdateCatalogVariantOperationsInput,
 } from './types';
+
+export const DEFAULT_REPLENISHMENT_THRESHOLD = 5;
+
+type InventoryAlertStatus = 'NORMAL' | 'LOW_STOCK' | 'OUT_OF_STOCK';
+
+interface InventoryAlertSourceRow {
+    productId: string;
+    productName: string;
+    variantId: string;
+    variantName: string;
+    sku: string;
+    productEnabled: boolean;
+    variantEnabled: boolean;
+    trackInventory: GlobalFlag;
+    stockLevels: Array<{
+        stockLocationId: string;
+        stockLocationName: string;
+        stockOnHand: number;
+        stockAllocated: number;
+        minimumStock: number | null;
+    }>;
+}
+
+export function buildInventoryAlertOverview(
+    rows: InventoryAlertSourceRow[],
+    channelTracksInventory: boolean,
+    defaultThreshold = DEFAULT_REPLENISHMENT_THRESHOLD,
+) {
+    const itemsBySku = new Map<
+        string,
+        Omit<
+            ReturnType<typeof inventoryAlertItem>,
+            'stockOnHand' | 'stockAllocated' | 'stockAvailable' | 'status'
+        >
+    >();
+    for (const row of rows) {
+        const tracksInventory =
+            row.trackInventory === GlobalFlag.TRUE ||
+            (row.trackInventory === GlobalFlag.INHERIT && channelTracksInventory);
+        if (!row.productEnabled || !row.variantEnabled || !tracksInventory) continue;
+
+        const locations = row.stockLevels.map(level => {
+            const stockAvailable = level.stockOnHand - level.stockAllocated;
+            const replenishmentThreshold = level.minimumStock ?? defaultThreshold;
+            return {
+                productVariantId: row.variantId,
+                stockLocationId: level.stockLocationId,
+                stockLocationName: level.stockLocationName,
+                stockOnHand: level.stockOnHand,
+                stockAllocated: level.stockAllocated,
+                stockAvailable,
+                replenishmentThreshold,
+                usesDefaultThreshold: level.minimumStock == null,
+                status: inventoryAlertStatus(stockAvailable, replenishmentThreshold),
+            };
+        });
+        const skuKey = row.sku.trim() || `variant:${row.variantId}`;
+        const existing = itemsBySku.get(skuKey);
+        if (existing) {
+            existing.locations.push(...locations);
+        } else {
+            itemsBySku.set(skuKey, {
+                productId: row.productId,
+                productName: row.productName,
+                variantId: row.variantId,
+                variantName: row.variantName,
+                sku: row.sku,
+                locations,
+            });
+        }
+    }
+    const items = [...itemsBySku.values()].map(inventoryAlertItem);
+    return {
+        defaultReplenishmentThreshold: defaultThreshold,
+        lowStockSkuCount: items.filter(item => item.status === 'LOW_STOCK').length,
+        outOfStockSkuCount: items.filter(item => item.status === 'OUT_OF_STOCK').length,
+        items,
+    };
+}
+
+function inventoryAlertItem(item: {
+    productId: string;
+    productName: string;
+    variantId: string;
+    variantName: string;
+    sku: string;
+    locations: Array<{
+        productVariantId: string;
+        stockLocationId: string;
+        stockLocationName: string;
+        stockOnHand: number;
+        stockAllocated: number;
+        stockAvailable: number;
+        replenishmentThreshold: number;
+        usesDefaultThreshold: boolean;
+        status: InventoryAlertStatus;
+    }>;
+}) {
+    const stockOnHand = item.locations.reduce((total, level) => total + level.stockOnHand, 0);
+    const stockAllocated = item.locations.reduce((total, level) => total + level.stockAllocated, 0);
+    const stockAvailable = stockOnHand - stockAllocated;
+    const status: InventoryAlertStatus =
+        item.locations.length === 0 || stockAvailable <= 0
+            ? 'OUT_OF_STOCK'
+            : item.locations.some(level => level.status !== 'NORMAL')
+              ? 'LOW_STOCK'
+              : 'NORMAL';
+    return { ...item, stockOnHand, stockAllocated, stockAvailable, status };
+}
+
+function inventoryAlertStatus(available: number, threshold: number): InventoryAlertStatus {
+    return available <= 0 ? 'OUT_OF_STOCK' : available <= threshold ? 'LOW_STOCK' : 'NORMAL';
+}
 
 @Injectable()
 export class CatalogOperationsService {
@@ -399,9 +513,9 @@ export class CatalogOperationsService {
         };
     }
 
-    async exportRows(ctx: RequestContext, skip = 0, take = 500) {
+    async exportRows(ctx: RequestContext, skip = 0, take = 500, strictChannelLocations = false) {
         const safeTake = Math.min(Math.max(take, 1), 500);
-        const allowedLocations = await this.stockLocations(ctx);
+        const allowedLocations = await this.stockLocations(ctx, !strictChannelLocations);
         const allowedStockLocationIds = new Set(allowedLocations.map(location => String(location.id)));
         const locationNameById = new Map(
             allowedLocations.map(location => [String(location.id), location.name]),
@@ -473,6 +587,7 @@ export class CatalogOperationsService {
                         productId: String(product.id),
                         variantId: String(variant.id),
                         productName: translation?.name ?? variant.name ?? product.name ?? '',
+                        variantName: variant.name ?? '',
                         channelCode: ctx.channel.code,
                         description: translation?.description ?? product.description ?? '',
                         fulfillmentType:
@@ -495,6 +610,7 @@ export class CatalogOperationsService {
                         tags: facetValueNames(product, 'catalog-tag', ctx.languageCode),
                         productEnabled: Boolean(product.enabled),
                         variantEnabled: Boolean(variant.enabled),
+                        trackInventory: variant.trackInventory,
                         systemCreatedAt: product.createdAt,
                         sourceCreatedAt: nullableDateValue(productFields.sourceCreatedAt),
                         supplierName: supplierByVariant.get(String(variant.id))?.name ?? null,
@@ -560,6 +676,54 @@ export class CatalogOperationsService {
                     },
                 ];
             }),
+        };
+    }
+
+    async inventoryAlertOverview(ctx: RequestContext) {
+        const rows: InventoryAlertSourceRow[] = [];
+        let skip = 0;
+        let totalItems = 0;
+        do {
+            const page = await this.exportRows(ctx, skip, 500, true);
+            totalItems = page.totalItems;
+            rows.push(...(page.items as InventoryAlertSourceRow[]));
+            const scannedItems = page.scannedItems ?? page.items.length;
+            if (scannedItems === 0) break;
+            skip += scannedItems;
+        } while (skip < totalItems);
+        return buildInventoryAlertOverview(rows, ctx.channel.trackInventory);
+    }
+
+    async updateInventoryThreshold(ctx: RequestContext, input: UpdateCatalogInventoryThresholdInput) {
+        const channelStockLocations = await this.stockLocations(ctx, false);
+        if (!channelStockLocations.some(location => location.id === String(input.stockLocationId))) {
+            throw new UserInputError('所选库存点不属于当前店铺');
+        }
+        const variant = await this.connection.getEntityOrThrow(ctx, ProductVariant, input.productVariantId, {
+            channelId: ctx.channelId,
+        });
+        const stockLevel = await this.connection.getRepository(ctx, StockLevel).findOne({
+            where: { productVariantId: variant.id, stockLocationId: input.stockLocationId },
+        });
+        if (!stockLevel) throw new UserInputError('该 SKU 未关联所选库存点');
+
+        const repository = this.connection.getRepository(ctx, InventoryPolicy);
+        const existing = await repository.findOne({
+            where: { variantId: variant.id, stockLocationId: input.stockLocationId },
+        });
+        const threshold = input.threshold ?? null;
+        await this.savePolicy(
+            ctx,
+            variant.id,
+            input.stockLocationId,
+            threshold,
+            existing?.maximumStock ?? null,
+        );
+        return {
+            productVariantId: String(variant.id),
+            stockLocationId: String(input.stockLocationId),
+            replenishmentThreshold: threshold ?? DEFAULT_REPLENISHMENT_THRESHOLD,
+            usesDefaultThreshold: threshold == null,
         };
     }
 
@@ -950,7 +1114,10 @@ export class CatalogOperationsService {
         return repository.save(policy);
     }
 
-    async stockLocations(ctx: RequestContext): Promise<Array<{ id: string; name: string }>> {
+    async stockLocations(
+        ctx: RequestContext,
+        allowUnassignedFallback = true,
+    ): Promise<Array<{ id: string; name: string }>> {
         const locations = await this.connection
             .getRepository(ctx, StockLocation)
             .createQueryBuilder('location')
@@ -962,6 +1129,7 @@ export class CatalogOperationsService {
         if (locations.length > 0) {
             return locations.map(location => ({ id: String(location.id), name: location.name }));
         }
+        if (!allowUnassignedFallback) return [];
         const fallbackLocations = await this.connection
             .getRepository(ctx, StockLocation)
             .find({ order: { name: 'ASC' } });

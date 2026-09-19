@@ -39,6 +39,7 @@ import {
     ResolveCatalogImportRowsInput,
     SaveCatalogProductInput,
     SaveInventoryLotInput,
+    UpdateCatalogInventoryThresholdInput,
     UpdateCatalogSupplierInput,
     UpdateCatalogVariantOperationsInput,
 } from './types';
@@ -162,6 +163,12 @@ export class CatalogManagementAdminResolver {
     }
 
     @Query()
+    @Allow(Permission.ReadProduct)
+    catalogInventoryAlertOverview(@Ctx() ctx: RequestContext) {
+        return this.operations.inventoryAlertOverview(ctx);
+    }
+
+    @Query()
     @Allow(manageCatalogSupplierPermission.Read, manageCatalogImportPermission.Read)
     catalogSuppliers(@Ctx() ctx: RequestContext, @Args('options') options?: CatalogSupplierListOptions) {
         return this.suppliers.findAll(ctx, options ?? {});
@@ -245,6 +252,15 @@ export class CatalogManagementAdminResolver {
         @Args('input') input: UpdateCatalogVariantOperationsInput,
     ) {
         return this.operations.updateVariant(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(manageCatalogOperationsPermission.Update, manageCatalogImportPermission.Update)
+    updateCatalogInventoryThreshold(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: UpdateCatalogInventoryThresholdInput,
+    ) {
+        return this.operations.updateInventoryThreshold(ctx, input);
     }
 
     @Mutation()
