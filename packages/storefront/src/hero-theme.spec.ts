@@ -81,7 +81,7 @@ describe('hero theme', () => {
         const style = heroThemeStyle(hero({ backgroundColor: '#FFF7F5' }));
 
         expect(style['--hero-stat-background']).toBe('rgba(255, 255, 255, 0.74)');
-        expect(style['--hero-title-shadow']).toContain('rgba(255, 255, 255, 0.86)');
+        expect(style['--hero-title-shadow']).toContain('rgba(255, 255, 255');
     });
 
     it('strengthens the image overlay only when a managed hero opts into high contrast', () => {

@@ -3,7 +3,7 @@ import type { MouseEventHandler, ReactNode } from 'react';
 
 import { normalizedHeroThemePreset } from '../content-visuals';
 
-import { heroThemeStyle, heroUsesImageOverlay, type HeroThemeData } from './hero-theme';
+import { heroThemeStyle, heroUsesImageOverlay, isLightColor, type HeroThemeData } from './hero-theme';
 import { useImageTone } from './image-tone';
 
 export interface HeroSceneData extends HeroThemeData {
@@ -39,7 +39,16 @@ export function HeroScene({
     const body = content.body.trim();
     const ctaLabel = content.ctaLabel.trim();
     const resolvedImageUrl = imageUrl ?? content.imageUrl ?? null;
-    const imageTone = useImageTone(resolvedImageUrl);
+    // Compute context-aware fallback for when CORS prevents canvas sampling:
+    // If the admin set dark text or a light background, we must assume light tone.
+    const HEX = /^#[0-9a-f]{6}$/i;
+    const rawText = typeof content.textColor === 'string' ? content.textColor.trim() : '';
+    const rawBg = typeof content.backgroundColor === 'string' ? content.backgroundColor.trim() : '';
+    const contextFallbackTone: 'light' | 'dark' =
+        (HEX.test(rawText) && !isLightColor(rawText)) || (HEX.test(rawBg) && isLightColor(rawBg))
+            ? 'light'
+            : 'dark';
+    const imageTone = useImageTone(resolvedImageUrl, contextFallbackTone);
     const adaptiveStyle = heroThemeStyle(content, imageTone);
 
     return (
