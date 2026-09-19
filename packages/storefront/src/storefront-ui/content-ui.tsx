@@ -53,14 +53,14 @@ export function BrandLogo({ url, name, className }: { url: string | null; name: 
 
     if (!responsiveSource) {
         return (
-            <span className={className} aria-hidden="true">
+            <span className={`${className} is-brand-fallback`} aria-hidden="true">
                 <Store size={24} />
             </span>
         );
     }
 
     return (
-        <span className={className}>
+        <span className={`${className} is-brand-image`}>
             <SafeImage
                 src={sourceUrl ?? ''}
                 imageKind="thumbnail"
