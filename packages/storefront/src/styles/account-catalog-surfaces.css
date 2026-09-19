@@ -24,6 +24,18 @@
     height: 100%;
     object-fit: cover;
 }
+.account-hero > .account-hero-art::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        180deg,
+        rgba(15, 23, 42, 0.16) 0%,
+        rgba(15, 23, 42, 0.35) 42%,
+        rgba(15, 23, 42, 0.65) 100%
+    );
+    pointer-events: none;
+}
 .account-hero-content {
     position: relative;
     min-width: 0;
@@ -33,19 +45,29 @@
     top: -16px;
     right: -8px;
     display: grid;
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     place-items: center;
     padding: 0;
-    border: 0;
+    border: 1px solid rgba(255, 253, 248, 0.22);
     border-radius: 50%;
-    background: transparent;
-    color: inherit;
+    background: rgba(255, 253, 248, 0.16);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #fffdf8;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    transition: transform 140ms ease, background-color 140ms ease;
 }
 .account-hero-settings svg {
-    width: 23px;
-    height: 23px;
+    width: 22px;
+    height: 22px;
     stroke-width: 1.8;
+}
+.account-hero-settings:hover {
+    background: rgba(255, 253, 248, 0.28);
+}
+.account-hero-settings:active {
+    transform: scale(0.95);
 }
 .account-hero-identity {
     display: flex;
@@ -91,6 +113,7 @@
     font-size: 20px;
     font-weight: 650;
     line-height: 1.4;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 .account-hero-profile {
     display: inline-flex;
@@ -113,10 +136,11 @@
 }
 .account-hero-meta {
     margin-top: 6px;
-    color: rgba(255, 253, 248, 0.82);
+    color: rgba(255, 253, 248, 0.88);
     font-size: 12px;
     line-height: 1.6;
     overflow-wrap: anywhere;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 .account-hero-assets {
     gap: 6px;
@@ -139,33 +163,52 @@
 .account-hero-asset-icon {
     position: relative;
     display: grid;
-    width: 32px;
-    height: 32px;
+    width: 38px;
+    height: 38px;
     place-items: center;
-    color: var(--oriental-gold, #fffdf8);
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+    border-radius: 50%;
+    background: rgba(255, 253, 248, 0.16);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 253, 248, 0.22);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+    color: #fffdf8;
+    transition: transform 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
 }
 .account-hero-asset-icon svg {
-    width: 26px;
-    height: 26px;
-    stroke-width: 1.8;
+    width: 22px;
+    height: 22px;
+    stroke-width: 2;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+.account-hero-asset:hover .account-hero-asset-icon {
+    background: rgba(255, 253, 248, 0.28);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.24);
+}
+.account-hero-asset:active .account-hero-asset-icon {
+    transform: scale(0.94);
+    background: rgba(255, 253, 248, 0.22);
 }
 .account-hero-asset-label {
     max-width: 100%;
     color: inherit;
     font-size: 12px;
+    font-weight: 500;
     line-height: 1.5;
     overflow-wrap: anywhere;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 .account-hero-unread {
     position: absolute;
-    top: 0;
-    right: 0;
-    width: 6px;
-    height: 6px;
-    border: 1px solid #fff;
+    top: -1px;
+    right: -1px;
+    width: 8px;
+    height: 8px;
+    border: 1.5px solid #fff;
     border-radius: 50%;
     background: var(--accent);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 .account-hero-guest .account-hero-identity {
     max-width: 100%;
@@ -198,7 +241,7 @@
     color: #fffdf8;
 }
 .account-hero
-    :is(.account-hero-asset, .account-hero-settings, .account-hero-profile, .account-hero-register):hover {
+    :is(.account-hero-profile, .account-hero-register):hover {
     background: rgb(255 255 255 / 18%);
 }
 .account-hero button:focus-visible {
