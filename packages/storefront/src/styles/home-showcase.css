@@ -2940,7 +2940,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     background: var(--soft);
-    border-right: 1px solid var(--line);
+    border-right: 0;
     display: flex;
     flex-direction: column;
     padding: 0 0 12px;
@@ -2977,7 +2977,6 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         border-color 140ms ease,
         color 140ms ease,
         box-shadow 140ms ease;
-    border-left: 3px solid transparent;
 }
 
 .subcat-side-item:hover:not(.is-active) {
@@ -2986,11 +2985,10 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 }
 
 .subcat-side-item.is-active {
-    background: var(--paper);
+    background: #ffffff;
     color: var(--accent);
     font-weight: 700;
-    border-left-color: var(--accent);
-    box-shadow: var(--shadow-sm);
+    box-shadow: none;
 }
 
 .subcat-side-all {

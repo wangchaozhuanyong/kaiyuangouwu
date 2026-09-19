@@ -146,6 +146,17 @@ describe('category navigation responsive spacing', () => {
         expect(stylesheet).toMatch(/\.category-results \.sort-bar\s*\{[^}]*height:\s*44px;/);
     });
 
+    it('connects the active mobile subcategory to the product area without vertical dividers', () => {
+        const sidebarRule = stylesheet.match(/\.category-subcat-sidebar\s*\{([^}]*)\}/)?.[1] ?? '';
+        const itemRule = stylesheet.match(/\.subcat-side-item\s*\{([^}]*)\}/)?.[1] ?? '';
+        const activeItemRule = stylesheet.match(/\.subcat-side-item\.is-active\s*\{([^}]*)\}/)?.[1] ?? '';
+
+        expect(sidebarRule).toMatch(/border-right:\s*0;/);
+        expect(itemRule).not.toMatch(/border-left/);
+        expect(activeItemRule).toMatch(/background:\s*#ffffff;/);
+        expect(activeItemRule).toMatch(/box-shadow:\s*none;/);
+    });
+
     it('keeps the search bar full width on narrow mobile screens', () => {
         expect(stylesheet).toMatch(
             /@media \(max-width:\s*370px\)[\s\S]*?\.category-topbar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*gap:\s*0;/,
