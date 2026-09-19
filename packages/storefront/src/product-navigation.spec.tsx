@@ -229,6 +229,34 @@ describe('product image navigation layers', () => {
         });
     });
 
+    it('renders clean flush-left fulfillment badge without pill background in ProductCard', () => {
+        const physicalProduct: Product = {
+            ...digitalProduct,
+            variants: [
+                {
+                    ...digitalProduct.variants[0],
+                    customFields: {
+                        fulfillmentType: 'physical',
+                        digitalDeliveryMode: undefined,
+                    },
+                },
+            ],
+        };
+        const markup = renderToStaticMarkup(
+            <ProductCard
+                product={physicalProduct}
+                market={market}
+                locale={market.locale}
+                language="zh"
+                onOpen={vi.fn()}
+            />,
+        );
+
+        expect(markup).toContain('text-[#0284c7]');
+        expect(markup).not.toContain('bg-[var(--accent-soft)]');
+        expect(markup).toContain('实物商品 · 需要配送');
+    });
+
     it('does not cover manual digital product images with a delivery badge', () => {
         const manualServiceProduct: Product = {
             ...digitalProduct,
