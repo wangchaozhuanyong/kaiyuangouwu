@@ -1282,6 +1282,7 @@
     border-bottom: 1px solid #edf0f3;
     display: grid;
     grid-template-columns: 72px minmax(0, 1fr);
+    align-items: center;
     gap: 10px;
     font-size: 11px;
     line-height: 1.45;

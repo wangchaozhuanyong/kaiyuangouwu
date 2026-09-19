@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { readStorefrontStylesheet } from '../test-stylesheet';
+
 import { CouponQueryBoundary, couponTabCountDisplay } from './coupon-center-page';
 
 describe('coupon center query states', () => {
@@ -52,5 +54,15 @@ describe('coupon center query states', () => {
 
         expect(markup).toContain('正在加载优惠券数据');
         expect(markup).not.toContain('暂无使用记录');
+    });
+});
+
+describe('coupon center instruction layout', () => {
+    it('vertically aligns each instruction label with its value', () => {
+        const stylesheet = readStorefrontStylesheet();
+
+        expect(stylesheet).toMatch(
+            /\.coupon-center-instructions dl > div\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*72px minmax\(0, 1fr\);[^}]*align-items:\s*center;/,
+        );
     });
 });
