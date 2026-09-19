@@ -177,6 +177,45 @@ describe('unified cart controller', () => {
         expect(controller.getSnapshot().confirmed?.lines[0].quantity).toBe(21);
     });
 
+    it('sends Buy now immediately instead of waiting for the edit batching window', async () => {
+        vi.useFakeTimers();
+        const { controller, apply } = await setup();
+        const started = deferred<void>();
+        apply.mockImplementationOnce(async command => {
+            started.resolve();
+            return result(command, snapshot());
+        });
+
+        const pending = controller.execute({
+            buyNow: { productVariantId: '1', quantity: 1 },
+        });
+
+        await started.promise;
+        expect(vi.getTimerCount()).toBe(0);
+        expect(apply).toHaveBeenCalledTimes(1);
+        await pending;
+    });
+
+    it('flushes a queued edit before an immediate Buy now command without losing command order', async () => {
+        vi.useFakeTimers();
+        const { controller, apply } = await setup();
+
+        const edit = controller.execute({ changes: { lines: [{ lineId: '1', quantity: 3 }] } });
+        const buyNow = controller.execute({ buyNow: { productVariantId: '1', quantity: 1 } });
+
+        await Promise.all([edit, buyNow]);
+        expect(apply).toHaveBeenCalledTimes(2);
+        expect(apply.mock.calls[0][0]).toMatchObject({
+            expectedRevision: 0,
+            changes: { lines: [{ lineId: '1', quantity: 3 }] },
+        });
+        expect(apply.mock.calls[1][0]).toMatchObject({
+            expectedRevision: 1,
+            buyNow: { productVariantId: '1', quantity: 1 },
+        });
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
     it('preserves a reversal during a slow request and permits only one in-flight write', async () => {
         vi.useFakeTimers();
         const { controller, apply } = await setup();

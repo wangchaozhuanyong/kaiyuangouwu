@@ -1,6 +1,28 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeDeliveryEmail, orderConfirmationRecipient } from './order-confirmation-email';
+import {
+    deliveryOnlyEmailHandlers,
+    normalizeDeliveryEmail,
+    orderConfirmationRecipient,
+} from './order-confirmation-email';
+
+describe('customer order email policy', () => {
+    it('removes the generic paid-order email and preserves delivery and account mail', () => {
+        const handlers = [
+            { type: 'order-confirmation' },
+            { type: 'auto-card-delivery' },
+            { type: 'manual-digital-delivery' },
+            { type: 'email-verification' },
+        ];
+
+        expect(deliveryOnlyEmailHandlers(handlers).map(handler => handler.type)).toEqual([
+            'auto-card-delivery',
+            'manual-digital-delivery',
+            'email-verification',
+        ]);
+        expect(handlers).toHaveLength(4);
+    });
+});
 
 describe('digital order confirmation email', () => {
     it('normalizes and uses the order-level delivery email for a digital order', () => {

@@ -1,5 +1,7 @@
 import { type CSSProperties, type ReactNode, useState } from 'react';
 
+import { type ImageTone, useImageTone } from './image-tone';
+
 export interface AuthVisualData {
     imageUrl?: string | null;
     title: string;
@@ -23,19 +25,25 @@ export function readableColor(background: string): string {
     return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722 > 0.179 ? '#172033' : '#ffffff';
 }
 
-/** Explicit block colors inherit from the current store when left unset. */
-export function authVisualStyle(content?: AuthVisualData): CSSProperties {
+/** Explicit block colors inherit from the current store when left unset; auto-adapts to image tone. */
+export function authVisualStyle(content?: AuthVisualData, imageTone?: ImageTone): CSSProperties {
     const background = configuredColor(content?.backgroundColor);
     const accent = configuredColor(content?.settings?.accentColor);
+    const configuredText = configuredColor(content?.textColor);
+    const isLightTone =
+        imageTone === 'light' || (background ? readableColor(background) === '#172033' : false);
+
+    const defaultForeground = isLightTone ? '#0f172a' : '#ffffff';
+    const foreground = configuredText ?? (background ? readableColor(background) : defaultForeground);
+    const secondaryColor = isLightTone ? '#334155' : 'rgba(239, 247, 255, 0.90)';
+
     return {
         '--auth-visual-background':
-            background ?? 'var(--auth-store-background, var(--skin-background, #f1f5f9))',
-        '--auth-visual-foreground':
-            configuredColor(content?.textColor) ??
-            (background
-                ? readableColor(background)
-                : 'var(--auth-store-foreground, var(--skin-foreground, #172033))'),
-        '--auth-accent': accent ?? 'var(--accent, #635bff)',
+            background ??
+            (isLightTone ? '#f8fafc' : 'var(--auth-store-background, var(--skin-background, #f1f5f9))'),
+        '--auth-visual-foreground': foreground,
+        '--auth-hero-secondary-text': secondaryColor,
+        '--auth-accent': accent ?? (isLightTone ? '#2563eb' : 'var(--accent, #635bff)'),
         '--auth-button-foreground': accent ? readableColor(accent) : 'var(--accent-foreground, #ffffff)',
     } as CSSProperties;
 }
@@ -112,12 +120,14 @@ export function AuthVisual({
     header?: ReactNode;
 }) {
     const source = authOriginalImageUrl(content.imageUrl ?? '');
+    const imageTone = useImageTone(source);
     const items = content.items.filter(item => item.enabled !== false && item.label.trim());
     return (
         <section
             className="store-auth-visual"
+            data-image-tone={imageTone}
             style={{
-                ...authVisualStyle(content),
+                ...authVisualStyle(content, imageTone),
                 minWidth: 0,
                 background: 'var(--auth-visual-background)',
                 color: 'var(--auth-visual-foreground)',

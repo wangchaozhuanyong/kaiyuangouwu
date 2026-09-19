@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { ShopApi, ShopApiError } from '../api';
 import { CartController } from '../cart/cart-controller';
 import { quantityStockMessage } from '../product-availability';
+import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { ActiveCustomer, Order, OrderSummary, ProductVariant, StorefrontCart } from '../types';
 
@@ -130,6 +131,7 @@ export function useStorefrontCartActions({
             setCartLoading(true);
             setCartError(null);
             try {
+                void preloadStorefrontRouteComponent('purchase');
                 const result = await cartController.execute({
                     buyNow: { productVariantId: variant.id, quantity: 1 },
                 });

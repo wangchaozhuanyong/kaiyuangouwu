@@ -20,6 +20,7 @@ import {
     authOriginalImageUrl,
     authVisualStyle,
 } from '../../storefront-content-plugin/src/shared/auth-visual';
+import { useImageTone } from '../../storefront-content-plugin/src/shared/image-tone';
 
 import { ShopApi, ShopApiError } from './api';
 import {
@@ -1229,16 +1230,18 @@ function AuthLayout({
           } as CSSProperties)
         : undefined;
     const managedHeroSrc = heroContent?.imageUrl?.trim();
+    const heroImageTone = useImageTone(managedHeroSrc);
     const hasManagedHero = Boolean(authVisualVariant && heroContent);
 
     return (
         <main
             className={`page subpage auth-page auth-page-${heroVariant}${hasManagedHero ? ' auth-page-managed' : ''}`}
             aria-label={title}
-            style={authVisualStyle(heroContent)}
+            style={authVisualStyle(heroContent, heroImageTone)}
         >
             <section
                 className={`auth-hero auth-hero-${heroVariant}${hasManagedHero ? ' auth-hero-managed' : ''}`}
+                data-image-tone={heroImageTone}
                 style={heroStyle}
             >
                 {managedHeroSrc && (

@@ -1,9 +1,8 @@
 // Release alignment: perf-unified-architecture-20260911
 import { createBrowserHistory, createRouter, useRouterState } from '@tanstack/react-router';
-import { useContext } from 'react';
 
 import { preloadStorefrontRouteComponent } from './route-component-preload';
-import { PageSkeleton, pageSkeletonVariantForPathname, RouteTransitionLoader } from './route-loading';
+import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { routeTree } from './routeTree.gen';
 import {
     getStorefrontScrollRestorationKey,
@@ -11,7 +10,6 @@ import {
     routeFromRouterLocation,
     routeHref,
 } from './storefront-router';
-import { StorefrontContext } from './StorefrontContext';
 
 function parseStorefrontSearch(searchString: string): Record<string, string> {
     return Object.fromEntries(new URLSearchParams(searchString.replace(/^\?/, '')));
@@ -53,17 +51,9 @@ router.subscribe('onBeforeNavigate', event => {
 });
 
 function StorefrontPendingPage() {
-    const storefront = useContext(StorefrontContext);
-    const language = typeof storefront?.language === 'string' ? storefront.language : undefined;
-    const storefrontName =
-        typeof storefront?.storefrontName === 'string' ? storefront.storefrontName : undefined;
-    const logoUrl = typeof storefront?.logoUrl === 'string' ? storefront.logoUrl : null;
     const location = useRouterState({ select: s => s.location });
     const variant = pageSkeletonVariantForPathname(location.pathname);
-    if (variant === 'catalog') {
-        return <PageSkeleton variant="catalog" language={language} root />;
-    }
-    return <RouteTransitionLoader language={language} logoUrl={logoUrl} storefrontName={storefrontName} />;
+    return <PageSkeleton variant={variant} root />;
 }
 
 declare module '@tanstack/react-router' {

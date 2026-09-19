@@ -27,6 +27,7 @@ import type { RouteState } from '../storefront-router';
 import { ShopApi } from '../api';
 import accountRefractionImage from '../assets/ui/account-refraction.webp';
 import { useDesktopLayout } from '../desktop-layout';
+import { useImageTone } from '../hero-theme';
 import { compactUiCopy, languageCodeFor } from '../i18n';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
 import {
@@ -204,6 +205,8 @@ export function AccountPage() {
             />
         );
 
+    const accountHeroTone = useImageTone(accountHeroImageUrl);
+
     return (
         <main
             className="page account-page lg:grid lg:content-start lg:gap-4 lg:pb-8 lg:pt-[88px]"
@@ -211,6 +214,7 @@ export function AccountPage() {
         >
             <section
                 className={`account-hero lg:col-span-full ${accountHeroImageUrl ? 'has-custom-background' : ''}`}
+                data-image-tone={accountHeroTone}
                 aria-labelledby={customer ? undefined : 'guest-account-title'}
             >
                 <SafeImage

@@ -12,6 +12,7 @@ import {
 import { HeroScene, type HeroSceneData } from '../../../../storefront-content-plugin/src/shared/hero-scene';
 import heroSceneCss from '../../../../storefront-content-plugin/src/shared/hero-scene.css?inline';
 import { heroThemeStyle } from '../../../../storefront-content-plugin/src/shared/hero-theme';
+import { useImageTone } from '../../../../storefront-content-plugin/src/shared/image-tone';
 import {
     normalizeStorefrontAssetUrl,
     responsiveImageSources,
@@ -227,12 +228,14 @@ function HeroBlockPreview({
     const frameHeight = viewport === 'desktop' ? 400 : 235;
     const frameScale = Math.min(1, previewWidth / frameWidth);
     const imageUrl = block.imageAsset?.preview ?? block.imageUrl ?? '';
+    const imageTone = useImageTone(imageUrl);
     const content: HeroSceneData = {
         ...blockTranslation(block, language),
         backgroundColor: block.backgroundColor,
         textColor: block.textColor,
         settings: block.settings,
         targetType: block.targetType,
+        imageUrl,
         items: block.items.map(item => ({ ...itemTranslation(item, language), enabled: item.enabled })),
     };
     const brandingQuery = useQuery<{
@@ -274,8 +277,9 @@ function HeroBlockPreview({
                 <body style={style}>
                     <section
                         className="hero"
+                        data-image-tone={imageTone}
                         style={{
-                            ...heroThemeStyle(content),
+                            ...heroThemeStyle(content, imageTone),
                             margin: 0,
                             width: viewport === 'desktop' ? 850 : '100%',
                             minHeight: viewport === 'desktop' ? 360 : 195,
@@ -283,6 +287,7 @@ function HeroBlockPreview({
                     >
                         <HeroScene
                             content={content}
+                            imageUrl={imageUrl}
                             imageLabel={content.title}
                             image={
                                 imageUrl ? (
@@ -418,9 +423,11 @@ function AuthBlockPreview({
     );
     const background = configuredColor(oriental ? undefined : branding?.backgroundColor);
     const accent = configuredColor(oriental ? undefined : branding?.primaryColor);
+    const authImageUrl = block.imageAsset?.preview ?? block.imageUrl;
+    const authImageTone = useImageTone(authImageUrl);
     const content: AuthVisualData = {
         ...blockTranslation(block, language),
-        imageUrl: block.imageAsset?.preview ?? block.imageUrl,
+        imageUrl: authImageUrl,
         backgroundColor: block.backgroundColor,
         textColor: block.textColor,
         settings: block.settings,
@@ -459,9 +466,10 @@ function AuthBlockPreview({
                     <div style={{ height: previewSize.height * previewScale }}>
                         <div
                             ref={previewCanvas}
+                            data-image-tone={authImageTone}
                             style={
                                 {
-                                    ...authVisualStyle(content),
+                                    ...authVisualStyle(content, authImageTone),
                                     '--auth-store-background':
                                         background ?? (oriental ? '#f6f2ea' : '#f1f5f9'),
                                     '--auth-store-foreground': background

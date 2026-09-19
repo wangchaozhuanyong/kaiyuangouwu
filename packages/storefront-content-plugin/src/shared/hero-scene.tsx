@@ -3,7 +3,8 @@ import type { MouseEventHandler, ReactNode } from 'react';
 
 import { normalizedHeroThemePreset } from '../content-visuals';
 
-import { heroUsesImageOverlay, type HeroThemeData } from './hero-theme';
+import { heroThemeStyle, heroUsesImageOverlay, type HeroThemeData } from './hero-theme';
+import { useImageTone } from './image-tone';
 
 export interface HeroSceneData extends HeroThemeData {
     title: string;
@@ -11,6 +12,7 @@ export interface HeroSceneData extends HeroThemeData {
     body: string;
     ctaLabel: string;
     targetType: string;
+    imageUrl?: string | null;
     items: Array<{ label: string; description: string; enabled?: boolean }>;
 }
 
@@ -19,12 +21,14 @@ export function HeroScene({
     content,
     image,
     imageLabel,
+    imageUrl,
     onImageOpen,
     onOpen,
 }: {
     content: HeroSceneData;
     image: ReactNode;
     imageLabel: string;
+    imageUrl?: string | null;
     onImageOpen?: MouseEventHandler<HTMLButtonElement>;
     onOpen?: () => void;
 }) {
@@ -34,8 +38,12 @@ export function HeroScene({
     const subtitle = content.subtitle.trim();
     const body = content.body.trim();
     const ctaLabel = content.ctaLabel.trim();
+    const resolvedImageUrl = imageUrl ?? content.imageUrl ?? null;
+    const imageTone = useImageTone(resolvedImageUrl);
+    const adaptiveStyle = heroThemeStyle(content, imageTone);
+
     return (
-        <>
+        <div className="hero-scene-wrapper" data-image-tone={imageTone} style={adaptiveStyle}>
             <button
                 type="button"
                 className="hero-rich-image-link"
@@ -78,6 +86,6 @@ export function HeroScene({
                     </button>
                 )}
             </div>
-        </>
+        </div>
     );
 }

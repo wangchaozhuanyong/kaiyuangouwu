@@ -1482,7 +1482,13 @@ html[lang='en'] .quick-grid b {
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.08em;
-    opacity: 0.82;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    background: rgba(15, 23, 42, 0.68);
+    color: #ffffff;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .category-promotion-visual-copy strong {
@@ -2504,7 +2510,7 @@ html[lang='en'] .quick-grid b {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 2px;
     scroll-snap-align: start;
     transition:
         transform 140ms ease,
@@ -2516,8 +2522,8 @@ html[lang='en'] .quick-grid b {
 }
 
 .primary-category-image {
-    width: 40px;
-    height: 40px;
+    width: 48px;
+    height: 48px;
     overflow: hidden;
     border-radius: 8px;
     border: 1px solid rgba(0, 0, 0, 0.06);
@@ -2672,8 +2678,8 @@ html[lang='en'] .primary-categories button {
 }
 
 .primary-categories-all-icon {
-    width: 40px;
-    height: 40px;
+    width: 48px;
+    height: 48px;
     border-radius: 8px;
     border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line));
     background: color-mix(in srgb, var(--accent) 7%, var(--paper));

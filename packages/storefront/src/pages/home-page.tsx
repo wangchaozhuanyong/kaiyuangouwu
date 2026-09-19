@@ -37,7 +37,7 @@ import { ProductCard } from '../components/common/product-card';
 import { claimableCouponCampaigns } from '../coupon-center-state';
 import { useDesktopLayout } from '../desktop-layout';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
-import { heroThemeStyle } from '../hero-theme';
+import { heroThemeStyle, useImageTone } from '../hero-theme';
 import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-merchandising';
 import { homepageModuleEntries } from '../homepage-module-order';
 import { resolveManagedContentCopy } from '../managed-content-copy';
@@ -572,7 +572,8 @@ export function HomePage() {
             : undefined;
     const hero = managedHeroProduct;
     const heroImage = managedHero?.imageUrl ?? '';
-    const heroStyle = managedHero ? heroThemeStyle(managedHero) : undefined;
+    const heroImageTone = useImageTone(heroImage);
+    const heroStyle = managedHero ? heroThemeStyle(managedHero, heroImageTone) : undefined;
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
     const defaultNoticeItem: HomeNoticeItem = {
         id: 'default-notice',
@@ -839,28 +840,40 @@ export function HomePage() {
                 </button>
                 <div className="topbar-actions">
                     {currencySelectorEnabled && availableCurrencyCodes.length > 1 ? (
+                        <div className="topbar-capsule">
+                            <button
+                                className="currency-select"
+                                type="button"
+                                disabled={currencyLoading}
+                                onClick={() => setCurrencySheetOpen(true)}
+                                aria-label={isZh ? '选择显示币种' : 'Choose display currency'}
+                                title={isZh ? '选择显示币种' : 'Choose display currency'}
+                                aria-haspopup="dialog"
+                                aria-expanded={currencySheetOpen}
+                            >
+                                <span>{displayCurrencyCode}</span>
+                                <ChevronDown aria-hidden="true" />
+                            </button>
+                            <span className="topbar-capsule-divider" aria-hidden="true" />
+                            <button
+                                className="language-button"
+                                type="button"
+                                onClick={onToggleLanguage}
+                                aria-label={isZh ? '切换为英文' : 'Switch to Chinese'}
+                            >
+                                {isZh ? '中' : 'EN'}
+                            </button>
+                        </div>
+                    ) : (
                         <button
-                            className="currency-select"
+                            className="language-button"
                             type="button"
-                            disabled={currencyLoading}
-                            onClick={() => setCurrencySheetOpen(true)}
-                            aria-label={isZh ? '选择显示币种' : 'Choose display currency'}
-                            title={isZh ? '选择显示币种' : 'Choose display currency'}
-                            aria-haspopup="dialog"
-                            aria-expanded={currencySheetOpen}
+                            onClick={onToggleLanguage}
+                            aria-label={isZh ? '切换为英文' : 'Switch to Chinese'}
                         >
-                            <span>{displayCurrencyCode}</span>
-                            <ChevronDown aria-hidden="true" />
+                            {isZh ? '中' : 'EN'}
                         </button>
-                    ) : null}
-                    <button
-                        className="language-button"
-                        type="button"
-                        onClick={onToggleLanguage}
-                        aria-label={isZh ? '切换为英文' : 'Switch to Chinese'}
-                    >
-                        {isZh ? '中' : 'EN'}
-                    </button>
+                    )}
                     <NoticeButton language={language} onClick={onNotifications} />
                 </div>
             </header>
@@ -938,6 +951,7 @@ export function HomePage() {
                                 <section
                                     className={`hero${heroCount > 1 ? ' is-swipeable' : ''}`}
                                     style={{ ...heroStyle, order: homepageModuleOrder('HERO') }}
+                                    data-image-tone={heroImageTone}
                                     role="region"
                                     aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
                                     aria-roledescription={isZh ? '轮播' : 'carousel'}
@@ -974,6 +988,7 @@ export function HomePage() {
                                     {managedHero && (
                                         <HeroScene
                                             content={managedHero}
+                                            imageUrl={heroImage}
                                             imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${managedHero.title || hero?.name || storefrontName}`}
                                             onImageOpen={handleHeroImageOpen}
                                             onOpen={openActiveHero}

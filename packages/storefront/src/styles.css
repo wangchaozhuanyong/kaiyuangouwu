@@ -394,40 +394,25 @@ img {
 }
 
 .route-transition-mark {
-    width: 58px;
-    height: 58px;
+    width: 60px;
+    height: 60px;
     position: relative;
     display: grid;
     place-items: center;
-    border: 1px solid color-mix(in srgb, var(--brand-primary) 20%, var(--line));
-    border-radius: 18px;
-    background:
-        radial-gradient(circle at 32% 24%, rgba(34, 211, 238, 0.16), transparent 46%),
-        linear-gradient(145deg, #ffffff, #f7f5ff);
-    box-shadow: 0 12px 28px -18px rgba(99, 91, 255, 0.58);
+    border: none;
+    background: transparent;
 }
 
 .route-transition-mark::after {
-    content: '';
-    width: 8px;
-    height: 8px;
-    position: absolute;
-    right: -2px;
-    bottom: 8px;
-    border: 2px solid var(--paper);
-    border-radius: 50%;
-    background: var(--brand-accent);
-    box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.12);
-    animation: route-transition-pulse 1.2s ease-in-out infinite;
+    display: none;
 }
 
 .route-transition-mark img,
 .route-transition-placeholder {
-    width: 44px;
-    height: 34px;
+    width: 52px;
+    height: 52px;
     grid-area: 1 / 1;
     object-fit: contain;
-    filter: drop-shadow(0 3px 7px rgba(0, 102, 255, 0.2));
 }
 
 .route-transition-placeholder {
@@ -437,6 +422,7 @@ img {
 
 .route-transition-mark img {
     visibility: hidden;
+    border-radius: 12px;
 }
 
 .route-transition-mark.is-logo-ready img {
@@ -836,48 +822,6 @@ img {
     white-space: nowrap;
 }
 
-.topbar-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.currency-select {
-    width: auto;
-    min-width: 58px;
-    height: 44px;
-    padding: 0 6px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: #fff;
-    color: var(--ink);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    font-size: 12px;
-    font-weight: var(--font-weight-semibold);
-    line-height: 1;
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-.currency-select svg {
-    width: 14px;
-    height: 14px;
-    flex: none;
-}
-
-.currency-select:focus-visible {
-    outline: 2px solid rgba(15, 23, 42, 0.2);
-    outline-offset: 2px;
-}
-
-.currency-select:disabled {
-    cursor: wait;
-    opacity: 0.6;
-}
-
 .currency-sheet {
     max-height: min(70dvh, 420px);
 }
@@ -936,36 +880,6 @@ img {
     height: 18px;
     justify-self: end;
     stroke-width: 2.4;
-}
-
-.language-button,
-.notice-button {
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    border: 1px solid var(--line);
-    border-radius: 7px;
-    background: white;
-    display: grid;
-    place-items: center;
-    transition:
-        border-color 180ms ease,
-        background 180ms ease;
-}
-
-.language-button {
-    font-size: 13px;
-    font-weight: var(--font-weight-semibold);
-}
-
-.notice-button {
-    position: relative;
-}
-
-.language-button:hover,
-.notice-button:hover {
-    border-color: #cfd4d2;
-    background: #f7f8f8;
 }
 
 .notice-strip {

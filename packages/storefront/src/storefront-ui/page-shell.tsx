@@ -194,6 +194,7 @@ export function NoticeButton({ language, onClick }: { language: StorefrontLangua
             aria-label={language === 'zh' ? '通知' : 'Notifications'}
         >
             <Bell />
+            <span className="notice-badge" aria-hidden="true" />
         </button>
     );
 }
