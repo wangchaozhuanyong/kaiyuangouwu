@@ -39,6 +39,7 @@ export interface ProductDetailPageProps {
     language: StorefrontLanguage;
     storefrontName: string;
     logoUrl: string | null;
+    initialVariantId?: string;
     flashSaleItems: StorefrontFlashSaleItem[];
     couponCampaigns: StorefrontCouponCampaign[];
     customerCoupons: StoreCustomerCoupon[];
@@ -83,14 +84,24 @@ export function ProductDetailPage() {
         customerCoupons,
         addingVariantId,
         favorite,
+        initialVariantId,
         onAdd,
         onBuyNow,
         onFavorite,
         onNotify,
     } = ProductDetailPageContext.useValue();
     const isZh = language === 'zh';
-    const [variantId, setVariantId] = useState(product.variants[0]?.id ?? '');
+    const initialVariant =
+        (initialVariantId && product.variants.find(item => item.id === initialVariantId)) ||
+        product.variants[0];
+    const [variantId, setVariantId] = useState(initialVariant?.id ?? '');
     const [headerScrolled, setHeaderScrolled] = useState(false);
+
+    useEffect(() => {
+        if (initialVariantId && product.variants.some(item => item.id === initialVariantId)) {
+            setVariantId(initialVariantId);
+        }
+    }, [initialVariantId, product.id]);
     const variant = product.variants.find(item => item.id === variantId) ?? product.variants[0];
     const activeFlashItem = flashSaleItems.find(item => item.productVariantId === variant?.id);
     const displayedPrice = activeFlashItem?.salePrice ?? variant?.priceWithTax ?? null;

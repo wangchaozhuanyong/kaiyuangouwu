@@ -33,6 +33,7 @@ html[data-storefront-preset='modern-oriental'] {
     --radius-md: 12px;
     --shadow-sm: 0 2px 6px rgb(62 45 25 / 4%);
     --shadow-md: 0 8px 24px rgb(62 45 25 / 7%);
+    --account-hero-bg: linear-gradient(135deg, #1c2b3a 0%, #293c4d 100%);
     /* Tailwind controls share the same semantic palette, including focus states. */
     --color-blue-50: #faf0eb;
     --color-blue-100: #f4e5df;
@@ -242,6 +243,6 @@ html[data-storefront-preset='modern-oriental'] .auth-route-tabs > button[aria-cu
 }
 
 html[data-storefront-preset='modern-oriental']
-    :is(.section-header h2, .subpage-header h1, .store-auth-copy h2) {
+    :is(.section-header h2, .subpage-header h1, .store-auth-copy h2, .brand strong, .all-primary-categories h2) {
     font-family: var(--font-display);
 }

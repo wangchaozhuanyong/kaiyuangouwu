@@ -870,6 +870,20 @@ export interface StorefrontFlashSaleItem {
     imageUrl: string | null;
 }
 
+export interface StorefrontFlashSaleProduct {
+    productId: string;
+    productVariantId: string;
+    productName: string;
+    variantName: string;
+    salePrice: number;
+    originalPrice: number;
+    currencyCode: string;
+    imageUrl: string | null;
+    hasMultipleVariants: boolean;
+    hasPriceRange: boolean;
+    variantCount: number;
+}
+
 export interface StorefrontFlashSale {
     id: string;
     startsAt: string | null;

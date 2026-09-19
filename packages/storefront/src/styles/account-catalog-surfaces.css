@@ -1,6 +1,7 @@
 /* The account foreground palette stays fixed; managed content can replace only the artwork. */
 .page.account-page {
-    background: #fafafd;
+    background: var(--bg);
+    color: var(--text);
 }
 .account-hero {
     position: relative;
@@ -8,8 +9,8 @@
     padding: 28px 18px 26px;
     overflow: hidden;
     border-radius: 0 0 50% 50% / 0 0 12px 12px;
-    background-color: #a8a8ee;
-    color: #18145b;
+    background: var(--account-hero-bg, linear-gradient(135deg, #1c2b3a 0%, #293c4d 100%));
+    color: #fffdf8;
 }
 .account-hero > .account-hero-art {
     position: absolute;
@@ -69,12 +70,14 @@
     height: 64px;
     place-items: center;
     overflow: hidden;
-    border: 2px solid rgb(255 255 255 / 90%);
+    border: 2px solid rgba(255, 253, 248, 0.85);
     border-radius: 50%;
-    background: #dddafb;
-    color: #312679;
+    background: rgba(255, 253, 248, 0.15);
+    color: #fffdf8;
     font-size: 26px;
     font-weight: 600;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 .account-hero-details {
     flex: 1;
@@ -110,7 +113,7 @@
 }
 .account-hero-meta {
     margin-top: 6px;
-    color: #302967;
+    color: rgba(255, 253, 248, 0.82);
     font-size: 12px;
     line-height: 1.6;
     overflow-wrap: anywhere;
@@ -139,8 +142,8 @@
     width: 32px;
     height: 32px;
     place-items: center;
-    color: #fff;
-    filter: drop-shadow(0 1px 1px rgb(95 70 166 / 38%));
+    color: var(--oriental-gold, #fffdf8);
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
 }
 .account-hero-asset-icon svg {
     width: 26px;
@@ -162,7 +165,7 @@
     height: 6px;
     border: 1px solid #fff;
     border-radius: 50%;
-    background: #654bd3;
+    background: var(--accent);
 }
 .account-hero-guest .account-hero-identity {
     max-width: 100%;
@@ -184,28 +187,29 @@
     font-weight: 600;
 }
 .account-hero-signin {
-    border: 1px solid #443094;
-    background: #443094;
-    color: #fff;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: var(--accent-foreground, #fff);
+    box-shadow: var(--accent-shadow);
 }
 .account-hero-register {
-    border: 1px solid #615397;
-    background: rgb(255 255 255 / 22%);
-    color: #221956;
+    border: 1px solid rgba(255, 253, 248, 0.35);
+    background: rgba(255, 253, 248, 0.15);
+    color: #fffdf8;
 }
 .account-hero
     :is(.account-hero-asset, .account-hero-settings, .account-hero-profile, .account-hero-register):hover {
     background: rgb(255 255 255 / 18%);
 }
 .account-hero button:focus-visible {
-    outline: 2px solid #332570;
+    outline: 2px solid var(--accent);
     outline-offset: 3px;
 }
 .account-page .account-section {
     margin: 0 var(--page-section-inset, 20px);
     padding: 18px 0;
     border: 0;
-    border-bottom: 1px solid #e4e5ef;
+    border-bottom: 1px solid var(--line);
     border-radius: 0;
     background: transparent;
     box-shadow: none;
@@ -226,7 +230,7 @@
 }
 .account-page .account-section h2 {
     margin: 0;
-    color: #20203c;
+    color: var(--text);
     font-size: 17px;
     font-weight: 650;
     line-height: 1.4;
@@ -251,7 +255,7 @@
     min-height: 52px;
     align-items: center;
     gap: 16px;
-    color: #20203c;
+    color: var(--text);
     font-size: 13px;
 }
 .account-logistics-empty > svg {
@@ -260,14 +264,15 @@
     height: 42px;
     padding: 8px;
     border-radius: 16px;
-    background: #ece8fc;
-    color: #7553f4;
+    background: var(--soft);
+    color: var(--oriental-gold, var(--accent));
+    border: 1px solid var(--line);
     stroke-width: 1.8;
 }
 .account-logistics-empty small {
     display: block;
     margin-top: 4px;
-    color: #7b8196;
+    color: var(--muted);
     font-size: 12px;
     line-height: 1.5;
 }
@@ -289,7 +294,7 @@
     stroke-width: 1.8;
 }
 .account-page .account-service-grid > button > b {
-    color: #303047;
+    color: var(--text);
     font-size: 12px;
 }
 .account-page .legal-footer {

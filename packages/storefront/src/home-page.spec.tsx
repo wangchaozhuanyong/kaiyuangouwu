@@ -10,7 +10,7 @@ import {
     type HomePageProps,
 } from './pages/home-page';
 import { HomePageContext } from './storefront-page-contexts';
-import { FlashSalePage } from './storefront-ui/content-ui';
+import { aggregateFlashSaleProducts, FlashSalePage } from './storefront-ui/content-ui';
 import { readStorefrontStylesheet } from './test-stylesheet';
 import {
     MarketConfig,
@@ -594,6 +594,202 @@ describe('HomePage flash-sale product count', () => {
         expect(stylesheet).toMatch(
             /\.flash-sale-grid\.is-expanded\s*\{[^}]*grid-auto-flow:\s*row;[^}]*overflow-x:\s*visible;/,
         );
+    });
+
+    it('aggregates multiple variants of the same product into one card with lowest price and from-suffix', () => {
+        const multiVariantSale: StorefrontFlashSale = {
+            id: 'flash-sale-multi',
+            startsAt: null,
+            endsAt: '2026-09-30T14:06:00.000Z',
+            items: [
+                {
+                    productId: 'product-wine',
+                    productVariantId: 'wine-variant-1',
+                    productName: '浏阳河粮食酒',
+                    variantName: '500ml 1瓶',
+                    originalPrice: 1800,
+                    salePrice: 1620,
+                    currencyCode: 'MYR',
+                    imageUrl: '/assets/wine.jpg',
+                },
+                {
+                    productId: 'product-wine',
+                    productVariantId: 'wine-variant-2',
+                    productName: '浏阳河粮食酒',
+                    variantName: '500ml 2瓶',
+                    originalPrice: 16000,
+                    salePrice: 14400,
+                    currencyCode: 'MYR',
+                    imageUrl: '/assets/wine.jpg',
+                },
+                {
+                    productId: 'product-wine',
+                    productVariantId: 'wine-variant-3',
+                    productName: '浏阳河粮食酒',
+                    variantName: '500ml 箱装',
+                    originalPrice: 18500,
+                    salePrice: 16650,
+                    currencyCode: 'MYR',
+                    imageUrl: '/assets/wine.jpg',
+                },
+            ],
+        };
+
+        const markup = renderHome({ contentBlocks: [flashSaleBlock], flashSales: [multiVariantSale] });
+
+        // Exactly one card for this product despite 3 variants
+        expect(markup.match(/class="flash-sale-card"/g) ?? []).toHaveLength(1);
+        expect(markup).toContain('浏阳河粮食酒');
+        // Displays lowest sale price: 16.2
+        expect(markup).toContain('16.2');
+        // Has the '起' price suffix indicating price range
+        expect(markup).toContain('class="flash-sale-price-suffix"');
+        expect(markup).toContain('起');
+        // Has the multiple variants hint
+        expect(markup).toContain('多规格可选');
+    });
+
+    it('counts aggregated products rather than individual variants against displayCount', () => {
+        const multiProductSale: StorefrontFlashSale = {
+            id: 'flash-sale-multi-prod',
+            startsAt: null,
+            endsAt: '2026-09-30T14:06:00.000Z',
+            items: [
+                // Product 1 has 3 variants
+                {
+                    productId: 'p-1',
+                    productVariantId: 'p-1-v-1',
+                    productName: '商品 1',
+                    variantName: '规格 1',
+                    originalPrice: 2000,
+                    salePrice: 1500,
+                    currencyCode: 'MYR',
+                    imageUrl: null,
+                },
+                {
+                    productId: 'p-1',
+                    productVariantId: 'p-1-v-2',
+                    productName: '商品 1',
+                    variantName: '规格 2',
+                    originalPrice: 4000,
+                    salePrice: 3000,
+                    currencyCode: 'MYR',
+                    imageUrl: null,
+                },
+                // Product 2 has 2 variants
+                {
+                    productId: 'p-2',
+                    productVariantId: 'p-2-v-1',
+                    productName: '商品 2',
+                    variantName: '规格 1',
+                    originalPrice: 1000,
+                    salePrice: 800,
+                    currencyCode: 'MYR',
+                    imageUrl: null,
+                },
+                {
+                    productId: 'p-2',
+                    productVariantId: 'p-2-v-2',
+                    productName: '商品 2',
+                    variantName: '规格 2',
+                    originalPrice: 1800,
+                    salePrice: 1400,
+                    currencyCode: 'MYR',
+                    imageUrl: null,
+                },
+            ],
+        };
+
+        const markup = renderHome({
+            contentBlocks: [{ ...flashSaleBlock, settings: { displayCount: 2 } }],
+            flashSales: [multiProductSale],
+        });
+
+        // 2 distinct products should be shown
+        expect(markup.match(/class="flash-sale-card"/g) ?? []).toHaveLength(2);
+        expect(markup).toContain('商品 1');
+        expect(markup).toContain('商品 2');
+    });
+
+    it('aggregates multiple variants on the more page as well', () => {
+        const multiProductSale: StorefrontFlashSale = {
+            id: 'flash-sale-more-page',
+            startsAt: null,
+            endsAt: '2026-09-30T14:06:00.000Z',
+            items: [
+                {
+                    productId: 'prod-A',
+                    productVariantId: 'prod-A-v1',
+                    productName: '商品 A',
+                    variantName: '规格 1',
+                    originalPrice: 1000,
+                    salePrice: 500,
+                    currencyCode: 'MYR',
+                    imageUrl: null,
+                },
+                {
+                    productId: 'prod-A',
+                    productVariantId: 'prod-A-v2',
+                    productName: '商品 A',
+                    variantName: '规格 2',
+                    originalPrice: 2000,
+                    salePrice: 1000,
+                    currencyCode: 'MYR',
+                    imageUrl: null,
+                },
+            ],
+        };
+
+        const markup = renderToStaticMarkup(
+            <FlashSalePage
+                sales={[multiProductSale]}
+                language="zh"
+                locale="zh-CN"
+                onBack={vi.fn()}
+                onProduct={vi.fn()}
+            />,
+        );
+
+        // Exactly 1 card on the more page
+        expect(markup.match(/class="flash-sale-card"/g) ?? []).toHaveLength(1);
+        expect(markup).toContain('共 1 件');
+        expect(markup).toContain('商品 A');
+        expect(markup).toContain('多规格可选');
+    });
+
+    it('aggregateFlashSaleProducts helper correctly identifies lowest price and properties', () => {
+        const aggregated = aggregateFlashSaleProducts([
+            {
+                productId: 'wine',
+                productVariantId: 'wine-expensive',
+                productName: '测试红酒',
+                variantName: '礼盒装',
+                originalPrice: 20000,
+                salePrice: 18000,
+                currencyCode: 'CNY',
+                imageUrl: '/assets/wine-box.jpg',
+            },
+            {
+                productId: 'wine',
+                productVariantId: 'wine-cheap',
+                productName: '测试红酒',
+                variantName: '单支装',
+                originalPrice: 5000,
+                salePrice: 3500,
+                currencyCode: 'CNY',
+                imageUrl: null,
+            },
+        ]);
+
+        expect(aggregated).toHaveLength(1);
+        expect(aggregated[0].productId).toBe('wine');
+        expect(aggregated[0].productVariantId).toBe('wine-cheap');
+        expect(aggregated[0].salePrice).toBe(3500);
+        expect(aggregated[0].originalPrice).toBe(5000);
+        expect(aggregated[0].hasMultipleVariants).toBe(true);
+        expect(aggregated[0].hasPriceRange).toBe(true);
+        expect(aggregated[0].variantCount).toBe(2);
+        expect(aggregated[0].imageUrl).toBe('/assets/wine-box.jpg'); // fallback to available image
     });
 });
 

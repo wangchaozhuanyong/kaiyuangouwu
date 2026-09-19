@@ -49,6 +49,7 @@ export interface RouteState {
     checkoutOrderId?: string;
     editAddress?: boolean;
     id?: string;
+    variantId?: string;
     orderCode?: string;
     tab?: OrderTab;
     token?: string;
@@ -176,6 +177,7 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
         checkoutOrderId: stringValue('checkoutOrderId'),
         editAddress: search.editAddress === true || search.editAddress === 'true' || undefined,
         id: stringValue('id'),
+        variantId: stringValue('variantId'),
         orderCode: stringValue('orderCode'),
         tab: orderTabs.includes(tab as OrderTab) ? (tab as OrderTab) : undefined,
         token: stringValue('token'),
