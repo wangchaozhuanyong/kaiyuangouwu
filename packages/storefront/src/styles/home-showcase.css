@@ -3059,25 +3059,28 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 .category-client-plugin {
     width: 100%;
     min-height: 58px;
-    border: 1px solid rgba(15, 23, 42, 0.08);
+    border: 1px solid var(--line);
     border-radius: 12px;
     padding: 10px 12px;
     display: grid;
     grid-template-columns: 38px minmax(0, 1fr) auto;
     align-items: center;
     gap: 10px;
-    color: #0f172a;
+    background: var(--paper);
+    color: var(--text);
     text-align: left;
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    box-shadow: var(--shadow-sm, 0 2px 8px rgba(15, 23, 42, 0.04));
     transition:
         transform 140ms ease,
+        border-color 140ms ease,
         box-shadow 140ms ease;
 }
 
 .category-client-plugin:hover {
+    border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
     transform: translateY(-1px);
-    box-shadow: 0 5px 14px rgba(15, 23, 42, 0.08);
+    box-shadow: var(--shadow-md, 0 5px 14px rgba(15, 23, 42, 0.08));
 }
 
 .category-client-plugin:focus-visible {
@@ -3086,11 +3089,24 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 }
 
 .category-client-plugin-coupon {
-    background: linear-gradient(110deg, #fff7ed 0%, #fff1f2 100%);
+    border-color: color-mix(in srgb, var(--accent) 18%, var(--line));
+    background: linear-gradient(
+        110deg,
+        color-mix(in srgb, var(--accent-soft) 72%, var(--paper)) 0%,
+        var(--paper) 100%
+    );
 }
 
-.category-client-plugin-support {
-    background: linear-gradient(110deg, #eff6ff 0%, #f5f3ff 100%);
+.category-client-plugin-support,
+.category-client-plugin-two-factor,
+.category-client-plugin-mail-query,
+.category-client-plugin-image-studio {
+    background: var(--paper);
+}
+
+.category-client-plugin-image-studio {
+    overflow-x: hidden;
+    overflow-x: clip;
 }
 
 .category-client-plugin-icon {
@@ -3099,8 +3115,8 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     border-radius: 10px;
     display: grid;
     place-items: center;
-    background: rgba(255, 255, 255, 0.86);
-    color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent-ink, var(--accent));
 }
 
 .category-client-plugin-icon svg {
@@ -3122,7 +3138,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 
 .category-client-plugin-copy > span {
     overflow: hidden;
-    color: #64748b;
+    color: var(--muted);
     font-size: 11px;
     line-height: 1.35;
     text-overflow: ellipsis;
@@ -3132,15 +3148,16 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 .category-client-plugin-action {
     border-radius: 999px;
     padding: 6px 9px;
-    background: rgba(255, 255, 255, 0.82);
-    color: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--line));
+    background: color-mix(in srgb, var(--accent-soft) 72%, var(--paper));
+    color: var(--accent-ink, var(--accent));
     font-size: 11px;
     font-weight: 700;
     white-space: nowrap;
 }
 
 .business-services-page {
-    --page-surface: linear-gradient(180deg, #f8fafc 0%, #ffffff 46%);
+    --page-surface: var(--bg);
 }
 
 .business-services-topbar {
@@ -3152,7 +3169,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 .business-services-page-title {
     margin: 0;
     justify-self: center;
-    color: #0f172a;
+    color: var(--text);
     font-size: 17px;
     font-weight: 800;
     letter-spacing: -0.02em;
@@ -3162,17 +3179,26 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 
 .business-services-hero {
     margin: 12px var(--page-section-inset, 12px) 4px;
-    border: 1px solid rgba(109, 40, 217, 0.08);
+    border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
     border-radius: 18px;
     padding: 18px;
     display: flex;
     align-items: center;
     gap: 13px;
     background:
-        radial-gradient(circle at 90% 8%, rgba(255, 255, 255, 0.65), transparent 34%),
-        linear-gradient(135deg, #ede9fe 0%, #e0e7ff 52%, #dbeafe 100%);
-    color: #312e81;
-    box-shadow: 0 8px 24px rgba(76, 29, 149, 0.08);
+        radial-gradient(
+            circle at 90% 8%,
+            color-mix(in srgb, var(--paper) 82%, transparent),
+            transparent 34%
+        ),
+        linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--accent-soft) 88%, var(--paper)) 0%,
+            color-mix(in srgb, var(--accent-soft) 52%, var(--paper)) 54%,
+            var(--paper) 100%
+        );
+    color: var(--text);
+    box-shadow: var(--shadow-md, 0 8px 24px rgba(15, 23, 42, 0.08));
 }
 
 .business-services-hero-icon {
@@ -3183,11 +3209,11 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     border-radius: 11px;
     display: grid;
     place-items: center;
-    background: #4f46e5;
-    color: #ffffff;
+    background: var(--accent);
+    color: var(--accent-foreground, #fff);
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.16),
-        0 4px 10px rgba(79, 70, 229, 0.18);
+        0 4px 10px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .business-services-hero-icon svg {
@@ -3209,7 +3235,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 
 .business-services-hero p {
     margin: 0;
-    color: #514c86;
+    color: var(--muted);
     font-size: 12px;
     line-height: 1.55;
 }
@@ -3217,24 +3243,24 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 .business-services-hero-link {
     flex: none;
     min-height: 40px;
-    border: 0;
+    border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
     border-radius: 999px;
     padding: 7px 11px;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: rgba(255, 255, 255, 0.78);
-    color: #5b21b6;
+    background: var(--paper);
+    color: var(--accent-ink, var(--accent));
     font: inherit;
     font-size: 11px;
     font-weight: 800;
     white-space: nowrap;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(76, 29, 149, 0.08);
+    box-shadow: var(--shadow-sm, 0 4px 12px rgba(15, 23, 42, 0.06));
 }
 
 .business-services-hero-link:focus-visible {
-    outline: 2px solid #2f6feb;
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
 

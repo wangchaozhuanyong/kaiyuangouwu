@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { DesktopLayoutContext } from './desktop-layout';
 import { BusinessServicesPage } from './pages/business-services-page';
 import { BusinessServicesPageContext } from './storefront-page-contexts';
+import { readStorefrontStylesheet } from './test-stylesheet';
 import { type StorefrontContentBlock, type StorefrontContentItem } from './types';
 
 function businessPluginBlock(): StorefrontContentBlock {
@@ -99,6 +100,27 @@ function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'e
 }
 
 describe('business services page', () => {
+    it('uses the active storefront theme for every service-card surface', () => {
+        const stylesheet = readStorefrontStylesheet([
+            './styles/visual-presets.css',
+            './styles/modals-and-support.css',
+            './styles/image-studio.css',
+        ]);
+
+        expect(stylesheet).toMatch(
+            /\.category-client-plugin\s*\{[^}]*background:\s*var\(--paper\);[^}]*color:\s*var\(--text\);/,
+        );
+        expect(stylesheet).toMatch(
+            /\.business-services-hero\s*\{[^}]*var\(--accent-soft\)[^}]*color:\s*var\(--text\);/,
+        );
+        expect(stylesheet).not.toMatch(
+            /\.category-client-plugin-image-studio\s*\{[^}]*background:\s*var\(--bg\)/,
+        );
+        expect(stylesheet).toMatch(
+            /\.business-services-hero-icon\s*\{[^}]*background:\s*var\(--accent\);[^}]*color:\s*var\(--accent-foreground/,
+        );
+    });
+
     it('puts enabled tools before assistance on desktop and retains managed copy in the disclosure', () => {
         const block = businessPluginBlock();
         block.settings = { businessServicesCopyVersion: 1 };

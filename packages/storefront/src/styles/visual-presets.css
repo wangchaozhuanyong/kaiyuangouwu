@@ -61,7 +61,7 @@ html[data-storefront-preset='modern-oriental'] {
 }
 
 html[data-storefront-preset='modern-oriental']
-    :is(.storefront-app, .page, .auth-page, .category-client-plugin-image-studio) {
+    :is(.storefront-app, .page, .auth-page) {
     background: var(--bg);
     color: var(--text);
 }

@@ -929,12 +929,6 @@
     }
 }
 
-.category-client-plugin-image-studio {
-    background: linear-gradient(135deg, #f5f3ff, #fff 55%, #eef2ff);
-    overflow-x: hidden;
-    overflow-x: clip;
-}
-
 .spin {
     animation: ai-studio-spin 0.9s linear infinite;
 }
