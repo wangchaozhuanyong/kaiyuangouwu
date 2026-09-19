@@ -136,24 +136,25 @@
         margin: 0;
         font-size: clamp(30px, 2.8vw, 42px);
         line-height: 1.25;
-        font-weight: 600;
-        text-shadow: none;
+        font-weight: 700;
+        text-shadow: var(--hero-title-shadow);
+        -webkit-font-smoothing: antialiased;
     }
     .desktop-store-layout .home-page .hero-rich-desc {
         margin: 0;
         font-size: 15px;
         line-height: 1.7;
-        text-shadow: none;
+        font-weight: 500;
+        text-shadow: var(--hero-body-shadow);
         -webkit-line-clamp: 3;
+        -webkit-font-smoothing: antialiased;
     }
     .desktop-store-layout .home-page .hero-rich-pill {
-        padding: 0;
-        border: 0;
-        background: none;
-        box-shadow: none;
-        backdrop-filter: none;
+        padding: 4px 12px;
+        border-radius: 9999px;
+        backdrop-filter: blur(8px);
         font-size: 12px;
-        letter-spacing: 0.12em;
+        letter-spacing: 0.08em;
     }
     .desktop-store-layout .home-page .hero-rich-stats-row {
         gap: 10px 22px;

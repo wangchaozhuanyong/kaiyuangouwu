@@ -1088,19 +1088,36 @@
     }
 
     .topbar-actions {
-        gap: 4px;
+        gap: 6px;
     }
 
-    .language-button,
+    .topbar-capsule {
+        height: 32px;
+    }
+
+    .topbar-capsule .currency-select {
+        min-width: 52px;
+        height: 26px;
+        padding: 0 4px 0 6px;
+        font-size: 11px;
+    }
+
+    .topbar-capsule .language-button {
+        width: 26px;
+        height: 26px;
+        font-size: 11px;
+    }
+
+    .language-button:not(.topbar-capsule *),
     .notice-button {
-        width: 38px;
-        height: 38px;
+        width: 32px;
+        height: 32px;
     }
 
-    .currency-select {
-        min-width: 56px;
-        height: 38px;
-        padding: 0 5px;
+    .currency-select:not(.topbar-capsule *) {
+        min-width: 54px;
+        height: 32px;
+        padding: 0 6px;
     }
 
     .account-service-grid > button > b {
@@ -1301,15 +1318,50 @@
     max-width: 13em;
     font-size: clamp(32px, 3.3vw, 44px);
     line-height: 1.12;
+    color: var(--auth-hero-text-color, #ffffff);
     text-shadow: 0 4px 22px rgb(0 0 0 / 46%);
+    -webkit-font-smoothing: antialiased;
 }
 
 .auth-hero-message p {
     max-width: 34em;
     margin-top: 0;
-    color: rgb(239 247 255 / 88%);
+    color: var(--auth-hero-secondary-text, rgb(239 247 255 / 88%));
     font-size: 14px;
     line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Light tone adaptive enhancements for auth hero */
+[data-image-tone="light"].auth-hero,
+[data-image-tone="light"] .auth-hero {
+    --auth-hero-overlay-color: #f8fafc;
+    background: #f8fafc;
+}
+
+[data-image-tone="light"] .auth-hero-message h2 {
+    color: var(--auth-hero-text-color, #0f172a);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 16px rgba(255, 255, 255, 0.6), 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+[data-image-tone="light"] .auth-hero-message p {
+    color: var(--auth-hero-secondary-text, #334155);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85), 0 0 12px rgba(255, 255, 255, 0.4);
+    font-weight: 500;
+}
+
+[data-image-tone="light"] .auth-hero-tags > span {
+    background: rgba(255, 255, 255, 0.88);
+    border-color: rgba(15, 23, 42, 0.15);
+    color: #0f172a;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+[data-image-tone="light"] .auth-back-button {
+    background: rgba(255, 255, 255, 0.82);
+    color: #0f172a;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .auth-hero-tags {

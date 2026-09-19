@@ -440,17 +440,22 @@ export function StorefrontBlockEditor({
                                             </Field>
                                         </>
                                     )}
-                                    <Field label="背景色">
+                                    <Field label="背景色" helpText="留空时继承商城统一背景色">
                                         <ColorInput
                                             value={draft.backgroundColor ?? ''}
+                                            placeholder="继承商城默认"
                                             onChange={value => setDraft({ ...draft, backgroundColor: value })}
                                         />
                                     </Field>
                                     {!isSupport && (
                                         <>
-                                            <Field label="文字色">
+                                            <Field
+                                                label="文字色"
+                                                helpText="推荐留空：将自动根据图片深浅适配高清晰文字与光晕，换图无需重新调色"
+                                            >
                                                 <ColorInput
                                                     value={draft.textColor ?? ''}
+                                                    placeholder="自动适应图片（推荐）"
                                                     onChange={value =>
                                                         setDraft({ ...draft, textColor: value })
                                                     }

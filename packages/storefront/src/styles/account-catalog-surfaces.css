@@ -25,17 +25,59 @@
     object-fit: cover;
 }
 .account-hero > .account-hero-art::after {
-    content: '';
     position: absolute;
     inset: 0;
+    content: '';
     background: linear-gradient(
         180deg,
-        rgba(15, 23, 42, 0.16) 0%,
-        rgba(15, 23, 42, 0.35) 42%,
+        rgba(15, 23, 42, 0.35) 0%,
         rgba(15, 23, 42, 0.65) 100%
     );
     pointer-events: none;
 }
+
+/* Custom background adaptive protections for account hero */
+.account-hero.has-custom-background .account-hero-name,
+.account-hero.has-custom-background .account-hero-profile,
+.account-hero.has-custom-background .account-hero-asset-label {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75), 0 0 12px rgba(0, 0, 0, 0.4);
+}
+
+.account-hero.has-custom-background[data-image-tone="light"] > .account-hero-art::after {
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.35) 0%,
+        rgba(255, 255, 255, 0.65) 100%
+    );
+}
+
+.account-hero.has-custom-background[data-image-tone="light"] .account-hero-name {
+    color: #0f172a;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 12px rgba(255, 255, 255, 0.6);
+}
+
+.account-hero.has-custom-background[data-image-tone="light"] .account-hero-profile {
+    color: #334155;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.account-hero.has-custom-background[data-image-tone="light"] .account-hero-settings {
+    background: rgba(255, 255, 255, 0.85);
+    color: #0f172a;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+}
+
+.account-hero.has-custom-background[data-image-tone="light"] .account-hero-asset-icon {
+    background: rgba(255, 255, 255, 0.88);
+    color: #0f172a;
+    border-color: rgba(15, 23, 42, 0.15);
+}
+
+.account-hero.has-custom-background[data-image-tone="light"] .account-hero-asset-label {
+    color: #0f172a;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
 .account-hero-content {
     position: relative;
     min-width: 0;

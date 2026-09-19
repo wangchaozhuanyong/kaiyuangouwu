@@ -76,16 +76,35 @@ export function LanguageSwitch({
     );
 }
 
-export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+export function Field({
+    label,
+    helpText,
+    children,
+}: {
+    label: string;
+    helpText?: React.ReactNode;
+    children: React.ReactNode;
+}) {
     return (
         <label className="block text-xs font-bold text-slate-700">
             <span className="mb-1.5 block">{label}</span>
             {children}
+            {helpText && (
+                <span className="mt-1 block text-[11px] font-normal text-slate-400">{helpText}</span>
+            )}
         </label>
     );
 }
 
-export function ColorInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+export function ColorInput({
+    value,
+    placeholder = '自动适应图片（推荐）',
+    onChange,
+}: {
+    value: string;
+    placeholder?: string;
+    onChange: (value: string) => void;
+}) {
     return (
         <div className="flex flex-wrap gap-2">
             <input
@@ -97,7 +116,7 @@ export function ColorInput({ value, onChange }: { value: string; onChange: (valu
             <input
                 value={value}
                 onChange={event => onChange(event.target.value)}
-                placeholder="继承"
+                placeholder={placeholder}
                 className={`${inputClass} min-w-0 flex-1 font-mono`}
             />
             <button
@@ -106,7 +125,7 @@ export function ColorInput({ value, onChange }: { value: string; onChange: (valu
                 disabled={!value}
                 className="shrink-0 text-xs text-blue-700 disabled:text-slate-400"
             >
-                恢复继承
+                自动适应
             </button>
         </div>
     );
