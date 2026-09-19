@@ -15,7 +15,7 @@ import type { RouteState, SortMode } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { minimumProductPrice, priceInputToMinorUnits, sortCategoryProducts } from '../catalog-page-utils';
-import { centeredHorizontalScrollLeft } from '../category-navigation';
+import { centeredHorizontalScrollLeft, compactCategoryLabel } from '../category-navigation';
 import { CategoryClientPluginSlot } from '../client-plugins/client-plugin-registry';
 import { CategoryPaginationStatus } from '../components/common/category-pagination-status';
 import { ProductRow } from '../components/common/product-row';
@@ -326,6 +326,7 @@ export function CategoryPage() {
                                             type="button"
                                             key={collection.id}
                                             title={collection.name}
+                                            aria-label={collection.name}
                                             className={
                                                 collection.id === activeCollectionId ? 'is-active' : undefined
                                             }
@@ -362,7 +363,11 @@ export function CategoryPage() {
                                                     </span>
                                                 )}
                                             </span>
-                                            <span className="primary-category-label">{collection.name}</span>
+                                            <span className="primary-category-label">
+                                                {isZh
+                                                    ? compactCategoryLabel(collection.name)
+                                                    : collection.name}
+                                            </span>
                                         </button>
                                     );
                                 })}

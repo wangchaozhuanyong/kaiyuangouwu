@@ -144,6 +144,7 @@ export function SupportRoutePage() {
                 content: runtime.supportContent,
                 language: runtime.language,
                 orderCode: runtime.route.orderCode,
+                focus: runtime.route.focus,
                 onNotify: runtime.notify,
             }}
         >

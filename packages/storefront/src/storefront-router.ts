@@ -71,6 +71,7 @@ export interface RouteState {
     id?: string;
     variantId?: string;
     orderCode?: string;
+    focus?: 'evaluation';
     tab?: OrderTab;
     token?: string;
     term?: string;
@@ -191,6 +192,7 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
     const sort = stringValue('sort');
     const fulfillment = stringValue('fulfillment');
     const returnTo = stringValue('returnTo');
+    const focus = stringValue('focus');
     return {
         returnTo: returnTo && isCheckoutRoute(returnTo) ? returnTo : undefined,
         addressId: stringValue('addressId'),
@@ -199,6 +201,7 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
         id: stringValue('id'),
         variantId: stringValue('variantId'),
         orderCode: stringValue('orderCode'),
+        focus: focus === 'evaluation' ? focus : undefined,
         tab: orderTabs.includes(tab as OrderTab) ? (tab as OrderTab) : undefined,
         token: stringValue('token'),
         term: stringValue('term'),
@@ -249,6 +252,7 @@ export function routeHref(route: RouteState): string {
     if (search.editAddress) params.set('editAddress', 'true');
     if (search.id) params.set('id', search.id);
     if (search.orderCode) params.set('orderCode', search.orderCode);
+    if (search.focus) params.set('focus', search.focus);
     if (search.tab) params.set('tab', search.tab);
     if (search.token) params.set('token', search.token);
     if (search.term) params.set('term', search.term);

@@ -108,6 +108,19 @@ describe('support content', () => {
         expect(markup).toContain('target="_blank"');
         expect(markup.indexOf('微信客服')).toBeLessThan(markup.indexOf('Telegram'));
         expect(markup).toContain('<span class="support-channel-icon" aria-hidden="true"><img');
-        expect(markup).not.toContain('support-channel-icon"><span class="responsive-picture safe-image-frame"');
+        expect(markup).not.toContain(
+            'support-channel-icon"><span class="responsive-picture safe-image-frame"',
+        );
+    });
+
+    it('marks the order evaluation section as the focused destination', () => {
+        const markup = renderToStaticMarkup(
+            <SupportContent content={supportBlock} language="zh" orderCode="T0001" focus="evaluation" />,
+        );
+
+        expect(markup).toContain('当前服务订单');
+        expect(markup).toContain('T0001');
+        expect(markup).toContain('class="support-evaluation-card"');
+        expect(markup).toContain('tabindex="-1"');
     });
 });

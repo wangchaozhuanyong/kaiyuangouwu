@@ -1,5 +1,16 @@
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 
+type EmailHandlerWithType = { type: string };
+
+/**
+ * Paid orders must not send a generic confirmation email. Customer-facing order mail is emitted
+ * by the concrete delivery workflows (for example auto-card or manual digital delivery) only
+ * after the purchased content is actually ready.
+ */
+export function deliveryOnlyEmailHandlers<T extends EmailHandlerWithType>(handlers: readonly T[]): T[] {
+    return handlers.filter(handler => handler.type !== 'order-confirmation');
+}
+
 export function normalizeDeliveryEmail(value: string | null | undefined): string | undefined {
     const email = value?.trim().toLowerCase();
     return email && email.length <= 254 && EMAIL_PATTERN.test(email) ? email : undefined;

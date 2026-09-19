@@ -921,6 +921,7 @@ export function OrderDetailPage({
     const navigate = useNavigate();
     const isZh = language === 'zh';
     const [cancelOpen, setCancelOpen] = useState(false);
+    const [afterSalesOpen, setAfterSalesOpen] = useState(false);
     const [logisticsSheetOpen, setLogisticsSheetOpen] = useState(false);
     if (!order) {
         return (
@@ -947,11 +948,13 @@ export function OrderDetailPage({
                 line.productVariant.customFields.fulfillmentType !== 'digital',
         );
     const refundableLines = order.lines.filter(
-        line => line.customFields.refundPolicySnapshot !== 'NON_REFUNDABLE',
+        line => line.customFields.refundPolicySnapshot !== 'NON_REFUNDABLE' && !isAutoCardLine(line),
     );
     const canRequestAfterSales =
         refundableLines.length > 0 &&
-        ['PaymentSettled', 'PartiallyShipped', 'Shipped', 'Delivered'].includes(order.state);
+        ['PaymentSettled', 'TestPaymentSettled', 'PartiallyShipped', 'Shipped', 'Delivered'].includes(
+            order.state,
+        );
     const statusHint =
         order.state === 'TestPaymentSettled'
             ? isZh
@@ -978,6 +981,11 @@ export function OrderDetailPage({
                       : 'Order status updated';
     const navigateToSupport = () => {
         void navigate(routeNavigateOptions({ name: 'support', orderCode: order.code }) as never);
+    };
+    const navigateToEvaluation = () => {
+        void navigate(
+            routeNavigateOptions({ name: 'support', orderCode: order.code, focus: 'evaluation' }) as never,
+        );
     };
 
     return (
@@ -1213,14 +1221,34 @@ export function OrderDetailPage({
                         {isZh ? '取消订单' : 'Cancel order'}
                     </button>
                 )}
-                {!pending && (
-                    <button type="button" onClick={navigateToSupport}>
+                {canRequestAfterSales && (
+                    <button
+                        type="button"
+                        className={orderPageClassName('order-secondary-action')}
+                        onClick={() => setAfterSalesOpen(true)}
+                    >
+                        <ShieldCheck aria-hidden="true" />
                         {isZh ? '申请售后' : 'Request after-sales'}
                     </button>
                 )}
                 {(inTransit || fulfillments.length > 0) && (
-                    <button type="button" onClick={() => setLogisticsSheetOpen(true)}>
+                    <button
+                        type="button"
+                        className={orderPageClassName('order-secondary-action')}
+                        onClick={() => setLogisticsSheetOpen(true)}
+                    >
+                        <Truck aria-hidden="true" />
                         {isZh ? '查看物流' : 'Track'}
+                    </button>
+                )}
+                {!pending && (
+                    <button
+                        type="button"
+                        className={orderPageClassName('order-secondary-action')}
+                        onClick={navigateToEvaluation}
+                    >
+                        <Sparkles aria-hidden="true" />
+                        {isZh ? '服务评价' : 'Rate service'}
                     </button>
                 )}
                 <button
@@ -1228,9 +1256,22 @@ export function OrderDetailPage({
                     className={orderPageClassName('primary-action')}
                     onClick={pending ? () => void onReopen(order) : () => void onBuyAgain(order)}
                 >
+                    <RotateCcw aria-hidden="true" />
                     {pending ? (isZh ? '返回修改订单' : 'Reopen order') : isZh ? '再来一单' : 'Buy again'}
                 </button>
             </div>
+            {afterSalesOpen && (
+                <AfterSalesRequestSheet
+                    order={order}
+                    locale={locale}
+                    language={language}
+                    onClose={() => setAfterSalesOpen(false)}
+                    onConfirm={async input => {
+                        await onCreateAfterSales(input);
+                        setAfterSalesOpen(false);
+                    }}
+                />
+            )}
             {cancelOpen && (
                 <CancelOrderSheet
                     order={order}
@@ -1567,7 +1608,9 @@ function AfterSalesRequestSheet({
     const submittingRef = useRef(submitting);
     const previousFocus = useRef<HTMLElement | null>(null);
     const titleId = useId();
-    const eligibleLines = order.lines.filter(line => !isAutoCardLine(line));
+    const eligibleLines = order.lines.filter(
+        line => line.customFields.refundPolicySnapshot !== 'NON_REFUNDABLE' && !isAutoCardLine(line),
+    );
     const selectedLines = eligibleLines.filter(line => (quantities[line.id] ?? 0) > 0);
     const containsDigital = selectedLines.some(
         line => line.customFields.fulfillmentTypeSnapshot === 'digital',

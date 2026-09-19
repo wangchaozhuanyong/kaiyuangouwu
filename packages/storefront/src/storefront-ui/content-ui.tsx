@@ -16,7 +16,7 @@ import {
     Truck,
     Waypoints,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { selectManagedProducts } from '../home-merchandising';
 import { resolveManagedContentCopy } from '../managed-content-copy';
@@ -293,7 +293,7 @@ export function FlashSaleSection({
                     isZh ? `秒杀商品，共 ${items.length} 件` : `Flash-sale products, ${items.length} items`
                 }
             >
-                {items.map(item => {
+                {items.map((item, index) => {
                     const hasMultipleVariants =
                         'hasMultipleVariants' in item ? item.hasMultipleVariants : false;
                     const hasPriceRange = 'hasPriceRange' in item ? item.hasPriceRange : false;
@@ -305,21 +305,13 @@ export function FlashSaleSection({
                             onClick={() => onProduct(item.productId, item.productVariantId)}
                             aria-label={`${isZh ? '查看秒杀商品' : 'View flash-sale product'} ${item.productName}`}
                         >
-                            <span className="flash-sale-image">
-                                {item.imageUrl ? (
-                                    <SafeImage
-                                        src={item.imageUrl}
-                                        alt={item.productName}
-                                        imageKind="card"
-                                        loading="lazy"
-                                    />
-                                ) : (
-                                    <span className="image-placeholder" aria-hidden="true">
-                                        <Package />
-                                    </span>
-                                )}
-                                <em>{isZh ? '限时价' : 'Limited price'}</em>
-                            </span>
+                            <FlashSaleImage
+                                imageUrl={item.imageUrl}
+                                productName={item.productName}
+                                index={index}
+                                layout={layout}
+                                badge={isZh ? '限时价' : 'Limited price'}
+                            />
                             <strong className="flash-sale-name">{item.productName}</strong>
                             {hasMultipleVariants ? (
                                 <small className="flash-sale-variant-hint">
@@ -344,6 +336,69 @@ export function FlashSaleSection({
                 })}
             </div>
         </section>
+    );
+}
+
+function FlashSaleImage({
+    imageUrl,
+    productName,
+    index,
+    layout,
+    badge,
+}: {
+    imageUrl: string | null;
+    productName: string;
+    index: number;
+    layout: 'carousel' | 'grid';
+    badge: string;
+}) {
+    const frameRef = useRef<HTMLSpanElement>(null);
+    const [preload, setPreload] = useState(index < 4);
+
+    useEffect(() => {
+        if (preload || layout !== 'carousel' || typeof IntersectionObserver === 'undefined') return;
+        const frame = frameRef.current;
+        const scroller = frame?.closest('.flash-sale-grid');
+        if (!frame || !(scroller instanceof HTMLElement)) return;
+        const observer = new IntersectionObserver(
+            entries => {
+                if (entries.some(entry => entry.isIntersecting)) {
+                    setPreload(true);
+                    observer.disconnect();
+                }
+            },
+            {
+                root: scroller,
+                rootMargin: '0px 480px 0px 120px',
+                threshold: 0.01,
+            },
+        );
+        observer.observe(frame);
+        return () => observer.disconnect();
+    }, [layout, preload]);
+
+    return (
+        <span ref={frameRef} className="flash-sale-image">
+            {imageUrl ? (
+                <SafeImage
+                    src={imageUrl}
+                    alt={productName}
+                    imageKind={layout === 'carousel' ? 'thumbnail' : 'card'}
+                    sizes={
+                        layout === 'carousel'
+                            ? '(min-width: 420px) 126px, 30vw'
+                            : '(min-width: 1024px) 220px, (min-width: 420px) 160px, 42vw'
+                    }
+                    loading={preload ? 'eager' : 'lazy'}
+                    fetchPriority={index < 2 ? 'high' : 'auto'}
+                />
+            ) : (
+                <span className="image-placeholder" aria-hidden="true">
+                    <Package />
+                </span>
+            )}
+            <em>{badge}</em>
+        </span>
     );
 }
 

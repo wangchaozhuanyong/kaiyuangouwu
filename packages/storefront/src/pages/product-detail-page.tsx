@@ -9,6 +9,7 @@ import { productAvailability, productAvailabilityLabel } from '../product-availa
 import { productGalleryAssets } from '../product-media';
 import { ProductReviewsSection } from '../review-pages';
 import { productDescriptionText, sanitizeProductDescription } from '../rich-text';
+import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { bestProductCouponPrice } from '../storefront-coupons';
 import { ProductDetailPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
@@ -394,6 +395,9 @@ export function ProductDetailPage() {
             <button
                 type="button"
                 disabled={unavailable || addingVariantId !== null}
+                onPointerEnter={() => void preloadStorefrontRouteComponent('purchase')}
+                onFocus={() => void preloadStorefrontRouteComponent('purchase')}
+                onTouchStart={() => void preloadStorefrontRouteComponent('purchase')}
                 onClick={() => variant && onBuyNow(variant)}
             >
                 {unavailable
@@ -402,8 +406,8 @@ export function ProductDetailPage() {
                         : 'Sold out'
                     : addingVariantId === variant?.id
                       ? isZh
-                          ? '准备中'
-                          : 'Preparing'
+                          ? '正在进入结算'
+                          : 'Opening checkout'
                       : isZh
                         ? '立即购买'
                         : 'Buy now'}

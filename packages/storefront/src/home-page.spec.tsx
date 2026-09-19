@@ -10,7 +10,7 @@ import {
     type HomePageProps,
 } from './pages/home-page';
 import { HomePageContext } from './storefront-page-contexts';
-import { aggregateFlashSaleProducts, FlashSalePage } from './storefront-ui/content-ui';
+import { aggregateFlashSaleProducts, FlashSalePage, FlashSaleSection } from './storefront-ui/content-ui';
 import { readStorefrontStylesheet } from './test-stylesheet';
 import {
     MarketConfig,
@@ -564,6 +564,28 @@ describe('HomePage flash-sale product count', () => {
 
         expect(markup.match(/class="flash-sale-card"/g) ?? []).toHaveLength(9);
         expect(markup).toContain('秒杀商品 9');
+    });
+
+    it('preloads the visible carousel images and uses compact thumbnail derivatives', () => {
+        const items = flashSale.items.slice(0, 5).map((item, index) => ({
+            ...item,
+            imageUrl: `/assets/preview/flash-${index + 1}.jpg`,
+        }));
+        const markup = renderToStaticMarkup(
+            <FlashSaleSection
+                title="限时秒杀"
+                items={items}
+                locale="zh-CN"
+                language="zh"
+                endsAt={flashSale.endsAt}
+                onProduct={vi.fn()}
+            />,
+        );
+
+        expect(markup.match(/loading="eager"/g) ?? []).toHaveLength(4);
+        expect(markup.match(/loading="lazy"/g) ?? []).toHaveLength(1);
+        expect(markup).toContain('preset=storefront-thumbnail-160');
+        expect(markup).toContain('sizes="(min-width: 420px) 126px, 30vw"');
     });
 
     it('still honors an explicit merchant display limit', () => {

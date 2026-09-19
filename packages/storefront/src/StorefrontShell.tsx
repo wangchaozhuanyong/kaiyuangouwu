@@ -12,9 +12,9 @@ import { DesktopHeader } from './components/common/desktop-header';
 import { DesktopLayoutContext, useDesktopViewport } from './desktop-layout';
 import { type useStorefrontAppState } from './hooks/useStorefrontAppState';
 import { PageReadinessBoundary } from './page-readiness';
-import { PageSkeleton, RouteTransitionLoader } from './route-loading';
+import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { isBrowsingStorefrontRoute, isPublicStorefrontRoute } from './storefront-access';
-import { routePageIdentity } from './storefront-router';
+import { routeHref } from './storefront-router';
 import { StorefrontContext } from './StorefrontContext';
 import { StorefrontUpdatePrompt } from './StorefrontUpdatePrompt';
 
@@ -44,20 +44,15 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     const waitingForAccount = !customer && customerLoadState !== 'ready';
     const accountFailed = customerLoadState === 'error' || customerLoadState === 'paused';
     const showNavigation = isBrowsingStorefrontRoute(displayedRoute.name) || Boolean(customer);
-    const activeRoute = storefrontContextValue.route ?? displayedRoute;
-    const pageIdentity = routePageIdentity(activeRoute);
+    const bootstrapIdentity = JSON.stringify([storefrontContextValue.storefrontCode, language]);
+    const skeletonVariant = pageSkeletonVariantForPathname(routeHref(displayedRoute));
 
     return (
         <StorefrontContext.Provider value={storefrontContextValue}>
             <DesktopLayoutContext.Provider value={desktop}>
                 <PageReadinessBoundary
-                    requestKey={JSON.stringify([language, pageIdentity])}
-                    navigationKey={JSON.stringify([
-                        storefrontContextValue.storefrontCode,
-                        language,
-                        customer?.id,
-                        pageIdentity,
-                    ])}
+                    requestKey={bootstrapIdentity}
+                    navigationKey={bootstrapIdentity}
                     pending={Boolean(state.pageDataPending || state.isNavigationPending)}
                     online={online}
                     language={language}
@@ -98,15 +93,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                             <div id="storefront-content" tabIndex={-1}>
                                 <Suspense
                                     fallback={
-                                        displayedRoute.name === 'category' ? (
-                                            <PageSkeleton variant="catalog" language={language} root />
-                                        ) : (
-                                            <RouteTransitionLoader
-                                                language={language}
-                                                logoUrl={logoUrl}
-                                                storefrontName={storefrontName}
-                                            />
-                                        )
+                                        <PageSkeleton variant={skeletonVariant} language={language} root />
                                     }
                                 >
                                     {protectedRoute && waitingForAccount ? (
@@ -121,11 +108,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                                 </a>
                                             </div>
                                         ) : (
-                                            <RouteTransitionLoader
-                                                language={language}
-                                                logoUrl={logoUrl}
-                                                storefrontName={storefrontName}
-                                            />
+                                            <PageSkeleton variant="account" language={language} root />
                                         )
                                     ) : protectedRoute && !customer ? (
                                         <LoginRoutePage />

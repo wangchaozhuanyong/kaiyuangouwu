@@ -326,6 +326,7 @@ describe('OrderDetailPage fulfillment actions', () => {
         const markup = renderDetail(order);
 
         expect(markup).toContain('申请售后');
+        expect(markup).toContain('服务评价');
         expect(markup).toContain('再来一单');
         expect(markup).not.toContain('取消订单');
     });

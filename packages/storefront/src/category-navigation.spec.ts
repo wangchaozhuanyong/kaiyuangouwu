@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { categoryTargetSelection, centeredHorizontalScrollLeft } from './category-navigation';
+import {
+    categoryTargetSelection,
+    centeredHorizontalScrollLeft,
+    compactCategoryLabel,
+} from './category-navigation';
 import { routePageIdentity } from './storefront-router';
 import { readStorefrontStylesheet } from './test-stylesheet';
 
@@ -58,6 +62,13 @@ describe('category navigation scrolling', () => {
                 { offsetLeft: 160, offsetWidth: 70 },
             ),
         ).toBe(0);
+    });
+});
+
+describe('category navigation labels', () => {
+    it('keeps at most six visible Chinese characters while preserving short labels', () => {
+        expect(compactCategoryLabel('正品烟草')).toBe('正品烟草');
+        expect(compactCategoryLabel('马来西亚特色食品')).toBe('马来西亚特色');
     });
 });
 
@@ -163,6 +174,8 @@ describe('category navigation responsive spacing', () => {
         expect(stylesheet).toMatch(
             /\.category-page \.primary-category-strip \.primary-categories button\s*\{[^}]*width:\s*76px;[^}]*min-width:\s*76px;[^}]*max-width:\s*76px;/,
         );
+        expect(stylesheet).toMatch(/\.primary-category-image\s*\{[^}]*width:\s*48px;[^}]*height:\s*48px;/);
+        expect(stylesheet).toMatch(/\.primary-categories button\s*\{[^}]*gap:\s*2px;/);
     });
 });
 

@@ -1,6 +1,6 @@
 import { useRouter } from '@tanstack/react-router';
 import { ChevronRight, Clock3, Copy, Headphones, MessageCircle, QrCode, Star, ThumbsUp } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import '../styles/modals-and-support.css';
 
@@ -26,6 +26,7 @@ export interface SupportPageProps {
     content?: StorefrontContentBlock;
     language: StorefrontLanguage;
     orderCode?: string;
+    focus?: 'evaluation';
     onNotify?: (message: string) => void;
 }
 
@@ -40,7 +41,7 @@ const channelIcons: Record<SupportChannelKey, string> = {
 export function SupportPage() {
     const router = useRouter();
     const goBack = () => router.history.back();
-    const { content, language, orderCode, onNotify } = SupportPageContext.useValue();
+    const { content, language, orderCode, focus, onNotify } = SupportPageContext.useValue();
     const isZh = language === 'zh';
     return (
         <Subpage
@@ -54,6 +55,7 @@ export function SupportPage() {
                     content={content}
                     language={language}
                     orderCode={orderCode}
+                    focus={focus}
                     onNotify={onNotify}
                 />
             ) : (
@@ -75,11 +77,13 @@ export function SupportContent({
     content,
     language,
     orderCode,
+    focus,
     onNotify,
 }: Readonly<{
     content: StorefrontContentBlock;
     language: StorefrontLanguage;
     orderCode?: string;
+    focus?: 'evaluation';
     onNotify?: (message: string) => void;
 }>) {
     const [qrChannel, setQrChannel] = useState<StorefrontSupportChannel | null>(null);
@@ -224,7 +228,12 @@ export function SupportContent({
                 </div>
             )}
 
-            <CustomerServiceEvaluationSection language={language} orderCode={orderCode} onNotify={onNotify} />
+            <CustomerServiceEvaluationSection
+                language={language}
+                orderCode={orderCode}
+                focusOnMount={focus === 'evaluation'}
+                onNotify={onNotify}
+            />
 
             {qrChannel?.item.imageUrl ? (
                 <Sheet
@@ -290,13 +299,16 @@ export function SupportContent({
 function CustomerServiceEvaluationSection({
     language,
     orderCode,
+    focusOnMount = false,
     onNotify,
 }: {
     language: StorefrontLanguage;
     orderCode?: string;
+    focusOnMount?: boolean;
     onNotify?: (message: string) => void;
 }) {
     const isZh = language === 'zh';
+    const sectionRef = useRef<HTMLElement>(null);
     const storageKey = `vendure_cs_evaluation_${orderCode || 'general'}`;
     const [rating, setRating] = useState(5);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -316,6 +328,15 @@ function CustomerServiceEvaluationSection({
     const ratingLabels = isZh
         ? ['', '非常不满意', '不满意', '一般', '满意', '非常满意']
         : ['', 'Very dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very satisfied'];
+
+    useEffect(() => {
+        if (!focusOnMount) return;
+        const frame = requestAnimationFrame(() => {
+            sectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+            sectionRef.current?.focus({ preventScroll: true });
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [focusOnMount]);
 
     const toggleTag = (tag: string) => {
         setSelectedTags(prev => (prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]));
@@ -345,6 +366,8 @@ function CustomerServiceEvaluationSection({
 
     return (
         <section
+            ref={sectionRef}
+            tabIndex={focusOnMount ? -1 : undefined}
             className="support-evaluation-card"
             aria-label={isZh ? '客服服务评价' : 'Customer service evaluation'}
         >

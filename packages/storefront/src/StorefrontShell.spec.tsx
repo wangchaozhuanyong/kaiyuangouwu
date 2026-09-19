@@ -28,6 +28,7 @@ vi.mock('./components/common/bottom-navigation', () => ({
 vi.mock('./route-loading', () => ({
     RouteTransitionLoader: () => <div>CHECKING_ACCOUNT</div>,
     PageSkeleton: () => <div>CATALOG_SKELETON</div>,
+    pageSkeletonVariantForPathname: () => 'default',
 }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -58,7 +59,8 @@ describe('catalog rendering boundary', () => {
     };
     it('never mounts catalog content while account validation is pending', () => {
         render({ displayedRoute: { name: 'orders' }, customerLoadState: 'loading' });
-        expect(element.textContent).toContain('CHECKING_ACCOUNT');
+        expect(element.textContent).toContain('CATALOG_SKELETON');
+        expect(element.textContent).not.toContain('CHECKING_ACCOUNT');
         expect(element.textContent).not.toContain('PAGE_CONTENT');
     });
     it('renders the product for an anonymous direct product URL', () => {
@@ -115,6 +117,14 @@ describe('catalog rendering boundary', () => {
         expect(element.textContent).not.toContain('CHECKING_ACCOUNT');
 
         render({ displayedRoute: { name: 'category', collectionId: 'coffee', childId: 'instant' } });
+        expect(element.textContent).toContain('PAGE_CONTENT');
+        expect(element.textContent).toContain('CATALOG_NAVIGATION');
+        expect(element.textContent).not.toContain('CHECKING_ACCOUNT');
+    });
+
+    it('keeps browsing content visible while an in-app navigation is pending', () => {
+        render({ displayedRoute: { name: 'home' }, isNavigationPending: true });
+
         expect(element.textContent).toContain('PAGE_CONTENT');
         expect(element.textContent).toContain('CATALOG_NAVIGATION');
         expect(element.textContent).not.toContain('CHECKING_ACCOUNT');

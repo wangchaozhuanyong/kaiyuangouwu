@@ -180,7 +180,12 @@ export class CartController {
             } else this.queue.push({ operation, waiters: [{ resolve, reject }] });
         });
         this.error = null;
-        if (!this.running && !this.timer) {
+        const flushImmediately = 'buyNow' in operation;
+        if (flushImmediately && !this.running) {
+            clearTimeout(this.timer);
+            this.timer = undefined;
+            this.phase = 'queued';
+        } else if (!this.running && !this.timer) {
             this.phase = 'queued';
             this.timer = setTimeout(() => {
                 this.timer = undefined;
@@ -188,6 +193,7 @@ export class CartController {
             }, 80);
         }
         this.publish();
+        if (flushImmediately && !this.running) void this.flush();
         return promise;
     }
 

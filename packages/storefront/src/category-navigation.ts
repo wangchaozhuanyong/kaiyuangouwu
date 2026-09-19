@@ -18,6 +18,12 @@ export interface CategoryTargetSelection {
     childId: string;
 }
 
+export function compactCategoryLabel(label: string, maximumCharacters = 6): string {
+    const normalized = label.trim();
+    if (maximumCharacters < 1) return '';
+    return Array.from(normalized).slice(0, maximumCharacters).join('');
+}
+
 export function categoryTargetSelection(
     collections: readonly CategoryTargetCollection[],
     targetId: string,

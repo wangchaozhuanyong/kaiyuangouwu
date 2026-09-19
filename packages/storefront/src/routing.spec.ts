@@ -70,6 +70,10 @@ describe('storefront routing', () => {
             name: 'orders',
             tab: 'shipping',
         });
+        expect(routeHref({ name: 'support', orderCode: 'T0001', focus: 'evaluation' })).toBe(
+            '/support?orderCode=T0001&focus=evaluation',
+        );
+        expect(routeFromRouterLocation('/support', { focus: 'other' }).focus).toBeUndefined();
     });
 
     it('keeps root-page scroll positions while isolating subpage history entries', () => {
