@@ -23,6 +23,10 @@ import {
 import { StorefrontContentService } from '@vendure/storefront-content-plugin';
 import { IsNull } from 'typeorm';
 
+export const PUBLIC_CATALOG_ASSET_CACHE_CONTROL = 'public, max-age=300, s-maxage=300, must-revalidate';
+export const PUBLIC_CATALOG_ASSET_AUTHORIZATION_TTL_MS = 5 * 60 * 1000;
+const PUBLIC_CATALOG_ASSET_AUTHORIZATION_LIMIT = 4096;
+
 export function createCatalogImageTransformStrategies(
     bootstrapBaseSchema: boolean,
 ): ImageTransformStrategy[] {
@@ -40,6 +44,7 @@ export function createCatalogImageTransformStrategies(
 // before originals, previews and transformed cache files can be returned.
 export class CatalogAssetAccessStrategy implements ImageTransformStrategy {
     private injector: Injector;
+    private readonly publicAuthorizations = new Map<string, number>();
 
     init(injector: Injector) {
         this.injector = injector;
@@ -54,13 +59,15 @@ export class CatalogAssetAccessStrategy implements ImageTransformStrategy {
             config.authOptions.tokenMethod,
             config.authOptions.apiKeyHeaderKey,
         );
-        const session =
-            extracted && extracted.method !== 'api-key'
-                ? await this.injector.get(SessionService).getSessionFromToken(extracted.token)
-                : undefined;
+        let sessionRequest: ReturnType<SessionService['getSessionFromToken']> | undefined;
+        const getSession = () => {
+            if (!extracted || extracted.method === 'api-key') return Promise.resolve(undefined);
+            sessionRequest ??= this.injector.get(SessionService).getSessionFromToken(extracted.token);
+            return sessionRequest;
+        };
         const request = await this.injector.get(StorefrontPromotionAccessService).resolveRequest(req);
         if (!request) {
-            if (session?.user?.id) return input;
+            if ((await getSession())?.user?.id) return input;
             throw new Error('Asset access denied');
         }
         let identifier: string;
@@ -70,11 +77,14 @@ export class CatalogAssetAccessStrategy implements ImageTransformStrategy {
             throw new Error('Asset access denied');
         }
         const origin = `https://${request.host}`;
+        const authorizationKey = `${request.ctx.channelId}\u0000${identifier}`;
         const allowPublicImage = () => {
-            // Keep a browser copy across refreshes; shared caches must not cross stores.
-            req.res?.setHeader('Cache-Control', 'private, max-age=300, must-revalidate');
+            // Authorization is channel-scoped and shared caches key by origin/host. A short public
+            // lifetime therefore reuses the same published variant without crossing stores.
+            req.res?.setHeader('Cache-Control', PUBLIC_CATALOG_ASSET_CACHE_CONTROL);
             return input;
         };
+        if (this.hasPublicAuthorization(authorizationKey)) return allowPublicImage();
         try {
             const blocks = await this.injector
                 .get(StorefrontContentService)
@@ -92,7 +102,7 @@ export class CatalogAssetAccessStrategy implements ImageTransformStrategy {
                             url.pathname.startsWith('/assets/') &&
                             decodeURIComponent(url.pathname).slice('/assets/'.length) === identifier
                         )
-                            return allowPublicImage();
+                            return this.rememberPublicAuthorization(authorizationKey, allowPublicImage);
                     } catch {
                         /* Invalid URLs do not grant access. */
                     }
@@ -101,14 +111,34 @@ export class CatalogAssetAccessStrategy implements ImageTransformStrategy {
             const html = await this.injector.get(StorefrontPromotionService).renderPublished(request.ctx, '');
             const paths = promotionAssetPaths(html, origin);
             if (paths.has(identifier) || (await this.isPublishedCatalogImage(request.ctx, identifier))) {
-                return allowPublicImage();
+                return this.rememberPublicAuthorization(authorizationKey, allowPublicImage);
             }
         } catch (error) {
             // Preserve existing authenticated media access if a public lookup is unavailable.
-            if (!session?.user?.id) throw error;
+            if (!(await getSession())?.user?.id) throw error;
         }
-        if (session?.user?.id) return input;
+        if ((await getSession())?.user?.id) return input;
         throw new Error('Asset access denied');
+    }
+
+    private hasPublicAuthorization(key: string): boolean {
+        const expiresAt = this.publicAuthorizations.get(key);
+        if (!expiresAt) return false;
+        if (expiresAt <= Date.now()) {
+            this.publicAuthorizations.delete(key);
+            return false;
+        }
+        return true;
+    }
+
+    private rememberPublicAuthorization(key: string, allow: () => GetImageTransformParametersArgs['input']) {
+        if (this.publicAuthorizations.size >= PUBLIC_CATALOG_ASSET_AUTHORIZATION_LIMIT) {
+            const oldest = this.publicAuthorizations.keys().next().value;
+            if (oldest) this.publicAuthorizations.delete(oldest);
+        }
+        this.publicAuthorizations.delete(key);
+        this.publicAuthorizations.set(key, Date.now() + PUBLIC_CATALOG_ASSET_AUTHORIZATION_TTL_MS);
+        return allow();
     }
 
     private async isPublishedCatalogImage(ctx: RequestContext, identifier: string): Promise<boolean> {

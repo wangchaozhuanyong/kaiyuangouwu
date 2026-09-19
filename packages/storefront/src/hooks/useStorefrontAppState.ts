@@ -118,8 +118,6 @@ export function useStorefrontAppState() {
         inStockOnly,
         minimumPrice,
         maximumPrice,
-        setMinimumPrice,
-        setMaximumPrice,
         navigate,
         goBack,
         updateCategory,
@@ -571,8 +569,6 @@ export function useStorefrontAppState() {
                 setDisplayCurrencyCode(currencyCode);
                 if (currencyCode !== 'USDT' && currencyCode !== market.currencyCode) {
                     if (route.name === 'category' && (minimumPrice || maximumPrice)) {
-                        setMinimumPrice('');
-                        setMaximumPrice('');
                         navigate({ ...route, minPrice: undefined, maxPrice: undefined }, true);
                     }
                     setStorefrontContext(current => ({
@@ -747,9 +743,9 @@ export function useStorefrontAppState() {
     } satisfies Record<string, unknown>;
 
     return {
-        pageDataPending:
-            (!storefrontContextResolved && !configQuery.isError) ||
-            (contentQuery.isPending && !contentError && !configQuery.isError),
+        // The shell only depends on resolving the current store identity. Route components own
+        // their content/query skeletons, so an unrelated content request never blocks the app.
+        pageDataPending: !storefrontContextResolved && !configQuery.isError,
         isNavigationPending,
         storefrontContextValue,
         customer,

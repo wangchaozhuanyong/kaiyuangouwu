@@ -23,6 +23,62 @@ it('shows a trusted catalog count or a count-free apply action', () => {
     expect(categoryFilterActionLabel('en', null)).toBe('Apply filters');
 });
 
+it('queries the complete catalog when the route has no category filters', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    const api = { catalog: vi.fn().mockResolvedValue({ items: [], totalItems: 0 }) };
+    const noop = () => undefined;
+    try {
+        await act(async () => {
+            root.render(
+                <QueryClientProvider client={client}>
+                    <CategoryPageContext.Provider
+                        value={
+                            {
+                                api,
+                                products: [],
+                                collections: [],
+                                contentBlocks: [],
+                                loading: false,
+                                error: null,
+                                market: { code: 'my-malaysia', currencyCode: 'MYR' },
+                                locale: 'en-MY',
+                                language: 'en',
+                                activeCollectionId: 'all',
+                                activeChildId: 'all',
+                                sortMode: 'recommended',
+                                fulfillmentFilter: 'all',
+                                inStockOnly: false,
+                                minimumPrice: '',
+                                maximumPrice: '',
+                                onCollectionChange: noop,
+                                onChildChange: noop,
+                                onSortChange: noop,
+                                onFilterChange: noop,
+                                onNotify: noop,
+                                onRetry: noop,
+                            } as any
+                        }
+                    >
+                        <CategoryPage />
+                    </CategoryPageContext.Provider>
+                </QueryClientProvider>,
+            );
+            await new Promise(resolve => setTimeout(resolve, 20));
+        });
+        expect(api.catalog).toHaveBeenCalled();
+        expect(api.catalog.mock.calls[0][0]).toMatchObject({
+            collectionId: undefined,
+            sort: 'recommended',
+        });
+        expect(container.textContent).toContain('All');
+    } finally {
+        act(() => root.unmount());
+        client.clear();
+    }
+});
+
 it('uses the server catalog total in the filter confirmation action', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const container = document.createElement('div');
@@ -98,7 +154,7 @@ it.each(
         { code: 'audit-store', currencyCode: 'CNY', language: 'en', languageCode: 'en' },
         { code: 'other-store', currencyCode: 'CNY', language: 'zh', languageCode: 'zh_Hans' },
     ].flatMap(scope =>
-        ['pending', 'failure', 'fallback', 'late-return'].map(outcome => ({ ...scope, outcome })),
+        ['pending', 'failure', 'no-collections', 'late-return'].map(outcome => ({ ...scope, outcome })),
     ),
 )('keeps old products out of a new detail scope: %j', async target => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 120000 } } });
@@ -179,14 +235,14 @@ it.each(
         expect(queryClient.getQueryData(myrKey)).toBeUndefined();
         props.market = { code: target.code, currencyCode: target.currencyCode };
         props.language = target.language;
-        if (target.outcome === 'fallback') {
+        if (target.outcome === 'no-collections') {
             props.collections = [];
             props.products = [product];
         }
         await act(async () => {
             await Promise.resolve(render());
         });
-        expect(api.catalog).toHaveBeenCalledTimes(target.outcome === 'fallback' ? 1 : 2);
+        expect(api.catalog).toHaveBeenCalledTimes(2);
         await act(async () => {
             await new Promise(resolve => setTimeout(resolve, 30));
         });

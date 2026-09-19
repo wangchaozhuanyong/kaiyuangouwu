@@ -1,4 +1,4 @@
-import { desktopCatalogInput, desktopCatalogRoute } from '../../desktop-catalog-query';
+import { catalogInputFromRoute, catalogRouteWithChanges } from '../../catalog-route-query';
 import { RouteState } from '../../storefront-router';
 import { useStorefront } from '../../StorefrontContext';
 import { CollectionSummary, StorefrontLanguage } from '../../types';
@@ -19,13 +19,13 @@ export function DesktopCategoryNavigation({ showCollections = true }: { showColl
     const isZh = language === 'zh';
     const isCatalogPage = route.name === 'home' || route.name === 'category' || route.name === 'search';
     const catalogRoute: RouteState = isCatalogPage ? route : { name: 'home' };
-    const input = desktopCatalogInput(catalogRoute);
+    const input = catalogInputFromRoute(catalogRoute);
     const activeCollection = isCatalogPage
         ? collections.find(collection => collection.id === route.collectionId)
         : undefined;
     const activeChild = activeCollection?.children?.find(collection => collection.id === route.childId);
-    const update = (changes: Partial<RouteState>) => navigate(desktopCatalogRoute(catalogRoute, changes));
-    const clearFilters = () => navigate(desktopCatalogRoute({ name: 'home' }));
+    const update = (changes: Partial<RouteState>) => navigate(catalogRouteWithChanges(catalogRoute, changes));
+    const clearFilters = () => navigate(catalogRouteWithChanges({ name: 'home' }));
 
     if (!isCatalogPage) return null;
     return (

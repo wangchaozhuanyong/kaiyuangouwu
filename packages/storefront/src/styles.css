@@ -70,6 +70,7 @@
     --footer-end-gap: 0px;
     /* Keep sticky headers above product-card hit areas when their bounds overlap. */
     --layer-sticky: 30;
+    --layer-readiness: 65;
     --layer-toast: 70;
 }
 
@@ -324,8 +325,7 @@ img {
     background-position: center;
     transition: opacity 180ms ease;
 }
-.safe-image-frame.is-loaded > .safe-image-fallback,
-.safe-image-frame.is-priority > .safe-image-fallback {
+.safe-image-frame.is-loaded > .safe-image-fallback {
     opacity: 0;
     display: none;
     pointer-events: none;
@@ -344,10 +344,40 @@ img {
 .page-readiness {
     min-height: 100dvh;
 }
+.page-readiness-stage {
+    min-height: inherit;
+}
+.page-readiness-progress {
+    position: fixed;
+    z-index: var(--layer-readiness);
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 3px;
+    overflow: hidden;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.page-readiness-progress > span {
+    width: 42%;
+    height: 100%;
+    display: block;
+    border-radius: 999px;
+    background: var(--accent);
+    animation: page-readiness-progress 1.1s ease-in-out infinite;
+}
+@keyframes page-readiness-progress {
+    from {
+        transform: translateX(-110%);
+    }
+    to {
+        transform: translateX(350%);
+    }
+}
 .page-readiness-overlay {
     position: fixed;
     inset: 0;
-    z-index: 65;
+    z-index: var(--layer-readiness);
     display: grid;
     place-items: center;
     background: var(--skin-background, #f4f5f7);

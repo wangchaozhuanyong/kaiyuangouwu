@@ -1,24 +1,25 @@
 import { useNavigate, useRouter, useRouterState } from '@tanstack/react-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
+import { catalogRouteSearch, catalogRouteState, type CatalogRouteState } from '../catalog-route-query';
 import { categoryTargetSelection } from '../category-navigation';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { preloadRouteMedia } from '../route-media-preload';
 import {
     routeFromHash,
     routeFromRouterLocation,
+    routeHref,
     routePath,
     routeSearch,
     RouteState,
-    SortMode,
 } from '../storefront-router';
 import {
-    FulfillmentType,
     StorefrontContentTargetType,
     type CollectionSummary,
     type Product,
     type StorefrontContentBlock,
 } from '../types';
+
 export function useStorefrontNavigation({
     collections,
     contentBlocks = [],
@@ -89,42 +90,35 @@ export function useStorefrontNavigation({
         [displayedRouterLocation.pathname, displayedRouterLocation.search],
     );
 
-    const [activeCollectionId, setActiveCollectionId] = useState(() => route.collectionId ?? 'all');
+    // The URL is the rendering source of truth. This ref only remembers the last explicit
+    // category URL so links returning from another route can preserve the user's filters.
+    const categoryStateRef = useRef<CatalogRouteState>(catalogRouteSearch(route));
+    const lastCategoryLocation = useRef('');
+    if (route.name === 'category') {
+        const routeLocation = routeHref(route);
+        if (routeLocation !== lastCategoryLocation.current) {
+            categoryStateRef.current = catalogRouteSearch(route);
+            lastCategoryLocation.current = routeLocation;
+        }
+    }
 
-    const [activeChildId, setActiveChildId] = useState(() => route.childId ?? 'all');
-
-    const [sortMode, setSortMode] = useState<SortMode>(() => route.sort ?? 'recommended');
-
-    const [fulfillmentFilter, setFulfillmentFilter] = useState<'all' | FulfillmentType>(
-        () => route.fulfillment ?? 'all',
+    const visibleCategoryState = catalogRouteState(
+        route.name === 'category' ? route : { name: 'category', ...categoryStateRef.current },
     );
-
-    const [inStockOnly, setInStockOnly] = useState(() => route.inStockOnly === true);
-
-    const [minimumPrice, setMinimumPrice] = useState(() => route.minPrice ?? '');
-
-    const [maximumPrice, setMaximumPrice] = useState(() => route.maxPrice ?? '');
-
-    const categoryStateRef = useRef<
-        Pick<
-            RouteState,
-            'collectionId' | 'childId' | 'sort' | 'fulfillment' | 'inStockOnly' | 'minPrice' | 'maxPrice'
-        >
-    >({});
-
-    categoryStateRef.current = {
-        collectionId: activeCollectionId === 'all' ? undefined : activeCollectionId,
-        childId: activeChildId === 'all' ? undefined : activeChildId,
-        sort: sortMode,
-        fulfillment: fulfillmentFilter,
-        inStockOnly,
-        minPrice: minimumPrice || undefined,
-        maxPrice: maximumPrice || undefined,
-    };
+    const activeCollectionId = visibleCategoryState.collectionId ?? 'all';
+    const activeChildId = visibleCategoryState.childId ?? 'all';
+    const sortMode = visibleCategoryState.sort ?? 'recommended';
+    const fulfillmentFilter = visibleCategoryState.fulfillment ?? 'all';
+    const inStockOnly = visibleCategoryState.inStockOnly === true;
+    const minimumPrice = visibleCategoryState.minPrice ?? '';
+    const maximumPrice = visibleCategoryState.maxPrice ?? '';
 
     const navigate = useCallback(
         (next: RouteState, replace = false) => {
             const resolvedNext = next.name === 'category' ? { ...categoryStateRef.current, ...next } : next;
+            if (resolvedNext.name === 'category') {
+                categoryStateRef.current = catalogRouteSearch(resolvedNext);
+            }
             void tanstackNavigate({
                 to: routePath(resolvedNext.name),
                 search: routeSearch(resolvedNext),
@@ -138,35 +132,6 @@ export function useStorefrontNavigation({
         if (window.history.length > 1) router.history.back();
         else navigate({ name: 'home' }, true);
     }, [navigate, router.history]);
-
-    useEffect(() => {
-        if (route.name !== 'category') return;
-        setActiveCollectionId(route.collectionId ?? 'all');
-        setActiveChildId(route.childId ?? 'all');
-        setSortMode(route.sort ?? 'recommended');
-        setFulfillmentFilter(route.fulfillment ?? 'all');
-        setInStockOnly(route.inStockOnly === true);
-        setMinimumPrice(route.minPrice ?? '');
-        setMaximumPrice(route.maxPrice ?? '');
-    }, [route]);
-
-    useEffect(() => {
-        if (activeCollectionId === 'all' && collections.length) {
-            setActiveCollectionId(collections[0].id);
-            setActiveChildId(collections[0].children?.[0]?.id ?? collections[0].id);
-        }
-    }, [activeCollectionId, collections]);
-
-    useEffect(() => {
-        if (route.name !== 'category') return;
-        setActiveCollectionId(route.collectionId ?? collections[0]?.id ?? 'all');
-        setActiveChildId(route.childId ?? collections[0]?.children?.[0]?.id ?? collections[0]?.id ?? 'all');
-        setSortMode(route.sort ?? 'recommended');
-        setFulfillmentFilter(route.fulfillment ?? 'all');
-        setInStockOnly(route.inStockOnly === true);
-        setMinimumPrice(route.minPrice ?? '');
-        setMaximumPrice(route.maxPrice ?? '');
-    }, [collections, route]);
 
     const updateCategory = useCallback(
         (
@@ -184,13 +149,6 @@ export function useStorefrontNavigation({
             >,
         ) => {
             const next = { ...categoryStateRef.current, ...updates };
-            setActiveCollectionId(next.collectionId ?? 'all');
-            setActiveChildId(next.childId ?? 'all');
-            setSortMode(next.sort ?? 'recommended');
-            setFulfillmentFilter(next.fulfillment ?? 'all');
-            setInStockOnly(next.inStockOnly === true);
-            setMinimumPrice(next.minPrice ?? '');
-            setMaximumPrice(next.maxPrice ?? '');
             navigate({ name: 'category', ...next });
         },
         [navigate],
@@ -205,8 +163,6 @@ export function useStorefrontNavigation({
             }
             if (targetType === 'COLLECTION' || targetType === 'CATEGORY') {
                 const target = categoryTargetSelection(collections, value);
-                setActiveCollectionId(target.collectionId);
-                setActiveChildId(target.childId);
                 navigate({ name: 'category', ...target });
                 return;
             }
@@ -248,16 +204,12 @@ export function useStorefrontNavigation({
         displayedRouterLocation,
         isNavigationPending,
         activeCollectionId,
-        setActiveCollectionId,
-        setActiveChildId,
         activeChildId,
         sortMode,
         fulfillmentFilter,
         inStockOnly,
         minimumPrice,
         maximumPrice,
-        setMinimumPrice,
-        setMaximumPrice,
         navigate,
         goBack,
         updateCategory,

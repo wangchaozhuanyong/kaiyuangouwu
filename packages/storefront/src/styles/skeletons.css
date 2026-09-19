@@ -17,7 +17,7 @@
 }
 
 .page-skeleton > span,
-.page-skeleton > div span,
+.page-skeleton > :is(div, span) span,
 .list-skeleton i,
 .list-skeleton b,
 .page-skeleton--route > * {

@@ -4,10 +4,10 @@ import { FormEvent, useEffect, useState } from 'react';
 
 import { ShopApi } from '../api';
 import { matchesCatalogFilters } from '../api/helpers';
+import { catalogInputFromRoute, catalogRouteWithChanges } from '../catalog-route-query';
 import { CategoryClientPluginSlot, clientPluginPlacements } from '../client-plugins/client-plugin-registry';
 import { DesktopCategoryNavigation } from '../components/common/desktop-category-navigation';
 import { ProductRow } from '../components/common/product-row';
-import { desktopCatalogInput, desktopCatalogRoute } from '../desktop-catalog-query';
 import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
 import {
@@ -39,7 +39,7 @@ export function DesktopCatalogPage() {
     const runtime: DesktopCatalogContext = useStorefront();
     const { route, market, language, locale, collections, contentBlocks, navigate } = runtime;
     const isZh = language === 'zh';
-    const input = desktopCatalogInput(route);
+    const input = catalogInputFromRoute(route);
     const query = useInfiniteQuery({
         queryKey: storefrontQueryKeys.catalog(storefrontQueryKeys.market(market), languageCodeFor(language), {
             ...input,
@@ -88,8 +88,8 @@ export function DesktopCatalogPage() {
         input.minPriceWithTax != null ||
         input.maxPriceWithTax != null
     );
-    const update = (changes: Partial<RouteState>) => navigate(desktopCatalogRoute(route, changes));
-    const clearFilters = () => navigate(desktopCatalogRoute({ name: 'home' }));
+    const update = (changes: Partial<RouteState>) => navigate(catalogRouteWithChanges(route, changes));
+    const clearFilters = () => navigate(catalogRouteWithChanges({ name: 'home' }));
     const applyFilters = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (minimum && maximum && Number(minimum) > Number(maximum)) {

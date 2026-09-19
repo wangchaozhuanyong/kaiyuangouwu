@@ -6,8 +6,6 @@ import {
     imageCandidateIdentity,
     isFirstViewportElement,
 } from './image-readiness';
-import { RouteTransitionLoader } from './route-loading';
-
 export const PAGE_DATA_TIMEOUT_MS = 10_000;
 export const PAGE_MEDIA_TIMEOUT_MS = 3_000;
 export const PAGE_LOADING_DELAY_MS = 200;
@@ -19,16 +17,16 @@ interface PageReadinessProps {
     pending: boolean;
     online: boolean;
     language: 'zh' | 'en';
-    logoUrl?: string | null;
-    storefrontName: string;
     onRetry: () => void;
     onBack: () => void;
 }
 
 /**
- * One presentation boundary for module, query and visible-media readiness.
- * The shell supplies the destination and store scope as one navigation identity. Children retain
- * their layout while staged, so lazy media can be promoted by viewport geometry.
+ * One non-blocking readiness observer for route modules, queries and visible media.
+ *
+ * The application shell and route skeletons remain visible while the observer works. This keeps
+ * navigation progressive: one slow query or image may extend the progress signal, but it cannot
+ * blank or disable an otherwise useful page.
  */
 export function PageReadinessBoundary(props: PageReadinessProps) {
     const {
@@ -36,8 +34,6 @@ export function PageReadinessBoundary(props: PageReadinessProps) {
         pending,
         online,
         language,
-        logoUrl,
-        storefrontName,
         onRetry,
         onBack,
         navigationKey = '',
@@ -58,7 +54,6 @@ export function PageReadinessBoundary(props: PageReadinessProps) {
     const lastRequest = useRef(requestKey);
     const [showProgress, setShowProgress] = useState(false);
     const [attempt, setAttempt] = useState(0);
-    const released = phase === 'ready' || phase === 'degraded';
 
     useLayoutEffect(() => {
         const root = stage.current;
@@ -130,7 +125,7 @@ export function PageReadinessBoundary(props: PageReadinessProps) {
             dataReadyAt ??= now;
             const waiting: HTMLImageElement[] = [];
             for (const image of Array.from(root.querySelectorAll('img'))) {
-                // SafeImage deliberately hides the undecoded bitmap; measure its frame.
+                // Measure the reserved SafeImage frame while its placeholder remains visible.
                 const visual = image.closest('[data-safe-image]') ?? image;
                 if (!isFirstViewportElement(visual, root)) continue;
                 const identity = imageCandidateIdentity(image);
@@ -205,55 +200,51 @@ export function PageReadinessBoundary(props: PageReadinessProps) {
     }, [attempt, navigationKey, requestKey]);
 
     useLayoutEffect(() => wake.current(), [pending, online]);
-    useLayoutEffect(() => {
-        if (!released && stage.current?.contains(document.activeElement)) {
-            (document.activeElement as HTMLElement)?.blur?.();
-        }
-    });
 
     return (
-        <div className="page-readiness" data-page-readiness={phase}>
-            <div
-                ref={stage}
-                className="page-readiness-stage"
-                inert={!released}
-                style={released ? undefined : { opacity: 0, pointerEvents: 'none' }}
-            >
+        <div
+            className="page-readiness"
+            data-page-readiness={phase}
+            aria-busy={phase === 'preparing' ? 'true' : undefined}
+        >
+            <div ref={stage} className="page-readiness-stage">
                 {children}
             </div>
-            {!released && (
-                <div className="page-readiness-overlay" aria-busy={phase === 'preparing'}>
-                    {phase === 'error' ? (
-                        <div className="page-readiness-error" role="alert">
-                            <p>
-                                {language === 'zh'
-                                    ? online
-                                        ? '页面加载超时，请重试'
-                                        : '当前网络不可用，请恢复网络后重试'
-                                    : online
-                                      ? 'The page took too long to load. Try again.'
-                                      : 'You are offline. Reconnect and try again.'}
-                            </p>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    onRetry();
-                                    setAttempt(value => value + 1);
-                                }}
-                            >
-                                {language === 'zh' ? '重试' : 'Try again'}
-                            </button>
-                            <button type="button" onClick={onBack}>
-                                {language === 'zh' ? '返回' : 'Back'}
-                            </button>
-                        </div>
-                    ) : showProgress ? (
-                        <RouteTransitionLoader
-                            language={language}
-                            logoUrl={logoUrl}
-                            storefrontName={storefrontName}
-                        />
-                    ) : null}
+            {phase === 'preparing' && showProgress && (
+                <div
+                    className="page-readiness-progress"
+                    role="status"
+                    aria-live="polite"
+                    aria-label={language === 'zh' ? '页面正在加载' : 'Page loading'}
+                >
+                    <span aria-hidden="true" />
+                </div>
+            )}
+            {phase === 'error' && (
+                <div className="page-readiness-overlay" aria-busy="false">
+                    <div className="page-readiness-error" role="alert">
+                        <p>
+                            {language === 'zh'
+                                ? online
+                                    ? '页面加载超时，请重试'
+                                    : '当前网络不可用，请恢复网络后重试'
+                                : online
+                                  ? 'The page took too long to load. Try again.'
+                                  : 'You are offline. Reconnect and try again.'}
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                onRetry();
+                                setAttempt(value => value + 1);
+                            }}
+                        >
+                            {language === 'zh' ? '重试' : 'Try again'}
+                        </button>
+                        <button type="button" onClick={onBack}>
+                            {language === 'zh' ? '返回' : 'Back'}
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

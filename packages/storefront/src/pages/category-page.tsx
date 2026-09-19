@@ -14,7 +14,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RouteState, SortMode } from '../storefront-router';
 
 import { ShopApi } from '../api';
-import { minimumProductPrice, priceInputToMinorUnits, sortCategoryProducts } from '../catalog-page-utils';
+import { minimumProductPrice } from '../catalog-page-utils';
+import { catalogInputFromRoute } from '../catalog-route-query';
 import { centeredHorizontalScrollLeft, compactCategoryLabel } from '../category-navigation';
 import { CategoryClientPluginSlot } from '../client-plugins/client-plugin-registry';
 import { CategoryPaginationStatus } from '../components/common/category-pagination-status';
@@ -84,8 +85,6 @@ export function CategoryPage() {
         products,
         collections,
         contentBlocks,
-        loading,
-        error,
         market,
         locale,
         language,
@@ -115,7 +114,10 @@ export function CategoryPage() {
     const [draftMaximumPrice, setDraftMaximumPrice] = useState(maximumPriceInput);
     const subcatScrollerRef = useRef<HTMLDivElement>(null);
     const primaryCollections = collections;
-    const primary = primaryCollections.find(item => item.id === activeCollectionId) ?? primaryCollections[0];
+    const primary =
+        activeCollectionId === 'all'
+            ? undefined
+            : primaryCollections.find(item => item.id === activeCollectionId);
     const collectionImageMap = useMemo(() => {
         const map = new Map<string, string>();
         for (const collection of primaryCollections) {
@@ -153,22 +155,23 @@ export function CategoryPage() {
     const hasFilters =
         fulfillmentFilter !== 'all' || inStockOnly || minimumPriceInput !== '' || maximumPriceInput !== '';
     const vendureLanguageCode = languageCodeFor(language);
-    const catalogInput = {
-        collectionId: selectedCollectionId === 'all' ? undefined : selectedCollectionId,
+    const catalogInput = catalogInputFromRoute({
+        name: 'category',
+        collectionId: activeCollectionId,
+        childId: activeChildId,
         sort: sortMode,
-        fulfillmentType: fulfillmentFilter === 'all' ? undefined : fulfillmentFilter,
+        fulfillment: fulfillmentFilter,
         inStockOnly,
-        minPriceWithTax: priceInputToMinorUnits(minimumPriceInput),
-        maxPriceWithTax: priceInputToMinorUnits(maximumPriceInput),
-    };
-    const catalogEnabled = collections.length > 0 && !!selectedCollectionId && selectedCollectionId !== 'all';
+        minPrice: minimumPriceInput,
+        maxPrice: maximumPriceInput,
+    });
     const pagination = useCategoryPagination({
         api,
         market,
         languageCode: vendureLanguageCode,
         language,
         input: catalogInput,
-        enabled: catalogEnabled,
+        enabled: true,
         suspended: filterOpen || allCategoriesOpen,
     });
     const catalogQuery = pagination.query;
@@ -194,30 +197,21 @@ export function CategoryPage() {
         [],
     );
 
-    const fallbackProducts = sortCategoryProducts(
-        products.filter(product =>
-            matchesFilters(product, fulfillmentFilter, inStockOnly, minimumPriceInput, maximumPriceInput),
-        ),
-        sortMode,
-        locale,
-    );
-    const categoryProducts = collections.length ? pagination.products : fallbackProducts;
+    const categoryProducts = pagination.products;
     const visibleProducts = categoryProducts;
-    const totalItems = collections.length ? pagination.totalItems : fallbackProducts.length;
-    const categoryLoading = collections.length
-        ? catalogQuery.isLoading && !catalogQuery.isPlaceholderData && !categoryProducts.length
-        : loading;
-    const categoryError = collections.length
-        ? catalogQuery.isPaused && catalogQuery.data === undefined
+    const totalItems = pagination.totalItems;
+    const categoryLoading =
+        catalogQuery.isLoading && !catalogQuery.isPlaceholderData && !categoryProducts.length;
+    const categoryError =
+        catalogQuery.isPaused && catalogQuery.data === undefined
             ? offlineLoadError(language)
             : catalogQuery.error instanceof Error
               ? storefrontErrorMessage(catalogQuery.error, language)
-              : ''
-        : (error ?? '');
+              : '';
 
     useEffect(() => {
-        // Fallback products have no catalog provenance; placeholder pages belong to an older query.
-        if (!collections.length || !catalogQuery.isSuccess || catalogQuery.isPlaceholderData) return;
+        // Placeholder pages belong to an older query and must not seed product detail state.
+        if (!catalogQuery.isSuccess || catalogQuery.isPlaceholderData) return;
         for (const product of categoryProducts) {
             const queryKey = storefrontQueryKeys.product(
                 storefrontQueryKeys.market(market),
@@ -234,7 +228,6 @@ export function CategoryPage() {
         }
     }, [
         categoryProducts,
-        collections.length,
         catalogQuery.isSuccess,
         catalogQuery.isPlaceholderData,
         market.code,
@@ -319,6 +312,32 @@ export function CategoryPage() {
                                 className="primary-categories"
                                 aria-label={isZh ? '一级分类' : 'Main categories'}
                             >
+                                <button
+                                    type="button"
+                                    title={isZh ? '全部商品' : 'All products'}
+                                    aria-label={isZh ? '全部商品' : 'All products'}
+                                    className={activeCollectionId === 'all' ? 'is-active' : undefined}
+                                    aria-pressed={activeCollectionId === 'all'}
+                                    onClick={event => {
+                                        onCollectionChange('all', 'all');
+                                        const item = event.currentTarget;
+                                        const scroller = item.parentElement;
+                                        if (!scroller) return;
+                                        requestAnimationFrame(() => {
+                                            scroller.scrollTo({
+                                                left: centeredHorizontalScrollLeft(scroller, item),
+                                                behavior: 'smooth',
+                                            });
+                                        });
+                                    }}
+                                >
+                                    <span className="primary-category-image">
+                                        <span className="primary-category-placeholder">
+                                            <LayoutGrid aria-hidden="true" />
+                                        </span>
+                                    </span>
+                                    <span className="primary-category-label">{isZh ? '全部' : 'All'}</span>
+                                </button>
                                 {primaryCollections.map((collection, index) => {
                                     const image = primaryCollectionImage(collection);
                                     return (
@@ -354,7 +373,7 @@ export function CategoryPage() {
                                                         alt=""
                                                         imageKind="thumbnail"
                                                         loading={index < 6 ? 'eager' : 'lazy'}
-                                                        fetchPriority={index < 6 ? 'high' : 'auto'}
+                                                        fetchPriority={index < 2 ? 'high' : 'auto'}
                                                         showFallbackIcon={false}
                                                     />
                                                 ) : (
@@ -600,7 +619,7 @@ export function CategoryPage() {
                         onNavigate={navigateTo}
                     />
 
-                    {categoryLoading || (loading && !collections.length) ? (
+                    {categoryLoading ? (
                         <ListSkeleton label={isZh ? '正在加载商品' : 'Loading products'} />
                     ) : categoryError && !categoryProducts.length ? (
                         <EmptyState
@@ -634,29 +653,27 @@ export function CategoryPage() {
                                     />
                                 ))}
                             </div>
-                            {catalogEnabled && (
-                                <CategoryPaginationStatus
-                                    sentinelRef={pagination.sentinelRef}
-                                    language={language}
-                                    state={
-                                        !pagination.online || catalogQuery.isPaused
-                                            ? 'offline'
-                                            : catalogQuery.isPlaceholderData ||
-                                                (catalogQuery.isFetching && !catalogQuery.isFetchingNextPage)
-                                              ? 'updating'
-                                              : catalogQuery.isFetchingNextPage
-                                                ? 'loading'
-                                                : catalogQuery.isError
-                                                  ? 'error'
-                                                  : !catalogQuery.hasNextPage
-                                                    ? 'done'
-                                                    : pagination.automaticSupported
-                                                      ? 'idle'
-                                                      : 'manual'
-                                    }
-                                    onContinue={() => void pagination.loadMore()}
-                                />
-                            )}
+                            <CategoryPaginationStatus
+                                sentinelRef={pagination.sentinelRef}
+                                language={language}
+                                state={
+                                    !pagination.online || catalogQuery.isPaused
+                                        ? 'offline'
+                                        : catalogQuery.isPlaceholderData ||
+                                            (catalogQuery.isFetching && !catalogQuery.isFetchingNextPage)
+                                          ? 'updating'
+                                          : catalogQuery.isFetchingNextPage
+                                            ? 'loading'
+                                            : catalogQuery.isError
+                                              ? 'error'
+                                              : !catalogQuery.hasNextPage
+                                                ? 'done'
+                                                : pagination.automaticSupported
+                                                  ? 'idle'
+                                                  : 'manual'
+                                }
+                                onContinue={() => void pagination.loadMore()}
+                            />
                         </>
                     ) : (
                         <EmptyState

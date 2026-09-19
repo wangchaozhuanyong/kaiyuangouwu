@@ -33,8 +33,6 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
         cart,
         toast,
         language,
-        logoUrl,
-        storefrontName,
         customer,
         customerLoadState,
         customerLoadError,
@@ -44,20 +42,22 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     const waitingForAccount = !customer && customerLoadState !== 'ready';
     const accountFailed = customerLoadState === 'error' || customerLoadState === 'paused';
     const showNavigation = isBrowsingStorefrontRoute(displayedRoute.name) || Boolean(customer);
-    const bootstrapIdentity = JSON.stringify([storefrontContextValue.storefrontCode, language]);
+    const readinessIdentity = JSON.stringify([
+        storefrontContextValue.storefrontCode,
+        language,
+        routeHref(displayedRoute),
+    ]);
     const skeletonVariant = pageSkeletonVariantForPathname(routeHref(displayedRoute));
 
     return (
         <StorefrontContext.Provider value={storefrontContextValue}>
             <DesktopLayoutContext.Provider value={desktop}>
                 <PageReadinessBoundary
-                    requestKey={bootstrapIdentity}
-                    navigationKey={bootstrapIdentity}
+                    requestKey={readinessIdentity}
+                    navigationKey={readinessIdentity}
                     pending={Boolean(state.pageDataPending || state.isNavigationPending)}
                     online={online}
                     language={language}
-                    logoUrl={logoUrl}
-                    storefrontName={storefrontName}
                     onRetry={() => window.location.reload()}
                     onBack={storefrontContextValue.goBack ?? (() => window.history.back())}
                 >

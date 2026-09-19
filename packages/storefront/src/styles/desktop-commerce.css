@@ -98,7 +98,7 @@
     .desktop-header-main {
         min-height: 88px;
         display: grid;
-        grid-template-columns: minmax(160px, 240px) minmax(300px, 1fr) 160px;
+        grid-template-columns: minmax(200px, 280px) minmax(300px, 1fr) 160px;
         gap: 44px;
         align-items: center;
     }

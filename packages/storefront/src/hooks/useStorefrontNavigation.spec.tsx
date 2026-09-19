@@ -52,9 +52,10 @@ describe('storefront navigation state', () => {
     });
     afterEach(() => act(() => root.unmount()));
 
-    it('uses the loaded category default and keeps filters when returning to categories', () => {
+    it('keeps the URL all-products default and remembers explicit filters when returning', () => {
         act(() => root.render(<Harness />));
-        expect(value.activeCollectionId).toBe('first');
+        expect(value.activeCollectionId).toBe('all');
+        expect(value.activeChildId).toBe('all');
         act(() => value.updateCategory({ collectionId: 'picked', minPrice: '10', inStockOnly: true }));
         act(() => value.navigate({ name: 'category' }));
         expect(router.navigate).toHaveBeenLastCalledWith(

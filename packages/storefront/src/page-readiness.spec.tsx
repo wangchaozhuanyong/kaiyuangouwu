@@ -5,8 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PageReadinessBoundary } from './page-readiness';
 import { SafeImage } from './safe-image';
-
-vi.mock('./route-loading', () => ({ RouteTransitionLoader: () => <div role="status">LOADING</div> }));
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function requiredImage(host: ParentNode): HTMLImageElement {
@@ -15,7 +13,7 @@ function requiredImage(host: ParentNode): HTMLImageElement {
     return image;
 }
 
-describe('whole-page readiness', () => {
+describe('progressive page readiness', () => {
     let host: HTMLDivElement;
     let root: ReturnType<typeof createRoot>;
     beforeEach(() => {
@@ -58,7 +56,6 @@ describe('whole-page readiness', () => {
                     pending={pending}
                     online={online}
                     language="zh"
-                    storefrontName="Store"
                     onBack={vi.fn()}
                     onRetry={vi.fn()}
                 >
@@ -86,8 +83,12 @@ describe('whole-page readiness', () => {
         });
     }
 
-    it('waits through data, a route module, and the visible image before revealing once', async () => {
+    it('keeps content visible while it observes data, a route module, and the visible image', async () => {
         render(<span data-page-pending="module" />, true);
+        const stage = host.querySelector<HTMLElement>('.page-readiness-stage');
+        expect(stage?.hasAttribute('inert')).toBe(false);
+        expect(stage?.style.opacity).toBe('');
+        expect(stage?.style.pointerEvents).toBe('');
         await advance(240);
         expect(host.querySelectorAll('[role=status]')).toHaveLength(1);
         render(<span data-page-pending="module" />);
@@ -161,8 +162,9 @@ describe('whole-page readiness', () => {
         expect(phase()).toBe('degraded');
     });
 
-    it('shows retry on data timeout or an offline pending query instead of revealing an empty form', async () => {
+    it('shows retry on data timeout or an offline pending query without hiding the current content', async () => {
         render(<h1>Form</h1>, true);
+        expect(host.textContent).toContain('Form');
         await advance(10100);
         expect(phase()).toBe('error');
         expect(host.querySelector('[role=alert]')?.textContent).toContain('加载超时');
@@ -227,7 +229,7 @@ describe('whole-page readiness', () => {
         expect(host.textContent).toContain('New destination');
     });
 
-    it('does not set aria-hidden on stage and blurs descendant focus when stage is unreleased', () => {
+    it('does not hide, inert, or blur the current stage while a new route prepares', () => {
         render(
             <div>
                 <button type="button" id="test-btn">
@@ -238,7 +240,7 @@ describe('whole-page readiness', () => {
         );
         const stageElement = host.querySelector('.page-readiness-stage');
         expect(stageElement?.getAttribute('aria-hidden')).toBeNull();
-        expect(stageElement?.hasAttribute('inert')).toBe(true);
+        expect(stageElement?.hasAttribute('inert')).toBe(false);
 
         const button = host.querySelector<HTMLButtonElement>('#test-btn');
         expect(button).not.toBeNull();
@@ -254,6 +256,6 @@ describe('whole-page readiness', () => {
             true,
             'second',
         );
-        expect(document.activeElement).not.toBe(button);
+        expect(document.activeElement).toBe(button);
     });
 });

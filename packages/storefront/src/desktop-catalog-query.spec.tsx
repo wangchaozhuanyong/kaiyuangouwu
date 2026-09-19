@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { catalogInputFromRoute, catalogRouteWithChanges } from './catalog-route-query';
 import { ProductRow } from './components/common/product-row';
-import { desktopCatalogInput, desktopCatalogRoute } from './desktop-catalog-query';
 import { MarketConfig, Product } from './types';
 
 vi.mock('@tanstack/react-router', async importOriginal => ({
@@ -20,7 +20,7 @@ describe('desktop catalog navigation', () => {
             fulfillment: 'digital' as const,
             inStockOnly: true,
         };
-        const reset = { ...remembered, ...desktopCatalogRoute({ name: 'home' }) };
+        const reset = { ...remembered, ...catalogRouteWithChanges({ name: 'home' }) };
         expect(reset).toMatchObject({
             collectionId: 'all',
             childId: 'all',
@@ -29,8 +29,11 @@ describe('desktop catalog navigation', () => {
             fulfillment: 'all',
             inStockOnly: false,
         });
-        const stock = { ...remembered, ...desktopCatalogRoute({ name: 'home' }, { inStockOnly: true }) };
-        expect(desktopCatalogInput(stock)).toMatchObject({
+        const stock = {
+            ...remembered,
+            ...catalogRouteWithChanges({ name: 'home' }, { inStockOnly: true }),
+        };
+        expect(catalogInputFromRoute(stock)).toMatchObject({
             collectionId: undefined,
             minPriceWithTax: undefined,
             maxPriceWithTax: undefined,
@@ -48,35 +51,42 @@ describe('desktop catalog navigation', () => {
             maxPrice: '100',
             sort: 'recommended' as const,
         };
-        expect(desktopCatalogRoute(route, { sort: 'newest' })).toMatchObject({ ...route, sort: 'newest' });
+        expect(catalogRouteWithChanges(route, { sort: 'newest' })).toMatchObject({
+            ...route,
+            sort: 'newest',
+        });
         expect(
-            desktopCatalogRoute({ name: 'search', term: 'Token', inStockOnly: true }, { sort: 'price-asc' }),
+            catalogRouteWithChanges(
+                { name: 'search', term: 'Token', inStockOnly: true },
+                { sort: 'price-asc' },
+            ),
         ).toMatchObject({ name: 'search', term: 'Token', inStockOnly: true, sort: 'price-asc' });
     });
     it('loads the complete catalog on the home page without selecting the first category', () => {
-        expect(desktopCatalogInput({ name: 'home' })).toMatchObject({
+        expect(catalogInputFromRoute({ name: 'home' })).toMatchObject({
             collectionId: undefined,
             term: undefined,
             sort: 'recommended',
             inStockOnly: false,
         });
         expect(
-            desktopCatalogInput({ name: 'category', collectionId: 'all', childId: 'all' }).collectionId,
+            catalogInputFromRoute({ name: 'category', collectionId: 'all', childId: 'all' }).collectionId,
         ).toBeUndefined();
     });
 
     it('keeps the parent scope for All and uses the child scope when selected', () => {
         expect(
-            desktopCatalogInput({ name: 'category', collectionId: 'parent', childId: 'all' }).collectionId,
+            catalogInputFromRoute({ name: 'category', collectionId: 'parent', childId: 'all' }).collectionId,
         ).toBe('parent');
         expect(
-            desktopCatalogInput({ name: 'category', collectionId: 'parent', childId: 'child' }).collectionId,
+            catalogInputFromRoute({ name: 'category', collectionId: 'parent', childId: 'child' })
+                .collectionId,
         ).toBe('child');
     });
 
     it('sends search, stock, fulfillment, and minor-unit prices to the existing catalog API', () => {
         expect(
-            desktopCatalogInput({
+            catalogInputFromRoute({
                 name: 'search',
                 term: ' Token ',
                 sort: 'price-desc',

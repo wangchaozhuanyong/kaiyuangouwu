@@ -23,6 +23,7 @@ vi.mock('@vendure/store-management-plugin', async () => ({
 import {
     CatalogAssetAccessStrategy,
     createCatalogImageTransformStrategies,
+    PUBLIC_CATALOG_ASSET_CACHE_CONTROL,
 } from './catalog-asset-access-strategy';
 
 function harness(userId?: string) {
@@ -30,13 +31,11 @@ function harness(userId?: string) {
     const findPublished = vi.fn().mockResolvedValue([]);
     const renderPublished = vi.fn().mockResolvedValue('<img src="/assets/preview/public-hero.jpg">');
     const getSessionFromToken = vi.fn().mockResolvedValue(userId ? { user: { id: userId } } : undefined);
+    const resolveRequest = vi.fn().mockResolvedValue({ host: 'shop.example.com', ctx });
     const instances = new Map<unknown, unknown>([
         [ConfigService, { authOptions: { tokenMethod: ['cookie', 'bearer'], apiKeyHeaderKey: 'x-api-key' } }],
         [SessionService, { getSessionFromToken }],
-        [
-            StorefrontPromotionAccessService,
-            { resolveRequest: vi.fn().mockResolvedValue({ host: 'shop.example.com', ctx }) },
-        ],
+        [StorefrontPromotionAccessService, { resolveRequest }],
         [StorefrontContentService, { findPublished }],
         [StorefrontPromotionService, { renderPublished }],
     ]);
@@ -58,7 +57,16 @@ function harness(userId?: string) {
             input: { preset: 'thumbnail' },
             availablePresets: [],
         } as never);
-    return { read, renderPublished, findPublished, ctx, repositories, headers };
+    return {
+        read,
+        renderPublished,
+        findPublished,
+        resolveRequest,
+        getSessionFromToken,
+        ctx,
+        repositories,
+        headers,
+    };
 }
 
 describe('catalog media boundary', () => {
@@ -72,7 +80,7 @@ describe('catalog media boundary', () => {
             await expect(test.read('/preview/published.jpg')).resolves.toEqual({ preset: 'thumbnail' });
             expect(test.headers.setHeader).toHaveBeenCalledWith(
                 'Cache-Control',
-                'private, max-age=300, must-revalidate',
+                PUBLIC_CATALOG_ASSET_CACHE_CONTROL,
             );
             const where = repository.findOne.mock.calls[0][0].where;
             expect(where).toHaveLength(4);
@@ -94,7 +102,7 @@ describe('catalog media boundary', () => {
         await expect(test.read('/preview/unpublished.jpg')).rejects.toThrow('Asset access denied');
         expect(test.headers.setHeader).not.toHaveBeenCalledWith(
             'Cache-Control',
-            'private, max-age=300, must-revalidate',
+            PUBLIC_CATALOG_ASSET_CACHE_CONTROL,
         );
     });
     it('authorizes catalog media before applying the image preset', () => {
@@ -116,7 +124,23 @@ describe('catalog media boundary', () => {
         await expect(harness().read(path)).rejects.toThrow('Asset access denied');
     });
     it('keeps the exact public promotion image readable', async () => {
-        await expect(harness().read('/preview/public-hero.jpg')).resolves.toEqual({ preset: 'thumbnail' });
+        const test = harness();
+        await expect(test.read('/preview/public-hero.jpg')).resolves.toEqual({ preset: 'thumbnail' });
+        await expect(test.read('/preview/public-hero.jpg')).resolves.toEqual({ preset: 'thumbnail' });
+        expect(test.findPublished).toHaveBeenCalledOnce();
+        expect(test.renderPublished).toHaveBeenCalledOnce();
+        expect(test.getSessionFromToken).not.toHaveBeenCalled();
+    });
+    it('never reuses a public authorization across store channels', async () => {
+        const test = harness();
+        await expect(test.read('/preview/public-hero.jpg')).resolves.toEqual({ preset: 'thumbnail' });
+        test.findPublished.mockResolvedValue([]);
+        test.renderPublished.mockResolvedValue('');
+        test.resolveRequest.mockResolvedValue({
+            host: 'other-shop.example.com',
+            ctx: { channelId: 'shop-b', languageCode: 'en' },
+        });
+        await expect(test.read('/preview/public-hero.jpg')).rejects.toThrow('Asset access denied');
     });
     it.each(['/preview/login.jpg', '/assets/preview/login.jpg', '/source/register.svg'])(
         'allows an exact published account visual: %s',
@@ -161,7 +185,7 @@ describe('catalog media boundary', () => {
         expect(test.headers.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
         expect(test.headers.setHeader).not.toHaveBeenCalledWith(
             'Cache-Control',
-            'private, max-age=300, must-revalidate',
+            PUBLIC_CATALOG_ASSET_CACHE_CONTROL,
         );
     });
     it('keeps authenticated media available on a public lookup failure while rejecting guests', async () => {
@@ -177,7 +201,7 @@ describe('catalog media boundary', () => {
             }
             expect(test.headers.setHeader).not.toHaveBeenCalledWith(
                 'Cache-Control',
-                'private, max-age=300, must-revalidate',
+                PUBLIC_CATALOG_ASSET_CACHE_CONTROL,
             );
         }
     });
