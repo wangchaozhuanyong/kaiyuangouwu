@@ -163,7 +163,11 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
                                 catalogProductChannelAssignments: {
                                     totalItems: 1,
                                     channels: [
-                                        { id: 'channel-default', code: '__default_channel__', isDefault: true },
+                                        {
+                                            id: 'channel-default',
+                                            code: '__default_channel__',
+                                            isDefault: true,
+                                        },
                                         { id: 'channel-branch-1', code: 'branch-store', isDefault: false },
                                     ],
                                     items: [
@@ -172,7 +176,11 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
                                             name: '白利群2',
                                             enabled: true,
                                             channels: [
-                                                { id: 'channel-default', code: '__default_channel__', isDefault: true },
+                                                {
+                                                    id: 'channel-default',
+                                                    code: '__default_channel__',
+                                                    isDefault: true,
+                                                },
                                             ],
                                         },
                                     ],
@@ -212,6 +220,16 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
 }
 
 describe('CatalogModule category columns', () => {
+    it('keeps the filter toolbar pinned above the scrolling product table', async () => {
+        const container = await renderCatalog();
+        const toolbar = container.querySelector<HTMLElement>('[data-testid="catalog-filter-toolbar"]');
+
+        expect(toolbar?.classList.contains('sticky')).toBe(true);
+        expect(toolbar?.classList.contains('-top-5')).toBe(true);
+        expect(toolbar?.classList.contains('sm:-top-8')).toBe(true);
+        expect(toolbar?.parentElement?.classList.contains('overflow-hidden')).toBe(false);
+    });
+
     it('describes soft deletion accurately and disables background search during password confirmation', async () => {
         const container = await renderCatalog();
         await act(async () => container.querySelector<HTMLButtonElement>('[title="删除商品"]')!.click());
@@ -256,7 +274,9 @@ describe('CatalogModule category columns', () => {
 
     it('supports selecting products and reveals floating bulk channel bar', async () => {
         const container = await renderCatalog({ channelCode: '__default_channel__' });
-        const selectAllCheckbox = container.querySelector<HTMLInputElement>('thead th input[type="checkbox"]');
+        const selectAllCheckbox = container.querySelector<HTMLInputElement>(
+            'thead th input[type="checkbox"]',
+        );
         expect(selectAllCheckbox).not.toBeNull();
 
         await act(async () => {

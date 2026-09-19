@@ -557,9 +557,12 @@ export function CatalogModule() {
                 )}
 
                 {/* Table Container */}
-                <div className="bg-white rounded-xl shadow-2xs border border-slate-200 flex flex-col min-h-[520px] overflow-hidden">
+                <div className="bg-white rounded-xl shadow-2xs border border-slate-200 flex flex-col min-h-[520px]">
                     {/* Toolbar */}
-                    <div className="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50">
+                    <div
+                        data-testid="catalog-filter-toolbar"
+                        className="sticky -top-5 z-30 flex flex-wrap items-center justify-between gap-3 rounded-t-xl border-b border-slate-200 bg-slate-50 p-4 sm:-top-8"
+                    >
                         <div className="flex gap-1.5">
                             <button
                                 type="button"
