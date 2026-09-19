@@ -20,9 +20,10 @@ describe('Adaptive Image Tone & Typography Contrast Engine', () => {
         const style = heroThemeStyle({}, 'light');
         expect(style['--hero-title-color']).toBe('#0f172a');
         expect(style['--hero-body-color']).toBe('#334155');
-        // Diffuse ambient white halo for crisp text on textured light surfaces
+        // Crisp edge definition shadow (no large blur halo)
         expect(style['--hero-title-shadow']).toContain('rgba(255, 255, 255');
         expect(style['--hero-body-shadow']).toContain('rgba(255, 255, 255');
+        expect(style['--hero-body-shadow']).not.toContain('12px');
         // High contrast pagination
         expect(style['--hero-pagination-active-color']).toBe('#0f172a');
     });
@@ -44,10 +45,10 @@ describe('Adaptive Image Tone & Typography Contrast Engine', () => {
         expect(style['--hero-body-shadow']).toContain('rgba(255, 255, 255');
     });
 
-    it('uses gentle, non-muddy overlay gradient to keep original image clear and crisp', () => {
+    it('uses a strong protective overlay scrim to keep text readable on any background image', () => {
         const lightStyle = heroThemeStyle({}, 'light');
-        // Max opacity on light tone is subtle (<= 0.50), not heavy 0.92+ mud
-        expect(lightStyle['--hero-overlay-strong']).toBe('rgba(255, 255, 255, 0.50)');
+        // Strong protective scrim (0.94) ensures dark text remains readable on any photo
+        expect(lightStyle['--hero-overlay-strong']).toBe('rgba(255, 255, 255, 0.94)');
         expect(lightStyle['--hero-overlay-fade']).toBe('transparent');
     });
 });

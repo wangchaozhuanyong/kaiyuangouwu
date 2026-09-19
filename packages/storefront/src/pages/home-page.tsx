@@ -37,7 +37,7 @@ import { ProductCard } from '../components/common/product-card';
 import { claimableCouponCampaigns } from '../coupon-center-state';
 import { useDesktopLayout } from '../desktop-layout';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
-import { heroThemeStyle, useImageTone } from '../hero-theme';
+import { heroThemeStyle, isLightColor, useImageTone } from '../hero-theme';
 import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-merchandising';
 import { homepageModuleEntries } from '../homepage-module-order';
 import { resolveManagedContentCopy } from '../managed-content-copy';
@@ -572,7 +572,16 @@ export function HomePage() {
             : undefined;
     const hero = managedHeroProduct;
     const heroImage = managedHero?.imageUrl ?? '';
-    const heroImageTone = useImageTone(heroImage);
+    // Context-aware fallback: when CORS prevents canvas sampling, use explicit
+    // text/background color to decide fallback tone so dark text never gets white overlay.
+    const heroFallbackTone: 'light' | 'dark' = (() => {
+        const HEX = /^#[0-9a-f]{6}$/i;
+        const text = typeof managedHero?.textColor === 'string' ? managedHero.textColor.trim() : '';
+        const bg = typeof managedHero?.backgroundColor === 'string' ? managedHero.backgroundColor.trim() : '';
+        if ((HEX.test(text) && !isLightColor(text)) || (HEX.test(bg) && isLightColor(bg))) return 'light';
+        return 'dark';
+    })();
+    const heroImageTone = useImageTone(heroImage, heroFallbackTone);
     const heroStyle = managedHero ? heroThemeStyle(managedHero, heroImageTone) : undefined;
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
     const defaultNoticeItem: HomeNoticeItem = {

@@ -42,19 +42,33 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
     const defaultAccent = vipTheme ? '#fbbf24' : '#67e8f9';
     const defaultAccentSecondary = vipTheme ? '#b45309' : '#0e7490';
 
-    // Explicit or inferred background
+    // Explicit background
     const rawBgColor = typeof block.backgroundColor === 'string' ? block.backgroundColor.trim() : '';
     const hasExplicitBg = HEX_COLOR_PATTERN.test(rawBgColor);
+    const bgIsLight = hasExplicitBg && isLightColor(rawBgColor);
+
+    // Explicit text
+    const rawTextColor = typeof block.textColor === 'string' ? block.textColor.trim() : '';
+    const hasExplicitText = HEX_COLOR_PATTERN.test(rawTextColor);
+    const explicitTextIsLight = hasExplicitText && isLightColor(rawTextColor);
+
+    // Tone resolution:
+    // If text is explicitly dark, tone MUST be light to protect dark text with a light scrim.
+    // If text is explicitly light, tone MUST be dark to protect white text with a dark scrim.
+    // If text is not explicitly set, follow explicit background or imageTone.
+    const isLightTone = hasExplicitText
+        ? !explicitTextIsLight
+        : hasExplicitBg
+          ? bgIsLight
+          : imageTone === 'light';
+    const highContrast = settings.contrastMode === 'high';
+
     const overlayColor = normalizedColor(
         block.backgroundColor,
-        imageTone === 'light'
-            ? 'rgba(255, 255, 255, 0.92)'
+        isLightTone
+            ? 'rgba(255, 255, 255, 0.96)'
             : 'var(--store-background, var(--skin-hero-background, #090d16))',
     );
-
-    // Check if background or detected tone is light
-    const isLightTone = imageTone === 'light' || (hasExplicitBg && isLightColor(rawBgColor));
-    const highContrast = settings.contrastMode === 'high';
 
     const accentColor = normalizedColor(
         settings.accentColor,
@@ -62,8 +76,6 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
     );
 
     // Explicit or adaptive title color
-    const rawTextColor = typeof block.textColor === 'string' ? block.textColor.trim() : '';
-    const hasExplicitText = HEX_COLOR_PATTERN.test(rawTextColor);
     const defaultTitleColor = isLightTone
         ? '#0f172a'
         : imageTone === 'dark'
@@ -73,15 +85,15 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
     const titleIsLight = isLightColor(titleColor);
 
     // Adaptive secondary/desc text color:
-    // If title was set to dark, secondary should definitely be dark (#334155), never white!
+    // If title was set to dark, secondary must always be dark (#334155 / #1e293b), never white!
     const rawSecondaryColor =
         typeof settings.secondaryTextColor === 'string' ? settings.secondaryTextColor.trim() : '';
     const hasExplicitSecondary = HEX_COLOR_PATTERN.test(rawSecondaryColor);
     let defaultBodyColor: string;
     if (hasExplicitSecondary) {
         defaultBodyColor = rawSecondaryColor;
-    } else if (hasExplicitText) {
-        defaultBodyColor = titleIsLight ? '#f1f5f9' : '#334155';
+    } else if (!titleIsLight) {
+        defaultBodyColor = '#334155';
     } else {
         defaultBodyColor = isLightTone
             ? '#334155'
@@ -94,16 +106,18 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
         '--hero-overlay-color': overlayColor,
         '--hero-overlay-strong': isLightTone
             ? highContrast
-                ? 'rgba(255, 255, 255, 0.75)'
-                : 'rgba(255, 255, 255, 0.50)'
+                ? 'rgba(255, 255, 255, 0.96)'
+                : 'rgba(255, 255, 255, 0.94)'
             : colorWithAlpha(overlayColor, highContrast ? 0.97 : 0.92),
         '--hero-overlay-medium': isLightTone
             ? highContrast
-                ? 'rgba(255, 255, 255, 0.45)'
-                : 'rgba(255, 255, 255, 0.25)'
+                ? 'rgba(255, 255, 255, 0.85)'
+                : 'rgba(255, 255, 255, 0.76)'
             : colorWithAlpha(overlayColor, highContrast ? 0.9 : 0.82),
         '--hero-overlay-soft': isLightTone
-            ? 'rgba(255, 255, 255, 0.08)'
+            ? highContrast
+                ? 'rgba(255, 255, 255, 0.38)'
+                : 'rgba(255, 255, 255, 0.24)'
             : colorWithAlpha(overlayColor, highContrast ? 0.66 : 0.46),
         '--hero-overlay-fade': isLightTone
             ? 'transparent'
@@ -111,7 +125,7 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
         '--hero-title-color': titleColor,
         '--hero-body-color': defaultBodyColor,
         '--hero-accent-color': accentColor,
-        '--hero-accent-soft': isLightTone ? 'rgba(255, 255, 255, 0.85)' : colorWithAlpha(accentColor, 0.18),
+        '--hero-accent-soft': isLightTone ? 'rgba(255, 255, 255, 0.88)' : colorWithAlpha(accentColor, 0.18),
         '--hero-accent-border': isLightTone
             ? colorWithAlpha(accentColor, 0.65)
             : colorWithAlpha(accentColor, 0.48),
@@ -126,11 +140,11 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
         '--hero-button-text-color': normalizedColor(settings.buttonTextColor, '#ffffff'),
         '--hero-title-shadow':
             isLightTone || !titleIsLight
-                ? '0 1px 0 rgba(255, 255, 255, 0.86), 0 0 16px rgba(255, 255, 255, 0.55), 0 8px 24px rgba(69, 26, 26, 0.12)'
+                ? '0 1px 1px rgba(255, 255, 255, 0.9), 0 2px 8px rgba(0, 0, 0, 0.04)'
                 : '0 2px 10px rgba(0, 0, 0, 0.85), 0 0 20px var(--hero-accent-shadow)',
         '--hero-body-shadow':
             isLightTone || !titleIsLight
-                ? '0 1px 0 rgba(255, 255, 255, 0.85), 0 0 12px rgba(255, 255, 255, 0.4)'
+                ? '0 1px 1px rgba(255, 255, 255, 0.85)'
                 : '0 1px 4px rgba(0, 0, 0, 0.85), 0 0 8px rgba(0, 0, 0, 0.4)',
         '--hero-pill-shadow': isLightTone
             ? '0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(255, 255, 255, 0.8)'
