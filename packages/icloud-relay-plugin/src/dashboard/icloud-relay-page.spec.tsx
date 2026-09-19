@@ -10,6 +10,8 @@ const fixture = vi.hoisted(() => ({
     pending: undefined as Promise<void> | undefined,
     queryFailure: false,
     failure: false,
+    status: 'ACTIVE',
+    lastSyncError: null as string | null,
     toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
@@ -46,10 +48,11 @@ vi.mock('@vendure/dashboard', async () => {
                                 id: '1',
                                 email: 'test@icloud.com',
                                 note: fixture.note,
-                                status: 'ACTIVE',
+                                status: fixture.status,
                                 codeResetIntervalDays: 0,
                                 masterQueryCode: 'FIXTURE-CODE',
                                 remainingDays: null,
+                                lastSyncError: fixture.lastSyncError,
                             },
                         ],
                     };
@@ -97,6 +100,8 @@ describe('registered legacy iCloud dashboard', () => {
         fixture.pending = undefined;
         fixture.queryFailure = false;
         fixture.failure = false;
+        fixture.status = 'ACTIVE';
+        fixture.lastSyncError = null;
         vi.clearAllMocks();
         client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
         container = document.createElement('div');
@@ -161,5 +166,15 @@ describe('registered legacy iCloud dashboard', () => {
             await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).toBeNull());
         });
         expect(fixture.requests).toHaveLength(2);
+    });
+
+    it('shows retryable sync failures without calling them password errors', async () => {
+        fixture.lastSyncError = 'connect ETIMEDOUT';
+        await act(async () => {
+            await client.refetchQueries({ queryKey: ['icloud', 'primary'] });
+            await vi.waitFor(() => expect(container.textContent).toContain('同步异常'));
+        });
+        expect(container.textContent).toContain('connect ETIMEDOUT');
+        expect(container.textContent).not.toContain('密码错误');
     });
 });

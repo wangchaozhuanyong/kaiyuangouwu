@@ -27,6 +27,19 @@ export interface SyncAccountResult {
     error?: string;
 }
 
+export function isIcloudAuthenticationFailure(error: unknown): boolean {
+    if (!error || typeof error !== 'object') return false;
+    const failure = error as {
+        authenticationFailed?: unknown;
+        serverResponseCode?: unknown;
+    };
+    return (
+        failure.authenticationFailed === true ||
+        (typeof failure.serverResponseCode === 'string' &&
+            failure.serverResponseCode.toUpperCase() === 'AUTHENTICATIONFAILED')
+    );
+}
+
 @Injectable()
 export class IcloudImapSyncService {
     constructor(
@@ -225,7 +238,12 @@ export class IcloudImapSyncService {
                         imapHost: account.imapHost,
                         imapPort: account.imapPort,
                     },
-                    { status: IcloudAccountStatus.AUTH_ERROR, lastSyncError: err.message },
+                    {
+                        status: isIcloudAuthenticationFailure(err)
+                            ? IcloudAccountStatus.AUTH_ERROR
+                            : account.status,
+                        lastSyncError: err.message,
+                    },
                 );
             return { success: false, syncedCount, error: err.message };
         }

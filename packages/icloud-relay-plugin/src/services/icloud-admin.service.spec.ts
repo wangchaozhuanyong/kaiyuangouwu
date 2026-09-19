@@ -1,11 +1,60 @@
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { IcloudPrimaryAccount } from '../entities/icloud-primary-account.entity';
+import { IcloudAccountStatus } from '../types';
+
 import { IcloudAccessCodeService } from './icloud-access-code.service';
 import { IcloudAdminService } from './icloud-admin.service';
 import { IcloudCipherService } from './icloud-cipher.service';
 import { IcloudImapSyncService } from './icloud-imap-sync.service';
 import { IcloudMailHistoryService } from './icloud-mail-history.service';
+
+describe('primary mailbox connection recovery', () => {
+    it('clears a stale authentication error after a successful connection test', async () => {
+        const account = new IcloudPrimaryAccount({
+            id: 'primary-1',
+            email: 'local@example.com',
+            encryptedAppPassword: 'encrypted-fixture',
+            imapHost: 'imap.mail.me.com',
+            imapPort: 993,
+            status: IcloudAccountStatus.AUTH_ERROR,
+            lastSyncError: 'connect ETIMEDOUT',
+        });
+        const repo = {
+            findOne: vi.fn().mockResolvedValue(account),
+            update: vi.fn().mockResolvedValue({ affected: 1 }),
+        };
+        const connection = {
+            getRepository: vi.fn(() => repo),
+        } as unknown as TransactionalConnection;
+        const imapSync = {
+            testConnection: vi.fn().mockResolvedValue({ success: true, message: '连接正常' }),
+        } as unknown as IcloudImapSyncService;
+        const service = new IcloudAdminService(
+            connection,
+            {} as IcloudCipherService,
+            new IcloudAccessCodeService(),
+            imapSync,
+            {} as IcloudMailHistoryService,
+        );
+
+        await expect(service.testConnection({} as RequestContext, account.id)).resolves.toEqual({
+            success: true,
+            message: '连接正常',
+        });
+        expect(repo.update).toHaveBeenCalledWith(
+            {
+                id: account.id,
+                status: IcloudAccountStatus.AUTH_ERROR,
+                encryptedAppPassword: account.encryptedAppPassword,
+                imapHost: account.imapHost,
+                imapPort: account.imapPort,
+            },
+            { status: IcloudAccountStatus.ACTIVE, lastSyncError: null },
+        );
+    });
+});
 
 describe('batch virtual mailbox import', () => {
     it('parses the documented separators, preserves notes and reports invalid or duplicate rows', async () => {

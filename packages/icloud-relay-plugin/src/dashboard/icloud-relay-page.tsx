@@ -37,14 +37,14 @@ import {
 // ==========================================
 // Status Badge Helper
 // ==========================================
-const StatusBadge = ({ status }: { status: string }) => {
+const StatusBadge = ({ status, lastSyncError }: { status: string; lastSyncError?: string | null }) => {
     switch (status) {
         case 'ACTIVE':
-            return <Badge color="green">正常</Badge>;
+            return lastSyncError ? <Badge color="red">同步异常</Badge> : <Badge color="green">正常</Badge>;
         case 'DISABLED':
             return <Badge color="gray">已禁用</Badge>;
         case 'AUTH_ERROR':
-            return <Badge color="red">授权错误</Badge>;
+            return <Badge color="red">认证失败</Badge>;
         case 'SYNCING':
             return <Badge color="blue">同步中</Badge>;
         default:
@@ -493,7 +493,10 @@ export function IcloudRelayPage() {
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <StatusBadge status={account.status} />
+                                                    <StatusBadge
+                                                        status={account.status}
+                                                        lastSyncError={account.lastSyncError}
+                                                    />
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-1.5">

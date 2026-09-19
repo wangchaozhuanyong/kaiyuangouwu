@@ -189,7 +189,20 @@ export class IcloudAdminService {
         if (!account) {
             return { success: false, message: '主邮箱不存在' };
         }
-        return this.imapSyncService.testConnection(account);
+        const result = await this.imapSyncService.testConnection(account);
+        if (result.success && account.status !== IcloudAccountStatus.DISABLED) {
+            await repo.update(
+                {
+                    id: account.id,
+                    status: account.status,
+                    encryptedAppPassword: account.encryptedAppPassword,
+                    imapHost: account.imapHost,
+                    imapPort: account.imapPort,
+                },
+                { status: IcloudAccountStatus.ACTIVE, lastSyncError: null },
+            );
+        }
+        return result;
     }
 
     async syncPrimaryAccount(ctx: RequestContext, id: ID): Promise<SyncAccountResult> {

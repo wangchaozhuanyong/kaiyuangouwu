@@ -714,7 +714,8 @@ export function IcloudRelayModule() {
                                                         </span>
                                                     </td>
                                                     <td className="p-3.5">
-                                                        {account.status === 'ACTIVE' ? (
+                                                        {account.status === 'ACTIVE' &&
+                                                        !account.lastSyncError ? (
                                                             <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                                                                 正常
@@ -722,13 +723,26 @@ export function IcloudRelayModule() {
                                                         ) : account.status === 'AUTH_ERROR' ? (
                                                             <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                                                                 <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                                                                密码错误
+                                                                认证失败
+                                                            </span>
+                                                        ) : account.status === 'ACTIVE' ? (
+                                                            <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                                                同步异常
                                                             </span>
                                                         ) : (
                                                             <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-bold bg-slate-100 text-slate-600">
                                                                 <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
                                                                 {account.status}
                                                             </span>
+                                                        )}
+                                                        {account.lastSyncError && (
+                                                            <div
+                                                                className="mt-1 max-w-[180px] truncate text-[10px] text-slate-500"
+                                                                title={account.lastSyncError}
+                                                            >
+                                                                {account.lastSyncError}
+                                                            </div>
                                                         )}
                                                     </td>
                                                     <td className="p-3.5">

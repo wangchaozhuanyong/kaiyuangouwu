@@ -179,6 +179,30 @@ describe('iCloud admin save interactions against the server schema', () => {
             await vi.waitFor(() => expect(document.body.textContent).toContain('数据已刷新'));
         });
     });
+    it('distinguishes authentication failures from retryable sync errors', async () => {
+        fixture.state.primary = {
+            ...fixture.state.primary,
+            status: 'AUTH_ERROR',
+            lastSyncError: 'Authentication failed',
+        };
+        await click(button('刷新'));
+        await act(async () => {
+            await vi.waitFor(() => expect(document.body.textContent).toContain('认证失败'));
+        });
+        expect(document.body.textContent).not.toContain('密码错误');
+        expect(document.querySelector('[title="Authentication failed"]')).toBeTruthy();
+
+        fixture.state.primary = {
+            ...fixture.state.primary,
+            status: 'ACTIVE',
+            lastSyncError: 'connect ETIMEDOUT',
+        };
+        await click(button('刷新'));
+        await act(async () => {
+            await vi.waitFor(() => expect(document.body.textContent).toContain('同步异常'));
+        });
+        expect(document.querySelector('[title="connect ETIMEDOUT"]')).toBeTruthy();
+    });
     it('separates a committed save from failed readback and retries only queries', async () => {
         await editVirtual();
         fixture.state.queryFailure = 'query unavailable';
