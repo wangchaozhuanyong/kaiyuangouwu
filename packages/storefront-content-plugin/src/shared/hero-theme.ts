@@ -1,7 +1,8 @@
-import type { CSSProperties } from 'react';
-import type { ImageTone } from './image-tone';
+import { type CSSProperties } from 'react';
 
 import { normalizedHeroThemePreset } from '../content-visuals';
+
+import { type ImageTone } from './image-tone';
 
 export interface HeroThemeData {
     backgroundColor?: string | null;
