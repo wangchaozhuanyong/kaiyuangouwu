@@ -80,12 +80,10 @@ describe('StorefrontCartService selection projection', () => {
             {} as any,
             {} as any,
         );
-        vi.spyOn(service as any, 'loadCart').mockImplementation(() =>
-            Promise.resolve({
-                ...cart,
-                checkoutOrder: order,
-            }),
-        );
+        vi.spyOn(service as any, 'loadCart').mockImplementation(() => ({
+            ...cart,
+            checkoutOrder: order,
+        }));
         const project = (force = false) =>
             (service as any).projectCart(
                 { channelId: 'store-a' },
@@ -358,7 +356,7 @@ describe('cart inventory before persistence', () => {
         vi.spyOn(service as any, 'claimRevision').mockResolvedValue(undefined);
         const projectCart = vi
             .spyOn(service as any, 'projectCart')
-            .mockImplementation((...args: unknown[]) => Promise.resolve(args[1] as StorefrontCart));
+            .mockImplementation((...args: unknown[]) => args[1] as StorefrontCart);
         const apply = (changes: any) => service.applyChanges({} as any, changes, 1, cart);
         return { service, cart, apply, repository, variants, projectCart };
     }
@@ -427,7 +425,7 @@ describe('cart inventory before persistence', () => {
         projectCart.mockImplementationOnce((...args: unknown[]) => {
             const next = args[1] as StorefrontCart;
             next.checkoutOrder = { id: 'order-1' } as any;
-            return Promise.resolve(next);
+            return next;
         });
 
         const result = await service.beginDirectPurchase(

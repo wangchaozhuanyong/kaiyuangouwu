@@ -73,6 +73,7 @@ test('verified copies integrate with the current channel-scoped download code wh
         });
         const order = {
             id: 'synthetic-order-a',
+            salesChannelId: 'a',
             state: 'PaymentSettled',
             active: false,
             totalWithTax: 100,
@@ -93,7 +94,8 @@ test('verified copies integrate with the current channel-scoped download code wh
         const connection = {
             getEntityOrThrow: async (ctx, entity, id, options) => {
                 assert.equal(id, order.id);
-                assert.equal(options.channelId, ctx.channelId);
+                assert.equal(ctx.channelId, order.salesChannelId);
+                assert.ok(options.relations.includes('lines.productVariant'));
                 return order;
             },
             rawConnection: { getRepository: () => ({ findOne: async () => order }) },

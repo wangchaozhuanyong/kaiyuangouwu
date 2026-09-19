@@ -26,14 +26,12 @@ import type {
     Order,
     OrderConfirmationToken,
     OrderPage,
-    PaymentMethod,
     Product,
     ProductSearchPage,
     ProductSearchSort,
     ReferralBalancePaymentResult,
     ReferralProgram,
     RegisterCustomerInput,
-    ShippingMethod,
     StoreCommerceMode,
     StoreCustomerCoupon,
     StorefrontCart,
@@ -523,44 +521,26 @@ export class ShopApi {
         return this.cartCheckoutApi.setCustomer(input);
     }
 
-    async setShippingAddress(input: CustomerAddressInput): Promise<Order> {
-        return this.cartCheckoutApi.setShippingAddress(input);
-    }
-
+    setShippingAddress: CartCheckoutApi['setShippingAddress'] = input =>
+        this.cartCheckoutApi.setShippingAddress(input);
     prepareShipping: CartCheckoutApi['prepareShipping'] = input =>
         this.cartCheckoutApi.prepareShipping(input);
-
-    async eligibleShippingMethods(): Promise<ShippingMethod[]> {
-        return this.cartCheckoutApi.eligibleShippingMethods();
-    }
-
-    async setShippingMethod(id: string): Promise<Order> {
-        return this.cartCheckoutApi.setShippingMethod(id);
-    }
-
-    async setShippingMethodWithCart(id: string): Promise<StorefrontCart> {
-        return this.cartCheckoutApi.setShippingMethodWithCart(id);
-    }
+    eligibleShippingMethods = () => this.cartCheckoutApi.eligibleShippingMethods();
+    setShippingMethod = (id: string) => this.cartCheckoutApi.setShippingMethod(id);
+    setShippingMethodWithCart = (id: string) => this.cartCheckoutApi.setShippingMethodWithCart(id);
 
     async setCurrencyForOrder(currencyCode: string): Promise<Order> {
         return this.cartCheckoutApi.setCurrencyForOrder(currencyCode);
     }
 
-    async setPaymentCurrencyForOrder(currencyCode: string): Promise<Order> {
-        return this.cartCheckoutApi.setPaymentCurrencyForOrder(currencyCode);
-    }
-
-    async eligiblePaymentMethods(signal?: AbortSignal, orderId?: string): Promise<PaymentMethod[]> {
-        return this.cartCheckoutApi.eligiblePaymentMethods(signal, orderId);
-    }
-
-    async prefetchEligiblePaymentMethods(orderId: string): Promise<PaymentMethod[]> {
-        return this.cartCheckoutApi.prefetchEligiblePaymentMethods(orderId);
-    }
-
-    cachedEligiblePaymentMethods(orderId: string): PaymentMethod[] | undefined {
-        return this.cartCheckoutApi.cachedEligiblePaymentMethods(orderId);
-    }
+    setPaymentCurrencyForOrder = (currencyCode: string) =>
+        this.cartCheckoutApi.setPaymentCurrencyForOrder(currencyCode);
+    eligiblePaymentMethods = (signal?: AbortSignal, orderId?: string) =>
+        this.cartCheckoutApi.eligiblePaymentMethods(signal, orderId);
+    prefetchEligiblePaymentMethods = (orderId: string) =>
+        this.cartCheckoutApi.prefetchEligiblePaymentMethods(orderId);
+    cachedEligiblePaymentMethods = (orderId: string) =>
+        this.cartCheckoutApi.cachedEligiblePaymentMethods(orderId);
 
     async createUsdtCheckoutQuote(signal?: AbortSignal): Promise<StorefrontUsdtCheckoutQuote> {
         return this.cartCheckoutApi.createUsdtCheckoutQuote(signal);

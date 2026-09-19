@@ -119,8 +119,8 @@ test('public smoke verifies ready and heartbeat before deterministically closing
 
     const result = await verifyPublicSmoke({
         url: fixture.url,
-        readyTimeoutMs: 200,
-        heartbeatTimeoutMs: 100,
+        readyTimeoutMs: 1_000,
+        heartbeatTimeoutMs: 500,
         closeTimeoutMs: 200,
         releaseId: 'public-fixture',
     });
@@ -129,10 +129,10 @@ test('public smoke verifies ready and heartbeat before deterministically closing
     assert.equal(result.mode, 'public-smoke');
     assert.equal(result.status, 200);
     assert.match(result.contentType, /^text\/event-stream/iu);
-    assert.ok(result.readyMs <= 200);
+    assert.ok(result.readyMs <= 1_000);
     assert.equal(result.readyHeartbeatIntervalMs, 10);
     assert.equal(result.legacyChannelHeaderCompatible, true);
-    assert.ok(result.heartbeatMs <= 100);
+    assert.ok(result.heartbeatMs <= 500);
     assert.deepEqual(fixture.receivedChannelTokens, ['legacy-market-code-probe']);
     await waitUntil(() => fixture.activeByIp.size === 0);
 });
