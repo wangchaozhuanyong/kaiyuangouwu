@@ -44,7 +44,7 @@ export function ProductCard({
 
     return (
         <article
-            className="product-card group relative isolate flex min-w-0 flex-col overflow-hidden pb-2.5"
+            className="product-card group relative isolate flex min-w-0 flex-col overflow-hidden pb-2.5 transition-transform duration-150 active:scale-[0.985]"
             onPointerEnter={() => prefetchProductAsset(product)}
             onPointerDown={() => prefetchProductAsset(product)}
             onFocus={() => prefetchProductAsset(product)}
@@ -79,7 +79,7 @@ export function ProductCard({
                 </button>
             )}
 
-            <div className="product-card-media aspect-square w-full overflow-hidden rounded-t-[inherit] [&_.responsive-picture]:block [&_.responsive-picture]:h-full [&_.responsive-picture]:w-full [&_.image-placeholder]:h-full [&_.image-placeholder]:w-full [&_.image-placeholder]:bg-[var(--product-media-bg)] [&_img]:block [&_img]:h-full [&_img]:w-full [&_img]:object-contain">
+            <div className="product-card-media aspect-square w-full overflow-hidden rounded-t-[inherit] [&_.responsive-picture]:block [&_.responsive-picture]:h-full [&_.responsive-picture]:w-full [&_.image-placeholder]:h-full [&_.image-placeholder]:w-full [&_.image-placeholder]:bg-[var(--product-media-bg)] [&_img]:block [&_img]:h-full [&_img]:w-full [&_img]:object-contain group-hover:[&_img]:scale-[1.03] [&_img]:transition-transform [&_img]:duration-300 [&_img]:ease-out">
                 <ProductImage product={product} />
             </div>
 
@@ -91,9 +91,15 @@ export function ProductCard({
                     {subtitle}
                 </span>
             ) : null}
-            <div className="mt-1 flex flex-wrap items-center gap-2 px-2.5 text-left text-[11px] leading-[1.35]">
-                <span className="font-medium text-[#0284c7]">{smartInfo.primary}</span>
-                {smartInfo.secondary ? <span className="text-[#94a3b8]">{smartInfo.secondary}</span> : null}
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 px-2.5 text-left text-[11px] leading-[1.35]">
+                <span className="inline-block rounded-[4px] bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10.5px] font-medium text-[var(--accent-ink)]">
+                    {smartInfo.primary}
+                </span>
+                {smartInfo.secondary ? (
+                    <span className="inline-block rounded-[4px] bg-[var(--soft)] px-1.5 py-0.5 text-[10.5px] text-[var(--muted)]">
+                        {smartInfo.secondary}
+                    </span>
+                ) : null}
             </div>
 
             <footer className="mt-auto flex min-h-[34px] items-center justify-between gap-2 px-2.5 pt-2">

@@ -180,7 +180,7 @@ export function BottomNavigation({
 
     return (
         <nav
-            className="storefront-bottom-nav fixed bottom-0 left-1/2 z-40 grid h-[calc(var(--bottom-navigation-height)+env(safe-area-inset-bottom,0px))] w-full max-w-[430px] border-t border-black/5 bg-white/95 px-2 pb-[calc(8px+env(safe-area-inset-bottom,0px))] pt-1.5 shadow-[0_-2px_14px_rgba(15,23,42,0.04)] backdrop-blur-md lg:top-0 lg:bottom-auto lg:h-[72px] lg:max-w-[560px] lg:border-t-0 lg:bg-transparent lg:shadow-none lg:backdrop-blur-none"
+            className="storefront-bottom-nav fixed bottom-0 left-1/2 z-40 grid h-[calc(var(--bottom-navigation-height)+env(safe-area-inset-bottom,0px))] w-full max-w-[430px] border-t border-[var(--line)] bg-[color-mix(in_srgb,var(--paper)_96%,transparent)] px-2 pb-[calc(8px+env(safe-area-inset-bottom,0px))] pt-1.5 shadow-[var(--shadow-sm)] backdrop-blur-md lg:top-0 lg:bottom-auto lg:h-[72px] lg:max-w-[560px] lg:border-t-0 lg:bg-transparent lg:shadow-none lg:backdrop-blur-none"
             style={{ gridTemplateColumns: 'repeat(' + items.length + ', minmax(0, 1fr))' }}
             aria-label={isZh ? '主导航' : 'Main navigation'}
         >
@@ -195,8 +195,8 @@ export function BottomNavigation({
                     <a
                         key={item.key}
                         className={cn(
-                            'flex w-[56px] min-w-[56px] flex-col items-center justify-center justify-self-center rounded-xl border-0 bg-transparent p-0.5 text-slate-500 transition-transform active:scale-95 lg:w-[96px] lg:min-w-[96px] lg:gap-[3px] lg:hover:bg-slate-100 lg:hover:text-slate-900',
-                            isActive && 'font-bold text-slate-900 lg:hover:bg-transparent',
+                            'flex w-[56px] min-w-[56px] flex-col items-center justify-center justify-self-center rounded-xl border-0 bg-transparent p-0.5 text-[var(--muted)] transition-transform active:scale-95 lg:w-[96px] lg:min-w-[96px] lg:gap-[3px] lg:hover:bg-slate-100 lg:hover:text-slate-900',
+                            isActive && 'font-bold text-[var(--text)] lg:hover:bg-transparent',
                         )}
                         aria-current={isActive ? 'page' : undefined}
                         aria-label={item.label}
@@ -235,11 +235,11 @@ export function BottomNavigation({
                                         'size-6 transition-transform duration-200',
                                         isActive && 'scale-[1.15] drop-shadow-sm',
                                     )}
-                                    style={{ color: isActive ? item.activeColor : '#64748B' }}
+                                    style={{ color: isActive ? item.activeColor : 'var(--muted)' }}
                                 />
                             )}
                             {item.routeName === 'cart' && cartQuantity > 0 && (
-                                <b className="absolute -right-2 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full border-[1.5px] border-white bg-red-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm">
+                                <b className="absolute -right-2 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full border-[1.5px] border-[var(--paper)] bg-[var(--accent)] px-1 text-[10px] font-bold leading-none text-white shadow-sm">
                                     {cartQuantity > 99 ? '99+' : cartQuantity}
                                 </b>
                             )}
@@ -247,7 +247,7 @@ export function BottomNavigation({
                         <span
                             className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-tight lg:hidden"
                             style={{
-                                color: isActive ? item.activeColor : '#64748B',
+                                color: isActive ? item.activeColor : 'var(--muted)',
                                 fontWeight: isActive ? 700 : 500,
                             }}
                         >
@@ -256,7 +256,7 @@ export function BottomNavigation({
                         <span
                             className="hidden max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[13px] leading-tight lg:block"
                             style={{
-                                color: isActive ? item.activeColor : '#64748B',
+                                color: isActive ? item.activeColor : 'var(--muted)',
                                 fontWeight: isActive ? 700 : 500,
                             }}
                         >

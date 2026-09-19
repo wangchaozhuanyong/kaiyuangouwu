@@ -32,6 +32,7 @@ import {
     StorefrontContentTargetType,
     StorefrontFlashSale,
     StorefrontFlashSaleItem,
+    StorefrontFlashSaleProduct,
     StorefrontLanguage,
 } from '../types';
 
@@ -199,6 +200,54 @@ export function HomepageCouponHub({
     );
 }
 
+export function aggregateFlashSaleProducts(items: StorefrontFlashSaleItem[]): StorefrontFlashSaleProduct[] {
+    const productsMap = new Map<string, StorefrontFlashSaleItem[]>();
+    for (const item of items) {
+        const list = productsMap.get(item.productId);
+        if (list) {
+            list.push(item);
+        } else {
+            productsMap.set(item.productId, [item]);
+        }
+    }
+
+    const aggregated: StorefrontFlashSaleProduct[] = [];
+    for (const [productId, variants] of productsMap.entries()) {
+        let lowestVariant = variants[0];
+        for (let i = 1; i < variants.length; i++) {
+            const v = variants[i];
+            if (v.salePrice < lowestVariant.salePrice) {
+                lowestVariant = v;
+            } else if (v.salePrice === lowestVariant.salePrice) {
+                if (v.originalPrice - v.salePrice > lowestVariant.originalPrice - lowestVariant.salePrice) {
+                    lowestVariant = v;
+                }
+            }
+        }
+
+        const minSalePrice = lowestVariant.salePrice;
+        const hasPriceRange = variants.some(v => v.salePrice !== minSalePrice);
+        const hasMultipleVariants = variants.length > 1;
+        const imageUrl = lowestVariant.imageUrl || variants.find(v => Boolean(v.imageUrl))?.imageUrl || null;
+
+        aggregated.push({
+            productId,
+            productVariantId: lowestVariant.productVariantId,
+            productName: lowestVariant.productName,
+            variantName: lowestVariant.variantName,
+            salePrice: minSalePrice,
+            originalPrice: lowestVariant.originalPrice,
+            currencyCode: lowestVariant.currencyCode,
+            imageUrl,
+            hasMultipleVariants,
+            hasPriceRange,
+            variantCount: variants.length,
+        });
+    }
+
+    return aggregated;
+}
+
 export function FlashSaleSection({
     title,
     subtitle,
@@ -212,12 +261,12 @@ export function FlashSaleSection({
 }: {
     title: string;
     subtitle?: string;
-    items: StorefrontFlashSaleItem[];
+    items: Array<StorefrontFlashSaleItem | StorefrontFlashSaleProduct>;
     locale: string;
     language: StorefrontLanguage;
     endsAt: string | null;
     onMore?: () => void;
-    onProduct: (productId: string) => void;
+    onProduct: (productId: string, variantId?: string) => void;
     layout?: 'carousel' | 'grid';
 }) {
     const isZh = language === 'zh';
@@ -244,39 +293,55 @@ export function FlashSaleSection({
                     isZh ? `秒杀商品，共 ${items.length} 件` : `Flash-sale products, ${items.length} items`
                 }
             >
-                {items.map(item => (
-                    <button
-                        type="button"
-                        className="flash-sale-card"
-                        key={item.productVariantId}
-                        onClick={() => onProduct(item.productId)}
-                        aria-label={`${isZh ? '查看秒杀商品' : 'View flash-sale product'} ${item.productName}`}
-                    >
-                        <span className="flash-sale-image">
-                            {item.imageUrl ? (
-                                <SafeImage
-                                    src={item.imageUrl}
-                                    alt={item.productName}
-                                    imageKind="card"
-                                    loading="lazy"
-                                />
-                            ) : (
-                                <span className="image-placeholder" aria-hidden="true">
-                                    <Package />
-                                </span>
-                            )}
-                            <em>{isZh ? '限时价' : 'Limited price'}</em>
-                        </span>
-                        <strong className="flash-sale-name">{item.productName}</strong>
-                        {item.variantName && item.variantName !== item.productName ? (
-                            <small>{item.variantName}</small>
-                        ) : null}
-                        <span className="flash-sale-price">
-                            <b>{formatMoney(item.salePrice, item.currencyCode, locale)}</b>
-                            <del>{formatMoney(item.originalPrice, item.currencyCode, locale)}</del>
-                        </span>
-                    </button>
-                ))}
+                {items.map(item => {
+                    const hasMultipleVariants =
+                        'hasMultipleVariants' in item ? item.hasMultipleVariants : false;
+                    const hasPriceRange = 'hasPriceRange' in item ? item.hasPriceRange : false;
+                    return (
+                        <button
+                            type="button"
+                            className="flash-sale-card"
+                            key={item.productId}
+                            onClick={() => onProduct(item.productId, item.productVariantId)}
+                            aria-label={`${isZh ? '查看秒杀商品' : 'View flash-sale product'} ${item.productName}`}
+                        >
+                            <span className="flash-sale-image">
+                                {item.imageUrl ? (
+                                    <SafeImage
+                                        src={item.imageUrl}
+                                        alt={item.productName}
+                                        imageKind="card"
+                                        loading="lazy"
+                                    />
+                                ) : (
+                                    <span className="image-placeholder" aria-hidden="true">
+                                        <Package />
+                                    </span>
+                                )}
+                                <em>{isZh ? '限时价' : 'Limited price'}</em>
+                            </span>
+                            <strong className="flash-sale-name">{item.productName}</strong>
+                            {hasMultipleVariants ? (
+                                <small className="flash-sale-variant-hint">
+                                    {isZh ? '多规格可选' : 'Multiple options'}
+                                </small>
+                            ) : item.variantName && item.variantName !== item.productName ? (
+                                <small>{item.variantName}</small>
+                            ) : null}
+                            <span className="flash-sale-price">
+                                <b>
+                                    {formatMoney(item.salePrice, item.currencyCode, locale)}
+                                    {hasPriceRange ? (
+                                        <span className="flash-sale-price-suffix">
+                                            {isZh ? ' 起' : ' up'}
+                                        </span>
+                                    ) : null}
+                                </b>
+                                <del>{formatMoney(item.originalPrice, item.currencyCode, locale)}</del>
+                            </span>
+                        </button>
+                    );
+                })}
             </div>
         </section>
     );
@@ -293,16 +358,17 @@ export function FlashSalePage({
     language: StorefrontLanguage;
     locale: string;
     onBack: () => void;
-    onProduct: (productId: string) => void;
+    onProduct: (productId: string, variantId?: string) => void;
 }) {
     const isZh = language === 'zh';
-    const items = sales
+    const rawItems = sales
         .flatMap(sale => sale.items)
         .filter(
             (item, index, allItems) =>
                 allItems.findIndex(candidate => candidate.productVariantId === item.productVariantId) ===
                 index,
         );
+    const items = aggregateFlashSaleProducts(rawItems);
     return (
         <Subpage title={isZh ? '限时秒杀' : 'Flash sale'} language={language} onBack={onBack}>
             {items.length ? (

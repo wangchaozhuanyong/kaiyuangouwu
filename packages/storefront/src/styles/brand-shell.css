@@ -37,7 +37,7 @@ img.fatal-error-mark {
     border: 0;
     border-radius: 0;
     box-shadow: none;
-    filter: drop-shadow(0 2px 5px rgba(99, 91, 255, 0.22));
+    filter: drop-shadow(0 2px 5px color-mix(in srgb, var(--accent) 25%, transparent));
 }
 
 img.brand-mark {
@@ -48,10 +48,11 @@ img.brand-mark {
     min-width: 0;
     flex: 1;
     overflow: hidden;
+    font-family: var(--font-display, inherit);
     font-size: 18px;
     font-weight: 800;
     line-height: 1.2;
-    color: #0f172a;
+    color: var(--text);
     letter-spacing: -0.02em;
     white-space: nowrap;
     text-overflow: ellipsis;

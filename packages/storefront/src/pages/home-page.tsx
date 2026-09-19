@@ -6,14 +6,11 @@ import {
     ChevronLeft,
     ChevronRight,
     CircleCheck,
-    Clock3,
     Download,
     ExternalLink,
-    Flame,
     Headphones,
     LayoutGrid,
     Lock,
-    Package,
     RotateCcw,
     ShieldCheck,
     ShoppingBag,
@@ -50,10 +47,11 @@ import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-co
 import { HomePageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import {
+    aggregateFlashSaleProducts,
     BrandLogo,
     dualCardTemplateSetting,
+    FlashSaleSection,
     localizedDualCardItemSetting,
-    useFlashSaleCountdown,
 } from '../storefront-ui/content-ui';
 import {
     EmptyState,
@@ -86,7 +84,6 @@ import {
     StorefrontContentTargetType,
     StorefrontCouponCampaign,
     StorefrontFlashSale,
-    StorefrontFlashSaleItem,
     StorefrontLanguage,
     StorefrontSystemAnnouncement,
 } from '../types';
@@ -605,18 +602,19 @@ export function HomePage() {
         (coupon, index, items) =>
             items.findIndex(candidate => candidate.campaignId === coupon.campaignId) === index,
     );
-    const allFlashSaleItems = flashSales
+    const rawFlashSaleItems = flashSales
         .flatMap(sale => sale.items)
         .filter(
             (item, index, items) =>
                 items.findIndex(candidate => candidate.productVariantId === item.productVariantId) === index,
         );
+    const allFlashSaleProducts = aggregateFlashSaleProducts(rawFlashSaleItems);
     const configuredFlashSaleDisplayCount = flashSaleBlock?.settings?.displayCount;
-    const flashSaleItems = allFlashSaleItems.slice(
+    const flashSaleItems = allFlashSaleProducts.slice(
         0,
         configuredFlashSaleDisplayCount == null
-            ? allFlashSaleItems.length
-            : Math.max(1, contentNumberSetting(configuredFlashSaleDisplayCount, allFlashSaleItems.length)),
+            ? allFlashSaleProducts.length
+            : Math.max(1, contentNumberSetting(configuredFlashSaleDisplayCount, allFlashSaleProducts.length)),
     );
     const noticeIntervalSeconds = Math.min(
         30,
@@ -1182,7 +1180,9 @@ export function HomePage() {
                                     language={language}
                                     endsAt={flashSales[0]?.endsAt ?? null}
                                     onMore={() => navigateTo({ name: 'flash-sale' })}
-                                    onProduct={productId => navigateTo({ name: 'product', id: productId })}
+                                    onProduct={(productId, variantId) =>
+                                        navigateTo({ name: 'product', id: productId, variantId })
+                                    }
                                 />
                             </div>
                         ) : null}
@@ -1245,134 +1245,6 @@ export function HomePage() {
                 </>
             )}
         </main>
-    );
-}
-
-function FlashSaleSection({
-    title,
-    subtitle,
-    items,
-    locale,
-    language,
-    endsAt,
-    onMore,
-    onProduct,
-}: {
-    title: string;
-    subtitle?: string;
-    items: StorefrontFlashSaleItem[];
-    locale: string;
-    language: StorefrontLanguage;
-    endsAt: string | null;
-    onMore?: () => void;
-    onProduct: (productId: string) => void;
-}) {
-    const isZh = language === 'zh';
-    const countdown = useFlashSaleCountdown(endsAt, language);
-    if (!items.length) return null;
-    return (
-        <section className="content-section flash-sale-section">
-            <SectionHeader
-                title={title}
-                subtitle={subtitle}
-                action={onMore ? (isZh ? '更多' : 'More') : undefined}
-                onAction={onMore}
-            />
-            {countdown ? (
-                <div className="flash-sale-countdown" role="timer">
-                    <Clock3 aria-hidden="true" />
-                    <span>{isZh ? '距结束' : 'Ends in'}</span>
-                    <strong>{countdown}</strong>
-                </div>
-            ) : null}
-            <div className="flash-sale-grid">
-                {items.map(item => (
-                    <button
-                        type="button"
-                        className="flash-sale-card"
-                        key={item.productVariantId}
-                        onClick={() => onProduct(item.productId)}
-                        aria-label={`${isZh ? '查看秒杀商品' : 'View flash-sale product'} ${item.productName}`}
-                    >
-                        <span className="flash-sale-image">
-                            {item.imageUrl ? (
-                                <SafeImage
-                                    src={item.imageUrl}
-                                    alt={item.productName}
-                                    imageKind="card"
-                                    loading="lazy"
-                                />
-                            ) : (
-                                <span className="image-placeholder" aria-hidden="true">
-                                    <Package />
-                                </span>
-                            )}
-                            <em>{isZh ? '限时价' : 'Limited price'}</em>
-                        </span>
-                        <strong className="flash-sale-name">{item.productName}</strong>
-                        {item.variantName && item.variantName !== item.productName ? (
-                            <small>{item.variantName}</small>
-                        ) : null}
-                        <span className="flash-sale-price">
-                            <b>{formatMoney(item.salePrice, item.currencyCode, locale)}</b>
-                            <del>{formatMoney(item.originalPrice, item.currencyCode, locale)}</del>
-                        </span>
-                    </button>
-                ))}
-            </div>
-        </section>
-    );
-}
-
-function FlashSalePage({
-    sales,
-    language,
-    locale,
-    onBack,
-    onProduct,
-}: {
-    sales: StorefrontFlashSale[];
-    language: StorefrontLanguage;
-    locale: string;
-    onBack: () => void;
-    onProduct: (productId: string) => void;
-}) {
-    const isZh = language === 'zh';
-    const items = sales
-        .flatMap(sale => sale.items)
-        .filter(
-            (item, index, allItems) =>
-                allItems.findIndex(candidate => candidate.productVariantId === item.productVariantId) ===
-                index,
-        );
-    return (
-        <Subpage title={isZh ? '限时秒杀' : 'Flash sale'} language={language} onBack={onBack}>
-            {items.length ? (
-                <FlashSaleSection
-                    title={isZh ? '限时秒杀' : 'Flash sale'}
-                    subtitle={
-                        isZh
-                            ? '活动价格会在购物车和结算页自动生效'
-                            : 'Sale prices apply automatically in cart and checkout'
-                    }
-                    items={items}
-                    locale={locale}
-                    language={language}
-                    endsAt={sales[0]?.endsAt ?? null}
-                    onProduct={onProduct}
-                />
-            ) : (
-                <EmptyState
-                    icon={<Flame />}
-                    title={isZh ? '暂无进行中的秒杀' : 'No active flash sale'}
-                    detail={
-                        isZh
-                            ? '请留意首页和店铺公告中的下次活动'
-                            : 'Check the home page and store announcements for the next event'
-                    }
-                />
-            )}
-        </Subpage>
     );
 }
 

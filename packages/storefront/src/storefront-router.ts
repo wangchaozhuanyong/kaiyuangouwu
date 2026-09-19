@@ -42,6 +42,26 @@ export function isCheckoutRoute(name: string): name is CheckoutRouteName {
     return name === 'purchase' || name === 'checkout' || name === 'payment';
 }
 
+export function routePageIdentity(route: RouteState): string {
+    switch (route.name) {
+        case 'product':
+            return `product:${route.id ?? ''}`;
+        case 'order-detail':
+            return `order-detail:${route.id ?? route.orderCode ?? ''}`;
+        case 'legal':
+            return `legal:${route.id ?? ''}`;
+        case 'category':
+            // In-page category switcher (collectionId, childId, sort, filters) must not be treated as a whole-page unmount.
+            return 'category';
+        case 'search':
+            return 'search';
+        case 'orders':
+            return 'orders';
+        default:
+            return route.name;
+    }
+}
+
 export interface RouteState {
     name: RouteName;
     returnTo?: CheckoutRouteName;
@@ -49,6 +69,7 @@ export interface RouteState {
     checkoutOrderId?: string;
     editAddress?: boolean;
     id?: string;
+    variantId?: string;
     orderCode?: string;
     tab?: OrderTab;
     token?: string;
@@ -176,6 +197,7 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
         checkoutOrderId: stringValue('checkoutOrderId'),
         editAddress: search.editAddress === true || search.editAddress === 'true' || undefined,
         id: stringValue('id'),
+        variantId: stringValue('variantId'),
         orderCode: stringValue('orderCode'),
         tab: orderTabs.includes(tab as OrderTab) ? (tab as OrderTab) : undefined,
         token: stringValue('token'),

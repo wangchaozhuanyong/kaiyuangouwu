@@ -182,6 +182,7 @@ export function ProductRoutePage() {
                 language: runtime.language,
                 storefrontName: runtime.storefrontName,
                 logoUrl: runtime.logoUrl,
+                initialVariantId: runtime.route.variantId,
                 flashSaleItems: runtime.activeFlashSaleItems.filter(
                     (item: { productId: string }) => item.productId === product.id,
                 ),

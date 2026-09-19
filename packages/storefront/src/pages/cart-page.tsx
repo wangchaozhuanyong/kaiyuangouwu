@@ -1,6 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
 import { Check, ChevronRight, Minus, Package, ShoppingBag, TicketPercent } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { cartLineCanSelect, cartSelectionState } from '../product-availability';
 import { appliedCouponLabel } from '../storefront-coupons';
@@ -108,23 +108,6 @@ export function CartPage() {
     const locked = cart?.state === 'PAYMENT_PENDING';
     const discount = Math.abs(order?.discounts.reduce((sum, item) => sum + item.amountWithTax, 0) ?? 0);
     const amount = locked && order ? order.totalWithTax : (order?.subTotalWithTax ?? 0);
-
-    const [isCheckoutBarHidden, setIsCheckoutBarHidden] = useState(false);
-    const lastScrollY = useRef(0);
-
-    useEffect(() => {
-        const handleScroll = () => {
-            const currentScrollY = window.scrollY;
-            if (currentScrollY > 60 && currentScrollY > lastScrollY.current + 5) {
-                setIsCheckoutBarHidden(true);
-            } else if (currentScrollY < lastScrollY.current - 5 || currentScrollY <= 20) {
-                setIsCheckoutBarHidden(false);
-            }
-            lastScrollY.current = currentScrollY;
-        };
-        window.addEventListener('scroll', handleScroll, { passive: true });
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, []);
 
     useEffect(() => {
         const currentLineIds = new Set(lines.map(line => line.id));
@@ -449,9 +432,7 @@ export function CartPage() {
             )}
 
             {isActive && !!lines.length && (
-                <div
-                    className={`cart-checkout-bar page-action-bar${isCheckoutBarHidden ? ' is-scrolled-hidden' : ''}`}
-                >
+                <div className="cart-checkout-bar page-action-bar">
                     <div>
                         <span>
                             {isZh ? '合计' : 'Total'}{' '}

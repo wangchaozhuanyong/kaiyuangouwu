@@ -95,7 +95,9 @@ export function FlashSaleRoutePage() {
             language={runtime.language}
             locale={runtime.locale}
             onBack={runtime.goBack}
-            onProduct={(productId: string) => runtime.navigate({ name: 'product', id: productId })}
+            onProduct={(productId: string, variantId?: string) =>
+                runtime.navigate({ name: 'product', id: productId, variantId })
+            }
         />
     );
 }
