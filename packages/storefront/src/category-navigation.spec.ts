@@ -164,7 +164,11 @@ describe('category navigation responsive spacing', () => {
         );
     });
 
-    it('keeps Chinese category labels single-line and fixes category buttons to 76px', () => {
+    it('keeps Chinese labels single-line and balances five mobile navigation slots', () => {
+        const mobileChineseCategoryPrefix =
+            String.raw`@media \(max-width:\s*1023px\)[\s\S]*?` +
+            String.raw`html:not\(\[lang='en'\]\) \.category-page `;
+
         expect(stylesheet).toMatch(
             /\.primary-category-label\s*\{[^}]*white-space:\s*nowrap;[^}]*text-overflow:\s*ellipsis;/,
         );
@@ -172,7 +176,31 @@ describe('category navigation responsive spacing', () => {
             /\.primary-categories button\s*\{[^}]*width:\s*76px;[^}]*min-width:\s*76px;[^}]*max-width:\s*76px;/,
         );
         expect(stylesheet).toMatch(
-            /\.category-page \.primary-category-strip \.primary-categories button\s*\{[^}]*width:\s*76px;[^}]*min-width:\s*76px;[^}]*max-width:\s*76px;/,
+            new RegExp(
+                mobileChineseCategoryPrefix +
+                    String.raw`\.primary-category-strip\s*\{[^}]*padding-inline:\s*16px;[^}]*gap:\s*0;`,
+            ),
+        );
+        expect(stylesheet).toMatch(
+            new RegExp(
+                mobileChineseCategoryPrefix +
+                    String.raw`\.primary-categories\s*\{[^}]*width:\s*80%;[^}]*flex:\s*0 0 80%;[^}]*gap:\s*0;`,
+            ),
+        );
+        expect(stylesheet).toMatch(
+            new RegExp(
+                mobileChineseCategoryPrefix +
+                    String.raw`\.primary-category-strip \.primary-categories button\s*\{` +
+                    String.raw`[^}]*width:\s*25%;[^}]*min-width:\s*25%;` +
+                    String.raw`[^}]*max-width:\s*25%;[^}]*flex:\s*0 0 25%;`,
+            ),
+        );
+        expect(stylesheet).toMatch(
+            new RegExp(
+                mobileChineseCategoryPrefix +
+                    String.raw`\.primary-categories-all\s*\{[^}]*width:\s*20%;` +
+                    String.raw`[^}]*min-width:\s*20%;[^}]*flex:\s*0 0 20%;`,
+            ),
         );
         expect(stylesheet).toMatch(/\.primary-category-image\s*\{[^}]*width:\s*48px;[^}]*height:\s*48px;/);
         expect(stylesheet).toMatch(/\.primary-categories button\s*\{[^}]*gap:\s*2px;/);
