@@ -29,6 +29,7 @@ describe('storefront account boundary', () => {
         'announcements',
         'services',
         'two-factor',
+        'mail-query',
         'not-found',
     ] as const)('allows public browsing of %s', route => expect(isPublicStorefrontRoute(route)).toBe(true));
     it.each([

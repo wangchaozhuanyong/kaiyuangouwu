@@ -262,6 +262,19 @@ export const UPDATE_PRODUCT_VARIANTS = gql`
     }
 `;
 
+export const APPLY_CATALOG_VARIANT_MATRIX = gql`
+    mutation ApplyCatalogVariantMatrix($input: ApplyCatalogVariantMatrixInput!) {
+        applyCatalogVariantMatrix(input: $input) {
+            id
+            updatedAt
+            variants {
+                id
+                sku
+            }
+        }
+    }
+`;
+
 export const DELETE_PRODUCT = gql`
     mutation DeleteProduct($id: ID!) {
         deleteProduct(id: $id) {

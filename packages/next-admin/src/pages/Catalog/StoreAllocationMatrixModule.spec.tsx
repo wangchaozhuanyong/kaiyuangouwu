@@ -52,8 +52,19 @@ async function renderAllocationMatrix() {
                         observer.next({
                             data: {
                                 catalogProductChannelAssignments: {
-                                    totalItems: items.length,
+                                    totalItems: 150,
                                     channels,
+                                    scopeChannel: channels[0],
+                                    summary: {
+                                        totalItems: 150,
+                                        unassignedItems: 40,
+                                        multiChannelItems: 110,
+                                        channelCounts: [
+                                            { channelId: 'channel-default', count: 150 },
+                                            { channelId: 'channel-branch-1', count: 90 },
+                                            { channelId: 'channel-branch-2', count: 20 },
+                                        ],
+                                    },
                                     items,
                                 },
                             },
@@ -108,7 +119,9 @@ describe('StoreAllocationMatrixModule', () => {
         const container = await renderAllocationMatrix();
 
         expect(container.textContent).toContain('商品多店铺分配中心');
-        expect(container.textContent).toContain('商品总数');
+        expect(container.textContent).toContain('当前渠道可见商品');
+        expect(container.textContent).toContain('150');
+        expect(container.textContent).toContain('当前第 1 / 3 页');
         expect(container.textContent).toContain('仅默认店铺 (未分发)');
         expect(container.textContent).toContain('默认店铺');
         expect(container.textContent).toContain('meiyijia');
@@ -162,7 +175,9 @@ describe('StoreAllocationMatrixModule', () => {
     it('supports selecting products and reveals floating bulk bar', async () => {
         const container = await renderAllocationMatrix();
 
-        const selectAllCheckbox = container.querySelector<HTMLInputElement>('thead th input[type="checkbox"]');
+        const selectAllCheckbox = container.querySelector<HTMLInputElement>(
+            'thead th input[type="checkbox"]',
+        );
         expect(selectAllCheckbox).not.toBeNull();
 
         await act(async () => {

@@ -11,6 +11,7 @@ const browsingRoutes = new Set<RouteName>([
     'announcements',
     'not-found',
     'two-factor',
+    'mail-query',
 ]);
 
 const accountRoutes = new Set<RouteName>([

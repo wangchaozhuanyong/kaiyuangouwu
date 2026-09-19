@@ -30,6 +30,7 @@ import {
     type ProductEditorTab,
     type ProductVariantState,
 } from './product-editor-types';
+import { applyNewOptionGroupToVariants } from './product-variant-matrix';
 import { useProductEditorData } from './useProductEditorData';
 import type { ProductEditorSaveDraft } from './useProductEditorSave';
 import { useProductEditorSave } from './useProductEditorSave';
@@ -427,75 +428,18 @@ export function useProductEditorForm() {
             return;
         }
 
-        if (variants.length === 1 && variants[0].optionIds.length === 0) {
-            const firstOpt = newGroup.options[0];
-            const updatedFirstVariant: ProductVariantState = {
-                ...variants[0],
-                optionIds: [firstOpt.id],
-                name: variants[0].name.trim()
-                    ? `${variants[0].name.trim()} (${firstOpt.name})`
-                    : `${productName.trim()} ${firstOpt.name}`.trim(),
-            };
-            const restVariants: ProductVariantState[] = newGroup.options.slice(1).map(opt => ({
-                sku: '',
-                name: `${productName.trim()} ${opt.name}`.trim(),
-                price: '',
-                costPrice: '',
-                stockOnHand: '',
-                stockAllocated: 0,
-                enabled: true,
-                digitalDeliveryMode: 'manual_service',
-                digitalStockPolicy: 'limited',
-                optionIds: [opt.id],
-                isNew: true,
-            }));
-            setVariants([updatedFirstVariant, ...restVariants]);
-            showNotice(
-                `已为当前商品应用规格“${newGroup.name}”，原单品自动转为“${firstOpt.name}”，已为您新增 ${restVariants.length} 个规格行供填写！`,
-            );
-        } else if (variants.length === 0) {
-            const generated: ProductVariantState[] = newGroup.options.map(opt => ({
-                sku: '',
-                name: `${productName.trim()} ${opt.name}`.trim(),
-                price: '',
-                costPrice: '',
-                stockOnHand: '',
-                stockAllocated: 0,
-                enabled: true,
-                digitalDeliveryMode: 'manual_service',
-                digitalStockPolicy: 'limited',
-                optionIds: [opt.id],
-                isNew: true,
-            }));
-            setVariants(generated);
-            showNotice(`已生成 ${generated.length} 个“${newGroup.name}”规格行`);
-        } else {
-            const existingKeys = new Set(variants.map(variant => [...variant.optionIds].sort().join(':')));
-            const newRows: ProductVariantState[] = [];
-            for (const opt of newGroup.options) {
-                if (!existingKeys.has(opt.id)) {
-                    newRows.push({
-                        sku: '',
-                        name: `${productName.trim()} ${opt.name}`.trim(),
-                        price: '',
-                        costPrice: '',
-                        stockOnHand: '',
-                        stockAllocated: 0,
-                        enabled: true,
-                        digitalDeliveryMode: 'manual_service',
-                        digitalStockPolicy: 'limited',
-                        optionIds: [opt.id],
-                        isNew: true,
-                    });
-                }
-            }
-            if (newRows.length > 0) {
-                setVariants(prev => [...prev, ...newRows]);
-                showNotice(`已为商品追加 ${newRows.length} 个“${newGroup.name}”新规格行`);
-            } else {
-                showNotice(`已创建规格模板“${newGroup.name}”并已勾选`);
-            }
+        const expanded = applyNewOptionGroupToVariants(variants, newGroup, productName);
+        if (expanded.length > 100) {
+            showError(`新增规格后将产生 ${expanded.length} 个 SKU，超过单次 100 个的安全限制`);
+            setSelectedOptionGroupIds(current => current.filter(id => id !== newGroup.id));
+            return;
         }
+        setVariants(expanded);
+        showNotice(
+            variants.length > 0
+                ? `已将规格“${newGroup.name}”应用到全部现有组合，共 ${expanded.length} 个规格行`
+                : `已生成 ${expanded.length} 个“${newGroup.name}”规格行`,
+        );
     };
 
     const handleGenerateVariantMatrix = () => {

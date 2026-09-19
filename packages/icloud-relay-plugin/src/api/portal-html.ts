@@ -904,7 +904,7 @@ export const PORTAL_HTML = `<!DOCTYPE html>
     <main class="container">
         <!-- Hero Header -->
         <section class="hero-section">
-            <div class="hero-badge">⚡ <span data-portal-store-name>大马通</span> · 邮件中继服务</div>
+            <div class="hero-badge">⚡ <span data-portal-store-name>店铺</span> · 邮件中继服务</div>
             <h1 class="hero-title">邮件验证码实时查询中心</h1>
             <p class="hero-subtitle">输入专属查询码，实时查收验证码</p>
         </section>
@@ -1024,7 +1024,7 @@ export const PORTAL_HTML = `<!DOCTYPE html>
         <!-- Footer -->
         <footer class="portal-footer">
             <p>🛡️ 数据经端到端加密与单向中继保护，仅凭对应查询码可读取邮件</p>
-            <p>© <span data-portal-store-name>大马通</span> · <a href="/services">智能商业服务平台</a> · <a href="/support">联系客服</a></p>
+            <p>© <span data-portal-store-name>店铺</span> · <a href="/services">智能商业服务平台</a> · <a href="/support">联系客服</a></p>
         </footer>
     </main>
 

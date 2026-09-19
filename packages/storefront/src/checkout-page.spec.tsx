@@ -828,13 +828,28 @@ describe('CheckoutPage submission authentication and recovery', () => {
             expect(selected.id).toBe('sm-standard');
         });
 
-        it('prioritizes free shipping even if preferredCode points to a paid method', () => {
+        it('keeps the existing eligible shipping method instead of silently replacing it', () => {
             const selected = selectBestShippingMethod(
                 [standardShipping, freeShipping],
                 null,
                 'standard-shipping',
             );
-            expect(selected.id).toBe('sm-free');
+            expect(selected.id).toBe('sm-standard');
+        });
+
+        it('does not treat free store pickup as automatic free delivery', () => {
+            const selected = selectBestShippingMethod([pickupShipping, standardShipping]);
+            expect(selected.id).toBe('sm-standard');
+        });
+
+        it('keeps store pickup when the customer already selected it', () => {
+            const selected = selectBestShippingMethod([standardShipping, pickupShipping], 'sm-pickup');
+            expect(selected.id).toBe('sm-pickup');
+        });
+
+        it('uses pickup when it is the only eligible shipping method', () => {
+            const selected = selectBestShippingMethod([pickupShipping]);
+            expect(selected.id).toBe('sm-pickup');
         });
     });
 });

@@ -10,6 +10,7 @@ import {
 import { UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION } from '../../graphql/catalog-operations.graphql';
 import {
     ADD_OPTION_GROUP_TO_PRODUCT,
+    APPLY_CATALOG_VARIANT_MATRIX,
     ASSIGN_PRODUCTS_TO_CHANNEL,
     CREATE_PRODUCT,
     CREATE_PRODUCT_VARIANTS,
@@ -195,6 +196,8 @@ export function useProductEditorSave({
     const [createVariantsMutation] = useMutation(CREATE_PRODUCT_VARIANTS);
 
     const [updateVariantsMutation] = useMutation(UPDATE_PRODUCT_VARIANTS);
+
+    const [applyVariantMatrixMutation] = useMutation(APPLY_CATALOG_VARIANT_MATRIX);
 
     const [addOptionGroupToProduct] = useMutation(ADD_OPTION_GROUP_TO_PRODUCT);
 
@@ -409,6 +412,26 @@ export function useProductEditorSave({
                     (target?.sku?.trim() ? `SKU ${target.sku.trim()}` : `第 ${emptyOptionIndex + 1} 行规格`);
                 showError(
                     `已启用规格模板，但规格“${label}”未绑定任何规格选项（如原单品行）。请删除无选项规格行后再保存。`,
+                );
+                return false;
+            }
+        }
+
+        if (
+            selectedOptionGroupIds.length > 0 &&
+            isMultiSpecMode &&
+            (isCreateMode || changes.optionGroups || changes.variants)
+        ) {
+            const incompatibleOptionIndex = variants.findIndex(
+                variant => variant.optionIds.length !== selectedOptionGroupIds.length,
+            );
+            if (incompatibleOptionIndex !== -1) {
+                setActiveTab('VARIANTS');
+                const target = variants[incompatibleOptionIndex];
+                const label =
+                    target?.name?.trim() || target?.sku?.trim() || `第 ${incompatibleOptionIndex + 1} 行`;
+                showError(
+                    `规格“${label}”没有从每个已选规格模板中各绑定一个选项，请重新生成完整 SKU 矩阵后保存。`,
                 );
                 return false;
             }
@@ -721,151 +744,153 @@ export function useProductEditorSave({
                     }
                 }
 
-                if (changes.optionGroups) {
-                    try {
-                        const originalGroupIds = Array.isArray(productData?.product?.optionGroups)
-                            ? productData.product.optionGroups.map(group => group.id)
-                            : [];
-                        await syncProductOptionGroups(productId, originalGroupIds);
-                        completedStages.push('规格模板关联');
-                    } catch (err: unknown) {
-                        throw new Error(`[规格模板关联更新失败] ${toUserFacingError(err, '请稍后重试')}`);
-                    }
-                }
+                const updateVariantInputs = changedExistingVariants.map(v => {
+                    const original = productData?.product?.variants.find(item => item.id === v.id);
+                    return {
+                        id: v.id,
+                        sku: v.sku.trim(),
+                        ...(original?.enabled !== v.enabled ? { enabled: v.enabled } : {}),
+                        price: Math.round(parseFloat(v.price) * 100),
+                        ...variantFulfillmentInput(v, effectiveFulfillmentType),
+                        ...(!original ||
+                        !sameValue(
+                            sortedIds(v.optionIds),
+                            sortedIds(original.options.map(option => option.id)),
+                        )
+                            ? { optionIds: v.optionIds }
+                            : {}),
+                        translations: [
+                            {
+                                languageCode: SOURCE_LANGUAGE_CODE,
+                                name: v.name.trim() || productName.trim(),
+                            },
+                        ],
+                    };
+                });
+                const createVariantInputs = newVariants.map(v => ({
+                    productId,
+                    sku: v.sku.trim(),
+                    enabled: v.enabled,
+                    price: Math.round(parseFloat(v.price) * 100),
+                    ...variantFulfillmentInput(v, effectiveFulfillmentType),
+                    optionIds: v.optionIds,
+                    translations: [
+                        {
+                            languageCode: SOURCE_LANGUAGE_CODE,
+                            name: v.name.trim() || productName.trim(),
+                        },
+                    ],
+                }));
+                let createdVariantList: Array<{ id: string; sku: string }> = [];
 
-                // 更新已有变体与创建新加变体
-                if (changedExistingVariants.length > 0) {
+                if (changes.optionGroups && changes.variants) {
                     try {
-                        await updateVariantsMutation({
+                        const isSingleProductWithoutOptions =
+                            variants.length <= 1 && (variants[0]?.optionIds.length ?? 0) === 0;
+                        const result = await applyVariantMatrixMutation({
                             variables: {
-                                input: changedExistingVariants.map(v => {
-                                    const original = productData?.product?.variants.find(
-                                        item => item.id === v.id,
-                                    );
-                                    return {
-                                        id: v.id,
-                                        sku: v.sku.trim(),
-                                        ...(original?.enabled !== v.enabled ? { enabled: v.enabled } : {}),
-                                        price: Math.round(parseFloat(v.price) * 100),
-                                        ...variantFulfillmentInput(v, effectiveFulfillmentType),
-                                        ...(!original ||
-                                        !sameValue(
-                                            sortedIds(v.optionIds),
-                                            sortedIds(original.options.map(option => option.id)),
-                                        )
-                                            ? { optionIds: v.optionIds }
-                                            : {}),
-                                        translations: [
-                                            {
-                                                languageCode: SOURCE_LANGUAGE_CODE,
-                                                name: v.name.trim() || productName.trim(),
-                                            },
-                                        ],
-                                    };
-                                }),
+                                input: {
+                                    productId,
+                                    targetOptionGroupIds: isSingleProductWithoutOptions
+                                        ? []
+                                        : selectedOptionGroupIds,
+                                    updateVariants: updateVariantInputs,
+                                    createVariants: createVariantInputs,
+                                },
                             },
                             context: changesVariantEnabledState ? enabledMutationContext : undefined,
                         });
-                        completedStages.push('现有 SKU');
-
-                        const variantsWithCostChanges = changedExistingVariants.filter(v => {
-                            const original = baselineDraft?.variants.find(o => o.id === v.id);
-                            return (v.costPrice ?? '') !== (original?.costPrice ?? '');
-                        });
-
-                        if (data.defaultStockLocationId && variantsWithCostChanges.length > 0) {
-                            await Promise.all(
-                                variantsWithCostChanges.map(v =>
-                                    client.mutate({
-                                        mutation: UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION,
-                                        variables: {
-                                            input: {
-                                                productVariantId: v.id,
-                                                stockLocationId: data.defaultStockLocationId,
-                                                currencyCode: activeCurrencyCode,
-                                                purchaseCostMicrounits: v.costPrice?.trim()
-                                                    ? Math.round(parseFloat(v.costPrice) * 1_000)
-                                                    : null,
-                                            },
-                                        },
-                                    }),
-                                ),
-                            ).catch(() => {
-                                // 采购成本为非阻塞扩展写入
-                            });
-                        }
+                        createdVariantList =
+                            (
+                                result.data as {
+                                    applyCatalogVariantMatrix?: {
+                                        variants: Array<{ id: string; sku: string }>;
+                                    };
+                                }
+                            )?.applyCatalogVariantMatrix?.variants ?? [];
+                        completedStages.push('规格模板与 SKU（事务）');
                     } catch (err: unknown) {
-                        throw new Error(`[现有 SKU 变体更新失败] ${toUserFacingError(err, '请稍后重试')}`);
+                        throw new Error(
+                            `[规格模板与 SKU 原子更新失败] ${toUserFacingError(err, '没有保存任何规格变更，请稍后重试')}`,
+                        );
+                    }
+                } else {
+                    if (changes.optionGroups) {
+                        try {
+                            const originalGroupIds = Array.isArray(productData?.product?.optionGroups)
+                                ? productData.product.optionGroups.map(group => group.id)
+                                : [];
+                            await syncProductOptionGroups(productId, originalGroupIds);
+                            completedStages.push('规格模板关联');
+                        } catch (err: unknown) {
+                            throw new Error(`[规格模板关联更新失败] ${toUserFacingError(err, '请稍后重试')}`);
+                        }
+                    }
+                    if (updateVariantInputs.length > 0) {
+                        try {
+                            await updateVariantsMutation({
+                                variables: { input: updateVariantInputs },
+                                context: changesVariantEnabledState ? enabledMutationContext : undefined,
+                            });
+                            completedStages.push('现有 SKU');
+                        } catch (err: unknown) {
+                            throw new Error(
+                                `[现有 SKU 变体更新失败] ${toUserFacingError(err, '请稍后重试')}`,
+                            );
+                        }
+                    }
+                    if (createVariantInputs.length > 0) {
+                        try {
+                            const result = await createVariantsMutation({
+                                variables: { input: createVariantInputs },
+                            });
+                            createdVariantList =
+                                (
+                                    result.data as {
+                                        createProductVariants?: Array<{ id: string; sku: string }>;
+                                    }
+                                )?.createProductVariants ?? [];
+                            completedStages.push('新增 SKU');
+                        } catch (err: unknown) {
+                            throw new Error(`[新 SKU 变体创建失败] ${toUserFacingError(err, '请稍后重试')}`);
+                        }
                     }
                 }
 
-                if (newVariants.length > 0) {
-                    try {
-                        const newVariantsResult = await createVariantsMutation({
-                            variables: {
-                                input: newVariants.map(v => ({
-                                    productId,
-                                    sku: v.sku.trim(),
-                                    enabled: v.enabled,
-                                    price: Math.round(parseFloat(v.price) * 100),
-                                    ...variantFulfillmentInput(v, effectiveFulfillmentType),
-                                    optionIds: v.optionIds,
-                                    translations: [
-                                        {
-                                            languageCode: SOURCE_LANGUAGE_CODE,
-                                            name: v.name.trim() || productName.trim(),
-                                        },
-                                    ],
-                                })),
-                            },
-                        });
-
-                        const createdNewList =
-                            (
-                                newVariantsResult?.data as {
-                                    createProductVariants?: Array<{ id: string; sku: string }>;
-                                }
-                            )?.createProductVariants ?? [];
-
-                        if (data.defaultStockLocationId && createdNewList.length > 0) {
-                            const newCostUpdates = newVariants
-                                .map(v => {
-                                    const created = createdNewList.find(c => c.sku === v.sku.trim());
-                                    return {
-                                        id: created?.id,
-                                        costPrice: v.costPrice?.trim(),
-                                    };
-                                })
-                                .filter((item): item is { id: string; costPrice: string } =>
-                                    Boolean(item.id && item.costPrice),
-                                );
-
-                            if (newCostUpdates.length > 0) {
-                                await Promise.all(
-                                    newCostUpdates.map(item =>
-                                        client.mutate({
-                                            mutation: UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION,
-                                            variables: {
-                                                input: {
-                                                    productVariantId: item.id,
-                                                    stockLocationId: data.defaultStockLocationId,
-                                                    currencyCode: activeCurrencyCode,
-                                                    purchaseCostMicrounits: Math.round(
-                                                        parseFloat(item.costPrice) * 1_000,
-                                                    ),
-                                                },
-                                            },
-                                        }),
-                                    ),
-                                ).catch(() => {
-                                    // 采购成本为非阻塞扩展写入
-                                });
-                            }
-                        }
-                        completedStages.push('新增 SKU');
-                    } catch (err: unknown) {
-                        throw new Error(`[新 SKU 变体创建失败] ${toUserFacingError(err, '请稍后重试')}`);
-                    }
+                if (data.defaultStockLocationId) {
+                    const existingCostUpdates = changedExistingVariants
+                        .filter(v => {
+                            const original = baselineDraft?.variants.find(o => o.id === v.id);
+                            return (v.costPrice ?? '') !== (original?.costPrice ?? '');
+                        })
+                        .map(v => ({ id: v.id!, costPrice: v.costPrice?.trim() || null }));
+                    const newCostUpdates = newVariants
+                        .map(v => ({
+                            id: createdVariantList.find(created => created.sku === v.sku.trim())?.id,
+                            costPrice: v.costPrice?.trim(),
+                        }))
+                        .filter((item): item is { id: string; costPrice: string } =>
+                            Boolean(item.id && item.costPrice),
+                        );
+                    await Promise.all(
+                        [...existingCostUpdates, ...newCostUpdates].map(item =>
+                            client.mutate({
+                                mutation: UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION,
+                                variables: {
+                                    input: {
+                                        productVariantId: item.id,
+                                        stockLocationId: data.defaultStockLocationId,
+                                        currencyCode: activeCurrencyCode,
+                                        purchaseCostMicrounits: item.costPrice
+                                            ? Math.round(parseFloat(item.costPrice) * 1_000)
+                                            : null,
+                                    },
+                                },
+                            }),
+                        ),
+                    ).catch(() => {
+                        // 采购成本为非阻塞扩展写入
+                    });
                 }
 
                 if (changes.channels || changes.collections) {

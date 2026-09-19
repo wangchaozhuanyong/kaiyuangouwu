@@ -515,6 +515,13 @@ export const adminApiExtensions = gql`
         variants: [UpdateCatalogVariantOperationsInput!]!
     }
 
+    input ApplyCatalogVariantMatrixInput {
+        productId: ID!
+        targetOptionGroupIds: [ID!]!
+        updateVariants: [UpdateProductVariantInput!]!
+        createVariants: [CreateProductVariantInput!]!
+    }
+
     input CreateCatalogInitialVariantInput {
         stockLocationId: ID!
         sku: String!
@@ -601,14 +608,43 @@ export const adminApiExtensions = gql`
         channels: [CatalogAssignmentChannel!]!
     }
 
+    enum CatalogChannelAssignmentFilterMode {
+        ALL
+        UNASSIGNED
+        MULTI
+        CHANNEL
+    }
+
+    input CatalogChannelAssignmentFilterInput {
+        mode: CatalogChannelAssignmentFilterMode = ALL
+        channelId: ID
+    }
+
+    type CatalogChannelAssignmentCount {
+        channelId: ID!
+        count: Int!
+    }
+
+    type CatalogChannelAssignmentSummary {
+        totalItems: Int!
+        unassignedItems: Int!
+        multiChannelItems: Int!
+        channelCounts: [CatalogChannelAssignmentCount!]!
+    }
+
     type CatalogProductChannelAssignmentList {
         items: [CatalogProductChannelAssignment!]!
         totalItems: Int!
         channels: [CatalogAssignmentChannel!]!
+        scopeChannel: CatalogAssignmentChannel!
+        summary: CatalogChannelAssignmentSummary!
     }
 
     extend type Query {
-        catalogProductChannelAssignments(options: ProductListOptions): CatalogProductChannelAssignmentList!
+        catalogProductChannelAssignments(
+            options: ProductListOptions
+            assignmentFilter: CatalogChannelAssignmentFilterInput
+        ): CatalogProductChannelAssignmentList!
         catalogImportJob(id: ID!): CatalogImportJob!
         catalogImportJobs(skip: Int, take: Int): CatalogImportJobList!
         catalogImportRows(jobId: ID!, action: CatalogImportAction): [CatalogImportRow!]!
@@ -637,6 +673,7 @@ export const adminApiExtensions = gql`
     }
 
     extend type Mutation {
+        applyCatalogVariantMatrix(input: ApplyCatalogVariantMatrixInput!): Product!
         beginCatalogImport(input: BeginCatalogImportInput!): CatalogImportJob!
         appendCatalogImportRows(input: AppendCatalogImportRowsInput!): CatalogImportJob!
         finalizeCatalogImportPreview(id: ID!): CatalogImportJob!

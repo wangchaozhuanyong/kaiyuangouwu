@@ -11,6 +11,7 @@ import { CatalogManagementAdminResolver } from './catalog-management.resolver';
 import { CatalogOperationsService } from './catalog-operations.service';
 import { CatalogProfitService } from './catalog-profit.service';
 import { CatalogSupplierService } from './catalog-supplier.service';
+import { CatalogVariantMatrixService } from './catalog-variant-matrix.service';
 import {
     manageCatalogExportPermission,
     manageCatalogImportPermission,
@@ -55,6 +56,7 @@ import './types';
         CatalogImportQueueService,
         InventoryLotLifecycleService,
         CatalogSupplierService,
+        CatalogVariantMatrixService,
     ],
     configuration: config => {
         config.authOptions.customPermissions.push(

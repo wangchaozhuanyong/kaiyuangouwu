@@ -4,6 +4,7 @@ export default defineConfig({
     test: {
         include: [
             'email-templates.spec.ts',
+            'order-confirmation-email.spec.ts',
             'migrations/**/*.spec.ts',
             'runtime-admin-credentials.spec.ts',
             'storefront-*-authentication-strategy.spec.ts',

@@ -1389,23 +1389,25 @@ export function selectBestShippingMethod(
         const found = methods.find(method => method.id === currentSelectedId);
         if (found) return found;
     }
-    const freeMethod = methods.find(method => method.priceWithTax === 0);
     if (preferredCode) {
         const preferred = methods.find(method => method.code === preferredCode);
-        if (preferred) {
-            if (freeMethod && preferred.priceWithTax > 0) {
-                return freeMethod;
-            }
-            return preferred;
-        }
+        if (preferred) return preferred;
     }
-    if (freeMethod) return freeMethod;
+    const deliveryMethods = methods.filter(method => !isPickupShippingMethod(method));
+    const freeDeliveryMethod = deliveryMethods.find(method => method.priceWithTax === 0);
+    if (freeDeliveryMethod) return freeDeliveryMethod;
     if (defaultCode) {
         const defaultMethod = methods.find(method => method.code === defaultCode);
         if (defaultMethod) return defaultMethod;
     }
-    const sorted = [...methods].sort((a, b) => a.priceWithTax - b.priceWithTax);
+    const sorted = [...(deliveryMethods.length > 0 ? deliveryMethods : methods)].sort(
+        (a, b) => a.priceWithTax - b.priceWithTax,
+    );
     return sorted[0];
+}
+
+function isPickupShippingMethod(method: ShippingMethod): boolean {
+    return method.code.toLowerCase().includes('pickup');
 }
 
 function shippingMethodDetails(

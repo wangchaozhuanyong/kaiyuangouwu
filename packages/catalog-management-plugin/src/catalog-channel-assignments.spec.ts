@@ -9,10 +9,14 @@ function setup(owner: boolean) {
         { id: 2, code: '店铺 A' },
         { id: 3, code: '店铺 B' },
     ];
+    let requestedIds: Array<string | number> = [];
     const query = {
         leftJoinAndSelect: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        getMany: vi.fn().mockResolvedValue([{ id: 10, channels }]),
+        where: vi.fn((_clause, variables) => {
+            requestedIds = variables.ids;
+            return query;
+        }),
+        getMany: vi.fn(() => Promise.resolve(requestedIds.map(id => ({ id, channels })))),
     };
     const channelRepository = { find: vi.fn().mockResolvedValue(owner ? channels : [channels[1]]) };
     const connection = {
@@ -27,6 +31,7 @@ function setup(owner: boolean) {
     };
     const ctx = {
         channelId: 2,
+        channel: channels[1],
         userHasPermissions: () => owner,
         session: {
             user: {
@@ -55,7 +60,8 @@ describe('catalog channel assignments', () => {
         const result = await service.list(ctx);
         expect(result.items[0].channels.map(channel => channel.id)).toEqual([1, 2, 3]);
         expect(result.items[0].channels[0].isDefault).toBe(true);
-        expect(products.findAll).toHaveBeenCalledWith(ctx, { take: 100 }, ['translations']);
+        expect(result.summary).toMatchObject({ totalItems: 1, unassignedItems: 0, multiChannelItems: 1 });
+        expect(products.findAll).toHaveBeenCalledWith(ctx, { skip: 0, take: 100 }, ['translations']);
         expect(query.where).toHaveBeenCalledWith('product.id IN (:...ids)', { ids: [10] });
     });
 
@@ -78,5 +84,27 @@ describe('catalog channel assignments', () => {
         products.findAll.mockResolvedValue({ items: [], totalItems: 0 });
         expect((await service.list(ctx)).items).toEqual([]);
         expect(query.getMany).not.toHaveBeenCalled();
+    });
+
+    it('aggregates beyond the first 100 products and returns the requested page', async () => {
+        const { service, ctx, products } = setup(true);
+        const all = Array.from({ length: 150 }, (_, index) => ({
+            id: index + 1,
+            name: `商品 ${index + 1}`,
+            enabled: true,
+        }));
+        products.findAll.mockImplementation((_ctx, options) =>
+            Promise.resolve({
+                items: all.slice(options.skip ?? 0, (options.skip ?? 0) + (options.take ?? 100)),
+                totalItems: all.length,
+            }),
+        );
+
+        const result = await service.list(ctx, { skip: 100, take: 25 });
+        expect(products.findAll).toHaveBeenCalledTimes(2);
+        expect(result.summary.totalItems).toBe(150);
+        expect(result.totalItems).toBe(150);
+        expect(result.items).toHaveLength(25);
+        expect(result.items[0].id).toBe(101);
     });
 });

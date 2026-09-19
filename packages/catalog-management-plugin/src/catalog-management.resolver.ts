@@ -2,7 +2,10 @@ import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Permission } from '@vendure/common/lib/generated-types';
 import { Allow, Ctx, ID, ListQueryOptions, Product, RequestContext } from '@vendure/core';
 
-import { CatalogChannelAssignmentsService } from './catalog-channel-assignments.service';
+import {
+    CatalogChannelAssignmentFilter,
+    CatalogChannelAssignmentsService,
+} from './catalog-channel-assignments.service';
 import { CatalogImportService } from './catalog-import.service';
 import { CatalogOperationsService } from './catalog-operations.service';
 import {
@@ -12,6 +15,10 @@ import {
     SaveCatalogOrderProfitExpenseInput,
 } from './catalog-profit.service';
 import { CatalogSupplierService } from './catalog-supplier.service';
+import {
+    ApplyCatalogVariantMatrixInput,
+    CatalogVariantMatrixService,
+} from './catalog-variant-matrix.service';
 import {
     manageCatalogExportPermission,
     manageCatalogImportPermission,
@@ -44,6 +51,7 @@ export class CatalogManagementAdminResolver {
         private readonly profit: CatalogProfitService,
         private readonly suppliers: CatalogSupplierService,
         private readonly channelAssignments: CatalogChannelAssignmentsService,
+        private readonly variantMatrix: CatalogVariantMatrixService,
     ) {}
 
     @Query()
@@ -51,8 +59,9 @@ export class CatalogManagementAdminResolver {
     catalogProductChannelAssignments(
         @Ctx() ctx: RequestContext,
         @Args('options') options?: ListQueryOptions<Product>,
+        @Args('assignmentFilter') assignmentFilter?: CatalogChannelAssignmentFilter,
     ) {
-        return this.channelAssignments.list(ctx, options);
+        return this.channelAssignments.list(ctx, options, assignmentFilter);
     }
 
     @Query()
@@ -173,6 +182,15 @@ export class CatalogManagementAdminResolver {
         @Args('take') take?: number,
     ) {
         return this.suppliers.linkedVariants(ctx, supplierId, skip, take);
+    }
+
+    @Mutation()
+    @Allow(Permission.UpdateProduct, Permission.UpdateCatalog)
+    applyCatalogVariantMatrix(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: ApplyCatalogVariantMatrixInput,
+    ) {
+        return this.variantMatrix.apply(ctx, input);
     }
 
     @Mutation()

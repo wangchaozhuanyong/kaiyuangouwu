@@ -8,6 +8,8 @@ import {
     CommerceFulfillmentPlugin,
     ManualDigitalDeliveryReadyEvent,
     ManualDigitalDeliveryService,
+    OrderConfirmationTokenService,
+    summarizeOrderFulfillment,
 } from '@vendure/commerce-fulfillment-plugin';
 import { ADMIN_API_PATH, API_PORT, SHOP_API_PATH } from '@vendure/common/lib/shared-constants';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
@@ -22,10 +24,12 @@ import {
     Injector,
     LanguageCode,
     LogLevel,
+    OrderStateTransitionEvent,
     PluginCommonModule,
     RequestContext,
     RequestContextService,
     SettingsStoreService,
+    ShippingLine,
     TransactionalConnection,
     VendureConfig,
     VendurePlugin,
@@ -35,8 +39,10 @@ import {
     EmailEventListener,
     EmailPlugin,
     FileBasedTemplateLoader,
+    type EmailEventHandlerWithAsyncData,
     type EmailPluginDevModeOptions,
     type EmailPluginOptions,
+    type EventWithAsyncData,
 } from '@vendure/email-plugin';
 import { HardenPlugin } from '@vendure/harden-plugin';
 import { IcloudRelayPlugin } from '@vendure/icloud-relay-plugin';
@@ -78,7 +84,11 @@ import { customerImageConfiguration } from './customer-image-config';
 import { emailLanguageVariables, localizedEmailSubjects, localizedEmailText } from './email-localization';
 import { createManualDeliveryEmailGuard } from './manual-delivery-email-guard';
 import { devServerMigrations } from './migrations';
-import { deliveryOnlyEmailHandlers, normalizeDeliveryEmail } from './order-confirmation-email';
+import {
+    buildOrderConfirmationUrl,
+    normalizeDeliveryEmail,
+    shouldSendOrderConfirmation,
+} from './order-confirmation-email';
 import { resolveRuntimeAdminCredentials } from './runtime-admin-credentials';
 import { StorefrontGoogleAuthenticationStrategy as GoogleAuthStrategy } from './storefront-google-authentication-strategy';
 import { StorefrontNativeAuthenticationStrategy as NativeAuthStrategy } from './storefront-native-authentication-strategy';
@@ -155,11 +165,76 @@ const manualDigitalDeliveryEmailHandler = new EmailEventListener('manual-digital
     }));
 
 const localizedEmailHandlers = [
-    ...deliveryOnlyEmailHandlers(defaultEmailHandlers),
+    ...defaultEmailHandlers,
     autoCardDeliveryEmailHandler,
     manualDigitalDeliveryEmailHandler,
 ].map(handler => {
-    if (handler.type === 'email-verification') {
+    if (handler.type === 'order-confirmation') {
+        type DefaultOrderEmailData = { shippingLines: ShippingLine[] };
+        type StorefrontOrderEmailData = DefaultOrderEmailData & {
+            isDigitalOrder: boolean;
+            containsDigitalProducts: boolean;
+            recipientEmail: string;
+            digitalDeliveryActionUrl?: string;
+        };
+        type DefaultOrderEmailEvent = EventWithAsyncData<OrderStateTransitionEvent, DefaultOrderEmailData>;
+        const orderHandler = handler as EmailEventHandlerWithAsyncData<
+            DefaultOrderEmailData,
+            'order-confirmation',
+            OrderStateTransitionEvent,
+            DefaultOrderEmailEvent
+        >;
+        orderHandler.filter(event =>
+            shouldSendOrderConfirmation(summarizeOrderFulfillment(event.order).fulfillmentType),
+        );
+        const loadDefaultOrderData = orderHandler._loadDataFn.bind(orderHandler);
+        orderHandler._loadDataFn = async context => {
+            const data = await loadDefaultOrderData(context);
+            const fulfillment = summarizeOrderFulfillment(context.event.order);
+            const isDigitalOrder = fulfillment.fulfillmentType === 'DIGITAL';
+            const containsDigitalProducts = fulfillment.containsDigitalProducts;
+            const recipientEmail = context.event.order.customer?.emailAddress;
+            if (!recipientEmail) {
+                throw new Error('Order confirmation email requires an order customer email address');
+            }
+            let digitalDeliveryActionUrl: string | undefined;
+            if (containsDigitalProducts) {
+                const confirmation = context.injector
+                    .get(OrderConfirmationTokenService)
+                    .createForSettledOrder(context.event.ctx, {
+                        id: context.event.order.id,
+                        state: context.event.toState,
+                    });
+                const storefrontUrl = await storefrontUrlForChannel(
+                    context.event.ctx,
+                    context.injector.get(TransactionalConnection),
+                );
+                digitalDeliveryActionUrl = buildOrderConfirmationUrl(
+                    storefrontUrl,
+                    context.event.order.code,
+                    confirmation.token,
+                );
+            }
+            return {
+                ...data,
+                isDigitalOrder,
+                containsDigitalProducts,
+                recipientEmail,
+                digitalDeliveryActionUrl,
+            } satisfies StorefrontOrderEmailData;
+        };
+        orderHandler.setRecipient(event => (event.data as StorefrontOrderEmailData).recipientEmail);
+        orderHandler.setTemplateVars(event => {
+            const data = event.data as StorefrontOrderEmailData;
+            return {
+                order: event.order,
+                shippingLines: data.shippingLines,
+                isDigitalOrder: data.isDigitalOrder,
+                containsDigitalProducts: data.containsDigitalProducts,
+                digitalDeliveryActionUrl: data.digitalDeliveryActionUrl,
+            };
+        });
+    } else if (handler.type === 'email-verification') {
         handler.setTemplateVars((event, globals) => ({
             verifyEmailAddressActionUrl: buildSignedStorefrontAccountActionUrl(
                 globals.verifyEmailAddressUrl,

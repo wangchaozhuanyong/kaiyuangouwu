@@ -5,6 +5,8 @@ import {
     ArrowLeft,
     Check,
     CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
     Layers3,
     Loader2,
     Package,
@@ -32,6 +34,7 @@ import { toUserFacingError } from '../../utils/user-facing-error';
 import { CatalogBulkChannelBar } from './CatalogBulkChannelBar';
 
 type FilterTab = 'all' | 'unassigned' | 'multi' | string;
+const PAGE_SIZE = 50;
 
 export function StoreAllocationMatrixModule() {
     const location = useLocation();
@@ -40,6 +43,7 @@ export function StoreAllocationMatrixModule() {
     const [searchTerm, setSearchTerm] = useState('');
     const deferredSearch = useDeferredValue(searchTerm.trim());
     const [activeTab, setActiveTab] = useState<FilterTab>('all');
+    const [page, setPage] = useState(0);
     const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
     const [updatingCell, setUpdatingCell] = useState<{ productId: string; channelId: string } | null>(null);
     const [notification, setNotification] = useState<{
@@ -47,15 +51,41 @@ export function StoreAllocationMatrixModule() {
         message: string;
     } | null>(null);
 
+    const changeActiveTab = (nextTab: FilterTab) => {
+        setActiveTab(nextTab);
+        setPage(0);
+        setSelectedProductIds([]);
+    };
+
+    const changeSearchTerm = (value: string) => {
+        setSearchTerm(value);
+        setPage(0);
+        setSelectedProductIds([]);
+    };
+
+    const changePage = (nextPage: number) => {
+        setPage(nextPage);
+        setSelectedProductIds([]);
+    };
+
+    const assignmentFilter = useMemo(() => {
+        if (activeTab === 'unassigned') return { mode: 'UNASSIGNED' };
+        if (activeTab === 'multi') return { mode: 'MULTI' };
+        if (activeTab !== 'all') return { mode: 'CHANNEL', channelId: activeTab };
+        return { mode: 'ALL' };
+    }, [activeTab]);
+
     const { data, loading, error, refetch } = useQuery<CatalogChannelAssignmentsData>(
         GET_CATALOG_CHANNEL_ASSIGNMENTS,
         {
             variables: {
                 options: {
-                    take: 100,
+                    skip: page * PAGE_SIZE,
+                    take: PAGE_SIZE,
                     sort: { updatedAt: 'DESC', id: 'DESC' },
                     ...(deferredSearch ? { filter: { name: { contains: deferredSearch } } } : {}),
                 },
+                assignmentFilter,
             },
             fetchPolicy: 'cache-and-network',
             notifyOnNetworkStatusChange: true,
@@ -82,39 +112,30 @@ export function StoreAllocationMatrixModule() {
         [data?.catalogProductChannelAssignments.items],
     );
 
-    // Filter products based on active tab
-    const filteredProducts = useMemo(() => {
-        return allProducts.filter(product => {
-            if (activeTab === 'all') return true;
-            if (activeTab === 'unassigned') {
-                // Products that are only in the default channel and have not been distributed to any branch
-                return product.channels.length <= 1 && product.channels.some(c => c.isDefault);
-            }
-            if (activeTab === 'multi') {
-                return product.channels.length > 1;
-            }
-            // Filter by specific channel ID
-            return product.channels.some(c => c.id === activeTab);
-        });
-    }, [allProducts, activeTab]);
+    const filteredProducts = allProducts;
 
     // Calculate metrics
     const metrics = useMemo(() => {
-        const total = allProducts.length;
-        const unassigned = allProducts.filter(
-            p => p.channels.length <= 1 && p.channels.some(c => c.isDefault),
-        ).length;
-        const channelCounts = new Map<string, number>();
-        for (const ch of channels) {
-            channelCounts.set(ch.id, 0);
+        const summary = data?.catalogProductChannelAssignments.summary;
+        return {
+            total: summary?.totalItems ?? 0,
+            unassigned: summary?.unassignedItems ?? 0,
+            multi: summary?.multiChannelItems ?? 0,
+            channelCounts: new Map(summary?.channelCounts.map(item => [item.channelId, item.count]) ?? []),
+        };
+    }, [data?.catalogProductChannelAssignments.summary]);
+    const filteredTotal = data?.catalogProductChannelAssignments.totalItems ?? 0;
+    const totalPages = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
+    const scopeChannel = data?.catalogProductChannelAssignments.scopeChannel;
+
+    const refreshFromFirstPage = () => {
+        setSelectedProductIds([]);
+        if (page === 0) {
+            void refetch();
+        } else {
+            setPage(0);
         }
-        for (const p of allProducts) {
-            for (const ch of p.channels) {
-                channelCounts.set(ch.id, (channelCounts.get(ch.id) ?? 0) + 1);
-            }
-        }
-        return { total, unassigned, channelCounts };
-    }, [allProducts, channels]);
+    };
 
     // Handle single cell toggle (assign / remove)
     const handleToggleChannel = async (product: ProductChannelAssignment, channel: AssignmentChannel) => {
@@ -142,7 +163,7 @@ export function StoreAllocationMatrixModule() {
                     },
                 });
                 showNotice(`已将商品《${product.name}》从「${channelName}」下架`);
-                void refetch();
+                refreshFromFirstPage();
             } catch (err) {
                 showNotice(toUserFacingError(err, '从店铺下架失败'), 'error');
             } finally {
@@ -161,7 +182,7 @@ export function StoreAllocationMatrixModule() {
                     },
                 });
                 showNotice(`已将商品《${product.name}》上架至「${channelName}」`);
-                void refetch();
+                refreshFromFirstPage();
             } catch (err) {
                 showNotice(toUserFacingError(err, '上架到店铺失败'), 'error');
             } finally {
@@ -187,8 +208,7 @@ export function StoreAllocationMatrixModule() {
                 },
             });
             showNotice(`已将选中的 ${selectedProductIds.length} 个商品成功上架至「${targetName}」`);
-            setSelectedProductIds([]);
-            void refetch();
+            refreshFromFirstPage();
         } catch (err) {
             showNotice(toUserFacingError(err, '批量上架失败'), 'error');
         }
@@ -236,8 +256,7 @@ export function StoreAllocationMatrixModule() {
             showNotice(
                 `已从「${targetName}」下架 ${eligibleIds.length} 个商品${skippedCount > 0 ? `（自动跳过 ${skippedCount} 个唯一归属该店的商品）` : ''}`,
             );
-            setSelectedProductIds([]);
-            void refetch();
+            refreshFromFirstPage();
         } catch (err) {
             showNotice(toUserFacingError(err, '批量下架失败'), 'error');
         }
@@ -350,16 +369,18 @@ export function StoreAllocationMatrixModule() {
                     {/* Card 1: Total Products */}
                     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-500">商品总数</span>
+                            <span className="text-xs font-bold text-slate-500">当前渠道可见商品</span>
                             <Package className="h-4 w-4 text-blue-500" />
                         </div>
                         <div className="mt-2 text-2xl font-extrabold text-slate-900">{metrics.total}</div>
-                        <p className="mt-1 text-[11px] text-slate-400">主库当前可供分配商品</p>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                            {scopeChannel ? getChannelDisplayName(scopeChannel.code) : '当前渠道'}统计范围
+                        </p>
                     </div>
 
                     {/* Card 2: Unassigned Warning Card */}
                     <div
-                        onClick={() => setActiveTab('unassigned')}
+                        onClick={() => changeActiveTab('unassigned')}
                         className={`cursor-pointer rounded-xl border p-4 shadow-2xs transition-all ${
                             activeTab === 'unassigned'
                                 ? 'border-amber-500 bg-amber-50/70 ring-2 ring-amber-400'
@@ -385,7 +406,7 @@ export function StoreAllocationMatrixModule() {
                         return (
                             <div
                                 key={channel.id}
-                                onClick={() => setActiveTab(isCurrentActive ? 'all' : channel.id)}
+                                onClick={() => changeActiveTab(isCurrentActive ? 'all' : channel.id)}
                                 className={`cursor-pointer rounded-xl border p-4 shadow-2xs transition-all ${
                                     isCurrentActive
                                         ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-400'
@@ -429,18 +450,18 @@ export function StoreAllocationMatrixModule() {
                             <div className="flex flex-wrap items-center gap-1.5">
                                 <button
                                     type="button"
-                                    onClick={() => setActiveTab('all')}
+                                    onClick={() => changeActiveTab('all')}
                                     className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer ${
                                         activeTab === 'all'
                                             ? 'bg-blue-600 text-white shadow-2xs'
                                             : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
                                     }`}
                                 >
-                                    全部商品 ({allProducts.length})
+                                    全部商品 ({metrics.total})
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setActiveTab('unassigned')}
+                                    onClick={() => changeActiveTab('unassigned')}
                                     className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer ${
                                         activeTab === 'unassigned'
                                             ? 'bg-amber-600 text-white shadow-2xs'
@@ -452,14 +473,14 @@ export function StoreAllocationMatrixModule() {
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setActiveTab('multi')}
+                                    onClick={() => changeActiveTab('multi')}
                                     className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer ${
                                         activeTab === 'multi'
                                             ? 'bg-indigo-600 text-white shadow-2xs'
                                             : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
                                     }`}
                                 >
-                                    多店铺通用
+                                    多店铺通用 ({metrics.multi})
                                 </button>
                             </div>
 
@@ -470,7 +491,7 @@ export function StoreAllocationMatrixModule() {
                                     type="search"
                                     autoComplete="off"
                                     value={searchTerm}
-                                    onValueChange={setSearchTerm}
+                                    onValueChange={changeSearchTerm}
                                     aria-label="在矩阵中搜索商品"
                                     placeholder="搜索商品名称…"
                                     className="w-64 rounded-lg border border-slate-300 bg-white py-1.5 pl-9 pr-8 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -478,7 +499,7 @@ export function StoreAllocationMatrixModule() {
                                 {searchTerm && (
                                     <button
                                         type="button"
-                                        onClick={() => setSearchTerm('')}
+                                        onClick={() => changeSearchTerm('')}
                                         className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600"
                                         aria-label="清空搜索"
                                     >
@@ -747,6 +768,33 @@ export function StoreAllocationMatrixModule() {
                             </table>
                         )}
                     </div>
+                    {filteredTotal > 0 && (
+                        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                            <span>
+                                共 {filteredTotal} 个匹配商品，当前第 {page + 1} / {totalPages} 页
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    aria-label="上一页"
+                                    disabled={page === 0 || loading}
+                                    onClick={() => changePage(Math.max(0, page - 1))}
+                                    className="rounded border border-slate-300 bg-white p-1.5 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </button>
+                                <button
+                                    type="button"
+                                    aria-label="下一页"
+                                    disabled={page + 1 >= totalPages || loading}
+                                    onClick={() => changePage(Math.min(totalPages - 1, page + 1))}
+                                    className="rounded border border-slate-300 bg-white p-1.5 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

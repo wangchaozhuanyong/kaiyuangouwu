@@ -214,6 +214,12 @@ describe('mail portal request ownership', () => {
 });
 
 describe('mail portal store configuration', () => {
+    it('ships neutral server HTML before host branding is resolved', () => {
+        expect(PORTAL_HTML).not.toContain('大马通');
+        expect(PORTAL_HTML.match(/data-portal-store-name/g)).toHaveLength(2);
+        expect(PORTAL_HTML).toContain('<span data-portal-store-name>店铺</span>');
+    });
+
     it.each([
         ['测试店铺甲', 'modern-oriental'],
         ['测试店铺乙', 'classic'],

@@ -15,6 +15,10 @@ describe('catalog import privacy contract', () => {
         expect(schema).toContain('saveCatalogProduct');
         expect(schema).toContain('catalogProductSummaries');
         expect(schema).toContain('catalogProductOperations');
+        expect(schema).toContain('applyCatalogVariantMatrix');
+        expect(schema).toContain('input ApplyCatalogVariantMatrixInput');
+        expect(schema).toContain('assignmentFilter: CatalogChannelAssignmentFilterInput');
+        expect(schema).toContain('summary: CatalogChannelAssignmentSummary!');
         expect(schema).toContain('catalogOrderProfitExpense');
         expect(schema).toContain('catalogProfitReport');
         expect(schema).toContain('saveCatalogOrderProfitExpense');
