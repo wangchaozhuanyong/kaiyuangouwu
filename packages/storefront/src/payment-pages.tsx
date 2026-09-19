@@ -85,8 +85,12 @@ export function PaymentPage({
             languageCodeFor(language),
             order?.id ?? '',
         ),
-        queryFn: ({ signal }) => api.eligiblePaymentMethods(signal),
+        queryFn: ({ signal }) => api.eligiblePaymentMethods(signal, order?.id),
         enabled: isPending,
+        initialData:
+            order && typeof api.cachedEligiblePaymentMethods === 'function'
+                ? api.cachedEligiblePaymentMethods(order.id)
+                : undefined,
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });

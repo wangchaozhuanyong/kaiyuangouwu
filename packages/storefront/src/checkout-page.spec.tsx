@@ -397,13 +397,33 @@ describe('CheckoutPage automatic delivery and drawer', () => {
             addresses: options.manual ? [] : [address],
             orders: { items: [], totalItems: 0 },
         } satisfies ActiveCustomer;
+        const quoteMethods = options.methods ?? methods;
+        const prepareShipping = vi.fn().mockImplementation(input => {
+            const selected = quoteMethods.length
+                ? selectBestShippingMethod(
+                      quoteMethods,
+                      input.selectedShippingMethodId,
+                      input.preferredShippingCode,
+                      input.defaultShippingCode,
+                  )
+                : undefined;
+            return Promise.resolve({
+                cart: cartFor(order),
+                order,
+                shippingMethods: quoteMethods,
+                selectedShippingMethodId: selected?.id ?? null,
+            });
+        });
         const api = {
             setShippingAddress: vi.fn().mockResolvedValue(order),
             eligibleShippingMethods: vi.fn().mockResolvedValue(options.methods ?? methods),
             setShippingMethod: vi.fn().mockResolvedValue(order),
             setPaymentCurrencyForOrder: vi.fn().mockResolvedValue(order),
+            setShippingMethodWithCart: vi.fn().mockResolvedValue(cartFor(order)),
+            prepareShipping,
             cart: vi.fn().mockResolvedValue(cartFor(order)),
             preparePayment: vi.fn().mockResolvedValue({ cart: cartFor(order), order }),
+            prefetchEligiblePaymentMethods: vi.fn().mockResolvedValue([]),
         };
         const onCartChange = vi.fn();
         const props = {
@@ -442,8 +462,11 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         const { api } = mount();
         expect(submitButton().disabled).toBe(true);
         await flush();
-        expect(api.setShippingAddress).toHaveBeenCalledTimes(1);
-        expect(api.setShippingMethod).toHaveBeenCalledWith('standard');
+        expect(api.prepareShipping).toHaveBeenCalledWith(
+            expect.objectContaining({ defaultShippingCode: 'store-fixture-store-standard-delivery' }),
+        );
+        expect(api.setShippingAddress).not.toHaveBeenCalled();
+        expect(api.setShippingMethod).not.toHaveBeenCalled();
         expect(trigger().textContent).toContain('标准配送');
         expect(submitButton().disabled).toBe(false);
         expect(container.textContent).not.toContain('下一步，选择配送');
@@ -455,12 +478,14 @@ describe('CheckoutPage automatic delivery and drawer', () => {
     it('keeps an eligible saved choice, opens a drawer and switches without submitting the checkout form', async () => {
         const { api } = mount({ selectedCode: 'economy' });
         await flush();
-        expect(api.setShippingMethod).toHaveBeenCalledWith('economy');
+        expect(api.prepareShipping).toHaveBeenCalledWith(
+            expect.objectContaining({ preferredShippingCode: 'economy' }),
+        );
         await flush(() => trigger().click());
         expect(container.querySelector('[role="dialog"]')).not.toBeNull();
         expect(container.querySelector('.checkout-options fieldset')).toBeNull();
         await flush(() => element<HTMLInputElement>('input[value="standard"]').click());
-        expect(api.setShippingMethod).toHaveBeenLastCalledWith('standard');
+        expect(api.setShippingMethodWithCart).toHaveBeenLastCalledWith('standard');
         expect(trigger().textContent).toContain('标准配送');
         expect(container.querySelector('[role="dialog"]')).toBeNull();
         expect(api.preparePayment).not.toHaveBeenCalled();
@@ -479,7 +504,10 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         expect(api.setPaymentCurrencyForOrder.mock.invocationCallOrder[0]).toBeLessThan(
             api.preparePayment.mock.invocationCallOrder[0],
         );
-        expect(api.setShippingAddress).toHaveBeenCalledTimes(1);
+        expect(api.setShippingAddress).not.toHaveBeenCalled();
+        expect(api.prepareShipping).toHaveBeenCalledTimes(1);
+        expect(api.cart).not.toHaveBeenCalled();
+        expect(api.prefetchEligiblePaymentMethods).toHaveBeenCalledWith('order-1');
         expect(navigate).toHaveBeenCalledWith({ to: '/payment', search: {}, replace: true });
     });
 
@@ -489,7 +517,12 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         expect(container.textContent).toContain('当前地址没有可用配送方式');
         expect(submitButton().disabled).toBe(true);
         expect(api.setShippingMethod).not.toHaveBeenCalled();
-        api.eligibleShippingMethods.mockResolvedValue(methods);
+        api.prepareShipping.mockResolvedValueOnce({
+            cart: cartFor(orderFor('PHYSICAL')),
+            order: orderFor('PHYSICAL'),
+            shippingMethods: methods,
+            selectedShippingMethodId: 'standard',
+        });
         await flush(() => trigger().click());
         expect(trigger().textContent).toContain('标准配送');
         expect(submitButton().disabled).toBe(false);
@@ -498,10 +531,10 @@ describe('CheckoutPage automatic delivery and drawer', () => {
 
     it('serializes rapid address changes and ignores the stale quote', async () => {
         const { api, props, onCartChange } = mount();
-        let finishOldAddress!: (order: Order) => void;
-        api.setShippingAddress.mockImplementationOnce(
+        let finishOldAddress!: (value: Awaited<ReturnType<typeof api.prepareShipping>>) => void;
+        api.prepareShipping.mockImplementationOnce(
             () =>
-                new Promise<Order>(resolve => {
+                new Promise(resolve => {
                     finishOldAddress = resolve;
                 }),
         );
@@ -511,13 +544,21 @@ describe('CheckoutPage automatic delivery and drawer', () => {
             customer: { ...props.customer, addresses: [{ ...address, postalCode: '50450' }] },
         };
         await flush(() => root.render(createElement(CheckoutPage, nextProps)));
-        expect(api.setShippingAddress).toHaveBeenCalledTimes(1);
-        await flush(() => finishOldAddress(props.order));
-        expect(api.setShippingAddress).toHaveBeenCalledTimes(2);
-        expect(api.setShippingAddress).toHaveBeenLastCalledWith(
-            expect.objectContaining({ postalCode: '50450' }),
+        expect(api.prepareShipping).toHaveBeenCalledTimes(1);
+        await flush(() =>
+            finishOldAddress({
+                cart: cartFor(props.order),
+                order: props.order,
+                shippingMethods: methods,
+                selectedShippingMethodId: 'standard',
+            }),
         );
-        expect(api.eligibleShippingMethods).toHaveBeenCalledTimes(1);
+        expect(api.prepareShipping).toHaveBeenCalledTimes(2);
+        expect(api.prepareShipping).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                shippingAddress: expect.objectContaining({ postalCode: '50450' }),
+            }),
+        );
         expect(onCartChange).toHaveBeenCalledTimes(1);
         expect(submitButton().disabled).toBe(false);
     });
@@ -537,10 +578,12 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         await flush(() =>
             root.render(createElement(CheckoutPage, { ...props, order: changedOrder, cartPending: true })),
         );
-        expect(api.eligibleShippingMethods).toHaveBeenCalledTimes(2);
+        expect(api.prepareShipping).toHaveBeenCalledTimes(2);
         expect(container.querySelector('.price-summary')).toBe(summary);
         expect(summary?.textContent).toContain('商品金额');
         expect(summary?.textContent).toContain('合计');
+        expect(summary?.textContent).toContain('正在确认最新价格');
+        expect(summary?.textContent).not.toContain('计算中');
         expect(submitButton().disabled).toBe(true);
     });
 
@@ -548,7 +591,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         const { api } = mount();
         await flush();
         await flush(() => trigger().click());
-        api.setShippingMethod.mockRejectedValueOnce(
+        api.setShippingMethodWithCart.mockRejectedValueOnce(
             new ShopApiError('INELIGIBLE_SHIPPING_METHOD_ERROR', 'Shipping is ineligible'),
         );
         await flush(() => element<HTMLInputElement>('input[value="economy"]').click());
@@ -585,7 +628,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
                 search: expect.objectContaining({ returnTo: 'purchase', checkoutOrderId: 'order-1' }),
             }),
         );
-        expect(api.setShippingAddress).not.toHaveBeenCalled();
+        expect(api.prepareShipping).not.toHaveBeenCalled();
         expect(api.preparePayment).not.toHaveBeenCalled();
     });
 
@@ -609,7 +652,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
                 search: expect.objectContaining({ addressId: address.id, editAddress: true }),
             }),
         );
-        expect(api.setShippingAddress).not.toHaveBeenCalled();
+        expect(api.prepareShipping).not.toHaveBeenCalled();
     });
 
     it('shows loading before addresses resolve without flashing the add-address action', async () => {
@@ -620,7 +663,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         expect(container.textContent).not.toContain('去添加收货地址');
         expect(container.querySelector('.saved-address')).toBeNull();
         expect(submitButton().disabled).toBe(true);
-        expect(api.setShippingAddress).not.toHaveBeenCalled();
+        expect(api.prepareShipping).not.toHaveBeenCalled();
     });
 
     it('quotes the returned selection, including apartment, without changing default or order progress', async () => {
@@ -645,10 +688,17 @@ describe('CheckoutPage automatic delivery and drawer', () => {
             ),
         );
         await flush();
-        expect(api.setShippingAddress).toHaveBeenLastCalledWith(
-            expect.objectContaining({ fullName: '第二收货人', streetLine2: 'Unit 12' }),
+        expect(api.prepareShipping).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                shippingAddress: expect.objectContaining({
+                    fullName: '第二收货人',
+                    streetLine2: 'Unit 12',
+                }),
+            }),
         );
-        expect(api.setShippingMethod).toHaveBeenLastCalledWith('standard');
+        expect(api.prepareShipping).toHaveBeenLastCalledWith(
+            expect.objectContaining({ defaultShippingCode: 'store-fixture-store-standard-delivery' }),
+        );
         expect(container.textContent).toContain('到达后电话联系');
         expect(order.couponCodes).toEqual(['SAVED']);
         expect(address.defaultShippingAddress).toBe(true);

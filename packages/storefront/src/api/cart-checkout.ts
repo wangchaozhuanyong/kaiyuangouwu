@@ -30,6 +30,10 @@ import { ShopApiError, type ErrorResult } from './helpers';
 
 export class CartCheckoutApi extends BaseDomainApi {
     controller?: CartController;
+    private readonly paymentMethodRequests = new Map<
+        string,
+        { expiresAt: number; promise: Promise<PaymentMethod[]>; data?: PaymentMethod[] }
+    >();
 
     connect(controller: CartController): void {
         this.controller = controller;
@@ -654,6 +658,45 @@ export class CartCheckoutApi extends BaseDomainApi {
         return this.assertOrder(result.setOrderShippingAddress);
     }
 
+    async prepareShipping(input: {
+        shippingAddress: CustomerAddressInput;
+        selectedShippingMethodId?: string;
+        preferredShippingCode?: string;
+        defaultShippingCode?: string;
+    }): Promise<{
+        cart: StorefrontCart;
+        order: Order;
+        shippingMethods: ShippingMethod[];
+        selectedShippingMethodId: string | null;
+    }> {
+        if (this.controller) {
+            const acknowledged = await this.controller.execute({ prepareShipping: input });
+            const order = requiredOrder(acknowledged);
+            const preparedMethods = acknowledged.shippingMethods ?? (await this.eligibleShippingMethods());
+            const selectedShippingMethodId =
+                acknowledged.selectedShippingMethodId ??
+                preparedMethods.find(method => method.code === order.checkoutShipping?.methodCode)?.id ??
+                null;
+            return {
+                cart: acknowledged.cart,
+                order,
+                shippingMethods: preparedMethods,
+                selectedShippingMethodId,
+            };
+        }
+        await this.setShippingAddress(input.shippingAddress);
+        const fallbackMethods = await this.eligibleShippingMethods();
+        const selected = selectShippingMethod(fallbackMethods, input);
+        if (selected) await this.setShippingMethod(selected.id);
+        const cart = await this.readCart();
+        return {
+            cart,
+            order: requiredCartOrder(cart),
+            shippingMethods: fallbackMethods,
+            selectedShippingMethodId: selected?.id ?? null,
+        };
+    }
+
     async eligibleShippingMethods(): Promise<ShippingMethod[]> {
         const result = await this.request<{ eligibleShippingMethods: ShippingMethod[] }>(`
             query EligibleShippingMethods {
@@ -680,6 +723,12 @@ export class CartCheckoutApi extends BaseDomainApi {
             { id: [id] },
         );
         return this.assertOrder(result.setOrderShippingMethod);
+    }
+
+    async setShippingMethodWithCart(id: string): Promise<StorefrontCart> {
+        if (this.controller) return (await this.controller.execute({ order: { shippingMethodId: id } })).cart;
+        await this.setShippingMethod(id);
+        return this.readCart();
     }
 
     async setCurrencyForOrder(currencyCode: string): Promise<Order> {
@@ -716,26 +765,52 @@ export class CartCheckoutApi extends BaseDomainApi {
         return result.setStorefrontPaymentCurrency;
     }
 
-    async eligiblePaymentMethods(signal?: AbortSignal): Promise<PaymentMethod[]> {
-        const result = await this.request<{ eligiblePaymentMethods: PaymentMethod[] }>(
+    async eligiblePaymentMethods(signal?: AbortSignal, orderId?: string): Promise<PaymentMethod[]> {
+        const cached = orderId ? this.paymentMethodRequests.get(orderId) : undefined;
+        if (cached && cached.expiresAt > Date.now()) return cached.promise;
+        const promise = this.request<{ eligiblePaymentMethods: PaymentMethod[] }>(
             `
-            query EligibleStorefrontPaymentMethods {
-                eligiblePaymentMethods {
-                    id
-                    code
-                    name
-                    description
-                    isEligible
-                    eligibilityMessage
+                query EligibleStorefrontPaymentMethods {
+                    eligiblePaymentMethods {
+                        id
+                        code
+                        name
+                        description
+                        isEligible
+                        eligibilityMessage
+                    }
                 }
-            }
-        `,
+            `,
             undefined,
             signal,
-        );
-        return result.eligiblePaymentMethods.filter(
-            method => method.code !== 'referral-balance' && method.code !== 'referral-balance-payment',
-        );
+        ).then(result => {
+            const methods = result.eligiblePaymentMethods.filter(
+                method => method.code !== 'referral-balance' && method.code !== 'referral-balance-payment',
+            );
+            if (orderId) {
+                const current = this.paymentMethodRequests.get(orderId);
+                if (current?.promise === promise) current.data = methods;
+            }
+            return methods;
+        });
+        if (orderId) {
+            const entry = { expiresAt: Date.now() + 30_000, promise };
+            this.paymentMethodRequests.set(orderId, entry);
+            void promise.catch(() => {
+                if (this.paymentMethodRequests.get(orderId) === entry)
+                    this.paymentMethodRequests.delete(orderId);
+            });
+        }
+        return promise;
+    }
+
+    prefetchEligiblePaymentMethods(orderId: string): Promise<PaymentMethod[]> {
+        return this.eligiblePaymentMethods(undefined, orderId);
+    }
+
+    cachedEligiblePaymentMethods(orderId: string): PaymentMethod[] | undefined {
+        const cached = this.paymentMethodRequests.get(orderId);
+        return cached && cached.expiresAt > Date.now() ? cached.data : undefined;
     }
 
     async createUsdtCheckoutQuote(signal?: AbortSignal): Promise<StorefrontUsdtCheckoutQuote> {
@@ -794,10 +869,33 @@ export class CartCheckoutApi extends BaseDomainApi {
 
 const commandResultFields = `commandId status appliedRevision errorCode message
     cart { ${cartFields} }
-    session { checkout { id cartRevision state completedAt } }`;
+    session { checkout { id cartRevision state completedAt } }
+    shippingMethods { id code name description priceWithTax metadata }
+    selectedShippingMethodId`;
 function requiredOrder(result: CartCommandResult): Order {
     if (!result.cart.checkoutOrder) throw new Error('No active checkout order.');
     return result.cart.checkoutOrder;
+}
+function requiredCartOrder(cart: StorefrontCart): Order {
+    if (!cart.checkoutOrder) throw new Error('No active checkout order.');
+    return cart.checkoutOrder;
+}
+
+function selectShippingMethod(
+    methods: ShippingMethod[],
+    input: {
+        selectedShippingMethodId?: string;
+        preferredShippingCode?: string;
+        defaultShippingCode?: string;
+    },
+): ShippingMethod | undefined {
+    return (
+        methods.find(method => method.id === input.selectedShippingMethodId) ??
+        methods.find(method => method.code === input.preferredShippingCode) ??
+        methods.find(method => method.code === input.defaultShippingCode) ??
+        methods.find(method => method.priceWithTax === 0) ??
+        [...methods].sort((left, right) => left.priceWithTax - right.priceWithTax)[0]
+    );
 }
 
 function hydrateCommandResult(result: CartCommandResult): CartCommandResult {

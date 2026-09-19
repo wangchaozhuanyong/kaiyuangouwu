@@ -1,4 +1,9 @@
-import type { CustomerAddressInput, StorefrontCart, StorefrontCheckoutSession } from '../types';
+import type {
+    CustomerAddressInput,
+    ShippingMethod,
+    StorefrontCart,
+    StorefrontCheckoutSession,
+} from '../types';
 
 export interface CartChanges {
     add?: Array<{ productVariantId: string; quantity: number }>;
@@ -10,6 +15,14 @@ export type CartOperation =
     | { buyNow: { productVariantId: string; quantity: number } }
     | { beginCheckout: true }
     | { preparePayment: true }
+    | {
+          prepareShipping: {
+              shippingAddress: CustomerAddressInput;
+              selectedShippingMethodId?: string;
+              preferredShippingCode?: string;
+              defaultShippingCode?: string;
+          };
+      }
     | { reopen: true }
     | {
           order:
@@ -45,6 +58,8 @@ export interface CartCommandResult {
     message: string | null;
     cart: StorefrontCart;
     session: StorefrontCheckoutSession | null;
+    shippingMethods?: ShippingMethod[] | null;
+    selectedShippingMethodId?: string | null;
 }
 
 /** Only adjacent, unsent line edits coalesce. Additions and order operations are barriers. */

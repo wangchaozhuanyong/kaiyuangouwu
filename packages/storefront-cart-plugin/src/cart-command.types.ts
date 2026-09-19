@@ -1,3 +1,4 @@
+import { CreateAddressInput } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/core';
 
 export interface CartChanges {
@@ -12,6 +13,12 @@ export interface CartCommandInput {
     expectedRevision: number;
     changes?: CartChanges;
     buyNow?: { productVariantId: ID; quantity: number };
+    prepareShipping?: {
+        shippingAddress: CreateAddressInput;
+        selectedShippingMethodId?: ID | null;
+        preferredShippingCode?: string | null;
+        defaultShippingCode?: string | null;
+    };
     beginCheckout?: boolean;
     preparePayment?: boolean;
     reopen?: boolean;

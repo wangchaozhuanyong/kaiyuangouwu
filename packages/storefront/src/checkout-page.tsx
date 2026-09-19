@@ -23,6 +23,7 @@ import { compactUiCopy } from './i18n';
 import { isInputMethodKey } from './input-method';
 import { formatDisplayMoney } from './money-display';
 import { variantCanIncreaseQuantity } from './product-availability';
+import { preloadStorefrontRouteComponent } from './route-component-preload';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { appliedCouponLabel } from './storefront-coupons';
 import { storefrontErrorMessage } from './storefront-errors';
@@ -229,30 +230,30 @@ export function CheckoutPage({
             shippingQueueRef.current = shippingQueueRef.current.then(async () => {
                 if (cancelled) return;
                 try {
-                    await api.setShippingAddress(JSON.parse(shippingAddressKey) as CustomerAddressInput);
+                    const preparation = await api.prepareShipping({
+                        shippingAddress: JSON.parse(shippingAddressKey) as CustomerAddressInput,
+                        selectedShippingMethodId: shippingSelectionRef.current || undefined,
+                        preferredShippingCode,
+                        defaultShippingCode,
+                    });
                     if (cancelled) return;
-                    const methods = await api.eligibleShippingMethods();
-                    if (cancelled) return;
+                    const methods = preparation.shippingMethods;
                     if (!methods.length) {
                         throw new Error(
                             isZh ? '当前地址没有可用配送方式' : 'No delivery is available for this address',
                         );
                     }
-                    const selected = selectBestShippingMethod(
-                        methods,
-                        shippingSelectionRef.current,
-                        preferredShippingCode,
-                        defaultShippingCode,
-                    );
-                    await api.setShippingMethod(selected.id);
-                    if (cancelled) return;
-                    const latestCart = await api.cart();
-                    if (cancelled) return;
-                    shippingSelectionRef.current = selected.id;
+                    const selectedShippingMethodId = preparation.selectedShippingMethodId;
+                    if (!selectedShippingMethodId) {
+                        throw new Error(
+                            isZh ? '配送方式确认失败，请重试' : 'Could not confirm the delivery method',
+                        );
+                    }
+                    shippingSelectionRef.current = selectedShippingMethodId;
                     setShippingMethods(methods);
-                    setSelectedShippingId(selected.id);
+                    setSelectedShippingId(selectedShippingMethodId);
                     setPreparedShippingKey(shippingKey);
-                    shippingCallbacksRef.current.onCartChange(latestCart);
+                    shippingCallbacksRef.current.onCartChange(preparation.cart);
                 } catch (requestError) {
                     if (!cancelled) {
                         setPreparedShippingKey('');
@@ -385,8 +386,7 @@ export function CheckoutPage({
         shippingQueueRef.current = shippingQueueRef.current.then(async () => {
             try {
                 if (!shippingMountedRef.current || currentShippingKeyRef.current !== requestKey) return;
-                await api.setShippingMethod(shippingMethodId);
-                const latestCart = await api.cart();
+                const latestCart = await api.setShippingMethodWithCart(shippingMethodId);
                 if (!shippingMountedRef.current || currentShippingKeyRef.current !== requestKey) return;
                 shippingCallbacksRef.current.onCartChange(latestCart);
                 setShippingPickerOpen(false);
@@ -487,10 +487,15 @@ export function CheckoutPage({
                 setCustomerPrepared(true);
             }
             if (paymentCurrencyCode) await api.setPaymentCurrencyForOrder(paymentCurrencyCode);
-            const latestCart = await api.cart();
-            onCartChange(latestCart);
-            const session = await api.preparePayment(latestCart.revision);
+            const session = await api.preparePayment(cart.revision);
             onSessionChange(session);
+            if (typeof api.prefetchEligiblePaymentMethods === 'function') {
+                try {
+                    await api.prefetchEligiblePaymentMethods(session.order.id);
+                } catch {
+                    // The payment page owns the retry/error state if prefetching is unavailable.
+                }
+            }
             onNotify(
                 isZh ? '订单已准备，请继续选择支付方式' : 'Order prepared. Continue with a payment method.',
             );
@@ -920,6 +925,9 @@ export function CheckoutPage({
                         <button
                             type={requiresShipping && !addressComplete ? 'button' : 'submit'}
                             onClick={requiresShipping && !addressComplete ? manageAddress : undefined}
+                            onPointerEnter={() => void preloadStorefrontRouteComponent('payment')}
+                            onFocus={() => void preloadStorefrontRouteComponent('payment')}
+                            onTouchStart={() => void preloadStorefrontRouteComponent('payment')}
                             disabled={
                                 customerLoading ||
                                 submitting ||
@@ -930,9 +938,15 @@ export function CheckoutPage({
                             }
                         >
                             {(() => {
-                                if (cartPending)
-                                    return isZh ? '正在确认商品与金额…' : 'Confirming items and total…';
-                                if (submitting) return isZh ? '处理中…' : 'Processing…';
+                                const totalFormatted = formatMoney(
+                                    order.totalWithTax,
+                                    order.currencyCode,
+                                    locale,
+                                );
+                                if (submitting)
+                                    return isZh
+                                        ? `正在安全确认 · ${totalFormatted}`
+                                        : `Securely confirming · ${totalFormatted}`;
                                 if (requiresShipping && customerLoading)
                                     return isZh ? '正在加载地址…' : 'Loading address…';
                                 if (requiresShipping && !addressComplete)
@@ -949,14 +963,9 @@ export function CheckoutPage({
                                             ? '请重试配送计算'
                                             : 'Retry the delivery quote'
                                         : isZh
-                                          ? '正在计算运费…'
-                                          : 'Calculating shipping…';
+                                          ? `正在确认运费 · ${totalFormatted}`
+                                          : `Confirming delivery · ${totalFormatted}`;
                                 }
-                                const totalFormatted = formatMoney(
-                                    order.totalWithTax,
-                                    order.currencyCode,
-                                    locale,
-                                );
                                 const itemLabel = `${order.totalQuantity} ${order.totalQuantity === 1 ? 'item' : 'items'}`;
                                 if (directPurchase) {
                                     return isZh
@@ -1164,7 +1173,9 @@ function CheckoutItemsGroup({
         <section className={checkoutPageClassName('checkout-section checkout-product-group')}>
             <header className={checkoutPageClassName('checkout-section-title')}>
                 <h2>{title}</h2>
-                <span>{hint}</span>
+                <span aria-live="polite">
+                    {pending ? (isZh ? '正在确认最新价格' : 'Confirming latest price') : hint}
+                </span>
             </header>
             <div className={checkoutPageClassName('checkout-items')}>
                 {lines.map(line => (
@@ -1176,15 +1187,7 @@ function CheckoutItemsGroup({
                         </div>
                         <span className={checkoutPageClassName('checkout-line-meta')}>
                             <b>
-                                {pending
-                                    ? isZh
-                                        ? '计算中…'
-                                        : 'Calculating…'
-                                    : formatMoney(
-                                          line.linePriceWithTax,
-                                          line.productVariant.currencyCode,
-                                          locale,
-                                      )}
+                                {formatMoney(line.linePriceWithTax, line.productVariant.currencyCode, locale)}
                             </b>
                             {directPurchase ? (
                                 <span
@@ -1302,26 +1305,32 @@ function PriceSummary({
             .reduce((sum, item) => sum + item.amountWithTax, 0),
     );
     const otherDiscount = Math.max(0, discount - flashSaleDiscount);
-    const pendingLabel = isZh ? '计算中…' : 'Calculating…';
     return (
         <dl className={checkoutPageClassName('price-summary')} aria-busy={pending || shippingPending}>
+            {(pending || shippingPending) && (
+                <div className={checkoutPageClassName('price-refresh-status')} role="status">
+                    <dt>{isZh ? '价格状态' : 'Price status'}</dt>
+                    <dd>
+                        {pending
+                            ? isZh
+                                ? '正在确认最新价格，当前显示上次确认金额'
+                                : 'Confirming the latest price; showing the last confirmed amount'
+                            : isZh
+                              ? '正在确认运费，当前显示上次确认金额'
+                              : 'Confirming delivery; showing the last confirmed amount'}
+                    </dd>
+                </div>
+            )}
             <div>
                 <dt>{isZh ? '商品金额' : 'Items'}</dt>
-                <dd>
-                    {pending
-                        ? pendingLabel
-                        : formatMoney(order.subTotalWithTax + discount, order.currencyCode, locale)}
-                </dd>
+                <dd>{formatMoney(order.subTotalWithTax + discount, order.currencyCode, locale)}</dd>
             </div>
             <div>
                 <dt>
                     {requiresShipping ? (isZh ? '运费' : 'Shipping') : isZh ? '邮箱交付' : 'Email delivery'}
                 </dt>
                 <dd>
-                    {shippingUnavailable ??
-                        (pending || shippingPending
-                            ? pendingLabel
-                            : formatMoney(order.shippingWithTax, order.currencyCode, locale))}
+                    {shippingUnavailable ?? formatMoney(order.shippingWithTax, order.currencyCode, locale)}
                 </dd>
             </div>
             {flashSaleDiscount > 0 && (
@@ -1348,13 +1357,11 @@ function PriceSummary({
             <div className={checkoutPageClassName('summary-total')}>
                 <dt>{isZh ? '合计' : 'Total'}</dt>
                 <dd>
-                    {pending || shippingPending
-                        ? pendingLabel
-                        : formatMoney(
-                              order.totalWithTax - (shippingUnavailable ? order.shippingWithTax : 0),
-                              order.currencyCode,
-                              locale,
-                          )}
+                    {formatMoney(
+                        order.totalWithTax - (shippingUnavailable ? order.shippingWithTax : 0),
+                        order.currencyCode,
+                        locale,
+                    )}
                     {shippingUnavailable && (
                         <small className="checkout-total-hint">
                             {isZh ? '不含运费' : 'Excludes shipping'}

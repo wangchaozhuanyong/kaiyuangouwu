@@ -527,12 +527,19 @@ export class ShopApi {
         return this.cartCheckoutApi.setShippingAddress(input);
     }
 
+    prepareShipping: CartCheckoutApi['prepareShipping'] = input =>
+        this.cartCheckoutApi.prepareShipping(input);
+
     async eligibleShippingMethods(): Promise<ShippingMethod[]> {
         return this.cartCheckoutApi.eligibleShippingMethods();
     }
 
     async setShippingMethod(id: string): Promise<Order> {
         return this.cartCheckoutApi.setShippingMethod(id);
+    }
+
+    async setShippingMethodWithCart(id: string): Promise<StorefrontCart> {
+        return this.cartCheckoutApi.setShippingMethodWithCart(id);
     }
 
     async setCurrencyForOrder(currencyCode: string): Promise<Order> {
@@ -543,8 +550,16 @@ export class ShopApi {
         return this.cartCheckoutApi.setPaymentCurrencyForOrder(currencyCode);
     }
 
-    async eligiblePaymentMethods(signal?: AbortSignal): Promise<PaymentMethod[]> {
-        return this.cartCheckoutApi.eligiblePaymentMethods(signal);
+    async eligiblePaymentMethods(signal?: AbortSignal, orderId?: string): Promise<PaymentMethod[]> {
+        return this.cartCheckoutApi.eligiblePaymentMethods(signal, orderId);
+    }
+
+    async prefetchEligiblePaymentMethods(orderId: string): Promise<PaymentMethod[]> {
+        return this.cartCheckoutApi.prefetchEligiblePaymentMethods(orderId);
+    }
+
+    cachedEligiblePaymentMethods(orderId: string): PaymentMethod[] | undefined {
+        return this.cartCheckoutApi.cachedEligiblePaymentMethods(orderId);
     }
 
     async createUsdtCheckoutQuote(signal?: AbortSignal): Promise<StorefrontUsdtCheckoutQuote> {

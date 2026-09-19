@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { CreateAddressInput, CreateCustomerInput, CurrencyCode } from '@vendure/common/lib/generated-types';
+import {
+    CreateAddressInput,
+    CreateCustomerInput,
+    CurrencyCode,
+    ShippingMethodQuote,
+} from '@vendure/common/lib/generated-types';
 import {
     ConfigService,
     ID,
@@ -29,6 +34,13 @@ export interface CartCommandResult {
     message: string | null;
     cart: StorefrontCart;
     session: StorefrontCheckoutSession | null;
+    shippingMethods: ShippingMethodQuote[] | null;
+    selectedShippingMethodId: ID | null;
+}
+
+interface ShippingPreparationOutcome {
+    shippingMethods: ShippingMethodQuote[];
+    selectedShippingMethodId: ID | null;
 }
 export type CartCommandHandler = (
     ctx: RequestContext,
@@ -123,6 +135,10 @@ export class CartCommandService {
                 if (receipt.digest && receipt.digest !== digest) {
                     return this.result(ctx, cart, input.commandId, 'REJECTED', null, 'COMMAND_ID_REUSED');
                 }
+                const replayedShippingPreparation =
+                    receipt.status === 'APPLIED' && input.prepareShipping
+                        ? await this.shippingPreparationSnapshot(ctx, cart)
+                        : undefined;
                 return this.result(
                     ctx,
                     cart,
@@ -130,6 +146,8 @@ export class CartCommandService {
                     receipt.status,
                     receipt.appliedRevision,
                     receipt.errorCode,
+                    undefined,
+                    replayedShippingPreparation,
                 );
             }
             const operations = Object.entries(input).filter(
@@ -150,6 +168,7 @@ export class CartCommandService {
                     message: 'Checkout is locked.',
                 };
             let next = cart;
+            let shippingPreparation: ShippingPreparationOutcome | undefined;
             if (!error) {
                 const runner = repository.manager.queryRunner;
                 if (!runner?.isTransactionActive) throw new Error('Cart commands require a transaction.');
@@ -166,14 +185,19 @@ export class CartCommandService {
                                 : outcome;
                         await runner.rollbackTransaction();
                     } else {
-                        next =
-                            outcome instanceof StorefrontCart
-                                ? outcome
-                                : outcome instanceof StorefrontCheckoutSession
-                                  ? outcome.cart
-                                  : outcome == null
-                                    ? cart
-                                    : await this.carts.acceptOrderChange(ctx, cart);
+                        if (isShippingPreparationOutcome(outcome)) {
+                            shippingPreparation = outcome;
+                            next = await this.carts.acceptOrderChange(ctx, cart);
+                        } else {
+                            next =
+                                outcome instanceof StorefrontCart
+                                    ? outcome
+                                    : outcome instanceof StorefrontCheckoutSession
+                                      ? outcome.cart
+                                      : outcome == null
+                                        ? cart
+                                        : await this.carts.acceptOrderChange(ctx, cart);
+                        }
                         await this.carts.syncActiveOrderSession(ctx, next);
                         await runner.commitTransaction();
                     }
@@ -205,6 +229,7 @@ export class CartCommandService {
                 next.revision,
                 error?.errorCode ?? null,
                 error?.message,
+                shippingPreparation,
             );
         });
     }
@@ -260,22 +285,14 @@ export class CartCommandService {
                 );
             case 'buyNow': {
                 const item = value as NonNullable<CartCommandInput['buyNow']>;
-                const updated = await this.carts.applyChanges(
+                return this.carts.beginDirectPurchase(ctx, item, cart);
+            }
+            case 'prepareShipping':
+                return this.prepareShipping(
                     ctx,
-                    {
-                        add: [item],
-                        lines: cart.lines.map(line => ({
-                            lineId: line.id,
-                            selected: String(line.productVariantId) === String(item.productVariantId),
-                        })),
-                    },
-                    cart.revision,
+                    value as NonNullable<CartCommandInput['prepareShipping']>,
                     cart,
                 );
-                return isGraphQlErrorResult(updated)
-                    ? updated
-                    : this.carts.beginCheckout(ctx, updated.revision);
-            }
             case 'beginCheckout':
                 return value === true ? this.carts.beginCheckout(ctx, cart.revision) : invalid();
             case 'preparePayment':
@@ -317,6 +334,39 @@ export class CartCommandService {
         return invalid();
     }
 
+    private async prepareShipping(
+        ctx: RequestContext,
+        input: NonNullable<CartCommandInput['prepareShipping']>,
+        cart: StorefrontCart,
+    ): Promise<ShippingPreparationOutcome | CommandFailure> {
+        const order = cart.checkoutOrder;
+        if (!order) return { errorCode: 'NO_ACTIVE_ORDER_ERROR', message: 'No active order.' };
+        if (!shippingAddressesMatch(order.shippingAddress, input.shippingAddress)) {
+            const addressResult = await this.orders.setShippingAddress(ctx, order.id, input.shippingAddress);
+            if (isGraphQlErrorResult(addressResult)) return addressResult;
+        }
+        const methods = await this.orders.getEligibleShippingMethods(ctx, order.id);
+        if (!methods.length) return { shippingMethods: [], selectedShippingMethodId: null };
+        const selected = selectShippingMethod(methods, input);
+        const shippingResult = await this.orders.setShippingMethod(ctx, order.id, [selected.id]);
+        if (isGraphQlErrorResult(shippingResult)) return shippingResult;
+        return { shippingMethods: methods, selectedShippingMethodId: selected.id };
+    }
+
+    private async shippingPreparationSnapshot(
+        ctx: RequestContext,
+        cart: StorefrontCart,
+    ): Promise<ShippingPreparationOutcome | undefined> {
+        if (!cart.checkoutOrder) return undefined;
+        const shippingMethods = await this.orders.getEligibleShippingMethods(ctx, cart.checkoutOrder.id);
+        const appliedId = cart.checkoutOrder.shippingLines?.[0]?.shippingMethodId;
+        return {
+            shippingMethods,
+            selectedShippingMethodId:
+                shippingMethods.find(method => String(method.id) === String(appliedId))?.id ?? null,
+        };
+    }
+
     private validateCommandId(id: string): void {
         if (!/^[a-zA-Z0-9_-]{16,80}$/.test(id)) throw new Error('Invalid cart command id.');
     }
@@ -329,6 +379,7 @@ export class CartCommandService {
         appliedRevision: number | null,
         errorCode: string | null,
         message?: string,
+        shippingPreparation?: ShippingPreparationOutcome,
     ): Promise<CartCommandResult> {
         return {
             commandId,
@@ -338,6 +389,8 @@ export class CartCommandService {
             message: message ?? errorCode,
             cart,
             session: await this.carts.checkoutContext(ctx, cart),
+            shippingMethods: shippingPreparation?.shippingMethods ?? null,
+            selectedShippingMethodId: shippingPreparation?.selectedShippingMethodId ?? null,
         };
     }
 }
@@ -354,4 +407,38 @@ function invalid(): CommandFailure {
 }
 function isFailure(value: unknown): value is CommandFailure {
     return !!value && typeof value === 'object' && 'errorCode' in value && 'message' in value;
+}
+function isShippingPreparationOutcome(value: unknown): value is ShippingPreparationOutcome {
+    return !!value && typeof value === 'object' && 'shippingMethods' in value;
+}
+function shippingAddressesMatch(current: unknown, input: CreateAddressInput): boolean {
+    const existing = current && typeof current === 'object' ? (current as Record<string, unknown>) : {};
+    const incoming = input as unknown as Record<string, unknown>;
+    const keys = [
+        'fullName',
+        'company',
+        'streetLine1',
+        'streetLine2',
+        'city',
+        'province',
+        'postalCode',
+        'countryCode',
+        'phoneNumber',
+    ];
+    return keys.every(key => addressPart(existing[key]) === addressPart(incoming[key]));
+}
+function addressPart(value: unknown): string {
+    return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+}
+function selectShippingMethod(
+    methods: ShippingMethodQuote[],
+    input: NonNullable<CartCommandInput['prepareShipping']>,
+): ShippingMethodQuote {
+    return (
+        methods.find(method => String(method.id) === String(input.selectedShippingMethodId ?? '')) ??
+        methods.find(method => method.code === input.preferredShippingCode) ??
+        methods.find(method => method.code === input.defaultShippingCode) ??
+        methods.find(method => method.priceWithTax === 0) ??
+        [...methods].sort((left, right) => left.priceWithTax - right.priceWithTax)[0]
+    );
 }

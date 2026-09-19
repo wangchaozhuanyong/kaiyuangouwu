@@ -1192,6 +1192,30 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('isEligible');
     });
 
+    it('reuses payment methods prefetched for the prepared order', async () => {
+        const fetchMock = mockGraphQlResponse({
+            eligiblePaymentMethods: [
+                {
+                    id: 'payment-1',
+                    code: 'card',
+                    name: 'Card',
+                    description: '',
+                    isEligible: true,
+                    eligibilityMessage: null,
+                },
+            ],
+        });
+        const api = new ShopApi(market);
+
+        await api.prefetchEligiblePaymentMethods('order-1');
+        await expect(api.eligiblePaymentMethods(undefined, 'order-1')).resolves.toHaveLength(1);
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(api.cachedEligiblePaymentMethods('order-1')).toEqual([
+            expect.objectContaining({ code: 'card', isEligible: true }),
+        ]);
+    });
+
     it('submits payment metadata and returns the placed order', async () => {
         const fetchMock = mockGraphQlResponse({
             addPaymentToOrder: {

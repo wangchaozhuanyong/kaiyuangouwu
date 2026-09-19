@@ -356,11 +356,11 @@ describe('cart inventory before persistence', () => {
             ownerId: 'customer',
         });
         vi.spyOn(service as any, 'claimRevision').mockResolvedValue(undefined);
-        vi.spyOn(service as any, 'projectCart').mockImplementation((_ctx: unknown, next: StorefrontCart) =>
-            Promise.resolve(next),
-        );
+        const projectCart = vi
+            .spyOn(service as any, 'projectCart')
+            .mockImplementation((...args: unknown[]) => Promise.resolve(args[1] as StorefrontCart));
         const apply = (changes: any) => service.applyChanges({} as any, changes, 1, cart);
-        return { service, cart, apply, repository, variants };
+        return { service, cart, apply, repository, variants, projectCart };
     }
     it('rejects adding to an unselected sold-out line before writing', async () => {
         const { apply, repository } = setup();
@@ -421,5 +421,30 @@ describe('cart inventory before persistence', () => {
             causeCode: 'INSUFFICIENT_STOCK_ERROR',
         });
         expect(digital.variants.getSaleableStockLevel).not.toHaveBeenCalled();
+    });
+    it('projects buy-now once and reuses the stock validation performed before writing', async () => {
+        const { service, cart, variants, projectCart } = setup(10);
+        projectCart.mockImplementationOnce((...args: unknown[]) => {
+            const next = args[1] as StorefrontCart;
+            next.checkoutOrder = { id: 'order-1' } as any;
+            return Promise.resolve(next);
+        });
+
+        const result = await service.beginDirectPurchase(
+            {} as any,
+            { productVariantId: 'variant-1', quantity: 1 },
+            cart,
+        );
+
+        expect(result).toMatchObject({ __typename: 'StorefrontCheckoutSession' });
+        expect(projectCart).toHaveBeenCalledOnce();
+        expect(projectCart).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ revision: 2 }),
+            { ownerType: 'CUSTOMER', ownerId: 'customer' },
+            true,
+            true,
+        );
+        expect(variants.getSaleableStockLevel).toHaveBeenCalledOnce();
     });
 });

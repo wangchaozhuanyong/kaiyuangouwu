@@ -20,7 +20,7 @@ const fields = `id revision state selectedQuantity lines { id quantity selected 
 quantity productVariant { id } } }`;
 const cartQuery = gql`query { storefrontCart { ${fields} } }`;
 const command = gql`mutation($input: StorefrontCartCommandInput!) { applyStorefrontCartCommand(input: $input) { commandId status appliedRevision
-errorCode cart { ${fields} } } }`;
+errorCode cart { ${fields} } shippingMethods { id code name priceWithTax } selectedShippingMethodId } }`;
 const recover = gql`mutation($id: String!, $cartId: ID!, $cancel: Boolean!) { recoverStorefrontCartCommand(cartId: $cartId, commandId: $id, cancel:
 $cancel) { status cart { ${fields} } } }`;
 let variantIds: string[];
@@ -335,31 +335,20 @@ describe('cart commands against a real database', () => {
                 })
             ).status,
         ).toBe('APPLIED');
-        expect(
-            (
-                await change({
-                    order: {
-                        shippingAddress: {
-                            fullName: 'Cart Guest',
-                            streetLine1: '100 Test Street',
-                            city: 'London',
-                            postalCode: 'SW1A 1AA',
-                            countryCode: 'GB',
-                        },
-                    },
-                })
-            ).status,
-        ).toBe('APPLIED');
-        const methods = await shopClient.query(gql`
-            query {
-                eligibleShippingMethods {
-                    id
-                }
-            }
-        `);
-        expect(
-            (await change({ order: { shippingMethodId: methods.eligibleShippingMethods[0].id } })).status,
-        ).toBe('APPLIED');
+        const shipping = await change({
+            prepareShipping: {
+                shippingAddress: {
+                    fullName: 'Cart Guest',
+                    streetLine1: '100 Test Street',
+                    city: 'London',
+                    postalCode: 'SW1A 1AA',
+                    countryCode: 'GB',
+                },
+            },
+        });
+        expect(shipping.status).toBe('APPLIED');
+        expect(shipping.shippingMethods.length).toBeGreaterThan(0);
+        expect(shipping.selectedShippingMethodId).toBe(shipping.shippingMethods[0].id);
         const before = await shopClient.query(gql`
             query {
                 activeOrder {

@@ -145,12 +145,19 @@ export const shopApiExtensions = gql`
         shippingMethodId: ID
         customer: CreateCustomerInput
     }
+    input StorefrontCartShippingPreparationInput {
+        shippingAddress: CreateAddressInput!
+        selectedShippingMethodId: ID
+        preferredShippingCode: String
+        defaultShippingCode: String
+    }
     input StorefrontCartCommandInput {
         cartId: ID!
         commandId: String!
         expectedRevision: Int!
         changes: StorefrontCartChangesInput
         buyNow: AddStorefrontCartItemInput
+        prepareShipping: StorefrontCartShippingPreparationInput
         order: StorefrontCartOrderChangeInput
         beginCheckout: Boolean
         preparePayment: Boolean
@@ -170,6 +177,8 @@ export const shopApiExtensions = gql`
         message: String
         cart: StorefrontCart!
         session: StorefrontCheckoutSession
+        shippingMethods: [ShippingMethodQuote!]
+        selectedShippingMethodId: ID
     }
 
     extend type Query {

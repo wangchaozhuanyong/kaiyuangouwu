@@ -63,6 +63,11 @@ interface AddStorefrontCartItemInput {
     quantity: number;
 }
 
+interface CartProjectionOptions {
+    force?: boolean;
+    stockAlreadyValidated?: boolean;
+}
+
 const NON_PRODUCTION_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|sandbox|test)(?:$|[-_\s])|测试/iu;
 const INTERNAL_BALANCE_PAYMENT_CODES = new Set(['referral-balance', 'referral-balance-payment']);
 const CONTROLLED_TEST_PAYMENT_HANDLER_CODE = 'controlled-test-payment-handler';
@@ -185,6 +190,7 @@ export class StorefrontCartService {
         changes: CartChanges,
         expectedRevision: number,
         snapshot?: StorefrontCart,
+        projection: CartProjectionOptions = {},
     ): Promise<StorefrontCartMutationResult> {
         const cart = snapshot ?? (await this.getCart(ctx));
         const mutableError = this.validateMutable(cart, expectedRevision);
@@ -260,7 +266,8 @@ export class StorefrontCartService {
         );
         if (stockError) return stockError;
         const owner = await this.getOwner(ctx);
-        if (!changed.length && !removed.size) return this.projectCart(ctx, cart, owner);
+        if (!changed.length && !removed.size)
+            return this.projectCart(ctx, cart, owner, projection.force, projection.stockAlreadyValidated);
         const revisionError = await this.claimRevision(ctx, cart, owner, expectedRevision);
         if (revisionError) return revisionError;
         const repository = this.connection.getRepository(ctx, StorefrontCartLine);
@@ -276,7 +283,35 @@ export class StorefrontCartService {
         cart.lines = lines;
         cart.revision = expectedRevision + 1;
         cart.projectedRevision = null;
-        return this.projectCart(ctx, cart, owner);
+        return this.projectCart(ctx, cart, owner, projection.force, projection.stockAlreadyValidated);
+    }
+
+    /** Buy-now writes the selection and creates its checkout order in one projection. */
+    async beginDirectPurchase(
+        ctx: RequestContext,
+        item: AddStorefrontCartItemInput,
+        snapshot: StorefrontCart,
+    ): Promise<StorefrontCheckoutResult> {
+        const projected = await this.applyChanges(
+            ctx,
+            {
+                add: [item],
+                lines: snapshot.lines.map(line => ({
+                    lineId: line.id,
+                    selected: idsAreEqual(line.productVariantId, item.productVariantId),
+                })),
+            },
+            snapshot.revision,
+            snapshot,
+            { force: true, stockAlreadyValidated: true },
+        );
+        if (isGraphQlErrorResult(projected)) {
+            return projected;
+        }
+        if (!projected.checkoutOrder) {
+            return new CartProjectionError('ORDER_MISSING', 'No checkout order exists for the selection.');
+        }
+        return new StorefrontCheckoutSession(projected, projected.checkoutOrder, null);
     }
 
     /** The caller must already hold a transaction. All cart/order writers lock cart before coupons. */
@@ -792,6 +827,7 @@ export class StorefrontCartService {
         cart: StorefrontCart,
         owner: CartOwner,
         force = false,
+        stockAlreadyValidated = false,
     ): Promise<StorefrontCartMutationResult> {
         if (!force && cart.projectedRevision === cart.revision) {
             return cart;
@@ -806,7 +842,7 @@ export class StorefrontCartService {
         if (force && unavailableLine) {
             return new CartLineUnavailableError(unavailableLine.productVariantId);
         }
-        if (force) {
+        if (force && !stockAlreadyValidated) {
             const stockError = await this.validateStock(ctx, selectedLines);
             if (stockError) return stockError;
         }
