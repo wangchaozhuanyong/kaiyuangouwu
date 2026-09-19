@@ -25,7 +25,7 @@ import {
     WifiOff,
     X,
 } from 'lucide-react';
-import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { FormEvent, MouseEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
 import { formatBusinessDate } from './business-time';
@@ -667,6 +667,15 @@ function LogisticsCard({
     const updatedAt = fulfillment?.updatedAt ?? order.orderPlacedAt;
     const method = fulfillment?.method ?? order.checkoutShipping?.methodName;
     const trackingCode = fulfillment?.trackingCode;
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = (e: MouseEvent<HTMLButtonElement>) => {
+        e.stopPropagation();
+        if (!trackingCode) return;
+        void navigator.clipboard?.writeText(trackingCode);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
 
     return (
         <article className={orderPageClassName(`logistics-card is-${status}`)}>
@@ -693,25 +702,44 @@ function LogisticsCard({
                     </div>
                 ))}
             </div>
+            <div className={orderPageClassName('logistics-waybill-row')}>
+                <div className={orderPageClassName('waybill-field')}>
+                    <span className={orderPageClassName('waybill-label')}>
+                        {isZh ? '配送方式' : 'Delivery method'}
+                    </span>
+                    <strong className={orderPageClassName('waybill-value')}>
+                        {method ?? (isZh ? '承运商待分配' : 'Carrier pending')}
+                    </strong>
+                </div>
+                <div className={orderPageClassName('waybill-field')}>
+                    <span className={orderPageClassName('waybill-label')}>
+                        {isZh ? '运单号' : 'Tracking number'}
+                    </span>
+                    <div className={orderPageClassName('waybill-code-wrap')}>
+                        <span className={orderPageClassName('waybill-code')}>
+                            {trackingCode ??
+                                (isZh ? '承运商尚未提供运单号' : 'Tracking number is not available yet')}
+                        </span>
+                        {trackingCode && (
+                            <button
+                                type="button"
+                                className={orderPageClassName('waybill-copy-btn')}
+                                onClick={handleCopy}
+                                aria-label={isZh ? '复制运单号' : 'Copy tracking number'}
+                            >
+                                {copied ? <Check size={12} /> : <Copy size={12} />}
+                                <span>{copied ? (isZh ? '已复制' : 'Copied') : isZh ? '复制' : 'Copy'}</span>
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
             <details className={orderPageClassName('logistics-detail')} open={status === 'transit'}>
                 <summary>
-                    <span>{isZh ? '查看物流详情' : 'View delivery details'}</span>
+                    <span>{isZh ? '物流轨迹明细' : 'View delivery details'}</span>
                     <ChevronRight aria-hidden="true" />
                 </summary>
                 <div className={orderPageClassName('logistics-detail-body')}>
-                    <dl>
-                        <div>
-                            <dt>{isZh ? '配送方式' : 'Delivery method'}</dt>
-                            <dd>{method ?? (isZh ? '承运商待分配' : 'Carrier pending')}</dd>
-                        </div>
-                        <div>
-                            <dt>{isZh ? '运单号' : 'Tracking number'}</dt>
-                            <dd>
-                                {trackingCode ??
-                                    (isZh ? '承运商尚未提供运单号' : 'Tracking number is not available yet')}
-                            </dd>
-                        </div>
-                    </dl>
                     <ol className={orderPageClassName('logistics-timeline')}>
                         <li className={orderPageClassName('is-current')}>
                             <span />
@@ -740,19 +768,17 @@ function LogisticsCard({
                             </div>
                         </li>
                     </ol>
-                    <button
-                        type="button"
-                        className={orderPageClassName('logistics-order-link')}
-                        onClick={onOpen}
-                    >
-                        <span>{isZh ? `订单 ${order.code}` : `Order ${order.code}`}</span>
-                        <span>
-                            {isZh ? '查看订单详情' : 'View order'}
-                            <ChevronRight aria-hidden="true" />
-                        </span>
-                    </button>
                 </div>
             </details>
+            <footer className={orderPageClassName('logistics-card-footer')}>
+                <span className={orderPageClassName('logistics-order-code')}>
+                    {isZh ? `订单 ${order.code}` : `Order ${order.code}`}
+                </span>
+                <button type="button" className={orderPageClassName('logistics-order-link')} onClick={onOpen}>
+                    <span>{isZh ? '查看订单详情' : 'View order'}</span>
+                    <ChevronRight aria-hidden="true" />
+                </button>
+            </footer>
         </article>
     );
 }
