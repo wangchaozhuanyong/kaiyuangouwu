@@ -256,7 +256,7 @@ describe('HomePage hero carousel', () => {
 
         expect(markup).toContain('/assets/preview/icon.png');
         expect(markup).not.toContain('/assets/preview/logo.png');
-        expect(markup).toContain('class="brand-mark"');
+        expect(markup).toContain('class="brand-mark is-brand-image"');
         expect(markup).toContain('<strong>测试店铺</strong>');
     });
 
@@ -278,6 +278,7 @@ describe('HomePage hero carousel', () => {
             const header = markup.match(/<button class="brand"[\s\S]*?<\/button>/u)?.[0];
 
             expect(header).toContain(`<strong>${storefrontName}</strong>`);
+            expect(header).toContain('class="brand-mark is-brand-fallback"');
             expect(header).toContain('lucide-store');
             expect(header).not.toContain('<img');
             expect(header).not.toMatch(/moyao|logo-on-light|app-icon/iu);
@@ -289,6 +290,18 @@ describe('HomePage hero carousel', () => {
 
         expect(markup).toContain('<strong>测试店铺</strong>');
         expect(markup).not.toContain('/assets/preview/logo.png');
+    });
+
+    it('lets the uploaded desktop logo fill its frame without inheriting fallback styling', () => {
+        const stylesheet = readStorefrontStylesheet(['./styles/desktop-commerce.css']);
+
+        expect(stylesheet).toMatch(
+            /\.desktop-brand-mark\.is-brand-image > \.safe-image-frame > \.safe-image\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*object-fit:\s*contain;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.desktop-brand-mark\.is-brand-fallback\s*\{[^}]*background:\s*var\(--accent\);/,
+        );
+        expect(stylesheet).not.toContain('.desktop-brand-mark:has(svg)');
     });
 
     it('does not render a carousel from catalog products when no managed hero exists', () => {
