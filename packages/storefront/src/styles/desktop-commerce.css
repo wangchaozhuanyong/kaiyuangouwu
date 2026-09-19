@@ -816,7 +816,7 @@
         padding: 0;
         border: 0;
         background: none;
-        color: var(--muted);
+        color: #0284c7;
         font-size: 12px;
     }
     .desktop-product-grid .product-row-bottom {
