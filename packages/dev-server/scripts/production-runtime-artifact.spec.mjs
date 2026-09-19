@@ -16,6 +16,7 @@ import {
     REQUIRED_RUNTIME_FILES,
     RUNTIME_PACKAGE_ASSETS,
     runtimeArtifactsRoot,
+    writeRuntimeFrontendReleaseManifests,
 } from './production-runtime-artifact.mjs';
 import {
     assertVendureWorkspaceSymlinksResolve,
@@ -50,7 +51,36 @@ void test('runtime artifact serves the standalone next-admin application', () =>
     assert.equal(RUNTIME_PACKAGE_ASSETS.dashboard, undefined);
     assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/next-admin-plugin/dist/index.js'));
     assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/next-admin/dist/index.html'));
+    assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/next-admin/dist/frontend-release.json'));
+    assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/storefront/dist/frontend-release.json'));
     assert.ok(!REQUIRED_RUNTIME_FILES.includes('packages/dev-server/dist/dashboard/index.html'));
+});
+
+void test('full runtime writes public frontend revision manifests for both applications', async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-frontend-revisions-'));
+    const gitSha = 'a'.repeat(40);
+    try {
+        for (const component of ['storefront', 'next-admin']) {
+            await mkdir(path.join(fixtureRoot, 'packages', component, 'dist'), { recursive: true });
+        }
+        await writeRuntimeFrontendReleaseManifests(fixtureRoot, gitSha);
+        for (const component of ['storefront', 'next-admin']) {
+            const manifest = JSON.parse(
+                await readFile(
+                    path.join(fixtureRoot, 'packages', component, 'dist', 'frontend-release.json'),
+                    'utf8',
+                ),
+            );
+            assert.deepEqual(manifest, {
+                sourceSha: gitSha,
+                backendSha: gitSha,
+                component,
+                releaseLane: 'runtime',
+            });
+        }
+    } finally {
+        await rm(fixtureRoot, { recursive: true, force: true });
+    }
 });
 
 void test('runtime verification rejects missing Vendure workspace packages', async () => {

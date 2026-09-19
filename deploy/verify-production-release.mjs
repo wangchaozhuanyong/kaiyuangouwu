@@ -298,6 +298,34 @@ async function readJson(response, label) {
     }
 }
 
+export async function verifyFrontendReleaseManifest({
+    storefrontUrl,
+    expectedSourceSha,
+    fetchImpl = globalThis.fetch,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    releaseId = expectedSourceSha,
+}) {
+    if (!/^[a-f0-9]{40}$/u.test(expectedSourceSha ?? '')) {
+        throw new Error('Frontend release marker requires an exact source SHA');
+    }
+    const storefront = normalizeStorefrontUrl(storefrontUrl);
+    const markerUrl = cacheBustedUrl(new URL('/frontend-release.json', storefront), releaseId);
+    const response = await fetchWithTimeout(
+        fetchImpl,
+        markerUrl,
+        { redirect: 'manual', headers: { 'cache-control': 'no-cache' } },
+        timeoutMs,
+    );
+    expectStatus(response, 200, 'Storefront release marker');
+    const manifest = await readJson(response, 'Storefront release marker');
+    if (manifest?.sourceSha !== expectedSourceSha) {
+        throw new Error(
+            `Storefront release marker: expected source ${expectedSourceSha}, received ${manifest?.sourceSha ?? '(missing)'}`,
+        );
+    }
+    return manifest;
+}
+
 function shopApiRequest(cookie) {
     return {
         method: 'POST',
@@ -379,6 +407,17 @@ export async function verifyProductionRelease({
     const storefrontHtml = await storefrontResponse.text();
     extractStorefrontAssetUrl(storefrontHtml, storefront);
     checks.push('direct storefront');
+
+    if (/^[a-f0-9]{40}$/u.test(releaseId)) {
+        await verifyFrontendReleaseManifest({
+            storefrontUrl: storefront,
+            expectedSourceSha: releaseId,
+            fetchImpl,
+            timeoutMs,
+            releaseId,
+        });
+        checks.push('storefront release marker');
+    }
 
     const promotionUrl = new URL('/promo', storefront);
     const promotionResponse = await fetchWithTimeout(

@@ -18,6 +18,7 @@ async function startFixtureServer({
     extraEntryScript = '',
     assetCacheControl = 'public, max-age=31536000, immutable',
     assetContentType = 'text/css',
+    frontendReleaseSha,
 } = {}) {
     const server = createServer((request, response) => {
         const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
@@ -26,6 +27,11 @@ async function startFixtureServer({
         if (request.method === 'GET' && requestUrl.pathname === '/health') {
             response.writeHead(200, { 'content-type': 'application/json' });
             response.end('{"status":"ok"}');
+            return;
+        }
+        if (request.method === 'GET' && requestUrl.pathname === '/frontend-release.json') {
+            response.writeHead(frontendReleaseSha ? 200 : 404, { 'content-type': 'application/json' });
+            response.end(frontendReleaseSha ? JSON.stringify({ sourceSha: frontendReleaseSha }) : '{}');
             return;
         }
         if (request.method === 'POST' && requestUrl.pathname === '/shop-api') {
@@ -139,7 +145,8 @@ async function startFixtureServer({
 }
 
 test('verifies public browsing and optional promotion navigation without requiring an entry cookie', async t => {
-    const fixture = await startFixtureServer();
+    const releaseSha = 'a'.repeat(40);
+    const fixture = await startFixtureServer({ frontendReleaseSha: releaseSha });
     t.after(fixture.close);
 
     const checks = await verifyProductionRelease({
@@ -147,6 +154,7 @@ test('verifies public browsing and optional promotion navigation without requiri
         dashboardUrl: `${fixture.origin}/dashboard/`,
         expectedChannelCode: 'fixture-store',
         timeoutMs: 1_000,
+        releaseId: releaseSha,
     });
 
     assert.deepEqual(checks, [
@@ -155,12 +163,27 @@ test('verifies public browsing and optional promotion navigation without requiri
         'public Shop API',
         'expected Channel',
         'direct storefront',
+        'storefront release marker',
         'optional promotion page',
         'optional promotion entry',
         'storefront build asset',
         'dashboard asset graph',
         'public Admin API denial',
     ]);
+});
+
+test('rejects a storefront release marker that does not match the reviewed SHA', async t => {
+    const fixture = await startFixtureServer({ frontendReleaseSha: 'b'.repeat(40) });
+    t.after(fixture.close);
+    await assert.rejects(
+        verifyProductionRelease({
+            storefrontUrl: fixture.origin,
+            dashboardUrl: `${fixture.origin}/dashboard/`,
+            timeoutMs: 1_000,
+            releaseId: 'a'.repeat(40),
+        }),
+        /Storefront release marker: expected source/u,
+    );
 });
 
 test('rejects a dashboard origin without its same-origin health route', async () => {

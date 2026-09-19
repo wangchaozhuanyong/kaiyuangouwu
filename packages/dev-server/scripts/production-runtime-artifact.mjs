@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync } from 'node:fs';
@@ -125,6 +126,7 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/dev-server/dist/index-worker.js',
     'packages/dev-server/dist/run-migrations.js',
     'packages/next-admin/dist/index.html',
+    'packages/next-admin/dist/frontend-release.json',
     'packages/next-admin-plugin/dist/index.js',
     'packages/dev-server/email-templates/order-confirmation/body.hbs',
     'packages/content-translation-plugin/dist/index.js',
@@ -133,6 +135,7 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/two-factor-dashboard-plugin/dist/index.js',
     'packages/telemetry-plugin/dist/index.js',
     'packages/storefront/dist/index.html',
+    'packages/storefront/dist/frontend-release.json',
     'packages/storefront/dist-two-factor/index.html',
     'packages/dev-server/scripts/catalog-cigarette-media.mjs',
     'packages/dev-server/scripts/sync-storefront-media.mjs',
@@ -309,6 +312,17 @@ async function copyRuntimeBuildOutputs(stagingRoot) {
     );
 }
 
+export async function writeRuntimeFrontendReleaseManifests(stagingRoot, gitSha) {
+    assert.match(gitSha, /^[a-f0-9]{40}$/u);
+    for (const component of ['storefront', 'next-admin']) {
+        const manifestPath = path.join(stagingRoot, 'packages', component, 'dist', 'frontend-release.json');
+        await writeFile(
+            manifestPath,
+            `${JSON.stringify({ sourceSha: gitSha, backendSha: gitSha, component, releaseLane: 'runtime' })}\n`,
+        );
+    }
+}
+
 export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
     const releaseScripts = [
         'catalog-cigarette-media.mjs',
@@ -458,6 +472,7 @@ export async function buildRuntimeArtifact({
         await pruneDeniedRuntimePackages(stagingRoot);
         await pruneInstallerWorkspace(stagingRoot);
         await copyRuntimeBuildOutputs(stagingRoot);
+        await writeRuntimeFrontendReleaseManifests(stagingRoot, gitSha);
         await copyStorefrontMediaReleaseInputs(stagingRoot);
 
         const metadata = {
