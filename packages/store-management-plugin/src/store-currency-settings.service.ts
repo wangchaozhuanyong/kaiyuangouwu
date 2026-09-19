@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import {
+    assertOrderSalesChannel,
     Channel,
     ChannelService,
     CurrencyCode,
     EventBus,
     isGraphQlErrorResult,
+    Order,
     OrderService,
     ProductVariant,
     ProductVariantPrice,
@@ -18,6 +20,11 @@ import { LessThan, LockNotSupportedOnGivenDriverError, MoreThan } from 'typeorm'
 
 import { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity';
 import { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity';
+import {
+    isStorefrontPaymentCurrencyCode,
+    orderPaymentCurrencyCode,
+    STOREFRONT_USDT_CURRENCY_CODE,
+} from './payment-currency';
 import {
     StoreCurrencyConfiguration,
     StoreCurrencyRateMode,
@@ -101,6 +108,65 @@ export class StoreCurrencySettingsService {
         };
     }
 
+    async setActiveOrderPaymentCurrency(ctx: RequestContext, requestedCurrencyCode: string): Promise<Order> {
+        if (!isStorefrontPaymentCurrencyCode(requestedCurrencyCode)) {
+            throw new UserInputError('不支持的付款币种');
+        }
+        const activeOrderId = ctx.session?.activeOrderId;
+        if (!activeOrderId) throw new UserInputError('当前没有可结算订单');
+        const order = await this.connection.getEntityOrThrow(ctx, Order, activeOrderId);
+        assertOrderSalesChannel(ctx, order);
+        if (order.state !== 'AddingItems') {
+            throw new UserInputError('当前订单状态不能切换付款币种');
+        }
+
+        const configuration = await this.get(ctx);
+        if (!configuration.selectorEnabled) throw new UserInputError('当前店铺未开放付款币种切换');
+        if (requestedCurrencyCode === STOREFRONT_USDT_CURRENCY_CODE) {
+            if (
+                !configuration.usdtDisplayEnabled ||
+                !configuration.usdtRateAvailable ||
+                !configuration.usdtPaymentConfigured
+            ) {
+                throw new UserInputError('USDT 付款暂不可用，请等待报价和收款配置就绪');
+            }
+            if (order.currencyCode !== CurrencyCode.CNY && order.currencyCode !== CurrencyCode.MYR) {
+                throw new UserInputError('USDT 付款目前仅支持 CNY 和 MYR 订单');
+            }
+        } else if (!configuration.availableCurrencyCodes.includes(requestedCurrencyCode)) {
+            throw new UserInputError('当前店铺未开放该付款币种');
+        }
+
+        const previousPaymentCurrencyCode = orderPaymentCurrencyCode(order);
+        let updatedOrder = order;
+        if (
+            requestedCurrencyCode !== STOREFRONT_USDT_CURRENCY_CODE &&
+            order.currencyCode !== requestedCurrencyCode
+        ) {
+            const result = await this.orderService.updateOrderCurrency(ctx, order.id, requestedCurrencyCode);
+            if (isGraphQlErrorResult(result)) throw new UserInputError(result.message);
+            updatedOrder = result;
+        }
+        updatedOrder = await this.orderService.updateCustomFields(ctx, updatedOrder.id, {
+            paymentCurrencyCode: requestedCurrencyCode,
+        });
+
+        if (requestedCurrencyCode === STOREFRONT_USDT_CURRENCY_CODE) {
+            await this.usdtPaymentService.expirePendingIntentsForOrder(
+                ctx,
+                updatedOrder.id,
+                '客户已重新确认 USDT 结算，旧报价失效',
+            );
+        } else if (previousPaymentCurrencyCode === STOREFRONT_USDT_CURRENCY_CODE) {
+            await this.usdtPaymentService.expirePendingIntentsForOrder(
+                ctx,
+                updatedOrder.id,
+                '客户已切换为其他付款币种',
+            );
+        }
+        return updatedOrder;
+    }
+
     async update(
         ctx: RequestContext,
         input: UpdateStoreCurrencyConfigurationInput,
@@ -158,6 +224,9 @@ export class StoreCurrencySettingsService {
         if (!order || !['AddingItems', 'ArrangingPayment'].includes(order.state)) {
             throw new UserInputError('当前订单状态不能生成 USDT 报价');
         }
+        if (orderPaymentCurrencyCode(order) !== STOREFRONT_USDT_CURRENCY_CODE) {
+            throw new UserInputError('当前订单未选择 USDT 作为付款币种');
+        }
         if (order.currencyCode !== CurrencyCode.CNY && order.currencyCode !== CurrencyCode.MYR) {
             throw new UserInputError('USDT 报价目前仅支持 CNY 和 MYR 订单');
         }
@@ -188,9 +257,17 @@ export class StoreCurrencySettingsService {
             order: { createdAt: 'DESC', id: 'DESC' },
         });
         if (current) {
+            await this.usdtPaymentService.expirePendingIntentsForOrder(
+                ctx,
+                order.id,
+                '报价已被当前订单金额替代',
+                current.id,
+            );
             const existingIntent = await this.ensureCheckoutPaymentIntent(ctx, current);
             return this.toCheckoutQuoteView(current, existingIntent);
         }
+
+        await this.usdtPaymentService.expirePendingIntentsForOrder(ctx, order.id, '报价已被当前订单金额替代');
 
         const usdtAmount = calculateUsdtCheckoutAmount(
             fiatAmount,

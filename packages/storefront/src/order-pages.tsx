@@ -33,6 +33,7 @@ import { useDesktopLayout } from './desktop-layout';
 import { compactUiCopy, languageCodeFor } from './i18n';
 import { isInputMethodKey } from './input-method';
 import { offlineLoadError } from './loading-state';
+import { formatUsdtPaymentAmount, usdtPaymentReceipt } from './order-payment-display';
 import { ORDER_STATUS_REFRESH_INTERVAL, orderNeedsStatusRefresh } from './order-refresh';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { PageSkeleton } from './route-loading';
@@ -2239,6 +2240,7 @@ function PriceSummary({
 }) {
     const isZh = language === 'zh';
     const discount = Math.abs(order.discounts.reduce((sum, item) => sum + item.amountWithTax, 0));
+    const usdtReceipt = usdtPaymentReceipt(order);
     return (
         <dl className={orderPageClassName('price-summary')}>
             <div>
@@ -2260,6 +2262,14 @@ function PriceSummary({
                 <dt>{isZh ? '合计' : 'Total'}</dt>
                 <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
             </div>
+            {usdtReceipt && (
+                <div className={orderPageClassName('summary-total')}>
+                    <dt>{isZh ? 'USDT 实付' : 'USDT paid'}</dt>
+                    <dd>
+                        {formatUsdtPaymentAmount(usdtReceipt)} {usdtReceipt.network}
+                    </dd>
+                </div>
+            )}
         </dl>
     );
 }

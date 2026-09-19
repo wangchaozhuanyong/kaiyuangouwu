@@ -287,7 +287,7 @@ export function UsdtPaymentSetupPanel({
                                             }))
                                         }
                                     />
-                                    启用报价
+                                    启用 USDT 付款
                                 </label>
                             </div>
 

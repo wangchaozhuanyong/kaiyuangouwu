@@ -47,11 +47,11 @@ export const cartQuoteFields = `
     totalWithTax
     currencyCode
     customer { id emailAddress }
-    payments { id method amount state }
+    payments { id method amount state transactionId metadata }
     discounts { adjustmentSource description amountWithTax }
     taxSummary { description taxRate taxBase taxTotal }
     couponCodes
-    customFields { customerNote deliveryEmail }
+    customFields { customerNote deliveryEmail paymentCurrencyCode }
     lines {
         id
         quantity

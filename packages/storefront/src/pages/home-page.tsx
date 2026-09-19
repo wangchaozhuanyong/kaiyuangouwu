@@ -256,7 +256,7 @@ export function CurrencySelectionSheet({
 
     return (
         <Sheet
-            title={isZh ? '选择显示币种' : 'Choose display currency'}
+            title={isZh ? '选择付款币种' : 'Choose payment currency'}
             language={language}
             onClose={onClose}
             className="currency-sheet"
@@ -264,7 +264,7 @@ export function CurrencySelectionSheet({
             <div
                 className="currency-sheet-options"
                 role="radiogroup"
-                aria-label={isZh ? '显示币种' : 'Display currency'}
+                aria-label={isZh ? '付款币种' : 'Payment currency'}
                 aria-busy={currencyLoading}
             >
                 {currencyCodes.map(currencyCode => {
@@ -287,8 +287,8 @@ export function CurrencySelectionSheet({
                                 {currencyCode === 'USDT' ? (
                                     <small>
                                         {isZh
-                                            ? '参考价格，结算币种不变'
-                                            : 'Reference price; settlement currency is unchanged'}
+                                            ? '按锁价金额通过 TRC20 付款'
+                                            : 'Pay the locked amount over TRC20'}
                                     </small>
                                 ) : null}
                             </span>
@@ -855,8 +855,8 @@ export function HomePage() {
                                 type="button"
                                 disabled={currencyLoading}
                                 onClick={() => setCurrencySheetOpen(true)}
-                                aria-label={isZh ? '选择显示币种' : 'Choose display currency'}
-                                title={isZh ? '选择显示币种' : 'Choose display currency'}
+                                aria-label={isZh ? '选择付款币种' : 'Choose payment currency'}
+                                title={isZh ? '选择付款币种' : 'Choose payment currency'}
                                 aria-haspopup="dialog"
                                 aria-expanded={currencySheetOpen}
                             >

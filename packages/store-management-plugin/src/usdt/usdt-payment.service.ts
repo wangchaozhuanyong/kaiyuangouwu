@@ -3,6 +3,7 @@ import {
     assertOrderSalesChannel,
     Channel,
     EventBus,
+    ID,
     isGraphQlErrorResult,
     Order,
     OrderService,
@@ -34,6 +35,7 @@ const PAYMENT_MATCH_GRACE_MS = 60 * 1000;
 const FINALITY_DISCOVERY_GRACE_MS = 30 * 60 * 1000;
 const UNIQUE_AMOUNT_VARIATIONS = 999;
 const PAYMENT_PROOF_TTL_MS = 5 * 60 * 1000;
+const INVALIDATED_QUOTE_REASON_PREFIX = 'PAYMENT_CURRENCY_QUOTE_INVALIDATED:';
 
 export interface UsdtPaymentScanResult {
     configured: boolean;
@@ -325,6 +327,36 @@ export class UsdtPaymentService {
         throw new Error('当前 USDT 专属付款金额已用完，请稍后重新生成报价');
     }
 
+    async expirePendingIntentsForOrder(
+        ctx: RequestContext,
+        orderId: ID,
+        reason: string,
+        exceptQuoteId?: ID,
+    ): Promise<number> {
+        const repository = this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent);
+        const intents = await repository.find({
+            where: {
+                orderId,
+                status: USDT_PAYMENT_INTENT_STATUS.pending,
+                ...(exceptQuoteId == null ? {} : { quoteId: Not(exceptQuoteId) }),
+            },
+        });
+        if (!intents.length) return 0;
+
+        const now = new Date();
+        const failureReason = `${INVALIDATED_QUOTE_REASON_PREFIX}${reason}`.slice(0, 500);
+        for (const intent of intents) {
+            intent.status = USDT_PAYMENT_INTENT_STATUS.expired;
+            intent.failureReason = failureReason;
+            intent.expiresAt = now;
+        }
+        await repository.save(intents, { reload: false });
+        await this.connection
+            .getRepository(ctx, StorefrontUsdtCheckoutQuote)
+            .update({ id: In(intents.map(intent => intent.quoteId)) }, { expiresAt: now });
+        return intents.length;
+    }
+
     private async assertQuoteScope(ctx: RequestContext, quote: StorefrontUsdtCheckoutQuote): Promise<void> {
         if (String(quote.channelId) !== String(ctx.channelId)) {
             throw new UserInputError('USDT 报价不属于当前店铺');
@@ -545,6 +577,20 @@ export class UsdtPaymentService {
                 // Claim the transaction before calling Vendure or notifying operators. The unique index
                 // also arbitrates different workers trying to attach one transfer to different intents.
                 await repository.save(locked, { reload: false });
+                if (locked.failureReason?.startsWith(INVALIDATED_QUOTE_REASON_PREFIX)) {
+                    locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
+                    locked.failureReason =
+                        '已确认链上到账，但原 USDT 报价在付款前已失效，请人工核对并避免重复入账';
+                    await repository.save(locked, { reload: false });
+                    await this.publishManualReview(
+                        ctx,
+                        locked,
+                        locked.failureReason,
+                        transfer,
+                        'invalidated-quote',
+                    );
+                    return locked.status;
+                }
                 if (history) {
                     locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
                     locked.failureReason = '付款金额曾用于其他报价，需核实付款归属后处理';

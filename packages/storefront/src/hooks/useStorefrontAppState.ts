@@ -562,8 +562,8 @@ export function useStorefrontAppState() {
             setCartLoading(true);
             setCartError(null);
             try {
-                if (currencyCode !== 'USDT' && cart?.checkoutOrder && currencyCode !== market.currencyCode) {
-                    const updatedOrder = await api.setCurrencyForOrder(currencyCode);
+                if (cart?.checkoutOrder) {
+                    const updatedOrder = await api.setPaymentCurrencyForOrder(currencyCode);
                     setCheckoutOrder(updatedOrder);
                 }
                 writeStoredCurrency(market.code, currencyCode);
@@ -582,8 +582,8 @@ export function useStorefrontAppState() {
                 }
                 notify(
                     language === 'zh'
-                        ? `已切换为 ${currencyCode} 价格`
-                        : `Prices switched to ${currencyCode}`,
+                        ? `已切换为 ${currencyCode} 付款`
+                        : `Payment currency switched to ${currencyCode}`,
                 );
             } catch (requestError) {
                 const message =

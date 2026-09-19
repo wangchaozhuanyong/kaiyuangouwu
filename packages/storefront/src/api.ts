@@ -539,6 +539,10 @@ export class ShopApi {
         return this.cartCheckoutApi.setCurrencyForOrder(currencyCode);
     }
 
+    async setPaymentCurrencyForOrder(currencyCode: string): Promise<Order> {
+        return this.cartCheckoutApi.setPaymentCurrencyForOrder(currencyCode);
+    }
+
     async eligiblePaymentMethods(signal?: AbortSignal): Promise<PaymentMethod[]> {
         return this.cartCheckoutApi.eligiblePaymentMethods(signal);
     }

@@ -322,6 +322,8 @@ export interface Order {
         method: string;
         amount: number;
         state: string;
+        transactionId?: string | null;
+        metadata?: unknown;
     }>;
     lines: OrderLine[];
     discounts: Array<{ adjustmentSource: string; description: string; amountWithTax: number }>;
@@ -331,6 +333,7 @@ export interface Order {
         customerNote?: string | null;
         deliveryEmail?: string | null;
         deliveryEmailContactId?: string | null;
+        paymentCurrencyCode?: string | null;
     };
     fulfillments?: OrderFulfillment[] | null;
     digitalDeliveries?: DigitalDelivery[] | null;
@@ -693,6 +696,7 @@ export interface StorefrontCurrencyConfiguration {
     usdtRateSource: string | null;
     usdtRateUpdatedAt: string | null;
     usdtRateAvailable: boolean;
+    usdtPaymentConfigured: boolean;
 }
 
 export interface StorefrontUsdtCheckoutQuote {

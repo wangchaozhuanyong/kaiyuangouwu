@@ -401,6 +401,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
             setShippingAddress: vi.fn().mockResolvedValue(order),
             eligibleShippingMethods: vi.fn().mockResolvedValue(options.methods ?? methods),
             setShippingMethod: vi.fn().mockResolvedValue(order),
+            setPaymentCurrencyForOrder: vi.fn().mockResolvedValue(order),
             cart: vi.fn().mockResolvedValue(cartFor(order)),
             preparePayment: vi.fn().mockResolvedValue({ cart: cartFor(order), order }),
         };
@@ -412,6 +413,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
             order,
             customer,
             market,
+            paymentCurrencyCode: 'MYR',
             storefrontCode: 'fixture-store',
             availableCountries: [{ code: 'MY', name: 'Malaysia' }],
             availableProvinces,
@@ -473,6 +475,10 @@ describe('CheckoutPage automatic delivery and drawer', () => {
             element('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
         );
         expect(api.preparePayment).toHaveBeenCalledTimes(1);
+        expect(api.setPaymentCurrencyForOrder).toHaveBeenCalledWith('MYR');
+        expect(api.setPaymentCurrencyForOrder.mock.invocationCallOrder[0]).toBeLessThan(
+            api.preparePayment.mock.invocationCallOrder[0],
+        );
         expect(api.setShippingAddress).toHaveBeenCalledTimes(1);
         expect(navigate).toHaveBeenCalledWith({ to: '/payment', search: {}, replace: true });
     });

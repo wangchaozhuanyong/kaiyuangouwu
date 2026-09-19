@@ -178,6 +178,13 @@ export class StoreCurrencySettingsShopResolver {
     @Transaction()
     @Mutation()
     @Allow(Permission.Owner)
+    setStorefrontPaymentCurrency(@Ctx() ctx: RequestContext, @Args('currencyCode') currencyCode: string) {
+        return this.currencySettings.setActiveOrderPaymentCurrency(ctx, currencyCode);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.Owner)
     createStorefrontUsdtCheckoutQuote(@Ctx() ctx: RequestContext) {
         return this.currencySettings.createCheckoutUsdtQuote(ctx);
     }

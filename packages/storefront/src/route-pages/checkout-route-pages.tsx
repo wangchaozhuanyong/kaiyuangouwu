@@ -27,6 +27,9 @@ function CheckoutRoutePage({ mode }: { mode?: 'purchase' }) {
                             : undefined
                     }
                     market={runtime.market}
+                    paymentCurrencyCode={
+                        runtime.currencySelectorEnabled ? runtime.displayCurrencyCode : undefined
+                    }
                     storefrontCode={runtime.storefrontCode}
                     availableCountries={runtime.availableCountries}
                     availableProvinces={runtime.availableProvinces}

@@ -19,6 +19,7 @@ import { ShopApi } from './api';
 import { languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
 import { formatDisplayMoney } from './money-display';
+import { formatUsdtPaymentAmount, usdtPaymentReceipt } from './order-payment-display';
 import { orderStatusRefreshInterval } from './order-refresh';
 import { isPaymentCompletedOrderState, isTestPaymentMethod, paymentAvailability } from './payment-readiness';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
@@ -76,6 +77,7 @@ export function PaymentPage({
     const submissionLock = useRef(false);
     const usdtCompletionLock = useRef(false);
     const confirmationTokenRef = useRef('');
+    const paymentCurrencyCode = order?.customFields.paymentCurrencyCode || displayCurrencyCode;
     const isPending = cart?.state === 'PAYMENT_PENDING' && order?.state === 'ArrangingPayment';
     const methodsQuery = useQuery({
         queryKey: storefrontQueryKeys.paymentMethods(
@@ -123,12 +125,12 @@ export function PaymentPage({
     const outstandingAmount = Math.max(0, (order?.totalWithTax ?? 0) - appliedReferralAmount);
     const maximumReferralAmount = Math.min(referralWallet?.availableBalance ?? 0, outstandingAmount);
     const canUseReferral =
+        paymentCurrencyCode !== 'USDT' &&
         referralProgramQuery.data?.enabled === true &&
         referralProgramQuery.data.allowBalanceSpend &&
         maximumReferralAmount > 0 &&
         appliedReferralAmount === 0;
-    const isUsdtPayment =
-        selectedMethod === 'usdt-trc20' || (displayCurrencyCode === 'USDT' && selectedMethod === '');
+    const isUsdtPayment = paymentCurrencyCode === 'USDT';
     const usdtQuoteQuery = useQuery({
         queryKey: ['storefront', market.code, 'usdt-checkout-quote', order?.id ?? '', outstandingAmount],
         queryFn: ({ signal }) => api.createUsdtCheckoutQuote(signal),
@@ -157,7 +159,10 @@ export function PaymentPage({
         staleTime: 0,
         refetchInterval: 5_000,
     });
-    const availability = paymentAvailability(isPending ? (methodsQuery.data ?? []) : [], {
+    const currencyMethods = (methodsQuery.data ?? []).filter(method =>
+        isUsdtPayment ? method.code === 'usdt-trc20' : method.code !== 'usdt-trc20',
+    );
+    const availability = paymentAvailability(isPending ? currencyMethods : [], {
         allowTestMethods: import.meta.env.DEV,
     });
     const methods = availability.methods;
@@ -181,13 +186,12 @@ export function PaymentPage({
         }
         setSelectedMethod(current => {
             if (methods.some(method => method.code === current && method.isEligible)) return current;
-            const preferredUsdtMethod =
-                displayCurrencyCode === 'USDT'
-                    ? methods.find(method => method.code === 'usdt-trc20' && method.isEligible)
-                    : undefined;
+            const preferredUsdtMethod = isUsdtPayment
+                ? methods.find(method => method.code === 'usdt-trc20' && method.isEligible)
+                : undefined;
             return preferredUsdtMethod?.code ?? methods.find(method => method.isEligible)?.code ?? '';
         });
-    }, [displayCurrencyCode, isPending, methods]);
+    }, [isPending, isUsdtPayment, methods]);
 
     useEffect(() => {
         if (!canUseReferral || referralAmount) return;
@@ -468,7 +472,7 @@ export function PaymentPage({
                             </span>
                         </div>
                     </section>
-                    {customer && referralProgramQuery.data?.enabled && (
+                    {customer && !isUsdtPayment && referralProgramQuery.data?.enabled && (
                         <section className="payment-method-section">
                             <h2>{isZh ? '返利余额抵扣' : 'Referral balance'}</h2>
                             <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
@@ -658,7 +662,15 @@ export function PaymentPage({
                             useDisplayCurrency
                         />
                         <div className="summary-total">
-                            <dt>{isZh ? '应付合计' : 'Total due'}</dt>
+                            <dt>
+                                {isUsdtPayment
+                                    ? isZh
+                                        ? '订单计价合计'
+                                        : 'Order total'
+                                    : isZh
+                                      ? '应付合计'
+                                      : 'Total due'}
+                            </dt>
                             <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
                         </div>
                         {appliedReferralAmount > 0 && (
@@ -672,6 +684,18 @@ export function PaymentPage({
                                     <dd>{formatMoney(outstandingAmount, order.currencyCode, locale)}</dd>
                                 </div>
                             </>
+                        )}
+                        {isUsdtPayment && (
+                            <div className="summary-total">
+                                <dt>{isZh ? 'USDT 锁价应付' : 'Locked USDT due'}</dt>
+                                <dd>
+                                    {usdtQuoteQuery.data
+                                        ? `₮${usdtQuoteQuery.data.usdtAmount.toFixed(6)}`
+                                        : isZh
+                                          ? '正在锁价…'
+                                          : 'Locking quote…'}
+                                </dd>
+                            </div>
                         )}
                     </dl>
                     {isUsdtPayment ? (
@@ -768,6 +792,7 @@ export function OrderConfirmationPage({
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const order = code ? (orderQuery.data ?? null) : null;
+    const usdtReceipt = order ? usdtPaymentReceipt(order) : null;
     const isTestOrder = order?.state === 'TestPaymentSettled';
     const loading = Boolean(code && confirmationToken && orderQuery.isLoading);
     const loadError =
@@ -860,7 +885,11 @@ export function OrderConfirmationPage({
                                   ? '支付金额'
                                   : 'Payment total'}
                         </dt>
-                        <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
+                        <dd>
+                            {usdtReceipt
+                                ? `${formatUsdtPaymentAmount(usdtReceipt)} ${usdtReceipt.network}`
+                                : formatMoney(order.totalWithTax, order.currencyCode, locale)}
+                        </dd>
                     </div>
                     {!isTestOrder && order.checkoutShipping && (
                         <div>

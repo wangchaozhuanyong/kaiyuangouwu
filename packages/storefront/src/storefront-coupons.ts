@@ -277,7 +277,7 @@ function displayMoneyParts(
                     minimumFractionDigits: 2,
                     maximumFractionDigits: amount < 1 ? 4 : 2,
                 }).format(amount),
-                unit: '≈₮',
+                unit: '₮',
             };
         }
     }

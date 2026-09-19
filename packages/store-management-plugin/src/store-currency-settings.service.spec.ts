@@ -57,6 +57,95 @@ describe('legacy currency price sync mutation', () => {
     });
 });
 
+describe('active order payment currency', () => {
+    const configuration = {
+        selectorEnabled: true,
+        availableCurrencyCodes: [CurrencyCode.CNY, CurrencyCode.MYR],
+        usdtDisplayEnabled: true,
+        usdtRateAvailable: true,
+        usdtPaymentConfigured: true,
+    } as Awaited<ReturnType<StoreCurrencySettingsService['get']>>;
+
+    function setup(order: Record<string, unknown>) {
+        const orderService = {
+            updateOrderCurrency: vi.fn(),
+            updateCustomFields: vi.fn((_ctx, _id, customFields) =>
+                Promise.resolve({ ...order, customFields }),
+            ),
+        };
+        const usdtPaymentService = { expirePendingIntentsForOrder: vi.fn().mockResolvedValue(1) };
+        const service = Object.create(StoreCurrencySettingsService.prototype) as StoreCurrencySettingsService;
+        Object.assign(service, {
+            connection: { getEntityOrThrow: vi.fn().mockResolvedValue(order) },
+            orderService,
+            usdtPaymentService,
+        });
+        vi.spyOn(service, 'get').mockResolvedValue(configuration);
+        const ctx = { session: { activeOrderId: 'order-1' }, channelId: 'channel-1' } as never;
+        return { service, orderService, usdtPaymentService, ctx };
+    }
+
+    it('persists USDT as the actual customer payment currency without changing the fiat ledger', async () => {
+        const { service, orderService, usdtPaymentService, ctx } = setup({
+            id: 'order-1',
+            salesChannelId: 'channel-1',
+            state: 'AddingItems',
+            currencyCode: CurrencyCode.CNY,
+            customFields: {},
+        });
+
+        await expect(service.setActiveOrderPaymentCurrency(ctx, 'USDT')).resolves.toMatchObject({
+            customFields: { paymentCurrencyCode: 'USDT' },
+        });
+        expect(orderService.updateOrderCurrency).not.toHaveBeenCalled();
+        expect(orderService.updateCustomFields).toHaveBeenCalledWith(ctx, 'order-1', {
+            paymentCurrencyCode: 'USDT',
+        });
+        expect(usdtPaymentService.expirePendingIntentsForOrder).toHaveBeenCalledWith(
+            ctx,
+            'order-1',
+            '客户已重新确认 USDT 结算，旧报价失效',
+        );
+    });
+
+    it('switches the ledger currency for fiat and invalidates the previous USDT quote', async () => {
+        const order = {
+            id: 'order-1',
+            salesChannelId: 'channel-1',
+            state: 'AddingItems',
+            currencyCode: CurrencyCode.CNY,
+            customFields: { paymentCurrencyCode: 'USDT' },
+        };
+        const { service, orderService, usdtPaymentService, ctx } = setup(order);
+        orderService.updateOrderCurrency.mockResolvedValue({ ...order, currencyCode: CurrencyCode.MYR });
+
+        await service.setActiveOrderPaymentCurrency(ctx, CurrencyCode.MYR);
+
+        expect(orderService.updateOrderCurrency).toHaveBeenCalledWith(ctx, 'order-1', CurrencyCode.MYR);
+        expect(usdtPaymentService.expirePendingIntentsForOrder).toHaveBeenCalledWith(
+            ctx,
+            'order-1',
+            '客户已切换为其他付款币种',
+        );
+    });
+
+    it('rejects USDT when either the quote or receiving-wallet gate is unavailable', async () => {
+        const { service, ctx } = setup({
+            id: 'order-1',
+            salesChannelId: 'channel-1',
+            state: 'AddingItems',
+            currencyCode: CurrencyCode.CNY,
+            customFields: {},
+        });
+        vi.spyOn(service, 'get').mockResolvedValue({
+            ...configuration,
+            usdtPaymentConfigured: false,
+        });
+
+        await expect(service.setActiveOrderPaymentCurrency(ctx, 'USDT')).rejects.toThrow(/USDT 付款暂不可用/);
+    });
+});
+
 describe('store currency optimistic concurrency', () => {
     const service = Object.create(StoreCurrencySettingsService.prototype) as StoreCurrencySettingsService;
 

@@ -58,6 +58,7 @@ const publicMutations = new Set([
     'setAllStorefrontCartLinesSelected',
     'beginStorefrontCheckout',
     'prepareStorefrontCartPayment',
+    'setStorefrontPaymentCurrency',
     'reopenStorefrontCart',
     'addItemToOrder',
     'adjustOrderLine',

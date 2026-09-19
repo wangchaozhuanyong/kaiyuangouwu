@@ -844,8 +844,8 @@ export const devConfig: VendureConfig = {
                 public: false,
                 ui: { dashboard: false },
                 label: [
-                    { languageCode: LanguageCode.zh_Hans, value: '客户端显示 USDT 参考价' },
-                    { languageCode: LanguageCode.en, value: 'Show USDT reference prices' },
+                    { languageCode: LanguageCode.zh_Hans, value: '客户端启用 USDT 付款' },
+                    { languageCode: LanguageCode.en, value: 'Enable USDT checkout payments' },
                 ],
             },
             {

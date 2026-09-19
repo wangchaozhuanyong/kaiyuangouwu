@@ -43,7 +43,7 @@ export function formatDisplayMoney(value: number, sourceCurrencyCode: string, lo
         const usdtAmount = convertMinorPriceToUsdt(value, sourceCurrencyCode);
         if (usdtAmount !== null) {
             const maximumFractionDigits = usdtAmount < 1 ? 4 : 2;
-            return `≈₮${new Intl.NumberFormat(locale, {
+            return `₮${new Intl.NumberFormat(locale, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits,
             }).format(usdtAmount)}`;

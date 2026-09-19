@@ -108,9 +108,19 @@ describe('USDT payment security', () => {
             receivingAddressFingerprint: fingerprintReceivingAddress(address),
             expiresAt: Date.now() + 60_000,
         });
+        const wrongCurrency = await usdtTrc20PaymentHandler.createPayment(
+            { channelId: '1' } as any,
+            { id: '3', currencyCode: 'CNY', customFields: {} } as any,
+            10_000,
+            [],
+            { proof },
+            {} as any,
+        );
+        expect(wrongCurrency.state).toBe('Declined');
+
         const settled = await usdtTrc20PaymentHandler.createPayment(
             { channelId: '1' } as any,
-            { id: '3', currencyCode: 'CNY' } as any,
+            { id: '3', currencyCode: 'CNY', customFields: { paymentCurrencyCode: 'USDT' } } as any,
             10_000,
             [],
             { proof },

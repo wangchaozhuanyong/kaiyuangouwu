@@ -116,6 +116,7 @@ import { AddOrderSalesChannel1789390800000 } from './1789390800000-add-order-sal
 import { AddCustomerIdentityKey1789394400000 } from './1789394400000-add-customer-identity-key';
 import { AddCustomerGroupChannel1789398000000 } from './1789398000000-add-customer-group-channel';
 import { AddCustomerStoreEntry1789401600000 } from './1789401600000-add-customer-store-entry';
+import { AddOrderPaymentCurrency1789405200000 } from './1789405200000-add-order-payment-currency';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -236,4 +237,5 @@ export const devServerMigrations = [
     AddCustomerIdentityKey1789394400000,
     AddCustomerGroupChannel1789398000000,
     AddCustomerStoreEntry1789401600000,
+    AddOrderPaymentCurrency1789405200000,
 ];

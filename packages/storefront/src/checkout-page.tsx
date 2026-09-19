@@ -65,6 +65,7 @@ export function CheckoutPage({
     selectedAddressId,
     customerLoading = false,
     market,
+    paymentCurrencyCode,
     storefrontCode,
     availableProvinces = [],
     locale,
@@ -94,6 +95,7 @@ export function CheckoutPage({
     selectedAddressId?: string;
     customerLoading?: boolean;
     market: MarketConfig;
+    paymentCurrencyCode?: string;
     storefrontCode?: string;
     availableCountries?: StorefrontConfig['availableCountries'];
     availableProvinces?: StorefrontProvince[];
@@ -484,6 +486,7 @@ export function CheckoutPage({
                 });
                 setCustomerPrepared(true);
             }
+            if (paymentCurrencyCode) await api.setPaymentCurrencyForOrder(paymentCurrencyCode);
             const latestCart = await api.cart();
             onCartChange(latestCart);
             const session = await api.preparePayment(latestCart.revision);

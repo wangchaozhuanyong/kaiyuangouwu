@@ -146,6 +146,7 @@ export class ContentReviewsApi extends BaseDomainApi {
                     usdtRateSource
                     usdtRateUpdatedAt
                     usdtRateAvailable
+                    usdtPaymentConfigured
                 }
             }
         `,

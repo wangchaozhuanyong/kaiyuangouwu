@@ -172,7 +172,9 @@ export function useStorefrontBootstrap() {
             : [configuredMarket.currencyCode];
         const nextAvailableCurrencyCodes = [
             ...settlementCurrencyCodes,
-            ...(currencyConfiguration?.usdtDisplayEnabled && currencyConfiguration.usdtRateAvailable
+            ...(currencyConfiguration?.usdtDisplayEnabled &&
+            currencyConfiguration.usdtRateAvailable &&
+            currencyConfiguration.usdtPaymentConfigured
                 ? ['USDT']
                 : []),
         ];

@@ -852,7 +852,7 @@ describe('HomePage mobile header layout', () => {
 });
 
 describe('CurrencySelectionSheet', () => {
-    it('shows every currency and identifies the selected USDT reference option', () => {
+    it('shows every currency and identifies the selected USDT payment option', () => {
         const markup = renderToStaticMarkup(
             <CurrencySelectionSheet
                 currencyCodes={['MYR', 'USDT']}
@@ -867,7 +867,7 @@ describe('CurrencySelectionSheet', () => {
         expect(markup).toContain('class="sheet currency-sheet"');
         expect(markup).toContain('role="radiogroup"');
         expect(markup).toContain('role="radio" aria-checked="true"');
-        expect(markup).toContain('参考价格，结算币种不变');
+        expect(markup).toContain('按锁价金额通过 TRC20 付款');
     });
 });
 

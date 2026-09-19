@@ -1,6 +1,8 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { PaymentMethodHandler } from '@vendure/core';
 
+import { orderPaymentCurrencyCode } from '../payment-currency';
+
 import { verifyUsdtPaymentProof } from './usdt-payment-proof';
 import { USDT_TRC20_PAYMENT_HANDLER_CODE } from './usdt-payment.constants';
 
@@ -15,6 +17,7 @@ export const usdtTrc20PaymentHandler = new PaymentMethodHandler({
         const proof = verifyUsdtPaymentProof(metadata?.proof);
         if (
             !proof ||
+            orderPaymentCurrencyCode(order) !== 'USDT' ||
             proof.channelId !== String(ctx.channelId) ||
             proof.orderId !== String(order.id) ||
             proof.fiatCurrencyCode !== String(order.currencyCode) ||

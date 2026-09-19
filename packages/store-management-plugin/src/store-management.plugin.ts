@@ -53,6 +53,7 @@ import { MerchantCatalogAccessService } from './merchant-catalog-access.service'
 import { MerchantInitialPasswordInterceptor } from './merchant-initial-password.interceptor';
 import { MerchantInitialPasswordResolver } from './merchant-initial-password.resolver';
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
+import { isStorefrontPaymentCurrencyCode, STOREFRONT_PAYMENT_CURRENCY_CODES } from './payment-currency';
 import { CartCouponCommandAdapter } from './promotion/cart-coupon-command.adapter';
 import {
     collectionPercentageDiscount,
@@ -118,6 +119,7 @@ import {
     StorefrontBrandingShopResolver,
 } from './storefront-branding.resolver';
 import { StorefrontCatalogAccessInterceptor } from './storefront-catalog-access.interceptor';
+import { StorefrontPaymentCurrencyInterceptor } from './storefront-payment-currency.interceptor';
 import { StorefrontRegionShopResolver } from './storefront-region.resolver';
 import {
     SystemAnnouncementAdminResolver,
@@ -232,9 +234,42 @@ import {
             provide: APP_INTERCEPTOR,
             useClass: StorefrontCatalogAccessInterceptor,
         },
+        {
+            provide: APP_INTERCEPTOR,
+            useClass: StorefrontPaymentCurrencyInterceptor,
+        },
     ],
     exports: [ReferralWalletSpendService],
     configuration: config => {
+        config.customFields.Order ??= [];
+        if (!config.customFields.Order.some(field => field.name === 'paymentCurrencyCode')) {
+            config.customFields.Order.push({
+                name: 'paymentCurrencyCode',
+                type: 'string',
+                length: 8,
+                nullable: true,
+                public: true,
+                ui: { dashboard: false },
+                validate: (value: string | null | undefined) =>
+                    value == null || isStorefrontPaymentCurrencyCode(value)
+                        ? undefined
+                        : `Payment currency must be one of ${STOREFRONT_PAYMENT_CURRENCY_CODES.join(', ')}`,
+                label: [
+                    { languageCode: LanguageCode.zh_Hans, value: '客户付款币种' },
+                    { languageCode: LanguageCode.en, value: 'Customer payment currency' },
+                ],
+                description: [
+                    {
+                        languageCode: LanguageCode.zh_Hans,
+                        value: '客户选定的实际付款币种；USDT 订单仍保留法币账务金额',
+                    },
+                    {
+                        languageCode: LanguageCode.en,
+                        value: 'The currency selected for payment; USDT orders retain their fiat ledger amount',
+                    },
+                ],
+            });
+        }
         config.settingsStoreFields ??= {};
         config.settingsStoreFields.systemOperations = [
             ...(config.settingsStoreFields.systemOperations ?? []).filter(

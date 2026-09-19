@@ -735,6 +735,36 @@ describe('ShopApi storefront mutations', () => {
         expect(request.variables).toEqual({ currencyCode: 'MYR' });
     });
 
+    it('stores the selected customer payment currency on the active order', async () => {
+        const order = {
+            __typename: 'Order',
+            id: 'order-1',
+            code: 'ORDER-1',
+            state: 'AddingItems',
+            totalQuantity: 1,
+            subTotalWithTax: 5991,
+            shippingWithTax: 0,
+            totalWithTax: 5991,
+            currencyCode: 'MYR',
+            lines: [],
+            discounts: [],
+            taxSummary: [],
+            couponCodes: [],
+            customFields: { paymentCurrencyCode: 'USDT' },
+        };
+        const fetchMock = mockGraphQlResponse({ setStorefrontPaymentCurrency: order });
+
+        await expect(new ShopApi(market).setPaymentCurrencyForOrder('USDT')).resolves.toEqual(order);
+
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.query).toContain('setStorefrontPaymentCurrency');
+        expect(request.query).toContain('paymentCurrencyCode');
+        expect(request.variables).toEqual({ currencyCode: 'USDT' });
+    });
+
     it('creates a server-locked USDT checkout quote', async () => {
         const quote = {
             id: 'quote-1',
@@ -1250,7 +1280,7 @@ describe('ShopApi storefront mutations', () => {
             variables: Record<string, unknown>;
         };
         expect(request.query).toContain('setOrderCustomFields(input: $input)');
-        expect(request.query).toContain('customFields { customerNote deliveryEmail }');
+        expect(request.query).toContain('customFields { customerNote deliveryEmail paymentCurrencyCode }');
         expect(request.variables).toEqual({
             input: { customFields: { customerNote: '请放在门口' } },
         });

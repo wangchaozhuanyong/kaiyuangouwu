@@ -32,14 +32,14 @@ describe('USDT display money', () => {
         ).toBe(10);
     });
 
-    it('formats an approximate USDT price but preserves fiat when USDT is not selected', () => {
+    it('formats the selected USDT price but preserves fiat when USDT is not selected', () => {
         configureMoneyDisplay({
             displayCurrencyCode: 'USDT',
             cnyPerUsdtRate: 7.2,
             myrPerUsdtRate: 4.32,
             usdtMarkupPercent: 0,
         });
-        expect(formatDisplayMoney(7_200, 'CNY', 'zh-CN')).toBe('≈₮10.00');
+        expect(formatDisplayMoney(7_200, 'CNY', 'zh-CN')).toBe('₮10.00');
 
         resetMoneyDisplay();
         expect(formatDisplayMoney(7_200, 'CNY', 'zh-CN')).toContain('72');

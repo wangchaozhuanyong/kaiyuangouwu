@@ -40,7 +40,7 @@ export function DesktopHeader({
                         <Link to="/support">{isZh ? '联系客服' : 'Customer service'}</Link>
                         {context.currencySelectorEnabled && context.availableCurrencyCodes.length > 1 && (
                             <select
-                                aria-label={isZh ? '选择显示币种' : 'Choose display currency'}
+                                aria-label={isZh ? '选择付款币种' : 'Choose payment currency'}
                                 value={context.displayCurrencyCode}
                                 disabled={context.cartLoading}
                                 onChange={event => void context.switchCurrency(event.target.value)}

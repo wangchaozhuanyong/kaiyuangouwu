@@ -1355,6 +1355,7 @@ export const shopApiExtensions = gql`
 
     extend type Mutation {
         setCustomerAvatar(file: Upload!): Asset!
+        setStorefrontPaymentCurrency(currencyCode: String!): Order!
         createStorefrontUsdtCheckoutQuote: StorefrontUsdtCheckoutQuote!
         claimStorefrontCoupon(campaignId: ID!): StoreCustomerCoupon!
         applyStorefrontCoupon(id: ID!): StoreCustomerCoupon!

@@ -702,6 +702,20 @@ export class CartCheckoutApi extends BaseDomainApi {
         return this.assertOrder(result.setCurrencyCodeForOrder);
     }
 
+    async setPaymentCurrencyForOrder(currencyCode: string): Promise<Order> {
+        const result = await this.request<{ setStorefrontPaymentCurrency: Order }>(
+            `
+                mutation SetStorefrontPaymentCurrency($currencyCode: String!) {
+                    setStorefrontPaymentCurrency(currencyCode: $currencyCode) {
+                        ${orderFields}
+                    }
+                }
+            `,
+            { currencyCode },
+        );
+        return result.setStorefrontPaymentCurrency;
+    }
+
     async eligiblePaymentMethods(signal?: AbortSignal): Promise<PaymentMethod[]> {
         const result = await this.request<{ eligiblePaymentMethods: PaymentMethod[] }>(
             `

@@ -44,6 +44,20 @@ describe('storefront bootstrap boundaries', () => {
         description: ' 店铺说明 ',
         legalEntityName: ' Test Entity ',
     });
+    const currencyConfiguration = (usdtPaymentConfigured: boolean) => ({
+        defaultCurrencyCode: 'MYR',
+        availableCurrencyCodes: ['MYR', 'CNY'],
+        selectorEnabled: true,
+        cnyToMyrRate: 0.6,
+        usdtDisplayEnabled: true,
+        usdtMarkupPercent: 0,
+        cnyPerUsdtRate: 7.2,
+        myrPerUsdtRate: 4.32,
+        usdtRateSource: 'test',
+        usdtRateUpdatedAt: new Date().toISOString(),
+        usdtRateAvailable: true,
+        usdtPaymentConfigured,
+    });
     beforeEach(() => {
         localStorage.clear();
         vi.spyOn(navigator, 'language', 'get').mockReturnValue('zh-CN');
@@ -117,5 +131,15 @@ describe('storefront bootstrap boundaries', () => {
         act(() => value.toggleLanguage());
         expect(value.language).toBe('en');
         expect(value.storefrontName).toBe('Test store');
+    });
+
+    it('offers USDT only when both the quote and receiving-wallet gates are ready', () => {
+        config = { ...nextConfig(), currencyConfiguration: currencyConfiguration(false) };
+        render();
+        expect(value.availableCurrencyCodes).toEqual(['MYR', 'CNY']);
+
+        config = { ...nextConfig(), currencyConfiguration: currencyConfiguration(true) };
+        render();
+        expect(value.availableCurrencyCodes).toEqual(['MYR', 'CNY', 'USDT']);
     });
 });

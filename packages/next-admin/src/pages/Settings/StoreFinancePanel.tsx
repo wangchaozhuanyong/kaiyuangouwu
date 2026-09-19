@@ -217,7 +217,7 @@ export function CurrencyAndRatesPanel() {
                     ]}
                 />
                 <ToggleField
-                    label="前台显示 USDT 参考价"
+                    label="前台启用 USDT 付款"
                     checked={draft.usdtDisplayEnabled}
                     onChange={value => update('usdtDisplayEnabled', value)}
                 />

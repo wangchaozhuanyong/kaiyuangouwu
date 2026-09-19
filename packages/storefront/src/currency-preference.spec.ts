@@ -20,7 +20,7 @@ const market: MarketConfig = {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('display and settlement currency preferences', () => {
-    it('keeps the fiat settlement currency when the display currency changes to USDT', () => {
+    it('keeps the backing fiat ledger currency when the customer selects USDT payment', () => {
         const values = new Map<string, string>();
         vi.stubGlobal('localStorage', {
             getItem: (key: string) => values.get(key) ?? null,
@@ -34,7 +34,7 @@ describe('display and settlement currency preferences', () => {
         expect(readStoredSettlementCurrency(market, ['CNY', 'MYR'])).toBe('MYR');
     });
 
-    it('never stores USDT as an order settlement currency', () => {
+    it('never stores USDT as the backing fiat ledger currency', () => {
         const setItem = vi.fn();
         vi.stubGlobal('localStorage', { getItem: () => null, setItem });
 
