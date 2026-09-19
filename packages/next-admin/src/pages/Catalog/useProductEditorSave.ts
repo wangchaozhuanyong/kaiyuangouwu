@@ -782,18 +782,19 @@ export function useProductEditorSave({
                     ],
                 }));
                 let createdVariantList: Array<{ id: string; sku: string }> = [];
+                const hasVariantMatrix =
+                    variants.length > 1 || variants.some(variant => variant.optionIds.length > 0);
+                const hadOriginalOptionGroups = (productData?.product?.optionGroups.length ?? 0) > 0;
+                const shouldApplyVariantMatrixAtomically =
+                    changes.optionGroups && changes.variants && (hasVariantMatrix || hadOriginalOptionGroups);
 
-                if (changes.optionGroups && changes.variants) {
+                if (shouldApplyVariantMatrixAtomically) {
                     try {
-                        const isSingleProductWithoutOptions =
-                            variants.length <= 1 && (variants[0]?.optionIds.length ?? 0) === 0;
                         const result = await applyVariantMatrixMutation({
                             variables: {
                                 input: {
                                     productId,
-                                    targetOptionGroupIds: isSingleProductWithoutOptions
-                                        ? []
-                                        : selectedOptionGroupIds,
+                                    targetOptionGroupIds: hasVariantMatrix ? selectedOptionGroupIds : [],
                                     updateVariants: updateVariantInputs,
                                     createVariants: createVariantInputs,
                                 },
