@@ -44,9 +44,13 @@ import {
     businessChoiceLabel,
 } from './business-settings-choice-data';
 import {
+    CheckboxControl,
+    CheckboxField,
     ErrorState,
     Field,
+    FieldGroup,
     LoadingState,
+    SettingsFormGrid,
     errorText,
     inputClass,
     mergeById,
@@ -359,7 +363,7 @@ function GlobalBusinessSettings({
                     {state.loading ? '保存中…' : '保存全局设置'}
                 </button>
             </div>
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <SettingsFormGrid columns={3} className="mt-4">
                 <MultiValueChoiceField
                     label="平台可用语言"
                     description="从列表添加后台允许店铺使用的内容语言。"
@@ -369,7 +373,7 @@ function GlobalBusinessSettings({
                     onChange={setLanguages}
                     disabled={state.loading}
                 />
-                <Field label="全局缺货阈值">
+                <Field label="全局缺货阈值" description="为使用全局规则的 SKU 设置库存可售边界。">
                     <input
                         type="number"
                         min="0"
@@ -378,15 +382,15 @@ function GlobalBusinessSettings({
                         className={inputClass}
                     />
                 </Field>
-                <label className="flex items-center gap-2 pt-7 text-xs text-slate-700">
-                    <input
-                        type="checkbox"
-                        checked={trackInventory}
-                        onChange={event => setTrackInventory(event.target.checked)}
-                    />
-                    默认跟踪库存
-                </label>
-            </div>
+                <CheckboxField
+                    label="库存跟踪"
+                    description="作为新建 SKU 的平台默认库存行为。"
+                    checkboxLabel="默认跟踪库存"
+                    checked={trackInventory}
+                    onChange={event => setTrackInventory(event.target.checked)}
+                    disabled={state.loading}
+                />
+            </SettingsFormGrid>
         </section>
     );
 }
@@ -502,7 +506,7 @@ function ChannelBusinessSettings({
                     {state.loading ? '保存中…' : '保存基础参数'}
                 </button>
             </div>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <SettingsFormGrid columns={4} className="mt-4">
                 <MultiValueChoiceField
                     label="店铺内容语言"
                     description="顾客在前台可切换的语言。"
@@ -519,7 +523,7 @@ function ChannelBusinessSettings({
                     }}
                     disabled={state.loading}
                 />
-                <Field label="默认语言">
+                <Field label="默认语言" description="新内容优先采用的语言。">
                     <select
                         value={defaultLanguage}
                         onChange={event => setDefaultLanguage(event.target.value)}
@@ -545,7 +549,7 @@ function ChannelBusinessSettings({
                     }}
                     disabled={state.loading}
                 />
-                <Field label="默认币种">
+                <Field label="默认币种" description="商品定价和订单结算的默认币种。">
                     <select
                         value={defaultCurrency}
                         onChange={event => setDefaultCurrency(event.target.value)}
@@ -558,7 +562,7 @@ function ChannelBusinessSettings({
                         ))}
                     </select>
                 </Field>
-                <Field label="默认计税区域">
+                <Field label="默认计税区域" description="没有单独指定时使用的税务区域。">
                     <select
                         value={taxZoneId}
                         onChange={event => setTaxZoneId(event.target.value)}
@@ -572,7 +576,7 @@ function ChannelBusinessSettings({
                         ))}
                     </select>
                 </Field>
-                <Field label="默认配送区域">
+                <Field label="默认配送区域" description="没有单独指定时使用的配送区域。">
                     <select
                         value={shippingZoneId}
                         onChange={event => setShippingZoneId(event.target.value)}
@@ -586,7 +590,7 @@ function ChannelBusinessSettings({
                         ))}
                     </select>
                 </Field>
-                <Field label="缺货阈值">
+                <Field label="缺货阈值" description="当前店铺用于判断可售库存的安全边界。">
                     <input
                         type="number"
                         min="0"
@@ -595,25 +599,23 @@ function ChannelBusinessSettings({
                         className={inputClass}
                     />
                 </Field>
-                <div className="space-y-2 pt-1">
-                    <label className="flex items-center gap-2 text-xs text-slate-700">
-                        <input
-                            type="checkbox"
+                <FieldGroup label="业务规则" description="控制当前店铺的计价和库存默认行为。">
+                    <div className="grid gap-2">
+                        <CheckboxControl
+                            label="商品价格已含税"
                             checked={pricesIncludeTax}
                             onChange={event => setPricesIncludeTax(event.target.checked)}
+                            disabled={state.loading}
                         />
-                        商品价格已含税
-                    </label>
-                    <label className="flex items-center gap-2 text-xs text-slate-700">
-                        <input
-                            type="checkbox"
+                        <CheckboxControl
+                            label="默认跟踪库存"
                             checked={trackInventory}
                             onChange={event => setTrackInventory(event.target.checked)}
+                            disabled={state.loading}
                         />
-                        默认跟踪库存
-                    </label>
-                </div>
-            </div>
+                    </div>
+                </FieldGroup>
+            </SettingsFormGrid>
             <div className="mt-4">
                 <DynamicCustomFieldsForm
                     helpTopic="settings.store-profile"
@@ -791,8 +793,11 @@ function TaxBusinessSettings({
                 <p className="mt-1 text-xs text-slate-400">税率按“税类 + 区域”匹配订单</p>
             </div>
             <div className="space-y-4 p-5">
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label={editingCategoryId ? '税类名称' : '选择税类用途'}>
+                <SettingsFormGrid columns={2}>
+                    <Field
+                        label={editingCategoryId ? '税类名称' : '选择税类用途'}
+                        description="为商品选择对应的税务规则分组。"
+                    >
                         {editingCategoryId ? (
                             <input
                                 value={categoryName}
@@ -828,7 +833,7 @@ function TaxBusinessSettings({
                         )}
                     </Field>
                     {categoryPreset === '__custom__' && !editingCategoryId && (
-                        <Field label="自定义税类名称">
+                        <Field label="自定义税类名称" description="仅用于预设列表以外的业务场景。">
                             <input
                                 value={categoryName}
                                 onChange={event => setCategoryName(event.target.value)}
@@ -837,18 +842,15 @@ function TaxBusinessSettings({
                             />
                         </Field>
                     )}
-                    <label className="flex items-center gap-2 px-2 text-xs text-slate-600">
-                        <input
-                            type="checkbox"
-                            checked={categoryDefault}
-                            onChange={event => setCategoryDefault(event.target.checked)}
-                        />
-                        默认税类
-                    </label>
-                </div>
-                <p className="text-[11px] leading-4 text-slate-400">
-                    税类用于给商品分组；实际收取多少税，请在下方选择税类和业务区域后设置。
-                </p>
+                    <CheckboxField
+                        label="默认设置"
+                        description="新商品优先采用该税类。"
+                        checkboxLabel="设为默认税类"
+                        checked={categoryDefault}
+                        onChange={event => setCategoryDefault(event.target.checked)}
+                        disabled={busy}
+                    />
+                </SettingsFormGrid>
                 <div className="flex flex-wrap gap-2">
                     <button
                         type="button"

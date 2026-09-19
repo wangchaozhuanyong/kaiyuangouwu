@@ -9,7 +9,7 @@ import { toUserFacingError } from '../../utils/user-facing-error';
 // UsdtPaymentSetupPanel.
 
 export const inputClass =
-    'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400';
+    'min-h-9 min-w-0 w-full max-w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400';
 export const primaryButton =
     'tablet-touch-target flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
 export const secondaryButton =
@@ -112,14 +112,159 @@ export function ModalActions({
     );
 }
 
-// ─── Field ───────────────────────────────────────────────────────────────────
+// ─── Form layout ─────────────────────────────────────────────────────────────
 
-export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+const settingsFormGridColumns = {
+    2: 'md:grid-cols-2',
+    3: 'md:grid-cols-2 xl:grid-cols-3',
+    4: 'md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4',
+} as const;
+
+/**
+ * Shared settings-form grid. The progressive breakpoints account for the admin sidebar,
+ * so fields do not become cramped merely because the browser itself crossed `sm`.
+ */
+export function SettingsFormGrid({
+    columns = 2,
+    className = '',
+    children,
+}: {
+    columns?: keyof typeof settingsFormGridColumns;
+    className?: string;
+    children: React.ReactNode;
+}) {
     return (
-        <label className="block text-xs font-bold text-slate-700">
-            <span className="mb-1.5 block">{label}</span>
+        <div
+            data-settings-form-grid={columns}
+            className={`grid min-w-0 items-start gap-x-4 gap-y-5 ${settingsFormGridColumns[columns]} ${className}`}
+        >
+            {children}
+        </div>
+    );
+}
+
+function FieldHeader({
+    label,
+    description,
+    htmlFor,
+}: {
+    label: string;
+    description?: string;
+    htmlFor?: string;
+}) {
+    return (
+        <span className="block min-h-9">
+            {htmlFor ? (
+                <label htmlFor={htmlFor} className="block text-xs font-bold leading-4 text-slate-700">
+                    {label}
+                </label>
+            ) : (
+                <span className="block text-xs font-bold leading-4 text-slate-700">{label}</span>
+            )}
+            {description && (
+                <span className="mt-1 block text-[11px] font-normal leading-4 text-slate-400">
+                    {description}
+                </span>
+            )}
+        </span>
+    );
+}
+
+/** A labelled input field with the same header and control rhythm as every settings control. */
+export function Field({
+    label,
+    description,
+    className = '',
+    children,
+}: {
+    label: string;
+    description?: string;
+    className?: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <label data-settings-field="input" className={`flex min-w-0 flex-col gap-2 ${className}`}>
+            <FieldHeader label={label} description={description} />
             {children}
         </label>
+    );
+}
+
+/** A field shell for compound controls which cannot be wrapped by one HTML label. */
+export function FieldGroup({
+    label,
+    description,
+    htmlFor,
+    className = '',
+    children,
+}: {
+    label: string;
+    description?: string;
+    htmlFor?: string;
+    className?: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <div data-settings-field="group" className={`min-w-0 ${className}`}>
+            <FieldHeader label={label} description={description} htmlFor={htmlFor} />
+            <div className="mt-2 min-w-0">{children}</div>
+        </div>
+    );
+}
+
+export function CheckboxControl({
+    label,
+    checked,
+    onChange,
+    disabled = false,
+}: {
+    label: string;
+    checked: boolean;
+    onChange: React.ChangeEventHandler<HTMLInputElement>;
+    disabled?: boolean;
+}) {
+    return (
+        <label className="flex min-h-9 min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50 has-[:focus-visible]:border-blue-500 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-100 has-[:disabled]:cursor-not-allowed has-[:disabled]:bg-slate-50 has-[:disabled]:text-slate-400">
+            <input
+                type="checkbox"
+                checked={checked}
+                onChange={onChange}
+                disabled={disabled}
+                className="h-4 w-4 shrink-0 accent-blue-600"
+            />
+            <span className="min-w-0 leading-4">{label}</span>
+        </label>
+    );
+}
+
+export function CheckboxField({
+    label,
+    description,
+    checkboxLabel,
+    checked,
+    onChange,
+    disabled = false,
+    className = '',
+}: {
+    label: string;
+    description?: string;
+    checkboxLabel: string;
+    checked: boolean;
+    onChange: React.ChangeEventHandler<HTMLInputElement>;
+    disabled?: boolean;
+    className?: string;
+}) {
+    return (
+        <FieldGroup label={label} description={description} className={className}>
+            <div data-settings-checkbox-field="true">
+                <CheckboxControl
+                    label={checkboxLabel}
+                    checked={checked}
+                    onChange={onChange}
+                    disabled={disabled}
+                />
+            </div>
+        </FieldGroup>
     );
 }
 

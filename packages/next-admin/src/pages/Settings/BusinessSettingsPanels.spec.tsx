@@ -124,6 +124,21 @@ afterEach(() => {
 });
 
 describe('BusinessBasicsPanel', () => {
+    it('uses the shared form grid and field shells instead of manual checkbox offsets', () => {
+        const html = renderToStaticMarkup(
+            <ConfirmDialogContext.Provider value={async () => false}>
+                <BusinessBasicsPanel onChanged={async () => undefined} onError={() => undefined} />
+            </ConfirmDialogContext.Provider>,
+        );
+
+        expect(html.match(/data-settings-form-grid=/g)?.length).toBeGreaterThanOrEqual(3);
+        expect(html).toContain('data-settings-field="input"');
+        expect(html).toContain('data-settings-field="group"');
+        expect(html).toContain('data-settings-checkbox-field="true"');
+        expect(html).toMatch(/<label for="[^"]+"[^>]*>平台可用语言<\/label>/);
+        expect(html).not.toContain('pt-7');
+    });
+
     it('uses guided choices instead of asking operators to remember language and currency codes', () => {
         const html = renderToStaticMarkup(
             <ConfirmDialogContext.Provider value={async () => false}>
