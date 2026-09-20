@@ -27,8 +27,16 @@ import { InventoryLotMovement } from './entities/inventory-lot-movement.entity';
 import { InventoryLot } from './entities/inventory-lot.entity';
 import { InventoryPolicy } from './entities/inventory-policy.entity';
 import { OrderProfitExpense } from './entities/order-profit-expense.entity';
+import { PurchaseOrderEvent } from './entities/purchase-order-event.entity';
+import { PurchaseOrderLine } from './entities/purchase-order-line.entity';
+import { PurchaseOrder } from './entities/purchase-order.entity';
+import { PurchaseReceiptLine } from './entities/purchase-receipt-line.entity';
+import { PurchaseReceipt } from './entities/purchase-receipt.entity';
+import { PurchaseSupplierReturnLine } from './entities/purchase-supplier-return-line.entity';
+import { PurchaseSupplierReturn } from './entities/purchase-supplier-return.entity';
 import { VariantCostRecord } from './entities/variant-cost-record.entity';
 import { InventoryLotLifecycleService } from './inventory-lot-lifecycle.service';
+import { PurchaseOrderService } from './purchase-order.service';
 import './types';
 
 @VendurePlugin({
@@ -44,6 +52,13 @@ import './types';
         OrderProfitExpense,
         CatalogSupplier,
         CatalogVariantSupplier,
+        PurchaseOrder,
+        PurchaseOrderLine,
+        PurchaseReceipt,
+        PurchaseReceiptLine,
+        PurchaseOrderEvent,
+        PurchaseSupplierReturn,
+        PurchaseSupplierReturnLine,
     ],
     providers: [
         CatalogChannelAssignmentsService,
@@ -57,6 +72,7 @@ import './types';
         InventoryLotLifecycleService,
         CatalogSupplierService,
         CatalogVariantMatrixService,
+        PurchaseOrderService,
     ],
     configuration: config => {
         config.authOptions.customPermissions.push(
@@ -216,6 +232,7 @@ import './types';
         schema: adminApiExtensions,
         resolvers: [CatalogManagementAdminResolver],
     },
+    dashboard: './dashboard/index.tsx',
     compatibility: '^3.7.0',
 })
 export class CatalogManagementPlugin {}

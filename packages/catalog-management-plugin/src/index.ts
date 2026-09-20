@@ -11,6 +11,12 @@ export { InventoryLotMovement } from './entities/inventory-lot-movement.entity.j
 export { InventoryLot } from './entities/inventory-lot.entity.js';
 export { InventoryPolicy } from './entities/inventory-policy.entity.js';
 export { OrderProfitExpense } from './entities/order-profit-expense.entity.js';
+export { PurchaseOrderLine } from './entities/purchase-order-line.entity.js';
+export { PurchaseOrder } from './entities/purchase-order.entity.js';
+export { PurchaseReceiptLine } from './entities/purchase-receipt-line.entity.js';
+export { PurchaseReceipt } from './entities/purchase-receipt.entity.js';
+export { PurchaseSupplierReturnLine } from './entities/purchase-supplier-return-line.entity.js';
+export { PurchaseSupplierReturn } from './entities/purchase-supplier-return.entity.js';
 export { VariantCostRecord } from './entities/variant-cost-record.entity.js';
 export type {
     CatalogImportAction,

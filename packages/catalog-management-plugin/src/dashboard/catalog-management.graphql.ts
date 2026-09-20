@@ -393,6 +393,239 @@ export const updateCatalogSupplierMutation = gql`
     }
 `;
 
+const catalogPurchaseOrderFields = gql`
+    fragment CatalogPurchaseOrderFields on CatalogPurchaseOrder {
+        id
+        createdAt
+        updatedAt
+        code
+        status
+        paymentStatus
+        currencyCode
+        totalMicrounits
+        paidMicrounits
+        returnCreditMicrounits
+        outstandingMicrounits
+        expectedAt
+        submittedAt
+        closedAt
+        notes
+        closureNote
+        overdue
+        hasVariance
+        supplier {
+            id
+            code
+            name
+            enabled
+        }
+        stockLocation {
+            id
+            name
+        }
+        lines {
+            id
+            variantId
+            variant {
+                id
+                name
+                sku
+            }
+            orderedQuantity
+            receivedQuantity
+            acceptedQuantity
+            rejectedQuantity
+            returnedQuantity
+            outstandingQuantity
+            returnableQuantity
+            returnableLots {
+                id
+                lotCode
+                quantityOnHand
+                expiresAt
+            }
+            unitCostMicrounits
+            purchaseUnit
+            packageQuantity
+            notes
+        }
+        receipts {
+            id
+            code
+            supplierDeliveryReference
+            receivedAt
+            receivedByUserId
+            notes
+            lines {
+                id
+                purchaseOrderLineId
+                inventoryLotId
+                receivedQuantity
+                acceptedQuantity
+                rejectedQuantity
+                lotCode
+                unitCostMicrounits
+                rejectionReason
+            }
+        }
+        supplierReturns {
+            id
+            code
+            supplierAcknowledgementReference
+            returnedAt
+            returnedByUserId
+            notes
+            lines {
+                id
+                purchaseOrderLineId
+                inventoryLotId
+                quantity
+                unitCostMicrounits
+                creditMicrounits
+                reason
+            }
+        }
+        events {
+            id
+            createdAt
+            type
+            actorUserId
+            summary
+            details
+        }
+    }
+`;
+
+export const catalogPurchaseOrdersQuery = gql`
+    ${catalogPurchaseOrderFields}
+    query CatalogPurchaseOrders($options: CatalogPurchaseOrderListOptions) {
+        catalogPurchaseOrders(options: $options) {
+            items {
+                ...CatalogPurchaseOrderFields
+            }
+            totalItems
+        }
+    }
+`;
+
+export const catalogPurchaseOrderQuery = gql`
+    ${catalogPurchaseOrderFields}
+    query CatalogPurchaseOrder($id: ID!) {
+        catalogPurchaseOrder(id: $id) {
+            ...CatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const catalogPurchaseVariantsQuery = gql`
+    query CatalogPurchaseVariants($options: ProductVariantListOptions) {
+        productVariants(options: $options) {
+            items {
+                id
+                name
+                sku
+                customFields
+            }
+            totalItems
+        }
+    }
+`;
+
+export const createCatalogPurchaseOrderMutation = gql`
+    ${catalogPurchaseOrderFields}
+    mutation CreateCatalogPurchaseOrder($input: CreateCatalogPurchaseOrderInput!) {
+        createCatalogPurchaseOrder(input: $input) {
+            ...CatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const submitCatalogPurchaseOrderMutation = gql`
+    ${catalogPurchaseOrderFields}
+    mutation SubmitCatalogPurchaseOrder($id: ID!) {
+        submitCatalogPurchaseOrder(id: $id) {
+            ...CatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const receiveCatalogPurchaseOrderMutation = gql`
+    ${catalogPurchaseOrderFields}
+    mutation ReceiveCatalogPurchaseOrder($input: ReceiveCatalogPurchaseOrderInput!) {
+        receiveCatalogPurchaseOrder(input: $input) {
+            ...CatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const closeCatalogPurchaseOrderMutation = gql`
+    ${catalogPurchaseOrderFields}
+    mutation CloseCatalogPurchaseOrder($id: ID!, $note: String) {
+        closeCatalogPurchaseOrder(id: $id, note: $note) {
+            ...CatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const cancelCatalogPurchaseOrderMutation = gql`
+    ${catalogPurchaseOrderFields}
+    mutation CancelCatalogPurchaseOrder($id: ID!, $note: String) {
+        cancelCatalogPurchaseOrder(id: $id, note: $note) {
+            ...CatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const recordCatalogPurchasePaymentMutation = gql`
+    ${catalogPurchaseOrderFields}
+    mutation RecordCatalogPurchasePayment($input: RecordCatalogPurchasePaymentInput!) {
+        recordCatalogPurchasePayment(input: $input) {
+            ...CatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const disputeCatalogPurchasePaymentMutation = gql`
+    ${catalogPurchaseOrderFields}
+    mutation DisputeCatalogPurchasePayment($id: ID!, $note: String!) {
+        disputeCatalogPurchasePayment(id: $id, note: $note) {
+            ...CatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const returnCatalogPurchaseOrderMutation = gql`
+    ${catalogPurchaseOrderFields}
+    mutation ReturnCatalogPurchaseOrder($input: ReturnCatalogPurchaseOrderInput!) {
+        returnCatalogPurchaseOrder(input: $input) {
+            ...CatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const catalogSupplierPerformanceQuery = gql`
+    query CatalogSupplierPerformance($supplierId: ID!, $from: DateTime, $to: DateTime) {
+        catalogSupplierPerformance(supplierId: $supplierId, from: $from, to: $to) {
+            supplierId
+            from
+            to
+            totalOrders
+            closedOrders
+            orderedQuantity
+            acceptedQuantity
+            rejectedQuantity
+            returnedQuantity
+            varianceOrders
+            disputeOrders
+            onTimeRate
+            acceptanceRate
+            varianceFreeRate
+            disputeFreeRate
+            score
+        }
+    }
+`;
+
 export interface CatalogImportJobRecord {
     id: string;
     createdAt: string;
@@ -591,4 +824,115 @@ export interface CatalogSupplierVariantRecord {
     name: string;
     sku: string;
     enabled: boolean;
+}
+
+export type CatalogPurchaseOrderStatus =
+    'DRAFT' | 'SUBMITTED' | 'PARTIALLY_RECEIVED' | 'RECEIVED' | 'VARIANCE_REVIEW' | 'CLOSED' | 'CANCELLED';
+
+export interface CatalogPurchaseOrderRecord {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+    code: string;
+    status: CatalogPurchaseOrderStatus;
+    paymentStatus: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'DISPUTED';
+    currencyCode: string;
+    totalMicrounits: number;
+    paidMicrounits: number;
+    returnCreditMicrounits: number;
+    outstandingMicrounits: number;
+    expectedAt: string | null;
+    submittedAt: string | null;
+    closedAt: string | null;
+    notes: string | null;
+    closureNote: string | null;
+    overdue: boolean;
+    hasVariance: boolean;
+    supplier: Pick<CatalogSupplierRecord, 'id' | 'code' | 'name' | 'enabled'>;
+    stockLocation: { id: string; name: string };
+    lines: Array<{
+        id: string;
+        variantId: string;
+        variant: { id: string; name: string; sku: string };
+        orderedQuantity: number;
+        receivedQuantity: number;
+        acceptedQuantity: number;
+        rejectedQuantity: number;
+        returnedQuantity: number;
+        outstandingQuantity: number;
+        returnableQuantity: number;
+        returnableLots: Array<{
+            id: string;
+            lotCode: string;
+            quantityOnHand: number;
+            expiresAt: string | null;
+        }>;
+        unitCostMicrounits: number;
+        purchaseUnit: string | null;
+        packageQuantity: number;
+        notes: string | null;
+    }>;
+    receipts: Array<{
+        id: string;
+        code: string;
+        supplierDeliveryReference: string | null;
+        receivedAt: string;
+        receivedByUserId: string | null;
+        notes: string | null;
+        lines: Array<{
+            id: string;
+            purchaseOrderLineId: string;
+            inventoryLotId: string | null;
+            receivedQuantity: number;
+            acceptedQuantity: number;
+            rejectedQuantity: number;
+            lotCode: string | null;
+            unitCostMicrounits: number;
+            rejectionReason: string | null;
+        }>;
+    }>;
+    supplierReturns: Array<{
+        id: string;
+        code: string;
+        supplierAcknowledgementReference: string;
+        returnedAt: string;
+        returnedByUserId: string | null;
+        notes: string | null;
+        lines: Array<{
+            id: string;
+            purchaseOrderLineId: string;
+            inventoryLotId: string;
+            quantity: number;
+            unitCostMicrounits: number;
+            creditMicrounits: number;
+            reason: string;
+        }>;
+    }>;
+    events: Array<{
+        id: string;
+        createdAt: string;
+        type: string;
+        actorUserId: string | null;
+        summary: string;
+        details: Record<string, unknown> | null;
+    }>;
+}
+
+export interface CatalogSupplierPerformanceRecord {
+    supplierId: string;
+    from: string | null;
+    to: string | null;
+    totalOrders: number;
+    closedOrders: number;
+    orderedQuantity: number;
+    acceptedQuantity: number;
+    rejectedQuantity: number;
+    returnedQuantity: number;
+    varianceOrders: number;
+    disputeOrders: number;
+    onTimeRate: number | null;
+    acceptanceRate: number | null;
+    varianceFreeRate: number | null;
+    disputeFreeRate: number | null;
+    score: number | null;
 }

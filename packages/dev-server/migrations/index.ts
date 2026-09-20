@@ -122,6 +122,7 @@ import { AddDataSubjectRequests1789491600000 } from './1789491600000-add-data-su
 import { AddDataConsentRecords1789495200000 } from './1789495200000-add-data-consent-records';
 import { AddUsdtReconciliationActions1789498800000 } from './1789498800000-add-usdt-reconciliation-actions';
 import { AddIncidentResponseWorkflow1789502400000 } from './1789502400000-add-incident-response-workflow';
+import { AddPurchaseOrderWorkflow1789506000000 } from './1789506000000-add-purchase-order-workflow';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -248,4 +249,5 @@ export const devServerMigrations = [
     AddDataConsentRecords1789495200000,
     AddUsdtReconciliationActions1789498800000,
     AddIncidentResponseWorkflow1789502400000,
+    AddPurchaseOrderWorkflow1789506000000,
 ];

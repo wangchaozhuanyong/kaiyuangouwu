@@ -12,7 +12,7 @@ This plan tracks whether each business capability has a complete loop rather tha
 | P0       | Payment reconciliation     | Gateway/chain callback idempotency, order-payment matching, exceptions, refund reconciliation, daily close                | Implemented and locally verified; production migration and scheduler observation remain      |
 | P0       | Backup and recovery        | Backup ownership, retention, encryption, restore drill, RPO/RTO evidence and alerting                                     | Implemented and locally verified; production policy and first drill remain                   |
 | P0       | Incident response          | Security-event severity, owner, evidence preservation, notification workflow and recovery review                          | Implemented and locally verified; production migration and live alert exercise remain        |
-| P1       | Procurement                | Supplier, purchase order, receiving, variance, payable, return-to-supplier and performance score                          | Existing supplier area requires closure audit                                                |
+| P1       | Procurement                | Supplier, purchase order, receiving, variance, payable, return-to-supplier and performance score                          | Implemented and locally verified; production migration and browser exercise remain           |
 | P1       | Inventory                  | Reservation, receiving, adjustment, transfer, return disposition, low-stock alert and reconciliation                      | Existing pieces require closure audit                                                        |
 | P1       | Fulfilment and after-sales | Shipment, carrier exception, delivery proof, cancellation, return, exchange, reship and refund                            | Existing pieces require closure audit                                                        |
 | P1       | Customer operations        | Customer 360, service history, segmentation, RFM/LTV, churn signal and follow-up outcome                                  | Not started                                                                                  |
@@ -106,6 +106,33 @@ Incident-response acceptance gates:
 - [ ] Migration applied in a production-like database.
 - [ ] P0/P1 tabletop exercise, Telegram delivery and overdue escalation observed end to end.
 - [ ] Release, running SHA, browser acceptance and monitoring evidence.
+
+## Current P1 implementation: procurement and receiving
+
+The supplier directory is now connected to a channel-scoped purchase-order ledger instead of remaining an isolated SKU attribute. A purchase order snapshots its warehouse, currency, unit cost, purchase unit and package conversion. Server-enforced states cover draft, submission, partial receiving, exact receiving, variance review, closure and cancellation; invalid or post-receipt cancellation is rejected.
+
+Each goods receipt requires an idempotency key and records its operator, time, supplier delivery reference and line-level accepted or rejected quantities. Accepted quantities create or increment the named inventory lot, update aggregate stock and record the current variant cost in the same database transaction. Rejected quantities never enter stock and require a reason. Over-delivery or any rejection enters the variance queue and cannot close without an operator explanation.
+
+Payables are tracked independently from physical receipt because supplier credit terms may outlive delivery. Partial and final payments require a reference, cannot exceed the net order total and append audit events. A return-to-supplier record must identify the exact accepted inventory-lot ID, provide a supplier acknowledgement and a reason, then atomically reduces lot and aggregate stock while creating the payable credit. If the credit makes an earlier payment excessive, the order automatically enters payment dispute. Disputed payments enter the same exception filter as receiving variances and overdue incomplete deliveries.
+
+Supplier performance is calculated from the ledger rather than manually entered. The score combines on-time completion, net acceptance after returns, variance-free orders and dispute-free orders. The supplier editor exposes the component rates and score, while the native Vendure Dashboard purchase route exposes order creation, submission, receiving, return-to-supplier, payment, dispute, variance closure and the complete event timeline.
+
+Procurement acceptance gates:
+
+- [x] Purchase orders and all child records are isolated by active channel and use the existing supplier and warehouse boundaries.
+- [x] State transitions reject receiving before submission, cancellation after receipt and closure before receiving completes.
+- [x] Receipt retries are idempotent and concurrent receipt processing locks the purchase order where supported.
+- [x] Accepted stock and its lot/cost evidence are committed in the same transaction as the receipt.
+- [x] Rejected stock never increases inventory and requires a reason.
+- [x] Over-delivery and rejection enter an explicit variance-review queue.
+- [x] Partial/final payments are bounded by the net payable after return credits and keep reference/audit evidence.
+- [x] The Dashboard exposes entry, current state, exceptions, recovery actions and audit history.
+- [x] Migration is idempotent on SQLite-shaped schemas and uses portable MySQL/PostgreSQL types.
+- [x] Return-to-supplier reverses a specific accepted lot with supplier acknowledgement evidence.
+- [x] Return credits reduce net payable and overpayment automatically enters dispute review.
+- [x] Supplier score aggregates on-time delivery, net acceptance, variance and dispute outcomes.
+- [ ] Migration applied and workflow exercised in a production-like database.
+- [ ] Release, running SHA and browser acceptance evidence.
 
 Customer-avatar acceptance gates:
 

@@ -25,6 +25,7 @@ import {
     manageCatalogOperationsPermission,
     manageCatalogSupplierPermission,
 } from './constants';
+import { PurchaseOrderService } from './purchase-order.service';
 import {
     AppendCatalogImportRowsInput,
     BeginCatalogImportInput,
@@ -35,8 +36,13 @@ import {
     CreateCatalogProductInput,
     CreateCatalogProductVariantInput,
     CreateCatalogSupplierInput,
+    CreatePurchaseOrderInput,
+    PurchaseOrderListOptions,
+    ReceivePurchaseOrderInput,
+    RecordPurchasePaymentInput,
     ResolveCatalogImportRowInput,
     ResolveCatalogImportRowsInput,
+    ReturnPurchaseOrderInput,
     SaveCatalogProductInput,
     SaveInventoryLotInput,
     UpdateCatalogInventoryThresholdInput,
@@ -53,6 +59,7 @@ export class CatalogManagementAdminResolver {
         private readonly suppliers: CatalogSupplierService,
         private readonly channelAssignments: CatalogChannelAssignmentsService,
         private readonly variantMatrix: CatalogVariantMatrixService,
+        private readonly purchaseOrders: PurchaseOrderService,
     ) {}
 
     @Query()
@@ -189,6 +196,29 @@ export class CatalogManagementAdminResolver {
         @Args('take') take?: number,
     ) {
         return this.suppliers.linkedVariants(ctx, supplierId, skip, take);
+    }
+
+    @Query()
+    @Allow(manageCatalogSupplierPermission.Read, manageCatalogOperationsPermission.Read)
+    catalogPurchaseOrders(@Ctx() ctx: RequestContext, @Args('options') options?: PurchaseOrderListOptions) {
+        return this.purchaseOrders.findAll(ctx, options ?? {});
+    }
+
+    @Query()
+    @Allow(manageCatalogSupplierPermission.Read, manageCatalogOperationsPermission.Read)
+    catalogPurchaseOrder(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.purchaseOrders.findOne(ctx, id);
+    }
+
+    @Query()
+    @Allow(manageCatalogSupplierPermission.Read, manageCatalogOperationsPermission.Read)
+    catalogSupplierPerformance(
+        @Ctx() ctx: RequestContext,
+        @Args('supplierId') supplierId: ID,
+        @Args('from') from?: Date,
+        @Args('to') to?: Date,
+    ) {
+        return this.purchaseOrders.supplierPerformance(ctx, supplierId, from, to);
     }
 
     @Mutation()
@@ -341,5 +371,60 @@ export class CatalogManagementAdminResolver {
     ) {
         const supplier = await this.suppliers.update(ctx, input);
         return this.suppliers.findOneWithLinkedCount(ctx, supplier.id);
+    }
+
+    @Mutation()
+    @Allow(manageCatalogSupplierPermission.Create, manageCatalogOperationsPermission.Create)
+    createCatalogPurchaseOrder(@Ctx() ctx: RequestContext, @Args('input') input: CreatePurchaseOrderInput) {
+        return this.purchaseOrders.create(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(manageCatalogSupplierPermission.Update, manageCatalogOperationsPermission.Update)
+    submitCatalogPurchaseOrder(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.purchaseOrders.submit(ctx, id);
+    }
+
+    @Mutation()
+    @Allow(manageCatalogSupplierPermission.Update, manageCatalogOperationsPermission.Update)
+    receiveCatalogPurchaseOrder(@Ctx() ctx: RequestContext, @Args('input') input: ReceivePurchaseOrderInput) {
+        return this.purchaseOrders.receive(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(manageCatalogSupplierPermission.Update, manageCatalogOperationsPermission.Update)
+    closeCatalogPurchaseOrder(@Ctx() ctx: RequestContext, @Args('id') id: ID, @Args('note') note?: string) {
+        return this.purchaseOrders.close(ctx, id, note);
+    }
+
+    @Mutation()
+    @Allow(manageCatalogSupplierPermission.Update, manageCatalogOperationsPermission.Update)
+    cancelCatalogPurchaseOrder(@Ctx() ctx: RequestContext, @Args('id') id: ID, @Args('note') note?: string) {
+        return this.purchaseOrders.cancel(ctx, id, note);
+    }
+
+    @Mutation()
+    @Allow(manageCatalogSupplierPermission.Update, manageCatalogOperationsPermission.Update)
+    recordCatalogPurchasePayment(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: RecordPurchasePaymentInput,
+    ) {
+        return this.purchaseOrders.recordPayment(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(manageCatalogSupplierPermission.Update, manageCatalogOperationsPermission.Update)
+    disputeCatalogPurchasePayment(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: ID,
+        @Args('note') note: string,
+    ) {
+        return this.purchaseOrders.disputePayment(ctx, id, note);
+    }
+
+    @Mutation()
+    @Allow(manageCatalogSupplierPermission.Update, manageCatalogOperationsPermission.Update)
+    returnCatalogPurchaseOrder(@Ctx() ctx: RequestContext, @Args('input') input: ReturnPurchaseOrderInput) {
+        return this.purchaseOrders.returnToSupplier(ctx, input);
     }
 }
