@@ -4,9 +4,11 @@ export const routeModuleLoaders = {
     catalog: () => import('./pages/Catalog/CatalogModule'),
     storeAllocation: () => import('./pages/Catalog/StoreAllocationMatrixModule'),
     suppliers: () => import('./pages/Catalog/SuppliersModule'),
+    purchaseOrders: () => import('./pages/Catalog/PurchaseOrdersModule'),
     productEditor: () => import('./pages/Catalog/ProductEditor'),
     categories: () => import('./pages/Catalog/CategoriesModule'),
     inventory: () => import('./pages/Catalog/InventoryWarehouseModule'),
+    inventoryControl: () => import('./pages/Catalog/InventoryControlModule'),
     cardPool: () => import('./pages/Sales/CardPoolModule'),
     assets: () => import('./pages/Catalog/AssetsModule'),
     sales: () => import('./pages/Sales/SalesModule'),
@@ -44,8 +46,10 @@ export function getRouteModuleKey(target: string): RouteModuleKey | null {
     if (pathname === '/profile') return 'profile';
     if (pathname.startsWith('/catalog/products/')) return 'productEditor';
     if (pathname === '/catalog/suppliers') return 'suppliers';
+    if (pathname === '/catalog/purchase-orders') return 'purchaseOrders';
     if (pathname === '/catalog/categories') return 'categories';
     if (pathname === '/catalog/inventory') return 'inventory';
+    if (pathname === '/catalog/inventory-control') return 'inventoryControl';
     if (pathname === '/catalog/card-pool') return 'cardPool';
     if (pathname === '/catalog/assets') return 'assets';
     if (pathname === '/catalog/allocation') return 'storeAllocation';

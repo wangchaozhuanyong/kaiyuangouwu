@@ -329,6 +329,101 @@ export const saveCatalogInventoryLotMutation = gql`
     }
 `;
 
+const catalogInventoryOperationFields = gql`
+    fragment CatalogInventoryOperationFields on CatalogInventoryOperation {
+        id
+        createdAt
+        code
+        type
+        status
+        actorUserId
+        reason
+        reference
+        postedAt
+        lines {
+            id
+            quantityDelta
+            previousLotQuantity
+            resultingLotQuantity
+            previousStockOnHand
+            resultingStockOnHand
+            reconciliationMode
+            variant {
+                id
+                name
+                sku
+            }
+            stockLocation {
+                id
+                name
+            }
+            inventoryLot {
+                id
+                lotCode
+            }
+        }
+    }
+`;
+
+export const catalogInventoryOperationsQuery = gql`
+    ${catalogInventoryOperationFields}
+    query CatalogInventoryOperations($skip: Int, $take: Int) {
+        catalogInventoryOperations(skip: $skip, take: $take) {
+            items {
+                ...CatalogInventoryOperationFields
+            }
+            totalItems
+        }
+    }
+`;
+
+export const catalogInventoryReconciliationQuery = gql`
+    query CatalogInventoryReconciliation {
+        catalogInventoryReconciliation {
+            items {
+                id
+                productVariantId
+                variantName
+                sku
+                stockLocationId
+                stockLocationName
+                lotQuantity
+                stockOnHand
+                difference
+                canCreateBaselineLot
+            }
+            totalItems
+        }
+    }
+`;
+
+export const adjustCatalogLegacyInventoryMutation = gql`
+    ${catalogInventoryOperationFields}
+    mutation AdjustCatalogLegacyInventory($input: AdjustCatalogLegacyInventoryInput!) {
+        adjustCatalogLegacyInventory(input: $input) {
+            ...CatalogInventoryOperationFields
+        }
+    }
+`;
+
+export const transferCatalogInventoryLotMutation = gql`
+    ${catalogInventoryOperationFields}
+    mutation TransferCatalogInventoryLot($input: TransferCatalogInventoryLotInput!) {
+        transferCatalogInventoryLot(input: $input) {
+            ...CatalogInventoryOperationFields
+        }
+    }
+`;
+
+export const resolveCatalogInventoryReconciliationMutation = gql`
+    ${catalogInventoryOperationFields}
+    mutation ResolveCatalogInventoryReconciliation($input: ResolveCatalogInventoryReconciliationInput!) {
+        resolveCatalogInventoryReconciliation(input: $input) {
+            ...CatalogInventoryOperationFields
+        }
+    }
+`;
+
 const catalogSupplierFields = gql`
     fragment CatalogSupplierFields on CatalogSupplier {
         id
@@ -735,6 +830,43 @@ export interface CatalogIntegritySummaryRecord {
         variantsWithoutCategory: number;
         variantsWithoutCost: number;
     };
+}
+
+export interface CatalogInventoryReconciliationRecord {
+    id: string;
+    productVariantId: string;
+    variantName: string;
+    sku: string;
+    stockLocationId: string;
+    stockLocationName: string;
+    lotQuantity: number;
+    stockOnHand: number;
+    difference: number;
+    canCreateBaselineLot: boolean;
+}
+
+export interface CatalogInventoryOperationRecord {
+    id: string;
+    createdAt: string;
+    code: string;
+    type: string;
+    status: string;
+    actorUserId: string | null;
+    reason: string;
+    reference: string | null;
+    postedAt: string;
+    lines: Array<{
+        id: string;
+        quantityDelta: number;
+        previousLotQuantity: number;
+        resultingLotQuantity: number;
+        previousStockOnHand: number;
+        resultingStockOnHand: number;
+        reconciliationMode: string | null;
+        variant: { id: string; name: string; sku: string };
+        stockLocation: { id: string; name: string };
+        inventoryLot: { id: string; lotCode: string } | null;
+    }>;
 }
 
 export interface CatalogWorkspaceRecord {

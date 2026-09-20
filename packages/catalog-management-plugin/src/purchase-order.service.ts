@@ -264,28 +264,16 @@ export class PurchaseOrderService {
                 });
                 receiptLines.push(receiptLine);
                 if (received.acceptedQuantity > 0 && lotCode) {
-                    const existingLot = await this.connection.getRepository(txCtx, InventoryLot).findOne({
-                        where: {
-                            variantId: line.variantId,
-                            stockLocationId: order.stockLocationId,
-                            lotCode,
-                        },
+                    const savedLot = await this.operations.changeLotQuantity(txCtx, {
+                        productVariantId: line.variantId,
+                        stockLocationId: order.stockLocationId,
+                        lotCode,
+                        manufacturedAt: received.manufacturedAt,
+                        expiresAt: received.expiresAt,
+                        quantityDelta: received.acceptedQuantity,
+                        purchaseCostMicrounits: unitCost,
+                        currencyCode: order.currencyCode,
                     });
-                    const savedLot = await this.operations.saveLot(
-                        txCtx,
-                        {
-                            id: existingLot?.id,
-                            productVariantId: line.variantId,
-                            stockLocationId: order.stockLocationId,
-                            lotCode,
-                            manufacturedAt: received.manufacturedAt,
-                            expiresAt: received.expiresAt,
-                            quantityOnHand: (existingLot?.quantityOnHand ?? 0) + received.acceptedQuantity,
-                            purchaseCostMicrounits: unitCost,
-                            currencyCode: order.currencyCode,
-                        },
-                        true,
-                    );
                     receiptLine.inventoryLotId = savedLot.id;
                     await this.operations.recordCost(
                         txCtx,
@@ -438,7 +426,7 @@ export class PurchaseOrderService {
                         `SKU ${String(line.variantId)} 退供数量超过该采购单剩余可退的验收合格数量`,
                     );
                 }
-                const lot = await this.lockInventoryLot(txCtx, returned.inventoryLotId);
+                const lot = await this.getInventoryLot(txCtx, returned.inventoryLotId);
                 if (
                     String(lot.variantId) !== String(line.variantId) ||
                     String(lot.stockLocationId) !== String(order.stockLocationId)
@@ -467,22 +455,18 @@ export class PurchaseOrderService {
                 const lineCreditMicrounits = unitCost * creditedQuantity;
                 creditMicrounits += lineCreditMicrounits;
                 assertSafeMoney(creditMicrounits, '累计退供贷项');
-                await this.operations.saveLot(
-                    txCtx,
-                    {
-                        id: lot.id,
-                        productVariantId: lot.variantId,
-                        stockLocationId: lot.stockLocationId,
-                        lotCode: lot.lotCode,
-                        manufacturedAt: lot.manufacturedAt,
-                        expiresAt: lot.expiresAt,
-                        quantityOnHand: lot.quantityOnHand - returned.quantity,
-                        purchaseCostMicrounits:
-                            lot.purchaseCostMicrounits == null ? null : Number(lot.purchaseCostMicrounits),
-                        currencyCode: lot.currencyCode,
-                    },
-                    true,
-                );
+                await this.operations.changeLotQuantity(txCtx, {
+                    id: lot.id,
+                    productVariantId: lot.variantId,
+                    stockLocationId: lot.stockLocationId,
+                    lotCode: lot.lotCode,
+                    manufacturedAt: lot.manufacturedAt,
+                    expiresAt: lot.expiresAt,
+                    quantityDelta: -returned.quantity,
+                    purchaseCostMicrounits:
+                        lot.purchaseCostMicrounits == null ? null : Number(lot.purchaseCostMicrounits),
+                    currencyCode: lot.currencyCode,
+                });
                 line.returnedQuantity += returned.quantity;
                 returnLines.push(
                     new PurchaseSupplierReturnLine({
@@ -649,16 +633,9 @@ export class PurchaseOrderService {
         return query.getMany();
     }
 
-    private async lockInventoryLot(ctx: RequestContext, id: ID): Promise<InventoryLot> {
+    private async getInventoryLot(ctx: RequestContext, id: ID): Promise<InventoryLot> {
         const repository = this.connection.getRepository(ctx, InventoryLot);
-        const query = repository.createQueryBuilder('lot').where('lot.id = :id', { id });
-        if (
-            supportsLocks(repository.manager.connection.options.type) &&
-            repository.manager.queryRunner?.isTransactionActive
-        ) {
-            query.setLock('pessimistic_write');
-        }
-        const lot = await query.getOne();
+        const lot = await repository.findOne({ where: { id } });
         if (!lot) throw new UserInputError('退供批次不存在');
         return lot;
     }

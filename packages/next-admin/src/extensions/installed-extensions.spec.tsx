@@ -60,7 +60,7 @@ describe('installed next-admin extensions', () => {
 
     it('provides unique routes plus the plugin navigation entries', () => {
         const routes = getNextAdminExtensionRoutes();
-        expect(routes).toHaveLength(28);
+        expect(routes).toHaveLength(31);
         expect(new Set(routes.map(route => route.id)).size).toBe(routes.length);
         expect(new Set(routes.map(route => route.path)).size).toBe(routes.length);
         expect(routes).toContainEqual(

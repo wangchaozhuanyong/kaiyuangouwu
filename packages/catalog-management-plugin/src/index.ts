@@ -9,6 +9,8 @@ export { CatalogImportRow } from './entities/catalog-import-row.entity.js';
 export { CatalogSourceBinding } from './entities/catalog-source-binding.entity.js';
 export { InventoryLotMovement } from './entities/inventory-lot-movement.entity.js';
 export { InventoryLot } from './entities/inventory-lot.entity.js';
+export { InventoryOperationLine } from './entities/inventory-operation-line.entity.js';
+export { InventoryOperation } from './entities/inventory-operation.entity.js';
 export { InventoryPolicy } from './entities/inventory-policy.entity.js';
 export { OrderProfitExpense } from './entities/order-profit-expense.entity.js';
 export { PurchaseOrderLine } from './entities/purchase-order-line.entity.js';

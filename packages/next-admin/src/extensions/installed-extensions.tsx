@@ -1,5 +1,6 @@
 /* oxlint-disable react/only-export-components -- this module intentionally registers lazy extension components as import side effects */
 import {
+    ClipboardCheck,
     Database,
     KeyRound,
     Mail,
@@ -91,6 +92,12 @@ const StoreSettingsModule = lazy(() =>
 );
 const SuppliersModule = lazy(() =>
     routeModuleLoaders.suppliers().then(module => ({ default: module.SuppliersModule })),
+);
+const PurchaseOrdersModule = lazy(() =>
+    routeModuleLoaders.purchaseOrders().then(module => ({ default: module.PurchaseOrdersModule })),
+);
+const InventoryControlModule = lazy(() =>
+    routeModuleLoaders.inventoryControl().then(module => ({ default: module.InventoryControlModule })),
 );
 const UsdtPaymentManagementModule = lazy(() =>
     routeModuleLoaders.usdtPayments().then(module => ({ default: module.UsdtPaymentManagementModule })),
@@ -229,6 +236,44 @@ defineNextAdminExtension({
                 order: 60,
             },
             preload: routeModuleLoaders.suppliers,
+        },
+        {
+            id: 'catalog-purchase-orders',
+            path: '/catalog/purchase-orders',
+            legacyPaths: ['/catalog-purchase-orders'],
+            title: '采购与收货',
+            component: PurchaseOrdersModule,
+            permissions: ['ReadCatalogSupplier', 'ReadCatalogOperations'],
+            navItem: {
+                label: '采购与收货',
+                sectionId: 'catalog',
+                icon: ClipboardCheck,
+                order: 65,
+            },
+            preload: routeModuleLoaders.purchaseOrders,
+        },
+        {
+            id: 'catalog-inventory-control-compatibility',
+            path: '/catalog/inventory-control',
+            legacyPaths: ['/catalog-inventory-control'],
+            title: '库存控制台',
+            component: InventoryControlModule,
+            permissions: ['ReadCatalogOperations'],
+            navItem: {
+                label: '库存对账',
+                sectionId: 'catalog',
+                icon: Database,
+                order: 67,
+            },
+            preload: routeModuleLoaders.inventoryControl,
+        },
+        {
+            id: 'incident-response-compatibility',
+            path: '/settings/incident-response',
+            legacyPaths: ['/incident-response'],
+            title: '事故响应',
+            component: redirectTo('/settings/system-ops?tab=telegram'),
+            permissions: ['ReadSettings'],
         },
     ],
     actions: [

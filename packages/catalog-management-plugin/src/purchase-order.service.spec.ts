@@ -119,7 +119,7 @@ describe('purchase receipt idempotency', () => {
                 throw new Error(`Unexpected repository ${String(entity)}`);
             }),
         };
-        const operations = { saveLot: vi.fn(), recordCost: vi.fn() };
+        const operations = { changeLotQuantity: vi.fn(), recordCost: vi.fn() };
         const service = new PurchaseOrderService(connection as never, {} as never, operations as never);
 
         const result = await service.receive({ channelId: 1 } as never, {
@@ -140,7 +140,7 @@ describe('purchase receipt idempotency', () => {
         expect(receiptRepository.findOne).toHaveBeenCalledWith({
             where: { purchaseOrderId: 7, idempotencyKey: 'receipt-retry-1' },
         });
-        expect(operations.saveLot).not.toHaveBeenCalled();
+        expect(operations.changeLotQuantity).not.toHaveBeenCalled();
     });
 });
 

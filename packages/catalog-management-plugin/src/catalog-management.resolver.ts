@@ -25,8 +25,10 @@ import {
     manageCatalogOperationsPermission,
     manageCatalogSupplierPermission,
 } from './constants';
+import { InventoryControlService } from './inventory-control.service';
 import { PurchaseOrderService } from './purchase-order.service';
 import {
+    AdjustLegacyInventoryInput,
     AppendCatalogImportRowsInput,
     BeginCatalogImportInput,
     CatalogImportAction,
@@ -42,9 +44,11 @@ import {
     RecordPurchasePaymentInput,
     ResolveCatalogImportRowInput,
     ResolveCatalogImportRowsInput,
+    ResolveInventoryReconciliationInput,
     ReturnPurchaseOrderInput,
     SaveCatalogProductInput,
-    SaveInventoryLotInput,
+    SaveManualInventoryLotInput,
+    TransferInventoryLotInput,
     UpdateCatalogInventoryThresholdInput,
     UpdateCatalogSupplierInput,
     UpdateCatalogVariantOperationsInput,
@@ -60,6 +64,7 @@ export class CatalogManagementAdminResolver {
         private readonly channelAssignments: CatalogChannelAssignmentsService,
         private readonly variantMatrix: CatalogVariantMatrixService,
         private readonly purchaseOrders: PurchaseOrderService,
+        private readonly inventoryControl: InventoryControlService,
     ) {}
 
     @Query()
@@ -173,6 +178,22 @@ export class CatalogManagementAdminResolver {
     @Allow(Permission.ReadProduct)
     catalogInventoryAlertOverview(@Ctx() ctx: RequestContext) {
         return this.operations.inventoryAlertOverview(ctx);
+    }
+
+    @Query()
+    @Allow(manageCatalogOperationsPermission.Read)
+    catalogInventoryOperations(
+        @Ctx() ctx: RequestContext,
+        @Args('skip') skip?: number,
+        @Args('take') take?: number,
+    ) {
+        return this.inventoryControl.findOperations(ctx, skip, take);
+    }
+
+    @Query()
+    @Allow(manageCatalogOperationsPermission.Read)
+    catalogInventoryReconciliation(@Ctx() ctx: RequestContext) {
+        return this.inventoryControl.reconciliationOverview(ctx);
     }
 
     @Query()
@@ -331,8 +352,32 @@ export class CatalogManagementAdminResolver {
 
     @Mutation()
     @Allow(manageCatalogOperationsPermission.Update, manageCatalogImportPermission.Update)
-    saveCatalogInventoryLot(@Ctx() ctx: RequestContext, @Args('input') input: SaveInventoryLotInput) {
-        return this.operations.saveLot(ctx, input);
+    saveCatalogInventoryLot(@Ctx() ctx: RequestContext, @Args('input') input: SaveManualInventoryLotInput) {
+        return this.inventoryControl.saveManualLot(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(manageCatalogOperationsPermission.Update, manageCatalogImportPermission.Update)
+    adjustCatalogLegacyInventory(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: AdjustLegacyInventoryInput,
+    ) {
+        return this.inventoryControl.adjustLegacyStock(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(manageCatalogOperationsPermission.Update, manageCatalogImportPermission.Update)
+    transferCatalogInventoryLot(@Ctx() ctx: RequestContext, @Args('input') input: TransferInventoryLotInput) {
+        return this.inventoryControl.transferLot(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(manageCatalogOperationsPermission.Update, manageCatalogImportPermission.Update)
+    resolveCatalogInventoryReconciliation(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: ResolveInventoryReconciliationInput,
+    ) {
+        return this.inventoryControl.resolveReconciliation(ctx, input);
     }
 
     @Mutation()

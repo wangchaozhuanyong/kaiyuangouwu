@@ -320,6 +320,56 @@ export const adminApiExtensions = gql`
         daysUntilExpiry: Int
     }
 
+    type CatalogInventoryOperationLine implements Node {
+        id: ID!
+        variant: ProductVariant!
+        stockLocation: StockLocation!
+        inventoryLot: CatalogInventoryLot
+        quantityDelta: Int!
+        previousLotQuantity: Int!
+        resultingLotQuantity: Int!
+        previousStockOnHand: Int!
+        resultingStockOnHand: Int!
+        reconciliationMode: String
+    }
+
+    type CatalogInventoryOperation implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        code: String!
+        type: String!
+        status: String!
+        actorUserId: String
+        reason: String!
+        reference: String
+        postedAt: DateTime!
+        lines: [CatalogInventoryOperationLine!]!
+    }
+
+    type CatalogInventoryOperationList implements PaginatedList {
+        items: [CatalogInventoryOperation!]!
+        totalItems: Int!
+    }
+
+    type CatalogInventoryReconciliationItem implements Node {
+        id: ID!
+        productVariantId: ID!
+        variantName: String!
+        sku: String!
+        stockLocationId: ID!
+        stockLocationName: String!
+        lotQuantity: Int!
+        stockOnHand: Int!
+        difference: Int!
+        canCreateBaselineLot: Boolean!
+    }
+
+    type CatalogInventoryReconciliationList implements PaginatedList {
+        items: [CatalogInventoryReconciliationItem!]!
+        totalItems: Int!
+    }
+
     type CatalogWorkspaceVariant {
         id: ID!
         name: String!
@@ -638,6 +688,8 @@ export const adminApiExtensions = gql`
         purchaseUnit: String!
         packageQuantity: Float
         stockOnHand: Int
+        stockAdjustmentIdempotencyKey: String
+        stockAdjustmentReason: String
         purchaseCost: Float
         sellingPrice: Float
         reportedMargin: Float
@@ -808,6 +860,35 @@ export const adminApiExtensions = gql`
         quantityOnHand: Int!
         purchaseCostMicrounits: Float
         currencyCode: CurrencyCode!
+        idempotencyKey: String!
+        reason: String!
+    }
+
+    input AdjustCatalogLegacyInventoryInput {
+        productVariantId: ID!
+        stockLocationId: ID!
+        stockOnHand: Int!
+        idempotencyKey: String!
+        reason: String!
+        reference: String
+    }
+
+    input TransferCatalogInventoryLotInput {
+        inventoryLotId: ID!
+        targetStockLocationId: ID!
+        quantity: Int!
+        idempotencyKey: String!
+        reason: String!
+        reference: String
+    }
+
+    input ResolveCatalogInventoryReconciliationInput {
+        productVariantId: ID!
+        stockLocationId: ID!
+        expectedDifference: Int!
+        mode: String!
+        idempotencyKey: String!
+        reason: String!
     }
 
     input CatalogPurchaseOrderListOptions {
@@ -953,6 +1034,8 @@ export const adminApiExtensions = gql`
         catalogProducts(filter: CatalogProductSummaryFilterInput, options: ProductListOptions): ProductList!
         catalogExportRows(skip: Int, take: Int): CatalogExportPage!
         catalogInventoryAlertOverview: CatalogInventoryAlertOverview!
+        catalogInventoryOperations(skip: Int, take: Int): CatalogInventoryOperationList!
+        catalogInventoryReconciliation: CatalogInventoryReconciliationList!
         catalogSuppliers(options: CatalogSupplierListOptions): CatalogSupplierList!
         catalogSupplier(id: ID!): CatalogSupplier!
         catalogSupplierVariants(supplierId: ID!, skip: Int, take: Int): CatalogSupplierVariantList!
@@ -978,6 +1061,11 @@ export const adminApiExtensions = gql`
         createCatalogProduct(input: CreateCatalogProductInput!): Product!
         saveCatalogProduct(input: SaveCatalogProductInput!): Product!
         saveCatalogInventoryLot(input: SaveCatalogInventoryLotInput!): CatalogInventoryLot!
+        adjustCatalogLegacyInventory(input: AdjustCatalogLegacyInventoryInput!): CatalogInventoryOperation!
+        transferCatalogInventoryLot(input: TransferCatalogInventoryLotInput!): CatalogInventoryOperation!
+        resolveCatalogInventoryReconciliation(
+            input: ResolveCatalogInventoryReconciliationInput!
+        ): CatalogInventoryOperation!
         saveCatalogOrderProfitExpense(input: SaveCatalogOrderProfitExpenseInput!): CatalogOrderProfitExpense!
         importCatalogOrderProfitExpenses(
             input: ImportCatalogOrderProfitExpensesInput!

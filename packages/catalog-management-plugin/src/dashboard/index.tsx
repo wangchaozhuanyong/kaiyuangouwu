@@ -2,12 +2,13 @@ import { defineDashboardExtension } from '@vendure/dashboard';
 
 import { CatalogExportAction } from './catalog-export-action';
 import { CatalogImportAction } from './catalog-import-workbench';
+import { catalogInventoryControlRoute } from './catalog-inventory-control-page';
 import { CatalogProductWorkspace } from './catalog-product-workspace';
 import { catalogPurchaseOrderRoute } from './catalog-purchase-order-page';
 import { catalogSupplierRoute } from './catalog-supplier-page';
 
 defineDashboardExtension({
-    routes: [catalogSupplierRoute, catalogPurchaseOrderRoute],
+    routes: [catalogSupplierRoute, catalogPurchaseOrderRoute, catalogInventoryControlRoute],
     actionBarItems: [
         {
             id: 'catalog-safe-import',

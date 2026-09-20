@@ -728,7 +728,10 @@ export function TelegramNotificationsPanel() {
                             <ShieldAlert className="h-5 w-5" />
                         </span>
                         <div>
-                            <h2 className="text-sm font-bold text-slate-900">事故响应与闭环</h2>
+                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                事故响应与闭环
+                                <FeatureHelpButton topic="settings.telegram" title="事故响应与闭环" />
+                            </h2>
                             <p className="mt-1 text-xs text-slate-500">
                                 即使 Telegram 停用，事故仍会留存。P0/P1
                                 需经负责人确认、恢复验证、复盘和整改后才能闭环。

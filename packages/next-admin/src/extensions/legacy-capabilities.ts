@@ -27,6 +27,18 @@ export const LEGACY_ROUTE_CAPABILITIES: LegacyRouteCapability[] = [
         status: 'MIGRATED',
     },
     {
+        id: 'catalog-inventory-control',
+        legacyPath: '/catalog-inventory-control',
+        target: '/catalog/inventory-control',
+        status: 'MIGRATED',
+    },
+    {
+        id: 'catalog-purchase-orders',
+        legacyPath: '/catalog-purchase-orders',
+        target: '/catalog/purchase-orders',
+        status: 'MIGRATED',
+    },
+    {
         id: 'catalog-suppliers',
         legacyPath: '/catalog-suppliers',
         target: '/catalog/suppliers',
@@ -42,6 +54,12 @@ export const LEGACY_ROUTE_CAPABILITIES: LegacyRouteCapability[] = [
         id: 'image-generation-settings',
         legacyPath: '/image-generation-settings',
         target: '/plugins/ai-settings',
+        status: 'MIGRATED',
+    },
+    {
+        id: 'incident-response',
+        legacyPath: '/incident-response',
+        target: '/settings/incident-response',
         status: 'MIGRATED',
     },
     {

@@ -193,6 +193,105 @@ export const SAVE_CATALOG_INVENTORY_LOT_MUTATION = gql`
     }
 `;
 
+export const ADJUST_CATALOG_LEGACY_INVENTORY_MUTATION = gql`
+    mutation NextAdminAdjustCatalogLegacyInventory($input: AdjustCatalogLegacyInventoryInput!) {
+        adjustCatalogLegacyInventory(input: $input) {
+            id
+            code
+            reason
+            postedAt
+        }
+    }
+`;
+
+const CATALOG_INVENTORY_OPERATION_FIELDS = gql`
+    fragment NextAdminCatalogInventoryOperationFields on CatalogInventoryOperation {
+        id
+        createdAt
+        code
+        type
+        status
+        actorUserId
+        reason
+        reference
+        postedAt
+        lines {
+            id
+            quantityDelta
+            previousLotQuantity
+            resultingLotQuantity
+            previousStockOnHand
+            resultingStockOnHand
+            reconciliationMode
+            variant {
+                id
+                name
+                sku
+            }
+            stockLocation {
+                id
+                name
+            }
+            inventoryLot {
+                id
+                lotCode
+            }
+        }
+    }
+`;
+
+export const CATALOG_INVENTORY_OPERATIONS_QUERY = gql`
+    ${CATALOG_INVENTORY_OPERATION_FIELDS}
+    query NextAdminCatalogInventoryOperations($skip: Int, $take: Int) {
+        catalogInventoryOperations(skip: $skip, take: $take) {
+            items {
+                ...NextAdminCatalogInventoryOperationFields
+            }
+            totalItems
+        }
+    }
+`;
+
+export const CATALOG_INVENTORY_RECONCILIATION_QUERY = gql`
+    query NextAdminCatalogInventoryReconciliation {
+        catalogInventoryReconciliation {
+            items {
+                id
+                productVariantId
+                variantName
+                sku
+                stockLocationId
+                stockLocationName
+                lotQuantity
+                stockOnHand
+                difference
+                canCreateBaselineLot
+            }
+            totalItems
+        }
+    }
+`;
+
+export const RESOLVE_CATALOG_INVENTORY_RECONCILIATION_MUTATION = gql`
+    ${CATALOG_INVENTORY_OPERATION_FIELDS}
+    mutation NextAdminResolveCatalogInventoryReconciliation(
+        $input: ResolveCatalogInventoryReconciliationInput!
+    ) {
+        resolveCatalogInventoryReconciliation(input: $input) {
+            ...NextAdminCatalogInventoryOperationFields
+        }
+    }
+`;
+
+export const TRANSFER_CATALOG_INVENTORY_LOT_MUTATION = gql`
+    ${CATALOG_INVENTORY_OPERATION_FIELDS}
+    mutation NextAdminTransferCatalogInventoryLot($input: TransferCatalogInventoryLotInput!) {
+        transferCatalogInventoryLot(input: $input) {
+            ...NextAdminCatalogInventoryOperationFields
+        }
+    }
+`;
+
 export const CATALOG_INVENTORY_ALERT_OVERVIEW_QUERY = gql`
     query NextAdminCatalogInventoryAlertOverview {
         catalogInventoryAlertOverview {
@@ -296,6 +395,205 @@ export const UPDATE_CATALOG_SUPPLIER_MUTATION = gql`
     mutation NextAdminUpdateCatalogSupplier($input: UpdateCatalogSupplierInput!) {
         updateCatalogSupplier(input: $input) {
             ...NextAdminCatalogSupplierFields
+        }
+    }
+`;
+
+const CATALOG_PURCHASE_ORDER_FIELDS = gql`
+    fragment NextAdminCatalogPurchaseOrderFields on CatalogPurchaseOrder {
+        id
+        createdAt
+        updatedAt
+        code
+        status
+        paymentStatus
+        currencyCode
+        totalMicrounits
+        paidMicrounits
+        returnCreditMicrounits
+        outstandingMicrounits
+        expectedAt
+        submittedAt
+        closedAt
+        notes
+        closureNote
+        overdue
+        hasVariance
+        supplier {
+            id
+            code
+            name
+            enabled
+        }
+        stockLocation {
+            id
+            name
+        }
+        lines {
+            id
+            variantId
+            variant {
+                id
+                name
+                sku
+            }
+            orderedQuantity
+            receivedQuantity
+            acceptedQuantity
+            rejectedQuantity
+            returnedQuantity
+            outstandingQuantity
+            returnableQuantity
+            returnableLots {
+                id
+                lotCode
+                quantityOnHand
+                expiresAt
+            }
+            unitCostMicrounits
+            purchaseUnit
+            packageQuantity
+            notes
+        }
+        receipts {
+            id
+            code
+            supplierDeliveryReference
+            receivedAt
+            receivedByUserId
+            notes
+        }
+        supplierReturns {
+            id
+            code
+            supplierAcknowledgementReference
+            returnedAt
+            returnedByUserId
+            notes
+        }
+        events {
+            id
+            createdAt
+            type
+            actorUserId
+            summary
+            details
+        }
+    }
+`;
+
+export const CATALOG_PURCHASE_ORDERS_QUERY = gql`
+    ${CATALOG_PURCHASE_ORDER_FIELDS}
+    query NextAdminCatalogPurchaseOrders($options: CatalogPurchaseOrderListOptions) {
+        catalogPurchaseOrders(options: $options) {
+            items {
+                ...NextAdminCatalogPurchaseOrderFields
+            }
+            totalItems
+        }
+    }
+`;
+
+export const CATALOG_PURCHASE_ORDER_QUERY = gql`
+    ${CATALOG_PURCHASE_ORDER_FIELDS}
+    query NextAdminCatalogPurchaseOrder($id: ID!) {
+        catalogPurchaseOrder(id: $id) {
+            ...NextAdminCatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const CATALOG_PURCHASE_CONTEXT_QUERY = gql`
+    query NextAdminCatalogPurchaseContext {
+        activeChannel {
+            id
+            defaultCurrencyCode
+        }
+        stockLocations(options: { take: 200 }) {
+            items {
+                id
+                name
+            }
+        }
+        productVariants(options: { take: 200 }) {
+            items {
+                id
+                name
+                sku
+                customFields
+            }
+        }
+    }
+`;
+
+export const CREATE_CATALOG_PURCHASE_ORDER_MUTATION = gql`
+    ${CATALOG_PURCHASE_ORDER_FIELDS}
+    mutation NextAdminCreateCatalogPurchaseOrder($input: CreateCatalogPurchaseOrderInput!) {
+        createCatalogPurchaseOrder(input: $input) {
+            ...NextAdminCatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const SUBMIT_CATALOG_PURCHASE_ORDER_MUTATION = gql`
+    ${CATALOG_PURCHASE_ORDER_FIELDS}
+    mutation NextAdminSubmitCatalogPurchaseOrder($id: ID!) {
+        submitCatalogPurchaseOrder(id: $id) {
+            ...NextAdminCatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const RECEIVE_CATALOG_PURCHASE_ORDER_MUTATION = gql`
+    ${CATALOG_PURCHASE_ORDER_FIELDS}
+    mutation NextAdminReceiveCatalogPurchaseOrder($input: ReceiveCatalogPurchaseOrderInput!) {
+        receiveCatalogPurchaseOrder(input: $input) {
+            ...NextAdminCatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const RETURN_CATALOG_PURCHASE_ORDER_MUTATION = gql`
+    ${CATALOG_PURCHASE_ORDER_FIELDS}
+    mutation NextAdminReturnCatalogPurchaseOrder($input: ReturnCatalogPurchaseOrderInput!) {
+        returnCatalogPurchaseOrder(input: $input) {
+            ...NextAdminCatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const RECORD_CATALOG_PURCHASE_PAYMENT_MUTATION = gql`
+    ${CATALOG_PURCHASE_ORDER_FIELDS}
+    mutation NextAdminRecordCatalogPurchasePayment($input: RecordCatalogPurchasePaymentInput!) {
+        recordCatalogPurchasePayment(input: $input) {
+            ...NextAdminCatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const CLOSE_CATALOG_PURCHASE_ORDER_MUTATION = gql`
+    ${CATALOG_PURCHASE_ORDER_FIELDS}
+    mutation NextAdminCloseCatalogPurchaseOrder($id: ID!, $note: String) {
+        closeCatalogPurchaseOrder(id: $id, note: $note) {
+            ...NextAdminCatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const CANCEL_CATALOG_PURCHASE_ORDER_MUTATION = gql`
+    ${CATALOG_PURCHASE_ORDER_FIELDS}
+    mutation NextAdminCancelCatalogPurchaseOrder($id: ID!, $note: String) {
+        cancelCatalogPurchaseOrder(id: $id, note: $note) {
+            ...NextAdminCatalogPurchaseOrderFields
+        }
+    }
+`;
+
+export const DISPUTE_CATALOG_PURCHASE_PAYMENT_MUTATION = gql`
+    ${CATALOG_PURCHASE_ORDER_FIELDS}
+    mutation NextAdminDisputeCatalogPurchasePayment($id: ID!, $note: String!) {
+        disputeCatalogPurchasePayment(id: $id, note: $note) {
+            ...NextAdminCatalogPurchaseOrderFields
         }
     }
 `;
@@ -551,6 +849,115 @@ export interface CatalogSupplierRecord {
     address?: string | null;
     notes?: string | null;
     linkedVariantCount: number;
+}
+
+export type CatalogPurchaseOrderStatus =
+    'DRAFT' | 'SUBMITTED' | 'PARTIALLY_RECEIVED' | 'RECEIVED' | 'VARIANCE_REVIEW' | 'CLOSED' | 'CANCELLED';
+
+export interface CatalogPurchaseOrderRecord {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+    code: string;
+    status: CatalogPurchaseOrderStatus;
+    paymentStatus: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'DISPUTED';
+    currencyCode: string;
+    totalMicrounits: number;
+    paidMicrounits: number;
+    returnCreditMicrounits: number;
+    outstandingMicrounits: number;
+    expectedAt: string | null;
+    submittedAt: string | null;
+    closedAt: string | null;
+    notes: string | null;
+    closureNote: string | null;
+    overdue: boolean;
+    hasVariance: boolean;
+    supplier: Pick<CatalogSupplierRecord, 'id' | 'code' | 'name' | 'enabled'>;
+    stockLocation: { id: string; name: string };
+    lines: Array<{
+        id: string;
+        variantId: string;
+        variant: { id: string; name: string; sku: string };
+        orderedQuantity: number;
+        receivedQuantity: number;
+        acceptedQuantity: number;
+        rejectedQuantity: number;
+        returnedQuantity: number;
+        outstandingQuantity: number;
+        returnableQuantity: number;
+        returnableLots: Array<{
+            id: string;
+            lotCode: string;
+            quantityOnHand: number;
+            expiresAt: string | null;
+        }>;
+        unitCostMicrounits: number;
+        purchaseUnit: string | null;
+        packageQuantity: number;
+        notes: string | null;
+    }>;
+    receipts: Array<{
+        id: string;
+        code: string;
+        supplierDeliveryReference: string | null;
+        receivedAt: string;
+        receivedByUserId: string | null;
+        notes: string | null;
+    }>;
+    supplierReturns: Array<{
+        id: string;
+        code: string;
+        supplierAcknowledgementReference: string;
+        returnedAt: string;
+        returnedByUserId: string | null;
+        notes: string | null;
+    }>;
+    events: Array<{
+        id: string;
+        createdAt: string;
+        type: string;
+        actorUserId: string | null;
+        summary: string;
+        details: Record<string, unknown> | null;
+    }>;
+}
+
+export interface CatalogInventoryReconciliationRecord {
+    id: string;
+    productVariantId: string;
+    variantName: string;
+    sku: string;
+    stockLocationId: string;
+    stockLocationName: string;
+    lotQuantity: number;
+    stockOnHand: number;
+    difference: number;
+    canCreateBaselineLot: boolean;
+}
+
+export interface CatalogInventoryOperationRecord {
+    id: string;
+    createdAt: string;
+    code: string;
+    type: string;
+    status: string;
+    actorUserId: string | null;
+    reason: string;
+    reference: string | null;
+    postedAt: string;
+    lines: Array<{
+        id: string;
+        quantityDelta: number;
+        previousLotQuantity: number;
+        resultingLotQuantity: number;
+        previousStockOnHand: number;
+        resultingStockOnHand: number;
+        reconciliationMode: string | null;
+        variant: { id: string; name: string; sku: string };
+        stockLocation: { id: string; name: string };
+        inventoryLot: { id: string; lotCode: string } | null;
+    }>;
 }
 
 export interface CatalogWorkspaceVariantRecord {

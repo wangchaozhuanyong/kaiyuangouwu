@@ -25,6 +25,8 @@ import { CatalogSupplier } from './entities/catalog-supplier.entity';
 import { CatalogVariantSupplier } from './entities/catalog-variant-supplier.entity';
 import { InventoryLotMovement } from './entities/inventory-lot-movement.entity';
 import { InventoryLot } from './entities/inventory-lot.entity';
+import { InventoryOperationLine } from './entities/inventory-operation-line.entity';
+import { InventoryOperation } from './entities/inventory-operation.entity';
 import { InventoryPolicy } from './entities/inventory-policy.entity';
 import { OrderProfitExpense } from './entities/order-profit-expense.entity';
 import { PurchaseOrderEvent } from './entities/purchase-order-event.entity';
@@ -35,6 +37,7 @@ import { PurchaseReceipt } from './entities/purchase-receipt.entity';
 import { PurchaseSupplierReturnLine } from './entities/purchase-supplier-return-line.entity';
 import { PurchaseSupplierReturn } from './entities/purchase-supplier-return.entity';
 import { VariantCostRecord } from './entities/variant-cost-record.entity';
+import { InventoryControlService } from './inventory-control.service';
 import { InventoryLotLifecycleService } from './inventory-lot-lifecycle.service';
 import { PurchaseOrderService } from './purchase-order.service';
 import './types';
@@ -49,6 +52,8 @@ import './types';
         InventoryPolicy,
         InventoryLot,
         InventoryLotMovement,
+        InventoryOperation,
+        InventoryOperationLine,
         OrderProfitExpense,
         CatalogSupplier,
         CatalogVariantSupplier,
@@ -70,6 +75,7 @@ import './types';
         CatalogImportOptionsService,
         CatalogImportQueueService,
         InventoryLotLifecycleService,
+        InventoryControlService,
         CatalogSupplierService,
         CatalogVariantMatrixService,
         PurchaseOrderService,

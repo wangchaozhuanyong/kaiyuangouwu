@@ -5,6 +5,7 @@ import {
     Permission,
     SortOrder,
 } from '@vendure/common/lib/generated-types';
+import { StockLevel } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -13,6 +14,7 @@ import {
     DEFAULT_REPLENISHMENT_THRESHOLD,
 } from './catalog-operations.service';
 import { manageCatalogOperationsPermission } from './constants';
+import { InventoryLot } from './entities/inventory-lot.entity';
 
 function createService() {
     const txCtx = {
@@ -499,8 +501,17 @@ describe('CatalogOperationsService', () => {
 
     it('derives a saved lot expiry date from its production date and the SKU default shelf life', async () => {
         const { connection, service } = createService();
+        const lotQuery = {
+            where: vi.fn().mockReturnThis(),
+            andWhere: vi.fn().mockReturnThis(),
+            getOne: vi.fn().mockResolvedValue(null),
+        };
         const lotRepository = {
-            findOne: vi.fn(() => Promise.resolve(null)),
+            manager: {
+                connection: { options: { type: 'sqljs' } },
+                queryRunner: { isTransactionActive: true },
+            },
+            createQueryBuilder: vi.fn().mockReturnValue(lotQuery),
             save: vi.fn(value => Promise.resolve(Object.assign(value, { id: 'lot-1' }))),
         };
         vi.spyOn(service, 'requireStockLocation').mockResolvedValue({} as never);
@@ -510,16 +521,20 @@ describe('CatalogOperationsService', () => {
         });
         connection.getRepository.mockReturnValue(lotRepository);
 
-        const saved = await service.saveLot({ channelId: 'channel-1' } as never, {
-            productVariantId: 'variant-1',
-            stockLocationId: 'stock-1',
-            lotCode: 'LOT-20260910',
-            manufacturedAt: '2026-09-10T00:00:00.000Z',
-            expiresAt: null,
-            quantityOnHand: 0,
-            purchaseCostMicrounits: null,
-            currencyCode: CurrencyCode.CNY,
-        });
+        const saved = await service.saveLot(
+            { channelId: 'channel-1' } as never,
+            {
+                productVariantId: 'variant-1',
+                stockLocationId: 'stock-1',
+                lotCode: 'LOT-20260910',
+                manufacturedAt: '2026-09-10T00:00:00.000Z',
+                expiresAt: null,
+                quantityOnHand: 0,
+                purchaseCostMicrounits: null,
+                currencyCode: CurrencyCode.CNY,
+            },
+            false,
+        );
 
         expect(saved.expiresAt).toEqual(new Date('2026-10-10T00:00:00.000Z'));
         expect(lotRepository.save).toHaveBeenCalledWith(
@@ -527,6 +542,90 @@ describe('CatalogOperationsService', () => {
                 manufacturedAt: new Date('2026-09-10T00:00:00.000Z'),
                 expiresAt: new Date('2026-10-10T00:00:00.000Z'),
             }),
+        );
+    });
+
+    it('rejects changing the warehouse identity of an existing lot', async () => {
+        const { connection, service } = createService();
+        const lotQuery = {
+            where: vi.fn().mockReturnThis(),
+            andWhere: vi.fn().mockReturnThis(),
+            getOne: vi.fn().mockResolvedValue({
+                id: 'lot-1',
+                variantId: 'variant-1',
+                stockLocationId: 'stock-original',
+                lotCode: 'LOT-1',
+                quantityOnHand: 10,
+            }),
+        };
+        const lotRepository = {
+            manager: {
+                connection: { options: { type: 'sqljs' } },
+                queryRunner: { isTransactionActive: true },
+            },
+            createQueryBuilder: vi.fn().mockReturnValue(lotQuery),
+            save: vi.fn(),
+        };
+        vi.spyOn(service, 'requireStockLocation').mockResolvedValue({} as never);
+        connection.getEntityOrThrow.mockResolvedValue({ id: 'variant-1', customFields: {} });
+        connection.getRepository.mockReturnValue(lotRepository);
+
+        await expect(
+            service.saveLot(
+                { channelId: 'channel-1' } as never,
+                {
+                    id: 'lot-1',
+                    productVariantId: 'variant-1',
+                    stockLocationId: 'stock-new',
+                    lotCode: 'LOT-1',
+                    quantityOnHand: 10,
+                    currencyCode: CurrencyCode.CNY,
+                },
+                false,
+            ),
+        ).rejects.toThrow('已有批次的 SKU、仓库和批次号不能修改');
+        expect(lotRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('applies receiving as a delta against the latest locked lot quantity', async () => {
+        const { connection, service } = createService();
+        const stockQuery = {
+            where: vi.fn().mockReturnThis(),
+            andWhere: vi.fn().mockReturnThis(),
+            getOne: vi.fn().mockResolvedValue({ stockOnHand: 10 }),
+        };
+        const lotQuery = {
+            where: vi.fn().mockReturnThis(),
+            andWhere: vi.fn().mockReturnThis(),
+            getOne: vi.fn().mockResolvedValue({ id: 'lot-1', quantityOnHand: 10 }),
+        };
+        const manager = {
+            connection: { options: { type: 'sqljs' } },
+            queryRunner: { isTransactionActive: true },
+        };
+        const stockRepository = { manager, createQueryBuilder: vi.fn().mockReturnValue(stockQuery) };
+        const lotRepository = { manager, createQueryBuilder: vi.fn().mockReturnValue(lotQuery) };
+        vi.spyOn(service, 'requireStockLocation').mockResolvedValue({} as never);
+        connection.getEntityOrThrow.mockResolvedValue({ id: 'variant-1' });
+        connection.getRepository.mockImplementation((_ctx: unknown, entity: unknown) => {
+            if (entity === StockLevel) return stockRepository as never;
+            if (entity === InventoryLot) return lotRepository as never;
+            throw new Error(`Unexpected repository ${String(entity)}`);
+        });
+        const saveLot = vi.spyOn(service, 'saveLot').mockResolvedValue({ id: 'lot-1' } as never);
+
+        await service.changeLotQuantity({ channelId: 'channel-1' } as never, {
+            productVariantId: 'variant-1',
+            stockLocationId: 'stock-1',
+            lotCode: 'LOT-1',
+            quantityDelta: 5,
+            currencyCode: CurrencyCode.CNY,
+        });
+
+        expect(saveLot).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ id: 'lot-1', quantityOnHand: 15 }),
+            true,
         );
     });
 

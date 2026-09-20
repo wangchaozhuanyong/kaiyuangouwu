@@ -13,7 +13,7 @@ This plan tracks whether each business capability has a complete loop rather tha
 | P0       | Backup and recovery        | Backup ownership, retention, encryption, restore drill, RPO/RTO evidence and alerting                                     | Implemented and locally verified; production policy and first drill remain                   |
 | P0       | Incident response          | Security-event severity, owner, evidence preservation, notification workflow and recovery review                          | Implemented and locally verified; production migration and live alert exercise remain        |
 | P1       | Procurement                | Supplier, purchase order, receiving, variance, payable, return-to-supplier and performance score                          | Implemented and locally verified; production migration and browser exercise remain           |
-| P1       | Inventory                  | Reservation, receiving, adjustment, transfer, return disposition, low-stock alert and reconciliation                      | Existing pieces require closure audit                                                        |
+| P1       | Inventory                  | Reservation, receiving, adjustment, transfer, return disposition, low-stock alert and reconciliation                      | Implemented and locally verified; production migration and browser exercise remain           |
 | P1       | Fulfilment and after-sales | Shipment, carrier exception, delivery proof, cancellation, return, exchange, reship and refund                            | Existing pieces require closure audit                                                        |
 | P1       | Customer operations        | Customer 360, service history, segmentation, RFM/LTV, churn signal and follow-up outcome                                  | Not started                                                                                  |
 | P1       | Marketing analytics        | Acquisition attribution, search terms, funnel, campaign cost, revenue, refund-adjusted ROI                                | Traffic exists; cost/attribution closure not verified                                        |
@@ -115,7 +115,7 @@ Each goods receipt requires an idempotency key and records its operator, time, s
 
 Payables are tracked independently from physical receipt because supplier credit terms may outlive delivery. Partial and final payments require a reference, cannot exceed the net order total and append audit events. A return-to-supplier record must identify the exact accepted inventory-lot ID, provide a supplier acknowledgement and a reason, then atomically reduces lot and aggregate stock while creating the payable credit. If the credit makes an earlier payment excessive, the order automatically enters payment dispute. Disputed payments enter the same exception filter as receiving variances and overdue incomplete deliveries.
 
-Supplier performance is calculated from the ledger rather than manually entered. The score combines on-time completion, net acceptance after returns, variance-free orders and dispute-free orders. The supplier editor exposes the component rates and score, while the native Vendure Dashboard purchase route exposes order creation, submission, receiving, return-to-supplier, payment, dispute, variance closure and the complete event timeline.
+Supplier performance is calculated from the ledger rather than manually entered. The score combines on-time completion, net acceptance after returns, variance-free orders and dispute-free orders. The supplier editor exposes the component rates and score, while both administrator surfaces expose order creation, submission, receiving, return-to-supplier, payment, dispute, variance closure and the complete event timeline.
 
 Procurement acceptance gates:
 
@@ -126,12 +126,34 @@ Procurement acceptance gates:
 - [x] Rejected stock never increases inventory and requires a reason.
 - [x] Over-delivery and rejection enter an explicit variance-review queue.
 - [x] Partial/final payments are bounded by the net payable after return credits and keep reference/audit evidence.
-- [x] The Dashboard exposes entry, current state, exceptions, recovery actions and audit history.
+- [x] Both administrator surfaces expose entry, current state, exceptions, recovery actions and audit history.
 - [x] Migration is idempotent on SQLite-shaped schemas and uses portable MySQL/PostgreSQL types.
 - [x] Return-to-supplier reverses a specific accepted lot with supplier acknowledgement evidence.
 - [x] Return credits reduce net payable and overpayment automatically enters dispute review.
 - [x] Supplier score aggregates on-time delivery, net acceptance, variance and dispute outcomes.
 - [ ] Migration applied and workflow exercised in a production-like database.
+- [ ] Release, running SHA and browser acceptance evidence.
+
+## Current P1 implementation: inventory control
+
+Existing order reservation, FEFO sale deduction, cancellation restock, purchasing receipts, supplier returns and low-stock alerts now feed a shared inventory-control boundary. Manual lot counts, legacy aggregate-stock counts, exact-lot warehouse transfers and reconciliation decisions create channel-scoped, append-only operations with operator, reason, reference, before/after quantities and an idempotency key.
+
+An SKU/warehouse scope that has lots can no longer use the legacy direct aggregate adjustment. Existing lot identity is immutable, a transfer cannot target its source warehouse, and transfers are blocked until both source and target scopes reconcile. The reconciliation queue compares lot totals with Vendure aggregate stock and supports two explicit decisions: align aggregate stock to the lot ledger, or create an auditable baseline lot when aggregate stock is higher. An optimistic expected-difference check rejects stale decisions.
+
+Both administrator surfaces now expose the discrepancy queue, paginated audit operations and reasoned reconciliation decisions, while product lot rows expose exact-lot transfers. Both the native product workspace and the Next Admin inventory surfaces require a reason for manual counts; the Next Admin physical-count action now uses the audited mutation instead of writing Vendure stock levels directly.
+
+Inventory acceptance gates:
+
+- [x] Manual batch and aggregate counts require a reason, operator evidence and idempotency key.
+- [x] Lot-tracked SKU/warehouse scopes reject direct aggregate-stock edits.
+- [x] Existing lot SKU, warehouse and lot-code identity cannot be silently changed.
+- [x] Exact-lot transfers update source lot, target lot and both aggregate stock levels in one transaction.
+- [x] Transfers reject insufficient stock, same-warehouse targets and unreconciled source/target scopes.
+- [x] Batch-total versus platform-stock differences enter a visible reconciliation queue.
+- [x] Reconciliation decisions reject stale differences and preserve before/after evidence.
+- [x] Both administrator surfaces expose reconciliation, transfer and audit history and route manual counts through the audited inventory boundary.
+- [x] Migration is idempotent on SQLite-shaped schemas and uses portable MySQL/PostgreSQL types.
+- [ ] Migration applied and inventory workflow exercised in a production-like database.
 - [ ] Release, running SHA and browser acceptance evidence.
 
 Customer-avatar acceptance gates:
@@ -153,7 +175,7 @@ Customer-avatar acceptance gates:
 ## Execution order
 
 1. Apply and exercise the completed P0 controls in a production-like environment without publishing from this worktree.
-2. Close procurement, inventory and after-sales state machines with reconciliation and exception queues.
+2. Close fulfilment and after-sales state machines with reconciliation and exception queues.
 3. Add customer 360, attribution and refund-adjusted profitability on top of trustworthy operational data.
 4. Consolidate audit, approvals, scheduled reports, alerts and fraud review across all domains.
 

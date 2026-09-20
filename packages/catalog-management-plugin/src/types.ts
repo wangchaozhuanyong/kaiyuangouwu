@@ -87,6 +87,8 @@ export interface UpdateCatalogVariantOperationsInput {
     purchaseCostMicrounits?: number | null;
     currencyCode: CurrencyCode;
     stockOnHand?: number | null;
+    stockAdjustmentIdempotencyKey?: string | null;
+    stockAdjustmentReason?: string | null;
     minimumStock?: number | null;
     maximumStock?: number | null;
     supplierId?: ID | null;
@@ -277,6 +279,38 @@ export interface SaveInventoryLotInput {
     quantityOnHand: number;
     purchaseCostMicrounits?: number | null;
     currencyCode: CurrencyCode;
+}
+
+export interface SaveManualInventoryLotInput extends SaveInventoryLotInput {
+    idempotencyKey: string;
+    reason: string;
+}
+
+export interface TransferInventoryLotInput {
+    inventoryLotId: ID;
+    targetStockLocationId: ID;
+    quantity: number;
+    idempotencyKey: string;
+    reason: string;
+    reference?: string | null;
+}
+
+export interface AdjustLegacyInventoryInput {
+    productVariantId: ID;
+    stockLocationId: ID;
+    stockOnHand: number;
+    idempotencyKey: string;
+    reason: string;
+    reference?: string | null;
+}
+
+export interface ResolveInventoryReconciliationInput {
+    productVariantId: ID;
+    stockLocationId: ID;
+    expectedDifference: number;
+    mode: 'ALIGN_STOCK_TO_LOTS' | 'CREATE_BASELINE_LOT';
+    idempotencyKey: string;
+    reason: string;
 }
 
 export interface NormalizedCatalogRow {
