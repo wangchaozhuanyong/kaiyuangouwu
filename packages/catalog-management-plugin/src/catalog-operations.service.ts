@@ -540,42 +540,74 @@ export class CatalogOperationsService {
             return { items: [], totalItems: page.totalItems, scannedItems: page.items.length };
         }
 
-        const [hydrated, costs, policies, lots, supplierBindings] = await Promise.all([
-            this.connection.getRepository(ctx, ProductVariant).find({
-                where: { id: In(variantIds) },
-                relationLoadStrategy: 'query',
-                relations: [
-                    'product',
-                    'product.translations',
-                    'product.facetValues',
-                    'product.facetValues.facet',
-                    'product.facetValues.translations',
-                    'collections',
-                    'collections.translations',
-                    'collections.parent',
-                    'collections.parent.translations',
-                    'stockLevels',
-                    'stockLevels.stockLocation',
-                ],
-            }),
-            this.connection.getRepository(ctx, VariantCostRecord).find({
-                where: { variantId: In(variantIds), channelId: ctx.channelId },
-                order: { effectiveAt: 'DESC', id: 'DESC' },
-            }),
-            this.connection.getRepository(ctx, InventoryPolicy).find({
-                where: { variantId: In(variantIds) },
-            }),
-            this.connection.getRepository(ctx, InventoryLot).find({
-                where: { variantId: In(variantIds) },
-                relations: ['stockLocation'],
-                order: { expiresAt: 'ASC', manufacturedAt: 'ASC', createdAt: 'ASC' },
-            }),
-            this.suppliers.associations(ctx, variantIds),
-        ]);
+        const productIds = [
+            ...new Set(
+                page.items.flatMap(variant =>
+                    variant.productId === null || variant.productId === undefined
+                        ? []
+                        : [String(variant.productId)],
+                ),
+            ),
+        ];
+        const productRepository = this.connection.getRepository(ctx, Product);
+        const variantRepository = this.connection.getRepository(ctx, ProductVariant);
+        const stockLevelRepository = this.connection.getRepository(ctx, StockLevel);
+
+        // Keep independent to-many relation families out of the same TypeORM graph. Joining
+        // products, facets, collections and stock levels through ProductVariant multiplies the
+        // rows before hydration and can fail even for a small logical page on a real catalog.
+        // These bounded queries preserve the exact same export data without the cross product.
+        const productQuery = productRepository
+            .createQueryBuilder('product')
+            .leftJoinAndSelect('product.translations', 'productTranslation')
+            .leftJoinAndSelect('product.facetValues', 'facetValue')
+            .leftJoinAndSelect('facetValue.facet', 'facet')
+            .leftJoinAndSelect('facetValue.translations', 'facetValueTranslation')
+            .where('product.id IN (:...productIds)', { productIds });
+        const collectionQuery = variantRepository
+            .createQueryBuilder('variant')
+            .leftJoinAndSelect('variant.collections', 'collection')
+            .leftJoinAndSelect('collection.translations', 'collectionTranslation')
+            .leftJoinAndSelect('collection.parent', 'parentCollection')
+            .leftJoinAndSelect('parentCollection.translations', 'parentCollectionTranslation')
+            .where('variant.id IN (:...variantIds)', { variantIds });
+
+        const [products, variantsWithCollections, stockLevels, costs, policies, lots, supplierBindings] =
+            await Promise.all([
+                productIds.length > 0 ? productQuery.getMany() : Promise.resolve([]),
+                collectionQuery.getMany(),
+                stockLevelRepository.find({
+                    where: { productVariantId: In(variantIds) },
+                    relations: ['stockLocation'],
+                }),
+                this.connection.getRepository(ctx, VariantCostRecord).find({
+                    where: { variantId: In(variantIds), channelId: ctx.channelId },
+                    order: { effectiveAt: 'DESC', id: 'DESC' },
+                }),
+                this.connection.getRepository(ctx, InventoryPolicy).find({
+                    where: { variantId: In(variantIds) },
+                }),
+                this.connection.getRepository(ctx, InventoryLot).find({
+                    where: { variantId: In(variantIds) },
+                    relations: ['stockLocation'],
+                    order: { expiresAt: 'ASC', manufacturedAt: 'ASC', createdAt: 'ASC' },
+                }),
+                this.suppliers.associations(ctx, variantIds),
+            ]);
         const supplierByVariant = new Map(
             supplierBindings.map(binding => [String(binding.variantId), binding.supplier]),
         );
-        const hydratedById = new Map(hydrated.map(variant => [String(variant.id), variant]));
+        const productById = new Map(products.map(product => [String(product.id), product]));
+        const collectionsByVariantId = new Map(
+            variantsWithCollections.map(variant => [String(variant.id), variant.collections ?? []]),
+        );
+        const stockLevelsByVariantId = new Map<string, StockLevel[]>();
+        for (const level of stockLevels) {
+            const key = String(level.productVariantId);
+            const existing = stockLevelsByVariantId.get(key);
+            if (existing) existing.push(level);
+            else stockLevelsByVariantId.set(key, [level]);
+        }
         const latestCost = new Map<string, VariantCostRecord>();
         for (const cost of costs) {
             const key = `${String(cost.variantId)}:${cost.currencyCode}`;
@@ -585,20 +617,19 @@ export class CatalogOperationsService {
             totalItems: page.totalItems,
             scannedItems: page.items.length,
             items: page.items.flatMap(variant => {
-                const data = hydratedById.get(String(variant.id));
-                if (!data?.product) return [];
-                const product = data.product;
+                const product = productById.get(String(variant.productId));
+                if (!product) return [];
                 const translation =
                     (product.translations ?? []).find(item => item.languageCode === ctx.languageCode) ??
                     product.translations?.[0];
-                const fields = (data.customFields ?? {}) as unknown as Record<string, unknown>;
+                const fields = (variant.customFields ?? {}) as unknown as Record<string, unknown>;
                 const productFields = (product.customFields ?? {}) as unknown as Record<string, unknown>;
                 const cost = latestCost.get(`${String(variant.id)}:${variant.currencyCode}`);
                 const costMicrounits = cost ? Number(cost.costMicrounits) : null;
                 const importCategoryMarker =
                     facetValueNames(product, 'catalog-import-category', ctx.languageCode)[0] ?? null;
                 const collectionPaths = uniqueNames(
-                    (data.collections ?? []).map(collection =>
+                    (collectionsByVariantId.get(String(variant.id)) ?? []).map(collection =>
                         catalogCollectionPath(collection, String(ctx.languageCode)),
                     ),
                 );
@@ -637,7 +668,7 @@ export class CatalogOperationsService {
                         purchaseCostMicrounits: costMicrounits,
                         margin: calculateMargin(variant.price, costMicrounits),
                         currencyCode: variant.currencyCode,
-                        stockLevels: (data.stockLevels ?? [])
+                        stockLevels: (stockLevelsByVariantId.get(String(variant.id)) ?? [])
                             .filter(level => allowedStockLocationIds.has(String(level.stockLocationId)))
                             .map(level => ({
                                 stockLocationId: String(level.stockLocationId),
