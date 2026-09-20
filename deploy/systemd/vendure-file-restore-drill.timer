@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Vendure persistent file restore drill every week
+
+[Timer]
+OnCalendar=Sun *-*-* 22:00:00 UTC
+RandomizedDelaySec=30m
+Persistent=true
+Unit=vendure-file-restore-drill.service
+
+[Install]
+WantedBy=timers.target

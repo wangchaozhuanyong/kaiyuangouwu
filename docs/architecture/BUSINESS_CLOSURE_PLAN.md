@@ -10,7 +10,7 @@ This plan tracks whether each business capability has a complete loop rather tha
 | P0       | Data subject requests      | Customer export, correction, account closure, identity re-check, cooling-off period, legal/financial retention exceptions | In progress: export and account closure implemented and locally verified                     |
 | P0       | Consent and privacy        | Versioned privacy terms, consent evidence, withdrawal, cookie/tracking controls, purpose inventory                        | In progress: registration and first-party analytics consent implemented and locally verified |
 | P0       | Payment reconciliation     | Gateway/chain callback idempotency, order-payment matching, exceptions, refund reconciliation, daily close                | Implemented and locally verified; production migration and scheduler observation remain      |
-| P0       | Backup and recovery        | Backup ownership, retention, encryption, restore drill, RPO/RTO evidence and alerting                                     | Operational verification required                                                            |
+| P0       | Backup and recovery        | Backup ownership, retention, encryption, restore drill, RPO/RTO evidence and alerting                                     | Implemented and locally verified; production policy and first drill remain                   |
 | P0       | Incident response          | Security-event severity, owner, evidence preservation, notification workflow and recovery review                          | Not started                                                                                  |
 | P1       | Procurement                | Supplier, purchase order, receiving, variance, payable, return-to-supplier and performance score                          | Existing supplier area requires closure audit                                                |
 | P1       | Inventory                  | Reservation, receiving, adjustment, transfer, return disposition, low-stock alert and reconciliation                      | Existing pieces require closure audit                                                        |
@@ -59,6 +59,29 @@ Payment acceptance gates:
 - [ ] Migration applied in a production-like database.
 - [ ] Daily scheduler execution and incident delivery observed in a production-like environment.
 - [ ] Release, running SHA, browser acceptance and monitoring evidence.
+
+## Current P0 implementation: backup and recovery
+
+The daily database snapshot now proves its schema and row manifest, checksum, offsite upload and SSE-S3 encryption before it can satisfy a release gate. Public assets, digital deliveries, customer avatars and private generated images have a separate daily archive with a per-file SHA-256 manifest. Local customer-image storage is captured directly; S3 customer-image storage is copied by exact source `VersionId` into a different backup bucket and keeps a restore mapping for every object.
+
+The backup destination must be versioned, bucket-owner enforced, fully private, encrypted by default and covered by an enabled lifecycle whose current plus noncurrent retention does not exceed the declared window. Local and offsite retention are explicit and must cover the RPO. This only expires historical backup copies: an active avatar remains in live storage and is included again in each new backup, so it is not deleted by age.
+
+Weekly database and file drills independently discover the latest completed checksum marker from S3 without relying on the host's backup catalog. They download, checksum, fully restore and validate the database row manifest, file hashes and any S3 source-object manifest in isolated targets. The measured RTO includes remote discovery, download, validation and restoration. Daily health checks enforce backup freshness, drill age, offsite source and the exact RPO/RTO declarations; scheduled monitoring also fails on the latest drill service failure.
+
+Backup acceptance gates:
+
+- [x] Database and all persistent file classes have separate daily, serialized snapshots.
+- [x] Archives reject links, special files, traversal, duplicate paths and files changed during capture.
+- [x] S3 customer images are captured from versioned source objects into a distinct backup bucket.
+- [x] Backup prefixes must be private, versioned, encrypted and covered by bounded lifecycle expiry.
+- [x] Local and offsite retention must be 7-365 days and cannot be shorter than the declared RPO.
+- [x] Restore drills can discover the latest offsite backup after loss of the local catalog.
+- [x] RTO evidence covers discovery, download, checksum, full restore and content validation.
+- [x] Health and scheduled monitors fail on stale backup, bad checksum, stale drill, wrong source or exceeded RTO.
+- [ ] Required S3 lifecycle and least-privilege IAM applied in the production account.
+- [ ] Initial database and persistent-file backups completed against production-like data.
+- [ ] Both offsite restore drills and alert delivery observed in a production-like environment.
+- [ ] Release, running SHA and monitoring evidence.
 
 Acceptance gates:
 

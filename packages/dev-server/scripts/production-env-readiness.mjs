@@ -123,12 +123,45 @@ function isPersistentDirectory(value) {
 }
 
 function isS3Uri(value) {
+    const uri = normalized(value);
+    if (!/^s3:\/\/[a-z0-9.-]+(?:\/[A-Za-z0-9._/-]+)?$/u.test(uri)) return false;
+    if (
+        uri
+            .slice('s3://'.length)
+            .split('/')
+            .slice(1)
+            .some(part => part === '.' || part === '..')
+    ) {
+        return false;
+    }
     try {
-        const url = new URL(normalized(value));
-        return url.protocol === 's3:' && Boolean(url.hostname);
+        const url = new URL(uri);
+        return url.protocol === 's3:' && Boolean(url.hostname) && !url.username && !url.password;
     } catch {
         return false;
     }
+}
+
+function s3LocationsAreIndependent(first, second) {
+    if (!isS3Uri(first) || !isS3Uri(second)) return false;
+    const parse = value => {
+        const [bucket, ...parts] = normalized(value).slice('s3://'.length).split('/');
+        return { bucket, prefix: parts.filter(Boolean).join('/') };
+    };
+    const left = parse(first);
+    const right = parse(second);
+    if (left.bucket !== right.bucket) return true;
+    if (!left.prefix || !right.prefix) return false;
+    return !(
+        left.prefix === right.prefix ||
+        left.prefix.startsWith(`${right.prefix}/`) ||
+        right.prefix.startsWith(`${left.prefix}/`)
+    );
+}
+
+function s3BucketName(value) {
+    if (!isS3Uri(value)) return '';
+    return normalized(value).slice('s3://'.length).split('/')[0];
 }
 
 function hasRealEmailFrom(value) {
@@ -325,7 +358,67 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
                 ? 'required S3 destination configured'
                 : 'single-host production requires VENDURE_REQUIRE_OFFSITE_BACKUP=true and an s3:// destination',
         });
+        const fileBackupBucket = s3BucketName(env.VENDURE_FILE_BACKUP_S3_URI);
+        const avatarSourceBucket = normalized(env.CUSTOMER_AVATAR_S3_BUCKET);
+        const privateSourceBucket = normalized(env.CUSTOMER_PRIVATE_IMAGE_S3_BUCKET);
+        const customerImageBackupSeparated =
+            normalized(env.CUSTOMER_IMAGE_STORAGE || 'local') !== 's3' ||
+            (Boolean(avatarSourceBucket) &&
+                Boolean(privateSourceBucket) &&
+                avatarSourceBucket !== privateSourceBucket &&
+                fileBackupBucket !== avatarSourceBucket &&
+                fileBackupBucket !== privateSourceBucket);
+        const offsiteFileBackupReady =
+            normalized(env.VENDURE_REQUIRE_OFFSITE_FILE_BACKUP) === 'true' &&
+            isS3Uri(env.VENDURE_FILE_BACKUP_S3_URI) &&
+            s3LocationsAreIndependent(env.VENDURE_FILE_BACKUP_S3_URI, env.VENDURE_BACKUP_S3_URI) &&
+            customerImageBackupSeparated;
+        pushCheck(checks, {
+            id: 'offsite-file-backup',
+            title: '持久文件异地备份',
+            passed: offsiteFileBackupReady,
+            detail: offsiteFileBackupReady
+                ? 'separate required S3 destination configured'
+                : 'single-host production requires a distinct versioned S3 prefix for persistent files',
+        });
     }
+
+    const recoveryObjectives = [
+        Number(env.VENDURE_DATABASE_RECOVERY_RPO_SECONDS ?? 86_400),
+        Number(env.VENDURE_DATABASE_RECOVERY_RTO_SECONDS ?? 14_400),
+        Number(env.VENDURE_FILE_RECOVERY_RPO_SECONDS ?? 86_400),
+        Number(env.VENDURE_FILE_RECOVERY_RTO_SECONDS ?? 14_400),
+    ];
+    const recoveryObjectivesReady = recoveryObjectives.every(
+        value => Number.isInteger(value) && value >= 300 && value <= 604_800,
+    );
+    const retentionDays = [
+        Number(env.VENDURE_BACKUP_RETENTION_DAYS ?? 14),
+        Number(env.VENDURE_DATABASE_BACKUP_S3_RETENTION_DAYS ?? 30),
+        Number(env.VENDURE_FILE_BACKUP_RETENTION_DAYS ?? 14),
+        Number(env.VENDURE_FILE_BACKUP_S3_RETENTION_DAYS ?? 30),
+    ];
+    const retentionReady =
+        retentionDays.every(value => Number.isInteger(value) && value >= 7 && value <= 365) &&
+        recoveryObjectives[0] <= retentionDays[0] * 86_400 &&
+        recoveryObjectives[0] <= retentionDays[1] * 86_400 &&
+        recoveryObjectives[2] <= retentionDays[2] * 86_400 &&
+        recoveryObjectives[2] <= retentionDays[3] * 86_400;
+    const recoveryDetail = [
+        `database RPO/RTO ${recoveryObjectives[0]}/${recoveryObjectives[1]}s`,
+        `database local/offsite retention ${retentionDays[0]}/${retentionDays[1]}d`,
+        `file RPO/RTO ${recoveryObjectives[2]}/${recoveryObjectives[3]}s`,
+        `file local/offsite retention ${retentionDays[2]}/${retentionDays[3]}d`,
+    ].join('; ');
+    pushCheck(checks, {
+        id: 'recovery-objectives',
+        title: '备份 RPO/RTO 目标',
+        passed: recoveryObjectivesReady && retentionReady,
+        detail:
+            recoveryObjectivesReady && retentionReady
+                ? recoveryDetail
+                : 'recovery objectives must be 300-604800 seconds; retention must be 7-365 days and cover each RPO',
+    });
 
     const assetUploadDir = normalized(env.VENDURE_ASSET_UPLOAD_DIR);
     const importAssetsDir = normalized(env.VENDURE_IMPORT_ASSETS_DIR);

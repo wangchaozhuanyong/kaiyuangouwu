@@ -269,7 +269,7 @@
                     "Statement": [
                         {
                             "Effect": "Allow",
-                            "Action": ["s3:ListBucket"],
+                            "Action": ["s3:ListBucket", "s3:GetBucketVersioning"],
                             "Resource": [
                                 {
                                     "Fn::GetAtt": ["AvatarBucket", "Arn"]
@@ -281,7 +281,12 @@
                         },
                         {
                             "Effect": "Allow",
-                            "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:GetObjectVersion",
+                                "s3:PutObject",
+                                "s3:DeleteObject"
+                            ],
                             "Resource": [
                                 {
                                     "Fn::Sub": "${AvatarBucket.Arn}/avatars/v2/*"

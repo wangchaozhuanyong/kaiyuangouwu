@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+umask 077
+
+readonly vendure_repo_dir="${VENDURE_REPO_DIR:-/var/www/kaiyuangouwu}"
+readonly vendure_env_file="${VENDURE_ENV_FILE:-${vendure_repo_dir}/packages/dev-server/.env}"
+readonly vendure_backup_dir="${VENDURE_FILE_BACKUP_DIR:-/var/backups/vendure-files}"
+
+if [[ ! -r "${vendure_env_file}" ]]; then
+    printf 'Production environment file is not readable: %s\n' "${vendure_env_file}" >&2
+    exit 1
+fi
+
+set -a
+# shellcheck disable=SC1090
+source "${vendure_env_file}"
+set +a
+
+readonly offsite_backup_required="${VENDURE_REQUIRE_OFFSITE_FILE_BACKUP:-false}"
+readonly offsite_backup_uri="${VENDURE_FILE_BACKUP_S3_URI:-}"
+readonly offsite_retention_days="${VENDURE_FILE_BACKUP_S3_RETENTION_DAYS:-30}"
+if [[ ! "${offsite_backup_required}" =~ ^(true|false)$ ]]; then
+    printf 'VENDURE_REQUIRE_OFFSITE_FILE_BACKUP must be true or false\n' >&2
+    exit 1
+fi
+if [[ "${offsite_backup_required}" == "true" && -z "${offsite_backup_uri}" ]]; then
+    printf 'VENDURE_FILE_BACKUP_S3_URI is required when offsite file backups are mandatory\n' >&2
+    exit 1
+fi
+if [[ -n "${offsite_backup_uri}" && ! "${offsite_backup_uri}" =~ ^s3://[a-z0-9.-]+(/[A-Za-z0-9._/-]+)?$ ]]; then
+    printf 'VENDURE_FILE_BACKUP_S3_URI must be a safe s3:// bucket prefix\n' >&2
+    exit 1
+fi
+if [[ ! "${offsite_retention_days}" =~ ^[0-9]+$ ]] ||
+    ((offsite_retention_days < 7 || offsite_retention_days > 365)); then
+    printf 'VENDURE_FILE_BACKUP_S3_RETENTION_DAYS must be between 7 and 365\n' >&2
+    exit 1
+fi
+
+roots=(
+    "public-assets=${VENDURE_ASSET_UPLOAD_DIR:-}"
+    "digital-delivery=${DIGITAL_DELIVERY_ROOT:-}"
+)
+readonly customer_image_storage="${CUSTOMER_IMAGE_STORAGE:-local}"
+if [[ "${customer_image_storage}" == "local" ]]; then
+    roots+=(
+        "customer-avatars=${CUSTOMER_AVATAR_STORAGE_ROOT:-}"
+        "private-images=${IMAGE_GENERATION_STORAGE_ROOT:-}"
+    )
+elif [[ "${customer_image_storage}" == "s3" ]]; then
+    for required_name in AWS_REGION CUSTOMER_AVATAR_S3_BUCKET CUSTOMER_PRIVATE_IMAGE_S3_BUCKET; do
+        if [[ -z "${!required_name:-}" ]]; then
+            printf 'S3 customer image backup setting is missing: %s\n' "${required_name}" >&2
+            exit 1
+        fi
+    done
+    if [[ "${CUSTOMER_AVATAR_S3_BUCKET}" == "${CUSTOMER_PRIVATE_IMAGE_S3_BUCKET}" ]]; then
+        printf 'Customer avatar and private image source buckets must be distinct\n' >&2
+        exit 1
+    fi
+    if [[ -z "${offsite_backup_uri}" ]]; then
+        printf 'S3 customer images require an independent offsite file backup destination\n' >&2
+        exit 1
+    fi
+    offsite_bucket="${offsite_backup_uri#s3://}"
+    offsite_bucket="${offsite_bucket%%/*}"
+    if [[ "${offsite_bucket}" == "${CUSTOMER_AVATAR_S3_BUCKET}" ||
+        "${offsite_bucket}" == "${CUSTOMER_PRIVATE_IMAGE_S3_BUCKET}" ]]; then
+        printf 'Customer image source and backup buckets must be distinct\n' >&2
+        exit 1
+    fi
+else
+    printf 'CUSTOMER_IMAGE_STORAGE must be local or s3\n' >&2
+    exit 1
+fi
+for root in "${roots[@]}"; do
+    path="${root#*=}"
+    if [[ -z "${path}" || "${path}" != /* || "${path}" == "/" || ! -d "${path}" || -L "${path}" ]]; then
+        printf 'Persistent file backup root is invalid: %s\n' "${root%%=*}" >&2
+        exit 1
+    fi
+done
+
+install -d -m 0700 "${vendure_backup_dir}"
+command -v flock >/dev/null 2>&1 || {
+    printf 'The flock utility is required for persistent file backup serialization\n' >&2
+    exit 1
+}
+exec 8>"${vendure_backup_dir}/.backup.lock"
+if ! flock --nonblock 8; then
+    printf 'Another persistent file backup is already running\n' >&2
+    exit 1
+fi
+
+readonly backup_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+readonly backup_file="${vendure_backup_dir}/vendure-files-${backup_stamp}.tar.gz"
+readonly backup_partial="${backup_file}.part"
+readonly backup_tool="$(dirname "$(readlink -f "$0")")/vendure-file-backup.py"
+readonly s3_policy_guard="$(dirname "$(readlink -f "$0")")/vendure-backup-s3-guard.py"
+readonly s3_snapshot_tool="$(dirname "$(readlink -f "$0")")/vendure-s3-prefix-snapshot.py"
+readonly s3_snapshot_directory="${vendure_backup_dir}/.s3-source-${backup_stamp}"
+if [[ -e "${backup_file}" || -e "${backup_partial}" || -e "${backup_file}.manifest.json" ]]; then
+    printf 'Refusing to overwrite an existing file backup with the same timestamp\n' >&2
+    exit 1
+fi
+
+preserve_failed_backup() {
+    for candidate in "${backup_partial}" "${backup_partial}.manifest.json" "${backup_file}.sha256.part"; do
+        if [[ -f "${candidate}" ]]; then mv "${candidate}" "${candidate}.failed"; fi
+    done
+    if [[ "${s3_snapshot_directory}" == "${vendure_backup_dir}/.s3-source-${backup_stamp}" &&
+        -d "${s3_snapshot_directory}" ]]; then
+        rm -rf -- "${s3_snapshot_directory}"
+    fi
+}
+trap preserve_failed_backup EXIT
+
+offsite_policy_checked=false
+if [[ "${customer_image_storage}" == "s3" ]]; then
+    command -v aws >/dev/null 2>&1 || {
+        printf 'AWS CLI is required to snapshot S3 customer images\n' >&2
+        exit 1
+    }
+    python3 "${s3_policy_guard}" "${offsite_backup_uri}" "${offsite_retention_days}" >/dev/null
+    offsite_policy_checked=true
+    timeout --kill-after=10s 4h python3 "${s3_snapshot_tool}" \
+        capture "${CUSTOMER_AVATAR_S3_BUCKET}" 'avatars/v2/' "${s3_snapshot_directory}/customer-avatars"
+    timeout --kill-after=10s 4h python3 "${s3_snapshot_tool}" \
+        capture "${CUSTOMER_PRIVATE_IMAGE_S3_BUCKET}" 'private/v1/' "${s3_snapshot_directory}/private-images"
+    roots+=(
+        "customer-avatars=${s3_snapshot_directory}/customer-avatars"
+        "private-images=${s3_snapshot_directory}/private-images"
+    )
+fi
+
+timeout --kill-after=10s 4h python3 "${backup_tool}" capture "${backup_partial}" "${roots[@]}"
+gzip -t "${backup_partial}"
+python3 "${backup_tool}" verify "${backup_partial}" >/dev/null
+mv "${backup_partial}.manifest.json" "${backup_file}.manifest.json"
+mv "${backup_partial}" "${backup_file}"
+(
+    cd "${vendure_backup_dir}"
+    sha256sum "$(basename "${backup_file}")" "$(basename "${backup_file}.manifest.json")" \
+        >"$(basename "${backup_file}.sha256.part")"
+)
+mv "${backup_file}.sha256.part" "${backup_file}.sha256"
+
+if [[ -n "${offsite_backup_uri}" ]]; then
+    command -v aws >/dev/null 2>&1 || {
+        printf 'AWS CLI is required to upload the offsite file backup\n' >&2
+        exit 1
+    }
+    if [[ "${offsite_policy_checked}" != "true" ]]; then
+        python3 "${s3_policy_guard}" "${offsite_backup_uri}" "${offsite_retention_days}" >/dev/null
+    fi
+    readonly offsite_prefix="${offsite_backup_uri%/}"
+    readonly bucket_and_prefix="${offsite_prefix#s3://}"
+    readonly bucket="${bucket_and_prefix%%/*}"
+    prefix="${bucket_and_prefix#${bucket}}"
+    prefix="${prefix#/}"
+    for source in "${backup_file}" "${backup_file}.manifest.json" "${backup_file}.sha256"; do
+        name="$(basename "${source}")"
+        key="${name}"
+        if [[ -n "${prefix}" ]]; then key="${prefix}/${name}"; fi
+        aws s3 cp "${source}" "s3://${bucket}/${key}" --sse AES256 --only-show-errors
+        [[ "$(aws s3api head-object --bucket "${bucket}" --key "${key}" --query ServerSideEncryption --output text)" == "AES256" ]]
+    done
+fi
+preserve_failed_backup
+trap - EXIT
+
+printf 'Created verified persistent file backup: %s offsite=%s encrypted=%s\n' \
+    "${backup_file}" "$([[ -n "${offsite_backup_uri}" ]] && printf yes || printf no)" \
+    "$([[ -n "${offsite_backup_uri}" ]] && printf yes || printf local-volume)"

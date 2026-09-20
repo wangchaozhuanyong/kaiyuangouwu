@@ -5,8 +5,9 @@ set -Eeuo pipefail
 readonly vendure_repo_dir="${VENDURE_REPO_DIR:-/var/www/kaiyuangouwu}"
 readonly vendure_env_file="${VENDURE_ENV_FILE:-${vendure_repo_dir}/packages/dev-server/.env}"
 readonly vendure_backup_dir="${VENDURE_BACKUP_DIR:-/var/backups/vendure-mysql}"
+readonly vendure_file_backup_dir="${VENDURE_FILE_BACKUP_DIR:-/var/backups/vendure-files}"
 readonly vendure_restore_drill_evidence="${VENDURE_RESTORE_DRILL_EVIDENCE:-/var/lib/vendure-readiness/restore-drill.json}"
-readonly maximum_backup_age_seconds="${VENDURE_MAXIMUM_BACKUP_AGE_SECONDS:-129600}"
+readonly vendure_file_restore_drill_evidence="${VENDURE_FILE_RESTORE_DRILL_EVIDENCE:-/var/lib/vendure-readiness/file-restore-drill.json}"
 readonly maximum_restore_drill_age_seconds="${VENDURE_MAXIMUM_RESTORE_DRILL_AGE_SECONDS:-777600}"
 readonly maximum_disk_usage_percent="${VENDURE_MAXIMUM_DISK_USAGE_PERCENT:-85}"
 
@@ -26,8 +27,29 @@ for required_name in DB_HOST DB_PORT DB_USERNAME DB_PASSWORD; do
         exit 1
     fi
 done
+for required_boolean in VENDURE_REQUIRE_OFFSITE_BACKUP VENDURE_REQUIRE_OFFSITE_FILE_BACKUP; do
+    if [[ ! "${!required_boolean:-false}" =~ ^(true|false)$ ]]; then
+        printf 'Backup requirement flag must be true or false: %s\n' "${required_boolean}" >&2
+        exit 1
+    fi
+done
+readonly backup_alert_grace_seconds="${VENDURE_BACKUP_ALERT_GRACE_SECONDS:-21600}"
+readonly database_rpo_seconds="${VENDURE_DATABASE_RECOVERY_RPO_SECONDS:-86400}"
+readonly database_rto_seconds="${VENDURE_DATABASE_RECOVERY_RTO_SECONDS:-14400}"
+readonly file_rpo_seconds="${VENDURE_FILE_RECOVERY_RPO_SECONDS:-86400}"
+readonly file_rto_seconds="${VENDURE_FILE_RECOVERY_RTO_SECONDS:-14400}"
+for objective in "${backup_alert_grace_seconds}" "${database_rpo_seconds}" "${database_rto_seconds}" "${file_rpo_seconds}" "${file_rto_seconds}"; do
+    if [[ ! "${objective}" =~ ^[0-9]+$ ]] || ((objective < 300)); then
+        printf 'Backup recovery objectives must be integer seconds of at least 300\n' >&2
+        exit 1
+    fi
+done
+readonly maximum_database_backup_age_seconds="$((database_rpo_seconds + backup_alert_grace_seconds))"
+readonly maximum_file_backup_age_seconds="$((file_rpo_seconds + backup_alert_grace_seconds))"
 
 failures=()
+current_epoch="$(date +%s)"
+readonly current_epoch
 
 if ! MYSQL_PWD="${DB_PASSWORD}" mysqladmin --host="${DB_HOST}" --port="${DB_PORT}" --user="${DB_USERNAME}" ping --silent; then
     failures+=("mysql-unreachable")
@@ -41,29 +63,57 @@ if ! curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/image
     failures+=("image-generation-health-failed")
 fi
 
-latest_backup_file="$(find "${vendure_backup_dir}" -maxdepth 1 -type f -name 'vendure-*.sql.gz' -printf '%T@ %p\n' | sort -nr | awk 'NR == 1 { sub(/^[^ ]+ /, ""); print }')"
-latest_backup_epoch=""
-if [[ -n "${latest_backup_file}" ]]; then
-    latest_backup_epoch="$(stat --format='%Y' "${latest_backup_file}")"
-fi
-current_epoch="$(date +%s)"
-if [[ -z "${latest_backup_epoch}" ]] || ((current_epoch - latest_backup_epoch > maximum_backup_age_seconds)); then
-    failures+=("backup-missing-or-stale")
-elif [[ ! -f "${latest_backup_file}.sha256" ]] || ! (
-    cd "${vendure_backup_dir}"
-    sha256sum --check --status "$(basename "${latest_backup_file}.sha256")"
-); then
-    failures+=("backup-checksum-invalid")
-fi
+check_backup() {
+    local directory="$1"
+    local pattern="$2"
+    local maximum_age="$3"
+    local failure_prefix="$4"
+    local latest_file latest_epoch
+    latest_file="$(find "${directory}" -maxdepth 1 -type f -name "${pattern}" -printf '%T@ %p\n' | sort -nr | awk 'NR == 1 { sub(/^[^ ]+ /, ""); print }')"
+    latest_epoch=""
+    if [[ -n "${latest_file}" ]]; then latest_epoch="$(stat --format='%Y' "${latest_file}")"; fi
+    if [[ -z "${latest_epoch}" ]] || ((current_epoch - latest_epoch < 0 || current_epoch - latest_epoch > maximum_age)); then
+        failures+=("${failure_prefix}-missing-or-stale")
+    elif [[ ! -f "${latest_file}.sha256" ]] || ! (
+        cd "${directory}"
+        sha256sum --check --status "$(basename "${latest_file}.sha256")"
+    ); then
+        failures+=("${failure_prefix}-checksum-invalid")
+    fi
+}
 
-restore_drill_epoch=""
-if [[ -f "${vendure_restore_drill_evidence}" ]]; then
-    restore_drill_epoch="$(stat --format='%Y' "${vendure_restore_drill_evidence}")"
-fi
-if [[ -z "${restore_drill_epoch}" ]] ||
-    ((current_epoch - restore_drill_epoch < 0 || current_epoch - restore_drill_epoch > maximum_restore_drill_age_seconds)); then
-    failures+=("restore-drill-missing-or-stale")
-fi
+check_restore_evidence() {
+    local evidence="$1"
+    local configured_rto="$2"
+    local offsite_required="$3"
+    local failure_prefix="$4"
+    local completed_at completed_epoch duration recorded_rto source
+    if [[ ! -s "${evidence}" ]] || ! jq -e . "${evidence}" >/dev/null 2>&1; then
+        failures+=("${failure_prefix}-missing-or-invalid")
+        return
+    fi
+    completed_at="$(jq -er '.completedAt' "${evidence}" 2>/dev/null || true)"
+    completed_epoch="$(date -u --date="${completed_at}" +%s 2>/dev/null || true)"
+    duration="$(jq -er '.durationSeconds' "${evidence}" 2>/dev/null || true)"
+    recorded_rto="$(jq -er '.rtoSeconds' "${evidence}" 2>/dev/null || true)"
+    source="$(jq -er '.source' "${evidence}" 2>/dev/null || true)"
+    if [[ ! "${completed_epoch}" =~ ^[0-9]+$ ]] ||
+        ((current_epoch - completed_epoch < 0 || current_epoch - completed_epoch > maximum_restore_drill_age_seconds)); then
+        failures+=("${failure_prefix}-missing-or-stale")
+    elif [[ ! "${duration}" =~ ^[0-9]+$ || ! "${recorded_rto}" =~ ^[0-9]+$ ]] ||
+        ((duration > configured_rto || recorded_rto != configured_rto)); then
+        failures+=("${failure_prefix}-rto-failed")
+    elif [[ "${offsite_required}" == "true" && "${source}" != "offsite" ]]; then
+        failures+=("${failure_prefix}-offsite-unverified")
+    fi
+}
+
+check_backup "${vendure_backup_dir}" 'vendure-*.sql.gz' "${maximum_database_backup_age_seconds}" 'backup'
+check_backup "${vendure_file_backup_dir}" 'vendure-files-*.tar.gz' "${maximum_file_backup_age_seconds}" 'file-backup'
+check_restore_evidence "${vendure_restore_drill_evidence}" "${database_rto_seconds}" \
+    "${VENDURE_REQUIRE_OFFSITE_BACKUP:-false}" 'restore-drill'
+check_restore_evidence "${vendure_file_restore_drill_evidence}" "${file_rto_seconds}" \
+    "${VENDURE_REQUIRE_OFFSITE_FILE_BACKUP:-false}" 'file-restore-drill'
 
 disk_usage_percent="$(df --output=pcent / | tail -1 | tr -dc '0-9')"
 if [[ -z "${disk_usage_percent}" ]] || ((disk_usage_percent >= maximum_disk_usage_percent)); then
@@ -75,4 +125,5 @@ if ((${#failures[@]} > 0)); then
     exit 1
 fi
 
-printf 'Vendure production health check passed\n'
+printf 'Vendure production health check passed: database_rpo=%ss database_rto=%ss file_rpo=%ss file_rto=%ss\n' \
+    "${database_rpo_seconds}" "${database_rto_seconds}" "${file_rpo_seconds}" "${file_rto_seconds}"

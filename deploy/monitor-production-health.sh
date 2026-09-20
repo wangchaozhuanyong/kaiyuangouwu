@@ -88,6 +88,10 @@ require_recent_systemd_success \
     vendure-mysql-restore-drill.timer \
     vendure-mysql-restore-drill.service \
     "${restore_drill_maximum_age_seconds}"
+require_recent_systemd_success \
+    vendure-file-restore-drill.timer \
+    vendure-file-restore-drill.service \
+    "${restore_drill_maximum_age_seconds}"
 
 node "${memory_guard}" --stage scheduled-monitor --check
 curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/dev/null

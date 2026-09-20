@@ -661,7 +661,7 @@ function startVerifiedMysqlBackup() {
         { encoding: 'utf8', timeout: 30000, maxBuffer: 65536, stdio: ['ignore', 'pipe', 'pipe'] },
     );
     const evidence = journal.match(
-        /^Created verified MySQL backup: (\/var\/backups\/vendure-mysql\/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz) offsite=yes$/mu,
+        /^Created verified MySQL backup: (\/var\/backups\/vendure-mysql\/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz) offsite=yes encrypted=yes$/mu,
     );
     assert.ok(evidence, 'Database backup is missing verified offsite evidence');
     const file = evidence[1];
