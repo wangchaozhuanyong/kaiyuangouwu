@@ -20,7 +20,9 @@ import {
 } from './types';
 
 const navigate = vi.hoisted(() => vi.fn());
+const preloadRoute = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }));
+vi.mock('./route-component-preload', () => ({ preloadStorefrontRouteComponent: preloadRoute }));
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const market: MarketConfig = {
@@ -508,6 +510,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         expect(api.prepareShipping).toHaveBeenCalledTimes(1);
         expect(api.cart).toHaveBeenCalledTimes(1);
         expect(api.prefetchEligiblePaymentMethods).toHaveBeenCalledWith('order-1');
+        expect(preloadRoute).toHaveBeenCalledWith('payment');
         expect(navigate).toHaveBeenCalledWith({ to: '/payment', search: {}, replace: true });
     });
 

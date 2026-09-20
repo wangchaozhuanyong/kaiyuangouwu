@@ -8,6 +8,7 @@ import { resolveCurrentCheckoutOrder } from '../payment-readiness';
 import { cartLineCanSelect } from '../product-availability';
 import { storefrontQueryKeys } from '../query-client';
 import { invalidateStorefrontRealtimeQueries } from '../realtime-updates';
+import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { isPublicStorefrontRoute } from '../storefront-access';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { scopedStorageKey } from '../storefront-storage';
@@ -99,12 +100,14 @@ export function useStorefrontAppState() {
     const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
     const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
     const [cartLoading, setCartLoading] = useState(false);
+    const [checkoutStarting, setCheckoutStarting] = useState(false);
     const [cartError, setCartError] = useState<string | null>(null);
     const [addingVariantId, setAddingVariantId] = useState<string | null>(null);
     const [toast, setToast] = useState<ToastPayload | null>(null);
     const [online, setOnline] = useState(navigator.onLine);
 
     const toastTimer = useRef<number | null>(null);
+    const checkoutStartingRef = useRef(false);
 
     const {
         route,
@@ -437,10 +440,13 @@ export function useStorefrontAppState() {
             navigate({ name: 'login', returnTo: 'checkout' });
             return;
         }
-        setCartLoading(true);
+        if (checkoutStartingRef.current) return;
+        checkoutStartingRef.current = true;
+        setCheckoutStarting(true);
         setCartError(null);
+        const checkoutRouteRequest = preloadStorefrontRouteComponent('checkout');
         try {
-            const session = await api.beginCheckout(cart.revision);
+            const [session] = await Promise.all([api.beginCheckout(cart.revision), checkoutRouteRequest]);
             setCart(session.cart);
             setCheckoutOrder(session.order);
             navigate({ name: 'checkout' });
@@ -459,7 +465,8 @@ export function useStorefrontAppState() {
                 setCartError(storefrontErrorMessage(requestError, language, text.loadError));
             }
         } finally {
-            setCartLoading(false);
+            checkoutStartingRef.current = false;
+            setCheckoutStarting(false);
         }
     }, [api, cart, customer, isZh, navigate, refreshCart, text.loadError]);
 
@@ -654,6 +661,8 @@ export function useStorefrontAppState() {
         cart,
         cartLoading: cartLoading || cartState.pending,
         cartPending: cartState.pending,
+        cartTotalsPending: cartState.totalsPending,
+        checkoutStarting,
         cartEditingBlocked: cartState.editingBlocked,
         cartCommandUnknown: cartState.phase === 'unknown',
         cancelPendingCartCommand: () => void cartController.recoverPending(true),

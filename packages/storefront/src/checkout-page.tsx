@@ -434,6 +434,7 @@ export function CheckoutPage({
         const data = new FormData(event.currentTarget);
         setSubmitting(true);
         setFormError(null);
+        const paymentRouteRequest = preloadStorefrontRouteComponent('payment');
         try {
             const getString = (key: string, fallback = '') => {
                 const val = data.get(key);
@@ -491,13 +492,14 @@ export function CheckoutPage({
             onCartChange(latestCart);
             const session = await api.preparePayment(latestCart.revision);
             onSessionChange(session);
+            let paymentMethodsRequest: Promise<void> = Promise.resolve();
             if (typeof api.prefetchEligiblePaymentMethods === 'function') {
-                try {
-                    await api.prefetchEligiblePaymentMethods(session.order.id);
-                } catch {
-                    // The payment page owns the retry/error state if prefetching is unavailable.
-                }
+                paymentMethodsRequest = api
+                    .prefetchEligiblePaymentMethods(session.order.id)
+                    .then(() => undefined)
+                    .catch(() => undefined);
             }
+            await Promise.all([paymentRouteRequest, paymentMethodsRequest]);
             onNotify(
                 isZh ? '订单已准备，请继续选择支付方式' : 'Order prepared. Continue with a payment method.',
             );

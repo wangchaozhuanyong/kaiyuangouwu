@@ -118,6 +118,7 @@ function renderCart(
     products: Product[] = [],
     coupons: StoreCustomerCoupon[] = [],
     selectionPending = false,
+    checkoutPending = false,
 ) {
     return renderToStaticMarkup(
         createElement(
@@ -132,6 +133,7 @@ function renderCart(
                     language: 'zh' as const,
                     loading: selectionPending,
                     selectionPending,
+                    checkoutPending,
                     error: null,
                     favoriteProductIds: [],
                     coupons,
@@ -153,6 +155,14 @@ describe('CartPage guest cart', () => {
         expect(checkbox).not.toContain('disabled');
         expect(markup).toContain('disabled="">结算（1）');
         expect(markup).not.toContain('aria-label="增加 32 英寸显示器 数量" disabled=""');
+    });
+
+    it('keeps the confirmed total stable while checkout opens and moves progress onto the action', () => {
+        const markup = renderCart({ ...cart, checkoutOrder }, [], [], false, true);
+        expect(markup).toContain('MYR 313.81');
+        expect(markup).not.toContain('计算中…');
+        expect(markup).toContain('aria-busy="true"');
+        expect(markup).toContain('disabled="">正在进入结算…</button>');
     });
 
     it('keeps cart lines and editing controls visible for a guest customer', () => {
