@@ -3,13 +3,7 @@
     .desktop-store-layout {
         --font-display:
             -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-        --bg: #f5f5f5;
-        --paper: #fff;
-        --soft: #f7f7f7;
-        --line: #e9e9e9;
-        --text: #262626;
-        --muted: #777;
-        --desktop-header-height: 152px;
+        --desktop-header-height: 61px;
         width: 100%;
         max-width: none;
         background: var(--bg);
@@ -19,38 +13,30 @@
     }
     html,
     body {
-        background: #f5f5f5;
+        background: var(--bg);
     }
     body:has(.desktop-store-layout) {
-        background: #f5f5f5;
+        background: var(--bg);
     }
     html[data-storefront-preset='neo-minimalist'],
     html[data-storefront-preset='neo-minimalist'] body,
     html[data-storefront-preset='neo-minimalist'] body:has(.desktop-store-layout) {
-        background: #070B14;
-        color: #F1F5F9;
+        background: var(--bg);
+        color: var(--text);
     }
     html[data-storefront-preset='neo-minimalist'] .desktop-store-layout {
-        --bg: #070B14;
-        --paper: #0E121C;
-        --soft: #131825;
-        --line: rgba(255, 255, 255, 0.08);
-        --text: #F1F5F9;
-        --muted: #94A3B8;
-        --accent: #8B5CF6;
-        --accent-hover: #7C3AED;
-        background: #070B14;
-        color: #F1F5F9;
+        background: var(--bg);
+        color: var(--text);
     }
     html[data-storefront-preset='neo-minimalist'] .route-transition {
-        background: #070B14;
+        background: var(--bg);
     }
     .route-transition {
         width: 100vw;
         min-height: 100dvh;
         inset: 0;
         transform: none;
-        background: #f5f5f5;
+        background: var(--bg);
     }
     .desktop-store-layout :is(h1, h2, h3) {
         font-family: inherit;
@@ -64,7 +50,7 @@
         min-width: 0;
     }
     .desktop-store-layout :is(button, a, input, select):focus-visible {
-        outline: 2px solid var(--accent);
+        outline: 2px solid var(--focus);
         outline-offset: 3px;
     }
     .desktop-header {
@@ -90,7 +76,7 @@
     .desktop-utility-bar {
         background: color-mix(in srgb, var(--soft, #f8fafc) 80%, transparent);
         border-bottom: 1px solid color-mix(in srgb, var(--line, #e2e8f0) 40%, transparent);
-        color: #64748b;
+        color: var(--muted);
         font-size: 12px;
         font-weight: 500;
     }
@@ -107,7 +93,7 @@
         text-overflow: ellipsis;
         white-space: nowrap;
         letter-spacing: -0.01em;
-        color: #475569;
+        color: var(--muted);
     }
     .desktop-utility-inner nav {
         display: flex;
@@ -155,7 +141,7 @@
         display: grid;
         place-items: center;
         background: var(--accent);
-        color: #fff;
+        color: var(--accent-foreground);
     }
     .desktop-brand-mark.is-brand-image,
     .desktop-brand-mark.is-brand-image > .safe-image-frame {
@@ -195,7 +181,7 @@
         width: 17px;
         height: 17px;
         margin-right: 8px;
-        color: #94a3b8;
+        color: var(--muted);
         flex: none;
     }
     .desktop-search input {
@@ -209,7 +195,7 @@
         outline: none;
     }
     .desktop-search input::placeholder {
-        color: #94a3b8;
+        color: var(--muted);
     }
     .desktop-search-kbd {
         display: inline-flex;
@@ -221,7 +207,7 @@
         border: 1px solid color-mix(in srgb, var(--line, #cbd5e1) 70%, transparent);
         border-radius: 4px;
         background: rgba(0, 0, 0, 0.04);
-        color: #64748b;
+        color: var(--muted);
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         font-size: 11px;
         font-weight: 600;
@@ -232,7 +218,7 @@
     }
     .desktop-search:focus-within {
         border-color: var(--accent);
-        background: #ffffff;
+        background: var(--surface, var(--paper));
         box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent), 0 4px 12px rgba(0, 0, 0, 0.04);
     }
     .desktop-search button {
@@ -242,7 +228,7 @@
         border: 0;
         border-radius: 9999px;
         background: var(--accent);
-        color: #fff;
+        color: var(--accent-foreground);
         font-size: 13px;
         font-weight: 500;
         padding: 0 16px;
@@ -290,7 +276,7 @@
         padding: 0 6px;
         border-radius: 9999px;
         background: var(--accent);
-        color: #fff;
+        color: var(--accent-foreground);
         font-size: 11px;
         font-weight: 700;
         line-height: 1;
@@ -314,7 +300,7 @@
         background: none;
         font-size: 14px;
         font-weight: 500;
-        color: #475569;
+        color: var(--muted);
         text-decoration: none;
         transition: color 0.15s ease, border-color 0.15s ease;
     }
@@ -476,16 +462,16 @@
         padding: 10px 24px;
         border-left: 3px solid transparent;
         text-decoration: none;
-        color: #666;
+        color: var(--muted);
         font-size: 14px;
     }
     .desktop-account-navigation a:hover {
-        color: var(--accent);
+        color: var(--accent-ink);
     }
     .desktop-account-navigation [aria-current='page'] {
         border-left-color: var(--accent);
-        color: var(--accent);
-        background: color-mix(in srgb, var(--accent) 5%, #fff);
+        color: var(--accent-ink);
+        background: var(--accent-soft);
     }
     .desktop-account-page {
         display: flex;
@@ -550,7 +536,7 @@
         height: 64px;
         background: var(--soft, #f4f1ee);
         border-radius: 50%;
-        color: #9b8b7e;
+        color: var(--muted);
         flex: none;
         overflow: hidden;
     }
@@ -637,7 +623,7 @@
     .desktop-order-statuses svg {
         width: 14px;
         height: 14px;
-        color: #aaa;
+        color: var(--muted);
     }
     .desktop-orders-empty {
         display: flex;
@@ -648,7 +634,7 @@
     .desktop-orders-empty > svg {
         width: 46px;
         height: 46px;
-        color: #c4beb6;
+        color: var(--muted);
         stroke-width: 1.3;
         flex: none;
     }
@@ -670,7 +656,7 @@
         padding: 0 18px;
         border: 1px solid var(--accent);
         background: var(--paper, #fff);
-        color: var(--accent);
+        color: var(--accent-ink);
         font-size: 13px;
     }
     .desktop-account-query-error {
@@ -683,7 +669,7 @@
     .desktop-account-query-error button {
         border: 0;
         background: none;
-        color: var(--accent);
+        color: var(--accent-ink);
     }
     .desktop-recent-orders article {
         display: grid;
@@ -745,7 +731,7 @@
         padding-top: 18px;
     }
     .desktop-delivery-summary > svg {
-        color: #aaa;
+        color: var(--muted);
         width: 30px;
         height: 30px;
         flex: none;
@@ -767,7 +753,7 @@
         background: none;
         padding: 10px 0;
         text-align: left;
-        color: #666;
+        color: var(--muted);
         font-size: 13px;
     }
     .desktop-account-help svg {
@@ -789,7 +775,7 @@
         display: none;
     }
     .desktop-account-page button:hover {
-        color: var(--accent);
+        color: var(--accent-ink);
     }
 
     /* Catalog filters are desktop controls; products retain complete square images. */
@@ -813,7 +799,7 @@
     .desktop-category-navigation button {
         border: 0;
         background: none;
-        color: #666;
+        color: var(--muted);
         padding: 14px 0;
         min-height: 46px;
         cursor: pointer;
@@ -856,7 +842,7 @@
         border: 1px solid color-mix(in srgb, var(--line, #cbd5e1) 75%, transparent);
         border-radius: 9999px;
         background: color-mix(in srgb, var(--soft, #f8fafc) 60%, transparent);
-        color: #475569;
+        color: var(--muted);
         cursor: pointer;
         font-size: 13px;
         font-weight: 500;
@@ -870,7 +856,7 @@
     .desktop-sort button[aria-pressed='true'] {
         background: var(--accent);
         border-color: var(--accent);
-        color: #ffffff;
+        color: var(--accent-foreground);
         font-weight: 600;
         box-shadow: 0 2px 8px -1px color-mix(in srgb, var(--accent) 35%, transparent);
     }
@@ -883,7 +869,7 @@
         background: color-mix(in srgb, var(--soft, #f8fafc) 60%, transparent);
         padding: 4px 12px;
         min-height: 32px;
-        color: #475569;
+        color: var(--muted);
         cursor: pointer;
         font-size: 13px;
         transition: all 0.15s ease;
@@ -905,7 +891,7 @@
         gap: 7px;
         align-items: center;
         font-size: 13px;
-        color: #666;
+        color: var(--muted);
         cursor: pointer;
     }
     .desktop-stock-filter input {
@@ -924,13 +910,13 @@
         display: grid;
         gap: 8px;
         font-size: 13px;
-        color: #666;
+        color: var(--muted);
     }
     .desktop-catalog-filters :is(input, select) {
         height: 36px;
         width: 170px;
         padding: 6px 10px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--line);
         background: var(--paper, #fff);
         border-radius: 0;
         color: var(--text);
@@ -979,7 +965,7 @@
         padding: 0;
         border: 0;
         background: none;
-        color: #0284c7;
+        color: var(--accent-ink);
         font-size: 12px;
     }
     .desktop-product-grid .product-row-bottom {

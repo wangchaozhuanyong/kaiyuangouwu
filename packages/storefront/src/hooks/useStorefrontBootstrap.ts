@@ -40,6 +40,13 @@ import { useStorefrontVisualPreset } from '../use-storefront-visual-preset';
 import { useStorefrontBrandColors } from './useStorefrontDocument';
 import { useStorefrontPublicData } from './useStorefrontPublicData';
 
+function previewLanguage(fallback: StorefrontLanguage): StorefrontLanguage {
+    if (typeof window === 'undefined') return fallback;
+    const parameters = new URLSearchParams(window.location.search);
+    if (parameters.get('storefrontPreviewEmbedded') !== '1') return fallback;
+    return parameters.get('storefrontPreviewLanguage') === 'en' ? 'en' : 'zh';
+}
+
 export function useStorefrontBootstrap() {
     const queryClient = useQueryClient();
 
@@ -51,7 +58,7 @@ export function useStorefrontBootstrap() {
         const currencyCode = readStoredSettlementCurrency(initialMarket);
         return {
             market: { ...initialMarket, currencyCode },
-            language: readStoredLanguage(initialMarket),
+            language: previewLanguage(readStoredLanguage(initialMarket)),
         };
     });
     const [displayCurrencyCode, setDisplayCurrencyCode] = useState(() =>
@@ -195,7 +202,7 @@ export function useStorefrontBootstrap() {
             nextMarket.currencyCode !== market.currencyCode ||
             nextMarket.countryCode !== market.countryCode
         ) {
-            const nextLanguage = readStoredLanguage(nextMarket);
+            const nextLanguage = previewLanguage(readStoredLanguage(nextMarket));
             if (nextLanguage === language) {
                 const nextConfigKey = [
                     ...storefrontQueryKeys.config(

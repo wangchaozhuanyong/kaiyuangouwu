@@ -271,7 +271,7 @@
     border-left: 0;
     border-right: 0;
     border-radius: 0;
-    background: #ffffff;
+    background: var(--surface);
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     box-shadow: none;
@@ -288,7 +288,7 @@
     position: relative;
     border: 0;
     background: transparent;
-    color: #64748b;
+    color: var(--muted);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -323,7 +323,7 @@
 }
 
 .sort-bar button.is-active {
-    color: var(--accent);
+    color: var(--accent-ink);
     font-weight: 700;
 }
 
@@ -465,7 +465,7 @@
 }
 
 .sheet-actions .reset-filter-button {
-    color: var(--accent);
+    color: var(--accent-ink);
 }
 
 .product-row-image {
@@ -1005,7 +1005,7 @@
     padding: 4px;
     border: 1px solid var(--line);
     border-radius: 12px;
-    background: white;
+    background: var(--surface);
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 4px;
@@ -1029,7 +1029,7 @@
 
 .coupon-center-tabs button.is-active {
     background: var(--accent-soft);
-    color: var(--accent);
+    color: var(--accent-ink);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -1341,7 +1341,7 @@
     border: 0;
     border-top: 1px solid var(--line);
     background: transparent;
-    color: var(--accent);
+    color: var(--accent-ink);
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
@@ -1726,7 +1726,7 @@
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--accent);
+    color: var(--accent-ink);
     display: inline-flex;
     align-items: center;
     gap: 7px;

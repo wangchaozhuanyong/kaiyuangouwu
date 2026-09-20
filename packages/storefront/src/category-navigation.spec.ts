@@ -153,7 +153,8 @@ describe('category navigation responsive spacing', () => {
 
         expect(sidebarRule).toMatch(/border-right:\s*0;/);
         expect(itemRule).not.toMatch(/border-left/);
-        expect(activeItemRule).toMatch(/background:\s*#ffffff;/);
+        expect(activeItemRule).toMatch(/background:\s*var\(--accent-soft\);/);
+        expect(activeItemRule).toMatch(/color:\s*var\(--accent-ink\);/);
         expect(activeItemRule).toMatch(/box-shadow:\s*none;/);
     });
 

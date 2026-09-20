@@ -897,7 +897,7 @@ describe('HomePage desktop intro layout', () => {
         items: [],
     };
 
-    it('consolidates only desktop shortcuts already available in the header, retaining custom destinations', () => {
+    it('reuses every managed shortcut in the desktop Bento without changing mobile content', () => {
         const overrides: Partial<HomePageProps> = {
             collections: [
                 {
@@ -935,9 +935,9 @@ describe('HomePage desktop intro layout', () => {
         };
 
         const desktopMarkup = renderHome(overrides, true);
-        expect(desktopMarkup).not.toContain('<b>主分类快捷入口</b>');
-        expect(desktopMarkup).toContain('<b>子分类快捷入口</b>');
-        expect(desktopMarkup).toContain('<b>自定义服务入口</b>');
+        expect(desktopMarkup).toContain('主分类快捷入口');
+        expect(desktopMarkup).toContain('子分类快捷入口');
+        expect(desktopMarkup).toContain('自定义服务入口');
         const mobileMarkup = renderHome(overrides);
         expect(mobileMarkup).toContain('<b>主分类快捷入口</b>');
         expect(mobileMarkup).toContain('<b>子分类快捷入口</b>');

@@ -57,7 +57,7 @@ export interface BottomNavigationItem {
     activeColor: string;
 }
 
-const activeColors = Array.from({ length: 5 }, () => 'var(--accent)');
+const activeColors = Array.from({ length: 5 }, () => 'var(--accent-ink)');
 
 const targetIcons: Record<
     NavigationTargetPath,

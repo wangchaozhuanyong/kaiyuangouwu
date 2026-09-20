@@ -258,7 +258,7 @@ describe('product image navigation layers', () => {
             />,
         );
 
-        expect(markup).toContain('text-[#0284c7]');
+        expect(markup).toContain('text-[var(--accent-ink)]');
         expect(markup).not.toContain('bg-[var(--accent-soft)]');
         expect(markup).toContain('实物商品 · 需要配送');
     });

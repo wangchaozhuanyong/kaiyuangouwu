@@ -34,7 +34,7 @@ import {
 import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
 import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { ProductCard } from '../components/common/product-card';
-import { DesktopNeoMinimalistHome } from '../components/desktop/desktop-neo-minimalist-home';
+import { DesktopUnifiedHome } from '../components/desktop/desktop-unified-home';
 import { claimableCouponCampaigns } from '../coupon-center-state';
 import { useDesktopLayout } from '../desktop-layout';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
@@ -840,14 +840,19 @@ export function HomePage() {
                 className="page home-page desktop-neo-home-page"
                 data-page-pending={loading ? 'query' : undefined}
             >
-                <DesktopNeoMinimalistHome
+                <DesktopUnifiedHome
                     products={products}
                     collections={collections}
                     contentBlocks={contentBlocks}
                     language={language}
                     storefrontName={storefrontName}
+                    storefrontDescription={storefrontDescription}
+                    storefrontTagline={storefrontTagline}
+                    market={market}
+                    locale={locale}
                     onProductSelect={id => navigateTo({ name: 'product', id })}
-                    onToast={onToast}
+                    onCollectionSelect={collectionId => navigateTo({ name: 'category', collectionId })}
+                    onContentTarget={onContentTarget}
                 />
             </main>
         );

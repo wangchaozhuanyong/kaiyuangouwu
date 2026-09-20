@@ -1,6 +1,11 @@
+import { gql } from '@apollo/client';
 import { useMutation, useQuery } from '@apollo/client/react';
-import { Monitor, Smartphone, X } from 'lucide-react';
+import { ExternalLink, Monitor, Smartphone, X } from 'lucide-react';
 import { useState } from 'react';
+import {
+    auditStorefrontSemanticPalette,
+    resolveStorefrontSemanticPalette,
+} from '../../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import { storefrontVisualPresets } from '../../../../storefront-content-plugin/src/visual-presets';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
@@ -17,6 +22,20 @@ import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { storefrontVisualPreviewDocument } from './storefront-visual-preview';
 
+const STOREFRONT_PREVIEW_URL_QUERY = gql`
+    query NextAdminStorefrontPreviewUrl {
+        activeChannel {
+            id
+        }
+        storeProfiles {
+            storefrontUrl
+            channel {
+                id
+            }
+        }
+    }
+`;
+
 export function StorefrontVisualPresetPanel() {
     const query = useQuery<StorefrontVisualPresetResult>(STOREFRONT_VISUAL_PRESET_QUERY, {
         fetchPolicy: 'no-cache',
@@ -26,15 +45,25 @@ export function StorefrontVisualPresetPanel() {
         UPDATE_STOREFRONT_VISUAL_PRESET_MUTATION,
         { fetchPolicy: 'no-cache' },
     );
+    const previewUrlQuery = useQuery<{
+        activeChannel: { id: string };
+        storeProfiles: Array<{ storefrontUrl?: string | null; channel: { id: string } }>;
+    }>(STOREFRONT_PREVIEW_URL_QUERY, { fetchPolicy: 'no-cache' });
     const { hasAnyPermission } = useAdminPermissions();
     const [preview, setPreview] = useState<'mobile' | 'desktop' | null>(null);
     const [draft, setDraft] = useState<StorefrontSkinConfig | null>(null);
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
     const [feedbackChannel, setFeedbackChannel] = useState<string | null>(null);
-    const channel = query.data?.activeChannel;
+    const queryData = query.data;
+    const channel = queryData?.activeChannel;
     const storeName = channel ? getChannelDisplayName(channel.code) : '当前店铺';
-    const source = query.data?.storefrontVisualPreset;
+    const storefrontUrl = previewUrlQuery.data?.storeProfiles?.find(
+        profile => profile.channel.id === channel?.id,
+    )?.storefrontUrl;
+    const source = queryData?.storefrontVisualPreset;
+    const previewBranding = queryData?.storefrontPreviewBranding;
+    const branding = previewBranding?.channelId === channel?.id ? previewBranding : undefined;
     const consistent = Boolean(
         source &&
         channel &&
@@ -46,6 +75,16 @@ export function StorefrontVisualPresetPanel() {
     const busy = query.loading || mutation.loading;
     const disabled =
         !consistent || busy || Boolean(query.error) || !hasAnyPermission(['UpdateStorefrontContent']);
+    const paletteAudit = selected
+        ? auditStorefrontSemanticPalette(
+              resolveStorefrontSemanticPalette(selected.presetId, {
+                  backgroundColor: branding?.backgroundColor,
+                  primaryColor: branding?.primaryColor,
+                  accentColor: branding?.accentColor,
+                  highlightColor: branding?.highlightColor,
+              }),
+          )
+        : null;
     useUnsavedChangesWarning(dirty || mutation.loading, '皮肤选择尚未保存，离开后将放弃本次选择。');
     const reload = async () => {
         const activeToken = getActiveChannelToken();
@@ -116,7 +155,7 @@ export function StorefrontVisualPresetPanel() {
                 </button>
             </div>
             <p className="mt-2 text-xs text-slate-500">
-                选择仅保存到当前店铺。现代东方使用皮肤配色，现有皮肤保留品牌配色；单独设置的区块颜色优先。
+                选择仅保存到当前店铺。经典皮肤保留品牌身份色，界面会自动使用可读的派生色。
             </p>
             {query.loading && (
                 <p role="status" className="mt-3 text-sm">
@@ -183,10 +222,33 @@ export function StorefrontVisualPresetPanel() {
                 >
                     恢复默认皮肤（保存后生效）
                 </button>
+                {storefrontUrl && (
+                    <a
+                        href={`${storefrontUrl.replace(/\/$/, '')}/__storefront-preview`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-blue-700"
+                    >
+                        打开真实页面预览 <ExternalLink className="h-4 w-4" />
+                    </a>
+                )}
             </div>
             <p className="mt-3 text-xs text-slate-500">
                 电脑端使用统一布局，首页按已保存的楼层顺序展示。切换皮肤会保留图片、文案、区块颜色和开关。
             </p>
+            {paletteAudit && (
+                <p
+                    className={`mt-2 text-xs font-semibold ${paletteAudit.passes ? 'text-emerald-700' : 'text-amber-700'}`}
+                    role="status"
+                >
+                    {paletteAudit.passes
+                        ? 'WCAG AA 通过：正文、弱文字、按钮、边框和焦点色均达标。'
+                        : `WCAG AA 风险：${paletteAudit.checks
+                              .filter(check => !check.passes)
+                              .map(check => check.name)
+                              .join('、')}`}
+                </p>
+            )}
             {preview && selected && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3">
                     <AccessibleDialogSurface
@@ -237,7 +299,12 @@ export function StorefrontVisualPresetPanel() {
                                 sandbox=""
                                 className="mx-auto block h-[70dvh] max-w-none shrink-0 border-0 bg-white"
                                 style={{ width: preview === 'mobile' ? 390 : 1200 }}
-                                srcDoc={storefrontVisualPreviewDocument(selected.presetId, storeName)}
+                                srcDoc={storefrontVisualPreviewDocument(selected.presetId, storeName, {
+                                    backgroundColor: branding?.backgroundColor,
+                                    primaryColor: branding?.primaryColor,
+                                    accentColor: branding?.accentColor,
+                                    highlightColor: branding?.highlightColor,
+                                })}
                             />
                         </div>
                     </AccessibleDialogSurface>

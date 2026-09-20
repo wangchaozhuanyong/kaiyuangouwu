@@ -1,3 +1,8 @@
+import {
+    resolveStorefrontSemanticPalette,
+    semanticPaletteCssVariables,
+    type StorefrontBrandPaletteInput,
+} from '../../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import type { StorefrontVisualPresetId } from '../../../../storefront-content-plugin/src/visual-presets';
 import baseStyles from '../../../../storefront/src/styles.css?inline';
 import desktopStyles from '../../../../storefront/src/styles/desktop-layout.css?inline';
@@ -14,12 +19,17 @@ function escapeHtml(value: string): string {
 export function storefrontVisualPreviewDocument(
     presetId: StorefrontVisualPresetId,
     storeName: string,
+    brand: StorefrontBrandPaletteInput = {},
 ): string {
+    const variables = semanticPaletteCssVariables(resolveStorefrontSemanticPalette(presetId, brand));
+    const semanticStyles = Object.entries(variables)
+        .map(([property, value]) => `${property}:${value}`)
+        .join(';');
     return `<!doctype html><html lang="zh-CN" data-storefront-preset="${presetId}"><head>
         <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
         <style>${baseStyles}\n${desktopStyles}\n${presetStyles}</style>
-        <style>
+        <style>:root{${semanticStyles}}
             body{padding:24px;min-height:100vh;background:var(--bg, #fff);color:var(--text, #0f172a)}.preview-shell{max-width:1060px;margin:auto;display:grid;gap:24px}
             .preview-brand{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:16px}
             .preview-brand b{font-size:20px}.preview-brand small{color:var(--muted)}
@@ -31,7 +41,7 @@ export function storefrontVisualPreviewDocument(
             .preview-card{padding:20px;border:1px solid var(--line);background:var(--paper);border-radius:var(--radius-md)}
             .preview-card h2{font-size:18px;margin:0 0 16px}.preview-card p{font-size:14px;color:var(--muted)}
             .preview-card input{width:100%;padding:12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--paper);margin-bottom:12px}
-            .preview-card .primary-btn{background:var(--accent);color:white;border:0;padding:12px 18px;border-radius:var(--radius-sm)}
+            .preview-card .primary-btn{background:var(--accent);color:var(--accent-foreground);border:0;padding:12px 18px;border-radius:var(--radius-sm)}
             .preview-line{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line);font-size:14px}
             .preview-note{font-size:12px;line-height:1.6;color:var(--muted)}
             @media(max-width:600px){body{padding:16px}.preview-grid{grid-template-columns:1fr}.preview-hero{padding:28px 22px}}

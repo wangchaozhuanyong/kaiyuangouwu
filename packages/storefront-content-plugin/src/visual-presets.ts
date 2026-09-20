@@ -4,20 +4,20 @@ export const STOREFRONT_VISUAL_PRESET_CODE = 'storefront-visual-preset';
 export const storefrontVisualPresets = [
     {
         id: 'classic',
-        name: '现有皮肤',
-        description: '保留现有配色、字体与组件效果。',
+        name: '经典',
+        description: '使用店铺品牌色，并自动派生满足可读性要求的界面色。',
         colors: ['#f1f5f9', '#ffffff', '#d33c30', '#0f172a'],
     },
     {
         id: 'modern-oriental',
-        name: '现代东方',
-        description: '米白底色、墨蓝文字、朱砂按钮，搭配宋体标题与轻阴影。',
+        name: '新中式',
+        description: '米白底色、墨蓝文字与朱砂强调，共用统一电脑端布局。',
         colors: ['#f6f2ea', '#fffdf8', '#a63d32', '#203346'],
     },
     {
         id: 'neo-minimalist',
         name: '新锐科技极简',
-        description: '深空黑曜石底色、浮动毛玻璃顶栏、AI 推理旗舰 Bento 与 5 列全功能模型矩阵。',
+        description: '深空黑曜石底色、高对比文字与紫色强调，共用统一电脑端布局。',
         colors: ['#070b14', '#0e121c', '#8b5cf6', '#f1f5f9'],
     },
 ] as const;

@@ -343,6 +343,118 @@ html[data-storefront-preset='neo-minimalist']
     color: var(--text);
 }
 
+/* Checkout utilities are shared by the mobile and desktop renderers. Keep their
+   surfaces tied to the active semantic palette instead of their legacy white
+   defaults so switching skins never produces light cards with dark-skin text. */
+html[data-storefront-preset] :is(.purchase-page, .checkout-page) :is(.checkout-section, .checkout-assurance) {
+    background: var(--surface);
+    color: var(--text);
+}
+
+html[data-storefront-preset] :is(.purchase-page, .checkout-page) .checkout-options > button {
+    background: transparent;
+    color: var(--text);
+}
+
+html[data-storefront-preset] :is(.purchase-page, .checkout-page) .saved-address {
+    background: var(--soft);
+    color: var(--text);
+}
+
+html[data-storefront-preset] :is(.purchase-page, .checkout-page) .checkout-items article em {
+    background: color-mix(in srgb, var(--success) 12%, var(--surface));
+    color: var(--success);
+}
+
+html[data-storefront-preset] :is(.purchase-page, .checkout-page) .checkout-assurance {
+    color: var(--success);
+}
+
+html[data-storefront-preset] .orders-page .order-tabs {
+    border-color: var(--line);
+    background: color-mix(in srgb, var(--surface) 96%, transparent);
+}
+
+html[data-storefront-preset] .orders-page .order-search {
+    border-color: var(--line);
+    background: var(--surface);
+    color: var(--text);
+}
+
+html[data-storefront-preset] .orders-page .order-tabs button.is-active {
+    color: var(--accent-ink);
+}
+
+html[data-storefront-preset] .logistics-page :is(.logistics-stats-grid, .logistics-service-strip) {
+    border-color: var(--line);
+    background: var(--surface);
+}
+
+html[data-storefront-preset] .logistics-page .logistics-stat-card:is(:hover, .is-active) {
+    border-color: var(--line);
+    background: var(--soft);
+}
+
+html[data-storefront-preset] .logistics-page :is(.stat-card-label, .service-strip-item) {
+    color: var(--muted);
+}
+
+html[data-storefront-preset] .logistics-page .logistics-stat-card.is-active .stat-card-label {
+    color: var(--text);
+}
+
+/* The 2FA tool intentionally keeps its mobile workflow, but all utility-class
+   surfaces still consume the same semantic palette as the surrounding shell. */
+html[data-storefront-preset] .desktop-two-factor-content {
+    color: var(--text);
+}
+
+html[data-storefront-preset] .desktop-two-factor-content > :is(section, aside) {
+    border-color: var(--line);
+    background: var(--surface);
+    color: var(--text);
+}
+
+html[data-storefront-preset] .desktop-two-factor-content > section:first-child {
+    background: linear-gradient(135deg, var(--accent-soft), var(--surface));
+}
+
+html[data-storefront-preset]
+    .desktop-two-factor-content
+    :is(.bg-white, [data-vault-state], input:not([type='file']), textarea, select) {
+    border-color: var(--line);
+    background: var(--surface);
+    color: var(--text);
+}
+
+html[data-storefront-preset] .desktop-two-factor-content :is(.bg-slate-50, .bg-slate-100) {
+    background: var(--soft);
+}
+
+html[data-storefront-preset]
+    .desktop-two-factor-content
+    :is(.text-slate-950, .text-slate-900, .text-slate-800, .text-slate-700) {
+    color: var(--text);
+}
+
+html[data-storefront-preset]
+    .desktop-two-factor-content
+    :is(.text-slate-600, .text-slate-500, .text-slate-400) {
+    color: var(--muted);
+}
+
+html[data-storefront-preset]
+    .desktop-two-factor-content
+    :is(.text-emerald-700, .text-emerald-600, .text-emerald-500) {
+    color: var(--success);
+}
+
+html[data-storefront-preset] .desktop-two-factor-content [data-vault-state] button {
+    border-color: var(--line);
+    background: var(--surface);
+    color: var(--text);
+}
+
 /* ==========================================================================
    Classic Preset (经典明亮) - Unified Bento Template Tokens
    ========================================================================== */
