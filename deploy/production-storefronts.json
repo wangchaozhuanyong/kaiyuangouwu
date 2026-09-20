@@ -3,7 +3,7 @@
     "storefronts": [
         {
             "origin": "https://moyaoai.com",
-            "expectedChannelCode": "__default_channel__"
+            "expectedChannelCode": "moyao-ai"
         },
         {
             "origin": "https://damatong.net",

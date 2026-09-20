@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -18,6 +18,14 @@ const threeStores = {
 
 void test('production storefront config accepts any number of unique stores', () => {
     assert.deepEqual(validateProductionStorefronts(threeStores), threeStores);
+});
+
+void test('production routes MOYAO through its dedicated Channel', async () => {
+    const config = JSON.parse(
+        await readFile(new URL('../../../deploy/production-storefronts.json', import.meta.url), 'utf8'),
+    );
+    const moyao = config.storefronts.find(store => store.origin === 'https://moyaoai.com');
+    assert.equal(moyao?.expectedChannelCode, 'moyao-ai');
 });
 
 void test('production storefront config rejects duplicate routes and Channels', () => {
