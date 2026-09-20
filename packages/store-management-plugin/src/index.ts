@@ -25,6 +25,7 @@ export { ReferralWithdrawal } from './entities/referral-withdrawal.entity.js';
 export { StoreAdministratorAccess } from './entities/store-administrator-access.entity.js';
 export { StoreProfile } from './entities/store-profile.entity.js';
 export { StoreUsdtManualRefund } from './entities/store-usdt-manual-refund.entity.js';
+export { StoreUsdtReconciliationAction } from './entities/store-usdt-reconciliation-action.entity.js';
 export { StoreUsdtWalletAudit } from './entities/store-usdt-wallet-audit.entity.js';
 export { StoreUsdtWallet } from './entities/store-usdt-wallet.entity.js';
 export { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity.js';

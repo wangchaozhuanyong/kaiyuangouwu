@@ -120,6 +120,7 @@ import { AddOrderPaymentCurrency1789405200000 } from './1789405200000-add-order-
 import { AddDataRetentionRecords1789488000000 } from './1789488000000-add-data-retention-records';
 import { AddDataSubjectRequests1789491600000 } from './1789491600000-add-data-subject-requests';
 import { AddDataConsentRecords1789495200000 } from './1789495200000-add-data-consent-records';
+import { AddUsdtReconciliationActions1789498800000 } from './1789498800000-add-usdt-reconciliation-actions';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -244,4 +245,5 @@ export const devServerMigrations = [
     AddDataRetentionRecords1789488000000,
     AddDataSubjectRequests1789491600000,
     AddDataConsentRecords1789495200000,
+    AddUsdtReconciliationActions1789498800000,
 ];

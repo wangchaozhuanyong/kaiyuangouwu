@@ -26,6 +26,7 @@ const USDT_PAYMENT_INTENT_STATUS_LABELS: Readonly<Record<string, string>> = {
     SETTLED: '已到账',
     MANUAL_REVIEW: '待人工复核',
     EXPIRED: '已过期',
+    RESOLVED: '已人工闭环',
 };
 
 export function isPlausibleTronMainnetAddress(value: string): boolean {

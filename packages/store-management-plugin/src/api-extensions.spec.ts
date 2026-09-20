@@ -280,6 +280,7 @@ describe('store management API extensions', () => {
                 'storePaymentStats',
                 'storePaymentDetails',
                 'storeUsdtManualRefunds',
+                'storeUsdtReconciliationActions',
             ]),
         );
         expect(adminMutation.fields?.map(field => field.name.value)).toEqual(
@@ -287,6 +288,7 @@ describe('store management API extensions', () => {
                 'submitMyStoreUsdtWallet',
                 'reviewStoreUsdtWallet',
                 'recordStoreUsdtManualRefund',
+                'resolveStoreUsdtPaymentIntent',
             ]),
         );
         expect(announcement.fields?.map(field => field.name.value)).toEqual(

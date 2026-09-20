@@ -15,12 +15,18 @@ import {
 } from '@vendure/core';
 import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { createHash, randomInt } from 'node:crypto';
-import { In, IsNull, LessThan, Not, Repository } from 'typeorm';
+import { In, IsNull, LessThan, Not, QueryFailedError, Repository } from 'typeorm';
 
+import { StoreUsdtManualRefund } from '../entities/store-usdt-manual-refund.entity';
+import {
+    StoreUsdtReconciliationAction,
+    StoreUsdtReconciliationActionType,
+} from '../entities/store-usdt-reconciliation-action.entity';
 import { StorefrontUsdtCheckoutQuote } from '../entities/storefront-usdt-checkout-quote.entity';
 import { StorefrontUsdtPaymentIntent } from '../entities/storefront-usdt-payment-intent.entity';
 
 import { maskTronAddress, StoreUsdtWalletService } from './store-usdt-wallet.service';
+import { loadReviewedRefundSenders } from './usdt-manual-refund.service';
 import { createUsdtPaymentProof } from './usdt-payment-proof';
 import {
     USDT_PAYMENT_INTENT_STATUS,
@@ -73,6 +79,10 @@ export interface StoreUsdtPaymentIntentView {
     blockNumber: number | null;
     blockTimestamp: Date | null;
     lastCheckedAt: Date | null;
+    manualReviewCode: string | null;
+    resolvedAt: Date | null;
+    resolvedByUserId: string | null;
+    resolutionActionId: string | null;
 }
 
 export interface StoreUsdtChannelPaymentStats {
@@ -83,9 +93,38 @@ export interface StoreUsdtChannelPaymentStats {
     settledCount: number;
     manualReviewCount: number;
     expiredCount: number;
+    resolvedCount: number;
     expectedUsdtTotal: number;
     receivedUsdtTotal: number;
     fiatTotals: Array<{ currencyCode: string; amount: number }>;
+}
+
+export interface ResolveStoreUsdtPaymentIntentInput {
+    id: ID;
+    action: StoreUsdtReconciliationActionType;
+    reason: string;
+    transactionId?: string | null;
+    usdtAmount?: string | null;
+    recipientAddress?: string | null;
+}
+
+export interface StoreUsdtReconciliationActionView {
+    id: string;
+    channelId: string;
+    intentId: string;
+    orderId: string;
+    action: StoreUsdtReconciliationActionType;
+    outcome: string;
+    operatorUserId: string;
+    reason: string;
+    network: string | null;
+    transactionId: string | null;
+    usdtAmount: string | null;
+    fromAddress: string | null;
+    toAddress: string | null;
+    blockNumber: number | null;
+    blockTimestamp: Date | null;
+    createdAt: Date;
 }
 
 @Injectable()
@@ -159,6 +198,7 @@ export class UsdtPaymentService {
                 'manualReviewCount',
             )
             .addSelect('SUM(CASE WHEN intent.status = :expiredStatus THEN 1 ELSE 0 END)', 'expiredCount')
+            .addSelect('SUM(CASE WHEN intent.status = :resolvedStatus THEN 1 ELSE 0 END)', 'resolvedCount')
             .addSelect('COALESCE(SUM(intent.expectedUsdtAmount), 0)', 'expectedUsdtTotal')
             .addSelect(
                 'COALESCE(SUM(CASE WHEN intent.status = :settledStatus THEN intent.receivedUsdtAmount ELSE 0 END), 0)',
@@ -173,6 +213,7 @@ export class UsdtPaymentService {
                 settledStatus: USDT_PAYMENT_INTENT_STATUS.settled,
                 manualReviewStatus: USDT_PAYMENT_INTENT_STATUS.manualReview,
                 expiredStatus: USDT_PAYMENT_INTENT_STATUS.expired,
+                resolvedStatus: USDT_PAYMENT_INTENT_STATUS.resolved,
             })
             .groupBy('intent.channelId')
             .addGroupBy('channel.code')
@@ -187,6 +228,7 @@ export class UsdtPaymentService {
             settledCount: string | number;
             manualReviewCount: string | number;
             expiredCount: string | number;
+            resolvedCount: string | number;
             expectedUsdtTotal: string | number;
             receivedUsdtTotal: string | number;
             fiatAmountTotal: string | number;
@@ -204,6 +246,7 @@ export class UsdtPaymentService {
             summary.settledCount += Number(row.settledCount);
             summary.manualReviewCount += Number(row.manualReviewCount);
             summary.expiredCount += Number(row.expiredCount);
+            summary.resolvedCount += Number(row.resolvedCount);
             summary.expectedUsdtTotal += Number(row.expectedUsdtTotal);
             summary.receivedUsdtTotal += Number(row.receivedUsdtTotal);
             const fiatAmount = Number(row.fiatAmountTotal);
@@ -228,6 +271,258 @@ export class UsdtPaymentService {
     async statsForChannel(ctx: RequestContext): Promise<StoreUsdtChannelPaymentStats> {
         const [summary] = await this.stats(ctx, String(ctx.channelId));
         return summary ?? emptyChannelStats(String(ctx.channelId), ctx.channel.code);
+    }
+
+    async listReconciliationActions(
+        ctx: RequestContext,
+        channelId?: ID | null,
+    ): Promise<StoreUsdtReconciliationActionView[]> {
+        const actions = await this.connection.getRepository(ctx, StoreUsdtReconciliationAction).find({
+            ...(channelId == null ? {} : { where: { channelId } }),
+            order: { createdAt: 'DESC', id: 'DESC' },
+            take: 200,
+        });
+        return actions.map(action => this.toReconciliationActionView(action));
+    }
+
+    async resolveManualReview(
+        ctx: RequestContext,
+        input: ResolveStoreUsdtPaymentIntentInput,
+    ): Promise<StoreUsdtPaymentIntentView> {
+        const operatorUserId = ctx.activeUserId;
+        if (!operatorUserId) throw new UserInputError('请先登录后处理对账异常');
+        const reason = input.reason.trim();
+        if (reason.length < 2 || reason.length > 500) {
+            throw new UserInputError('处理说明必须为 2 到 500 个字符');
+        }
+        const intent = await this.requireManualReviewIntent(ctx, input.id);
+        if (input.action === 'RETRY_SETTLEMENT') {
+            return this.retryManualReviewSettlement(ctx, intent, operatorUserId, reason);
+        }
+        if (input.action === 'CONFIRM_EXTERNAL_REFUND') {
+            return this.confirmExternalRefund(ctx, intent, operatorUserId, reason, input);
+        }
+        throw new UserInputError('不支持的对账处理方式');
+    }
+
+    private async retryManualReviewSettlement(
+        ctx: RequestContext,
+        intent: StorefrontUsdtPaymentIntent,
+        operatorUserId: ID,
+        reason: string,
+    ): Promise<StoreUsdtPaymentIntentView> {
+        if (!['vendure-payment', 'order-validation-exception'].includes(intent.manualReviewCode ?? '')) {
+            throw new UserInputError('该异常需先核对付款归属或钱包证据，不能直接重试入账');
+        }
+        const transfer = await this.requireStoredReceiptTransfer(intent);
+        const actionRepository = this.connection.getRepository(ctx, StoreUsdtReconciliationAction);
+        const action = await actionRepository.save(
+            new StoreUsdtReconciliationAction({
+                channelId: intent.channelId,
+                intentId: intent.id,
+                orderId: intent.orderId,
+                action: 'RETRY_SETTLEMENT',
+                outcome: 'STARTED',
+                operatorUserId,
+                reason,
+                network: null,
+                transactionId: null,
+                usdtAmountBaseUnits: null,
+                fromAddress: null,
+                toAddress: null,
+                blockNumber: null,
+                blockTimestamp: null,
+            }),
+        );
+        try {
+            const status = await this.settleMatchedIntent(
+                intent,
+                transfer,
+                transfer.blockNumber,
+                new Date(),
+                true,
+            );
+            action.outcome = status === USDT_PAYMENT_INTENT_STATUS.settled ? 'SETTLED' : 'MANUAL_REVIEW';
+            await actionRepository.save(action, { reload: false });
+            if (status === USDT_PAYMENT_INTENT_STATUS.settled) {
+                await this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent).update(
+                    { id: intent.id, status: USDT_PAYMENT_INTENT_STATUS.settled },
+                    {
+                        resolvedAt: new Date(),
+                        resolvedByUserId: operatorUserId,
+                        resolutionActionId: action.id,
+                    },
+                );
+                await this.publishManualReviewResolved(ctx, intent, action);
+            }
+            return this.loadIntentView(ctx, intent.id);
+        } catch (error) {
+            action.outcome = 'FAILED';
+            await actionRepository.save(action, { reload: false });
+            throw error;
+        }
+    }
+
+    private async confirmExternalRefund(
+        ctx: RequestContext,
+        intent: StorefrontUsdtPaymentIntent,
+        operatorUserId: ID,
+        reason: string,
+        input: ResolveStoreUsdtPaymentIntentInput,
+    ): Promise<StoreUsdtPaymentIntentView> {
+        const transactionId = (input.transactionId ?? '').trim().toLowerCase();
+        if (!/^[a-f0-9]{64}$/u.test(transactionId)) {
+            throw new UserInputError('TRON 退款交易哈希格式不正确');
+        }
+        if (transactionId === intent.transactionId?.toLowerCase()) {
+            throw new UserInputError('退款交易不能与原收款交易相同');
+        }
+        const recipientAddress = (input.recipientAddress ?? '').trim();
+        if (!isValidTronMainnetAddress(recipientAddress)) {
+            throw new UserInputError('退款收款地址不是有效的 TRON 主网地址');
+        }
+        const usdtAmount = normalizeUsdtAmount(input.usdtAmount ?? '');
+        if (usdtAmount !== normalizeUsdtAmount(intent.receivedUsdtAmount ?? intent.expectedUsdtAmount)) {
+            throw new UserInputError('外部退款必须覆盖该异常收款的全部 USDT 金额');
+        }
+        await this.assertResolutionTransactionUnused(ctx, transactionId);
+        const transfer = await this.tronClient.solidifiedUsdtTransfer(transactionId);
+        if (!transfer) throw new UserInputError('该交易不是已固化成功的官方 USDT-TRC20 转账');
+        if (transfer.amount !== usdtAmount || transfer.to !== recipientAddress) {
+            throw new UserInputError('链上退款金额或收款地址与登记内容不一致');
+        }
+        const allowedSenders = loadReviewedRefundSenders(process.env);
+        if (!allowedSenders.length || !allowedSenders.includes(transfer.from)) {
+            throw new UserInputError('链上退款地址不在平台已审核钱包白名单中');
+        }
+
+        const locked = await this.findLockedIntent(ctx, intent.id);
+        if (!locked || locked.status !== USDT_PAYMENT_INTENT_STATUS.manualReview) {
+            throw new UserInputError('该付款异常已被其他操作处理');
+        }
+        try {
+            const action = await this.connection.getRepository(ctx, StoreUsdtReconciliationAction).save(
+                new StoreUsdtReconciliationAction({
+                    channelId: locked.channelId,
+                    intentId: locked.id,
+                    orderId: locked.orderId,
+                    action: 'CONFIRM_EXTERNAL_REFUND',
+                    outcome: 'RESOLVED',
+                    operatorUserId,
+                    reason,
+                    network: USDT_TRC20_NETWORK,
+                    transactionId,
+                    usdtAmountBaseUnits: usdtAmountToBaseUnits(usdtAmount).toString(),
+                    fromAddress: transfer.from,
+                    toAddress: transfer.to,
+                    blockNumber: transfer.blockNumber,
+                    blockTimestamp: transfer.blockTimestamp,
+                }),
+            );
+            locked.status = USDT_PAYMENT_INTENT_STATUS.resolved;
+            locked.activeMatchKey = null;
+            locked.failureReason = '已核验全额链上退款，异常已闭环';
+            locked.resolvedAt = new Date();
+            locked.resolvedByUserId = operatorUserId;
+            locked.resolutionActionId = action.id;
+            await this.connection
+                .getRepository(ctx, StorefrontUsdtPaymentIntent)
+                .save(locked, { reload: false });
+            await this.publishManualReviewResolved(ctx, locked, action);
+        } catch (error) {
+            if (isUniqueConstraintViolation(error)) {
+                throw new UserInputError('该链上交易已用于其他对账或退款记录');
+            }
+            throw error;
+        }
+        return this.loadIntentView(ctx, intent.id);
+    }
+
+    private async requireManualReviewIntent(
+        ctx: RequestContext,
+        intentId: ID,
+    ): Promise<StorefrontUsdtPaymentIntent> {
+        const intent = await this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent).findOne({
+            where: { id: intentId },
+            relations: { channel: true, order: true, quote: true },
+        });
+        if (!intent) throw new UserInputError('找不到该 USDT 付款异常');
+        if (intent.status !== USDT_PAYMENT_INTENT_STATUS.manualReview) {
+            throw new UserInputError('只能处理待人工复核的 USDT 付款');
+        }
+        if (!intent.transactionId || !intent.receivedUsdtAmount || !intent.blockNumber) {
+            throw new UserInputError('该异常缺少完整的链上到账证据');
+        }
+        return intent;
+    }
+
+    private async requireStoredReceiptTransfer(intent: StorefrontUsdtPaymentIntent) {
+        const transactionId = intent.transactionId;
+        if (!transactionId) throw new UserInputError('待复核付款缺少链上交易哈希');
+        const transfer = await this.tronClient.solidifiedUsdtTransfer(transactionId);
+        if (
+            !transfer ||
+            transfer.to !== intent.receivingAddress ||
+            transfer.amount !== normalizeUsdtAmount(intent.receivedUsdtAmount ?? '') ||
+            transfer.blockNumber !== intent.blockNumber ||
+            (intent.senderAddress != null && transfer.from !== intent.senderAddress)
+        ) {
+            throw new UserInputError('链上付款证据与已保存的到账快照不一致');
+        }
+        return transfer;
+    }
+
+    private async assertResolutionTransactionUnused(
+        ctx: RequestContext,
+        transactionId: string,
+    ): Promise<void> {
+        const [intent, manualRefund, action] = await Promise.all([
+            this.connection
+                .getRepository(ctx, StorefrontUsdtPaymentIntent)
+                .findOne({ where: { transactionId } }),
+            this.connection
+                .getRepository(ctx, StoreUsdtManualRefund)
+                .findOne({ where: { network: USDT_TRC20_NETWORK, transactionId } }),
+            this.connection
+                .getRepository(ctx, StoreUsdtReconciliationAction)
+                .findOne({ where: { network: USDT_TRC20_NETWORK, transactionId } }),
+        ]);
+        if (intent || manualRefund || action) {
+            throw new UserInputError('该链上交易已用于收款、退款或对账记录');
+        }
+    }
+
+    private async loadIntentView(ctx: RequestContext, intentId: ID): Promise<StoreUsdtPaymentIntentView> {
+        const intent = await this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent).findOne({
+            where: { id: intentId },
+            relations: { channel: true, order: true, quote: true },
+        });
+        if (!intent) throw new UserInputError('对账处理后无法重新读取付款记录');
+        return this.toIntentView(intent);
+    }
+
+    private toReconciliationActionView(
+        action: StoreUsdtReconciliationAction,
+    ): StoreUsdtReconciliationActionView {
+        return {
+            id: String(action.id),
+            channelId: String(action.channelId),
+            intentId: String(action.intentId),
+            orderId: String(action.orderId),
+            action: action.action,
+            outcome: action.outcome,
+            operatorUserId: String(action.operatorUserId),
+            reason: action.reason,
+            network: action.network,
+            transactionId: action.transactionId,
+            usdtAmount:
+                action.usdtAmountBaseUnits == null ? null : formatUsdtBaseUnits(action.usdtAmountBaseUnits),
+            fromAddress: action.fromAddress,
+            toAddress: action.toAddress,
+            blockNumber: action.blockNumber,
+            blockTimestamp: action.blockTimestamp,
+            createdAt: action.createdAt,
+        };
     }
 
     private toIntentView(intent: StorefrontUsdtPaymentIntent): StoreUsdtPaymentIntentView {
@@ -258,6 +553,10 @@ export class UsdtPaymentService {
             blockNumber: intent.blockNumber,
             blockTimestamp: intent.blockTimestamp,
             lastCheckedAt: intent.lastCheckedAt,
+            manualReviewCode: intent.manualReviewCode,
+            resolvedAt: intent.resolvedAt,
+            resolvedByUserId: intent.resolvedByUserId == null ? null : String(intent.resolvedByUserId),
+            resolutionActionId: intent.resolutionActionId == null ? null : String(intent.resolutionActionId),
         };
     }
 
@@ -312,6 +611,10 @@ export class UsdtPaymentService {
                         lastCheckedAt: null,
                         settledAt: null,
                         failureReason: null,
+                        manualReviewCode: null,
+                        resolvedAt: null,
+                        resolvedByUserId: null,
+                        resolutionActionId: null,
                         expiresAt: quote.expiresAt,
                     }),
                 )
@@ -506,6 +809,7 @@ export class UsdtPaymentService {
         transfer: ConfirmedTrc20Transfer,
         blockNumber: number,
         now: Date,
+        allowManualReviewRetry = false,
     ): Promise<StorefrontUsdtPaymentIntent['status']> {
         const channelContext = await this.requestContextService.create({
             apiType: 'admin',
@@ -517,7 +821,10 @@ export class UsdtPaymentService {
             channelContext,
             async ctx => {
                 const locked = await this.findLockedIntent(ctx, intent.id);
-                if (!locked || !['PENDING', 'EXPIRED'].includes(locked.status) || !locked.activeMatchKey)
+                const allowedStatuses: Array<StorefrontUsdtPaymentIntent['status']> = allowManualReviewRetry
+                    ? ['PENDING', 'EXPIRED', 'MANUAL_REVIEW']
+                    : ['PENDING', 'EXPIRED'];
+                if (!locked || !allowedStatuses.includes(locked.status) || !locked.activeMatchKey)
                     return locked?.status ?? USDT_PAYMENT_INTENT_STATUS.manualReview;
                 const repository = this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent);
                 const claimed = await repository.findOne({
@@ -527,6 +834,7 @@ export class UsdtPaymentService {
                 if (locked.transactionId && locked.transactionId !== transfer.transactionId) {
                     locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
                     locked.failureReason = '同一付款请求收到多笔转账，请人工核对';
+                    locked.manualReviewCode = 'multiple-receipts';
                     await repository.save(locked, { reload: false });
                     await this.publishManualReview(
                         ctx,
@@ -552,13 +860,14 @@ export class UsdtPaymentService {
             return await this.orderService.withOrderMutationTransaction(channelContext, async ctx => {
                 const repository = this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent);
                 const locked = await this.findLockedIntent(ctx, intent.id);
-                if (
-                    !locked ||
-                    ![USDT_PAYMENT_INTENT_STATUS.pending, USDT_PAYMENT_INTENT_STATUS.expired].includes(
-                        locked.status as 'PENDING' | 'EXPIRED',
-                    ) ||
-                    !locked.activeMatchKey
-                ) {
+                const allowedStatuses: Array<StorefrontUsdtPaymentIntent['status']> = allowManualReviewRetry
+                    ? [
+                          USDT_PAYMENT_INTENT_STATUS.pending,
+                          USDT_PAYMENT_INTENT_STATUS.expired,
+                          USDT_PAYMENT_INTENT_STATUS.manualReview,
+                      ]
+                    : [USDT_PAYMENT_INTENT_STATUS.pending, USDT_PAYMENT_INTENT_STATUS.expired];
+                if (!locked || !allowedStatuses.includes(locked.status) || !locked.activeMatchKey) {
                     return locked?.status ?? USDT_PAYMENT_INTENT_STATUS.manualReview;
                 }
                 const claimed = await repository.findOne({
@@ -581,6 +890,7 @@ export class UsdtPaymentService {
                     locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
                     locked.failureReason =
                         '已确认链上到账，但原 USDT 报价在付款前已失效，请人工核对并避免重复入账';
+                    locked.manualReviewCode = 'invalidated-quote';
                     await repository.save(locked, { reload: false });
                     await this.publishManualReview(
                         ctx,
@@ -594,6 +904,7 @@ export class UsdtPaymentService {
                 if (history) {
                     locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
                     locked.failureReason = '付款金额曾用于其他报价，需核实付款归属后处理';
+                    locked.manualReviewCode = 'reused-amount';
                     await repository.save(locked, { reload: false });
                     await this.publishManualReview(
                         ctx,
@@ -613,6 +924,7 @@ export class UsdtPaymentService {
                 ) {
                     locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
                     locked.failureReason = '订单绑定的收款钱包快照未通过完整性校验';
+                    locked.manualReviewCode = 'wallet-snapshot';
                     await repository.save(locked, { reload: false });
                     await this.publishManualReview(
                         ctx,
@@ -654,6 +966,7 @@ export class UsdtPaymentService {
                             ? String(paymentResult.paymentErrorMessage)
                             : paymentResult.message
                     ).slice(0, 500);
+                    locked.manualReviewCode = 'vendure-payment';
                     await repository.save(locked, { reload: false });
                     await this.publishManualReview(
                         ctx,
@@ -680,6 +993,7 @@ export class UsdtPaymentService {
                 locked.status = USDT_PAYMENT_INTENT_STATUS.settled;
                 locked.settledAt = now;
                 locked.failureReason = null;
+                locked.manualReviewCode = null;
                 await repository.save(locked, { reload: false });
                 return locked.status;
             });
@@ -691,6 +1005,7 @@ export class UsdtPaymentService {
                 if (locked.status === USDT_PAYMENT_INTENT_STATUS.settled) return locked.status;
                 locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
                 locked.failureReason = '已确认到账，订单校验或入账处理异常，请人工核对；请勿重复付款';
+                locked.manualReviewCode = 'order-validation-exception';
                 await this.connection
                     .getRepository(ctx, StorefrontUsdtPaymentIntent)
                     .save(locked, { reload: false });
@@ -763,6 +1078,34 @@ export class UsdtPaymentService {
                     transactionId: transfer.transactionId,
                     reasonCode,
                     reason: safeError(reason),
+                    adminPath: '/settings/usdt-payments',
+                },
+            }),
+        );
+    }
+
+    private async publishManualReviewResolved(
+        ctx: RequestContext,
+        intent: StorefrontUsdtPaymentIntent,
+        action: StoreUsdtReconciliationAction,
+    ): Promise<void> {
+        await this.eventBus.publish(
+            new AdminNotificationRequestedEvent(ctx, {
+                mode: 'INCIDENT_RESOLVED',
+                eventType: 'commerce.payment.manual_review',
+                category: 'PAYMENT',
+                severity: 'P0',
+                sourceType: 'StorefrontUsdtPaymentIntent',
+                sourceId: String(intent.id),
+                fingerprint: `commerce.payment.manual_review:${intent.id}`,
+                title: 'USDT 付款人工复核已闭环',
+                payload: {
+                    channelId: String(intent.channelId),
+                    intentId: String(intent.id),
+                    orderId: String(intent.orderId),
+                    action: action.action,
+                    outcome: action.outcome,
+                    operatorUserId: String(action.operatorUserId),
                     adminPath: '/settings/usdt-payments',
                 },
             }),
@@ -856,6 +1199,11 @@ function formatUsdtUnits(value: bigint): string {
     return `${whole}.${fractional}`;
 }
 
+function formatUsdtBaseUnits(value: string): string {
+    const units = BigInt(value);
+    return formatUsdtUnits(units);
+}
+
 async function findIntentForQuote(
     repository: Repository<StorefrontUsdtPaymentIntent>,
     quoteId: StorefrontUsdtCheckoutQuote['id'],
@@ -874,6 +1222,17 @@ async function findIntentForQuote(
 
 function isLockUnsupported(error: unknown): boolean {
     return error instanceof Error && /Locking not supported|pessimistic lock/iu.test(error.message);
+}
+
+function isUniqueConstraintViolation(error: unknown): boolean {
+    if (!(error instanceof QueryFailedError)) return false;
+    const driverError = error.driverError as { code?: string; errno?: number };
+    return (
+        driverError.code === '23505' ||
+        driverError.code === 'ER_DUP_ENTRY' ||
+        driverError.code === 'SQLITE_CONSTRAINT' ||
+        driverError.errno === 1062
+    );
 }
 
 function safeError(error: unknown): string {
@@ -897,6 +1256,7 @@ function emptyChannelStats(channelId: string, channelCode: string): StoreUsdtCha
         settledCount: 0,
         manualReviewCount: 0,
         expiredCount: 0,
+        resolvedCount: 0,
         expectedUsdtTotal: 0,
         receivedUsdtTotal: 0,
         fiatTotals: [],

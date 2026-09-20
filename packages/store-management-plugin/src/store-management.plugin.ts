@@ -51,6 +51,7 @@ import { StoreAdministratorAccess } from './entities/store-administrator-access.
 import { StoreCouponCampaignConfig } from './entities/store-coupon-campaign-config.entity';
 import { StoreProfile } from './entities/store-profile.entity';
 import { StoreUsdtManualRefund } from './entities/store-usdt-manual-refund.entity';
+import { StoreUsdtReconciliationAction } from './entities/store-usdt-reconciliation-action.entity';
 import { StoreUsdtWalletAudit } from './entities/store-usdt-wallet-audit.entity';
 import { StoreUsdtWallet } from './entities/store-usdt-wallet.entity';
 import { StorefrontDailyVisitor } from './entities/storefront-daily-visitor.entity';
@@ -65,6 +66,7 @@ import { MerchantInitialPasswordInterceptor } from './merchant-initial-password.
 import { MerchantInitialPasswordResolver } from './merchant-initial-password.resolver';
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
 import { isStorefrontPaymentCurrencyCode, STOREFRONT_PAYMENT_CURRENCY_CODES } from './payment-currency';
+import { PaymentReconciliationService } from './payment-reconciliation.service';
 import { CartCouponCommandAdapter } from './promotion/cart-coupon-command.adapter';
 import {
     collectionPercentageDiscount,
@@ -113,6 +115,7 @@ import {
 } from './store-currency-settings.resolver';
 import { StoreCurrencySettingsService } from './store-currency-settings.service';
 import {
+    reconcileStorePaymentsDailyTask,
     reconcileStoreUsdtPaymentsTask,
     refreshStoreUsdtRatesTask,
     syncAutomaticStoreCurrencyPricesTask,
@@ -188,6 +191,7 @@ import {
         StorefrontUsdtCheckoutQuote,
         StorefrontUsdtPaymentIntent,
         StoreUsdtManualRefund,
+        StoreUsdtReconciliationAction,
         StoreUsdtWallet,
         StoreUsdtWalletAudit,
         DataSubjectRequest,
@@ -207,6 +211,7 @@ import {
         StoreCommerceSettingsService,
         StoreCurrencySettingsService,
         StorePaymentReportingService,
+        PaymentReconciliationService,
         UsdtOtcRateService,
         UsdtWalletConfigurationService,
         StoreUsdtWalletService,
@@ -339,6 +344,7 @@ import {
         config.schedulerOptions.tasks.push(syncAutomaticStoreCurrencyPricesTask);
         config.schedulerOptions.tasks.push(refreshStoreUsdtRatesTask);
         config.schedulerOptions.tasks.push(reconcileStoreUsdtPaymentsTask);
+        config.schedulerOptions.tasks.push(reconcileStorePaymentsDailyTask);
         config.schedulerOptions.tasks.push(purgeDueDataRetentionTask);
         config.schedulerOptions.tasks.push(processDueAccountClosuresTask);
         return config;

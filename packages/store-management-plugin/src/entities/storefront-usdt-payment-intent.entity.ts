@@ -97,6 +97,18 @@ export class StorefrontUsdtPaymentIntent extends VendureEntity {
     @Column({ type: 'varchar', length: 500, nullable: true })
     failureReason: string | null;
 
+    @Column({ type: 'varchar', length: 64, nullable: true })
+    manualReviewCode: string | null;
+
+    @Column({ type: Date, nullable: true })
+    resolvedAt: Date | null;
+
+    @EntityId({ nullable: true })
+    resolvedByUserId: ID | null;
+
+    @EntityId({ nullable: true })
+    resolutionActionId: ID | null;
+
     @Column({ type: Date })
     expiresAt: Date;
 }

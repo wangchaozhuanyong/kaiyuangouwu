@@ -310,6 +310,10 @@ const commonTypes = gql`
         blockNumber: Int
         blockTimestamp: DateTime
         lastCheckedAt: DateTime
+        manualReviewCode: String
+        resolvedAt: DateTime
+        resolvedByUserId: ID
+        resolutionActionId: ID
     }
 
     type StoreUsdtWallet {
@@ -341,6 +345,7 @@ const commonTypes = gql`
         settledCount: Int!
         manualReviewCount: Int!
         expiredCount: Int!
+        resolvedCount: Int!
         expectedUsdtTotal: Float!
         receivedUsdtTotal: Float!
         fiatTotals: [StoreUsdtFiatTotal!]!
@@ -421,6 +426,39 @@ const commonTypes = gql`
     type StoreUsdtManualRefundList {
         items: [StoreUsdtManualRefund!]!
         totalItems: Int!
+    }
+
+    enum StoreUsdtReconciliationActionType {
+        RETRY_SETTLEMENT
+        CONFIRM_EXTERNAL_REFUND
+    }
+
+    input ResolveStoreUsdtPaymentIntentInput {
+        id: ID!
+        action: StoreUsdtReconciliationActionType!
+        reason: String!
+        transactionId: String
+        usdtAmount: String
+        recipientAddress: String
+    }
+
+    type StoreUsdtReconciliationAction {
+        id: ID!
+        channelId: ID!
+        intentId: ID!
+        orderId: ID!
+        action: StoreUsdtReconciliationActionType!
+        outcome: String!
+        operatorUserId: ID!
+        reason: String!
+        network: String
+        transactionId: String
+        usdtAmount: String
+        fromAddress: String
+        toAddress: String
+        blockNumber: Int
+        blockTimestamp: DateTime
+        createdAt: DateTime!
     }
 
     input ReviewStoreUsdtWalletInput {
@@ -1259,6 +1297,7 @@ export const adminApiExtensions = gql`
             channelId: ID
             options: StorePaymentReportOptionsInput
         ): StoreUsdtManualRefundList!
+        storeUsdtReconciliationActions(channelId: ID): [StoreUsdtReconciliationAction!]!
         merchantInitialPasswordStatus: MerchantInitialPasswordStatus!
         storefrontPromotionPage: StorefrontPromotionPage!
         storeCouponCampaigns: [StoreCouponCampaign!]!
@@ -1301,6 +1340,7 @@ export const adminApiExtensions = gql`
         submitMyStoreUsdtWallet(receivingAddress: String!): StoreUsdtWallet!
         reviewStoreUsdtWallet(input: ReviewStoreUsdtWalletInput!): StoreUsdtWallet!
         recordStoreUsdtManualRefund(input: StoreUsdtManualRefundInput!): StoreUsdtManualRefund!
+        resolveStoreUsdtPaymentIntent(input: ResolveStoreUsdtPaymentIntentInput!): StoreUsdtPaymentIntent!
         completeInitialPasswordChange(password: String!): MerchantInitialPasswordStatus!
         saveStorefrontPromotionDraft(input: UpdateStorefrontPromotionDraftInput!): StorefrontPromotionPage!
         publishStorefrontPromotionPage: StorefrontPromotionPage!

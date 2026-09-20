@@ -10,10 +10,12 @@ import { SensitiveActionDialog } from '../../components/SensitiveActionDialog';
 import {
     PLATFORM_USDT_PAYMENT_MANAGEMENT_QUERY,
     RECORD_STORE_USDT_MANUAL_REFUND_MUTATION,
+    RESOLVE_STORE_USDT_PAYMENT_INTENT_MUTATION,
     REVIEW_STORE_USDT_WALLET_MUTATION,
     type ManualRefundRecord,
     type PaymentDetailRecord,
     type PlatformFinanceData,
+    type UsdtPaymentIntentRecord,
     type UsdtWalletRecord,
 } from '../../graphql/store-finance.graphql';
 import { getChannelDisplayName } from '../../utils/channel-display';
@@ -29,13 +31,21 @@ import {
 type ProtectedAction =
     | { kind: 'approve'; wallet: UsdtWalletRecord }
     | { kind: 'reject'; wallet: UsdtWalletRecord; reason: string }
-    | { kind: 'refund'; payment: PaymentDetailRecord; input: RefundDraft };
+    | { kind: 'refund'; payment: PaymentDetailRecord; input: RefundDraft }
+    | { kind: 'resolve-intent'; intent: UsdtPaymentIntentRecord; input: ReconciliationDraft };
 interface RefundDraft {
     amount: string;
     usdtAmount: string;
     recipientAddress: string;
     transactionId: string;
     reason: string;
+}
+interface ReconciliationDraft {
+    action: 'RETRY_SETTLEMENT' | 'CONFIRM_EXTERNAL_REFUND';
+    reason: string;
+    transactionId: string;
+    usdtAmount: string;
+    recipientAddress: string;
 }
 
 export function UsdtPaymentManagementModule() {
@@ -49,6 +59,7 @@ export function UsdtPaymentManagementModule() {
     const [refundPageSize, setRefundPageSize] = usePageSize(setRefundPage);
     const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
     const [refundPayment, setRefundPayment] = useState<PaymentDetailRecord | null>(null);
+    const [reviewIntent, setReviewIntent] = useState<UsdtPaymentIntentRecord | null>(null);
     const [action, setAction] = useState<ProtectedAction | null>(null);
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
@@ -74,14 +85,46 @@ export function UsdtPaymentManagementModule() {
     const [recordRefund, refundState] = useMutation<{
         recordStoreUsdtManualRefund: ManualRefundRecord;
     }>(RECORD_STORE_USDT_MANUAL_REFUND_MUTATION);
+    const [resolveIntent, resolveState] = useMutation<{
+        resolveStoreUsdtPaymentIntent: Pick<UsdtPaymentIntentRecord, 'id' | 'status'>;
+    }>(RESOLVE_STORE_USDT_PAYMENT_INTENT_MUTATION);
     const wallets = query.data?.storeUsdtWallets ?? [];
-    const loading = reviewState.loading || refundState.loading;
+    const loading = reviewState.loading || refundState.loading || resolveState.loading;
 
     const execute = async (password: string) => {
         if (!action) return;
         setError('');
         try {
-            if (action.kind === 'refund') {
+            if (action.kind === 'resolve-intent') {
+                const result = await resolveIntent({
+                    variables: {
+                        input: {
+                            id: action.intent.id,
+                            action: action.input.action,
+                            reason: required(action.input.reason, '处理说明'),
+                            ...(action.input.action === 'CONFIRM_EXTERNAL_REFUND'
+                                ? {
+                                      transactionId: required(action.input.transactionId, '退款交易哈希'),
+                                      usdtAmount: required(action.input.usdtAmount, '退款 USDT 金额'),
+                                      recipientAddress: required(
+                                          action.input.recipientAddress,
+                                          '退款收款地址',
+                                      ),
+                                  }
+                                : {}),
+                        },
+                    },
+                    context: sensitiveActionContext(password),
+                });
+                const resolved = result.data?.resolveStoreUsdtPaymentIntent;
+                if (!resolved) throw new Error('后端未返回对账处理结果');
+                setNotice(
+                    resolved.status === 'SETTLED'
+                        ? `订单 ${action.intent.orderCode} 已重试入账并结算`
+                        : `订单 ${action.intent.orderCode} 的链上退款已核验并关闭异常`,
+                );
+                setReviewIntent(null);
+            } else if (action.kind === 'refund') {
                 const input = refundInput(action.payment, action.input);
                 const result = await recordRefund({
                     variables: { input },
@@ -494,7 +537,7 @@ export function UsdtPaymentManagementModule() {
                                         </b>
                                         <span className="text-slate-500">
                                             到账 {item.settledCount} · 待复核 {item.manualReviewCount} · 过期{' '}
-                                            {item.expiredCount}
+                                            {item.expiredCount} · 已关闭 {item.resolvedCount}
                                         </span>
                                     </article>
                                 ))}
@@ -503,26 +546,85 @@ export function UsdtPaymentManagementModule() {
                                 {(query.data?.storeUsdtPaymentIntents ?? []).map(intent => (
                                     <article
                                         key={intent.id}
-                                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-3 text-xs"
+                                        className="rounded-lg border border-slate-200 p-3 text-xs"
                                     >
-                                        <span>
-                                            <strong>
-                                                {getChannelDisplayName(intent.channelCode)} · 订单{' '}
-                                                {intent.orderCode}
-                                            </strong>
-                                            <small
-                                                className="ml-2 text-slate-500"
-                                                title={`系统状态：${intent.status}`}
-                                            >
-                                                {storeUsdtPaymentIntentStatusLabel(intent.status)}
-                                            </small>
-                                            <span className="mt-1 block font-mono text-[10px] text-slate-500">
-                                                {intent.transactionId ?? '尚无交易号'}
+                                        <div className="flex flex-wrap items-start justify-between gap-2">
+                                            <span>
+                                                <strong>
+                                                    {getChannelDisplayName(intent.channelCode)} · 订单{' '}
+                                                    {intent.orderCode}
+                                                </strong>
+                                                <small
+                                                    className="ml-2 text-slate-500"
+                                                    title={`系统状态：${intent.status}`}
+                                                >
+                                                    {storeUsdtPaymentIntentStatusLabel(intent.status)}
+                                                </small>
+                                                <span className="mt-1 block font-mono text-[10px] text-slate-500">
+                                                    {intent.transactionId ?? '尚无交易号'}
+                                                </span>
                                             </span>
-                                        </span>
-                                        <b>{intent.expectedUsdtAmount.toFixed(6)} USDT</b>
+                                            <b>{intent.expectedUsdtAmount.toFixed(6)} USDT</b>
+                                        </div>
+                                        {intent.failureReason && (
+                                            <p className="mt-2 rounded bg-amber-50 px-2 py-1.5 text-amber-800">
+                                                {intent.failureReason}
+                                                {intent.manualReviewCode && (
+                                                    <span className="ml-1 font-mono text-[10px]">
+                                                        ({intent.manualReviewCode})
+                                                    </span>
+                                                )}
+                                            </p>
+                                        )}
+                                        {intent.status === 'MANUAL_REVIEW' && (
+                                            <div className="mt-2 flex justify-end">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setReviewIntent(intent)}
+                                                    className="font-bold text-blue-600 hover:underline"
+                                                >
+                                                    处理对账异常
+                                                </button>
+                                            </div>
+                                        )}
                                     </article>
                                 ))}
+                            </div>
+                            <div className="mt-5 border-t border-slate-200 pt-4">
+                                <Heading
+                                    title="对账处理证据"
+                                    detail="保留每次重试入账或外部链上退款的操作人、结果、原因和交易证据。"
+                                />
+                                <div className="mt-3 space-y-2">
+                                    {(query.data?.storeUsdtReconciliationActions ?? []).map(item => (
+                                        <article
+                                            key={item.id}
+                                            className="rounded-lg border border-slate-200 p-3 text-xs"
+                                        >
+                                            <div className="flex flex-wrap justify-between gap-2">
+                                                <strong>
+                                                    {item.action === 'RETRY_SETTLEMENT'
+                                                        ? '重试入账'
+                                                        : '外部链上退款'}{' '}
+                                                    · {item.outcome}
+                                                </strong>
+                                                <span>{formatDateTime(item.createdAt)}</span>
+                                            </div>
+                                            <p className="mt-1 text-slate-500">{item.reason}</p>
+                                            {item.transactionId && (
+                                                <p className="mt-1 break-all font-mono text-[10px] text-slate-500">
+                                                    {item.transactionId} · {item.usdtAmount} USDT · 区块{' '}
+                                                    {item.blockNumber}
+                                                </p>
+                                            )}
+                                        </article>
+                                    ))}
+                                    {!query.data?.storeUsdtReconciliationActions.length && (
+                                        <p className="py-5 text-center text-xs text-slate-500">
+                                            暂无对账处理记录
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         </section>
                     </>
@@ -535,9 +637,22 @@ export function UsdtPaymentManagementModule() {
                     onSubmit={input => setAction({ kind: 'refund', payment: refundPayment, input })}
                 />
             )}
+            {reviewIntent && (
+                <ReconciliationEditor
+                    intent={reviewIntent}
+                    onClose={() => setReviewIntent(null)}
+                    onSubmit={input => setAction({ kind: 'resolve-intent', intent: reviewIntent, input })}
+                />
+            )}
             <SensitiveActionDialog
                 open={action !== null}
-                title={action?.kind === 'refund' ? '确认记录 USDT 人工退款' : '确认审核收款地址'}
+                title={
+                    action?.kind === 'refund'
+                        ? '确认记录 USDT 人工退款'
+                        : action?.kind === 'resolve-intent'
+                          ? '确认处理 USDT 对账异常'
+                          : '确认审核收款地址'
+                }
                 description="这是资金敏感操作。系统将验证当前超级管理员密码，并以后端返回的持久化结果作为成功依据。"
                 confirmLabel="验证并执行"
                 loading={loading}
@@ -612,6 +727,115 @@ function WalletReview({
         </article>
     );
 }
+
+function ReconciliationEditor({
+    intent,
+    onClose,
+    onSubmit,
+}: {
+    intent: UsdtPaymentIntentRecord;
+    onClose: () => void;
+    onSubmit: (input: ReconciliationDraft) => void;
+}) {
+    const retryAllowed = ['vendure-payment', 'order-validation-exception'].includes(
+        intent.manualReviewCode ?? '',
+    );
+    const [draft, setDraft] = useState<ReconciliationDraft>({
+        action: retryAllowed ? 'RETRY_SETTLEMENT' : 'CONFIRM_EXTERNAL_REFUND',
+        reason: '',
+        transactionId: '',
+        usdtAmount: String(intent.receivedUsdtAmount ?? intent.expectedUsdtAmount),
+        recipientAddress: '',
+    });
+    const update = (field: Exclude<keyof ReconciliationDraft, 'action'>, value: string) =>
+        setDraft(current => ({ ...current, [field]: value }));
+    return (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4">
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="处理 USDT 对账异常"
+                className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl"
+            >
+                <div className="flex justify-between gap-4">
+                    <div>
+                        <h2 className="flex items-center gap-2 text-base font-bold">
+                            处理 USDT 对账异常
+                            <FeatureHelpButton topic="settings.usdt" title="处理 USDT 对账异常" />
+                        </h2>
+                        <p className="mt-1 text-xs text-slate-500">
+                            订单 {intent.orderCode} · {intent.expectedUsdtAmount.toFixed(6)} USDT ·{' '}
+                            {intent.failureReason}
+                        </p>
+                    </div>
+                    <button type="button" onClick={onClose} aria-label="关闭">
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <label className={`${labelClass} sm:col-span-2`}>
+                        处理方式
+                        <select
+                            value={draft.action}
+                            onChange={event =>
+                                setDraft(current => ({
+                                    ...current,
+                                    action: event.target.value as ReconciliationDraft['action'],
+                                }))
+                            }
+                            className={inputClass}
+                        >
+                            {retryAllowed && <option value="RETRY_SETTLEMENT">重试订单入账</option>}
+                            <option value="CONFIRM_EXTERNAL_REFUND">核验并关闭外部链上退款</option>
+                        </select>
+                    </label>
+                    {draft.action === 'CONFIRM_EXTERNAL_REFUND' && (
+                        <>
+                            <RefundField
+                                label="全额退款 USDT"
+                                type="number"
+                                value={draft.usdtAmount}
+                                onChange={value => update('usdtAmount', value)}
+                            />
+                            <RefundField
+                                label="退款收款 TRC20 地址"
+                                value={draft.recipientAddress}
+                                onChange={value => update('recipientAddress', value)}
+                            />
+                            <div className="sm:col-span-2">
+                                <RefundField
+                                    label="退款链上交易号"
+                                    value={draft.transactionId}
+                                    onChange={value => update('transactionId', value)}
+                                />
+                            </div>
+                        </>
+                    )}
+                    <div className="sm:col-span-2">
+                        <RefundField
+                            label="处理说明"
+                            value={draft.reason}
+                            onChange={value => update('reason', value)}
+                        />
+                    </div>
+                </div>
+                <p className="mt-3 text-[11px] leading-5 text-amber-700">
+                    重试仅适用于暂时性入账异常；外部退款会校验固化交易、全额金额、收款地址和已审核退款钱包。
+                </p>
+                <div className="mt-6 flex justify-end gap-2 border-t pt-4">
+                    <button type="button" onClick={onClose} className={secondaryButton}>
+                        取消
+                    </button>
+                    <button type="button" onClick={() => onSubmit(draft)} className={primaryButton}>
+                        <ShieldCheck className="h-4 w-4" />
+                        下一步验证密码
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function RefundEditor({
     payment,
     onClose,

@@ -9,7 +9,7 @@ This plan tracks whether each business capability has a complete loop rather tha
 | P0       | Data retention             | Policy, quarantine, recovery, reference checks, legal hold, due purge, retry, retained audit record                       | In progress: customer avatar flow implemented and locally verified                           |
 | P0       | Data subject requests      | Customer export, correction, account closure, identity re-check, cooling-off period, legal/financial retention exceptions | In progress: export and account closure implemented and locally verified                     |
 | P0       | Consent and privacy        | Versioned privacy terms, consent evidence, withdrawal, cookie/tracking controls, purpose inventory                        | In progress: registration and first-party analytics consent implemented and locally verified |
-| P0       | Payment reconciliation     | Gateway/chain callback idempotency, order-payment matching, exceptions, refund reconciliation, daily close                | Existing pieces require end-to-end audit                                                     |
+| P0       | Payment reconciliation     | Gateway/chain callback idempotency, order-payment matching, exceptions, refund reconciliation, daily close                | Implemented and locally verified; production migration and scheduler observation remain      |
 | P0       | Backup and recovery        | Backup ownership, retention, encryption, restore drill, RPO/RTO evidence and alerting                                     | Operational verification required                                                            |
 | P0       | Incident response          | Security-event severity, owner, evidence preservation, notification workflow and recovery review                          | Not started                                                                                  |
 | P1       | Procurement                | Supplier, purchase order, receiving, variance, payable, return-to-supplier and performance score                          | Existing supplier area requires closure audit                                                |
@@ -36,6 +36,29 @@ Account closure also requires password re-authentication and has a seven-day coo
 Email, quick-email and first-time Google registration require an explicit unchecked consent control. The server snapshots the current terms and privacy content into append-only evidence containing the policy version, SHA-256 digest, locale, source and timestamp; network and browser evidence is stored only as keyed hashes. The unaudited built-in registration mutation is blocked so API clients cannot bypass this path.
 
 First-party page-view analytics now defaults off. A global choice explains the optional purpose and offers “necessary only” or “allow analytics”; the server rejects page-view writes unless the grant cookie is present. Grant and withdrawal actions are auditable, users can change the preference at any time, and declining does not block account, shopping or support flows.
+
+## Current P0 implementation: payment reconciliation and recovery
+
+The USDT scanner already commits solidified receipt evidence before order settlement, uses transaction and active-match uniqueness for idempotency, and routes ownership, quote, wallet-integrity and Vendure settlement failures into manual review. Manual refund records verify a solidified official USDT transfer and create a linked Vendure refund.
+
+Manual-review cases now have an explicit server-enforced recovery path. Only transient settlement failures may be retried; the current chain transaction must still match the stored sender, recipient, amount and block snapshot. Non-retriable cases can be closed only after a full external refund is verified against the approved refund-wallet list. Both actions record the operator, reason, result and chain evidence, close the related incident, and remain visible in both administrator interfaces. Legacy review reasons are safely classified during migration where the original reason is unambiguous.
+
+A daily scheduled reconciliation cross-checks settled intents, Vendure payments, linked orders, transaction identifiers, manual refunds and overdue review cases. Hard inconsistencies fire a P0 operational incident; overdue reviews fire a P1 incident; a healthy run resolves the daily incident. Scan limits fail closed as an alert rather than silently reporting success.
+
+Payment acceptance gates:
+
+- [x] A chain receipt cannot be linked to multiple payment intents.
+- [x] A retry revalidates the current solidified transfer against the stored receipt snapshot.
+- [x] Ownership or wallet-integrity exceptions cannot use direct settlement retry.
+- [x] External resolution requires a verified full refund from an approved platform wallet.
+- [x] Refund transaction identifiers are checked across receipts, ordinary refunds and reconciliation actions.
+- [x] Resolution stores operator, reason, outcome and chain evidence.
+- [x] Both administrator interfaces expose the exception action and evidence history.
+- [x] Daily reconciliation alerts on broken intent/payment/refund links and overdue review cases.
+- [x] Migration is idempotent and tested on MySQL, PostgreSQL and SQLite-shaped schemas.
+- [ ] Migration applied in a production-like database.
+- [ ] Daily scheduler execution and incident delivery observed in a production-like environment.
+- [ ] Release, running SHA, browser acceptance and monitoring evidence.
 
 Acceptance gates:
 

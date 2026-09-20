@@ -9,6 +9,7 @@ export const USDT_PAYMENT_INTENT_STATUS = {
     settled: 'SETTLED',
     manualReview: 'MANUAL_REVIEW',
     expired: 'EXPIRED',
+    resolved: 'RESOLVED',
 } as const;
 
 export type UsdtPaymentIntentStatus =
