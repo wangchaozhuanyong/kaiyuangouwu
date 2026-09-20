@@ -64,7 +64,13 @@ export class AddIncidentResponseWorkflow1789502400000 implements MigrationInterf
         for (const column of incidentColumns) {
             if (!incidentTable.findColumnByName(column.name)) {
                 await runner.addColumn(incidentTableName, column);
-                incidentTable = await runner.getTable(incidentTableName);
+                const incidentTableAfterColumn = await runner.getTable(incidentTableName);
+                if (!incidentTableAfterColumn) {
+                    throw new Error(
+                        'Admin notification outbox disappeared during incident workflow migration',
+                    );
+                }
+                incidentTable = incidentTableAfterColumn;
             }
         }
         const escape = (name: string) => runner.connection.driver.escape(name);
@@ -77,7 +83,11 @@ export class AddIncidentResponseWorkflow1789502400000 implements MigrationInterf
              END
              WHERE ${escape('incidentStatus')} = 'NOT_APPLICABLE'`,
         );
-        incidentTable = await runner.getTable(incidentTableName);
+        const refreshedIncidentTable = await runner.getTable(incidentTableName);
+        if (!refreshedIncidentTable) {
+            throw new Error('Admin notification outbox disappeared during incident workflow migration');
+        }
+        incidentTable = refreshedIncidentTable;
         if (!incidentTable.indices.some(index => index.name === 'IDX_admin_incident_status_severity')) {
             await runner.createIndex(
                 incidentTableName,
