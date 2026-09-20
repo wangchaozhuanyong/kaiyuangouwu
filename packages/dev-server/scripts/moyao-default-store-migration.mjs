@@ -44,7 +44,6 @@ const PROFILE_COLUMNS = [
 ];
 
 const MOVED_CHANNEL_TABLES = [
-    'customer_store_entry',
     'customer_group',
     'storefront_content_block',
     'storefront_cart',
@@ -146,6 +145,9 @@ export function publicMigrationPlan(details) {
         ),
         addedRelations: Object.fromEntries(
             Object.entries(details.relationEntityIds).map(([table, ids]) => [table, ids.length]),
+        ),
+        copiedChannelRows: Object.fromEntries(
+            Object.entries(details.copiedEntityIds).map(([table, ids]) => [table, ids.length]),
         ),
         profileWillChange: details.profileDigest !== details.targetProfileDigest,
         contentSettingsWillChange:
@@ -256,6 +258,21 @@ async function collectDetails(connection, lock = false) {
         );
     }
 
+    const copiedEntityIds = { customer_store_entry: [] };
+    if (await tableExists(connection, 'customer_store_entry')) {
+        copiedEntityIds.customer_store_entry = await selectIds(
+            connection,
+            `SELECT source.customerId AS id
+             FROM customer_store_entry source
+             WHERE source.channelId = ? AND NOT EXISTS (
+                 SELECT 1 FROM customer_store_entry target
+                 WHERE target.customerId = source.customerId AND target.channelId = ?
+             )
+             ORDER BY source.customerId${lock ? ' FOR UPDATE' : ''}`,
+            [source.id, target.id],
+        );
+    }
+
     const movedRows = {};
     for (const table of MOVED_CHANNEL_TABLES) {
         if (
@@ -323,6 +340,7 @@ async function collectDetails(connection, lock = false) {
         profileDigest: migrationDigest(profileValues),
         targetProfileDigest: migrationDigest(targetProfileValues),
         relationEntityIds,
+        copiedEntityIds,
         movedRows,
         orderSalesOwnerIds,
         sourceHeroAutoplayIntervalSeconds: Number(sourceSettings.heroAutoplayIntervalSeconds),
@@ -371,6 +389,26 @@ async function applyMigration(environment, expectedDigest) {
                        AND target.channelId = ?
                  )`,
                 [details.targetChannelId, details.sourceChannelId, details.targetChannelId],
+            );
+        }
+
+        if (details.copiedEntityIds.customer_store_entry.length > 0) {
+            const [copyResult] = await connection.execute(
+                `INSERT INTO customer_store_entry
+                    (createdAt, updatedAt, customerId, channelId, firstSeenAt, source)
+                 SELECT source.createdAt, source.updatedAt, source.customerId, ?,
+                        source.firstSeenAt, source.source
+                 FROM customer_store_entry source
+                 WHERE source.channelId = ? AND NOT EXISTS (
+                     SELECT 1 FROM customer_store_entry target
+                     WHERE target.customerId = source.customerId AND target.channelId = ?
+                 )`,
+                [details.targetChannelId, details.sourceChannelId, details.targetChannelId],
+            );
+            assert.equal(
+                copyResult.affectedRows,
+                details.copiedEntityIds.customer_store_entry.length,
+                'Customer store-entry count drifted during migration',
             );
         }
 
@@ -489,6 +527,21 @@ async function verifyMigration(environment) {
             );
             assert.equal(Number(rows[0]?.value ?? -1), 0, `${table} still has unmigrated memberships`);
         }
+        if (await tableExists(connection, 'customer_store_entry')) {
+            const [rows] = await connection.execute(
+                `SELECT COUNT(*) AS value FROM customer_store_entry source
+                 WHERE source.channelId = ? AND NOT EXISTS (
+                     SELECT 1 FROM customer_store_entry target
+                     WHERE target.customerId = source.customerId AND target.channelId = ?
+                 )`,
+                [source.id, target.id],
+            );
+            assert.equal(
+                Number(rows[0]?.value ?? -1),
+                0,
+                'Customer store-entry history is incomplete for MOYAO',
+            );
+        }
         for (const table of MOVED_CHANNEL_TABLES) {
             if (
                 !(await tableExists(connection, table)) ||
@@ -531,6 +584,7 @@ async function verifyMigration(environment) {
             targetChannelCode: TARGET_CHANNEL_CODE,
             targetContentBlockCount: targetBlocks.length,
             relationTablesVerified: RELATION_TABLES.length,
+            copiedChannelTablesVerified: 1,
             movedChannelTablesVerified: MOVED_CHANNEL_TABLES.length,
             defaultOwnedOrderCount: 0,
             profileMatches: true,

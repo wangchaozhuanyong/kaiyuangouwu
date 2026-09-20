@@ -95,9 +95,10 @@ gh workflow run production_operations.yml --ref main \
 The plan contains aggregate counts and one exact operation digest, never customer,
 product, asset, content, or profile identifiers. It requires the target storefront
 to contain no content blocks, copies the default Channel's customer and catalog
-memberships to `moyao-ai`, copies the StoreProfile and content setting, moves the
-default storefront business data to the dedicated Channel, and transfers any
-default-owned historical sales after proving they have no other public-store owner.
+memberships and any missing per-store entry-history rows to `moyao-ai`, copies the
+StoreProfile and content setting, moves the default storefront business data to the
+dedicated Channel, and transfers any default-owned historical sales after proving
+they have no other public-store owner. Existing entry-history rows are preserved.
 
 After reviewing the counts and digest, apply the fixed plan:
 
