@@ -304,6 +304,7 @@ export const CATALOG_EXPORT_ROWS_QUERY = gql`
     query NextAdminCatalogExportRows($skip: Int, $take: Int) {
         catalogExportRows(skip: $skip, take: $take) {
             totalItems
+            scannedItems
             items {
                 productId
                 variantId

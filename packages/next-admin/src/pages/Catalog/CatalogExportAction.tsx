@@ -114,9 +114,14 @@ export function CatalogExportAction() {
         try {
             const rows: CatalogExportRowRecord[] = [];
             let totalItems = Number.POSITIVE_INFINITY;
-            for (let skip = 0; skip < totalItems; skip += 500) {
+            let skip = 0;
+            while (skip < totalItems) {
                 const page = await client.query<{
-                    catalogExportRows: { items: CatalogExportRowRecord[]; totalItems: number };
+                    catalogExportRows: {
+                        items: CatalogExportRowRecord[];
+                        totalItems: number;
+                        scannedItems: number;
+                    };
                 }>({
                     query: CATALOG_EXPORT_ROWS_QUERY,
                     variables: { skip, take: 500 },
@@ -126,8 +131,10 @@ export function CatalogExportAction() {
                 if (!exportPage) throw new Error('商品导出接口未返回分页数据');
                 totalItems = exportPage.totalItems;
                 rows.push(...exportPage.items);
-                setProgress(Math.round((rows.length / Math.max(totalItems, 1)) * 80));
-                if (!exportPage.items.length) break;
+                const scannedItems = exportPage.scannedItems ?? exportPage.items.length;
+                if (scannedItems <= 0) break;
+                skip += scannedItems;
+                setProgress(Math.min(80, Math.round((skip / Math.max(totalItems, 1)) * 80)));
             }
             if (!stockLocationId) throw new Error('请选择默认回导仓库');
             const output = await exportCatalogRowsLocally(rows, format, stockLocationId);

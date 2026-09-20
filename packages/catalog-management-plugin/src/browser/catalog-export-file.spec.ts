@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { downloadCatalogBlob } from './catalog-export-file';
+import { downloadCatalogBlob, exportCatalogRowsLocally } from './catalog-export-file';
 
 describe('catalog browser download', () => {
     afterEach(() => vi.unstubAllGlobals());
@@ -39,5 +39,31 @@ describe('catalog browser download', () => {
         expect(revokeObjectURL).toHaveBeenCalledWith('blob:catalog-export');
         expect(append.mock.invocationCallOrder[0]).toBeLessThan(click.mock.invocationCallOrder[0]);
         expect(click.mock.invocationCallOrder[0]).toBeLessThan(remove.mock.invocationCallOrder[0]);
+    });
+
+    it('falls back to the main thread when the browser cannot start the export worker', async () => {
+        const terminate = vi.fn();
+        class BrokenWorker {
+            onmessage: ((event: MessageEvent) => void) | null = null;
+            onmessageerror: ((event: MessageEvent) => void) | null = null;
+            onerror: ((event: ErrorEvent) => void) | null = null;
+            terminate = terminate;
+
+            postMessage() {
+                queueMicrotask(() => this.onerror?.({ message: '' } as ErrorEvent));
+            }
+        }
+        vi.stubGlobal('Worker', BrokenWorker);
+        vi.stubGlobal('window', {
+            setTimeout,
+            clearTimeout,
+        });
+
+        const result = await exportCatalogRowsLocally([], 'csv');
+
+        expect(result.extension).toBe('csv');
+        expect(result.blob.type).toBe('text/csv;charset=utf-8');
+        expect(result.blob.size).toBeGreaterThan(0);
+        expect(terminate).toHaveBeenCalledOnce();
     });
 });

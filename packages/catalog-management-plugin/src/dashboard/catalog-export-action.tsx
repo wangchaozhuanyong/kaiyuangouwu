@@ -81,14 +81,22 @@ function CatalogExportSheet({
         mutationFn: async (format: CatalogExportFormat) => {
             const rows: CatalogExportRowRecord[] = [];
             let totalItems = Number.POSITIVE_INFINITY;
-            for (let skip = 0; skip < totalItems; skip += 500) {
+            let skip = 0;
+            while (skip < totalItems) {
                 const page = await api.query<{
-                    catalogExportRows: { items: CatalogExportRowRecord[]; totalItems: number };
+                    catalogExportRows: {
+                        items: CatalogExportRowRecord[];
+                        totalItems: number;
+                        scannedItems: number;
+                    };
                 }>(catalogExportRowsQuery, { skip, take: 500 });
                 totalItems = page.catalogExportRows.totalItems;
                 rows.push(...page.catalogExportRows.items);
-                setProgress(Math.round((rows.length / Math.max(totalItems, 1)) * 80));
-                if (page.catalogExportRows.items.length === 0) break;
+                const scannedItems =
+                    page.catalogExportRows.scannedItems ?? page.catalogExportRows.items.length;
+                if (scannedItems <= 0) break;
+                skip += scannedItems;
+                setProgress(Math.min(80, Math.round((skip / Math.max(totalItems, 1)) * 80)));
             }
             setProgress(90);
             if (!stockLocationId) throw new Error('请选择默认回导仓库');
