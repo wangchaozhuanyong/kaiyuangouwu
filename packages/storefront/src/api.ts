@@ -17,6 +17,8 @@ import type {
     CustomerOrderCounts,
     DataSubjectExportPayload,
     DataSubjectRequest,
+    FraudRiskAppeal,
+    FraudRiskCase,
     FulfillmentDeliveryEvidence,
     ImageGenerationJob,
     ImageModelQuotaStatus,
@@ -229,6 +231,14 @@ export class ShopApi {
 
     async cancelAccountClosure(): Promise<DataSubjectRequest> {
         return this.accountApi.cancelAccountClosure();
+    }
+
+    async fraudRiskCases(signal?: AbortSignal): Promise<FraudRiskCase[]> {
+        return this.accountApi.fraudRiskCases(signal);
+    }
+
+    async appealFraudRiskCase(id: string, reason: string): Promise<FraudRiskAppeal> {
+        return this.accountApi.appealFraudRiskCase(id, reason);
     }
 
     async customerOrders(

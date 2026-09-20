@@ -684,6 +684,30 @@ export interface DataSubjectExportPayload {
     sha256: string;
 }
 
+export interface FraudRiskAppeal {
+    id: string;
+    createdAt: string;
+    status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+    reason: string;
+    response: string | null;
+    reviewedAt: string | null;
+}
+
+export interface FraudRiskCase {
+    id: string;
+    createdAt: string;
+    caseCode: string;
+    orderId: string | null;
+    status: 'OPEN' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED' | 'APPEALED' | 'CLOSED';
+    severity: 'P1' | 'P2' | 'P3';
+    riskScore: number;
+    recommendedAction: string;
+    dueAt: string;
+    decisionReason: string | null;
+    decidedAt: string | null;
+    appeals: FraudRiskAppeal[];
+}
+
 export type StorefrontCartState = 'OPEN' | 'PAYMENT_PENDING';
 export type StorefrontCartSelectionState = 'NONE' | 'PARTIAL' | 'ALL';
 

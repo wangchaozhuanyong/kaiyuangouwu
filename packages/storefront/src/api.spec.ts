@@ -1945,6 +1945,55 @@ describe('ShopApi storefront mutations', () => {
         expect(requests[3].query).toContain('cancelMyAccountClosure');
     });
 
+    it('lists customer risk reviews and submits an idempotent appeal', async () => {
+        const riskCase = {
+            id: 'risk-1',
+            createdAt: '2026-09-21T00:00:00.000Z',
+            caseCode: 'FR-TEST',
+            orderId: 'order-1',
+            status: 'OPEN',
+            severity: 'P1',
+            riskScore: 70,
+            recommendedAction: 'HOLD_FULFILLMENT',
+            dueAt: '2026-09-21T02:00:00.000Z',
+            decisionReason: null,
+            decidedAt: null,
+            appeals: [],
+        };
+        const appeal = {
+            id: 'appeal-1',
+            createdAt: '2026-09-21T00:10:00.000Z',
+            status: 'PENDING',
+            reason: '付款信息可以补充',
+            response: null,
+            reviewedAt: null,
+        };
+        const fetchMock = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(new Response(JSON.stringify({ data: { myFraudRiskCases: [riskCase] } })))
+            .mockResolvedValueOnce(new Response(JSON.stringify({ data: { appealMyFraudRiskCase: appeal } })));
+        vi.stubGlobal('fetch', fetchMock);
+        const api = new ShopApi(market);
+
+        await expect(api.fraudRiskCases()).resolves.toEqual([riskCase]);
+        await expect(api.appealFraudRiskCase('risk-1', appeal.reason)).resolves.toEqual(appeal);
+
+        const requests = fetchMock.mock.calls.map(
+            call =>
+                JSON.parse(jsonRequestBody(call[1])) as {
+                    query: string;
+                    variables?: { input?: Record<string, unknown> };
+                },
+        );
+        expect(requests[0].query).toContain('myFraudRiskCases');
+        expect(requests[1].query).toContain('appealMyFraudRiskCase(input: $input)');
+        expect(requests[1].variables?.input).toMatchObject({
+            id: 'risk-1',
+            reason: appeal.reason,
+        });
+        expect(requests[1].variables?.input?.idempotencyKey).toMatch(/^[0-9a-f]{8}-[0-9a-f-]{27}$/u);
+    });
+
     it('requires a CORS preflight for image reference uploads while preserving multipart metadata', async () => {
         const reference = { id: 'reference-fixture' };
         const fetchMock = mockGraphQlResponse({ uploadImageReference: reference });

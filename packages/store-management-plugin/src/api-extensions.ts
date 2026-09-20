@@ -1435,6 +1435,218 @@ export const adminApiExtensions = gql`
         idempotencyKey: String!
     }
 
+    enum GovernedConfigNamespace {
+        FRAUD_RULES
+        REPORT_SCHEDULE
+    }
+
+    enum GovernedConfigStatus {
+        DRAFT
+        ACTIVE
+        RETIRED
+        REJECTED
+    }
+
+    enum GovernanceApprovalStatus {
+        PENDING
+        APPROVED
+        REJECTED
+        CANCELLED
+        EXPIRED
+    }
+
+    type GovernedConfigVersion implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        channelId: ID!
+        namespace: GovernedConfigNamespace!
+        version: Int!
+        status: GovernedConfigStatus!
+        payloadJson: String!
+        payloadHash: String!
+        createdByUserId: ID!
+        activatedAt: DateTime
+        retiredAt: DateTime
+    }
+
+    type GovernanceApprovalRequest implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        channelId: ID!
+        configVersion: GovernedConfigVersion!
+        status: GovernanceApprovalStatus!
+        requestedByUserId: ID!
+        requestReason: String!
+        expiresAt: DateTime!
+        reviewedByUserId: ID
+        reviewReason: String
+        reviewedAt: DateTime
+        idempotencyKey: String!
+    }
+
+    type GovernanceAuditEntry implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        channelId: ID!
+        sequence: Int!
+        eventType: String!
+        resourceType: String!
+        resourceId: String!
+        actorType: String!
+        actorUserId: ID
+        actorLabel: String!
+        reason: String!
+        payloadJson: String!
+        payloadHash: String!
+        previousHash: String
+        entryHash: String!
+        idempotencyKey: String!
+    }
+
+    type GovernanceAuditEntryList implements PaginatedList {
+        items: [GovernanceAuditEntry!]!
+        totalItems: Int!
+    }
+
+    type GovernanceAuditIntegrity {
+        valid: Boolean!
+        checkedEntries: Int!
+        brokenAt: Int
+    }
+
+    type GovernanceReportSnapshot implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        channelId: ID!
+        businessDate: String!
+        windowStartedAt: DateTime!
+        windowEndedAt: DateTime!
+        metricsJson: String!
+        digest: String!
+        auditIntegrityValid: Boolean!
+        anomalyCount: Int!
+    }
+
+    input SubmitGovernedConfigInput {
+        namespace: GovernedConfigNamespace!
+        payloadJson: String!
+        reason: String!
+        idempotencyKey: String!
+    }
+
+    enum GovernanceApprovalDecision {
+        APPROVE
+        REJECT
+    }
+
+    input ReviewGovernanceApprovalInput {
+        id: ID!
+        decision: GovernanceApprovalDecision!
+        reason: String!
+        idempotencyKey: String!
+    }
+
+    enum FraudRiskCaseStatus {
+        OPEN
+        IN_REVIEW
+        APPROVED
+        REJECTED
+        APPEALED
+        CLOSED
+    }
+
+    enum FraudRiskSeverity {
+        P1
+        P2
+        P3
+    }
+
+    type FraudRiskCaseEvent implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        eventType: String!
+        actorType: String!
+        actorUserId: ID
+        note: String!
+        payloadJson: String
+        idempotencyKey: String!
+    }
+
+    type FraudRiskAppeal implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        status: String!
+        reason: String!
+        response: String
+        reviewedByUserId: ID
+        reviewedAt: DateTime
+    }
+
+    type FraudRiskCase implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        channelId: ID!
+        caseCode: String!
+        subjectType: String!
+        subjectId: String!
+        orderId: ID
+        customerId: ID
+        status: FraudRiskCaseStatus!
+        severity: FraudRiskSeverity!
+        riskScore: Int!
+        ruleVersion: String!
+        subjectDigest: String!
+        signalsJson: String!
+        recommendedAction: String!
+        dueAt: DateTime!
+        ownerUserId: ID
+        decisionCode: String
+        decisionReason: String
+        decidedByUserId: ID
+        decidedAt: DateTime
+        events: [FraudRiskCaseEvent!]!
+        appeals: [FraudRiskAppeal!]!
+    }
+
+    type FraudRiskCaseList implements PaginatedList {
+        items: [FraudRiskCase!]!
+        totalItems: Int!
+    }
+
+    input FraudRiskCaseListOptions {
+        status: FraudRiskCaseStatus
+        severity: FraudRiskSeverity
+        overdue: Boolean
+        skip: Int
+        take: Int
+    }
+
+    enum FraudRiskReviewAction {
+        CLAIM
+        RELEASE
+        BLOCK
+    }
+
+    input ReviewFraudRiskCaseInput {
+        id: ID!
+        action: FraudRiskReviewAction!
+        reason: String!
+        idempotencyKey: String!
+    }
+
+    input AppealFraudRiskCaseInput {
+        id: ID!
+        reason: String!
+        idempotencyKey: String!
+    }
+
     extend type Query {
         storeProvisioningTemplates: [Channel!]!
         storeProfiles: [StoreProfile!]!
@@ -1486,6 +1698,12 @@ export const adminApiExtensions = gql`
             options: CustomerOperationsProfileListOptions
         ): CustomerOperationsProfileList!
         customerFollowUps(options: CustomerFollowUpListOptions): CustomerFollowUpList!
+        governanceApprovals(status: GovernanceApprovalStatus): [GovernanceApprovalRequest!]!
+        governedConfigVersions(namespace: GovernedConfigNamespace): [GovernedConfigVersion!]!
+        governanceAuditEntries(skip: Int, take: Int): GovernanceAuditEntryList!
+        governanceAuditIntegrity: GovernanceAuditIntegrity!
+        governanceReports: [GovernanceReportSnapshot!]!
+        fraudRiskCases(options: FraudRiskCaseListOptions): FraudRiskCaseList!
     }
 
     extend type Mutation {
@@ -1555,6 +1773,9 @@ export const adminApiExtensions = gql`
         createCustomerFollowUp(input: CreateCustomerFollowUpInput!): CustomerFollowUp!
         updateCustomerFollowUp(input: UpdateCustomerFollowUpInput!): CustomerFollowUp!
         recordMarketingCampaignCost(input: RecordMarketingCampaignCostInput!): MarketingCampaignCost!
+        submitGovernedConfig(input: SubmitGovernedConfigInput!): GovernanceApprovalRequest!
+        reviewGovernanceApproval(input: ReviewGovernanceApprovalInput!): GovernanceApprovalRequest!
+        reviewFraudRiskCase(input: ReviewFraudRiskCaseInput!): FraudRiskCase!
     }
 
     extend type Order {
@@ -1673,6 +1894,7 @@ export const shopApiExtensions = gql`
         referralProgram: ReferralProgram!
         validateReferralInviteCode(code: String!): Boolean!
         myReferralOverview: MyReferralOverview!
+        myFraudRiskCases: [FraudRiskCase!]!
     }
 
     enum StorefrontCartCouponAction {
@@ -1713,5 +1935,6 @@ export const shopApiExtensions = gql`
         useMyReferralBalance(amount: Money!): ReferralBalancePaymentResult!
         recordStorefrontVisit(visitorId: String): StorefrontVisitResult!
         recordStorefrontPageView(input: StorefrontPageViewInput!): StorefrontVisitResult!
+        appealMyFraudRiskCase(input: AppealFraudRiskCaseInput!): FraudRiskAppeal!
     }
 `;

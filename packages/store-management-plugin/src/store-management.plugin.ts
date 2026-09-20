@@ -47,6 +47,13 @@ import { CustomerOperationsProfile } from './entities/customer-operations-profil
 import { DataConsentRecord } from './entities/data-consent-record.entity';
 import { DataRetentionRecord } from './entities/data-retention-record.entity';
 import { DataSubjectRequest } from './entities/data-subject-request.entity';
+import { FraudRiskAppeal } from './entities/fraud-risk-appeal.entity';
+import { FraudRiskCaseEvent } from './entities/fraud-risk-case-event.entity';
+import { FraudRiskCase } from './entities/fraud-risk-case.entity';
+import { GovernanceApprovalRequest } from './entities/governance-approval-request.entity';
+import { GovernanceAuditEntry } from './entities/governance-audit-entry.entity';
+import { GovernanceReportSnapshot } from './entities/governance-report-snapshot.entity';
+import { GovernedConfigVersion } from './entities/governed-config-version.entity';
 import { MarketingCampaignCost } from './entities/marketing-campaign-cost.entity';
 import { ReferralAccount } from './entities/referral-account.entity';
 import { ReferralBalanceUse } from './entities/referral-balance-use.entity';
@@ -72,6 +79,11 @@ import { StorefrontPromotionPage } from './entities/storefront-promotion-page.en
 import { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity';
 import { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity';
 import { SystemAnnouncement } from './entities/system-announcement.entity';
+import { FraudRiskService } from './fraud-risk.service';
+import { reconcileFraudRiskCasesTask } from './fraud-risk.tasks';
+import { GovernanceRiskAdminResolver, GovernanceRiskShopResolver } from './governance-risk.resolver';
+import { GovernanceService } from './governance.service';
+import { generateGovernanceReportsTask } from './governance.tasks';
 import { MarketingAttributionService } from './marketing-attribution.service';
 import { purgeExpiredMarketingAnalyticsTask } from './marketing-attribution.tasks';
 import { MerchantCatalogAccessInterceptor } from './merchant-catalog-access.interceptor';
@@ -216,6 +228,13 @@ import {
         CustomerOperationsProfile,
         CustomerFollowUp,
         CustomerFollowUpEvent,
+        GovernedConfigVersion,
+        GovernanceApprovalRequest,
+        GovernanceAuditEntry,
+        GovernanceReportSnapshot,
+        FraudRiskCase,
+        FraudRiskCaseEvent,
+        FraudRiskAppeal,
     ],
     controllers: [StorefrontPromotionController, StorefrontRealtimeController],
     providers: [
@@ -258,6 +277,8 @@ import {
         DataSubjectService,
         DataRetentionService,
         CustomerOperationsService,
+        GovernanceService,
+        FraudRiskService,
         {
             provide: STOREFRONT_PROMOTION_OPTIONS,
             useFactory: () => StoreManagementPlugin.promotionOptions,
@@ -283,7 +304,7 @@ import {
             useClass: StorefrontPaymentCurrencyInterceptor,
         },
     ],
-    exports: [ReferralWalletSpendService],
+    exports: [ReferralWalletSpendService, FraudRiskService],
     configuration: config => {
         config.customFields.Order ??= [];
         if (!config.customFields.Order.some(field => field.name === 'paymentCurrencyCode')) {
@@ -370,6 +391,8 @@ import {
         config.schedulerOptions.tasks.push(processDueAccountClosuresTask);
         config.schedulerOptions.tasks.push(reconcileCustomerOperationsTask);
         config.schedulerOptions.tasks.push(purgeExpiredMarketingAnalyticsTask);
+        config.schedulerOptions.tasks.push(generateGovernanceReportsTask);
+        config.schedulerOptions.tasks.push(reconcileFraudRiskCasesTask);
         return config;
     },
     adminApiExtensions: {
@@ -393,6 +416,7 @@ import {
             CustomerOperationsAdminResolver,
             CustomerOperationsProfileResolver,
             CustomerFollowUpResolver,
+            GovernanceRiskAdminResolver,
         ],
     },
     shopApiExtensions: {
@@ -409,6 +433,7 @@ import {
             SystemAnnouncementShopResolver,
             ReferralShopResolver,
             StorefrontTrafficShopResolver,
+            GovernanceRiskShopResolver,
         ],
     },
     compatibility: '^3.7.0',

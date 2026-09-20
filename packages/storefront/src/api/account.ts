@@ -8,6 +8,8 @@ import type {
     CustomerOrderCounts,
     DataSubjectExportPayload,
     DataSubjectRequest,
+    FraudRiskAppeal,
+    FraudRiskCase,
     FulfillmentDeliveryEvidence,
     Order,
     OrderConfirmationToken,
@@ -223,6 +225,37 @@ export class AccountApi extends BaseDomainApi {
             }
         `);
         return result.cancelMyAccountClosure;
+    }
+
+    async fraudRiskCases(signal?: AbortSignal): Promise<FraudRiskCase[]> {
+        const result = await this.request<{ myFraudRiskCases: FraudRiskCase[] }>(
+            `
+                query MyFraudRiskCases {
+                    myFraudRiskCases {
+                        id createdAt caseCode orderId status severity riskScore
+                        recommendedAction dueAt decisionReason decidedAt
+                        appeals { id createdAt status reason response reviewedAt }
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.myFraudRiskCases;
+    }
+
+    async appealFraudRiskCase(id: string, reason: string): Promise<FraudRiskAppeal> {
+        const result = await this.request<{ appealMyFraudRiskCase: FraudRiskAppeal }>(
+            `
+                mutation AppealMyFraudRiskCase($input: AppealFraudRiskCaseInput!) {
+                    appealMyFraudRiskCase(input: $input) {
+                        id createdAt status reason response reviewedAt
+                    }
+                }
+            `,
+            { input: { id, reason, idempotencyKey: crypto.randomUUID() } },
+        );
+        return result.appealMyFraudRiskCase;
     }
 
     async customerOrders(

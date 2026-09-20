@@ -51,7 +51,7 @@ function legacyRoutePathsFromSource() {
 }
 
 describe('legacy capability parity contract', () => {
-    it('maps all 32 local plugin routes to the exact new capability', () => {
+    it('maps all 33 local plugin routes to the exact new capability', () => {
         const actual = getNextAdminExtensionLegacyRoutes()
             .map(({ path, target }) => ({ legacyPath: path, target }))
             .sort((left, right) => left.legacyPath.localeCompare(right.legacyPath));
@@ -60,9 +60,9 @@ describe('legacy capability parity contract', () => {
             target,
         })).sort((left, right) => left.legacyPath.localeCompare(right.legacyPath));
 
-        expect(LEGACY_ROUTE_CAPABILITIES).toHaveLength(32);
+        expect(LEGACY_ROUTE_CAPABILITIES).toHaveLength(33);
         expect(actual).toEqual(expected);
-        expect(new Set(actual.map(item => item.legacyPath)).size).toBe(32);
+        expect(new Set(actual.map(item => item.legacyPath)).size).toBe(33);
         expect(legacyRoutePathsFromSource()).toEqual(
             LEGACY_ROUTE_CAPABILITIES.map(item => item.legacyPath).sort(),
         );

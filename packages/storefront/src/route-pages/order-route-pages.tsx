@@ -12,7 +12,7 @@ import {
 import { PageSkeleton } from '../route-loading';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { AuthPageBoundary, EmptyState, Subpage } from '../storefront-ui/page-shell';
-import { ActiveCustomer, CustomerAvatarHistoryEntry, DataSubjectRequest } from '../types';
+import { ActiveCustomer, CustomerAvatarHistoryEntry, DataSubjectRequest, FraudRiskCase } from '../types';
 
 import '../commerce-styles';
 import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
@@ -190,6 +190,8 @@ export function AccountSecurityRoutePage() {
     const [avatarHistoryLoading, setAvatarHistoryLoading] = useState(Boolean(runtime.customer));
     const [dataSubjectRequests, setDataSubjectRequests] = useState<DataSubjectRequest[]>([]);
     const [dataSubjectLoading, setDataSubjectLoading] = useState(Boolean(runtime.customer));
+    const [fraudRiskCases, setFraudRiskCases] = useState<FraudRiskCase[]>([]);
+    const [fraudRiskLoading, setFraudRiskLoading] = useState(Boolean(runtime.customer));
     const refreshAvatarHistory = async () => {
         if (!runtime.customer) {
             setAvatarHistory([]);
@@ -220,6 +222,21 @@ export function AccountSecurityRoutePage() {
             setDataSubjectLoading(false);
         }
     };
+    const refreshFraudRiskCases = async () => {
+        if (!runtime.customer) {
+            setFraudRiskCases([]);
+            setFraudRiskLoading(false);
+            return;
+        }
+        setFraudRiskLoading(true);
+        try {
+            setFraudRiskCases(await runtime.api.fraudRiskCases());
+        } catch (error) {
+            runtime.notify(storefrontErrorMessage(error, runtime.language));
+        } finally {
+            setFraudRiskLoading(false);
+        }
+    };
     useEffect(() => {
         const controller = new AbortController();
         if (!runtime.customer) {
@@ -238,6 +255,26 @@ export function AccountSecurityRoutePage() {
             })
             .finally(() => {
                 if (!controller.signal.aborted) setAvatarHistoryLoading(false);
+            });
+        return () => controller.abort();
+    }, [isZh, runtime.api, runtime.customer?.id, runtime.notify]);
+    useEffect(() => {
+        const controller = new AbortController();
+        if (!runtime.customer) {
+            setFraudRiskCases([]);
+            setFraudRiskLoading(false);
+            return () => controller.abort();
+        }
+        setFraudRiskLoading(true);
+        void runtime.api
+            .fraudRiskCases(controller.signal)
+            .then(cases => setFraudRiskCases(cases))
+            .catch(error => {
+                if (!controller.signal.aborted)
+                    runtime.notify(storefrontErrorMessage(error, runtime.language));
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setFraudRiskLoading(false);
             });
         return () => controller.abort();
     }, [isZh, runtime.api, runtime.customer?.id, runtime.notify]);
@@ -275,6 +312,8 @@ export function AccountSecurityRoutePage() {
                     avatarHistoryLoading={avatarHistoryLoading}
                     dataSubjectRequests={dataSubjectRequests}
                     dataSubjectLoading={dataSubjectLoading}
+                    fraudRiskCases={fraudRiskCases}
+                    fraudRiskLoading={fraudRiskLoading}
                     onAvatarChange={async (file: File) => {
                         const avatar = await runtime.api.uploadCustomerAvatar(file);
                         runtime.setCustomer((current: ActiveCustomer | null) =>
@@ -309,6 +348,10 @@ export function AccountSecurityRoutePage() {
                     onCancelAccountClosure={async () => {
                         await runtime.api.cancelAccountClosure();
                         await refreshDataSubjectRequests();
+                    }}
+                    onAppealFraudRiskCase={async (id, reason) => {
+                        await runtime.api.appealFraudRiskCase(id, reason);
+                        await refreshFraudRiskCases();
                     }}
                     onLogout={() => {
                         void runtime.api.logout().then(() => {

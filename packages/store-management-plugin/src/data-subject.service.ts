@@ -23,6 +23,9 @@ import { DataRetentionService } from './data-retention.service';
 import { BeforeAccountAnonymizationEvent } from './data-subject.events';
 import { CustomerCoupon } from './entities/customer-coupon.entity';
 import { DataSubjectRequest, DataSubjectRequestStatus } from './entities/data-subject-request.entity';
+import { FraudRiskAppeal } from './entities/fraud-risk-appeal.entity';
+import { FraudRiskCaseEvent } from './entities/fraud-risk-case-event.entity';
+import { FraudRiskCase } from './entities/fraud-risk-case.entity';
 import { ReferralAccount } from './entities/referral-account.entity';
 import { ReferralWallet } from './entities/referral-wallet.entity';
 import { ReferralWithdrawal } from './entities/referral-withdrawal.entity';
@@ -112,6 +115,7 @@ export class DataSubjectService {
                 consentRecordCount: payload.consentRecords.length,
                 customerFollowUpCount: payload.customerOperations.followUps.length,
                 orderAttributionCount: payload.analytics.orderAttributions.length,
+                fraudRiskCaseCount: payload.fraudPrevention.cases.length,
             });
             request.completedAt = new Date();
             await repository.save(request, { reload: false });
@@ -321,6 +325,7 @@ export class DataSubjectService {
                     note: '[removed by account closure]',
                     payloadJson: null,
                 });
+                await this.anonymizeFraudRiskRows(txCtx, customer.id);
                 await this.clearOptionalCustomerReference(txCtx, 'StorefrontDailyVisitor', customer.id);
                 await this.connection.getRepository(txCtx, Address).delete({ customer: { id: customer.id } });
                 await this.customerService.softDelete(txCtx, customer.id);
@@ -334,6 +339,7 @@ export class DataSubjectService {
                     sessionsRevoked: true,
                     addressesRemoved: true,
                     profileAnonymized: true,
+                    fraudAppealContentRemoved: true,
                     transactionalRecordsRetained: true,
                 });
                 await repository.save(request, { reload: false });
@@ -384,6 +390,11 @@ export class DataSubjectService {
             .andWhere('intent.status IN (:...statuses)', { statuses: ['PENDING', 'MANUAL_REVIEW'] })
             .getCount();
         if (paymentIntents) blockers.push(`仍有 ${paymentIntents} 个待核对支付`);
+
+        const fraudReviews = await this.connection.getRepository(ctx, FraudRiskCase).count({
+            where: { customerId, status: In(['OPEN', 'IN_REVIEW', 'APPEALED']) },
+        });
+        if (fraudReviews) blockers.push(`仍有 ${fraudReviews} 个待处理风险复核`);
 
         const afterSales = await this.countOptionalCustomerRows(ctx, 'AfterSalesRequest', customerId, {
             state: ['PENDING', 'APPROVED'],
@@ -453,8 +464,8 @@ export class DataSubjectService {
             relations: ['addresses', 'addresses.country', 'channels'],
         });
         if (!customer) throw new UserInputError('当前账号没有客户资料');
-        const [orders, coupons, referralAccounts, referralWallets, withdrawals, requests] = await Promise.all(
-            [
+        const [orders, coupons, referralAccounts, referralWallets, withdrawals, requests, fraudRiskCases] =
+            await Promise.all([
                 this.connection.getRepository(ctx, Order).find({
                     where: { customerId },
                     relations: ['lines', 'payments', 'payments.refunds', 'fulfillments', 'channels'],
@@ -474,8 +485,12 @@ export class DataSubjectService {
                     where: { subjectKeyHash: dataSubjectHash(customerId) },
                     order: { createdAt: 'DESC' },
                 }),
-            ],
-        );
+                this.connection.getRepository(ctx, FraudRiskCase).find({
+                    where: { customerId },
+                    relations: { events: true, appeals: true },
+                    order: { createdAt: 'DESC' },
+                }),
+            ]);
         const [
             reviews,
             afterSales,
@@ -953,6 +968,42 @@ export class DataSubjectService {
                 followUps: customerFollowUps,
                 events: customerFollowUpEvents,
             },
+            fraudPrevention: {
+                cases: fraudRiskCases.map(riskCase => ({
+                    id: String(riskCase.id),
+                    createdAt: iso(riskCase.createdAt),
+                    channelId: String(riskCase.channelId),
+                    caseCode: riskCase.caseCode,
+                    subjectType: riskCase.subjectType,
+                    subjectId: riskCase.subjectId,
+                    orderId: riskCase.orderId == null ? null : String(riskCase.orderId),
+                    status: riskCase.status,
+                    severity: riskCase.severity,
+                    riskScore: riskCase.riskScore,
+                    ruleVersion: riskCase.ruleVersion,
+                    signalsJson: riskCase.signalsJson,
+                    recommendedAction: riskCase.recommendedAction,
+                    dueAt: iso(riskCase.dueAt),
+                    decisionCode: riskCase.decisionCode,
+                    decisionReason: riskCase.decisionReason,
+                    decidedAt: iso(riskCase.decidedAt),
+                    events: (riskCase.events ?? []).map(event => ({
+                        id: String(event.id),
+                        createdAt: iso(event.createdAt),
+                        eventType: event.eventType,
+                        actorType: event.actorType,
+                        note: event.note,
+                    })),
+                    appeals: (riskCase.appeals ?? []).map(appeal => ({
+                        id: String(appeal.id),
+                        createdAt: iso(appeal.createdAt),
+                        status: appeal.status,
+                        reason: appeal.reason,
+                        response: appeal.response,
+                        reviewedAt: iso(appeal.reviewedAt),
+                    })),
+                })),
+            },
             consentRecords,
             reviews,
             afterSales,
@@ -1060,6 +1111,41 @@ export class DataSubjectService {
             .createQueryBuilder()
             .update(metadata.target)
             .set({ customerId: null })
+            .where('customerId = :customerId', { customerId })
+            .execute();
+    }
+
+    private async anonymizeFraudRiskRows(ctx: RequestContext, customerId: ID): Promise<void> {
+        const cases = await this.connection.getRepository(ctx, FraudRiskCase).find({
+            where: { customerId },
+            select: { id: true },
+        });
+        const caseIds = cases.map(riskCase => riskCase.id);
+        if (caseIds.length) {
+            await this.connection
+                .getRepository(ctx, FraudRiskCaseEvent)
+                .createQueryBuilder()
+                .update(FraudRiskCaseEvent)
+                .set({ note: '[removed by account closure]', payloadJson: null })
+                .where('riskCaseId IN (:...caseIds)', { caseIds })
+                .execute();
+        }
+        await this.connection
+            .getRepository(ctx, FraudRiskAppeal)
+            .createQueryBuilder()
+            .update(FraudRiskAppeal)
+            .set({
+                customerId: null,
+                reason: '[removed by account closure]',
+                response: null,
+            })
+            .where('customerId = :customerId', { customerId })
+            .execute();
+        await this.connection
+            .getRepository(ctx, FraudRiskCase)
+            .createQueryBuilder()
+            .update(FraudRiskCase)
+            .set({ customerId: null, decisionReason: '[removed by account closure]' })
             .where('customerId = :customerId', { customerId })
             .execute();
     }

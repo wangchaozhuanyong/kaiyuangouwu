@@ -1,6 +1,7 @@
 import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { configureDefaultOrderProcess, LanguageCode, PluginCommonModule, VendurePlugin } from '@vendure/core';
+import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 
 import { AfterSalesAdminResolver, AfterSalesShopResolver } from './after-sales.resolver';
@@ -76,7 +77,13 @@ import { ProductPackagingService } from './product-packaging.service';
 import './types';
 
 @VendurePlugin({
-    imports: [PluginCommonModule, ContentTranslationPlugin, StorefrontCartPlugin, CatalogManagementPlugin],
+    imports: [
+        PluginCommonModule,
+        ContentTranslationPlugin,
+        StorefrontCartPlugin,
+        CatalogManagementPlugin,
+        StoreManagementPlugin,
+    ],
     entities: [
         AfterSalesRequest,
         AfterSalesItem,

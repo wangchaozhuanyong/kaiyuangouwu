@@ -129,6 +129,7 @@ import { CloseFulfillmentDelivery1789599600000 } from './1789599600000-close-ful
 import { AddCustomerOperations1789686000000 } from './1789686000000-add-customer-operations';
 import { AddMarketingAttribution1789689600000 } from './1789689600000-add-marketing-attribution';
 import { CloseFinanceProfitReconciliation1789693200000 } from './1789693200000-close-finance-profit-reconciliation';
+import { AddGovernanceAndFraudControl1789696800000 } from './1789696800000-add-governance-and-fraud-control';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -262,4 +263,5 @@ export const devServerMigrations = [
     AddCustomerOperations1789686000000,
     AddMarketingAttribution1789689600000,
     CloseFinanceProfitReconciliation1789693200000,
+    AddGovernanceAndFraudControl1789696800000,
 ];

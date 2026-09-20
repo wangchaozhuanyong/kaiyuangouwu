@@ -50,6 +50,8 @@ export { StorefrontPromotionPage } from './entities/storefront-promotion-page.en
 export { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity.js';
 export { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity.js';
 export { SystemAnnouncement } from './entities/system-announcement.entity.js';
+export { FraudRiskService } from './fraud-risk.service.js';
+export { GovernanceService } from './governance.service.js';
 export { MarketingAttributionService } from './marketing-attribution.service.js';
 export { MerchantCatalogAccessService } from './merchant-catalog-access.service.js';
 export {

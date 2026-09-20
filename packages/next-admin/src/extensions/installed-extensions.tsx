@@ -430,6 +430,15 @@ defineNextAdminExtension({
     ],
     routes: [
         {
+            id: 'operations-governance-risk-compatibility',
+            path: '/settings/governance-risk',
+            legacyPaths: [{ path: '/governance-risk', target: '/settings/system-ops?tab=governance' }],
+            title: '治理与风控',
+            component: redirectTo('/settings/system-ops?tab=governance'),
+            permissions: ['SuperAdmin'],
+            commandPalette: false,
+        },
+        {
             id: 'operations-after-sales',
             path: '/sales/after-sales',
             legacyPaths: ['/after-sales'],

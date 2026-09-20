@@ -47,6 +47,7 @@ const settingsItemIds = [
 
 const systemItemIds = [
     'image-generation-access',
+    'governance-risk',
     'incident-response',
     'job-queue',
     'scheduled-tasks',
@@ -106,6 +107,7 @@ describe('organizeOperationsNavigation', () => {
         ]);
         expect(sectionItems(result, 'accounts-and-access')).toEqual(['administrators', 'roles', 'api-keys']);
         expect(sectionItems(result, 'system-operations')).toEqual([
+            'governance-risk',
             'incident-response',
             'job-queue',
             'scheduled-tasks',

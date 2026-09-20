@@ -1,4 +1,4 @@
-import { Customer } from '@vendure/core';
+import { Customer, Order } from '@vendure/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -7,6 +7,9 @@ import {
     DataSubjectService,
 } from './data-subject.service';
 import { DataSubjectRequest } from './entities/data-subject-request.entity';
+import { FraudRiskCase } from './entities/fraud-risk-case.entity';
+import { ReferralWithdrawal } from './entities/referral-withdrawal.entity';
+import { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity';
 
 const ctx = { channelId: 'channel-1', activeUserId: 'user-1' } as never;
 
@@ -122,6 +125,7 @@ describe('DataSubjectService', () => {
             orders: unknown[];
             imageStudio: { jobs: unknown[]; privateAssets: unknown[] };
             couponHistory: { ledger: unknown[]; allocations: unknown[] };
+            fraudPrevention: { cases: unknown[] };
         };
 
         expect(body.profile.emailAddress).toBe('customer@example.com');
@@ -129,6 +133,7 @@ describe('DataSubjectService', () => {
         expect(body.orders).toEqual([]);
         expect(body.imageStudio).toMatchObject({ jobs: [], privateAssets: [] });
         expect(body.couponHistory).toEqual({ ledger: [], allocations: [] });
+        expect(body.fraudPrevention).toEqual({ cases: [] });
         expect(exported.sha256).toHaveLength(64);
         expect(exported.request).toMatchObject({
             requestType: 'EXPORT',
@@ -155,5 +160,41 @@ describe('DataSubjectService', () => {
         expect(request.nextAttemptAt).toBeNull();
         expect(request.cancelledAt).toBeInstanceOf(Date);
         expect(test.requestRepository.save).toHaveBeenCalledWith(request);
+    });
+
+    it('blocks account closure while a fraud review or appeal is unresolved', async () => {
+        const emptyCountBuilder = {
+            innerJoin: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis(),
+            andWhere: vi.fn().mockReturnThis(),
+            getCount: vi.fn().mockResolvedValue(0),
+        };
+        const connection = {
+            rawConnection: { entityMetadatas: [] },
+            getRepository: vi.fn((_ctx, target) => {
+                if (target === Order || target === StorefrontUsdtPaymentIntent) {
+                    return { createQueryBuilder: vi.fn(() => emptyCountBuilder) };
+                }
+                if (target === ReferralWithdrawal) return { count: vi.fn().mockResolvedValue(0) };
+                if (target === FraudRiskCase) return { count: vi.fn().mockResolvedValue(1) };
+                throw new Error('Unexpected repository');
+            }),
+        };
+        const service = new DataSubjectService(
+            connection as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+
+        const blockers = await (
+            service as unknown as {
+                closureBlockers: (requestContext: typeof ctx, customerId: string) => Promise<string[]>;
+            }
+        ).closureBlockers(ctx, 'customer-1');
+
+        expect(blockers).toContain('仍有 1 个待处理风险复核');
     });
 });

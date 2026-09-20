@@ -18,8 +18,8 @@ This plan tracks whether each business capability has a complete loop rather tha
 | P1       | Customer operations        | Customer 360, service history, segmentation, RFM/LTV, churn signal and follow-up outcome                                  | Implemented and locally verified; production migration and browser exercise remain           |
 | P1       | Marketing analytics        | Acquisition attribution, search terms, funnel, campaign cost, revenue, refund-adjusted ROI                                | Implemented and locally verified; production migration and browser exercise remain           |
 | P1       | Finance                    | Revenue, discount, tax, cost, gateway fee, refund, chargeback and profit reconciliation                                   | Implemented and locally verified; production migration and browser exercise remain           |
-| P2       | Governance                 | Unified immutable audit, four-eyes approval, content/config versioning, scheduled reports and anomaly alerts              | Partial and distributed                                                                      |
-| P2       | Fraud and abuse            | Account/order/payment/referral risk rules, review queue, decision evidence and appeal                                     | Partial and distributed                                                                      |
+| P2       | Governance                 | Unified immutable audit, four-eyes approval, content/config versioning, scheduled reports and anomaly alerts              | Implemented and locally verified; production migration and scheduler observation remain      |
+| P2       | Fraud and abuse            | Account/order/payment/referral risk rules, review queue, decision evidence and appeal                                     | Implemented and locally verified; production migration and browser exercise remain           |
 
 ## Current P0 implementation: customer avatar retention
 
@@ -27,9 +27,9 @@ The active avatar is not placed in a time-based deletion queue. Only an avatar r
 
 ## Current P0 implementation: personal-data requests and account closure
 
-Signed-in customers can generate a JSON export after password re-authentication. The file contains profile, addresses, delivery emails, orders, payments, refunds, fulfilments, coupons, referrals, reviews, after-sales, image-studio activity and linked analytics. The server keeps only the request audit, summary and SHA-256 digest, not the exported body.
+Signed-in customers can generate a JSON export after password re-authentication. The file contains profile, addresses, delivery emails, orders, payments, refunds, fulfilments, coupons, referrals, reviews, after-sales, image-studio activity, linked analytics, fraud cases, case events and appeals. The server keeps only the request audit, summary and SHA-256 digest, not the exported body.
 
-Account closure also requires password re-authentication and has a seven-day cooling-off period that the customer can cancel. The scheduled worker blocks closure while orders, withdrawals, payment reconciliation, after-sales or image jobs are unresolved. A successful closure revokes access, removes direct contact/address data, quarantines avatars, anonymizes user/authentication identifiers and plugin-owned image content, and retains transactional records required for finance, disputes and audit. Blocked and failed requests stay visible in the admin exception queue and can be retried.
+Account closure also requires password re-authentication and has a seven-day cooling-off period that the customer can cancel. The scheduled worker blocks closure while orders, withdrawals, payment reconciliation, after-sales or image jobs are unresolved. A successful closure revokes access, removes direct contact/address data, quarantines avatars, anonymizes user/authentication identifiers and plugin-owned image content, disconnects fraud records from the customer ID and removes appeal/decision free text, while retaining non-identifying transaction, fraud-prevention, dispute and audit evidence. Blocked and failed requests stay visible in the admin exception queue and can be retried.
 
 ## Current P0 implementation: consent and first-party analytics
 
@@ -265,6 +265,50 @@ Financial-reconciliation acceptance gates:
 - [ ] Migration applied and a representative order/refund/chargeback set reconciled in a production-like database.
 - [ ] Release, running SHA, browser acceptance and finance sign-off evidence.
 
+## Current P2 implementation: governance control plane
+
+Risk rules and governance-report schedules now use channel-scoped, versioned JSON documents with strict field allowlists and value ranges. A configuration remains a draft until a second authenticated SuperAdmin approves it; the submitter cannot approve their own request, approvals expire after seven days, and duplicate submissions or decisions use explicit idempotency keys. Approval activates the new immutable version and retires the previous active version instead of overwriting it.
+
+Every configuration request, approval decision, fraud evaluation and fraud-case action enters a channel-scoped SHA-256 audit chain with monotonic sequence, previous-entry hash, payload hash and idempotency evidence. The chain can be verified independently and a daily report snapshots pending/expired approvals, open/overdue risk cases, pending appeals and audit integrity. Anomalies publish into the durable incident workflow; a healthy later run resolves the same incident fingerprint. Both administrator interfaces expose configuration submission, approval, audit integrity, recent evidence and daily reports.
+
+Governance acceptance gates:
+
+- [x] Configuration namespaces reject unknown keys and invalid value ranges.
+- [x] Drafts require a second administrator and self-approval is rejected.
+- [x] Approvals expire after seven days and all write paths are idempotent.
+- [x] Activating a version retires the prior active version without rewriting history.
+- [x] Audit entries are append-only, hash chained and independently verifiable.
+- [x] Daily snapshots cover approvals, risk cases, appeals and audit integrity.
+- [x] Anomalies enter the durable incident workflow and recovery resolves the same fingerprint.
+- [x] Next Admin and Vendure Dashboard expose the control and evidence workflow.
+- [x] Migration is idempotent and tested on MySQL, PostgreSQL and SQLite-shaped schemas.
+- [ ] Migration applied and four-eyes approval exercised with two production-like administrator identities.
+- [ ] Daily report task, anomaly incident and recovery observed end to end.
+- [ ] Release, running SHA, browser acceptance and monitoring evidence.
+
+## Current P2 implementation: fraud and abuse review
+
+Before an order can enter payment arrangement, the server evaluates account age and verification, order value, recent order velocity, recent failed-payment velocity and a newly bound referral relationship against the active governed rule version. The evidence digest, rule version, signals, score, deadline and recommended action are persisted in a detached context, so deliberately rejecting the order transition cannot roll back the review case. A matching unresolved case continues to block retry; an administrator release permits the same evidence digest to continue, while a block remains explicit.
+
+Risk cases have severity-based deadlines, ownership, an append-only event timeline and a scheduled overdue incident. Administrators can claim, release or block a case with a required reason and idempotency key. Customers can see their own held-order cases and submit one pending appeal from the account-security page; the review decision closes that appeal with a response. Personal-data export includes the complete customer-linked record. Account closure removes customer/appeal free text and the direct customer link while preserving non-identifying fraud and transaction evidence. Next Admin and Vendure Dashboard expose the queue, signals, appeals and actions.
+
+Fraud-control acceptance gates:
+
+- [x] Risk evaluation runs before payment arrangement and is scoped to the active store.
+- [x] Account, order, payment and referral signals contribute explainable evidence.
+- [x] Rule version and subject digest make retries deterministic.
+- [x] A held transition still leaves a durable case and recovery path.
+- [x] Claim, release and block actions require an authenticated operator, reason and idempotency key.
+- [x] Held orders remain blocked until release; blocked decisions remain explicit.
+- [x] Customer case visibility and appeal submission enforce ownership.
+- [x] Severity deadlines and overdue reconciliation publish durable incidents.
+- [x] Data export includes cases/events/appeals and account closure removes identifying free text.
+- [x] Storefront, Next Admin and Vendure Dashboard expose their respective workflows.
+- [x] Migration is idempotent and tested on MySQL, PostgreSQL and SQLite-shaped schemas.
+- [ ] Migration applied and representative allow, review, release, block and appeal paths exercised in a production-like database.
+- [ ] Scheduled overdue incident, browser checkout retry and customer appeal observed end to end.
+- [ ] Release, running SHA and monitoring evidence.
+
 Customer-avatar acceptance gates:
 
 - [x] Replacement is atomic: a failed upload leaves the current avatar active.
@@ -283,10 +327,10 @@ Customer-avatar acceptance gates:
 
 ## Execution order
 
-1. Apply and exercise the completed P0 controls in a production-like environment without publishing from this worktree.
-2. Apply and exercise outbound fulfilment delivery evidence, exception recovery and scheduled alerts.
-3. Apply and exercise acquisition attribution and refund-adjusted profitability in a production-like environment.
-4. Consolidate audit, approvals, scheduled reports, alerts and fraud review across all domains.
+1. Review and apply the accumulated migrations in a production-like database without publishing from this worktree.
+2. Exercise the critical user/admin workflows, including avatar recovery, closure, payments, fulfilment, after-sales, governed approval and fraud appeal.
+3. Observe all scheduled reconciliation, retention, backup, incident, analytics, customer-operations and governance jobs for at least one complete cycle.
+4. Run release CI, deploy through the approved release process, confirm the running SHA and complete browser plus monitoring acceptance separately.
 
 ## Definition of done for every domain
 

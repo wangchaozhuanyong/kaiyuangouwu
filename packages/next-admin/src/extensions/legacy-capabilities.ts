@@ -45,6 +45,12 @@ export const LEGACY_ROUTE_CAPABILITIES: LegacyRouteCapability[] = [
         status: 'MIGRATED',
     },
     {
+        id: 'governance-risk',
+        legacyPath: '/governance-risk',
+        target: '/settings/system-ops?tab=governance',
+        status: 'MIGRATED',
+    },
+    {
         id: 'image-generation-access',
         legacyPath: '/image-generation-access',
         target: '/plugins/ai-access',

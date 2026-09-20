@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
 import {
+    AlertTriangle,
     ArrowLeft,
     Camera,
     CheckCircle2,
@@ -29,6 +30,7 @@ import {
     CustomerAvatarHistoryEntry,
     DataSubjectExportPayload,
     DataSubjectRequest,
+    FraudRiskCase,
     StoreCommerceMode,
     StorefrontLanguage,
 } from './types';
@@ -66,9 +68,12 @@ export function AccountSecurityPage({
     onAvatarRemove,
     dataSubjectRequests = [],
     dataSubjectLoading = false,
+    fraudRiskCases = [],
+    fraudRiskLoading = false,
     onDataExport,
     onRequestAccountClosure,
     onCancelAccountClosure,
+    onAppealFraudRiskCase,
     onLogout,
 }: {
     customer: ActiveCustomer | null;
@@ -83,9 +88,12 @@ export function AccountSecurityPage({
     onAvatarRemove?: () => Promise<void>;
     dataSubjectRequests?: DataSubjectRequest[];
     dataSubjectLoading?: boolean;
+    fraudRiskCases?: FraudRiskCase[];
+    fraudRiskLoading?: boolean;
     onDataExport?: (password: string) => Promise<DataSubjectExportPayload>;
     onRequestAccountClosure?: (password: string) => Promise<void>;
     onCancelAccountClosure?: () => Promise<void>;
+    onAppealFraudRiskCase?: (id: string, reason: string) => Promise<void>;
     onLogout: () => void;
 }) {
     const navigate = useNavigate();
@@ -102,6 +110,10 @@ export function AccountSecurityPage({
     const [privacyPassword, setPrivacyPassword] = useState('');
     const [privacyError, setPrivacyError] = useState<string | null>(null);
     const [privacyNotice, setPrivacyNotice] = useState<string | null>(null);
+    const [riskAppealId, setRiskAppealId] = useState<string | null>(null);
+    const [riskAppealReason, setRiskAppealReason] = useState('');
+    const [riskAction, setRiskAction] = useState(false);
+    const [riskMessage, setRiskMessage] = useState<string | null>(null);
 
     useEffect(
         () => () => {
@@ -515,6 +527,153 @@ export function AccountSecurityPage({
                     </div>
                 </div>
 
+                {(fraudRiskLoading || fraudRiskCases.length > 0) && (
+                    <div className="security-group">
+                        <div className="security-group-header">
+                            <span>{isZh ? '订单风险复核' : 'Order risk review'}</span>
+                        </div>
+                        <div className="security-card-list" aria-live="polite">
+                            {fraudRiskLoading ? (
+                                <div className="security-item-static">
+                                    <span className="security-item-icon icon-shield" aria-hidden="true">
+                                        <LoaderCircle size={17} />
+                                    </span>
+                                    <div className="security-item-info">
+                                        <strong className="security-item-title">
+                                            {isZh ? '正在读取复核状态…' : 'Loading review status…'}
+                                        </strong>
+                                    </div>
+                                </div>
+                            ) : (
+                                fraudRiskCases.map(riskCase => {
+                                    const canAppeal = ['OPEN', 'REJECTED'].includes(riskCase.status);
+                                    const pendingAppeal = riskCase.appeals.find(
+                                        appeal => appeal.status === 'PENDING',
+                                    );
+                                    return (
+                                        <div className="security-risk-case" key={riskCase.id}>
+                                            <div className="security-item-static">
+                                                <span
+                                                    className="security-item-icon icon-account-closure"
+                                                    aria-hidden="true"
+                                                >
+                                                    <AlertTriangle size={17} />
+                                                </span>
+                                                <div className="security-item-info">
+                                                    <strong className="security-item-title">
+                                                        {riskCase.caseCode} ·{' '}
+                                                        {riskCaseStatusLabel(riskCase.status, language)}
+                                                    </strong>
+                                                    <span className="security-item-subtitle">
+                                                        {isZh
+                                                            ? `订单 ${riskCase.orderId ?? '—'} 暂需人工复核；批准后可继续支付`
+                                                            : `Order ${riskCase.orderId ?? '—'} is under manual review; checkout resumes after release.`}
+                                                    </span>
+                                                    {riskCase.decisionReason && (
+                                                        <span className="security-item-subtitle">
+                                                            {isZh ? '复核说明：' : 'Decision: '}
+                                                            {riskCase.decisionReason}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {pendingAppeal && (
+                                                <p className="security-risk-message">
+                                                    {isZh
+                                                        ? '申诉已提交，等待复核。'
+                                                        : 'Appeal submitted and awaiting review.'}
+                                                </p>
+                                            )}
+                                            {canAppeal &&
+                                                !pendingAppeal &&
+                                                onAppealFraudRiskCase &&
+                                                (riskAppealId === riskCase.id ? (
+                                                    <div className="security-risk-appeal">
+                                                        <textarea
+                                                            value={riskAppealReason}
+                                                            onChange={event =>
+                                                                setRiskAppealReason(event.target.value)
+                                                            }
+                                                            maxLength={1000}
+                                                            placeholder={
+                                                                isZh
+                                                                    ? '说明订单用途、付款人与其他有助于复核的信息'
+                                                                    : 'Explain the order purpose and any details that help the review.'
+                                                            }
+                                                        />
+                                                        <div>
+                                                            <button
+                                                                type="button"
+                                                                disabled={
+                                                                    riskAction || !riskAppealReason.trim()
+                                                                }
+                                                                onClick={() => {
+                                                                    setRiskAction(true);
+                                                                    setRiskMessage(null);
+                                                                    void onAppealFraudRiskCase(
+                                                                        riskCase.id,
+                                                                        riskAppealReason,
+                                                                    )
+                                                                        .then(() => {
+                                                                            setRiskMessage(
+                                                                                isZh
+                                                                                    ? '申诉已提交'
+                                                                                    : 'Appeal submitted',
+                                                                            );
+                                                                            setRiskAppealId(null);
+                                                                            setRiskAppealReason('');
+                                                                        })
+                                                                        .catch(error =>
+                                                                            setRiskMessage(
+                                                                                error instanceof Error
+                                                                                    ? storefrontErrorMessage(
+                                                                                          error,
+                                                                                          language,
+                                                                                      )
+                                                                                    : isZh
+                                                                                      ? '申诉提交失败'
+                                                                                      : 'Appeal failed',
+                                                                            ),
+                                                                        )
+                                                                        .finally(() => setRiskAction(false));
+                                                                }}
+                                                            >
+                                                                {riskAction ? (
+                                                                    <LoaderCircle size={13} />
+                                                                ) : null}
+                                                                {isZh ? '提交申诉' : 'Submit appeal'}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                disabled={riskAction}
+                                                                onClick={() => setRiskAppealId(null)}
+                                                            >
+                                                                {isZh ? '取消' : 'Cancel'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        className="security-risk-open"
+                                                        onClick={() => {
+                                                            setRiskAppealId(riskCase.id);
+                                                            setRiskAppealReason('');
+                                                            setRiskMessage(null);
+                                                        }}
+                                                    >
+                                                        {isZh ? '提交复核说明' : 'Submit review details'}
+                                                    </button>
+                                                ))}
+                                        </div>
+                                    );
+                                })
+                            )}
+                            {riskMessage && <p className="security-risk-message">{riskMessage}</p>}
+                        </div>
+                    </div>
+                )}
+
                 <div className="security-group">
                     <div className="security-group-header">
                         <span>{isZh ? '数据与隐私' : 'Data & Privacy'}</span>
@@ -539,8 +698,8 @@ export function AccountSecurityPage({
                                 </strong>
                                 <span className="security-item-subtitle">
                                     {isZh
-                                        ? '包含资料、地址、订单、支付、售后、评价与数据请求记录'
-                                        : 'Includes profile, addresses, orders, payments, support, reviews and requests'}
+                                        ? '包含资料、订单、支付、售后、评价、风险复核与数据请求记录'
+                                        : 'Includes profile, orders, payments, support, reviews, risk cases and requests'}
                                 </span>
                             </div>
                             <span className="security-item-tail">
@@ -611,8 +770,8 @@ export function AccountSecurityPage({
                                     </strong>
                                     <span className="security-item-subtitle">
                                         {isZh
-                                            ? '7 天冷静期；未完成订单、支付、售后或提现会阻止注销'
-                                            : '7-day cooling-off; open orders, payments, support or payouts block closure'}
+                                            ? '7 天冷静期；未完成订单、支付、风控、售后或提现会阻止注销'
+                                            : '7-day cooling-off; open orders, payments, risk reviews, support or payouts block closure'}
                                     </span>
                                 </div>
                                 <ChevronRight size={15} aria-hidden="true" />
@@ -672,10 +831,10 @@ export function AccountSecurityPage({
                                     ? '为防止他人下载你的资料，请输入当前登录密码。导出文件仅在本次请求中生成，不会保存文件内容。'
                                     : 'Enter your current password. The export is generated for this request and its file contents are not stored.'
                                 : isZh
-                                  ? '提交后有 7 天冷静期。到期会先检查未完成订单、支付、售后和提现；交易及争议记录会按法定义务继续保留。'
+                                  ? '提交后有 7 天冷静期。到期会先检查未完成订单、支付、风险复核、售后和提现；交易及争议记录会按法定义务继续保留。'
                                   : [
                                         'A 7-day cooling-off period applies.',
-                                        'Open orders, payments, support and payouts are checked;',
+                                        'Open orders, payments, risk reviews, support and payouts are checked;',
                                         'legally required transaction and dispute records remain retained.',
                                     ].join(' ')}
                         </p>
@@ -743,6 +902,18 @@ function closureStatusLabel(status: DataSubjectRequest['status'], language: Stor
     if (status === 'FAILED') return isZh ? '注销处理失败，等待重试' : 'Closure failed and will retry';
     if (status === 'PROCESSING') return isZh ? '正在注销账户' : 'Closing account';
     return isZh ? '账户注销已申请' : 'Account closure requested';
+}
+
+function riskCaseStatusLabel(status: FraudRiskCase['status'], language: StorefrontLanguage): string {
+    const labels: Record<FraudRiskCase['status'], [string, string]> = {
+        OPEN: ['待复核', 'Awaiting review'],
+        IN_REVIEW: ['复核中', 'In review'],
+        APPEALED: ['申诉复核中', 'Appeal under review'],
+        APPROVED: ['已放行', 'Released'],
+        REJECTED: ['已拦截', 'Blocked'],
+        CLOSED: ['已关闭', 'Closed'],
+    };
+    return labels[status][language === 'zh' ? 0 : 1];
 }
 
 function formatPrivacyDate(value: string, language: StorefrontLanguage): string {

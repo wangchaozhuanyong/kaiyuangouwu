@@ -5,6 +5,7 @@ import { afterSalesRoute } from './after-sales-page';
 import { autoCardRoute } from './auto-card-page';
 import { CustomerOperationsPageBlock } from './customer-operations-page-block';
 import { FulfillmentDeliveryPageBlock } from './fulfillment-delivery-page-block';
+import { governanceRiskRoute } from './governance-risk-page';
 import { incidentResponseRoute } from './incident-response-page';
 import { manualDigitalDeliveryRoute } from './manual-digital-delivery-page';
 import { marketingAttributionRoute } from './marketing-attribution-page';
@@ -68,6 +69,7 @@ defineDashboardExtension({
     routes: [
         afterSalesRoute,
         autoCardRoute,
+        governanceRiskRoute,
         incidentResponseRoute,
         manualDigitalDeliveryRoute,
         marketingAttributionRoute,
