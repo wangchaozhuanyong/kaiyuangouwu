@@ -265,6 +265,8 @@ void test('deployment cache cleanup is reviewed, source-pinned and limited to pl
     mkdirSync(cacheB);
     writeFileSync(path.join(cacheA, 'package'), 'a');
     writeFileSync(path.join(cacheB, 'package'), 'b');
+    const inspectedRepositorySha = 'c'.repeat(40);
+    let ancestryChecks = 0;
     const inspect = () =>
         operations.inspectDeploymentCacheCleanup(sourceSha, {
             directories: [
@@ -273,8 +275,7 @@ void test('deployment cache cleanup is reviewed, source-pinned and limited to pl
             ],
             inspectRepository: () => ({
                 status: 'ok',
-                head: sourceSha,
-                headMatchesOperationsSource: true,
+                head: inspectedRepositorySha,
                 originMainMatchesOperationsSource: true,
                 trackedClean: true,
             }),
@@ -282,9 +283,16 @@ void test('deployment cache cleanup is reviewed, source-pinned and limited to pl
                 markerSha: 'b'.repeat(40),
                 currentRuntime: path.join(canonicalRoot, 'runtime'),
             }),
+            assertRepositoryRevision: (before, after) => {
+                ancestryChecks++;
+                assert.equal(before, inspectedRepositorySha);
+                assert.equal(after, sourceSha);
+            },
             sizeDirectory: () => 128,
         });
     const plan = inspect();
+    assert.equal(ancestryChecks, 1);
+    assert.equal(plan.repositorySha, inspectedRepositorySha);
     assert.equal(plan.totalKib, 256);
     assert.deepEqual(
         plan.candidates.map(candidate => candidate.directory),
@@ -300,6 +308,7 @@ void test('deployment cache cleanup is reviewed, source-pinned and limited to pl
         inspect,
         remove: directory => removed.push(directory),
     });
+    assert.equal(ancestryChecks, 3);
     assert.deepEqual(removed, [cacheA, cacheB]);
     assert.throws(() =>
         operations.applyDeploymentCacheCleanup(
