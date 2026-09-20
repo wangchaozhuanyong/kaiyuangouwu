@@ -124,6 +124,7 @@ interface SalesOrdersData {
     activeChannel: { id: string; code: string };
     orders: { items: SalesOrderItem[]; totalItems: number };
     physicalFulfillmentTodoCount: number;
+    fulfillmentDeliveryExceptions: { totalItems: number };
 }
 
 interface FulfillmentMutationData {
@@ -243,6 +244,7 @@ export function SalesModule() {
     const totalItems = data?.orders.totalItems ?? 0;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     const physicalTodoCount = data?.physicalFulfillmentTodoCount ?? 0;
+    const deliveryExceptionCount = data?.fulfillmentDeliveryExceptions.totalItems ?? 0;
     const selectableOrders = orders.filter(
         order =>
             canManageOrderInChannel(order, data?.activeChannel?.id) &&
@@ -480,7 +482,7 @@ export function SalesModule() {
 
             <div className="flex-1 overflow-y-auto p-5 sm:p-8">
                 <div className="w-full max-w-none space-y-4">
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
                         <div className="min-w-0 rounded-lg bg-slate-900 px-3 py-2.5 text-white shadow-sm">
                             <div className="text-[11px] font-medium text-slate-300">当前筛选</div>
                             <div className="mt-1 font-mono text-lg font-semibold tabular-nums">
@@ -498,7 +500,17 @@ export function SalesModule() {
                             </div>
                             <div className="mt-0.5 text-[11px] text-amber-700">已排除纯虚拟订单</div>
                         </div>
-                        <div className="col-span-2 min-w-0 rounded-lg border border-slate-200 bg-white sm:col-span-1 px-3 py-2.5">
+                        <div className="min-w-0 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5">
+                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-700">
+                                <AlertCircle className="h-3.5 w-3.5" />
+                                配送异常 / 逾期
+                            </div>
+                            <div className="mt-1 font-mono text-lg font-semibold tabular-nums text-rose-900">
+                                {deliveryExceptionCount}
+                            </div>
+                            <div className="mt-0.5 text-[11px] text-rose-700">需进入订单处理并留证</div>
+                        </div>
+                        <div className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5">
                             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
                                 <PackageCheck className="h-3.5 w-3.5" />
                                 本页可批量发货

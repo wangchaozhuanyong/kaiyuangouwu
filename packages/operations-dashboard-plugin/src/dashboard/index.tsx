@@ -3,6 +3,7 @@ import { defineDashboardExtension } from '@vendure/dashboard';
 
 import { afterSalesRoute } from './after-sales-page';
 import { autoCardRoute } from './auto-card-page';
+import { FulfillmentDeliveryPageBlock } from './fulfillment-delivery-page-block';
 import { incidentResponseRoute } from './incident-response-page';
 import { manualDigitalDeliveryRoute } from './manual-digital-delivery-page';
 import { organizeOperationsNavigation, type OperationsNavigationTitles } from './operations-navigation';
@@ -90,6 +91,18 @@ defineDashboardExtension({
                 );
             },
             requiresPermission: ['UpdateProduct'],
+        },
+        {
+            id: 'fulfillment-delivery-evidence',
+            title: undefined,
+            location: {
+                pageId: 'order-detail',
+                column: 'main',
+                position: { blockId: 'order-table', order: 'after' },
+            },
+            component: FulfillmentDeliveryPageBlock,
+            shouldRender: context => Boolean(context.entity?.id),
+            requiresPermission: ['UpdateOrder'],
         },
     ],
     widgets: [

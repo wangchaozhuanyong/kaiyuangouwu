@@ -506,12 +506,67 @@ const customerDeliveryEmailTypes = gql`
     }
 `;
 
+const fulfillmentDeliveryTypes = gql`
+    enum FulfillmentDeliveryStatus {
+        IN_TRANSIT
+        EXCEPTION
+        DELIVERED
+    }
+
+    enum FulfillmentDeliveryActorType {
+        CUSTOMER
+        ADMIN
+        SYSTEM
+    }
+
+    type FulfillmentDeliveryEvent implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        status: FulfillmentDeliveryStatus!
+        actorType: FulfillmentDeliveryActorType!
+        actorLabel: String!
+        note: String!
+        carrier: String!
+        trackingCode: String!
+        proofReference: String
+    }
+
+    type FulfillmentDeliveryRecord implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        status: FulfillmentDeliveryStatus!
+        carrier: String!
+        trackingCode: String!
+        exceptionReason: String
+        proofReference: String
+        shippedAt: DateTime!
+        deliveredAt: DateTime
+        nextActionDueAt: DateTime
+        overdue: Boolean!
+        fulfillment: Fulfillment!
+        order: Order!
+        events: [FulfillmentDeliveryEvent!]!
+    }
+
+    input ConfirmFulfillmentDeliveryInput {
+        fulfillmentId: ID!
+        idempotencyKey: String!
+    }
+
+    extend type Fulfillment {
+        deliveryEvidence: FulfillmentDeliveryRecord
+    }
+`;
+
 export const shopApiExtensions = gql`
     ${afterSalesTypes}
     ${productPackagingTypes}
     ${commerceModeTypes}
     ${manualDeliveryCommonTypes}
     ${customerDeliveryEmailTypes}
+    ${fulfillmentDeliveryTypes}
 
     enum AutoCardDeliveryState {
         WAITING_STOCK
@@ -603,6 +658,7 @@ export const shopApiExtensions = gql`
         cancelMyAfterSalesRequest(id: ID!): AfterSalesRequest!
         submitMyAfterSalesReturnShipment(input: SubmitAfterSalesReturnShipmentInput!): AfterSalesRequest!
         confirmMyAfterSalesReplacement(input: ConfirmAfterSalesReplacementInput!): AfterSalesRequest!
+        confirmMyFulfillmentDelivery(input: ConfirmFulfillmentDeliveryInput!): FulfillmentDeliveryRecord!
         saveMyDeliveryEmail(input: SaveCustomerDeliveryEmailInput!): CustomerDeliveryEmail!
         setMyDefaultDeliveryEmail(id: ID!): CustomerDeliveryEmail!
         deleteMyDeliveryEmail(id: ID!): Boolean!
@@ -625,6 +681,7 @@ export const adminApiExtensions = gql`
     ${commerceModeTypes}
     ${manualDeliveryCommonTypes}
     ${manualDeliveryAdminTypes}
+    ${fulfillmentDeliveryTypes}
 
     extend type Order {
         manualDigitalDeliveries: [ManualDigitalOrderDelivery!]!
@@ -671,6 +728,10 @@ export const adminApiExtensions = gql`
     }
 
     extend type AfterSalesEvent {
+        actorId: String
+    }
+
+    extend type FulfillmentDeliveryEvent {
         actorId: String
     }
 
@@ -728,6 +789,27 @@ export const adminApiExtensions = gql`
         idempotencyKey: String!
     }
 
+    type FulfillmentDeliveryRecordList implements PaginatedList {
+        items: [FulfillmentDeliveryRecord!]!
+        totalItems: Int!
+    }
+
+    input FulfillmentDeliveryListOptions {
+        skip: Int
+        take: Int
+        exceptionsOnly: Boolean
+    }
+
+    input UpdateFulfillmentDeliveryInput {
+        fulfillmentId: ID!
+        status: FulfillmentDeliveryStatus!
+        carrier: String
+        trackingCode: String
+        proofReference: String
+        note: String!
+        idempotencyKey: String!
+    }
+
     extend type Query {
         myStoreCommerceMode: StoreCommerceModeConfiguration!
         manualDigitalDeliveries(options: ManualDigitalDeliveryListOptions): ManualDigitalDeliveryList!
@@ -741,6 +823,7 @@ export const adminApiExtensions = gql`
         productPackaging(productId: ID!): ProductPackagingRule
         productPackagingStock(productId: ID!): ProductPackagingStockSummary
         productPackagingUnpackEvents(productId: ID!, take: Int = 20): [PackagingUnpackEvent!]!
+        fulfillmentDeliveryExceptions(options: FulfillmentDeliveryListOptions): FulfillmentDeliveryRecordList!
     }
 
     extend type Mutation {
@@ -759,5 +842,6 @@ export const adminApiExtensions = gql`
         setAutoCardPoolItemEnabled(id: ID!, enabled: Boolean!, reason: String): AutoCardPoolItem!
         retryAutoCardDelivery(id: ID!): AutoCardDelivery!
         updateProductPackaging(input: UpdateProductPackagingInput!): ProductPackagingRule!
+        updateFulfillmentDelivery(input: UpdateFulfillmentDeliveryInput!): FulfillmentDeliveryRecord!
     }
 `;

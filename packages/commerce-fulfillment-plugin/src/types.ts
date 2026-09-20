@@ -1,4 +1,4 @@
-import { ID } from '@vendure/common/lib/shared-types';
+import type { ID } from '@vendure/common/lib/shared-types';
 import {
     CustomChannelFields,
     CustomOrderFields,
@@ -143,6 +143,27 @@ export interface UpdateAfterSalesReplacementInput {
 
 export interface ConfirmAfterSalesReplacementInput {
     id: ID;
+    idempotencyKey: string;
+}
+
+export interface FulfillmentDeliveryListOptions {
+    skip?: number | null;
+    take?: number | null;
+    exceptionsOnly?: boolean | null;
+}
+
+export interface UpdateFulfillmentDeliveryInput {
+    fulfillmentId: ID;
+    status: 'IN_TRANSIT' | 'EXCEPTION' | 'DELIVERED';
+    carrier?: string | null;
+    trackingCode?: string | null;
+    proofReference?: string | null;
+    note: string;
+    idempotencyKey: string;
+}
+
+export interface ConfirmFulfillmentDeliveryInput {
+    fulfillmentId: ID;
     idempotencyKey: string;
 }
 

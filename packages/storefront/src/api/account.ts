@@ -8,6 +8,7 @@ import type {
     CustomerOrderCounts,
     DataSubjectExportPayload,
     DataSubjectRequest,
+    FulfillmentDeliveryEvidence,
     Order,
     OrderConfirmationToken,
     OrderPage,
@@ -351,6 +352,24 @@ export class AccountApi extends BaseDomainApi {
             { orderId, reason },
         );
         return result.cancelMyAuthorizedOrder;
+    }
+
+    async confirmFulfillmentDelivery(fulfillmentId: string): Promise<FulfillmentDeliveryEvidence> {
+        const result = await this.request<{
+            confirmMyFulfillmentDelivery: FulfillmentDeliveryEvidence;
+        }>(
+            `
+                mutation ConfirmMyFulfillmentDelivery($input: ConfirmFulfillmentDeliveryInput!) {
+                    confirmMyFulfillmentDelivery(input: $input) {
+                        id status carrier trackingCode exceptionReason proofReference
+                        shippedAt deliveredAt nextActionDueAt overdue
+                        events { id createdAt status actorType actorLabel note }
+                    }
+                }
+            `,
+            { input: { fulfillmentId, idempotencyKey: `customer-delivered-${fulfillmentId}` } },
+        );
+        return result.confirmMyFulfillmentDelivery;
     }
 
     async login(emailAddress: string, password: string): Promise<void> {

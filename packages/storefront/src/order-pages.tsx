@@ -1112,6 +1112,7 @@ export function OrderDetailPage({
     onReopen,
     onCancelOrder,
     onCreateAfterSales,
+    onConfirmDelivery,
     onUnavailable,
     onNotify,
 }: {
@@ -1125,6 +1126,7 @@ export function OrderDetailPage({
     onReopen: (order: Order) => Promise<void>;
     onCancelOrder: (order: Order, reason: string) => Promise<void>;
     onCreateAfterSales: (input: CreateAfterSalesRequestInput) => Promise<void>;
+    onConfirmDelivery: (fulfillmentId: string) => Promise<void>;
     onUnavailable: () => void;
     onNotify?: (message: string) => void;
 }) {
@@ -1133,6 +1135,7 @@ export function OrderDetailPage({
     const [cancelOpen, setCancelOpen] = useState(false);
     const [afterSalesOpen, setAfterSalesOpen] = useState(false);
     const [logisticsSheetOpen, setLogisticsSheetOpen] = useState(false);
+    const [confirmingDeliveryId, setConfirmingDeliveryId] = useState('');
     if (!order) {
         return (
             <Subpage title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack}>
@@ -1263,9 +1266,46 @@ export function OrderDetailPage({
                                               : 'Tracking number is not available yet'}
                                     </b>
                                     <em>
-                                        {fulfillmentStateLabel(fulfillment.state, language)} ·{' '}
-                                        {formatOrderDate(fulfillment.updatedAt, locale)}
+                                        {fulfillment.deliveryEvidence?.status === 'EXCEPTION'
+                                            ? isZh
+                                                ? '配送异常待处理'
+                                                : 'Delivery exception'
+                                            : fulfillmentStateLabel(fulfillment.state, language)}{' '}
+                                        · {formatOrderDate(fulfillment.updatedAt, locale)}
                                     </em>
+                                    {fulfillment.deliveryEvidence?.exceptionReason && (
+                                        <small>
+                                            {isZh ? '异常说明：' : 'Exception: '}
+                                            {fulfillment.deliveryEvidence.exceptionReason}
+                                        </small>
+                                    )}
+                                    {fulfillment.state === 'Shipped' &&
+                                        fulfillment.deliveryEvidence?.status !== 'DELIVERED' && (
+                                            <button
+                                                type="button"
+                                                disabled={confirmingDeliveryId === fulfillment.id}
+                                                onClick={event => {
+                                                    event.stopPropagation();
+                                                    setConfirmingDeliveryId(fulfillment.id);
+                                                    void onConfirmDelivery(fulfillment.id)
+                                                        .catch(error =>
+                                                            onNotify?.(
+                                                                storefrontErrorMessage(error, language),
+                                                            ),
+                                                        )
+                                                        .finally(() => setConfirmingDeliveryId(''));
+                                                }}
+                                            >
+                                                <PackageCheck aria-hidden="true" />
+                                                {confirmingDeliveryId === fulfillment.id
+                                                    ? isZh
+                                                        ? '正在确认'
+                                                        : 'Confirming'
+                                                    : isZh
+                                                      ? '确认已收货'
+                                                      : 'Confirm delivery'}
+                                            </button>
+                                        )}
                                 </div>
                             ))
                         ) : (
@@ -1697,6 +1737,31 @@ export function LogisticsTrackingSheet({
                             </div>
 
                             <div className="logistics-timeline">
+                                {currentFulfillment.deliveryEvidence?.events
+                                    .slice()
+                                    .reverse()
+                                    .map(event => (
+                                        <div className="timeline-step is-active" key={event.id}>
+                                            <div className="timeline-dot" />
+                                            <div className="timeline-body">
+                                                <strong>
+                                                    {event.status === 'EXCEPTION'
+                                                        ? isZh
+                                                            ? '配送异常'
+                                                            : 'Delivery exception'
+                                                        : event.status === 'DELIVERED'
+                                                          ? isZh
+                                                              ? '包裹已签收'
+                                                              : 'Package delivered'
+                                                          : isZh
+                                                            ? '运输信息已更新'
+                                                            : 'Delivery updated'}
+                                                </strong>
+                                                <p>{event.note}</p>
+                                                <time>{formatOrderDate(event.createdAt, locale)}</time>
+                                            </div>
+                                        </div>
+                                    ))}
                                 {isDelivered && (
                                     <div className="timeline-step is-active">
                                         <div className="timeline-dot" />

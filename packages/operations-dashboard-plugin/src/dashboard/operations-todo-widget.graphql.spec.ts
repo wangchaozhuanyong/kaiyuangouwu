@@ -17,6 +17,7 @@ describe('operations todo query', () => {
         const query = print(operationsTodoQuery);
 
         expect(query).toContain('pendingAfterSales: afterSalesRequests');
+        expect(query).toContain('deliveryExceptions: fulfillmentDeliveryExceptions');
         expect(query).toContain('pendingReviews: storefrontReviews');
         expect(query.match(/state: PENDING/g)).toHaveLength(2);
         expect(query).toContain('autoCardTodoSummary');

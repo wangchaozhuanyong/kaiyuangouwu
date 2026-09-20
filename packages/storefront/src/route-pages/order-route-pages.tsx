@@ -124,6 +124,11 @@ export function OrderDetailRoutePage() {
                     onReopen={runtime.reopenPendingOrder}
                     onCancelOrder={runtime.cancelAuthorizedOrder}
                     onCreateAfterSales={runtime.createAfterSalesRequest}
+                    onConfirmDelivery={async fulfillmentId => {
+                        await runtime.api.confirmFulfillmentDelivery(fulfillmentId);
+                        await runtime.orderQuery.refetch();
+                        runtime.notify(isZh ? '已确认收货，订单状态已更新' : 'Delivery confirmed');
+                    }}
                     onUnavailable={() => runtime.notify(isZh ? '当前商品不可用' : 'Unavailable')}
                     onNotify={runtime.notify}
                 />

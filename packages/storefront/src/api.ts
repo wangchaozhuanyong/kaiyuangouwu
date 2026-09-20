@@ -17,6 +17,7 @@ import type {
     CustomerOrderCounts,
     DataSubjectExportPayload,
     DataSubjectRequest,
+    FulfillmentDeliveryEvidence,
     ImageGenerationJob,
     ImageModelQuotaStatus,
     ImageModelRecommendation,
@@ -258,6 +259,10 @@ export class ShopApi {
 
     async cancelMyAuthorizedOrder(orderId: string, reason: string): Promise<Order> {
         return this.accountApi.cancelMyAuthorizedOrder(orderId, reason);
+    }
+
+    async confirmFulfillmentDelivery(fulfillmentId: string): Promise<FulfillmentDeliveryEvidence> {
+        return this.accountApi.confirmFulfillmentDelivery(fulfillmentId);
     }
 
     async afterSalesRequests(signal?: AbortSignal): Promise<AfterSalesRequest[]> {

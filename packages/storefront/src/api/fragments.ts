@@ -98,6 +98,26 @@ export const orderFields = `${cartQuoteFields}
         trackingCode
         createdAt
         updatedAt
+        deliveryEvidence {
+            id
+            status
+            carrier
+            trackingCode
+            exceptionReason
+            proofReference
+            shippedAt
+            deliveredAt
+            nextActionDueAt
+            overdue
+            events {
+                id
+                createdAt
+                status
+                actorType
+                actorLabel
+                note
+            }
+        }
     }
     digitalDeliveries {
         orderLineId

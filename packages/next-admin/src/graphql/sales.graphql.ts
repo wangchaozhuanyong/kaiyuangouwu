@@ -77,6 +77,26 @@ const ORDER_LIST_FIELDS = gql`
             handlerCode
             method
             trackingCode
+            deliveryEvidence {
+                id
+                status
+                carrier
+                trackingCode
+                exceptionReason
+                proofReference
+                shippedAt
+                deliveredAt
+                nextActionDueAt
+                overdue
+                events {
+                    id
+                    createdAt
+                    status
+                    actorType
+                    actorLabel
+                    note
+                }
+            }
             lines {
                 orderLineId
                 quantity
@@ -207,6 +227,9 @@ export const GET_SALES_ORDERS = gql`
             totalItems
         }
         physicalFulfillmentTodoCount
+        fulfillmentDeliveryExceptions(options: { exceptionsOnly: true, take: 1 }) {
+            totalItems
+        }
     }
     ${ORDER_LIST_FIELDS}
 `;
@@ -567,6 +590,31 @@ export const TRANSITION_SALES_FULFILLMENT = gql`
             }
             ... on FulfillmentStateTransitionError {
                 transitionError
+            }
+        }
+    }
+`;
+
+export const UPDATE_FULFILLMENT_DELIVERY = gql`
+    mutation UpdateSalesFulfillmentDelivery($input: UpdateFulfillmentDeliveryInput!) {
+        updateFulfillmentDelivery(input: $input) {
+            id
+            status
+            carrier
+            trackingCode
+            exceptionReason
+            proofReference
+            shippedAt
+            deliveredAt
+            nextActionDueAt
+            overdue
+            events {
+                id
+                createdAt
+                status
+                actorType
+                actorLabel
+                note
             }
         }
     }

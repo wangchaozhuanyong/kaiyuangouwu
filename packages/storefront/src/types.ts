@@ -296,6 +296,33 @@ export interface OrderFulfillment {
     trackingCode?: string | null;
     createdAt: string;
     updatedAt: string;
+    deliveryEvidence?: FulfillmentDeliveryEvidence | null;
+}
+
+export interface FulfillmentDeliveryEvidence {
+    id: string;
+    status: 'IN_TRANSIT' | 'EXCEPTION' | 'DELIVERED';
+    carrier: string;
+    trackingCode: string;
+    exceptionReason?: string | null;
+    proofReference?: string | null;
+    shippedAt: string;
+    deliveredAt?: string | null;
+    nextActionDueAt?: string | null;
+    overdue: boolean;
+    events: Array<{
+        id: string;
+        createdAt: string;
+        status: 'IN_TRANSIT' | 'EXCEPTION' | 'DELIVERED';
+        actorType: 'CUSTOMER' | 'ADMIN' | 'SYSTEM';
+        actorLabel: string;
+        note: string;
+    }>;
+}
+
+export interface ConfirmFulfillmentDeliveryInput {
+    fulfillmentId: string;
+    idempotencyKey: string;
 }
 
 export interface DigitalDelivery {
