@@ -45,6 +45,36 @@ Normal deployment, verification, rollback and branch cleanup continue to use
 the existing workflows described in `DEPLOYMENT_RUNBOOK.md`. This operation
 does not promote an application release or change its version marker.
 
+## Clean reviewed deployment caches
+
+If release retention has already preserved only the current runtime and two
+rollback runtimes but the root disk is still above the release health limit,
+plan cleanup of regenerated package caches and the source checkout's
+`node_modules` directory:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=plan-deployment-cache-cleanup
+```
+
+The plan is limited to fixed package-cache paths. It requires the server source
+checkout to match the reviewed `main` revision with no tracked changes, proves
+that no candidate contains the current immutable runtime, and reports each
+candidate's size. It never includes `.env` files, uploads, logs, database
+backups, release directories, Git data or application data.
+
+After reviewing the exact candidates and total size, apply the bound plan:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=apply-deployment-cache-cleanup-reviewed \
+    -f expected_plan_sha256=<reviewed-plan-sha256>
+```
+
+The write revalidates the full plan under the production deployment lock,
+removes only those reviewed cache directories, and reruns the production health
+check. Any source, runtime, cache-size or candidate change requires a new plan.
+
 ## Backfill historical order sales ownership
 
 The store-isolation audit can identify legacy orders whose immutable

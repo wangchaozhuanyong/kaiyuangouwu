@@ -10,10 +10,12 @@ const {
     constants,
     existsSync,
     fstatSync,
+    lstatSync,
     openSync,
     readdirSync,
     readFileSync,
     realpathSync,
+    rmSync,
     statSync,
 } = require('node:fs');
 const path = require('node:path');
@@ -22,6 +24,13 @@ const retention = require('./systemd/vendure-production-release-retention.cjs');
 
 const DEPLOY_LOCK = '/run/lock/vendure-production-deploy.lock';
 const BACKUP_DIRECTORY = '/var/backups/vendure-mysql';
+const DEPLOYMENT_CACHE_DIRECTORIES = Object.freeze([
+    { label: 'repository-node-modules', directory: '/var/www/kaiyuangouwu/node_modules' },
+    { label: 'ubuntu-bun-install-cache', directory: '/home/ubuntu/.bun/install/cache' },
+    { label: 'ubuntu-npm-content-cache', directory: '/home/ubuntu/.npm/_cacache' },
+    { label: 'root-bun-install-cache', directory: '/root/.bun/install/cache' },
+    { label: 'root-npm-content-cache', directory: '/root/.npm/_cacache' },
+]);
 
 function withProductionLock(callback, lockPath = DEPLOY_LOCK) {
     // The existing deployment lock is owned by ubuntu in a sticky directory.
@@ -49,6 +58,8 @@ function validateRequest(environment) {
             'diagnose',
             'backup-database',
             'retain-reviewed',
+            'plan-deployment-cache-cleanup',
+            'apply-deployment-cache-cleanup-reviewed',
             'plan-two-factor-backup',
             'backup-two-factor-reviewed',
             'verify-two-factor-backup',
@@ -72,6 +83,7 @@ function validateRequest(environment) {
     if (
         [
             'retain-reviewed',
+            'apply-deployment-cache-cleanup-reviewed',
             'backup-two-factor-reviewed',
             'apply-order-sales-ownership-backfill-reviewed',
             'apply-moyao-default-store-migration-reviewed',
@@ -177,6 +189,96 @@ function retainReviewedPlan(
     assert.deepEqual(revalidatedPlan, plan, 'Release state changed before retention');
     apply(revalidatedPlan);
     return plan;
+}
+
+function directorySizeKib(directory) {
+    const output = execFileSync('du', ['-skx', '--', directory], {
+        encoding: 'utf8',
+        timeout: 120000,
+        maxBuffer: 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+    const match = /^(\d+)\s/u.exec(output);
+    assert.ok(match, 'Could not read deployment cache size');
+    const sizeKib = Number(match[1]);
+    assert.ok(Number.isSafeInteger(sizeKib) && sizeKib >= 0, 'Invalid deployment cache size');
+    return sizeKib;
+}
+
+function inspectDeploymentCacheCleanup(
+    sourceSha,
+    {
+        directories = DEPLOYMENT_CACHE_DIRECTORIES,
+        inspectRepository = inspectRepositoryState,
+        inspectRuntime = inspectProductionReleases,
+        sizeDirectory = directorySizeKib,
+    } = {},
+) {
+    const repository = inspectRepository(sourceSha);
+    assert.equal(repository.status, 'ok', 'Repository state is unavailable');
+    assert.equal(
+        repository.headMatchesOperationsSource,
+        true,
+        'Repository HEAD does not match operations source',
+    );
+    assert.equal(
+        repository.originMainMatchesOperationsSource,
+        true,
+        'Repository origin/main does not match operations source',
+    );
+    assert.equal(repository.trackedClean, true, 'Repository has tracked changes; cache cleanup is blocked');
+    const runtime = inspectRuntime();
+    const candidates = directories.flatMap(candidate => {
+        if (!existsSync(candidate.directory)) return [];
+        const stat = lstatSync(candidate.directory);
+        assert.ok(stat.isDirectory() && !stat.isSymbolicLink(), 'Deployment cache must be a real directory');
+        assert.equal(realpathSync(candidate.directory), candidate.directory, 'Deployment cache path changed');
+        assert.ok(
+            runtime.currentRuntime !== candidate.directory &&
+                !runtime.currentRuntime.startsWith(`${candidate.directory}${path.sep}`),
+            'Deployment cache contains the current runtime',
+        );
+        return [
+            {
+                label: candidate.label,
+                directory: candidate.directory,
+                sizeKib: sizeDirectory(candidate.directory),
+            },
+        ];
+    });
+    return {
+        format: 1,
+        schema: 'vendure-deployment-cache-cleanup',
+        repositorySha: repository.head,
+        runtimeSha: runtime.markerSha,
+        candidates,
+        totalKib: candidates.reduce((total, candidate) => total + candidate.sizeKib, 0),
+    };
+}
+
+function applyDeploymentCacheCleanup(
+    request,
+    {
+        inspect = sourceSha => inspectDeploymentCacheCleanup(sourceSha),
+        remove = directory => rmSync(directory, { recursive: true, force: false }),
+    } = {},
+) {
+    assert.equal(
+        request.operation,
+        'apply-deployment-cache-cleanup-reviewed',
+        'Deployment cache cleanup requires the reviewed operation',
+    );
+    const plan = inspect(request.sourceSha);
+    assert.ok(plan.candidates.length > 0 && plan.totalKib > 0, 'No deployment caches are available to clean');
+    assert.equal(
+        planDigest(plan, request.sourceSha),
+        request.expectedPlanSha256,
+        'Deployment cache cleanup plan changed; review a new plan',
+    );
+    const revalidatedPlan = inspect(request.sourceSha);
+    assert.deepEqual(revalidatedPlan, plan, 'Deployment cache state changed before cleanup');
+    for (const candidate of revalidatedPlan.candidates) remove(candidate.directory);
+    return revalidatedPlan;
 }
 
 // Only fixed, non-secret diagnostics are returned. Command stderr and PM2 environment
@@ -892,6 +994,42 @@ function runStoreIsolationAudit(
 
 function runLocked(environment = process.env) {
     const request = validateRequest(environment);
+    if (request.operation === 'plan-deployment-cache-cleanup') {
+        const plan = inspectDeploymentCacheCleanup(request.sourceSha);
+        process.stdout.write(
+            `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: planDigest(plan, request.sourceSha), plan })}\n`,
+        );
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=plan-deployment-cache-cleanup\n');
+        return;
+    }
+    if (request.operation === 'apply-deployment-cache-cleanup-reviewed') {
+        const plan = applyDeploymentCacheCleanup(request);
+        const healthRefresh = readCommand('sudo', [
+            '-n',
+            'systemctl',
+            'start',
+            'vendure-production-healthcheck.service',
+        ]);
+        const result = {
+            sourceSha: request.sourceSha,
+            planSha256: request.expectedPlanSha256,
+            removedDirectoryCount: plan.candidates.length,
+            removedKib: plan.totalKib,
+            disk: readCommand('df', ['-Pk', '/']),
+            healthRefresh,
+            healthService: readCommand('systemctl', [
+                'show',
+                'vendure-production-healthcheck.service',
+                '--property=Result,ExecMainStatus,ExecMainExitTimestamp,ActiveState',
+            ]),
+        };
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+        assert.equal(healthRefresh.status, 'ok', 'Deployment caches were removed, but health still failed');
+        process.stdout.write(
+            'PRODUCTION_OPERATIONS_COMPLETE operation=apply-deployment-cache-cleanup-reviewed\n',
+        );
+        return;
+    }
     if (request.operation === 'backup-database') {
         const result = runDatabaseBackup(request);
         process.stdout.write(
@@ -1135,10 +1273,12 @@ if (require.main === module) {
 }
 
 module.exports = {
+    applyDeploymentCacheCleanup,
     frontendRevisionEvidence,
     assertStorefrontInspectionRevision,
     encodeBeforeReport,
     inspectProductionReleases,
+    inspectDeploymentCacheCleanup,
     inspectRepositoryState,
     planDigest,
     retainReviewedPlan,
