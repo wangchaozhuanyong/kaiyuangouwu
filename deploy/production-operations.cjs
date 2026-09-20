@@ -507,6 +507,7 @@ function validateMoyaoDefaultStoreMigrationOutput(output, operation) {
         assert.ok(
             Number.isSafeInteger(plan?.movedChannelTablesVerified) && plan.movedChannelTablesVerified > 0,
         );
+        assert.equal(plan?.copiedChannelTablesVerified, 1);
         assert.equal(plan?.defaultOwnedOrderCount, 0);
         assert.equal(plan?.profileMatches, true);
         assert.equal(plan?.contentSettingsMatch, true);
@@ -517,9 +518,11 @@ function validateMoyaoDefaultStoreMigrationOutput(output, operation) {
         assert.ok(Number.isSafeInteger(plan?.orderSalesOwnerCount) && plan.orderSalesOwnerCount >= 0);
         assert.match(plan?.operationDigest || '', /^[a-f0-9]{64}$/u);
         assert.ok(plan?.addedRelations && typeof plan.addedRelations === 'object');
+        assert.ok(plan?.copiedChannelRows && typeof plan.copiedChannelRows === 'object');
         assert.ok(plan?.movedChannelRows && typeof plan.movedChannelRows === 'object');
         for (const [table, count] of Object.entries({
             ...plan.addedRelations,
+            ...plan.copiedChannelRows,
             ...plan.movedChannelRows,
         })) {
             assert.match(table, /^[a-z][a-z0-9_]*$/u);

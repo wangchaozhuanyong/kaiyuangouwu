@@ -19,6 +19,7 @@ function fixture() {
             customer_channels_channel: ['21', '22'],
             product_channels_channel: ['31'],
         },
+        copiedEntityIds: { customer_store_entry: ['21'] },
         movedRows: {
             storefront_content_block: ['10', '11'],
             storefront_promotion_page: ['41'],
@@ -49,6 +50,7 @@ void test('public migration plan exposes aggregates but no database identifiers'
         customer_channels_channel: 2,
         product_channels_channel: 1,
     });
+    assert.deepEqual(plan.copiedChannelRows, { customer_store_entry: 1 });
     assert.deepEqual(plan.movedChannelRows, {
         storefront_content_block: 2,
         storefront_promotion_page: 1,
