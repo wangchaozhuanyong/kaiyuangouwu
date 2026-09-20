@@ -42,6 +42,9 @@ import { StoreProfileService } from './store-profile.service';
 import { ProvisionStoreInput, ProvisionStoreResult } from './types';
 import { USDT_TRC20_PAYMENT_METHOD_CODE } from './usdt/usdt-payment.constants';
 
+const CONTROLLED_TEST_PAYMENT_HANDLER_CODE = 'controlled-test-payment-handler';
+const CONTROLLED_TEST_PAYMENT_METHOD_PREFIX = 'controlled-test-payment-';
+
 export const storeAdministratorPermissions: Permission[] = [
     Permission.ReadChannel,
     Permission.ReadCatalog,
@@ -213,8 +216,8 @@ export class StoreProvisioningService {
         for (const stockLocation of templateStockLocations) {
             stockLocations.push(await this.cloneStockLocation(channelCtx, channel, stockLocation));
         }
-        for (const paymentMethod of templatePaymentMethods.filter(
-            method => method.code !== USDT_TRC20_PAYMENT_METHOD_CODE,
+        for (const paymentMethod of templatePaymentMethods.filter(method =>
+            this.canClonePaymentMethod(method),
         )) {
             await this.clonePaymentMethod(channelCtx, channel, paymentMethod);
         }
@@ -378,6 +381,16 @@ export class StoreProvisioningService {
         });
         await this.removeDefaultChannelAssignment(ctx, channel, PaymentMethod, cloned.id);
         return cloned;
+    }
+
+    private canClonePaymentMethod(method: PaymentMethod): boolean {
+        // Controlled test payments are bound to one encoded Channel ID in both their code and handler
+        // arguments. They must be configured explicitly for the new store rather than copied verbatim.
+        return (
+            method.code !== USDT_TRC20_PAYMENT_METHOD_CODE &&
+            method.handler.code !== CONTROLLED_TEST_PAYMENT_HANDLER_CODE &&
+            !method.code.startsWith(CONTROLLED_TEST_PAYMENT_METHOD_PREFIX)
+        );
     }
 
     private operationInput(operation: { code: string; args: Array<{ name: string; value: string }> }) {
