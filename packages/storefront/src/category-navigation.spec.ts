@@ -216,6 +216,15 @@ describe('category navigation responsive spacing', () => {
         expect(stylesheet).toMatch(/\.primary-category-image\s*\{[^}]*width:\s*48px;[^}]*height:\s*48px;/);
         expect(stylesheet).toMatch(/\.primary-categories button\s*\{[^}]*gap:\s*2px;/);
     });
+
+    it('keeps the active category image inside the navigation row', () => {
+        expect(stylesheet).toMatch(
+            /\.primary-categories button\.is-active \.primary-category-image\s*\{[^}]*box-shadow:\s*inset 0 0 0 1px var\(--accent\);[^}]*transform:\s*none;/,
+        );
+        expect(stylesheet).not.toMatch(
+            /\.primary-categories button\.is-active \.primary-category-image\s*\{[^}]*transform:\s*translateY\(-/,
+        );
+    });
 });
 
 describe('routePageIdentity for category navigation transitions', () => {
