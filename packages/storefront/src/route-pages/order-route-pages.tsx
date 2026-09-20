@@ -11,7 +11,7 @@ import {
 } from '../lazy-storefront-pages';
 import { PageSkeleton } from '../route-loading';
 import { AuthPageBoundary, EmptyState, Subpage } from '../storefront-ui/page-shell';
-import { ActiveCustomer, CustomerAvatarHistoryEntry } from '../types';
+import { ActiveCustomer, CustomerAvatarHistoryEntry, DataSubjectRequest } from '../types';
 
 import '../commerce-styles';
 import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
@@ -182,6 +182,8 @@ export function AccountSecurityRoutePage() {
     const isZh = runtime.language === 'zh';
     const [avatarHistory, setAvatarHistory] = useState<CustomerAvatarHistoryEntry[]>([]);
     const [avatarHistoryLoading, setAvatarHistoryLoading] = useState(Boolean(runtime.customer));
+    const [dataSubjectRequests, setDataSubjectRequests] = useState<DataSubjectRequest[]>([]);
+    const [dataSubjectLoading, setDataSubjectLoading] = useState(Boolean(runtime.customer));
     const refreshAvatarHistory = async () => {
         if (!runtime.customer) {
             setAvatarHistory([]);
@@ -201,6 +203,27 @@ export function AccountSecurityRoutePage() {
             );
         } finally {
             setAvatarHistoryLoading(false);
+        }
+    };
+    const refreshDataSubjectRequests = async () => {
+        if (!runtime.customer) {
+            setDataSubjectRequests([]);
+            setDataSubjectLoading(false);
+            return;
+        }
+        setDataSubjectLoading(true);
+        try {
+            setDataSubjectRequests(await runtime.api.dataSubjectRequests());
+        } catch (error) {
+            runtime.notify(
+                error instanceof Error
+                    ? error.message
+                    : isZh
+                      ? '数据请求记录加载失败'
+                      : 'Could not load data request history',
+            );
+        } finally {
+            setDataSubjectLoading(false);
         }
     };
     useEffect(() => {
@@ -230,6 +253,33 @@ export function AccountSecurityRoutePage() {
             });
         return () => controller.abort();
     }, [isZh, runtime.api, runtime.customer?.id, runtime.notify]);
+    useEffect(() => {
+        const controller = new AbortController();
+        if (!runtime.customer) {
+            setDataSubjectRequests([]);
+            setDataSubjectLoading(false);
+            return () => controller.abort();
+        }
+        setDataSubjectLoading(true);
+        void runtime.api
+            .dataSubjectRequests(controller.signal)
+            .then(requests => setDataSubjectRequests(requests))
+            .catch(error => {
+                if (!controller.signal.aborted) {
+                    runtime.notify(
+                        error instanceof Error
+                            ? error.message
+                            : isZh
+                              ? '数据请求记录加载失败'
+                              : 'Could not load data request history',
+                    );
+                }
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setDataSubjectLoading(false);
+            });
+        return () => controller.abort();
+    }, [isZh, runtime.api, runtime.customer?.id, runtime.notify]);
     return (
         <RouteGate name="account-security">
             <AuthPageBoundary language={runtime.language} onBack={runtime.goBack}>
@@ -241,6 +291,8 @@ export function AccountSecurityRoutePage() {
                     onBack={runtime.goBack}
                     avatarHistory={avatarHistory}
                     avatarHistoryLoading={avatarHistoryLoading}
+                    dataSubjectRequests={dataSubjectRequests}
+                    dataSubjectLoading={dataSubjectLoading}
                     onAvatarChange={async (file: File) => {
                         const avatar = await runtime.api.uploadCustomerAvatar(file);
                         runtime.setCustomer((current: ActiveCustomer | null) =>
@@ -266,6 +318,15 @@ export function AccountSecurityRoutePage() {
                         runtime.notify(
                             isZh ? '头像已移入30天恢复区' : 'Profile photo moved to 30-day recovery',
                         );
+                    }}
+                    onDataExport={password => runtime.api.exportPersonalData(password)}
+                    onRequestAccountClosure={async password => {
+                        await runtime.api.requestAccountClosure(password);
+                        await refreshDataSubjectRequests();
+                    }}
+                    onCancelAccountClosure={async () => {
+                        await runtime.api.cancelAccountClosure();
+                        await refreshDataSubjectRequests();
                     }}
                     onLogout={() => {
                         void runtime.api.logout().then(() => {

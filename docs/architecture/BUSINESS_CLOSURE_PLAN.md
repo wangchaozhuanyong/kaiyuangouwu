@@ -7,7 +7,7 @@ This plan tracks whether each business capability has a complete loop rather tha
 | Priority | Domain | Required closure | Status |
 | --- | --- | --- | --- |
 | P0 | Data retention | Policy, quarantine, recovery, reference checks, legal hold, due purge, retry, retained audit record | In progress: customer avatar flow implemented and locally verified |
-| P0 | Data subject requests | Customer export, correction, account closure, identity re-check, cooling-off period, legal/financial retention exceptions | Not started |
+| P0 | Data subject requests | Customer export, correction, account closure, identity re-check, cooling-off period, legal/financial retention exceptions | In progress: export and account closure implemented and locally verified |
 | P0 | Consent and privacy | Versioned privacy terms, consent evidence, withdrawal, cookie/tracking controls, purpose inventory | Not started |
 | P0 | Payment reconciliation | Gateway/chain callback idempotency, order-payment matching, exceptions, refund reconciliation, daily close | Existing pieces require end-to-end audit |
 | P0 | Backup and recovery | Backup ownership, retention, encryption, restore drill, RPO/RTO evidence and alerting | Operational verification required |
@@ -24,6 +24,12 @@ This plan tracks whether each business capability has a complete loop rather tha
 ## Current P0 implementation: customer avatar retention
 
 The active avatar is not placed in a time-based deletion queue. Only an avatar replaced or removed by its owner is quarantined for 30 days. During that period the owner can restore it. At expiry the worker checks ownership, channel boundaries, business references and legal hold before deletion. Referenced assets are blocked, technical failures are retried, and completed deletion keeps its database audit record.
+
+## Current P0 implementation: personal-data requests and account closure
+
+Signed-in customers can generate a JSON export after password re-authentication. The file contains profile, addresses, delivery emails, orders, payments, refunds, fulfilments, coupons, referrals, reviews, after-sales, image-studio activity and linked analytics. The server keeps only the request audit, summary and SHA-256 digest, not the exported body.
+
+Account closure also requires password re-authentication and has a seven-day cooling-off period that the customer can cancel. The scheduled worker blocks closure while orders, withdrawals, payment reconciliation, after-sales or image jobs are unresolved. A successful closure revokes access, removes direct contact/address data, quarantines avatars, anonymizes user/authentication identifiers and plugin-owned image content, and retains transactional records required for finance, disputes and audit. Blocked and failed requests stay visible in the admin exception queue and can be retried.
 
 Acceptance gates:
 

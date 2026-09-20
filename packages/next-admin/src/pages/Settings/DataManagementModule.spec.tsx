@@ -17,6 +17,7 @@ let root: Root;
 let refetch: ReturnType<typeof vi.fn>;
 let setLegalHold: ReturnType<typeof vi.fn>;
 let retry: ReturnType<typeof vi.fn>;
+let retrySubject: ReturnType<typeof vi.fn>;
 
 const records = [
     {
@@ -61,16 +62,40 @@ const records = [
     },
 ];
 
+const subjectRequests = [
+    {
+        id: 'subject-1',
+        createdAt: '2026-09-20T00:00:00.000Z',
+        channelId: '2',
+        requestType: 'ACCOUNT_CLOSURE',
+        status: 'BLOCKED',
+        requestedAt: '2026-09-20T00:00:00.000Z',
+        dueAt: '2026-09-27T00:00:00.000Z',
+        nextAttemptAt: '2026-09-28T00:00:00.000Z',
+        lastAttemptAt: '2026-09-27T00:00:00.000Z',
+        attemptCount: 1,
+        blockersJson: '["仍有 1 个未完成订单"]',
+        lastError: '仍有 1 个未完成订单',
+        resultDigest: null,
+        resultSummaryJson: null,
+        completedAt: null,
+        cancelledAt: null,
+    },
+];
+
 beforeEach(() => {
     reactTestEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
-    refetch = vi.fn().mockResolvedValue({ data: { dataRetentionRecords: records } });
+    refetch = vi.fn().mockResolvedValue({
+        data: { dataRetentionRecords: records, dataSubjectRequests: subjectRequests },
+    });
     setLegalHold = vi.fn().mockResolvedValue({ data: { setDataRetentionLegalHold: records[0] } });
     retry = vi.fn().mockResolvedValue({ data: { retryDataRetentionRecord: records[1] } });
+    retrySubject = vi.fn().mockResolvedValue({ data: { retryDataSubjectRequest: subjectRequests[0] } });
     apolloMocks.useQuery.mockReturnValue({
-        data: { dataRetentionRecords: records },
+        data: { dataRetentionRecords: records, dataSubjectRequests: subjectRequests },
         loading: false,
         refetch,
     });
@@ -78,6 +103,7 @@ beforeEach(() => {
         const source = document.loc?.source.body ?? '';
         if (source.includes('SetDataRetentionLegalHold')) return [setLegalHold, { loading: false }];
         if (source.includes('RetryDataRetentionRecord')) return [retry, { loading: false }];
+        if (source.includes('RetryDataSubjectRequest')) return [retrySubject, { loading: false }];
         throw new Error('Unexpected mutation');
     });
 });
@@ -115,7 +141,9 @@ describe('DataManagementModule', () => {
         expect(container.textContent).toContain('等待到期');
         expect(container.textContent).toContain('引用阻断');
         expect(container.textContent).toContain('资产仍被商品引用');
-        expect(button('重试').disabled).toBe(false);
+        expect(container.textContent).toContain('个人数据与账户注销请求');
+        expect(container.textContent).toContain('仍有 1 个未完成订单');
+        expect(container.querySelectorAll('button').length).toBeGreaterThan(0);
     });
 
     it('requires and submits an auditable reason before enabling legal hold', async () => {

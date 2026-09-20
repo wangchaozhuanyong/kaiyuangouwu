@@ -10,6 +10,7 @@ import {
     RotateCcw,
     ShieldAlert,
     ShieldCheck,
+    UserRound,
     X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -44,6 +45,24 @@ const DATA_RETENTION_QUERY = gql`
             lastError
             completedAt
         }
+        dataSubjectRequests {
+            id
+            createdAt
+            channelId
+            requestType
+            status
+            requestedAt
+            dueAt
+            nextAttemptAt
+            lastAttemptAt
+            attemptCount
+            blockersJson
+            lastError
+            resultDigest
+            resultSummaryJson
+            completedAt
+            cancelledAt
+        }
     }
 `;
 
@@ -64,6 +83,18 @@ const SET_LEGAL_HOLD_MUTATION = gql`
 const RETRY_RETENTION_MUTATION = gql`
     mutation RetryDataRetentionRecord($id: ID!) {
         retryDataRetentionRecord(id: $id) {
+            id
+            status
+            nextAttemptAt
+            lastError
+            updatedAt
+        }
+    }
+`;
+
+const RETRY_DATA_SUBJECT_MUTATION = gql`
+    mutation RetryDataSubjectRequest($id: ID!) {
+        retryDataSubjectRequest(id: $id) {
             id
             status
             nextAttemptAt
@@ -98,16 +129,41 @@ interface RetentionRecord {
     completedAt?: string | null;
 }
 
+type SubjectRequestStatus = 'PENDING' | 'PROCESSING' | 'BLOCKED' | 'FAILED' | 'FULFILLED' | 'CANCELLED';
+
+interface SubjectRequest {
+    id: string;
+    createdAt: string;
+    channelId: string;
+    requestType: 'EXPORT' | 'ACCOUNT_CLOSURE';
+    status: SubjectRequestStatus;
+    requestedAt: string;
+    dueAt?: string | null;
+    nextAttemptAt?: string | null;
+    lastAttemptAt?: string | null;
+    attemptCount: number;
+    blockersJson?: string | null;
+    lastError?: string | null;
+    resultDigest?: string | null;
+    resultSummaryJson?: string | null;
+    completedAt?: string | null;
+    cancelledAt?: string | null;
+}
+
 const filters = ['ACTIVE', 'ALL', 'PENDING', 'BLOCKED_REFERENCE', 'FAILED', 'RESTORED', 'PURGED'] as const;
 type Filter = (typeof filters)[number];
 
 export function DataManagementModule() {
-    const query = useQuery<{ dataRetentionRecords: RetentionRecord[] }>(DATA_RETENTION_QUERY, {
+    const query = useQuery<{
+        dataRetentionRecords: RetentionRecord[];
+        dataSubjectRequests: SubjectRequest[];
+    }>(DATA_RETENTION_QUERY, {
         fetchPolicy: 'cache-and-network',
         notifyOnNetworkStatusChange: true,
     });
     const [setLegalHold, holdState] = useMutation(SET_LEGAL_HOLD_MUTATION);
     const [retryRetention, retryState] = useMutation(RETRY_RETENTION_MUTATION);
+    const [retryDataSubject, retrySubjectState] = useMutation(RETRY_DATA_SUBJECT_MUTATION);
     const requestConfirmation = useConfirmDialog();
     const [filter, setFilter] = useState<Filter>('ACTIVE');
     const [notice, setNotice] = useState('');
@@ -115,6 +171,10 @@ export function DataManagementModule() {
     const [holdTarget, setHoldTarget] = useState<RetentionRecord | null>(null);
     const [holdReason, setHoldReason] = useState('');
     const records = useMemo(() => query.data?.dataRetentionRecords ?? [], [query.data?.dataRetentionRecords]);
+    const subjectRequests = useMemo(
+        () => query.data?.dataSubjectRequests ?? [],
+        [query.data?.dataSubjectRequests],
+    );
     const visible = useMemo(
         () =>
             records.filter(record => {
@@ -134,7 +194,7 @@ export function DataManagementModule() {
         }),
         [records],
     );
-    const busy = holdState.loading || retryState.loading;
+    const busy = holdState.loading || retryState.loading || retrySubjectState.loading;
 
     const refresh = async (message?: string) => {
         await query.refetch();
@@ -183,6 +243,15 @@ export function DataManagementModule() {
         }
     };
 
+    const retrySubjectRequest = async (request: SubjectRequest) => {
+        try {
+            await retryDataSubject({ variables: { id: request.id } });
+            await refresh('账户注销请求已安排重试，业务阻断仍会重新检查');
+        } catch (error) {
+            setActionError(toUserFacingError(error, '数据请求重试失败'));
+        }
+    };
+
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
@@ -194,7 +263,7 @@ export function DataManagementModule() {
                             <FeatureHelpButton topic="settings.data-management" title="数据管理中心" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            查看数据恢复区、到期清理、引用阻断、失败重试和法律保留记录
+                            查看数据恢复区、到期清理、个人数据导出、账户注销、失败重试和法律保留记录
                         </p>
                     </div>
                     <button
@@ -370,6 +439,84 @@ export function DataManagementModule() {
                         </div>
                     )}
                 </section>
+                <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <div className="border-b border-slate-100 p-4">
+                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            <UserRound className="h-4 w-4 text-indigo-600" />
+                            个人数据与账户注销请求
+                        </h2>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                            导出仅保留摘要和校验值，不保存文件正文；注销有 7 天冷静期和业务阻断检查
+                        </p>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[1120px] border-collapse text-left text-xs">
+                            <thead className="bg-slate-50 text-[11px] font-bold text-slate-500">
+                                <tr>
+                                    <th className="px-4 py-3">请求</th>
+                                    <th className="px-4 py-3">状态</th>
+                                    <th className="px-4 py-3">申请时间</th>
+                                    <th className="px-4 py-3">计划处理</th>
+                                    <th className="px-4 py-3">尝试</th>
+                                    <th className="px-4 py-3">阻断/错误</th>
+                                    <th className="px-4 py-3 text-right">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {subjectRequests.map(request => (
+                                    <tr key={request.id} className="hover:bg-slate-50/70">
+                                        <td className="px-4 py-3">
+                                            <strong className="block text-slate-800">
+                                                {request.requestType === 'EXPORT'
+                                                    ? '个人数据导出'
+                                                    : '账户注销'}
+                                            </strong>
+                                            <span className="mt-1 block font-mono text-[10px] text-slate-400">
+                                                #{request.id} · 店铺 {request.channelId}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <SubjectStatusBadge status={request.status} />
+                                        </td>
+                                        <td className="whitespace-nowrap px-4 py-3 font-mono text-[10px] text-slate-500">
+                                            {formatDateTime(request.requestedAt)}
+                                        </td>
+                                        <td className="whitespace-nowrap px-4 py-3 font-mono text-[10px] text-slate-500">
+                                            {request.dueAt ? formatDateTime(request.dueAt) : '—'}
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-600">{request.attemptCount}</td>
+                                        <td className="max-w-96 px-4 py-3 text-rose-600">
+                                            {request.lastError ?? '—'}
+                                        </td>
+                                        <td className="px-4 py-3 text-right">
+                                            {request.requestType === 'ACCOUNT_CLOSURE' &&
+                                                ['BLOCKED', 'FAILED'].includes(request.status) && (
+                                                    <button
+                                                        type="button"
+                                                        disabled={busy}
+                                                        onClick={() => void retrySubjectRequest(request)}
+                                                        className={buttonClass}
+                                                    >
+                                                        <RotateCcw className="h-3.5 w-3.5" /> 重试
+                                                    </button>
+                                                )}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {!subjectRequests.length && (
+                                    <tr>
+                                        <td
+                                            colSpan={7}
+                                            className="px-4 py-12 text-center text-xs text-slate-400"
+                                        >
+                                            暂无个人数据请求
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
             </main>
             {holdTarget && (
                 <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-4">
@@ -470,6 +617,30 @@ function StatusBadge({ record }: { record: RetentionRecord }) {
     );
 }
 
+function SubjectStatusBadge({ status }: { status: SubjectRequestStatus }) {
+    const styles: Record<SubjectRequestStatus, string> = {
+        PENDING: 'bg-blue-50 text-blue-700',
+        PROCESSING: 'bg-indigo-50 text-indigo-700',
+        BLOCKED: 'bg-amber-50 text-amber-700',
+        FAILED: 'bg-rose-50 text-rose-700',
+        FULFILLED: 'bg-emerald-50 text-emerald-700',
+        CANCELLED: 'bg-slate-100 text-slate-600',
+    };
+    const labels: Record<SubjectRequestStatus, string> = {
+        PENDING: '冷静期/等待',
+        PROCESSING: '处理中',
+        BLOCKED: '业务阻断',
+        FAILED: '处理失败',
+        FULFILLED: '已完成',
+        CANCELLED: '已撤销',
+    };
+    return (
+        <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold ${styles[status]}`}>
+            {labels[status]}
+        </span>
+    );
+}
+
 function statusLabel(value: RetentionStatus) {
     return {
         PENDING: '等待到期',
@@ -492,8 +663,12 @@ function resourceLabel(value: string) {
 
 function reasonLabel(value: string) {
     return (
-        { REPLACED: '用户更换', REMOVED: '用户移除', RESTORE_REPLACEMENT: '恢复历史头像时替换' }[value] ??
-        value
+        {
+            REPLACED: '用户更换',
+            REMOVED: '用户移除',
+            RESTORE_REPLACEMENT: '恢复历史头像时替换',
+            ACCOUNT_CLOSURE: '账户注销',
+        }[value] ?? value
     );
 }
 

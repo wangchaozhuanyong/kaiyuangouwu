@@ -4,7 +4,10 @@ export {
     CUSTOMER_AVATAR_RETENTION_POLICY,
     DataRetentionService,
 } from './data-retention.service.js';
+export { BeforeAccountAnonymizationEvent } from './data-subject.events.js';
+export { ACCOUNT_CLOSURE_COOLING_OFF_DAYS, DataSubjectService } from './data-subject.service.js';
 export { DataRetentionRecord } from './entities/data-retention-record.entity.js';
+export { DataSubjectRequest } from './entities/data-subject-request.entity.js';
 export { ReferralAccount } from './entities/referral-account.entity.js';
 export { ReferralLedgerEntry } from './entities/referral-ledger-entry.entity.js';
 export { ReferralProgramConfig } from './entities/referral-program-config.entity.js';

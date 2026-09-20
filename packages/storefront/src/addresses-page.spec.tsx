@@ -318,6 +318,45 @@ describe('AccountSecurityPage commerceMode adaptation', () => {
         expect(markup).toContain('管理实物商品默认收货地址');
         expect(markup).toContain('0 个地址');
     });
+
+    it('exposes password-verified data export and a cancellable closure cooling-off state', () => {
+        const markup = renderToStaticMarkup(
+            createElement(AccountSecurityPage, {
+                customer: mockCustomer,
+                language: 'zh',
+                storefrontName: '测试商城',
+                commerceMode: 'HYBRID',
+                onBack: vi.fn(),
+                onAvatarChange: vi.fn(),
+                onDataExport: vi.fn(),
+                onRequestAccountClosure: vi.fn(),
+                onCancelAccountClosure: vi.fn(),
+                dataSubjectRequests: [
+                    {
+                        id: 'closure-1',
+                        requestType: 'ACCOUNT_CLOSURE',
+                        status: 'BLOCKED',
+                        requestedAt: '2026-09-20T00:00:00.000Z',
+                        dueAt: '2026-09-27T00:00:00.000Z',
+                        nextAttemptAt: '2026-09-28T00:00:00.000Z',
+                        attemptCount: 1,
+                        blockersJson: '["仍有 1 个未完成订单"]',
+                        lastError: '仍有 1 个未完成订单',
+                        resultDigest: null,
+                        completedAt: null,
+                        cancelledAt: null,
+                    },
+                ],
+                onLogout: vi.fn(),
+            }),
+        );
+
+        expect(markup).toContain('导出我的个人数据');
+        expect(markup).toContain('注销暂缓处理');
+        expect(markup).toContain('仍有 1 个未完成订单');
+        expect(markup).toContain('撤销');
+        expect(markup).not.toContain('当前账户密码');
+    });
 });
 
 describe('AddressesPage checkout selection and editing', () => {

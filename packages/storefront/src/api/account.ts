@@ -6,6 +6,8 @@ import type {
     CustomerAddressUpdateInput,
     CustomerAvatarHistoryEntry,
     CustomerOrderCounts,
+    DataSubjectExportPayload,
+    DataSubjectRequest,
     Order,
     OrderConfirmationToken,
     OrderPage,
@@ -145,6 +147,80 @@ export class AccountApi extends BaseDomainApi {
             }
         `);
         return result.removeCustomerAvatar;
+    }
+
+    async dataSubjectRequests(signal?: AbortSignal): Promise<DataSubjectRequest[]> {
+        const result = await this.request<{ myDataSubjectRequests: DataSubjectRequest[] }>(
+            `
+                query MyDataSubjectRequests {
+                    myDataSubjectRequests {
+                        id
+                        requestType
+                        status
+                        requestedAt
+                        dueAt
+                        nextAttemptAt
+                        attemptCount
+                        blockersJson
+                        lastError
+                        resultDigest
+                        completedAt
+                        cancelledAt
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.myDataSubjectRequests;
+    }
+
+    async exportPersonalData(password: string): Promise<DataSubjectExportPayload> {
+        const result = await this.request<{ exportMyPersonalData: DataSubjectExportPayload }>(
+            `
+                mutation ExportMyPersonalData($password: String!) {
+                    exportMyPersonalData(password: $password) {
+                        fileName
+                        mimeType
+                        content
+                        sha256
+                        request {
+                            id requestType status requestedAt dueAt nextAttemptAt attemptCount
+                            blockersJson lastError resultDigest completedAt cancelledAt
+                        }
+                    }
+                }
+            `,
+            { password },
+        );
+        return result.exportMyPersonalData;
+    }
+
+    async requestAccountClosure(password: string): Promise<DataSubjectRequest> {
+        const result = await this.request<{ requestMyAccountClosure: DataSubjectRequest }>(
+            `
+                mutation RequestMyAccountClosure($password: String!) {
+                    requestMyAccountClosure(password: $password) {
+                        id requestType status requestedAt dueAt nextAttemptAt attemptCount
+                        blockersJson lastError resultDigest completedAt cancelledAt
+                    }
+                }
+            `,
+            { password },
+        );
+        return result.requestMyAccountClosure;
+    }
+
+    async cancelAccountClosure(): Promise<DataSubjectRequest> {
+        const result = await this.request<{ cancelMyAccountClosure: DataSubjectRequest }>(`
+            mutation CancelMyAccountClosure {
+                cancelMyAccountClosure {
+                    id requestType status requestedAt dueAt nextAttemptAt attemptCount
+                    blockersJson lastError resultDigest completedAt cancelledAt
+                }
+            }
+        `);
+        return result.cancelMyAccountClosure;
     }
 
     async customerOrders(

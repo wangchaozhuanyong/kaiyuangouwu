@@ -14,6 +14,8 @@ import type {
     CustomerAvatarHistoryEntry,
     CustomerDeliveryEmail,
     CustomerOrderCounts,
+    DataSubjectExportPayload,
+    DataSubjectRequest,
     ImageGenerationJob,
     ImageModelQuotaStatus,
     ImageModelRecommendation,
@@ -207,6 +209,22 @@ export class ShopApi {
 
     async removeCustomerAvatar(): Promise<boolean> {
         return this.accountApi.removeCustomerAvatar();
+    }
+
+    async dataSubjectRequests(signal?: AbortSignal): Promise<DataSubjectRequest[]> {
+        return this.accountApi.dataSubjectRequests(signal);
+    }
+
+    async exportPersonalData(password: string): Promise<DataSubjectExportPayload> {
+        return this.accountApi.exportPersonalData(password);
+    }
+
+    async requestAccountClosure(password: string): Promise<DataSubjectRequest> {
+        return this.accountApi.requestAccountClosure(password);
+    }
+
+    async cancelAccountClosure(): Promise<DataSubjectRequest> {
+        return this.accountApi.cancelAccountClosure();
     }
 
     async customerOrders(

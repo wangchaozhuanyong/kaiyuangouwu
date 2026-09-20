@@ -63,6 +63,48 @@ const referralPosterFields = `
 `;
 
 const commonTypes = gql`
+    enum DataSubjectRequestType {
+        EXPORT
+        ACCOUNT_CLOSURE
+    }
+
+    enum DataSubjectRequestStatus {
+        PENDING
+        PROCESSING
+        BLOCKED
+        FAILED
+        FULFILLED
+        CANCELLED
+    }
+
+    type DataSubjectRequest implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        channelId: ID!
+        requestType: DataSubjectRequestType!
+        status: DataSubjectRequestStatus!
+        requestedAt: DateTime!
+        dueAt: DateTime
+        nextAttemptAt: DateTime
+        lastAttemptAt: DateTime
+        attemptCount: Int!
+        blockersJson: String
+        lastError: String
+        resultDigest: String
+        resultSummaryJson: String
+        completedAt: DateTime
+        cancelledAt: DateTime
+    }
+
+    type DataSubjectExportPayload {
+        request: DataSubjectRequest!
+        fileName: String!
+        mimeType: String!
+        content: String!
+        sha256: String!
+    }
+
     enum DataRetentionStatus {
         PENDING
         BLOCKED_REFERENCE
@@ -1200,6 +1242,7 @@ export const adminApiExtensions = gql`
         storefrontTraffic(days: Int = 7): StorefrontTrafficReport!
         referralBalanceAudit: ReferralBalanceAuditResult!
         dataRetentionRecords: [DataRetentionRecord!]!
+        dataSubjectRequests: [DataSubjectRequest!]!
     }
 
     extend type Mutation {
@@ -1263,6 +1306,7 @@ export const adminApiExtensions = gql`
         ): ReferralWallet!
         setDataRetentionLegalHold(id: ID!, enabled: Boolean!, reason: String): DataRetentionRecord!
         retryDataRetentionRecord(id: ID!): DataRetentionRecord!
+        retryDataSubjectRequest(id: ID!): DataSubjectRequest!
     }
 
     extend type Order {
@@ -1368,6 +1412,7 @@ export const shopApiExtensions = gql`
         availableStorefrontProvinces: [StorefrontProvinceOption!]!
         myCustomerAvatar: Asset
         myCustomerAvatarHistory: [CustomerAvatarHistoryEntry!]!
+        myDataSubjectRequests: [DataSubjectRequest!]!
         storefrontCurrencyConfiguration: StoreCurrencyConfiguration!
         activeStorefrontCoupons: [StorefrontCoupon!]!
         myStorefrontCoupons: [StoreCustomerCoupon!]!
@@ -1400,6 +1445,9 @@ export const shopApiExtensions = gql`
         setCustomerAvatar(file: Upload!): Asset!
         restoreCustomerAvatar(retentionId: ID!): Asset!
         removeCustomerAvatar: Boolean!
+        exportMyPersonalData(password: String!): DataSubjectExportPayload!
+        requestMyAccountClosure(password: String!): DataSubjectRequest!
+        cancelMyAccountClosure: DataSubjectRequest!
         setStorefrontPaymentCurrency(currencyCode: String!): Order!
         createStorefrontUsdtCheckoutQuote: StorefrontUsdtCheckoutQuote!
         claimStorefrontCoupon(campaignId: ID!): StoreCustomerCoupon!

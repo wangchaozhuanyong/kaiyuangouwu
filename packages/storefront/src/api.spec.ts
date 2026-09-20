@@ -1845,6 +1845,71 @@ describe('ShopApi storefront mutations', () => {
         expect(requests[2].query).toContain('removeCustomerAvatar');
     });
 
+    it('uses password-verified personal-data export and account-closure mutations', async () => {
+        const closure = {
+            id: 'request-1',
+            requestType: 'ACCOUNT_CLOSURE',
+            status: 'PENDING',
+            requestedAt: '2026-09-20T00:00:00.000Z',
+            dueAt: '2026-09-27T00:00:00.000Z',
+            nextAttemptAt: '2026-09-27T00:00:00.000Z',
+            attemptCount: 0,
+            blockersJson: null,
+            lastError: null,
+            resultDigest: null,
+            completedAt: null,
+            cancelledAt: null,
+        };
+        const exported = {
+            request: { ...closure, id: 'export-1', requestType: 'EXPORT', status: 'FULFILLED' },
+            fileName: 'my-data-2026-09-20.json',
+            mimeType: 'application/json',
+            content: '{"version":1}',
+            sha256: 'a'.repeat(64),
+        };
+        const fetchMock = vi
+            .spyOn(globalThis, 'fetch')
+            .mockResolvedValueOnce(new Response(JSON.stringify({ data: { myDataSubjectRequests: [] } })))
+            .mockResolvedValueOnce(new Response(JSON.stringify({ data: { exportMyPersonalData: exported } })))
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ data: { requestMyAccountClosure: closure } })),
+            )
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        data: {
+                            cancelMyAccountClosure: {
+                                ...closure,
+                                status: 'CANCELLED',
+                                cancelledAt: '2026-09-21T00:00:00.000Z',
+                            },
+                        },
+                    }),
+                ),
+            );
+        const api = new ShopApi(market);
+
+        await expect(api.dataSubjectRequests()).resolves.toEqual([]);
+        await expect(api.exportPersonalData('current-password')).resolves.toEqual(exported);
+        await expect(api.requestAccountClosure('current-password')).resolves.toEqual(closure);
+        await expect(api.cancelAccountClosure()).resolves.toMatchObject({ status: 'CANCELLED' });
+
+        const requests = fetchMock.mock.calls.map(call => {
+            const body = call[1]?.body;
+            if (typeof body !== 'string') throw new Error('Expected a serialized GraphQL request body');
+            return JSON.parse(body) as {
+                query: string;
+                variables?: Record<string, unknown>;
+            };
+        });
+        expect(requests[0].query).toContain('myDataSubjectRequests');
+        expect(requests[1].query).toContain('exportMyPersonalData(password: $password)');
+        expect(requests[1].variables).toEqual({ password: 'current-password' });
+        expect(requests[2].query).toContain('requestMyAccountClosure(password: $password)');
+        expect(requests[2].variables).toEqual({ password: 'current-password' });
+        expect(requests[3].query).toContain('cancelMyAccountClosure');
+    });
+
     it('requires a CORS preflight for image reference uploads while preserving multipart metadata', async () => {
         const reference = { id: 'reference-fixture' };
         const fetchMock = mockGraphQlResponse({ uploadImageReference: reference });

@@ -579,6 +579,29 @@ export interface CustomerAvatarHistoryEntry {
     asset: Asset | null;
 }
 
+export interface DataSubjectRequest {
+    id: string;
+    requestType: 'EXPORT' | 'ACCOUNT_CLOSURE';
+    status: 'PENDING' | 'PROCESSING' | 'BLOCKED' | 'FAILED' | 'FULFILLED' | 'CANCELLED';
+    requestedAt: string;
+    dueAt: string | null;
+    nextAttemptAt: string | null;
+    attemptCount: number;
+    blockersJson: string | null;
+    lastError: string | null;
+    resultDigest: string | null;
+    completedAt: string | null;
+    cancelledAt: string | null;
+}
+
+export interface DataSubjectExportPayload {
+    request: DataSubjectRequest;
+    fileName: string;
+    mimeType: string;
+    content: string;
+    sha256: string;
+}
+
 export type StorefrontCartState = 'OPEN' | 'PAYMENT_PENDING';
 export type StorefrontCartSelectionState = 'NONE' | 'PARTIAL' | 'ALL';
 

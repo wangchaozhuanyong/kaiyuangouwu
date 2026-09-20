@@ -58,7 +58,8 @@ export class DataRetentionService {
         ctx: RequestContext,
         asset: Asset,
         customerId: ID,
-        reason: 'REPLACED' | 'REMOVED' | 'RESTORE_REPLACEMENT',
+        reason: 'REPLACED' | 'REMOVED' | 'RESTORE_REPLACEMENT' | 'ACCOUNT_CLOSURE',
+        channelId: ID = ctx.channelId,
     ): Promise<DataRetentionRecord> {
         const repository = this.connection.getRepository(ctx, DataRetentionRecord);
         const resourceKey = String(asset.id);
@@ -77,7 +78,7 @@ export class DataRetentionService {
             record.legalHoldChangedByUserId = null;
             record.legalHoldChangedAt = null;
         }
-        record.channelId = ctx.channelId;
+        record.channelId = channelId;
         record.resourceType = 'CUSTOMER_AVATAR';
         record.resourceKey = resourceKey;
         record.subjectKeyHash = customerAvatarSubjectHash(customerId);
@@ -92,6 +93,29 @@ export class DataRetentionService {
         record.lastError = null;
         record.completedAt = null;
         return repository.save(record);
+    }
+
+    async quarantineAllCustomerAvatars(ctx: RequestContext, customerId: ID): Promise<number> {
+        const ownerTag = `${CUSTOMER_AVATAR_OWNER_TAG_PREFIX}${String(customerId)}`;
+        const assets = await this.connection
+            .getRepository(ctx, Asset)
+            .createQueryBuilder('asset')
+            .innerJoin('asset.tags', 'ownerTag', 'ownerTag.value = :ownerTag', { ownerTag })
+            .leftJoinAndSelect('asset.tags', 'tags')
+            .leftJoinAndSelect('asset.channels', 'channels')
+            .getMany();
+        let quarantined = 0;
+        for (const asset of assets) {
+            const existing = await this.connection.getRepository(ctx, DataRetentionRecord).findOne({
+                where: { resourceType: 'CUSTOMER_AVATAR', resourceKey: String(asset.id) },
+            });
+            if (existing && RETIRED_STATUSES.includes(existing.status)) continue;
+            const businessChannel =
+                asset.channels.find(channel => channel.code !== DEFAULT_CHANNEL_CODE)?.id ?? ctx.channelId;
+            await this.quarantineAvatar(ctx, asset, customerId, 'ACCOUNT_CLOSURE', businessChannel);
+            quarantined += 1;
+        }
+        return quarantined;
     }
 
     async avatarHistory(ctx: RequestContext, customerId: ID): Promise<CustomerAvatarHistoryEntry[]> {

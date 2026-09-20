@@ -26,10 +26,14 @@ import { CustomerAvatarService } from './customer-avatar.service';
 import { DataRetentionAdminResolver } from './data-retention.resolver';
 import { DataRetentionService } from './data-retention.service';
 import { purgeDueDataRetentionTask } from './data-retention.tasks';
+import { DataSubjectAdminResolver, DataSubjectShopResolver } from './data-subject.resolver';
+import { DataSubjectService } from './data-subject.service';
+import { processDueAccountClosuresTask } from './data-subject.tasks';
 import { CouponLedgerEntry } from './entities/coupon-ledger-entry.entity';
 import { CouponOrderAllocation } from './entities/coupon-order-allocation.entity';
 import { CustomerCoupon } from './entities/customer-coupon.entity';
 import { DataRetentionRecord } from './entities/data-retention-record.entity';
+import { DataSubjectRequest } from './entities/data-subject-request.entity';
 import { ReferralAccount } from './entities/referral-account.entity';
 import { ReferralBalanceUse } from './entities/referral-balance-use.entity';
 import { ReferralLedgerEntry } from './entities/referral-ledger-entry.entity';
@@ -183,6 +187,7 @@ import {
         StoreUsdtManualRefund,
         StoreUsdtWallet,
         StoreUsdtWalletAudit,
+        DataSubjectRequest,
         DataRetentionRecord,
     ],
     controllers: [StorefrontPromotionController, StorefrontRealtimeController],
@@ -219,6 +224,7 @@ import {
         SystemAnnouncementService,
         StorefrontRealtimeService,
         CustomerAvatarService,
+        DataSubjectService,
         DataRetentionService,
         {
             provide: STOREFRONT_PROMOTION_OPTIONS,
@@ -328,6 +334,7 @@ import {
         config.schedulerOptions.tasks.push(refreshStoreUsdtRatesTask);
         config.schedulerOptions.tasks.push(reconcileStoreUsdtPaymentsTask);
         config.schedulerOptions.tasks.push(purgeDueDataRetentionTask);
+        config.schedulerOptions.tasks.push(processDueAccountClosuresTask);
         return config;
     },
     adminApiExtensions: {
@@ -346,6 +353,7 @@ import {
             ReferralAdminResolver,
             StorefrontTrafficAdminResolver,
             DataRetentionAdminResolver,
+            DataSubjectAdminResolver,
         ],
     },
     shopApiExtensions: {
@@ -354,6 +362,7 @@ import {
             StorefrontBrandingShopResolver,
             StorefrontRegionShopResolver,
             CustomerAvatarShopResolver,
+            DataSubjectShopResolver,
             StoreCurrencySettingsShopResolver,
             StorePromotionCampaignShopResolver,
             StoreCouponVariantResolver,
