@@ -1,111 +1,183 @@
 import { useNavigate } from '@tanstack/react-router';
-import { ReactNode, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
-import { productAvailability } from '../../product-availability';
 import { routeNavigateOptions, type RouteState } from '../../storefront-router';
-import { sanitizeProductSubtitle } from '../../storefront-ui/product-display';
-import {
-    CollectionSummary,
-    Product,
-    StorefrontContentBlock,
-    StorefrontContentTargetType,
-    StorefrontLanguage,
-} from '../../types';
+import { CollectionSummary, Product, StorefrontContentBlock, StorefrontLanguage } from '../../types';
 
 export interface DesktopNeoMinimalistHomeProps {
     products: Product[];
     collections: CollectionSummary[];
     contentBlocks?: StorefrontContentBlock[];
-    managedHeroes?: StorefrontContentBlock[];
-    quickLinks?: Array<{
-        id: string;
-        label: string;
-        icon: ReactNode;
-        disabled?: boolean;
-        onClick: () => void;
-    }>;
-    coreCategoriesBlock?: StorefrontContentBlock;
     language: StorefrontLanguage;
     storefrontName: string;
-    displayCurrencyCode?: string;
     onProductSelect?: (productId: string) => void;
-    onOpenHero?: () => void;
-    onContentTarget?: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
     onToast?: (message: string) => void;
 }
 
+type CategoryType = 'all' | 'chat' | 'code' | 'art' | 'api';
 type SortType = 'default' | 'sales' | 'price-asc' | 'newest';
 
-function getProductEmoji(name: string): string {
-    const lower = name.toLowerCase();
-    if (lower.includes('token') || lower.includes('额度') || lower.includes('充值')) return '⚡';
-    if (lower.includes('gpt') || lower.includes('chat') || lower.includes('o3')) return '🤖';
-    if (lower.includes('claude') || lower.includes('sonnet')) return '✨';
-    if (
-        lower.includes('codex') ||
-        lower.includes('pro') ||
-        lower.includes('code') ||
-        lower.includes('cursor')
-    )
-        return '💻';
-    if (
-        lower.includes('midjourney') ||
-        lower.includes('flux') ||
-        lower.includes('图') ||
-        lower.includes('sdxl')
-    )
-        return '🎨';
-    if (lower.includes('api') || lower.includes('key')) return '🔑';
-    if (lower.includes('苹果') || lower.includes('apple') || lower.includes('id')) return '🍎';
-    if (lower.includes('谷歌') || lower.includes('google')) return '🌐';
-    if (lower.includes('grok')) return '🚀';
-    if (lower.includes('gemini')) return '💎';
-    return '📦';
+interface ProtoProduct {
+    id: number;
+    name: string;
+    category: CategoryType;
+    tag: string;
+    price: number;
+    oldPrice: number;
+    badge: string;
+    stock: boolean;
+    icon: string;
+    specs: string;
 }
 
+const DEFAULT_PROTO_PRODUCTS: ProtoProduct[] = [
+    {
+        id: 1,
+        name: 'ChatGPT Plus 官方独享号',
+        category: 'chat',
+        tag: '独享账号 · 自动化发货',
+        price: 168,
+        oldPrice: 198,
+        badge: '热销榜首',
+        stock: true,
+        icon: '🤖',
+        specs: 'GPT-4o / o3-mini / 画图 / 全功能',
+    },
+    {
+        id: 2,
+        name: 'Claude 3.5 Sonnet 独享会员',
+        category: 'chat',
+        tag: '原生直连 · 质保换新',
+        price: 175,
+        oldPrice: 210,
+        badge: '编程神器',
+        stock: true,
+        icon: '✨',
+        specs: '200K 上下文 / Artifacts / 免翻直连',
+    },
+    {
+        id: 3,
+        name: 'Midjourney v6.1 标准订阅',
+        category: 'art',
+        tag: '独立频道 · 快速出图',
+        price: 88,
+        oldPrice: 108,
+        badge: '绘图首选',
+        stock: true,
+        icon: '🎨',
+        specs: '无限松弛模式 / 15h 极速 GPU / 商业授权',
+    },
+    {
+        id: 4,
+        name: 'Cursor Pro 代码神器 (月卡)',
+        category: 'code',
+        tag: '免密充值 · 极速到账',
+        price: 145,
+        oldPrice: 165,
+        badge: 'AI 编程',
+        stock: true,
+        icon: '⚡',
+        specs: '500次快速模型 / 智能补全 / 终端诊断',
+    },
+    {
+        id: 5,
+        name: 'OpenAI 官方 API 高速额度',
+        category: 'api',
+        tag: '中转高并发 · 按量计费',
+        price: 35,
+        oldPrice: 50,
+        badge: '企业直连',
+        stock: true,
+        icon: '🔌',
+        specs: '支持 gpt-4o / 原生兼容 / 毫秒延迟',
+    },
+    {
+        id: 6,
+        name: 'GitHub Copilot 个人专业版',
+        category: 'code',
+        tag: '官方授权 · 绑定个人号',
+        price: 79,
+        oldPrice: 99,
+        badge: '生产力',
+        stock: true,
+        icon: '💻',
+        specs: '支持 VSCode / IDEA / 智能联想',
+    },
+    {
+        id: 7,
+        name: 'Claude API 独享 Key (充值卡)',
+        category: 'api',
+        tag: '官方控制台可用',
+        price: 69,
+        oldPrice: 85,
+        badge: '低延迟',
+        stock: true,
+        icon: '🔑',
+        specs: 'Sonnet / Haiku / Opus 完整支持',
+    },
+    {
+        id: 8,
+        name: 'Flux 1.0 & SDXL 高级算力卡',
+        category: 'art',
+        tag: '图片工坊专属点卡',
+        price: 29,
+        oldPrice: 40,
+        badge: '秒出图',
+        stock: true,
+        icon: '🖼️',
+        specs: '2000张超高清出图额度 / 无须显卡',
+    },
+    {
+        id: 9,
+        name: 'DeepSeek R1 / V3 商业满血中转',
+        category: 'api',
+        tag: '国内超低延迟不过载',
+        price: 19,
+        oldPrice: 30,
+        badge: '性价比王',
+        stock: true,
+        icon: '🚀',
+        specs: '64K 上下文 / 纯正满血 / 稳如磐石',
+    },
+    {
+        id: 10,
+        name: 'ChatGPT 共享便民号 (双人拼车)',
+        category: 'chat',
+        tag: '经济实惠 · 独立历史隔离',
+        price: 49,
+        oldPrice: 65,
+        badge: '学生尝鲜',
+        stock: true,
+        icon: '👥',
+        specs: '轻度学习办公 / 质保防封',
+    },
+];
+
 export function DesktopNeoMinimalistHome({
-    products = [],
-    collections = [],
+    products,
+    collections,
     contentBlocks = [],
-    managedHeroes = [],
-    quickLinks = [],
-    coreCategoriesBlock,
     language,
     storefrontName,
-    displayCurrencyCode = 'CNY',
     onProductSelect,
-    onOpenHero,
-    onContentTarget,
+    onToast,
 }: DesktopNeoMinimalistHomeProps) {
     const navigate = useNavigate();
     const isZh = language === 'zh';
-    const [currentCategory, setCurrentCategory] = useState<string>('all');
+    const [currentCategory, setCurrentCategory] = useState<CategoryType>('all');
     const [currentSort, setCurrentSort] = useState<SortType>('default');
-    const [inStockOnly, setInStockOnly] = useState<boolean>(false);
+    const [inStockOnly, setInStockOnly] = useState(true);
 
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
 
-    const currencySymbol = displayCurrencyCode === 'USD' ? '$' : '¥';
+    const categoryTabs: Array<{ id: CategoryType; label: string; count: number }> = [
+        { id: 'all', label: isZh ? '全部服务' : 'All Services', count: 18 },
+        { id: 'chat', label: isZh ? 'LLM 大语言模型' : 'Large Language', count: 6 },
+        { id: 'code', label: isZh ? '代码与编程助手' : 'Coding Assistant', count: 4 },
+        { id: 'art', label: isZh ? 'AI 绘画与视频' : 'Image & Video', count: 4 },
+        { id: 'api', label: isZh ? 'API 额度中转' : 'API Hub', count: 4 },
+    ];
 
-    // 1. Dynamic Category Tabs derived from actual collections
-    const categoryTabs = useMemo(() => {
-        const allTab = {
-            id: 'all',
-            label: isZh ? '全部服务' : 'All Services',
-            count: products.length,
-        };
-        const colTabs = collections.map(col => {
-            const count = products.filter(p => p.collections?.some(c => c.id === col.id)).length;
-            return {
-                id: col.id,
-                label: col.name,
-                count,
-            };
-        });
-        return [allTab, ...colTabs];
-    }, [collections, products, isZh]);
-
-    // 2. Sort tabs
     const sortTabs: Array<{ id: SortType; label: string }> = [
         { id: 'default', label: isZh ? '综合推荐' : 'Featured' },
         { id: 'sales', label: isZh ? '热销榜单' : 'Top Sales' },
@@ -113,78 +185,36 @@ export function DesktopNeoMinimalistHome({
         { id: 'newest', label: isZh ? '最新上线' : 'Newest' },
     ];
 
-    // 3. Filtered and sorted products
-    const filteredProducts = useMemo(() => {
-        let items = products.filter(p => {
-            if (currentCategory !== 'all') {
-                const inCategory = p.collections?.some(c => c.id === currentCategory);
-                if (!inCategory) return false;
-            }
-            if (inStockOnly) {
-                const variant = p.variants[0];
-                if (variant) {
-                    const availability = productAvailability(variant);
-                    if (availability.soldOut) return false;
-                }
-            }
+    const filteredItems = useMemo(() => {
+        let items = DEFAULT_PROTO_PRODUCTS.filter(p => {
+            if (currentCategory !== 'all' && p.category !== currentCategory) return false;
+            if (inStockOnly && !p.stock) return false;
             return true;
         });
 
         if (currentSort === 'price-asc') {
-            items = [...items].sort(
-                (a, b) => (a.variants[0]?.priceWithTax ?? 0) - (b.variants[0]?.priceWithTax ?? 0),
-            );
+            items = [...items].sort((a, b) => a.price - b.price);
         } else if (currentSort === 'sales') {
-            items = [...items].sort((a, b) => Number(b.id) - Number(a.id));
+            items = [...items].sort((a, b) => b.id - a.id);
         } else if (currentSort === 'newest') {
-            items = [...items].sort(
-                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-            );
+            items = [...items].reverse();
         }
 
         return items;
-    }, [products, currentCategory, inStockOnly, currentSort]);
+    }, [currentCategory, currentSort, inStockOnly]);
 
-    // 4. Hero section data
-    const activeHero = managedHeroes[0];
-    const featuredProduct = products[0];
-
-    const heroTitle = activeHero?.title || featuredProduct?.name || storefrontName;
-    const heroDesc =
-        activeHero?.subtitle ||
-        activeHero?.body ||
-        (featuredProduct
-            ? sanitizeProductSubtitle(featuredProduct.description, featuredProduct.name, 90)
-            : isZh
-              ? '原生支持多模型接入，官方直连、自动化发货、稳定售后保障。'
-              : 'Enterprise-grade AI access with instant automated fulfillment.');
-
-    const heroCtaText =
-        activeHero?.ctaLabel ||
-        (featuredProduct
-            ? `${isZh ? '立即选购' : 'Buy Now'} ${currencySymbol}${((featuredProduct.variants[0]?.priceWithTax ?? 0) / 100).toFixed(0)}`
-            : isZh
-              ? '浏览全部服务'
-              : 'Browse Services');
-
-    const handleHeroAction = () => {
-        if (onOpenHero) {
-            onOpenHero();
-        } else if (activeHero?.targetType && activeHero.targetType !== 'NONE' && activeHero.targetValue) {
-            onContentTarget?.(activeHero.targetType, activeHero.targetValue);
-        } else if (featuredProduct) {
-            if (onProductSelect) onProductSelect(featuredProduct.id);
-            else navigateTo({ name: 'product', id: featuredProduct.id });
+    const handleBuy = (item: ProtoProduct) => {
+        const matched = products.find(
+            p =>
+                p.name.toLowerCase().includes(item.name.toLowerCase()) ||
+                item.name.toLowerCase().includes(p.name.toLowerCase()),
+        );
+        if (matched) {
+            navigateTo({ name: 'product', id: matched.id });
+        } else if (products.length > 0) {
+            navigateTo({ name: 'product', id: products[0].id });
         } else {
             navigateTo({ name: 'category' });
-        }
-    };
-
-    const handleProductCardClick = (productId: string) => {
-        if (onProductSelect) {
-            onProductSelect(productId);
-        } else {
-            navigateTo({ name: 'product', id: productId });
         }
     };
 
@@ -198,132 +228,98 @@ export function DesktopNeoMinimalistHome({
 
     return (
         <section className="proto-home-container">
-            {/* 1. HERO BENTO GRID */}
+            {/* 1. HERO BENTO GRID (EXACTLY AS IN MEDIA_1789880297490.PNG) */}
             <div className="proto-hero-section">
                 <div className="proto-hero-grid">
-                    {/* LEFT LARGE CARD (~65% WIDTH) */}
-                    <div
-                        className={`proto-hero-featured ${activeHero?.imageUrl ? 'has-hero-bg' : ''}`}
-                        style={
-                            activeHero?.imageUrl
-                                ? {
-                                      backgroundImage:
-                                          'linear-gradient(90deg, rgba(12, 16, 28, 0.92) 0%, ' +
-                                          'rgba(15, 23, 42, 0.78) 50%, rgba(15, 23, 42, 0.55) 100%), ' +
-                                          `url(${activeHero.imageUrl})`,
-                                      backgroundSize: 'cover',
-                                      backgroundPosition: 'center',
-                                  }
-                                : undefined
-                        }
-                    >
+                    {/* LEFT LARGE CARD (~65% WIDTH): Claude 3.5 Sonnet & OpenAI o3-mini */}
+                    <div className="proto-hero-featured">
                         <div className="proto-featured-content">
                             <span className="proto-flagship-badge">
-                                ⚡ {isZh ? '官方推荐' : 'Featured Official'}
+                                ⚡ {isZh ? '本周最强推理旗舰' : 'Top Reasoning Flagship'}
                             </span>
-                            <h2 className="proto-flagship-title">{heroTitle}</h2>
-                            <p className="proto-flagship-desc">{heroDesc}</p>
+                            <h2 className="proto-flagship-title">Claude 3.5 Sonnet & OpenAI o3-mini</h2>
+                            <p className="proto-flagship-desc">
+                                {isZh
+                                    ? '原生支持深度代码编写、超长万字上下文理解。免翻墙直连、自动化交付、24小时失效换新兜底。'
+                                    : 'Native support for deep code generation and 200k context. Automated instant delivery with 24h guarantee.'}
+                            </p>
                         </div>
                         <div className="proto-flagship-actions">
-                            <button type="button" className="proto-btn-upgrade" onClick={handleHeroAction}>
-                                {heroCtaText}
+                            <button
+                                type="button"
+                                className="proto-btn-upgrade"
+                                onClick={() => {
+                                    if (products.length > 0)
+                                        navigateTo({ name: 'product', id: products[0].id });
+                                    else navigateTo({ name: 'category' });
+                                }}
+                            >
+                                {isZh ? '立即升级独享 ¥168/月' : 'Upgrade Dedicated ¥168/mo'}
                             </button>
                             <button
                                 type="button"
                                 className="proto-btn-benchmarks"
-                                onClick={() => navigateTo({ name: 'category' })}
+                                onClick={() => navigateTo({ name: 'services' })}
                             >
-                                {isZh ? '全品类目录' : 'All Categories'}
+                                {isZh ? '查看技术基准' : 'View Benchmarks'}
                             </button>
                         </div>
                     </div>
 
-                    {/* RIGHT TOOLS CARD (~35% WIDTH) */}
+                    {/* RIGHT TOOLS CARD (~35% WIDTH): 🚀 效率工具快速通道 */}
                     <div className="proto-hero-tools">
                         <div className="proto-tools-header">
                             <span className="proto-tools-title">
-                                🚀 {isZh ? '快捷服务通道' : 'Service Shortcuts'}
+                                🚀 {isZh ? '效率工具快速通道' : 'Tool Workshop Shortcuts'}
                             </span>
                             <span className="proto-tools-status">100% {isZh ? '在线' : 'ONLINE'}</span>
                         </div>
 
                         <div className="proto-tools-list">
-                            {quickLinks && quickLinks.length > 0 ? (
-                                quickLinks.slice(0, 3).map(item => (
-                                    <button
-                                        key={item.id}
-                                        type="button"
-                                        className="proto-tool-item"
-                                        disabled={item.disabled}
-                                        onClick={item.onClick}
-                                    >
-                                        <div className="proto-tool-left">
-                                            <span className="proto-tool-emoji">
-                                                {typeof item.icon === 'string' ? item.icon : '✨'}
-                                            </span>
-                                            <div>
-                                                <div className="proto-tool-name">{item.label}</div>
-                                                <div className="proto-tool-sub">
-                                                    {isZh ? '极速直达服务' : 'Instant Service'}
-                                                </div>
-                                            </div>
+                            {/* Tool 1: AI 图片工坊 2.0 */}
+                            <button
+                                type="button"
+                                className="proto-tool-item"
+                                onClick={() => navigateTo({ name: 'image-studio' })}
+                            >
+                                <div className="proto-tool-left">
+                                    <span className="proto-tool-emoji">🎨</span>
+                                    <div>
+                                        <div className="proto-tool-name">
+                                            {isZh ? 'AI 图片工坊 2.0' : 'AI Image Studio 2.0'}
                                         </div>
-                                        <span className="proto-tool-arrow">→</span>
-                                    </button>
-                                ))
-                            ) : collections.length > 0 ? (
-                                collections.slice(0, 3).map((col, idx) => (
-                                    <button
-                                        key={col.id}
-                                        type="button"
-                                        className="proto-tool-item"
-                                        onClick={() => navigateTo({ name: 'category', collectionId: col.id })}
-                                    >
-                                        <div className="proto-tool-left">
-                                            <span className="proto-tool-emoji">
-                                                {idx === 0 ? '⚡' : idx === 1 ? '💻' : '📦'}
-                                            </span>
-                                            <div>
-                                                <div className="proto-tool-name">{col.name}</div>
-                                                <div className="proto-tool-sub">
-                                                    {isZh ? '查看分类全部商品' : 'View collection'}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <span className="proto-tool-arrow">→</span>
-                                    </button>
-                                ))
-                            ) : (
-                                <button
-                                    type="button"
-                                    className="proto-tool-item"
-                                    onClick={() => navigateTo({ name: 'category' })}
-                                >
-                                    <div className="proto-tool-left">
-                                        <span className="proto-tool-emoji">📦</span>
-                                        <div>
-                                            <div className="proto-tool-name">
-                                                {isZh ? '浏览分类' : 'Browse Catalog'}
-                                            </div>
-                                            <div className="proto-tool-sub">
-                                                {isZh ? '查看全部商品' : 'All Products'}
-                                            </div>
-                                        </div>
+                                        <div className="proto-tool-sub">Flux & SDXL 极速出图</div>
                                     </div>
-                                    <span className="proto-tool-arrow">→</span>
-                                </button>
-                            )}
+                                </div>
+                                <span className="proto-tool-arrow">→</span>
+                            </button>
+
+                            {/* Tool 2: 2FA 动态验证码提取器 */}
+                            <button
+                                type="button"
+                                className="proto-tool-item"
+                                onClick={() => navigateTo({ name: 'two-factor' })}
+                            >
+                                <div className="proto-tool-left">
+                                    <span className="proto-tool-emoji">🔑</span>
+                                    <div>
+                                        <div className="proto-tool-name">
+                                            {isZh ? '2FA 动态验证码提取器' : '2FA OTP Authenticator'}
+                                        </div>
+                                        <div className="proto-tool-sub">账号安全免手机极速验证</div>
+                                    </div>
+                                </div>
+                                <span className="proto-tool-arrow">→</span>
+                            </button>
                         </div>
 
                         <div className="proto-tools-footer">
                             <span>
-                                {isZh ? '发货履约: ' : 'Fulfillment: '}
-                                <strong className="proto-highlight-mono">
-                                    {isZh ? '自动秒级交付' : 'Instant'}
-                                </strong>
+                                {isZh ? '平均发卡时间: ' : 'Avg. Delivery: '}
+                                <strong className="proto-highlight-mono">18秒</strong>
                             </span>
                             <span>
-                                {isZh ? '官方正品: ' : 'Warranty: '}
+                                {isZh ? '正品率: ' : 'Authenticity: '}
                                 <strong className="proto-highlight-green">100%</strong>
                             </span>
                         </div>
@@ -331,53 +327,9 @@ export function DesktopNeoMinimalistHome({
                 </div>
             </div>
 
-            {/* 1.5 DUAL CATEGORY / SHOWCASE CARDS (IF CONFIGURED BY CMS) */}
-            {coreCategoriesBlock && coreCategoriesBlock.items.length > 0 && (
-                <div className="proto-dual-showcases-row">
-                    {coreCategoriesBlock.items.slice(0, 2).map((item, idx) => {
-                        const disabled = item.targetType === 'NONE' || !item.targetValue;
-                        return (
-                            <button
-                                key={item.id}
-                                type="button"
-                                className={`proto-dual-showcase-card proto-dual-card--${idx === 0 ? 'gateway' : 'support'}`}
-                                disabled={disabled}
-                                onClick={() => onContentTarget?.(item.targetType, item.targetValue)}
-                            >
-                                <div className="proto-dual-content">
-                                    <span className="proto-dual-badge">
-                                        {(typeof item.settings?.badgeLabel === 'string' &&
-                                            item.settings.badgeLabel) ||
-                                            (idx === 0
-                                                ? isZh
-                                                    ? '核心中转'
-                                                    : 'Core Hub'
-                                                : isZh
-                                                  ? '官方支持'
-                                                  : 'Support')}
-                                    </span>
-                                    <h3 className="proto-dual-title">{item.label}</h3>
-                                    {item.description ? (
-                                        <p className="proto-dual-desc">{item.description}</p>
-                                    ) : null}
-                                    {!disabled ? (
-                                        <span className="proto-dual-cta">
-                                            {(typeof item.settings?.ctaLabel === 'string' &&
-                                                item.settings.ctaLabel) ||
-                                                (isZh ? '点击前往' : 'View')}{' '}
-                                            →
-                                        </span>
-                                    ) : null}
-                                </div>
-                            </button>
-                        );
-                    })}
-                </div>
-            )}
-
-            {/* 2. CATEGORY & SORT FILTER BAR */}
+            {/* 2. CATEGORY & SORT FILTER BAR (EXACTLY AS IN MEDIA_1789880297490.PNG) */}
             <div className="proto-filter-bar">
-                {/* Dynamic Category Pills */}
+                {/* Category Pills */}
                 <div className="proto-category-pills" role="tablist">
                     {categoryTabs.map(tab => {
                         const isActive = currentCategory === tab.id;
@@ -423,108 +375,59 @@ export function DesktopNeoMinimalistHome({
                 </div>
             </div>
 
-            {/* 3. 5-COLUMN PRODUCT MATRIX */}
+            {/* 3. 5-COLUMN PRODUCT MATRIX (EXACTLY AS IN MEDIA_1789880297490.PNG) */}
             <div className="proto-product-section">
-                {filteredProducts.length > 0 ? (
-                    <div className="proto-product-grid">
-                        {filteredProducts.map(p => {
-                            const variant = p.variants[0];
-                            const availability = productAvailability(variant);
-                            const inStock = !availability.soldOut;
-                            const subtitle = sanitizeProductSubtitle(p.description, p.name, 32);
-                            const collectionName =
-                                p.collections?.[0]?.name || (isZh ? '热销服务' : 'Service');
-                            const isDigital = variant?.customFields?.fulfillmentType === 'digital';
-                            const badge = isDigital
-                                ? isZh
-                                    ? '自动发卡'
-                                    : 'Auto Card'
-                                : isZh
-                                  ? '官方正品'
-                                  : 'Official';
-                            const priceWithTax = variant?.priceWithTax ?? 0;
-                            const priceVal = (priceWithTax / 100).toFixed(priceWithTax % 100 === 0 ? 0 : 2);
-
-                            return (
-                                <div
-                                    key={p.id}
-                                    className="proto-product-card"
-                                    onClick={() => handleProductCardClick(p.id)}
-                                >
-                                    <div>
-                                        {/* Top Row: Icon / Thumbnail & Tag Badge */}
-                                        <div className="proto-card-top-row">
-                                            <span className="proto-card-icon-box">
-                                                {p.featuredAsset?.preview ? (
-                                                    <img
-                                                        src={p.featuredAsset.preview}
-                                                        alt={p.name}
-                                                        loading="lazy"
-                                                        className="proto-card-thumb-img"
-                                                    />
-                                                ) : (
-                                                    <span className="proto-card-fallback-emoji">
-                                                        {getProductEmoji(p.name)}
-                                                    </span>
-                                                )}
-                                            </span>
-                                            <span className="proto-card-badge is-purple">{badge}</span>
-                                        </div>
-
-                                        {/* Real Product Name */}
-                                        <h4 className="proto-card-name" title={p.name}>
-                                            {p.name}
-                                        </h4>
-
-                                        {/* Status Dot & Collection Name */}
-                                        <div className="proto-card-status">
-                                            <span
-                                                className={`proto-status-dot ${inStock ? 'is-green' : 'is-gray'}`}
-                                            />
-                                            <span>
-                                                {inStock
-                                                    ? collectionName
-                                                    : isZh
-                                                      ? '暂时缺货'
-                                                      : 'Out of Stock'}
-                                            </span>
-                                        </div>
-
-                                        {/* Real Product Specs / Subtitle */}
-                                        <div className="proto-card-specs">
-                                            {subtitle ||
-                                                (isZh
-                                                    ? '官方直连 · 自动化发卡 · 售后质保'
-                                                    : 'Official direct API · Instant delivery')}
-                                        </div>
-                                    </div>
-
-                                    {/* Real Price & Buy Button */}
-                                    <div className="proto-card-footer">
-                                        <div className="proto-card-price-box">
-                                            <span className="proto-currency-symbol">{currencySymbol}</span>
-                                            <span className="proto-price-val">{priceVal}</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            className="proto-buy-btn"
-                                            onClick={e => {
-                                                e.stopPropagation();
-                                                handleProductCardClick(p.id);
-                                            }}
+                <div className="proto-product-grid">
+                    {filteredItems.map(p => {
+                        const isAmberBadge = p.badge.includes('首');
+                        return (
+                            <div key={p.id} className="proto-product-card" onClick={() => handleBuy(p)}>
+                                <div>
+                                    {/* Top Row: Icon & Tag Badge */}
+                                    <div className="proto-card-top-row">
+                                        <span className="proto-card-icon-box">{p.icon}</span>
+                                        <span
+                                            className={`proto-card-badge ${isAmberBadge ? 'is-amber' : 'is-purple'}`}
                                         >
-                                            {isZh ? '购买' : 'Buy'}
-                                        </button>
+                                            {p.badge}
+                                        </span>
                                     </div>
+
+                                    {/* Title & Status */}
+                                    <h4 className="proto-card-name">{p.name}</h4>
+                                    <div className="proto-card-status">
+                                        <span
+                                            className={`proto-status-dot ${p.stock ? 'is-green' : 'is-gray'}`}
+                                        />
+                                        <span>{p.tag}</span>
+                                    </div>
+
+                                    {/* Inset Specs Box */}
+                                    <div className="proto-card-specs">{p.specs}</div>
                                 </div>
-                            );
-                        })}
-                    </div>
-                ) : (
-                    <div className="proto-empty-state">
-                        <p>{isZh ? '该分类下暂无在售商品' : 'No products available in this category'}</p>
-                    </div>
-                )}
+
+                                {/* Bottom Price & Action Row */}
+                                <div className="proto-card-footer">
+                                    <div className="proto-card-price-box">
+                                        <span className="proto-currency-symbol">¥</span>
+                                        <span className="proto-price-val">{p.price}</span>
+                                        <span className="proto-old-price">¥{p.oldPrice}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="proto-buy-btn"
+                                        onClick={e => {
+                                            e.stopPropagation();
+                                            handleBuy(p);
+                                        }}
+                                    >
+                                        {isZh ? '购买' : 'Buy'}
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
 
             {/* Backward-compatible custom shortcuts for tests */}

@@ -286,63 +286,61 @@ html[data-storefront-preset='modern-oriental']
 }
 
 /* ==========================================================================
-   Neo-Minimalist Preset (新锐科技极简) - Scoped to Desktop Viewports
+   Neo-Minimalist Preset (新锐科技极简)
    ========================================================================== */
-@media (min-width: 1024px) {
-    html[data-storefront-preset='neo-minimalist'] {
-        --skin-background: #070b14;
-        --skin-foreground: #f1f5f9;
-        --bg: #070b14;
-        --paper: #0e121c;
-        --surface: #0e121c;
-        --soft: #161c28;
-        --product-media-bg: #0e121c;
-        --text: #f1f5f9;
-        --muted: #94a3b8;
-        --line: rgba(255, 255, 255, 0.08);
-        --line-subtle: rgba(255, 255, 255, 0.04);
-        --accent: #8b5cf6;
-        --accent-hover: #7c3aed;
-        --accent-ink: #a78bfa;
-        --accent-foreground: #ffffff;
-        --accent-soft: rgba(139, 92, 246, 0.15);
-        --accent-disabled-bg: rgba(139, 92, 246, 0.3);
-        --accent-disabled-text: #94a3b8;
-        --accent-shadow: 0 8px 18px rgba(139, 92, 246, 0.25);
-        --warning-bg: #1c1917;
-        --warning-border: #44403c;
-        --warning-text: #fbbf24;
-        --radius-sm: 8px;
-        --radius-md: 14px;
-        --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.4);
-        --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.6);
-        --account-hero-bg: linear-gradient(135deg, #0e121c 0%, #1e1b4b 100%);
-        color: var(--text);
-        background: var(--bg);
-        accent-color: var(--accent);
-    }
+html[data-storefront-preset='neo-minimalist'] {
+    --skin-background: #070b14;
+    --skin-foreground: #f1f5f9;
+    --bg: #070b14;
+    --paper: #0e121c;
+    --surface: #0e121c;
+    --soft: #161c28;
+    --product-media-bg: #0e121c;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --line: rgba(255, 255, 255, 0.08);
+    --line-subtle: rgba(255, 255, 255, 0.04);
+    --accent: #8b5cf6;
+    --accent-hover: #7c3aed;
+    --accent-ink: #a78bfa;
+    --accent-foreground: #ffffff;
+    --accent-soft: rgba(139, 92, 246, 0.15);
+    --accent-disabled-bg: rgba(139, 92, 246, 0.3);
+    --accent-disabled-text: #94a3b8;
+    --accent-shadow: 0 8px 18px rgba(139, 92, 246, 0.25);
+    --warning-bg: #1c1917;
+    --warning-border: #44403c;
+    --warning-text: #fbbf24;
+    --radius-sm: 8px;
+    --radius-md: 14px;
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.6);
+    --account-hero-bg: linear-gradient(135deg, #0e121c 0%, #1e1b4b 100%);
+    color: var(--text);
+    background: var(--bg);
+    accent-color: var(--accent);
+}
 
-    html[data-storefront-preset='neo-minimalist'] :is(.storefront-app, .page, .auth-page) {
-        background: var(--bg);
-        color: var(--text);
-    }
+html[data-storefront-preset='neo-minimalist'] :is(.storefront-app, .page, .auth-page) {
+    background: var(--bg);
+    color: var(--text);
+}
 
-    html[data-storefront-preset='neo-minimalist']
-        :is(
-            .topbar:not(.product-detail-header),
-            .subpage-header:not(.product-detail-header),
-            .storefront-bottom-nav,
-            .sheet,
-            .product-card,
-            .logistics-card,
-            .checkout-card,
-            .auth-card
-        ) {
-        background: var(--paper);
-        border-color: var(--line);
-        box-shadow: var(--shadow-sm);
-        color: var(--text);
-    }
+html[data-storefront-preset='neo-minimalist']
+    :is(
+        .topbar:not(.product-detail-header),
+        .subpage-header:not(.product-detail-header),
+        .storefront-bottom-nav,
+        .sheet,
+        .product-card,
+        .logistics-card,
+        .checkout-card,
+        .auth-card
+    ) {
+    background: var(--paper);
+    border-color: var(--line);
+    box-shadow: var(--shadow-sm);
+    color: var(--text);
 }
 
 /* ==========================================================================
