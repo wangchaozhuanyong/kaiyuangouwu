@@ -43,6 +43,8 @@ on:
                     - diagnose
                     - backup-database
                     - retain-reviewed
+                    - plan-deployment-cache-cleanup
+                    - apply-deployment-cache-cleanup-reviewed
                     - plan-two-factor-backup
                     - backup-two-factor-reviewed
                     - verify-two-factor-backup
@@ -115,13 +117,13 @@ jobs:
                   }
                   [[ "$OPS_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
                   case "$OPS_OPERATION" in
-                    preflight-release|postflight-release|diagnose|backup-database|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|audit-store-isolation-data|plan-order-sales-ownership-backfill|plan-moyao-default-store-migration|verify-moyao-default-store-migration)
+                    preflight-release|postflight-release|diagnose|backup-database|plan-deployment-cache-cleanup|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|audit-store-isolation-data|plan-order-sales-ownership-backfill|plan-moyao-default-store-migration|verify-moyao-default-store-migration)
                       [[ -z "$OPS_EXPECTED_PLAN_SHA256" ]] || {
                         echo 'Operations without reviewed data changes must not include an expected plan' >&2
                         exit 1
                       }
                       ;;
-                    retain-reviewed|backup-two-factor-reviewed|apply-order-sales-ownership-backfill-reviewed|apply-moyao-default-store-migration-reviewed)
+                    retain-reviewed|apply-deployment-cache-cleanup-reviewed|backup-two-factor-reviewed|apply-order-sales-ownership-backfill-reviewed|apply-moyao-default-store-migration-reviewed)
                       [[ "$OPS_EXPECTED_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
                         echo 'Reviewed writes require the exact lowercase plan SHA-256' >&2
                         exit 1

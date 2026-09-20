@@ -7,6 +7,7 @@ import {
     mkdirSync,
     mkdtempSync,
     readFileSync,
+    realpathSync,
     rmSync,
     statSync,
     symlinkSync,
@@ -254,6 +255,60 @@ void test('oversized diagnostic evidence fails before any retention can start', 
     assert.throws(() => operations.encodeBeforeReport({ data: 'x'.repeat(18000) }), /evidence limit/u);
 });
 
+void test('deployment cache cleanup is reviewed, source-pinned and limited to planned directories', t => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-deployment-caches-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const canonicalRoot = realpathSync(root);
+    const cacheA = path.join(canonicalRoot, 'node_modules');
+    const cacheB = path.join(canonicalRoot, 'bun-cache');
+    mkdirSync(cacheA);
+    mkdirSync(cacheB);
+    writeFileSync(path.join(cacheA, 'package'), 'a');
+    writeFileSync(path.join(cacheB, 'package'), 'b');
+    const inspect = () =>
+        operations.inspectDeploymentCacheCleanup(sourceSha, {
+            directories: [
+                { label: 'repository-node-modules', directory: cacheA },
+                { label: 'bun-install-cache', directory: cacheB },
+            ],
+            inspectRepository: () => ({
+                status: 'ok',
+                head: sourceSha,
+                headMatchesOperationsSource: true,
+                originMainMatchesOperationsSource: true,
+                trackedClean: true,
+            }),
+            inspectRuntime: () => ({
+                markerSha: 'b'.repeat(40),
+                currentRuntime: path.join(canonicalRoot, 'runtime'),
+            }),
+            sizeDirectory: () => 128,
+        });
+    const plan = inspect();
+    assert.equal(plan.totalKib, 256);
+    assert.deepEqual(
+        plan.candidates.map(candidate => candidate.directory),
+        [cacheA, cacheB],
+    );
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'apply-deployment-cache-cleanup-reviewed',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_PLAN_SHA256: operations.planDigest(plan, sourceSha),
+    });
+    const removed = [];
+    operations.applyDeploymentCacheCleanup(request, {
+        inspect,
+        remove: directory => removed.push(directory),
+    });
+    assert.deepEqual(removed, [cacheA, cacheB]);
+    assert.throws(() =>
+        operations.applyDeploymentCacheCleanup(
+            { ...request, expectedPlanSha256: 'f'.repeat(64) },
+            { inspect, remove: () => assert.fail('must not remove') },
+        ),
+    );
+});
+
 void test('a failing PM2 command cannot leak its stderr or error message', t => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-pm2-redaction-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -312,6 +367,13 @@ void test('diagnostics are the default; unknown commands and unreviewed retentio
     assert.throws(() => operations.validateRequest({ OPS_SOURCE_SHA: 'main' }));
     assert.throws(() =>
         operations.validateRequest({ OPS_SOURCE_SHA: sourceSha, OPS_EXPECTED_PLAN_SHA256: 'a'.repeat(64) }),
+    );
+    assert.equal(
+        operations.validateRequest({
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_OPERATION: 'plan-deployment-cache-cleanup',
+        }).operation,
+        'plan-deployment-cache-cleanup',
     );
 });
 
