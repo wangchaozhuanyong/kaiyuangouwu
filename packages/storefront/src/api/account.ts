@@ -11,6 +11,7 @@ import type {
     Order,
     OrderConfirmationToken,
     OrderPage,
+    StorefrontRegistrationConsentInput,
 } from '../types';
 
 import { BaseDomainApi } from './base-domain-api';
@@ -369,11 +370,29 @@ export class AccountApi extends BaseDomainApi {
         this.assertNoError(result.login);
     }
 
-    async authenticateWithGoogle(credential: string): Promise<void> {
+    async authenticateWithGoogle(
+        credential: string,
+        consent: StorefrontRegistrationConsentInput,
+    ): Promise<void> {
         const result = await this.request<{ authenticate: ErrorResult }>(
             `
-                mutation StorefrontGoogleAuthenticate($credential: String!) {
-                    authenticate(input: { google: { credential: $credential } }, rememberMe: true) {
+                mutation StorefrontGoogleAuthenticate(
+                    $credential: String!
+                    $termsAccepted: Boolean!
+                    $privacyAcknowledged: Boolean!
+                    $locale: String!
+                ) {
+                    authenticate(
+                        input: {
+                            google: {
+                                credential: $credential
+                                termsAccepted: $termsAccepted
+                                privacyAcknowledged: $privacyAcknowledged
+                                locale: $locale
+                            }
+                        }
+                        rememberMe: true
+                    ) {
                         __typename
                         ... on CurrentUser { id identifier }
                         ... on ErrorResult { errorCode message }
@@ -381,7 +400,7 @@ export class AccountApi extends BaseDomainApi {
                     }
                 }
             `,
-            { credential },
+            { credential, ...consent },
         );
         this.assertNoError(result.authenticate);
     }

@@ -108,6 +108,7 @@ export class DataSubjectService {
                 reviewCount: payload.reviews.length,
                 afterSalesCount: payload.afterSales.length,
                 imageJobCount: payload.imageStudio.jobs.length,
+                consentRecordCount: payload.consentRecords.length,
             });
             request.completedAt = new Date();
             await repository.save(request, { reload: false });
@@ -470,6 +471,7 @@ export class DataSubjectService {
             couponLedger,
             couponAllocations,
             dailyVisits,
+            consentRecords,
         ] = await Promise.all([
             this.optionalCustomerRows(ctx, 'StorefrontReview', customerId, [
                 'id',
@@ -688,6 +690,18 @@ export class DataSubjectService {
                 'lastSeenAt',
                 'visitCount',
             ]),
+            this.optionalCustomerRows(ctx, 'DataConsentRecord', customerId, [
+                'id',
+                'createdAt',
+                'channelId',
+                'purpose',
+                'action',
+                'policyVersion',
+                'policyDigest',
+                'locale',
+                'source',
+                'recordedAt',
+            ]),
         ]);
         return {
             format: 'website-personal-data-export',
@@ -834,6 +848,7 @@ export class DataSubjectService {
                 usageQuotas,
             },
             analytics: { dailyVisits },
+            consentRecords,
             reviews,
             afterSales,
             dataRequests: requests.map(request => ({

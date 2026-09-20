@@ -44,7 +44,11 @@ export class StorefrontTrafficService {
             throw new UserInputError('Invalid visitor ID');
         }
         const cookie = ctx.req?.headers.cookie ?? '';
-        if (cookie.split(';').some(part => part.trim() === 'storefront_analytics_opt_out=1')) {
+        const cookies = cookie.split(';').map(part => part.trim());
+        if (
+            !cookies.includes('storefront_analytics_consent=granted') ||
+            cookies.includes('storefront_analytics_opt_out=1')
+        ) {
             return { recorded: false, setCookie: null };
         }
         const identity = resolveStorefrontVisitorIdentity({

@@ -40,10 +40,10 @@ const publicQueries = new Set([
 ]);
 const publicMutations = new Set([
     'recordStorefrontPageView',
+    'recordStorefrontAnalyticsConsent',
     'login',
     'authenticate',
     'logout',
-    'registerCustomerAccount',
     'registerCustomerWithReferral',
     'verifyCustomerAccount',
     'refreshCustomerVerification',
@@ -91,6 +91,11 @@ export class StorefrontCatalogAccessInterceptor implements NestInterceptor {
         // shared proxy/browser response cache to serve them to another visitor.
         parsed.res.setHeader('Cache-Control', 'private, no-store');
         parsed.res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+        // Registration must use the audited mutation which requires explicit,
+        // versioned terms and privacy evidence.
+        if (parent === 'Mutation' && parsed.info.fieldName === 'registerCustomerAccount') {
+            throw new ForbiddenError();
+        }
         if (ctx.activeUserId) return next.handle();
         const allowed = parent === 'Query' ? publicQueries : publicMutations;
         if (!allowed.has(parsed.info.fieldName)) throw new ForbiddenError();

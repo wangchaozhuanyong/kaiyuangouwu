@@ -4,22 +4,22 @@ This plan tracks whether each business capability has a complete loop rather tha
 
 ## Delivery status
 
-| Priority | Domain | Required closure | Status |
-| --- | --- | --- | --- |
-| P0 | Data retention | Policy, quarantine, recovery, reference checks, legal hold, due purge, retry, retained audit record | In progress: customer avatar flow implemented and locally verified |
-| P0 | Data subject requests | Customer export, correction, account closure, identity re-check, cooling-off period, legal/financial retention exceptions | In progress: export and account closure implemented and locally verified |
-| P0 | Consent and privacy | Versioned privacy terms, consent evidence, withdrawal, cookie/tracking controls, purpose inventory | Not started |
-| P0 | Payment reconciliation | Gateway/chain callback idempotency, order-payment matching, exceptions, refund reconciliation, daily close | Existing pieces require end-to-end audit |
-| P0 | Backup and recovery | Backup ownership, retention, encryption, restore drill, RPO/RTO evidence and alerting | Operational verification required |
-| P0 | Incident response | Security-event severity, owner, evidence preservation, notification workflow and recovery review | Not started |
-| P1 | Procurement | Supplier, purchase order, receiving, variance, payable, return-to-supplier and performance score | Existing supplier area requires closure audit |
-| P1 | Inventory | Reservation, receiving, adjustment, transfer, return disposition, low-stock alert and reconciliation | Existing pieces require closure audit |
-| P1 | Fulfilment and after-sales | Shipment, carrier exception, delivery proof, cancellation, return, exchange, reship and refund | Existing pieces require closure audit |
-| P1 | Customer operations | Customer 360, service history, segmentation, RFM/LTV, churn signal and follow-up outcome | Not started |
-| P1 | Marketing analytics | Acquisition attribution, search terms, funnel, campaign cost, revenue, refund-adjusted ROI | Traffic exists; cost/attribution closure not verified |
-| P1 | Finance | Revenue, discount, tax, cost, gateway fee, refund, chargeback and profit reconciliation | Existing reports require closure audit |
-| P2 | Governance | Unified immutable audit, four-eyes approval, content/config versioning, scheduled reports and anomaly alerts | Partial and distributed |
-| P2 | Fraud and abuse | Account/order/payment/referral risk rules, review queue, decision evidence and appeal | Partial and distributed |
+| Priority | Domain                     | Required closure                                                                                                          | Status                                                                                       |
+| -------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| P0       | Data retention             | Policy, quarantine, recovery, reference checks, legal hold, due purge, retry, retained audit record                       | In progress: customer avatar flow implemented and locally verified                           |
+| P0       | Data subject requests      | Customer export, correction, account closure, identity re-check, cooling-off period, legal/financial retention exceptions | In progress: export and account closure implemented and locally verified                     |
+| P0       | Consent and privacy        | Versioned privacy terms, consent evidence, withdrawal, cookie/tracking controls, purpose inventory                        | In progress: registration and first-party analytics consent implemented and locally verified |
+| P0       | Payment reconciliation     | Gateway/chain callback idempotency, order-payment matching, exceptions, refund reconciliation, daily close                | Existing pieces require end-to-end audit                                                     |
+| P0       | Backup and recovery        | Backup ownership, retention, encryption, restore drill, RPO/RTO evidence and alerting                                     | Operational verification required                                                            |
+| P0       | Incident response          | Security-event severity, owner, evidence preservation, notification workflow and recovery review                          | Not started                                                                                  |
+| P1       | Procurement                | Supplier, purchase order, receiving, variance, payable, return-to-supplier and performance score                          | Existing supplier area requires closure audit                                                |
+| P1       | Inventory                  | Reservation, receiving, adjustment, transfer, return disposition, low-stock alert and reconciliation                      | Existing pieces require closure audit                                                        |
+| P1       | Fulfilment and after-sales | Shipment, carrier exception, delivery proof, cancellation, return, exchange, reship and refund                            | Existing pieces require closure audit                                                        |
+| P1       | Customer operations        | Customer 360, service history, segmentation, RFM/LTV, churn signal and follow-up outcome                                  | Not started                                                                                  |
+| P1       | Marketing analytics        | Acquisition attribution, search terms, funnel, campaign cost, revenue, refund-adjusted ROI                                | Traffic exists; cost/attribution closure not verified                                        |
+| P1       | Finance                    | Revenue, discount, tax, cost, gateway fee, refund, chargeback and profit reconciliation                                   | Existing reports require closure audit                                                       |
+| P2       | Governance                 | Unified immutable audit, four-eyes approval, content/config versioning, scheduled reports and anomaly alerts              | Partial and distributed                                                                      |
+| P2       | Fraud and abuse            | Account/order/payment/referral risk rules, review queue, decision evidence and appeal                                     | Partial and distributed                                                                      |
 
 ## Current P0 implementation: customer avatar retention
 
@@ -30,6 +30,12 @@ The active avatar is not placed in a time-based deletion queue. Only an avatar r
 Signed-in customers can generate a JSON export after password re-authentication. The file contains profile, addresses, delivery emails, orders, payments, refunds, fulfilments, coupons, referrals, reviews, after-sales, image-studio activity and linked analytics. The server keeps only the request audit, summary and SHA-256 digest, not the exported body.
 
 Account closure also requires password re-authentication and has a seven-day cooling-off period that the customer can cancel. The scheduled worker blocks closure while orders, withdrawals, payment reconciliation, after-sales or image jobs are unresolved. A successful closure revokes access, removes direct contact/address data, quarantines avatars, anonymizes user/authentication identifiers and plugin-owned image content, and retains transactional records required for finance, disputes and audit. Blocked and failed requests stay visible in the admin exception queue and can be retried.
+
+## Current P0 implementation: consent and first-party analytics
+
+Email, quick-email and first-time Google registration require an explicit unchecked consent control. The server snapshots the current terms and privacy content into append-only evidence containing the policy version, SHA-256 digest, locale, source and timestamp; network and browser evidence is stored only as keyed hashes. The unaudited built-in registration mutation is blocked so API clients cannot bypass this path.
+
+First-party page-view analytics now defaults off. A global choice explains the optional purpose and offers “necessary only” or “allow analytics”; the server rejects page-view writes unless the grant cookie is present. Grant and withdrawal actions are auditable, users can change the preference at any time, and declining does not block account, shopping or support flows.
 
 Acceptance gates:
 

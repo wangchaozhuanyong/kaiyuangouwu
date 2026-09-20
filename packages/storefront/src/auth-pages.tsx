@@ -230,6 +230,7 @@ export function LoginPage({
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [autoRegistrationEmail, setAutoRegistrationEmail] = useState('');
+    const [registrationConsentAccepted, setRegistrationConsentAccepted] = useState(false);
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const data = new FormData(event.currentTarget);
@@ -242,8 +243,19 @@ export function LoginPage({
             await onSuccess();
         } catch (requestError) {
             if (authSettings.emailAutoRegistrationEnabled && isInvalidCredentials(requestError)) {
+                if (!registrationConsentAccepted) {
+                    setError(
+                        isZh
+                            ? '该邮箱尚未注册。如需自动创建账户，请先勾选同意条款与隐私政策。'
+                            : 'No account exists. Accept the terms and privacy policy to create one automatically.',
+                    );
+                    return;
+                }
                 try {
-                    await api.registerCustomerAccount({ emailAddress, password });
+                    await api.registerCustomerAccount(
+                        { emailAddress, password },
+                        registrationConsent(registrationConsentAccepted, language),
+                    );
                     setAutoRegistrationEmail(emailAddress);
                 } catch (registrationError) {
                     setError(registerErrorMessage(registrationError, language));
@@ -260,7 +272,10 @@ export function LoginPage({
         setSubmitting(true);
         setError('');
         try {
-            await api.authenticateWithGoogle(credential);
+            await api.authenticateWithGoogle(
+                credential,
+                registrationConsent(registrationConsentAccepted, language),
+            );
             await onSuccess();
         } catch (requestError) {
             throw new Error(googleAuthErrorMessage(requestError, language));
@@ -378,6 +393,15 @@ export function LoginPage({
                     ) : null}
                 </>
             )}
+            {(authSettings.emailAutoRegistrationEnabled || googleAvailable) && (
+                <RegistrationConsentControl
+                    accepted={registrationConsentAccepted}
+                    language={language}
+                    content={legalContent}
+                    onChange={setRegistrationConsentAccepted}
+                    onContentTarget={onContentTarget}
+                />
+            )}
             <AuthLegalNotice content={legalContent} language={language} onContentTarget={onContentTarget} />
         </AuthLayout>
     );
@@ -408,6 +432,7 @@ export function RegisterPage({
     const [inviteCode, setInviteCode] = useState('');
     const [inviteSource, setInviteSource] = useState<ReferralSource>('CODE');
     const [inviteStatus, setInviteStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+    const [registrationConsentAccepted, setRegistrationConsentAccepted] = useState(false);
     const quickRegistration = authSettings.emailQuickRegistrationEnabled;
     const googleClientId = authSettings.googleEnabled ? authSettings.googleClientId : null;
     const googleAvailable = Boolean(googleClientId);
@@ -439,6 +464,10 @@ export function RegisterPage({
 
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        if (!registrationConsentAccepted) {
+            setError(isZh ? '请先同意使用条款并确认隐私政策' : 'Accept the terms and privacy policy first');
+            return;
+        }
         const data = new FormData(event.currentTarget);
         let firstName: string | undefined;
         let lastName: string | undefined;
@@ -482,6 +511,7 @@ export function RegisterPage({
                     ...(lastName ? { lastName } : {}),
                     ...(password ? { password } : {}),
                 },
+                registrationConsent(registrationConsentAccepted, language),
                 submittedInviteCode || undefined,
                 submittedInviteCode ? inviteSource : undefined,
             );
@@ -495,10 +525,18 @@ export function RegisterPage({
     };
 
     const authenticateWithGoogle = async (credential: string) => {
+        if (!registrationConsentAccepted) {
+            throw new Error(
+                isZh ? '请先同意使用条款并确认隐私政策' : 'Accept the terms and privacy policy first',
+            );
+        }
         setSubmitting(true);
         setError('');
         try {
-            await api.authenticateWithGoogle(credential);
+            await api.authenticateWithGoogle(
+                credential,
+                registrationConsent(registrationConsentAccepted, language),
+            );
             await onSuccess?.();
         } catch (requestError) {
             throw new Error(googleAuthErrorMessage(requestError, language));
@@ -716,6 +754,13 @@ export function RegisterPage({
                                     {error}
                                 </small>
                             )}
+                            <RegistrationConsentControl
+                                accepted={registrationConsentAccepted}
+                                language={language}
+                                content={legalContent}
+                                onChange={setRegistrationConsentAccepted}
+                                onContentTarget={onContentTarget}
+                            />
                             <SubmitButton
                                 submitting={submitting}
                                 idle={
@@ -754,7 +799,6 @@ export function RegisterPage({
                     <AuthLegalNotice
                         content={legalContent}
                         language={language}
-                        prefix={isZh ? '注册即表示您同意我们的' : 'By registering, you agree to our'}
                         onContentTarget={onContentTarget}
                     />
                 </>
@@ -1545,6 +1589,61 @@ function AuthResult({
             <p>{detail}</p>
             <div>{children}</div>
         </div>
+    );
+}
+
+function registrationConsent(accepted: boolean, language: StorefrontLanguage) {
+    return {
+        termsAccepted: accepted,
+        privacyAcknowledged: accepted,
+        locale: language,
+    };
+}
+
+function RegistrationConsentControl({
+    accepted,
+    language,
+    content,
+    onChange,
+    onContentTarget,
+}: {
+    accepted: boolean;
+    language: StorefrontLanguage;
+    content?: StorefrontContentBlock;
+    onChange: (accepted: boolean) => void;
+    onContentTarget: AuthLegalProps['onContentTarget'];
+}) {
+    const items =
+        content?.items.filter(
+            item => item.enabled && item.targetType !== 'NONE' && item.targetValue?.trim(),
+        ) ?? [];
+    return (
+        <label className="auth-registration-consent">
+            <input type="checkbox" checked={accepted} onChange={event => onChange(event.target.checked)} />
+            <span>
+                {language === 'zh' ? '我已阅读并同意' : 'I have read and accept'}{' '}
+                {items.length ? (
+                    <span className="auth-legal-links">
+                        {items.map(item => (
+                            <button
+                                key={item.id}
+                                type="button"
+                                onClick={event => {
+                                    event.preventDefault();
+                                    onContentTarget(item.targetType, item.targetValue);
+                                }}
+                            >
+                                {item.label}
+                            </button>
+                        ))}
+                    </span>
+                ) : language === 'zh' ? (
+                    '使用条款，并确认已阅读隐私政策'
+                ) : (
+                    'the terms and acknowledge the privacy policy'
+                )}
+            </span>
+        </label>
     );
 }
 

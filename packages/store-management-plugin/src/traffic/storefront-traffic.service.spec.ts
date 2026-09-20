@@ -26,7 +26,10 @@ const schema = new EntitySchema<StorefrontPageView>({
     },
 });
 const secret = 'test-traffic-signing-secret-not-a-production-credential';
-const browser = { 'user-agent': 'Mozilla/5.0 Traffic Browser Test' };
+const browser = {
+    'user-agent': 'Mozilla/5.0 Traffic Browser Test',
+    cookie: 'storefront_analytics_consent=granted',
+};
 const device = 'traffic-device-00000001';
 function ctx(channelId = 1, userId?: string, ip = '203.0.113.10', headers = browser) {
     return { channelId, activeUserId: userId, req: { ip, headers } } as unknown as RequestContext;
@@ -139,14 +142,26 @@ describe('storefront traffic persistence', () => {
 
     it('rejects bots, opted-out browsers, administrator sessions and malformed inputs', async () => {
         expect(
-            await service.record(ctx(1, undefined, '203.0.113.10', { 'user-agent': 'Googlebot' }), page()),
+            await service.record(
+                ctx(1, undefined, '203.0.113.10', {
+                    'user-agent': 'Googlebot',
+                    cookie: 'storefront_analytics_consent=granted',
+                }),
+                page(),
+            ),
         ).toMatchObject({ recorded: false });
         expect(
             await service.record(
                 ctx(1, undefined, '203.0.113.10', {
                     ...browser,
-                    cookie: 'storefront_analytics_opt_out=1',
-                } as typeof browser),
+                    cookie: 'storefront_analytics_consent=granted; storefront_analytics_opt_out=1',
+                }),
+                page(),
+            ),
+        ).toMatchObject({ recorded: false });
+        expect(
+            await service.record(
+                ctx(1, undefined, '203.0.113.10', { 'user-agent': browser['user-agent'], cookie: '' }),
                 page(),
             ),
         ).toMatchObject({ recorded: false });

@@ -407,6 +407,30 @@ describe('ShopApi storefront mutations', () => {
         expect(request.variables).toEqual({ input });
     });
 
+    it('records an explicit analytics grant or withdrawal', async () => {
+        const record = {
+            id: 'consent-1',
+            purpose: 'ANALYTICS',
+            action: 'WITHDRAWN',
+            policyVersion: 'storefront-analytics-v1',
+            policyDigest: 'a'.repeat(64),
+            locale: 'zh',
+            source: 'COOKIE_PREFERENCE',
+            recordedAt: '2026-09-20T00:00:00.000Z',
+        };
+        const fetchMock = mockGraphQlResponse({ recordStorefrontAnalyticsConsent: record });
+        const input = {
+            consentId: '00000000-0000-4000-8000-000000000123',
+            granted: false,
+            locale: 'zh',
+        };
+
+        await expect(new ShopApi(market).recordAnalyticsConsent(input)).resolves.toEqual(record);
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1]));
+        expect(request.query).toContain('recordStorefrontAnalyticsConsent(input: $input)');
+        expect(request.variables).toEqual({ input });
+    });
+
     it('surfaces the specific native authentication failure returned by the Shop API', async () => {
         const fetchMock = mockGraphQlResponse({
             login: {
@@ -432,15 +456,24 @@ describe('ShopApi storefront mutations', () => {
             authenticate: { __typename: 'CurrentUser', id: 'user-1', identifier: 'buyer@gmail.com' },
         });
 
-        await expect(new ShopApi(market).authenticateWithGoogle('signed-google-id-token')).resolves.toBe(
-            undefined,
-        );
+        await expect(
+            new ShopApi(market).authenticateWithGoogle('signed-google-id-token', {
+                termsAccepted: true,
+                privacyAcknowledged: true,
+                locale: 'en',
+            }),
+        ).resolves.toBe(undefined);
         const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as {
             query: string;
             variables: Record<string, unknown>;
         };
-        expect(request.query).toContain('authenticate(input: { google: { credential: $credential } }');
-        expect(request.variables).toEqual({ credential: 'signed-google-id-token' });
+        expect(request.query).toContain('termsAccepted: $termsAccepted');
+        expect(request.variables).toEqual({
+            credential: 'signed-google-id-token',
+            termsAccepted: true,
+            privacyAcknowledged: true,
+            locale: 'en',
+        });
     });
 
     it('limits the initial storefront product request to 12 items', async () => {
@@ -1387,6 +1420,7 @@ describe('ShopApi storefront mutations', () => {
                 lastName: 'Customer',
                 password: 'secure-password',
             },
+            { termsAccepted: true, privacyAcknowledged: true, locale: 'en' },
             'INVITE88',
             'POSTER',
         );
@@ -1395,7 +1429,7 @@ describe('ShopApi storefront mutations', () => {
             query: string;
             variables: Record<string, unknown>;
         };
-        expect(request.query).toContain('registerCustomerWithReferral(input: $input');
+        expect(request.query).toContain('consent: $consent');
         expect(request.variables).toEqual({
             input: {
                 emailAddress: 'customer@example.com',
@@ -1403,6 +1437,7 @@ describe('ShopApi storefront mutations', () => {
                 lastName: 'Customer',
                 password: 'secure-password',
             },
+            consent: { termsAccepted: true, privacyAcknowledged: true, locale: 'en' },
             inviteCode: 'INVITE88',
             source: 'POSTER',
         });

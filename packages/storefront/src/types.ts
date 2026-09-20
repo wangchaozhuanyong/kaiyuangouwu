@@ -417,6 +417,23 @@ export interface RegisterCustomerInput {
     password?: string;
 }
 
+export interface StorefrontRegistrationConsentInput {
+    termsAccepted: boolean;
+    privacyAcknowledged: boolean;
+    locale: string;
+}
+
+export interface DataConsentRecord {
+    id: string;
+    purpose: 'TERMS' | 'PRIVACY' | 'ANALYTICS';
+    action: 'GRANTED' | 'WITHDRAWN';
+    policyVersion: string;
+    policyDigest: string;
+    locale: string;
+    source: string;
+    recordedAt: string;
+}
+
 export interface ReferralProgram {
     channelId: string;
     enabled: boolean;

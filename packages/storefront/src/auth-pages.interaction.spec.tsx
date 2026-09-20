@@ -30,6 +30,10 @@ function requiredElement<T extends Element>(selector: string): T {
     return element;
 }
 
+function acceptRegistrationConsent(): void {
+    act(() => requiredElement<HTMLInputElement>('.auth-registration-consent input').click());
+}
+
 beforeEach(() => {
     host = document.createElement('div');
     document.body.append(host);
@@ -74,6 +78,7 @@ describe('storefront configurable authentication methods', () => {
         );
         requiredElement<HTMLInputElement>('input[name="emailAddress"]').value = 'new@example.com';
         requiredElement<HTMLInputElement>('input[name="password"]').value = 'secure-password';
+        acceptRegistrationConsent();
 
         await act(async () => {
             submit(requiredElement<HTMLFormElement>('form'));
@@ -82,10 +87,13 @@ describe('storefront configurable authentication methods', () => {
         });
 
         expect(login).toHaveBeenCalledWith('new@example.com', 'secure-password');
-        expect(registerCustomerAccount).toHaveBeenCalledWith({
-            emailAddress: 'new@example.com',
-            password: 'secure-password',
-        });
+        expect(registerCustomerAccount).toHaveBeenCalledWith(
+            {
+                emailAddress: 'new@example.com',
+                password: 'secure-password',
+            },
+            { termsAccepted: true, privacyAcknowledged: true, locale: 'zh' },
+        );
         expect(host.textContent).toContain('如果 new@example.com 是新邮箱');
         expect(host.textContent).toContain('如果已有账户');
     });
@@ -113,6 +121,7 @@ describe('storefront configurable authentication methods', () => {
             ),
         );
         requiredElement<HTMLInputElement>('input[name="emailAddress"]').value = 'quick@example.com';
+        acceptRegistrationConsent();
 
         await act(async () => {
             submit(requiredElement<HTMLFormElement>('form'));
@@ -122,6 +131,7 @@ describe('storefront configurable authentication methods', () => {
 
         expect(registerCustomerAccount).toHaveBeenCalledWith(
             { emailAddress: 'quick@example.com' },
+            { termsAccepted: true, privacyAcknowledged: true, locale: 'zh' },
             undefined,
             undefined,
         );

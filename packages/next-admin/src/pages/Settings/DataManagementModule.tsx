@@ -63,6 +63,18 @@ const DATA_RETENTION_QUERY = gql`
             completedAt
             cancelledAt
         }
+        dataConsentRecords {
+            id
+            createdAt
+            channelId
+            purpose
+            action
+            policyVersion
+            policyDigest
+            locale
+            source
+            recordedAt
+        }
     }
 `;
 
@@ -150,6 +162,19 @@ interface SubjectRequest {
     cancelledAt?: string | null;
 }
 
+interface ConsentRecord {
+    id: string;
+    createdAt: string;
+    channelId: string;
+    purpose: 'TERMS' | 'PRIVACY' | 'ANALYTICS';
+    action: 'GRANTED' | 'WITHDRAWN';
+    policyVersion: string;
+    policyDigest: string;
+    locale: string;
+    source: string;
+    recordedAt: string;
+}
+
 const filters = ['ACTIVE', 'ALL', 'PENDING', 'BLOCKED_REFERENCE', 'FAILED', 'RESTORED', 'PURGED'] as const;
 type Filter = (typeof filters)[number];
 
@@ -157,6 +182,7 @@ export function DataManagementModule() {
     const query = useQuery<{
         dataRetentionRecords: RetentionRecord[];
         dataSubjectRequests: SubjectRequest[];
+        dataConsentRecords: ConsentRecord[];
     }>(DATA_RETENTION_QUERY, {
         fetchPolicy: 'cache-and-network',
         notifyOnNetworkStatusChange: true,
@@ -174,6 +200,10 @@ export function DataManagementModule() {
     const subjectRequests = useMemo(
         () => query.data?.dataSubjectRequests ?? [],
         [query.data?.dataSubjectRequests],
+    );
+    const consentRecords = useMemo(
+        () => query.data?.dataConsentRecords ?? [],
+        [query.data?.dataConsentRecords],
     );
     const visible = useMemo(
         () =>
@@ -263,7 +293,7 @@ export function DataManagementModule() {
                             <FeatureHelpButton topic="settings.data-management" title="数据管理中心" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            查看数据恢复区、到期清理、个人数据导出、账户注销、失败重试和法律保留记录
+                            查看数据恢复区、到期清理、同意证据、个人数据导出、账户注销、失败重试和法律保留记录
                         </p>
                     </div>
                     <button
@@ -300,7 +330,10 @@ export function DataManagementModule() {
                 <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                     <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <h2 className="text-sm font-bold text-slate-900">保留与清理记录</h2>
+                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                保留与清理记录
+                                <FeatureHelpButton topic="settings.data-management" title="保留与清理记录" />
+                            </h2>
                             <p className="mt-1 text-[11px] text-slate-500">
                                 最新 100 条；已删除的资源仍保留审计记录
                             </p>
@@ -442,8 +475,12 @@ export function DataManagementModule() {
                 <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                     <div className="border-b border-slate-100 p-4">
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                            <UserRound className="h-4 w-4 text-indigo-600" />
+                            <UserRound className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                             个人数据与账户注销请求
+                            <FeatureHelpButton
+                                topic="settings.data-management"
+                                title="个人数据与账户注销请求"
+                            />
                         </h2>
                         <p className="mt-1 text-[11px] text-slate-500">
                             导出仅保留摘要和校验值，不保存文件正文；注销有 7 天冷静期和业务阻断检查
@@ -517,6 +554,79 @@ export function DataManagementModule() {
                         </table>
                     </div>
                 </section>
+                <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <div className="border-b border-slate-100 p-4">
+                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                            同意与撤回证据
+                            <FeatureHelpButton topic="settings.data-management" title="同意与撤回证据" />
+                        </h2>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                            保存条款版本、内容校验值、来源与时间；IP 和浏览器信息仅以密钥哈希保存
+                        </p>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[980px] border-collapse text-left text-xs">
+                            <thead className="bg-slate-50 text-[11px] font-bold text-slate-500">
+                                <tr>
+                                    <th className="px-4 py-3">用途</th>
+                                    <th className="px-4 py-3">动作</th>
+                                    <th className="px-4 py-3">版本</th>
+                                    <th className="px-4 py-3">校验值</th>
+                                    <th className="px-4 py-3">来源/语言</th>
+                                    <th className="px-4 py-3">记录时间</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {consentRecords.map(record => (
+                                    <tr key={record.id} className="hover:bg-slate-50/70">
+                                        <td className="px-4 py-3">
+                                            <strong className="block text-slate-800">
+                                                {consentPurposeLabel(record.purpose)}
+                                            </strong>
+                                            <span className="mt-1 block text-[10px] text-slate-400">
+                                                店铺 {record.channelId}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <span
+                                                className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold ${
+                                                    record.action === 'GRANTED'
+                                                        ? 'bg-emerald-50 text-emerald-700'
+                                                        : 'bg-slate-100 text-slate-600'
+                                                }`}
+                                            >
+                                                {record.action === 'GRANTED' ? '已授予' : '已撤回'}
+                                            </span>
+                                        </td>
+                                        <td className="max-w-72 px-4 py-3 font-mono text-[10px] text-slate-600">
+                                            {record.policyVersion}
+                                        </td>
+                                        <td className="px-4 py-3 font-mono text-[10px] text-slate-500">
+                                            {record.policyDigest.slice(0, 16)}…
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-600">
+                                            {record.source} · {record.locale}
+                                        </td>
+                                        <td className="whitespace-nowrap px-4 py-3 font-mono text-[10px] text-slate-500">
+                                            {formatDateTime(record.recordedAt)}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {!consentRecords.length && (
+                                    <tr>
+                                        <td
+                                            colSpan={6}
+                                            className="px-4 py-12 text-center text-xs text-slate-400"
+                                        >
+                                            暂无同意记录
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
             </main>
             {holdTarget && (
                 <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-4">
@@ -527,7 +637,13 @@ export function DataManagementModule() {
                     >
                         <div className="flex items-start justify-between gap-4">
                             <div>
-                                <h2 className="text-base font-bold text-slate-900">设置法律保留</h2>
+                                <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
+                                    设置法律保留
+                                    <FeatureHelpButton
+                                        topic="settings.data-management"
+                                        title="设置法律保留"
+                                    />
+                                </h2>
                                 <p className="mt-1 text-xs leading-5 text-slate-500">
                                     保留期间定时任务不会删除该资源，必须记录业务或法律原因。
                                 </p>
@@ -620,7 +736,7 @@ function StatusBadge({ record }: { record: RetentionRecord }) {
 function SubjectStatusBadge({ status }: { status: SubjectRequestStatus }) {
     const styles: Record<SubjectRequestStatus, string> = {
         PENDING: 'bg-blue-50 text-blue-700',
-        PROCESSING: 'bg-indigo-50 text-indigo-700',
+        PROCESSING: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300',
         BLOCKED: 'bg-amber-50 text-amber-700',
         FAILED: 'bg-rose-50 text-rose-700',
         FULFILLED: 'bg-emerald-50 text-emerald-700',
@@ -670,6 +786,14 @@ function reasonLabel(value: string) {
             ACCOUNT_CLOSURE: '账户注销',
         }[value] ?? value
     );
+}
+
+function consentPurposeLabel(value: ConsentRecord['purpose']): string {
+    return {
+        TERMS: '使用条款',
+        PRIVACY: '隐私政策确认',
+        ANALYTICS: '访问统计',
+    }[value];
 }
 
 function Message({ kind, text, onClose }: { kind: 'success' | 'error'; text: string; onClose: () => void }) {

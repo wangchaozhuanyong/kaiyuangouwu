@@ -1,11 +1,17 @@
 export { storeProfilePermission } from './constants.js';
 export {
+    DataConsentService,
+    consentSubjectHash,
+    type StorefrontRegistrationConsentInput,
+} from './data-consent.service.js';
+export {
     CUSTOMER_AVATAR_RETENTION_DAYS,
     CUSTOMER_AVATAR_RETENTION_POLICY,
     DataRetentionService,
 } from './data-retention.service.js';
 export { BeforeAccountAnonymizationEvent } from './data-subject.events.js';
 export { ACCOUNT_CLOSURE_COOLING_OFF_DAYS, DataSubjectService } from './data-subject.service.js';
+export { DataConsentRecord } from './entities/data-consent-record.entity.js';
 export { DataRetentionRecord } from './entities/data-retention-record.entity.js';
 export { DataSubjectRequest } from './entities/data-subject-request.entity.js';
 export { ReferralAccount } from './entities/referral-account.entity.js';

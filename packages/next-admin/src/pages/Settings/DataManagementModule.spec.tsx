@@ -83,19 +83,42 @@ const subjectRequests = [
     },
 ];
 
+const consentRecords = [
+    {
+        id: 'consent-1',
+        createdAt: '2026-09-20T00:00:00.000Z',
+        channelId: '2',
+        purpose: 'ANALYTICS',
+        action: 'WITHDRAWN',
+        policyVersion: 'storefront-analytics-v1',
+        policyDigest: 'a'.repeat(64),
+        locale: 'zh',
+        source: 'COOKIE_PREFERENCE',
+        recordedAt: '2026-09-20T00:00:00.000Z',
+    },
+];
+
 beforeEach(() => {
     reactTestEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
     refetch = vi.fn().mockResolvedValue({
-        data: { dataRetentionRecords: records, dataSubjectRequests: subjectRequests },
+        data: {
+            dataRetentionRecords: records,
+            dataSubjectRequests: subjectRequests,
+            dataConsentRecords: consentRecords,
+        },
     });
     setLegalHold = vi.fn().mockResolvedValue({ data: { setDataRetentionLegalHold: records[0] } });
     retry = vi.fn().mockResolvedValue({ data: { retryDataRetentionRecord: records[1] } });
     retrySubject = vi.fn().mockResolvedValue({ data: { retryDataSubjectRequest: subjectRequests[0] } });
     apolloMocks.useQuery.mockReturnValue({
-        data: { dataRetentionRecords: records, dataSubjectRequests: subjectRequests },
+        data: {
+            dataRetentionRecords: records,
+            dataSubjectRequests: subjectRequests,
+            dataConsentRecords: consentRecords,
+        },
         loading: false,
         refetch,
     });
@@ -143,6 +166,9 @@ describe('DataManagementModule', () => {
         expect(container.textContent).toContain('资产仍被商品引用');
         expect(container.textContent).toContain('个人数据与账户注销请求');
         expect(container.textContent).toContain('仍有 1 个未完成订单');
+        expect(container.textContent).toContain('同意与撤回证据');
+        expect(container.textContent).toContain('访问统计');
+        expect(container.textContent).toContain('已撤回');
         expect(container.querySelectorAll('button').length).toBeGreaterThan(0);
     });
 

@@ -10,6 +10,7 @@ import {
     LazyOrdersPage,
 } from '../lazy-storefront-pages';
 import { PageSkeleton } from '../route-loading';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { AuthPageBoundary, EmptyState, Subpage } from '../storefront-ui/page-shell';
 import { ActiveCustomer, CustomerAvatarHistoryEntry, DataSubjectRequest } from '../types';
 
@@ -194,13 +195,7 @@ export function AccountSecurityRoutePage() {
         try {
             setAvatarHistory(await runtime.api.customerAvatarHistory());
         } catch (error) {
-            runtime.notify(
-                error instanceof Error
-                    ? error.message
-                    : isZh
-                      ? '头像恢复记录加载失败'
-                      : 'Could not load profile photo history',
-            );
+            runtime.notify(storefrontErrorMessage(error, runtime.language));
         } finally {
             setAvatarHistoryLoading(false);
         }
@@ -215,13 +210,7 @@ export function AccountSecurityRoutePage() {
         try {
             setDataSubjectRequests(await runtime.api.dataSubjectRequests());
         } catch (error) {
-            runtime.notify(
-                error instanceof Error
-                    ? error.message
-                    : isZh
-                      ? '数据请求记录加载失败'
-                      : 'Could not load data request history',
-            );
+            runtime.notify(storefrontErrorMessage(error, runtime.language));
         } finally {
             setDataSubjectLoading(false);
         }
@@ -239,13 +228,7 @@ export function AccountSecurityRoutePage() {
             .then(history => setAvatarHistory(history))
             .catch(error => {
                 if (!controller.signal.aborted) {
-                    runtime.notify(
-                        error instanceof Error
-                            ? error.message
-                            : isZh
-                              ? '头像恢复记录加载失败'
-                              : 'Could not load profile photo history',
-                    );
+                    runtime.notify(storefrontErrorMessage(error, runtime.language));
                 }
             })
             .finally(() => {
@@ -266,13 +249,7 @@ export function AccountSecurityRoutePage() {
             .then(requests => setDataSubjectRequests(requests))
             .catch(error => {
                 if (!controller.signal.aborted) {
-                    runtime.notify(
-                        error instanceof Error
-                            ? error.message
-                            : isZh
-                              ? '数据请求记录加载失败'
-                              : 'Could not load data request history',
-                    );
+                    runtime.notify(storefrontErrorMessage(error, runtime.language));
                 }
             })
             .finally(() => {

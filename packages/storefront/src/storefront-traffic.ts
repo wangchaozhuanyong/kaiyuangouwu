@@ -1,19 +1,40 @@
 export const TRAFFIC_OPT_OUT_KEY = 'storefront-analytics-opt-out:v1';
+export const TRAFFIC_CONSENT_ID_KEY = 'storefront-analytics-consent-id:v1';
 export const TRAFFIC_PREFERENCE_EVENT = 'storefront-traffic-preference';
+const CONSENT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+export type StorefrontTrafficConsent = 'unknown' | 'granted' | 'denied';
+
+export function storefrontTrafficConsent(): StorefrontTrafficConsent {
+    if (typeof document === 'undefined') return 'unknown';
+    const cookie = document.cookie
+        .split(';')
+        .map(part => part.trim())
+        .find(part => part.startsWith('storefront_analytics_consent='))
+        ?.split('=')[1];
+    if (cookie === 'granted' || cookie === 'denied') return cookie;
+    try {
+        const stored = localStorage.getItem(TRAFFIC_OPT_OUT_KEY);
+        if (stored === '0') return 'granted';
+        if (stored === '1') return 'denied';
+    } catch {
+        // No persisted choice means analytics stays disabled.
+    }
+    return 'unknown';
+}
 
 export function storefrontTrafficOptedOut(): boolean {
-    if (typeof document === 'undefined') return false;
-    const cookie = document.cookie.split(';').some(part => part.trim() === 'storefront_analytics_opt_out=1');
-    try {
-        return cookie || localStorage.getItem(TRAFFIC_OPT_OUT_KEY) === '1';
-    } catch {
-        return cookie;
-    }
+    return storefrontTrafficConsent() !== 'granted';
 }
 
 export function setStorefrontTrafficOptOut(excluded: boolean): void {
-    const value = excluded ? '1' : '0';
+    setStorefrontTrafficConsent(!excluded);
+}
+
+export function setStorefrontTrafficConsent(granted: boolean): void {
+    const value = granted ? '0' : '1';
     const secure = location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `storefront_analytics_consent=${granted ? 'granted' : 'denied'}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
     document.cookie = `storefront_analytics_opt_out=${value}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
     try {
         localStorage.setItem(TRAFFIC_OPT_OUT_KEY, value);
@@ -26,6 +47,18 @@ export function setStorefrontTrafficOptOut(excluded: boolean): void {
         }
     }
     window.dispatchEvent(new Event(TRAFFIC_PREFERENCE_EVENT));
+}
+
+export function storefrontTrafficConsentId(): string {
+    try {
+        const stored = localStorage.getItem(TRAFFIC_CONSENT_ID_KEY);
+        if (stored && CONSENT_ID_PATTERN.test(stored)) return stored;
+        const created = crypto.randomUUID();
+        localStorage.setItem(TRAFFIC_CONSENT_ID_KEY, created);
+        return created;
+    } catch {
+        return crypto.randomUUID();
+    }
 }
 
 export interface StorefrontPageViewInput {

@@ -23,6 +23,8 @@ import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 import { STOREFRONT_PROMOTION_OPTIONS, storeProfilePermission } from './constants';
 import { CustomerAvatarShopResolver } from './customer-avatar.resolver';
 import { CustomerAvatarService } from './customer-avatar.service';
+import { DataConsentAdminResolver, DataConsentShopResolver } from './data-consent.resolver';
+import { DATA_CONSENT_SERVICE_TOKEN, DataConsentService } from './data-consent.service';
 import { DataRetentionAdminResolver } from './data-retention.resolver';
 import { DataRetentionService } from './data-retention.service';
 import { purgeDueDataRetentionTask } from './data-retention.tasks';
@@ -32,6 +34,7 @@ import { processDueAccountClosuresTask } from './data-subject.tasks';
 import { CouponLedgerEntry } from './entities/coupon-ledger-entry.entity';
 import { CouponOrderAllocation } from './entities/coupon-order-allocation.entity';
 import { CustomerCoupon } from './entities/customer-coupon.entity';
+import { DataConsentRecord } from './entities/data-consent-record.entity';
 import { DataRetentionRecord } from './entities/data-retention-record.entity';
 import { DataSubjectRequest } from './entities/data-subject-request.entity';
 import { ReferralAccount } from './entities/referral-account.entity';
@@ -189,6 +192,7 @@ import {
         StoreUsdtWalletAudit,
         DataSubjectRequest,
         DataRetentionRecord,
+        DataConsentRecord,
     ],
     controllers: [StorefrontPromotionController, StorefrontRealtimeController],
     providers: [
@@ -224,6 +228,8 @@ import {
         SystemAnnouncementService,
         StorefrontRealtimeService,
         CustomerAvatarService,
+        DataConsentService,
+        { provide: DATA_CONSENT_SERVICE_TOKEN, useExisting: DataConsentService },
         DataSubjectService,
         DataRetentionService,
         {
@@ -354,6 +360,7 @@ import {
             StorefrontTrafficAdminResolver,
             DataRetentionAdminResolver,
             DataSubjectAdminResolver,
+            DataConsentAdminResolver,
         ],
     },
     shopApiExtensions: {
@@ -362,6 +369,7 @@ import {
             StorefrontBrandingShopResolver,
             StorefrontRegionShopResolver,
             CustomerAvatarShopResolver,
+            DataConsentShopResolver,
             DataSubjectShopResolver,
             StoreCurrencySettingsShopResolver,
             StorePromotionCampaignShopResolver,

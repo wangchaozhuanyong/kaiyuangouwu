@@ -105,6 +105,43 @@ const commonTypes = gql`
         sha256: String!
     }
 
+    enum DataConsentPurpose {
+        TERMS
+        PRIVACY
+        ANALYTICS
+    }
+
+    enum DataConsentAction {
+        GRANTED
+        WITHDRAWN
+    }
+
+    type DataConsentRecord implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        channelId: ID!
+        purpose: DataConsentPurpose!
+        action: DataConsentAction!
+        policyVersion: String!
+        policyDigest: String!
+        locale: String!
+        source: String!
+        recordedAt: DateTime!
+    }
+
+    input StorefrontRegistrationConsentInput {
+        termsAccepted: Boolean!
+        privacyAcknowledged: Boolean!
+        locale: String!
+    }
+
+    input StorefrontAnalyticsConsentInput {
+        consentId: String!
+        granted: Boolean!
+        locale: String!
+    }
+
     enum DataRetentionStatus {
         PENDING
         BLOCKED_REFERENCE
@@ -1243,6 +1280,7 @@ export const adminApiExtensions = gql`
         referralBalanceAudit: ReferralBalanceAuditResult!
         dataRetentionRecords: [DataRetentionRecord!]!
         dataSubjectRequests: [DataSubjectRequest!]!
+        dataConsentRecords: [DataConsentRecord!]!
     }
 
     extend type Mutation {
@@ -1413,6 +1451,7 @@ export const shopApiExtensions = gql`
         myCustomerAvatar: Asset
         myCustomerAvatarHistory: [CustomerAvatarHistoryEntry!]!
         myDataSubjectRequests: [DataSubjectRequest!]!
+        myDataConsentRecords: [DataConsentRecord!]!
         storefrontCurrencyConfiguration: StoreCurrencyConfiguration!
         activeStorefrontCoupons: [StorefrontCoupon!]!
         myStorefrontCoupons: [StoreCustomerCoupon!]!
@@ -1448,6 +1487,7 @@ export const shopApiExtensions = gql`
         exportMyPersonalData(password: String!): DataSubjectExportPayload!
         requestMyAccountClosure(password: String!): DataSubjectRequest!
         cancelMyAccountClosure: DataSubjectRequest!
+        recordStorefrontAnalyticsConsent(input: StorefrontAnalyticsConsentInput!): DataConsentRecord!
         setStorefrontPaymentCurrency(currencyCode: String!): Order!
         createStorefrontUsdtCheckoutQuote: StorefrontUsdtCheckoutQuote!
         claimStorefrontCoupon(campaignId: ID!): StoreCustomerCoupon!
@@ -1456,6 +1496,7 @@ export const shopApiExtensions = gql`
         removeStorefrontCoupon(id: ID!): StoreCustomerCoupon!
         registerCustomerWithReferral(
             input: RegisterCustomerInput!
+            consent: StorefrontRegistrationConsentInput!
             inviteCode: String
             source: String
         ): RegisterCustomerAccountResult!

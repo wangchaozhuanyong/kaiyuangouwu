@@ -43,6 +43,7 @@ import type {
     StorefrontConfig,
     StorefrontContentResponse,
     StorefrontCouponCampaign,
+    StorefrontRegistrationConsentInput,
     StorefrontReview,
     StorefrontReviewCandidate,
     StorefrontReviewList,
@@ -290,8 +291,11 @@ export class ShopApi {
         this.publishCookieAuthenticationChange();
     }
 
-    async authenticateWithGoogle(credential: string): Promise<void> {
-        return this.accountApi.authenticateWithGoogle(credential);
+    async authenticateWithGoogle(
+        credential: string,
+        consent: StorefrontRegistrationConsentInput,
+    ): Promise<void> {
+        return this.accountApi.authenticateWithGoogle(credential, consent);
     }
 
     async referralProgram(signal?: AbortSignal): Promise<ReferralProgram> {
@@ -308,10 +312,11 @@ export class ShopApi {
 
     async registerCustomerAccount(
         input: RegisterCustomerInput,
+        consent: StorefrontRegistrationConsentInput,
         inviteCode?: string,
         source?: 'LINK' | 'POSTER' | 'CODE',
     ): Promise<void> {
-        return this.referralsApi.registerCustomerAccount(input, inviteCode, source);
+        return this.referralsApi.registerCustomerAccount(input, consent, inviteCode, source);
     }
 
     async useReferralBalance(amount: number): Promise<ReferralBalancePaymentResult> {
@@ -386,6 +391,10 @@ export class ShopApi {
 
     async recordStorefrontPageView(input: StorefrontPageViewInput): Promise<boolean> {
         return this.referralsApi.recordStorefrontPageView(input);
+    }
+
+    async recordAnalyticsConsent(input: { consentId: string; granted: boolean; locale: string }) {
+        return this.referralsApi.recordAnalyticsConsent(input);
     }
 
     async refreshCustomerVerification(emailAddress: string): Promise<void> {
