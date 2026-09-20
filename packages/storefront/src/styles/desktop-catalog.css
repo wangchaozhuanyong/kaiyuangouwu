@@ -322,23 +322,34 @@
         flex-wrap: wrap;
         justify-content: flex-end;
         align-items: center;
-        gap: 4px 12px;
+        gap: 6px;
         margin-left: auto;
     }
     .desktop-sort button {
-        min-height: 42px;
-        padding: 8px;
-        border: 0;
-        border-bottom: 2px solid transparent;
-        background: transparent;
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 4px 14px;
+        border: 1px solid color-mix(in srgb, var(--line, #cbd5e1) 75%, transparent);
+        border-radius: 9999px;
+        background: color-mix(in srgb, var(--soft, #f8fafc) 60%, transparent);
         color: #475569;
-        font-size: 14px;
+        font-size: 13px;
+        font-weight: 500;
         cursor: pointer;
+        transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .desktop-sort button:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 5%, var(--paper, #fff));
     }
     .desktop-sort button[aria-pressed='true'] {
-        color: var(--accent);
-        border-bottom-color: var(--accent);
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #ffffff;
         font-weight: 600;
+        box-shadow: 0 2px 8px -1px color-mix(in srgb, var(--accent) 35%, transparent);
     }
     .desktop-stock-filter {
         display: flex;

@@ -1751,6 +1751,35 @@
     .page:not(.subpage) {
         --page-bottom-fixed-height: 0px;
     }
+    .desktop-store-layout .ai-product-cover {
+        padding: 10px 10px 8px;
+        border-radius: 12px;
+    }
+    .desktop-store-layout .ai-cover-company {
+        font-size: 11px;
+    }
+    .desktop-store-layout .ai-cover-status {
+        font-size: 10px;
+        padding: 2px 6px;
+    }
+    .desktop-store-layout .ai-cover-logo-prism {
+        width: 52px;
+        height: 52px;
+        border-radius: 13px;
+    }
+    .desktop-store-layout .ai-hero-brand-svg {
+        width: 32px;
+        height: 32px;
+    }
+    .desktop-store-layout .ai-cover-brand-title {
+        font-size: 13px;
+        margin-top: 4px;
+    }
+    .desktop-store-layout .ai-cover-tier-badge {
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 6px;
+    }
 }
 
 .avatar {

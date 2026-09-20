@@ -17,6 +17,11 @@
         --category-content-sticky-top: 247px;
     }
 
+    body:has(.desktop-store-layout),
+    html:has(.desktop-store-layout) {
+        background: #070B14;
+    }
+
     html,
     body {
         background: var(--bg);
@@ -44,6 +49,21 @@
         overflow: visible;
         box-shadow: none;
         font-size: 15px;
+    }
+
+    .storefront-app.desktop-store-layout {
+        width: 100%;
+        max-width: 100%;
+        background: #070B14;
+        color: #f1f5f9;
+    }
+
+    .desktop-store-layout .page.desktop-neo-home-page {
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        padding: 0;
+        background: #070B14;
     }
 
     #storefront-content {

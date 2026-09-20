@@ -14,6 +14,12 @@ export const storefrontVisualPresets = [
         description: '米白底色、墨蓝文字、朱砂按钮，搭配宋体标题与轻阴影。',
         colors: ['#f6f2ea', '#fffdf8', '#a63d32', '#203346'],
     },
+    {
+        id: 'neo-minimalist',
+        name: '新锐科技极简',
+        description: '深空黑曜石底色、浮动毛玻璃顶栏、AI 推理旗舰 Bento 与 5 列全功能模型矩阵。',
+        colors: ['#070b14', '#0e121c', '#8b5cf6', '#f1f5f9'],
+    },
 ] as const;
 
 export type StorefrontVisualPresetId = (typeof storefrontVisualPresets)[number]['id'];
@@ -26,7 +32,7 @@ export interface StorefrontVisualPresetConfig {
 }
 
 export function isStorefrontVisualPresetId(value: unknown): value is StorefrontVisualPresetId {
-    return value === 'classic' || value === 'modern-oriental';
+    return value === 'classic' || value === 'modern-oriental' || value === 'neo-minimalist';
 }
 
 export function normalizeStorefrontVisualPreset(value: unknown): StorefrontVisualPresetId {
