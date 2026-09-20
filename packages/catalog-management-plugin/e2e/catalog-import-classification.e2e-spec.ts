@@ -261,6 +261,44 @@ describe('catalog import persisted type, hierarchy and rollback', () => {
         expect(await connection.rawConnection.getRepository(ProductVariant).count()).toBe(2);
     });
 
+    it('updates only the description when the maintenance file omits classification fields', async () => {
+        const operations = server.app.get(CatalogOperationsService);
+        const before = await operations.exportRows(ctx);
+        const original = before.items.find(row => row.sku === 'EXAMPLE-PHYSICAL-001');
+        expect(original?.importCategory).toBe('食品饮料 > 饮料');
+
+        const job = await importCsv(
+            `导入商店,SKU,商品描述\n${ctx.channel.code},EXAMPLE-PHYSICAL-001,只更新描述`,
+        );
+        expect(job.updatedCount).toBe(1);
+
+        const after = await operations.exportRows(ctx);
+        expect(after.items.find(row => row.sku === 'EXAMPLE-PHYSICAL-001')).toMatchObject({
+            description: '只更新描述',
+            importCategory: '食品饮料 > 饮料',
+        });
+    });
+
+    it('blocks a child category name from being promoted to a root by an existing-SKU import', async () => {
+        const preview = await importCsv(
+            `导入商店,SKU,一级分类\n${ctx.channel.code},EXAMPLE-PHYSICAL-001,饮料`,
+            ctx,
+            true,
+        );
+        const [row] = await imports.findRows(ctx, preview.id);
+        expect(row.action).toBe('CONFLICT');
+        expect(row.message).toContain('已作为“食品饮料”的二级分类存在');
+
+        const rootNames = (
+            await connection.rawConnection.getRepository(Collection).find({
+                relations: ['translations', 'parent'],
+            })
+        )
+            .filter(collection => !collection.isRoot && collection.parent?.isRoot)
+            .flatMap(collection => collection.translations.map(translation => translation.name));
+        expect(rootNames).not.toContain('饮料');
+    });
+
     it('clears the child, corrects type, and restores both on safe rollback', async () => {
         const job = await importCsv(
             `名称,商品类型,一级分类,二级分类,SKU,进货价,销售价,导入商店\n示例实物商品,虚拟货品,食品饮料,,EXAMPLE-PHYSICAL-001,3.125,5,${ctx.channel.code}`,
@@ -291,13 +329,18 @@ describe('catalog import persisted type, hierarchy and rollback', () => {
     });
     it('isolates ordinary stores and rejects a mismatched import without any catalog writes', async () => {
         const channels = server.app.get(ChannelService);
+        const defaultTaxZoneId = ctx.channel.defaultTaxZone?.id;
+        const defaultShippingZoneId = ctx.channel.defaultShippingZone?.id;
+        if (!defaultTaxZoneId || !defaultShippingZoneId) {
+            throw new Error('Default channel is missing its tax or shipping zone');
+        }
         const a = await channels.create(ctx, {
             code: 'import-store-a',
             token: 'import-store-a-test',
             defaultLanguageCode: ctx.languageCode,
             defaultCurrencyCode: ctx.currencyCode,
-            defaultTaxZoneId: ctx.channel.defaultTaxZone.id,
-            defaultShippingZoneId: ctx.channel.defaultShippingZone.id,
+            defaultTaxZoneId,
+            defaultShippingZoneId,
             pricesIncludeTax: ctx.channel.pricesIncludeTax,
         });
         const b = await channels.create(ctx, {
@@ -305,8 +348,8 @@ describe('catalog import persisted type, hierarchy and rollback', () => {
             token: 'import-store-b-test',
             defaultLanguageCode: ctx.languageCode,
             defaultCurrencyCode: ctx.currencyCode,
-            defaultTaxZoneId: ctx.channel.defaultTaxZone.id,
-            defaultShippingZoneId: ctx.channel.defaultShippingZone.id,
+            defaultTaxZoneId,
+            defaultShippingZoneId,
             pricesIncludeTax: ctx.channel.pricesIncludeTax,
         });
         if (!('id' in a) || !('id' in b)) throw new Error('Failed to create test stores');

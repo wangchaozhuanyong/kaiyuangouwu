@@ -571,6 +571,7 @@ export class CatalogImportWriter {
                 product.id,
                 stringValue(before.productImportCategory),
                 catalogCategoryPath(row.normalizedData),
+                { allowCreate: productCreated },
             );
         }
         await this.connection.getRepository(ctx, CatalogSourceBinding).upsert(

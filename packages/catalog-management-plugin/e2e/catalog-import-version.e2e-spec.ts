@@ -166,7 +166,9 @@ it('rejects old previews with unrecoverable timestamp precision before any catal
         .findOneByOrFail({ id: targetVariantId });
     const legacySnapshot = { ...row.beforeSnapshot };
     delete legacySnapshot.previewTimestampPrecision;
-    await connection.getRepository(ctx, CatalogImportRow).update(row.id, { beforeSnapshot: legacySnapshot });
+    await connection.getRepository(ctx, CatalogImportRow).update(row.id, {
+        beforeSnapshot: legacySnapshot as Record<string, unknown>,
+    } as never);
     const [result] = await execute(job.id);
     expect(result.action).toBe('ERROR');
     expect(result.message).toContain('旧版本生成');

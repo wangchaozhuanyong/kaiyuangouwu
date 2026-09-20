@@ -21,12 +21,11 @@ vi.mock('../../components/FeatureHelp', () => ({
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe('CatalogExportAction', () => {
-    it('loads warehouses and enables export buttons even when integrity check fails', async () => {
+    it('loads warehouses and enables export buttons while integrity check is still pending', async () => {
         mocks.query.mockImplementation(({ query }: { query: any }) => {
             const queryString = query?.loc?.source?.body ?? '';
             if (queryString.includes('NextAdminCatalogIntegritySummary')) {
-                // Simulate backend 500 error on integrity summary
-                return Promise.reject(new Error('GraphQL error: 内部服务异常'));
+                return new Promise(() => undefined);
             }
             if (queryString.includes('NextAdminCatalogExportContext')) {
                 return Promise.resolve({
@@ -62,6 +61,7 @@ describe('CatalogExportAction', () => {
             // Dialog should be open
             expect(host.textContent).toContain('导出可回导商品表');
             expect(host.textContent).toContain('默认回导仓库');
+            expect(host.textContent).toContain('正在检查商品完整性');
 
             // Select should contain the loaded warehouses and default to first warehouse
             const select = host.querySelector('select') as HTMLSelectElement;
@@ -81,6 +81,41 @@ describe('CatalogExportAction', () => {
             expect(exportCsvBtn).toBeDefined();
             expect((exportXlsxBtn as HTMLButtonElement).disabled).toBe(false);
             expect((exportCsvBtn as HTMLButtonElement).disabled).toBe(false);
+        } finally {
+            await act(async () => root.unmount());
+            host.remove();
+        }
+    });
+
+    it('reports an integrity failure without disabling export', async () => {
+        mocks.query.mockImplementation(({ query }: { query: any }) => {
+            const queryString = query?.loc?.source?.body ?? '';
+            if (queryString.includes('NextAdminCatalogIntegritySummary')) {
+                return Promise.reject(new Error('GraphQL error: 内部服务异常'));
+            }
+            if (queryString.includes('NextAdminCatalogExportContext')) {
+                return Promise.resolve({
+                    data: { stockLocations: { items: [{ id: 'loc-1', name: '主仓库' }] } },
+                });
+            }
+            return Promise.resolve({ data: {} });
+        });
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+
+        try {
+            await act(async () => root.render(<CatalogExportAction />));
+            await act(async () => {
+                host.querySelector('button')?.click();
+                await Promise.resolve();
+            });
+
+            expect(host.textContent).toContain('完整性检查暂不可用，但不影响导出');
+            const exportXlsxBtn = [...host.querySelectorAll('button')].find(btn =>
+                btn.textContent?.includes('导出可回导 XLSX'),
+            );
+            expect((exportXlsxBtn as HTMLButtonElement).disabled).toBe(false);
         } finally {
             await act(async () => root.unmount());
             host.remove();

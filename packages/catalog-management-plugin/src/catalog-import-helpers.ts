@@ -205,7 +205,9 @@ export function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: numb
     const secondaryCategory = safeImportText(row.secondaryCategory ?? '', 255);
     let fulfillmentType: NormalizedCatalogRow['fulfillmentType'];
     try {
-        fulfillmentType = parseCatalogFulfillmentType(row.fulfillmentType, row.rowNumber);
+        fulfillmentType = row.fulfillmentType
+            ? parseCatalogFulfillmentType(row.fulfillmentType, row.rowNumber)
+            : undefined;
         validateCatalogCategories(category, secondaryCategory, row.rowNumber);
         parseCatalogImportStore(row.channelCode, row.rowNumber);
     } catch (error) {

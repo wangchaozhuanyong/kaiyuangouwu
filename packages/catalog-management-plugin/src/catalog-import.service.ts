@@ -52,7 +52,7 @@ import {
     variantExecutionKey,
     withRiskConfirmation,
 } from './catalog-import-planning';
-import { CatalogImportPreview, type CatalogIndexProduct } from './catalog-import-preview';
+import { CatalogImportPreview, type CatalogIndex } from './catalog-import-preview';
 import { CatalogImportRollback } from './catalog-import-rollback';
 import { supportsRollbackLocks } from './catalog-import-rollback-state';
 import { CatalogImportWriter } from './catalog-import-writer';
@@ -833,7 +833,7 @@ export class CatalogImportService {
         ctx: RequestContext,
         row: NormalizedCatalogRow,
         input: CatalogImportContextInput,
-        catalogIndex: CatalogIndexProduct[],
+        catalogIndex: CatalogIndex,
         binding?: CatalogSourceBinding,
         suppliersByName: Map<string, CatalogSupplier> = new Map(),
     ): Promise<PlannedRow> {
@@ -889,7 +889,7 @@ export class CatalogImportService {
         return this.rollbackExecutor.rollbackRow(ctx, job, row);
     }
 
-    private async buildCatalogIndex(ctx: RequestContext): Promise<CatalogIndexProduct[]> {
+    private async buildCatalogIndex(ctx: RequestContext): Promise<CatalogIndex> {
         return this.preview.buildCatalogIndex(ctx);
     }
 

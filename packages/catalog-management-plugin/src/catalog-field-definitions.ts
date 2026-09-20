@@ -52,14 +52,7 @@ export const CATALOG_HEADER_ALIASES: Record<string, keyof NormalizedCatalogRow> 
     ),
 );
 
-export const CATALOG_REQUIRED_FIELDS: Array<keyof NormalizedCatalogRow> = [
-    'channelCode',
-    'name',
-    'fulfillmentType',
-    'category',
-    'purchaseCost',
-    'sellingPrice',
-];
+export const CATALOG_REQUIRED_FIELDS: Array<keyof NormalizedCatalogRow> = ['channelCode'];
 
 export const CATALOG_EXCLUDED_HEADERS = new Set([
     '扩展条码',

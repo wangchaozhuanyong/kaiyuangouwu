@@ -117,6 +117,26 @@ describe('hierarchical import categories', () => {
         );
     });
 
+    it('blocks promoting an existing child name to a root category', async () => {
+        const { imports, collections } = fixture();
+        await imports.moveImportedCategory(ctx, 'p1', '', '食品 > 饮料');
+
+        await expect(imports.moveImportedCategory(ctx, 'p2', '', '饮料')).rejects.toThrow(
+            '已作为“食品”的二级分类存在',
+        );
+        expect(collections.filter(item => item.translations[0].name === '饮料')).toHaveLength(1);
+    });
+
+    it('does not create a missing category for an existing-product maintenance update', async () => {
+        const { imports, collections } = fixture();
+        await imports.moveImportedCategory(ctx, 'p1', '', '食品');
+
+        await expect(
+            imports.moveImportedCategory(ctx, 'p1', '食品', '其他', { allowCreate: false }),
+        ).rejects.toThrow('维护导入禁止自动创建分类');
+        expect(collections.map(item => item.translations[0].name)).toEqual(['食品']);
+    });
+
     it('restores processing on failure and waits for overlapping imports to finish', async () => {
         const { imports, service } = fixture();
         await expect(

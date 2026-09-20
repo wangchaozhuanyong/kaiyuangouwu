@@ -1,9 +1,22 @@
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
-import { Product, ProductVariant, RequestContext, StockLevel, TransactionalConnection } from '@vendure/core';
+import {
+    Collection,
+    Product,
+    ProductVariant,
+    RequestContext,
+    StockLevel,
+    TransactionalConnection,
+} from '@vendure/core';
 import { IsNull } from 'typeorm';
 
 import { normalizeIdentity } from './catalog-file-parser.service';
-import { catalogCategoryPath, catalogImportTypeError } from './catalog-import-classification';
+import {
+    catalogCategoryPath,
+    catalogCollectionPath,
+    catalogImportTypeError,
+    preferredCatalogCategoryPath,
+    splitCatalogCategoryPath,
+} from './catalog-import-classification';
 import {
     clearsVariantIdentity,
     dateString,
@@ -40,6 +53,12 @@ export interface CatalogIndexProduct {
     categories: Set<string>;
 }
 
+export interface CatalogIndex {
+    products: CatalogIndexProduct[];
+    categoryPaths: Set<string>;
+    childCategoryParents: Map<string, Set<string>>;
+}
+
 export class CatalogImportPreview {
     constructor(
         private readonly connection: TransactionalConnection,
@@ -50,7 +69,7 @@ export class CatalogImportPreview {
         ctx: RequestContext,
         row: NormalizedCatalogRow,
         input: CatalogImportContextInput,
-        catalogIndex: CatalogIndexProduct[],
+        catalogIndex: CatalogIndex,
         binding?: CatalogSourceBinding,
         suppliersByName: Map<string, CatalogSupplier> = new Map(),
     ): Promise<PlannedRow> {
@@ -59,26 +78,27 @@ export class CatalogImportPreview {
         const warnings = [validationWarning(row)];
         const categoryExists =
             Boolean(row.category) &&
-            catalogIndex.some(item => item.categories.has(normalizeIdentity(catalogCategoryPath(row))));
-        if (row.category && !categoryExists) warnings.push('分类不存在，确认后将创建新分类');
+            catalogIndex.categoryPaths.has(normalizeIdentity(catalogCategoryPath(row)));
         const supplier = suppliersByName.get(normalizeSupplierName(row.supplier));
         if (row.supplier && !supplier) warnings.push(`供货商“${row.supplier}”不存在，确认后将创建`);
         if (supplier && !supplier.enabled) warnings.push(`供货商“${supplier.name}”已停用`);
-        const warning = warnings.filter((value): value is string => Boolean(value)).join('；') || null;
+        const warningMessage = () =>
+            warnings.filter((value): value is string => Boolean(value)).join('；') || null;
         let targetProduct: Product | undefined;
         let targetVariant: ProductVariant | undefined;
         if (row.sku) {
-            const variants = catalogIndex
+            const variants = catalogIndex.products
                 .flatMap(item => item.product.variants)
                 .filter(variant => variant.sku === row.sku);
             if (variants.length > 1) return conflictPlan('SKU 匹配到多个商品，请先清理重复 SKU');
             targetVariant = variants[0];
             targetProduct = targetVariant
-                ? catalogIndex.find(item => String(item.product.id) === String(targetVariant?.productId))
-                      ?.product
+                ? catalogIndex.products.find(
+                      item => String(item.product.id) === String(targetVariant?.productId),
+                  )?.product
                 : undefined;
         } else if (row.barcode) {
-            const variants = catalogIndex
+            const variants = catalogIndex.products
                 .flatMap(item => item.product.variants)
                 .filter(
                     variant =>
@@ -91,11 +111,12 @@ export class CatalogImportPreview {
             if (variants.length > 1) return conflictPlan('条码匹配到多个商品，请先清理重复条码');
             targetVariant = variants[0];
             targetProduct = targetVariant
-                ? catalogIndex.find(item => String(item.product.id) === String(targetVariant?.productId))
-                      ?.product
+                ? catalogIndex.products.find(
+                      item => String(item.product.id) === String(targetVariant?.productId),
+                  )?.product
                 : undefined;
         } else if (binding) {
-            targetProduct = catalogIndex.find(
+            targetProduct = catalogIndex.products.find(
                 item => String(item.product.id) === String(binding.productId),
             )?.product;
             targetVariant = targetProduct?.variants.find(
@@ -105,7 +126,7 @@ export class CatalogImportPreview {
         } else {
             const name = normalizeIdentity(row.name);
             const category = normalizeIdentity(catalogCategoryPath(row));
-            const products = catalogIndex.filter(
+            const products = catalogIndex.products.filter(
                 item =>
                     item.productKeyNames.has(name) &&
                     item.categories.has(category) &&
@@ -129,8 +150,22 @@ export class CatalogImportPreview {
         }
 
         if (!targetVariant) {
+            const currentCategory = targetProduct
+                ? (facetNames(targetProduct.facetValues, 'catalog-import-category')[0] ?? '')
+                : '';
+            const createCategoryError = catalogCategoryMutationError(
+                row,
+                catalogIndex,
+                currentCategory,
+                Boolean(targetProduct),
+            );
+            if (createCategoryError) return conflictPlan(createCategoryError);
+            if (row.category && !categoryExists && !targetProduct) {
+                warnings.push('分类不存在，确认后将随新商品创建');
+            }
             const missingCreateFields = [
                 !row.name ? '名称' : null,
+                !row.fulfillmentType ? '商品类型' : null,
                 !row.category ? '分类' : null,
                 row.purchaseCost == null ? '进货价' : null,
                 row.sellingPrice == null ? '销售价' : null,
@@ -179,14 +214,21 @@ export class CatalogImportPreview {
                           productCategories: [
                               ...new Set(
                                   targetProduct.variants.flatMap(variant =>
-                                      variant.collections.flatMap(collection =>
-                                          collection.translations.map(translation => translation.name),
+                                      variant.collections.map(collection =>
+                                          catalogCollectionPath(collection, String(ctx.languageCode)),
                                       ),
                                   ),
                               ),
-                          ],
+                          ].filter(Boolean),
                           productImportCategory:
-                              facetNames(targetProduct.facetValues, 'catalog-import-category')[0] ?? null,
+                              preferredCatalogCategoryPath(
+                                  facetNames(targetProduct.facetValues, 'catalog-import-category')[0],
+                                  targetProduct.variants.flatMap(variant =>
+                                      variant.collections.map(collection =>
+                                          catalogCollectionPath(collection, String(ctx.languageCode)),
+                                      ),
+                                  ),
+                              ) || null,
                           productSourceCreatedAt: dateString(
                               ((targetProduct.customFields ?? {}) as unknown as Record<string, unknown>)
                                   .sourceCreatedAt,
@@ -196,13 +238,21 @@ export class CatalogImportPreview {
                 plannedChanges: { safeAction: 'CREATE', ...createChanges(row, input.currencyCode) },
                 message: targetProduct ? '将在现有商品下创建新 SKU' : '将创建商品和 SKU',
             };
-            return warning ? warningPlan(createPlan, warning) : createPlan;
+            const createWarning = warningMessage();
+            return createWarning ? warningPlan(createPlan, createWarning) : createPlan;
         }
         const snapshot = await this.snapshotVariant(ctx, targetVariant, {
             channelId: ctx.channelId,
             stockLocationId: input.stockLocationId,
             currencyCode: input.currencyCode,
         } as CatalogImportJob);
+        const updateCategoryError = catalogCategoryMutationError(
+            row,
+            catalogIndex,
+            stringValue(snapshot.productImportCategory),
+            true,
+        );
+        if (updateCategoryError) return conflictPlan(updateCategoryError);
         const changes = this.diffRow(row, snapshot, input.currencyCode, Boolean(input.clearBlankFields));
         if (Object.keys(changes).filter(key => key !== 'safeAction').length === 0) {
             return {
@@ -226,7 +276,8 @@ export class CatalogImportPreview {
             plannedChanges: { safeAction: 'UPDATE', ...changes },
             message: '将只更新发生变化的字段',
         };
-        return warning ? warningPlan(plan, warning) : plan;
+        const updateWarning = warningMessage();
+        return updateWarning ? warningPlan(plan, updateWarning) : plan;
     }
 
     async snapshotVariant(
@@ -241,7 +292,13 @@ export class CatalogImportPreview {
             }),
             this.connection.getRepository(ctx, ProductVariant).findOne({
                 where: { id: variant.id, deletedAt: IsNull() },
-                relations: ['translations', 'collections', 'collections.translations'],
+                relations: [
+                    'translations',
+                    'collections',
+                    'collections.translations',
+                    'collections.parent',
+                    'collections.parent.translations',
+                ],
             }),
             this.connection.getRepository(ctx, StockLevel).findOne({
                 where: { productVariantId: variant.id, stockLocationId: job.stockLocationId },
@@ -265,11 +322,15 @@ export class CatalogImportPreview {
             variantDetails?.translations[0];
         const productCategories = [
             ...new Set(
-                (variantDetails?.collections ?? []).flatMap(collection =>
-                    collection.translations.map(translation => translation.name),
-                ),
+                (variantDetails?.collections ?? [])
+                    .map(collection => catalogCollectionPath(collection, String(ctx.languageCode)))
+                    .filter(Boolean),
             ),
         ].sort((left, right) => left.localeCompare(right, 'zh-Hans'));
+        const productImportCategory = preferredCatalogCategoryPath(
+            facetNames(product?.facetValues, 'catalog-import-category')[0],
+            productCategories,
+        );
         const price = variant.productVariantPrices?.find(
             item =>
                 String(item.channelId) === String(ctx.channelId) && item.currencyCode === job.currencyCode,
@@ -285,7 +346,7 @@ export class CatalogImportPreview {
             productFulfillmentType: productCustomFields.fulfillmentType ?? 'digital',
             productDescription: productTranslation?.description ?? '',
             productCategories,
-            productImportCategory: facetNames(product?.facetValues, 'catalog-import-category')[0] ?? null,
+            productImportCategory: productImportCategory || null,
             productFacetValueIds: product?.facetValues?.map(value => String(value.id)) ?? [],
             productBrand: facetNames(product?.facetValues, 'catalog-brand')[0] ?? null,
             productTags: facetNames(product?.facetValues, 'catalog-tag'),
@@ -428,8 +489,8 @@ export class CatalogImportPreview {
         return changes;
     }
 
-    async buildCatalogIndex(ctx: RequestContext): Promise<CatalogIndexProduct[]> {
-        const products = await this.connection
+    async buildCatalogIndex(ctx: RequestContext): Promise<CatalogIndex> {
+        const productQuery = this.connection
             .getRepository(ctx, Product)
             .createQueryBuilder('product')
             .leftJoinAndSelect('product.translations', 'productTranslation')
@@ -440,21 +501,79 @@ export class CatalogImportPreview {
             .leftJoinAndSelect('variant.productVariantPrices', 'variantPrice')
             .leftJoinAndSelect('variant.collections', 'collection')
             .leftJoinAndSelect('collection.translations', 'collectionTranslation')
+            .leftJoinAndSelect('collection.parent', 'collectionParent')
+            .leftJoinAndSelect('collectionParent.translations', 'collectionParentTranslation')
             .innerJoin('product.channels', 'channel', 'channel.id = :channelId', { channelId: ctx.channelId })
-            .where('product.deletedAt IS NULL')
-            .getMany();
-        return products.map(product => ({
-            product,
-            productKeyNames: new Set(
-                product.translations.map(translation => normalizeIdentity(translation.name)),
-            ),
-            categories: new Set(
-                product.variants.flatMap(variant =>
-                    variant.collections.flatMap(collection =>
-                        collection.translations.map(translation => normalizeIdentity(translation.name)),
+            .where('product.deletedAt IS NULL');
+        const collectionQuery = this.connection
+            .getRepository(ctx, Collection)
+            .createQueryBuilder('collection')
+            .leftJoinAndSelect('collection.translations', 'collectionTranslation')
+            .leftJoinAndSelect('collection.parent', 'collectionParent')
+            .leftJoinAndSelect('collectionParent.translations', 'collectionParentTranslation')
+            .innerJoin('collection.channels', 'collectionChannel', 'collectionChannel.id = :channelId', {
+                channelId: ctx.channelId,
+            })
+            .where('collection.isRoot = :isRoot', { isRoot: false });
+        const [products, collections] = await Promise.all([
+            productQuery.getMany(),
+            collectionQuery.getMany(),
+        ]);
+        const categoryPaths = new Set<string>();
+        const childCategoryParents = new Map<string, Set<string>>();
+        for (const collection of collections) {
+            const path = catalogCollectionPath(collection, String(ctx.languageCode));
+            if (!path) continue;
+            categoryPaths.add(normalizeIdentity(path));
+            const { category, secondaryCategory } = splitCatalogCategoryPath(path);
+            if (!secondaryCategory) {
+                continue;
+            }
+            const key = normalizeIdentity(secondaryCategory);
+            const parents = childCategoryParents.get(key) ?? new Set<string>();
+            parents.add(category);
+            childCategoryParents.set(key, parents);
+        }
+        return {
+            products: products.map(product => ({
+                product,
+                productKeyNames: new Set(
+                    product.translations.map(translation => normalizeIdentity(translation.name)),
+                ),
+                categories: new Set(
+                    product.variants.flatMap(variant =>
+                        variant.collections
+                            .map(collection =>
+                                normalizeIdentity(
+                                    catalogCollectionPath(collection, String(ctx.languageCode)),
+                                ),
+                            )
+                            .filter(Boolean),
                     ),
                 ),
-            ),
-        }));
+            })),
+            categoryPaths,
+            childCategoryParents,
+        };
     }
+}
+
+function catalogCategoryMutationError(
+    row: NormalizedCatalogRow,
+    catalogIndex: CatalogIndex,
+    currentCategory: string,
+    targetsExistingProduct: boolean,
+): string | null {
+    const requestedCategory = catalogCategoryPath(row);
+    if (!requestedCategory) return null;
+    if (normalizeIdentity(requestedCategory) === normalizeIdentity(currentCategory)) return null;
+
+    const conflictingParents = catalogIndex.childCategoryParents.get(normalizeIdentity(row.category));
+    if (conflictingParents?.size) {
+        return `一级分类“${row.category}”已作为“${[...conflictingParents].join('、')}”的二级分类存在，禁止提升为一级分类；请补充正确的一级分类`;
+    }
+    if (targetsExistingProduct && !catalogIndex.categoryPaths.has(normalizeIdentity(requestedCategory))) {
+        return `已有商品的目标分类“${requestedCategory}”不存在；维护导入禁止自动创建分类，请先在分类管理中建立并复核层级`;
+    }
+    return null;
 }

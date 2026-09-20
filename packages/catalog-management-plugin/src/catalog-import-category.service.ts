@@ -42,11 +42,18 @@ export class CatalogImportCategoryService {
         productId: ID,
         previousCategory: string,
         nextCategory: string,
+        options: { allowCreate?: boolean; bypassHierarchyGuard?: boolean } = {},
     ): Promise<void> {
-        if (previousCategory && normalizeIdentity(previousCategory) !== normalizeIdentity(nextCategory)) {
+        if (!nextCategory) return;
+        const unchanged = normalizeIdentity(previousCategory) === normalizeIdentity(nextCategory);
+        const allowCreate = options.allowCreate ?? true;
+        if (!options.bypassHierarchyGuard) {
+            await this.assertSafeCategoryChange(ctx, nextCategory, allowCreate);
+        }
+        if (previousCategory && !unchanged) {
             await this.removeCategory(ctx, productId, previousCategory);
         }
-        if (nextCategory) await this.assignCategory(ctx, nextCategory);
+        await this.assignCategory(ctx, nextCategory, allowCreate);
     }
 
     private async categoryCollections(ctx: RequestContext): Promise<Collection[]> {
@@ -55,6 +62,7 @@ export class CatalogImportCategoryService {
             .createQueryBuilder('collection')
             .leftJoinAndSelect('collection.translations', 'translation')
             .leftJoinAndSelect('collection.parent', 'parent')
+            .leftJoinAndSelect('parent.translations', 'parentTranslation')
             .innerJoin('collection.channels', 'channel', 'channel.id = :channelId', {
                 channelId: ctx.channelId,
             })
@@ -101,7 +109,48 @@ export class CatalogImportCategoryService {
         return matches[0];
     }
 
-    private async assignCategory(ctx: RequestContext, path: string): Promise<void> {
+    private async assertSafeCategoryChange(
+        ctx: RequestContext,
+        path: string,
+        allowCreate: boolean,
+    ): Promise<void> {
+        const collections = await this.categoryCollections(ctx);
+        const { category, secondaryCategory } = splitCatalogCategoryPath(path);
+        const conflictingParents = [
+            ...new Set(
+                collections
+                    .filter(
+                        item =>
+                            item.parent &&
+                            !item.parent.isRoot &&
+                            item.translations.some(
+                                translation =>
+                                    normalizeIdentity(translation.name) === normalizeIdentity(category),
+                            ),
+                    )
+                    .flatMap(item => item.parent?.translations ?? [])
+                    .map(translation => translation.name)
+                    .filter(Boolean),
+            ),
+        ];
+        if (conflictingParents.length > 0) {
+            throw new UserInputError(
+                `一级分类“${category}”已作为“${conflictingParents.join('、')}”的二级分类存在，禁止提升为一级分类`,
+            );
+        }
+        if (allowCreate) return;
+        const parent = this.findCategory(collections, category);
+        if (!parent) {
+            throw new UserInputError(`已有商品的目标一级分类“${category}”不存在，维护导入禁止自动创建分类`);
+        }
+        if (secondaryCategory && !this.findCategory(collections, secondaryCategory, parent.id)) {
+            throw new UserInputError(
+                `已有商品的目标二级分类“${category} > ${secondaryCategory}”不存在，维护导入禁止自动创建分类`,
+            );
+        }
+    }
+
+    private async assignCategory(ctx: RequestContext, path: string, allowCreate: boolean): Promise<void> {
         const collections = await this.categoryCollections(ctx);
         const { category, secondaryCategory } = splitCatalogCategoryPath(path);
         const primaryFacetId = await this.categoryFacetId(ctx, 'catalog-import-primary-category', category);
@@ -109,11 +158,18 @@ export class CatalogImportCategoryService {
         const rootFacetId =
             primaryFacetId ?? (await this.categoryFacetId(ctx, 'catalog-import-category', category));
         if (!rootFacetId) throw new UserInputError(`缺少一级分类“${category}”的归类标记`);
-        const parent = await this.ensureCategory(ctx, collections, category, rootFacetId);
+        const parent = await this.ensureCategory(
+            ctx,
+            collections,
+            category,
+            rootFacetId,
+            undefined,
+            allowCreate,
+        );
         if (!secondaryCategory) return;
         const facetId = await this.categoryFacetId(ctx, 'catalog-import-category', path);
         if (!facetId) throw new UserInputError(`缺少二级分类“${secondaryCategory}”的归类标记`);
-        await this.ensureCategory(ctx, collections, secondaryCategory, facetId, parent.id);
+        await this.ensureCategory(ctx, collections, secondaryCategory, facetId, parent.id, allowCreate);
     }
 
     private async categoryFacetId(
@@ -138,6 +194,7 @@ export class CatalogImportCategoryService {
         name: string,
         facetId: ID,
         parentId?: ID,
+        allowCreate = true,
     ): Promise<Collection> {
         const collection = this.findCategory(collections, name, parentId);
         const filter = {
@@ -149,6 +206,9 @@ export class CatalogImportCategoryService {
             ],
         };
         if (!collection) {
+            if (!allowCreate) {
+                throw new UserInputError(`已有商品的目标分类“${name}”不存在，维护导入禁止自动创建分类`);
+            }
             return this.collectionService.create(ctx, {
                 ...(parentId ? { parentId } : {}),
                 inheritFilters: false,
