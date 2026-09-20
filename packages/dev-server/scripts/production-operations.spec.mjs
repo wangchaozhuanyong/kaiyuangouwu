@@ -565,6 +565,7 @@ void test('MOYAO migration logs only aggregate evidence and verifies after backu
         copiedChannelRows: { customer_store_entry: 2 },
         profileWillChange: true,
         contentSettingsWillChange: false,
+        sellerWillChange: true,
         orderSalesOwnerCount: 7,
         operationDigest,
     };
@@ -580,6 +581,7 @@ void test('MOYAO migration logs only aggregate evidence and verifies after backu
         defaultOwnedOrderCount: 0,
         profileMatches: true,
         contentSettingsMatch: true,
+        sellerMatches: true,
     };
     let backupCount = 0;
     const result = operations.runMoyaoDefaultStoreMigration(request, {

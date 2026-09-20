@@ -139,7 +139,9 @@ export function publicMigrationPlan(details) {
         mode: 'reviewed-default-to-dedicated-channel',
         sourceChannelCode: SOURCE_CHANNEL_CODE,
         targetChannelCode: TARGET_CHANNEL_CODE,
-        contentBlockCount: details.movedRows.storefront_content_block.length,
+        contentBlockCount:
+            details.movedRows.storefront_content_block.length +
+            details.existingTargetRowCounts.storefront_content_block,
         movedChannelRows: Object.fromEntries(
             Object.entries(details.movedRows).map(([table, ids]) => [table, ids.length]),
         ),
@@ -152,6 +154,7 @@ export function publicMigrationPlan(details) {
         profileWillChange: details.profileDigest !== details.targetProfileDigest,
         contentSettingsWillChange:
             details.sourceHeroAutoplayIntervalSeconds !== details.targetHeroAutoplayIntervalSeconds,
+        sellerWillChange: details.sourceSellerId !== details.targetSellerId,
         orderSalesOwnerCount: details.orderSalesOwnerIds.length,
         operationDigest: migrationDigest(details),
     };
@@ -191,11 +194,15 @@ async function columnExists(connection, table, column) {
 
 async function selectChannel(connection, code, lock) {
     const [rows] = await connection.execute(
-        `SELECT id, code FROM channel WHERE code = ?${lock ? ' FOR UPDATE' : ''}`,
+        `SELECT id, code, sellerId FROM channel WHERE code = ?${lock ? ' FOR UPDATE' : ''}`,
         [code],
     );
     assert.equal(rows.length, 1, `Expected exactly one Channel ${code}`);
-    return { id: String(rows[0].id), code: String(rows[0].code) };
+    return {
+        id: String(rows[0].id),
+        code: String(rows[0].code),
+        sellerId: rows[0].sellerId == null ? null : String(rows[0].sellerId),
+    };
 }
 
 async function selectProfile(connection, channelId, lock) {
@@ -224,6 +231,7 @@ async function collectDetails(connection, lock = false) {
     const source = await selectChannel(connection, SOURCE_CHANNEL_CODE, lock);
     const target = await selectChannel(connection, TARGET_CHANNEL_CODE, lock);
     assert.notEqual(source.id, target.id, 'Source and target Channels must be different');
+    assert.ok(source.sellerId, 'Default Channel requires a Seller before migration');
 
     const sourceProfile = await selectProfile(connection, source.id, lock);
     const targetProfile = await selectProfile(connection, target.id, lock);
@@ -274,12 +282,14 @@ async function collectDetails(connection, lock = false) {
     }
 
     const movedRows = {};
+    const existingTargetRowCounts = {};
     for (const table of MOVED_CHANNEL_TABLES) {
         if (
             !(await tableExists(connection, table)) ||
             !(await columnExists(connection, table, 'channelId'))
         ) {
             movedRows[table] = [];
+            existingTargetRowCounts[table] = 0;
             continue;
         }
         const sourceRows = await selectIds(
@@ -294,10 +304,11 @@ async function collectDetails(connection, lock = false) {
         );
         assertMoveTargetAvailable(table, sourceRows, targetRows);
         movedRows[table] = sourceRows;
+        existingTargetRowCounts[table] = targetRows.length;
     }
     assert.ok(
-        movedRows.storefront_content_block.length > 0,
-        'Default Channel has no storefront content to migrate',
+        movedRows.storefront_content_block.length + existingTargetRowCounts.storefront_content_block > 0,
+        'MOYAO storefront content is missing from both source and target Channels',
     );
 
     const orderSalesOwnerIds = await selectIds(
@@ -335,6 +346,8 @@ async function collectDetails(connection, lock = false) {
     return {
         sourceChannelId: source.id,
         targetChannelId: target.id,
+        sourceSellerId: source.sellerId,
+        targetSellerId: target.sellerId,
         sourceProfileVersion: sourceProfile.updatedAt,
         targetProfileVersion: targetProfile.updatedAt,
         profileDigest: migrationDigest(profileValues),
@@ -342,6 +355,7 @@ async function collectDetails(connection, lock = false) {
         relationEntityIds,
         copiedEntityIds,
         movedRows,
+        existingTargetRowCounts,
         orderSalesOwnerIds,
         sourceHeroAutoplayIntervalSeconds: Number(sourceSettings.heroAutoplayIntervalSeconds),
         targetHeroAutoplayIntervalSeconds: Number(targetSettings.heroAutoplayIntervalSeconds),
@@ -433,6 +447,15 @@ async function applyMigration(environment, expectedDigest) {
             );
         }
 
+        if (details.sourceSellerId !== details.targetSellerId) {
+            const [sellerResult] = await connection.execute(
+                `UPDATE channel SET sellerId = ?, updatedAt = CURRENT_TIMESTAMP(6)
+                 WHERE id = ? AND sellerId <=> ?`,
+                [details.sourceSellerId, details.targetChannelId, details.targetSellerId],
+            );
+            assert.equal(sellerResult.affectedRows, 1, 'MOYAO Channel Seller was not updated exactly once');
+        }
+
         const profileAssignments = PROFILE_COLUMNS.map(
             column => `target.${quoted(column)} = source.${quoted(column)}`,
         );
@@ -478,6 +501,11 @@ async function verifyMigration(environment) {
     try {
         const source = await selectChannel(connection, SOURCE_CHANNEL_CODE, false);
         const target = await selectChannel(connection, TARGET_CHANNEL_CODE, false);
+        assert.equal(
+            target.sellerId,
+            source.sellerId,
+            'MOYAO Channel Seller does not match the default storefront',
+        );
         const sourceProfile = await selectProfile(connection, source.id, false);
         const targetProfile = await selectProfile(connection, target.id, false);
         const sourceProfileValues = Object.fromEntries(
@@ -589,6 +617,7 @@ async function verifyMigration(environment) {
             defaultOwnedOrderCount: 0,
             profileMatches: true,
             contentSettingsMatch: true,
+            sellerMatches: true,
         };
     } finally {
         await connection.end();

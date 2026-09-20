@@ -11,6 +11,8 @@ function fixture() {
     return {
         sourceChannelId: '1',
         targetChannelId: '3',
+        sourceSellerId: '2',
+        targetSellerId: '5',
         sourceProfileVersion: '2026-09-20T00:00:00.000Z',
         targetProfileVersion: '2026-09-20T01:00:00.000Z',
         profileDigest: 'a'.repeat(64),
@@ -23,6 +25,10 @@ function fixture() {
         movedRows: {
             storefront_content_block: ['10', '11'],
             storefront_promotion_page: ['41'],
+        },
+        existingTargetRowCounts: {
+            storefront_content_block: 0,
+            storefront_promotion_page: 0,
         },
         orderSalesOwnerIds: ['51'],
         sourceHeroAutoplayIntervalSeconds: 5,
@@ -58,10 +64,23 @@ void test('public migration plan exposes aggregates but no database identifiers'
     assert.equal(plan.orderSalesOwnerCount, 1);
     assert.equal(plan.profileWillChange, true);
     assert.equal(plan.contentSettingsWillChange, true);
+    assert.equal(plan.sellerWillChange, true);
     assert.match(plan.operationDigest, /^[a-f0-9]{64}$/u);
     const output = JSON.stringify(plan);
     for (const privateId of ['10', '11', '21', '22', '31', '41', '51'])
         assert.equal(output.includes(`\"${privateId}\"`), false);
+});
+
+void test('public plan supports a completed data move with a pending Seller repair', () => {
+    const details = fixture();
+    details.movedRows.storefront_content_block = [];
+    details.movedRows.storefront_promotion_page = [];
+    details.existingTargetRowCounts.storefront_content_block = 2;
+    details.existingTargetRowCounts.storefront_promotion_page = 1;
+    const plan = publicMigrationPlan(details);
+    assert.equal(plan.contentBlockCount, 2);
+    assert.equal(plan.movedChannelRows.storefront_content_block, 0);
+    assert.equal(plan.sellerWillChange, true);
 });
 
 void test('target-only state does not block unrelated migration rows', () => {
