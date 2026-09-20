@@ -28,6 +28,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { NextAdminDashboardAlerts, NextAdminDashboardWidgets } from '../../extensions/extension-hosts';
+import { GET_ACTIVE_CHANNEL } from '../../graphql/catalog.graphql';
 import {
     DASHBOARD_BOOTSTRAP_QUERY,
     DASHBOARD_METRICS_QUERY,
@@ -35,7 +36,7 @@ import {
     type DashboardMetricsData,
 } from '../../graphql/dashboard.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
-import { getChannelDisplayName } from '../../utils/channel-display';
+import { getChannelDisplayName, isDefaultChannelCode } from '../../utils/channel-display';
 import {
     compareMetric,
     getMetricRange,
@@ -156,6 +157,12 @@ export function DashboardModule() {
         localStorage.setItem(DASHBOARD_WIDGET_STORAGE_KEY, JSON.stringify(widgetPreferences));
     }, [widgetPreferences]);
 
+    const channelContext = useQuery<{
+        activeChannel: { code: string; defaultCurrencyCode: string };
+    }>(GET_ACTIVE_CHANNEL, { fetchPolicy: 'cache-first' });
+    const isPlatformContext = isDefaultChannelCode(channelContext.data?.activeChannel.code);
+    const businessQueryPaused = !channelContext.data || isPlatformContext;
+
     const dashboard = useQuery<DashboardBootstrapData>(DASHBOARD_BOOTSTRAP_QUERY, {
         variables: {
             input: {
@@ -171,6 +178,7 @@ export function DashboardModule() {
         },
         fetchPolicy: 'cache-first',
         notifyOnNetworkStatusChange: true,
+        skip: businessQueryPaused,
     });
     const previousMetrics = useQuery<DashboardMetricsData>(DASHBOARD_METRICS_QUERY, {
         variables: {
@@ -182,12 +190,16 @@ export function DashboardModule() {
         },
         fetchPolicy: 'cache-first',
         notifyOnNetworkStatusChange: true,
+        skip: businessQueryPaused,
     });
     const metrics = dashboard;
     const todo = dashboard;
     const recentOrders = dashboard;
 
-    const currencyCode = metrics.data?.activeChannel.defaultCurrencyCode ?? 'CNY';
+    const currencyCode =
+        metrics.data?.activeChannel.defaultCurrencyCode ??
+        channelContext.data?.activeChannel.defaultCurrencyCode ??
+        'CNY';
     const orderTotal = metricTotal(metrics.data, 'OrderTotal');
     const orderCount = metricTotal(metrics.data, 'OrderCount');
     const averageOrderValue = orderCount > 0 ? orderTotal / orderCount : 0;
@@ -234,6 +246,54 @@ export function DashboardModule() {
     const visibleWidgets = widgetPreferences.order.filter(
         widgetId => !widgetPreferences.hidden.includes(widgetId),
     );
+
+    if (isPlatformContext) {
+        return (
+            <div className="flex h-full flex-col bg-slate-50">
+                <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-5 sm:px-8">
+                    <div className="mx-auto w-full max-w-5xl">
+                        <h1 className="text-xl font-bold text-slate-900">平台管理中心</h1>
+                        <p className="mt-1 text-xs text-slate-500">
+                            默认 Channel 只用于平台管理，不承载商品、订单、库存、分类或素材等经营数据。
+                        </p>
+                    </div>
+                </header>
+                <main className="flex-1 overflow-y-auto px-5 py-8 sm:px-8">
+                    <div className="mx-auto grid w-full max-w-5xl gap-4 md:grid-cols-2">
+                        <section className="rounded-2xl border border-blue-100 bg-blue-50 p-6">
+                            <h2 className="text-sm font-bold text-blue-950">管理某个店铺</h2>
+                            <p className="mt-2 text-xs leading-5 text-blue-800">
+                                请使用右上角“当前店铺”切换到 MOYAO
+                                AI｜模钥或美宜佳。切换后才会显示该店自己的经营数据。
+                            </p>
+                        </section>
+                        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <h2 className="text-sm font-bold text-slate-900">平台级管理</h2>
+                            <p className="mt-2 text-xs leading-5 text-slate-600">
+                                在这里管理员工、角色、权限与系统运维，不会将业务数据写入平台 Channel。
+                            </p>
+                            <div className="mt-4 flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/settings/team')}
+                                    className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700"
+                                >
+                                    员工与权限
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/settings/system-ops')}
+                                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                                >
+                                    系统运维
+                                </button>
+                            </div>
+                        </section>
+                    </div>
+                </main>
+            </div>
+        );
+    }
 
     return (
         <div className="flex h-full flex-col bg-slate-50">

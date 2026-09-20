@@ -79,6 +79,20 @@ const GET_ADMIN_BOOTSTRAP = gql`
                 token
             }
         }
+        activeAdministrator {
+            user {
+                roles {
+                    code
+                }
+            }
+        }
+        channels(options: { take: 100, sort: { code: ASC } }) {
+            items {
+                id
+                code
+                token
+            }
+        }
         merchantInitialPasswordStatus {
             mustChangePassword
         }
@@ -99,6 +113,10 @@ interface AdminBootstrapData {
         identifier: string;
         channels: Array<{ id: string; code: string; token: string }>;
     } | null;
+    activeAdministrator?: {
+        user: { roles: Array<{ code: string }> };
+    } | null;
+    channels?: { items: Array<{ id: string; code: string; token: string }> };
     merchantInitialPasswordStatus: { mustChangePassword: boolean };
 }
 
@@ -125,9 +143,14 @@ function AuthenticatedShell() {
     });
 
     const selectedChannelToken = getActiveChannelToken();
-    const fallbackChannel = data?.me?.channels[0];
+    const isSuperAdmin =
+        data?.activeAdministrator?.user.roles.some(role => role.code === '__super_admin_role__') ?? false;
+    const accessibleChannels = isSuperAdmin
+        ? (data?.channels?.items ?? data?.me?.channels)
+        : data?.me?.channels;
+    const fallbackChannel = accessibleChannels?.[0];
     const selectedChannelIsAccessible = Boolean(
-        selectedChannelToken && data?.me?.channels.some(channel => channel.token === selectedChannelToken),
+        selectedChannelToken && accessibleChannels?.some(channel => channel.token === selectedChannelToken),
     );
     const needsChannelRecovery = Boolean(fallbackChannel && !selectedChannelIsAccessible);
 

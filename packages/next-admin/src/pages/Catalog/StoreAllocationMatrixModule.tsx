@@ -1,16 +1,13 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useQuery } from '@apollo/client/react';
 import {
     AlertCircle,
     AlertTriangle,
     ArrowLeft,
-    Check,
     CheckCircle2,
     ChevronLeft,
     ChevronRight,
     Layers3,
-    Loader2,
     Package,
-    Plus,
     RefreshCw,
     Search,
     Store,
@@ -28,10 +25,7 @@ import {
     type CatalogChannelAssignmentsData,
     type ProductChannelAssignment,
 } from '../../graphql/catalog-channel-assignments.graphql';
-import { ASSIGN_PRODUCTS_TO_CHANNEL, REMOVE_PRODUCTS_FROM_CHANNEL } from '../../graphql/catalog.graphql';
 import { getChannelDisplayName } from '../../utils/channel-display';
-import { toUserFacingError } from '../../utils/user-facing-error';
-import { CatalogBulkChannelBar } from './CatalogBulkChannelBar';
 
 type FilterTab = 'all' | 'unassigned' | 'multi' | string;
 const PAGE_SIZE = 50;
@@ -44,28 +38,19 @@ export function StoreAllocationMatrixModule() {
     const deferredSearch = useDeferredValue(searchTerm.trim());
     const [activeTab, setActiveTab] = useState<FilterTab>('all');
     const [page, setPage] = useState(0);
-    const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
-    const [updatingCell, setUpdatingCell] = useState<{ productId: string; channelId: string } | null>(null);
-    const [notification, setNotification] = useState<{
-        type: 'success' | 'error' | 'warning';
-        message: string;
-    } | null>(null);
 
     const changeActiveTab = (nextTab: FilterTab) => {
         setActiveTab(nextTab);
         setPage(0);
-        setSelectedProductIds([]);
     };
 
     const changeSearchTerm = (value: string) => {
         setSearchTerm(value);
         setPage(0);
-        setSelectedProductIds([]);
     };
 
     const changePage = (nextPage: number) => {
         setPage(nextPage);
-        setSelectedProductIds([]);
     };
 
     const assignmentFilter = useMemo(() => {
@@ -92,17 +77,6 @@ export function StoreAllocationMatrixModule() {
         },
     );
 
-    const [assignMutation, { loading: assigning }] = useMutation(ASSIGN_PRODUCTS_TO_CHANNEL);
-    const [removeMutation, { loading: removing }] = useMutation(REMOVE_PRODUCTS_FROM_CHANNEL);
-
-    const showNotice = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
-        setNotification({ type, message });
-        const timer = window.setTimeout(() => {
-            setNotification(prev => (prev?.message === message ? null : prev));
-        }, 4000);
-        return () => window.clearTimeout(timer);
-    };
-
     const channels: AssignmentChannel[] = useMemo(
         () => data?.catalogProductChannelAssignments.channels ?? [],
         [data?.catalogProductChannelAssignments.channels],
@@ -128,162 +102,6 @@ export function StoreAllocationMatrixModule() {
     const totalPages = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
     const scopeChannel = data?.catalogProductChannelAssignments.scopeChannel;
 
-    const refreshFromFirstPage = () => {
-        setSelectedProductIds([]);
-        if (page === 0) {
-            void refetch();
-        } else {
-            setPage(0);
-        }
-    };
-
-    // Handle single cell toggle (assign / remove)
-    const handleToggleChannel = async (product: ProductChannelAssignment, channel: AssignmentChannel) => {
-        const hasChannel = product.channels.some(c => c.id === channel.id);
-        const channelName = getChannelDisplayName(channel.code);
-
-        if (hasChannel) {
-            // Check if this is the product's only channel
-            if (product.channels.length <= 1) {
-                showNotice(
-                    `商品《${product.name}》当前仅属于「${channelName}」，商品必须至少保留在一个店铺中，无法移除唯一归属店铺。`,
-                    'warning',
-                );
-                return;
-            }
-
-            setUpdatingCell({ productId: product.id, channelId: channel.id });
-            try {
-                await removeMutation({
-                    variables: {
-                        input: {
-                            productIds: [product.id],
-                            channelId: channel.id,
-                        },
-                    },
-                });
-                showNotice(`已将商品《${product.name}》从「${channelName}」下架`);
-                refreshFromFirstPage();
-            } catch (err) {
-                showNotice(toUserFacingError(err, '从店铺下架失败'), 'error');
-            } finally {
-                setUpdatingCell(null);
-            }
-        } else {
-            setUpdatingCell({ productId: product.id, channelId: channel.id });
-            try {
-                await assignMutation({
-                    variables: {
-                        input: {
-                            productIds: [product.id],
-                            channelId: channel.id,
-                            priceFactor: 1.0,
-                        },
-                    },
-                });
-                showNotice(`已将商品《${product.name}》上架至「${channelName}」`);
-                refreshFromFirstPage();
-            } catch (err) {
-                showNotice(toUserFacingError(err, '上架到店铺失败'), 'error');
-            } finally {
-                setUpdatingCell(null);
-            }
-        }
-    };
-
-    // Bulk actions
-    const handleBulkAssign = async (targetChannelId: string, priceFactor: number) => {
-        if (!selectedProductIds.length) return;
-        const targetChannel = channels.find(c => c.id === targetChannelId);
-        const targetName = targetChannel ? getChannelDisplayName(targetChannel.code) : '';
-
-        try {
-            await assignMutation({
-                variables: {
-                    input: {
-                        productIds: selectedProductIds,
-                        channelId: targetChannelId,
-                        priceFactor,
-                    },
-                },
-            });
-            showNotice(`已将选中的 ${selectedProductIds.length} 个商品成功上架至「${targetName}」`);
-            refreshFromFirstPage();
-        } catch (err) {
-            showNotice(toUserFacingError(err, '批量上架失败'), 'error');
-        }
-    };
-
-    const handleBulkRemove = async (targetChannelId: string) => {
-        if (!selectedProductIds.length) return;
-        const targetChannel = channels.find(c => c.id === targetChannelId);
-        const targetName = targetChannel ? getChannelDisplayName(targetChannel.code) : '';
-
-        // Pre-filter: Do not attempt to remove products where this is their only channel
-        const eligibleIds: string[] = [];
-        let skippedCount = 0;
-
-        for (const id of selectedProductIds) {
-            const prod = allProducts.find(p => p.id === id);
-            if (prod && prod.channels.some(c => c.id === targetChannelId)) {
-                if (prod.channels.length > 1) {
-                    eligibleIds.push(id);
-                } else {
-                    skippedCount++;
-                }
-            }
-        }
-
-        if (eligibleIds.length === 0) {
-            showNotice(
-                skippedCount > 0
-                    ? `所选商品中仅属于「${targetName}」，无法从其唯一店铺移除。`
-                    : `所选商品未在上架状态，无需下架。`,
-                'warning',
-            );
-            return;
-        }
-
-        try {
-            await removeMutation({
-                variables: {
-                    input: {
-                        productIds: eligibleIds,
-                        channelId: targetChannelId,
-                    },
-                },
-            });
-            showNotice(
-                `已从「${targetName}」下架 ${eligibleIds.length} 个商品${skippedCount > 0 ? `（自动跳过 ${skippedCount} 个唯一归属该店的商品）` : ''}`,
-            );
-            refreshFromFirstPage();
-        } catch (err) {
-            showNotice(toUserFacingError(err, '批量下架失败'), 'error');
-        }
-    };
-
-    // Selection helpers
-    const allFilteredSelected =
-        filteredProducts.length > 0 && filteredProducts.every(p => selectedProductIds.includes(p.id));
-
-    const isIndeterminate =
-        filteredProducts.some(p => selectedProductIds.includes(p.id)) && !allFilteredSelected;
-
-    const toggleSelectAll = () => {
-        if (allFilteredSelected) {
-            setSelectedProductIds(prev => prev.filter(id => !filteredProducts.some(p => p.id === id)));
-        } else {
-            const combined = new Set([...selectedProductIds, ...filteredProducts.map(p => p.id)]);
-            setSelectedProductIds(Array.from(combined));
-        }
-    };
-
-    const toggleSelectProduct = (productId: string) => {
-        setSelectedProductIds(prev =>
-            prev.includes(productId) ? prev.filter(id => id !== productId) : [...prev, productId],
-        );
-    };
-
     return (
         <div className="flex h-full flex-col bg-slate-50">
             {/* Header */}
@@ -300,11 +118,11 @@ export function StoreAllocationMatrixModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Layers3 className="h-5 w-5 text-blue-600" />
-                            商品多店铺分配中心
-                            <FeatureHelpButton topic="catalog.products" title="商品多店铺分配中心" />
+                            商品店铺归属检查
+                            <FeatureHelpButton topic="catalog.products" title="商品店铺归属检查" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            集中管理商品在各个店铺/渠道的上架状态，直观对比分发矩阵并一键批量调配
+                            只读检查商品的唯一店铺归属。跨店共享已禁止，多店记录必须通过隔离修复处理。
                         </p>
                     </div>
                 </div>
@@ -329,38 +147,6 @@ export function StoreAllocationMatrixModule() {
                     </button>
                 </div>
             </div>
-
-            {/* Notification alert */}
-            {notification && (
-                <div className="px-5 pt-4 sm:px-8">
-                    <div
-                        role="status"
-                        className={`flex items-center gap-2 rounded-xl border p-3.5 text-xs font-medium animate-fadeIn ${
-                            notification.type === 'success'
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                                : notification.type === 'warning'
-                                  ? 'border-amber-200 bg-amber-50 text-amber-900'
-                                  : 'border-rose-200 bg-rose-50 text-rose-800'
-                        }`}
-                    >
-                        {notification.type === 'success' ? (
-                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                        ) : notification.type === 'warning' ? (
-                            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
-                        ) : (
-                            <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-                        )}
-                        <span>{notification.message}</span>
-                        <button
-                            type="button"
-                            onClick={() => setNotification(null)}
-                            className="ml-auto text-slate-400 hover:text-slate-600"
-                        >
-                            <X className="h-3.5 w-3.5" />
-                        </button>
-                    </div>
-                </div>
-            )}
 
             {/* Main Content Area */}
             <div className="w-full max-w-none flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
@@ -388,13 +174,13 @@ export function StoreAllocationMatrixModule() {
                         }`}
                     >
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-amber-800">仅默认店铺 (未分发)</span>
+                            <span className="text-xs font-bold text-amber-800">平台归属异常</span>
                             <AlertTriangle className="h-4 w-4 text-amber-600" />
                         </div>
                         <div className="mt-2 text-2xl font-extrabold text-amber-900">
                             {metrics.unassigned}
                         </div>
-                        <p className="mt-1 text-[11px] text-amber-700">尚未分配到任何独立分店</p>
+                        <p className="mt-1 text-[11px] text-amber-700">经营商品不应留在平台管理店铺</p>
                     </div>
 
                     {/* Store Cards */}
@@ -469,7 +255,7 @@ export function StoreAllocationMatrixModule() {
                                     }`}
                                 >
                                     <AlertTriangle className="h-3 w-3" />
-                                    仅默认店铺 (未分发: {metrics.unassigned})
+                                    平台归属异常 ({metrics.unassigned})
                                 </button>
                                 <button
                                     type="button"
@@ -480,7 +266,7 @@ export function StoreAllocationMatrixModule() {
                                             : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
                                     }`}
                                 >
-                                    多店铺通用 ({metrics.multi})
+                                    多店共享异常 ({metrics.multi})
                                 </button>
                             </div>
 
@@ -509,17 +295,9 @@ export function StoreAllocationMatrixModule() {
                             </div>
                         </div>
 
-                        {/* Bulk Action Toolbar (appears when products are selected) */}
-                        {selectedProductIds.length > 0 && (
-                            <CatalogBulkChannelBar
-                                selectedCount={selectedProductIds.length}
-                                channels={channels}
-                                onAssign={handleBulkAssign}
-                                onRemove={handleBulkRemove}
-                                onClearSelection={() => setSelectedProductIds([])}
-                                busy={assigning || removing}
-                            />
-                        )}
+                        <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] text-blue-800">
+                            本页不再修改店铺关联；商品跨店必须创建独立副本，不得共享同一条商品、规格、分类或素材记录。
+                        </div>
                     </div>
 
                     {/* Matrix Table */}
@@ -544,7 +322,7 @@ export function StoreAllocationMatrixModule() {
                             <div className="m-6 flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800">
                                 <div className="flex items-center gap-2">
                                     <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-                                    <span>商品分配数据读取失败，请检查网络或权限。</span>
+                                    <span>商品归属数据读取失败，请检查网络或权限。</span>
                                 </div>
                                 <button
                                     type="button"
@@ -564,7 +342,7 @@ export function StoreAllocationMatrixModule() {
                                 </div>
                                 <div className="text-sm font-bold text-slate-700">暂无匹配的商品</div>
                                 <p className="max-w-xs text-xs text-slate-400">
-                                    当前筛选条件或搜索关键词下未找到商品分配记录。
+                                    当前筛选条件或搜索关键词下未找到商品归属记录。
                                 </p>
                             </div>
                         )}
@@ -574,27 +352,10 @@ export function StoreAllocationMatrixModule() {
                             <table className="w-full border-collapse text-left text-xs">
                                 <thead>
                                     <tr className="whitespace-nowrap border-b border-slate-200 bg-slate-50/80 font-bold text-slate-600">
-                                        {/* Checkbox */}
-                                        <th
-                                            scope="col"
-                                            className="sticky left-0 z-20 w-10 bg-slate-50 px-3 py-3"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                aria-label="全选本页商品"
-                                                checked={allFilteredSelected}
-                                                ref={el => {
-                                                    if (el) el.indeterminate = isIndeterminate;
-                                                }}
-                                                onChange={toggleSelectAll}
-                                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                            />
-                                        </th>
-
                                         {/* Product info */}
                                         <th
                                             scope="col"
-                                            className="sticky left-10 z-20 min-w-64 max-w-80 bg-slate-50 px-3 py-3"
+                                            className="sticky left-0 z-20 min-w-64 max-w-80 bg-slate-50 px-3 py-3"
                                         >
                                             商品信息
                                         </th>
@@ -627,7 +388,6 @@ export function StoreAllocationMatrixModule() {
 
                                 <tbody className="divide-y divide-slate-100 text-slate-700">
                                     {filteredProducts.map(product => {
-                                        const isSelected = selectedProductIds.includes(product.id);
                                         const isUnassignedOnly =
                                             product.channels.length <= 1 &&
                                             product.channels.some(c => c.isDefault);
@@ -635,25 +395,10 @@ export function StoreAllocationMatrixModule() {
                                         return (
                                             <tr
                                                 key={product.id}
-                                                className={`group h-[56px] transition-colors ${
-                                                    isSelected
-                                                        ? 'bg-blue-50/40 hover:bg-blue-50/50'
-                                                        : 'hover:bg-slate-50/80'
-                                                }`}
+                                                className="group h-[56px] transition-colors hover:bg-slate-50/80"
                                             >
-                                                {/* Checkbox */}
-                                                <td className="sticky left-0 z-10 h-[56px] w-10 bg-white px-3 py-0 group-hover:bg-slate-50">
-                                                    <input
-                                                        type="checkbox"
-                                                        aria-label={`选择商品 ${product.name}`}
-                                                        checked={isSelected}
-                                                        onChange={() => toggleSelectProduct(product.id)}
-                                                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                    />
-                                                </td>
-
                                                 {/* Product Info */}
-                                                <td className="sticky left-10 z-10 h-[56px] min-w-64 max-w-80 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                                <td className="sticky left-0 z-10 h-[56px] min-w-64 max-w-80 bg-white px-3 py-0 group-hover:bg-slate-50">
                                                     <div className="flex items-center gap-2.5">
                                                         <div className="flex-1 min-w-0">
                                                             <button
@@ -677,12 +422,13 @@ export function StoreAllocationMatrixModule() {
                                                                 {isUnassignedOnly ? (
                                                                     <span className="inline-flex items-center gap-0.5 rounded bg-amber-50 px-1.5 py-0.2 text-[10px] font-bold text-amber-700 border border-amber-200">
                                                                         <AlertTriangle className="h-2.5 w-2.5" />
-                                                                        未分发到分店
+                                                                        平台归属异常
                                                                     </span>
                                                                 ) : (
                                                                     <span className="text-[10px] text-slate-400">
-                                                                        已上架 {product.channels.length}{' '}
-                                                                        个店铺
+                                                                        {product.channels.length > 1
+                                                                            ? `多店共享异常（${product.channels.length} 个店铺）`
+                                                                            : '唯一店铺归属正常'}
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -710,54 +456,20 @@ export function StoreAllocationMatrixModule() {
                                                     const isAssigned = product.channels.some(
                                                         c => c.id === channel.id,
                                                     );
-                                                    const isCellUpdating =
-                                                        updatingCell?.productId === product.id &&
-                                                        updatingCell?.channelId === channel.id;
-
                                                     return (
                                                         <td
                                                             key={channel.id}
                                                             className="h-[56px] whitespace-nowrap px-3 py-0 text-center border-l border-slate-100"
                                                         >
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    void handleToggleChannel(product, channel)
-                                                                }
-                                                                disabled={
-                                                                    isCellUpdating || assigning || removing
-                                                                }
-                                                                className={`group/btn inline-flex items-center justify-center gap-1 rounded-full px-3 py-1 text-xs font-bold transition-all shadow-2xs cursor-pointer ${
+                                                            <span
+                                                                className={`inline-flex items-center justify-center rounded-full border px-3 py-1 text-xs font-bold ${
                                                                     isAssigned
-                                                                        ? 'border border-emerald-300 bg-emerald-50 text-emerald-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700'
-                                                                        : 'border border-slate-200 bg-white text-slate-400 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
-                                                                } disabled:cursor-not-allowed disabled:opacity-50`}
-                                                                title={
-                                                                    isAssigned
-                                                                        ? `点击从「${getChannelDisplayName(channel.code)}」下架`
-                                                                        : `点击上架到「${getChannelDisplayName(channel.code)}」`
-                                                                }
+                                                                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                                                                        : 'border-slate-200 bg-white text-slate-400'
+                                                                }`}
                                                             >
-                                                                {isCellUpdating ? (
-                                                                    <Loader2 className="h-3 w-3 animate-spin text-slate-600" />
-                                                                ) : isAssigned ? (
-                                                                    <>
-                                                                        <Check className="h-3 w-3 group-hover/btn:hidden text-emerald-600" />
-                                                                        <span className="group-hover/btn:hidden">
-                                                                            已在售
-                                                                        </span>
-                                                                        <X className="hidden h-3 w-3 group-hover/btn:inline text-rose-600" />
-                                                                        <span className="hidden group-hover/btn:inline">
-                                                                            下架
-                                                                        </span>
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        <Plus className="h-3 w-3 text-slate-400 group-hover/btn:text-blue-600" />
-                                                                        <span>未上架</span>
-                                                                    </>
-                                                                )}
-                                                            </button>
+                                                                {isAssigned ? '归属' : '无归属'}
+                                                            </span>
                                                         </td>
                                                     );
                                                 })}

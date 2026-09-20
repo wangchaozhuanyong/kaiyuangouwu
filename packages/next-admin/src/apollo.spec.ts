@@ -9,6 +9,7 @@ import {
     openAdminOrderEvents,
     prepareAuthSession,
     setInitialActiveChannel,
+    switchActiveChannel,
     uploadAdminFiles,
 } from './apollo';
 import { GET_INVENTORY_OVERVIEW } from './graphql/catalog-admin.graphql';
@@ -235,6 +236,29 @@ describe('admin channel request routing', () => {
         expect(getActiveChannelToken()).toBe('store-b');
         expect(sessionStorage.getItem('vendure-active-channel-token')).toBe('store-b');
         expect(localStorage.getItem('vendure-active-channel-token')).toBe('legacy-shared-store');
+    });
+
+    it('commits a store switch only after the selected Channel reload succeeds', async () => {
+        const resetStore = vi.spyOn(client, 'resetStore').mockResolvedValueOnce(undefined);
+
+        await switchActiveChannel('store-b');
+
+        expect(resetStore).toHaveBeenCalledTimes(1);
+        expect(getActiveChannelToken()).toBe('store-b');
+        resetStore.mockRestore();
+    });
+
+    it('restores the previous store when reloading the selected Channel fails', async () => {
+        const resetStore = vi
+            .spyOn(client, 'resetStore')
+            .mockRejectedValueOnce(new Error('forbidden target Channel'))
+            .mockResolvedValueOnce(undefined);
+
+        await expect(switchActiveChannel('store-b')).rejects.toThrow('forbidden target Channel');
+
+        expect(resetStore).toHaveBeenCalledTimes(2);
+        expect(getActiveChannelToken()).toBe('store-a');
+        resetStore.mockRestore();
     });
 
     it('clears tab-scoped and legacy shared selections when authentication changes', () => {

@@ -1,7 +1,14 @@
 import 'reflect-metadata';
 
 import { Permission } from '@vendure/common/lib/generated-types';
-import { PaymentMethod, ShippingMethod, StockLocation } from '@vendure/core';
+import {
+    Collection,
+    Facet,
+    PaymentMethod,
+    ProductOptionGroup,
+    ShippingMethod,
+    StockLocation,
+} from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -9,7 +16,12 @@ import {
     manageReferralWithdrawalPermission,
     referralPermission,
 } from './referral/referral.constants';
-import { storeAdministratorPermissions, StoreProvisioningService } from './store-provisioning.service';
+import {
+    cloneTemplateCollectionFilters,
+    remapTemplateOperationIds,
+    storeAdministratorPermissions,
+    StoreProvisioningService,
+} from './store-provisioning.service';
 
 function createService() {
     const repository = { find: vi.fn(), findOne: vi.fn().mockResolvedValue(null) };
@@ -66,11 +78,17 @@ function createService() {
             },
         ]),
     };
+    const facetRepository = { find: vi.fn().mockResolvedValue([]) };
+    const optionGroupRepository = { find: vi.fn().mockResolvedValue([]) };
+    const collectionRepository = { find: vi.fn().mockResolvedValue([]) };
     const connection = {
         getRepository: vi.fn((_ctx, entity) => {
             if (entity === StockLocation) return stockLocationRepository;
             if (entity === PaymentMethod) return paymentMethodRepository;
             if (entity === ShippingMethod) return shippingMethodRepository;
+            if (entity === Facet) return facetRepository;
+            if (entity === ProductOptionGroup) return optionGroupRepository;
+            if (entity === Collection) return collectionRepository;
             return repository;
         }),
     };
@@ -134,6 +152,11 @@ function createService() {
         ),
         recordPreparedFields: vi.fn().mockResolvedValue(undefined),
     };
+    const facetService = { create: vi.fn() };
+    const facetValueService = { create: vi.fn() };
+    const productOptionGroupService = { create: vi.fn() };
+    const productOptionService = { create: vi.fn() };
+    const collectionService = { create: vi.fn() };
     const service = new StoreProvisioningService(
         connection as any,
         sellerService as any,
@@ -146,6 +169,11 @@ function createService() {
         storeProfileService as any,
         merchantInitialPasswordService as any,
         contentTranslations as any,
+        facetService as any,
+        facetValueService as any,
+        productOptionGroupService as any,
+        productOptionService as any,
+        collectionService as any,
     );
     return {
         administratorService,
@@ -163,6 +191,14 @@ function createService() {
         merchantInitialPasswordService,
         contentTranslations,
         repository,
+        facetRepository,
+        optionGroupRepository,
+        collectionRepository,
+        facetService,
+        facetValueService,
+        productOptionGroupService,
+        productOptionService,
+        collectionService,
     };
 }
 
@@ -180,6 +216,57 @@ const input = {
 };
 
 describe('StoreProvisioningService', () => {
+    it('remaps facet-value ids inside collection filter arguments', () => {
+        const result = remapTemplateOperationIds(
+            {
+                code: 'facet-value-filter',
+                args: [
+                    { name: 'facetValueIds', value: '["11","12"]' },
+                    { name: 'containsAny', value: ['11', 'other'] },
+                ],
+            },
+            new Map([
+                ['11', '101'],
+                ['12', '102'],
+            ]),
+        );
+
+        expect(result).toEqual({
+            code: 'facet-value-filter',
+            args: [
+                { name: 'facetValueIds', value: '["101","102"]' },
+                { name: 'containsAny', value: ['101', 'other'] },
+            ],
+        });
+    });
+
+    it('drops template product and variant id filters instead of leaking source-store records', () => {
+        expect(
+            cloneTemplateCollectionFilters(
+                [
+                    {
+                        code: 'product-id-filter',
+                        args: [{ name: 'productIds', value: '["product-1"]' }],
+                    },
+                    {
+                        code: 'variant-id-filter',
+                        args: [{ name: 'variantIds', value: '["variant-1"]' }],
+                    },
+                    {
+                        code: 'facet-value-filter',
+                        args: [{ name: 'facetValueIds', value: '["facet-value-1"]' }],
+                    },
+                ],
+                new Map([['facet-value-1', 'target-facet-value-1']]),
+            ),
+        ).toEqual([
+            {
+                code: 'facet-value-filter',
+                arguments: [{ name: 'facetValueIds', value: '["target-facet-value-1"]' }],
+            },
+        ]);
+    });
+
     it('creates one isolated store from the selected base Channel without a separate template flag', async () => {
         const {
             administratorService,
@@ -331,6 +418,147 @@ describe('StoreProvisioningService', () => {
         expect(result.temporaryPassword.length).toBeGreaterThanOrEqual(24);
     });
 
+    it('clones facets, options and the collection tree as independent store records', async () => {
+        const {
+            service,
+            facetRepository,
+            optionGroupRepository,
+            collectionRepository,
+            facetService,
+            facetValueService,
+            productOptionGroupService,
+            productOptionService,
+            collectionService,
+        } = createService();
+        facetRepository.find.mockResolvedValueOnce([
+            {
+                id: 'facet-1',
+                code: 'brand',
+                isPrivate: false,
+                customFields: {},
+                translations: [{ languageCode: 'en', name: 'Brand', customFields: {} }],
+                values: [
+                    {
+                        id: 'facet-value-1',
+                        code: 'local',
+                        customFields: {},
+                        translations: [{ languageCode: 'en', name: 'Local', customFields: {} }],
+                    },
+                ],
+            },
+        ]);
+        optionGroupRepository.find.mockResolvedValueOnce([
+            {
+                id: 'option-group-1',
+                code: 'size',
+                customFields: {},
+                translations: [{ languageCode: 'en', name: 'Size', customFields: {} }],
+                options: [
+                    {
+                        id: 'option-1',
+                        code: 'large',
+                        customFields: {},
+                        translations: [{ languageCode: 'en', name: 'Large', customFields: {} }],
+                    },
+                ],
+            },
+        ]);
+        collectionRepository.find.mockResolvedValueOnce([
+            {
+                id: 'collection-parent',
+                parentId: 'root',
+                parent: { isRoot: true },
+                isPrivate: false,
+                inheritFilters: true,
+                filters: [
+                    {
+                        code: 'facet-value-filter',
+                        args: [{ name: 'facetValueIds', value: '["facet-value-1"]' }],
+                    },
+                ],
+                customFields: {},
+                translations: [
+                    {
+                        languageCode: 'en',
+                        name: 'Parent',
+                        slug: 'parent',
+                        description: '',
+                        customFields: {},
+                    },
+                ],
+            },
+            {
+                id: 'collection-child',
+                parentId: 'collection-parent',
+                parent: { isRoot: false },
+                isPrivate: false,
+                inheritFilters: true,
+                filters: [],
+                customFields: {},
+                translations: [
+                    {
+                        languageCode: 'en',
+                        name: 'Child',
+                        slug: 'child',
+                        description: '',
+                        customFields: {},
+                    },
+                ],
+            },
+        ]);
+        facetService.create.mockResolvedValueOnce({ id: 'target-facet-1' });
+        facetValueService.create.mockResolvedValueOnce({ id: 'target-facet-value-1' });
+        productOptionGroupService.create.mockResolvedValueOnce({ id: 'target-option-group-1' });
+        productOptionService.create.mockResolvedValueOnce({ id: 'target-option-1' });
+        collectionService.create
+            .mockResolvedValueOnce({ id: 'target-collection-parent' })
+            .mockResolvedValueOnce({ id: 'target-collection-child' });
+        const ctx = {
+            channelId: 'template-1',
+            session: { user: { channelPermissions: [] } },
+            copy: vi.fn().mockReturnValue({ channelId: 'store-1' }),
+        } as any;
+
+        const result = await service.provision(ctx, input);
+
+        expect(facetService.create).toHaveBeenCalledWith(
+            expect.objectContaining({ channelId: 'store-1' }),
+            expect.objectContaining({ code: 'alpha-store-brand' }),
+        );
+        expect(facetValueService.create).toHaveBeenCalledWith(
+            expect.objectContaining({ channelId: 'store-1' }),
+            expect.objectContaining({ id: 'target-facet-1' }),
+            expect.objectContaining({ code: 'local' }),
+        );
+        expect(productOptionGroupService.create).toHaveBeenCalledWith(
+            expect.objectContaining({ channelId: 'store-1' }),
+            expect.objectContaining({ code: 'alpha-store-size' }),
+        );
+        expect(productOptionService.create).toHaveBeenCalledWith(
+            expect.objectContaining({ channelId: 'store-1' }),
+            expect.objectContaining({ id: 'target-option-group-1' }),
+            expect.objectContaining({ code: 'large' }),
+        );
+        expect(collectionService.create).toHaveBeenNthCalledWith(
+            1,
+            expect.objectContaining({ channelId: 'store-1' }),
+            expect.objectContaining({
+                parentId: undefined,
+                filters: [
+                    {
+                        code: 'facet-value-filter',
+                        arguments: [{ name: 'facetValueIds', value: '["target-facet-value-1"]' }],
+                    },
+                ],
+            }),
+        );
+        expect(collectionService.create).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({ channelId: 'store-1' }),
+            expect.objectContaining({ parentId: 'target-collection-parent' }),
+        );
+    });
+
     it('rejects invalid store identifiers before writing data', async () => {
         const { sellerService, service } = createService();
 
@@ -353,9 +581,10 @@ describe('StoreProvisioningService', () => {
         expect(sellerService.create).not.toHaveBeenCalled();
     });
 
-    it('lists every existing Channel as a selectable base store', async () => {
+    it('lists operating Channels as selectable bases and excludes platform management', async () => {
         const { repository, service } = createService();
         repository.find.mockResolvedValueOnce([
+            { id: 'default', code: '__default_channel__' },
             { id: 'template', code: 'template', customFields: { isStoreProvisioningTemplate: true } },
             { id: 'store', code: 'store', customFields: { isStoreProvisioningTemplate: false } },
         ]);

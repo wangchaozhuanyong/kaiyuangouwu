@@ -14,7 +14,7 @@ export const getChannelDisplayName = (value: string | ChannelDisplayValue) => {
     const code = typeof value === 'string' ? value : value.code;
     const normalizedCode = code.trim();
     if (!normalizedCode) return '未命名店铺';
-    if (isDefaultChannelCode(normalizedCode)) return '默认店铺';
+    if (isDefaultChannelCode(normalizedCode)) return '平台管理（不经营）';
     if (typeof value !== 'string') {
         const localizedName = value.customFields?.storefrontNameZh?.trim();
         if (localizedName) return localizedName;

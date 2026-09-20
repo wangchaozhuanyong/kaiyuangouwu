@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const SOURCE_CHANNEL_CODE = '__default_channel__';
 const TARGET_CHANNEL_CODE = 'moyao-ai';
+const REQUIRED_TARGET_ROLE_CODES = ['__customer_role__', '__super_admin_role__'];
 
 const RELATION_TABLES = [
     ['customer_channels_channel', 'customerId'],
@@ -148,13 +149,25 @@ export function publicMigrationPlan(details) {
         addedRelations: Object.fromEntries(
             Object.entries(details.relationEntityIds).map(([table, ids]) => [table, ids.length]),
         ),
+        removedDefaultRelations: Object.fromEntries(
+            Object.entries(details.sourceRelationEntityIds).map(([table, ids]) => [table, ids.length]),
+        ),
+        crossStoreRelationConflicts: Object.fromEntries(
+            Object.entries(details.crossStoreRelationEntityIds).map(([table, ids]) => [table, ids.length]),
+        ),
         copiedChannelRows: Object.fromEntries(
             Object.entries(details.copiedEntityIds).map(([table, ids]) => [table, ids.length]),
         ),
+        removedDefaultCustomerStoreEntries: details.sourceCustomerStoreEntryIds.length,
+        removedDefaultOrderMemberships: details.sourceOrderMembershipIds.length,
         profileWillChange: details.profileDigest !== details.targetProfileDigest,
         contentSettingsWillChange:
             details.sourceHeroAutoplayIntervalSeconds !== details.targetHeroAutoplayIntervalSeconds,
-        sellerWillChange: details.sourceSellerId !== details.targetSellerId,
+        sellerWillChange: details.sellerSeparationAction !== 'NONE',
+        sellerSeparationAction: details.sellerSeparationAction,
+        sellerIsolationConflictCount:
+            details.sourceSellerOtherChannelIds.length + details.targetSellerOtherChannelIds.length,
+        addedRequiredRoleAssignments: details.missingTargetRoleIds.length,
         orderSalesOwnerCount: details.orderSalesOwnerIds.length,
         operationDigest: migrationDigest(details),
     };
@@ -247,11 +260,23 @@ async function collectDetails(connection, lock = false) {
     assert.ok(sourceSettings && targetSettings, 'Storefront content settings are incomplete');
 
     const relationEntityIds = {};
+    const sourceRelationEntityIds = {};
+    const crossStoreRelationEntityIds = {};
     for (const [table, entityColumn] of RELATION_TABLES) {
         if (!(await tableExists(connection, table))) {
             relationEntityIds[table] = [];
+            sourceRelationEntityIds[table] = [];
+            crossStoreRelationEntityIds[table] = [];
             continue;
         }
+        sourceRelationEntityIds[table] = await selectIds(
+            connection,
+            `SELECT source.${quoted(entityColumn)} AS id
+             FROM ${quoted(table)} source
+             WHERE source.channelId = ?
+             ORDER BY source.${quoted(entityColumn)}${lock ? ' FOR UPDATE' : ''}`,
+            [source.id],
+        );
         relationEntityIds[table] = await selectIds(
             connection,
             `SELECT source.${quoted(entityColumn)} AS id
@@ -264,10 +289,31 @@ async function collectDetails(connection, lock = false) {
              ORDER BY source.${quoted(entityColumn)}${lock ? ' FOR UPDATE' : ''}`,
             [source.id, target.id],
         );
+        crossStoreRelationEntityIds[table] =
+            table === 'customer_channels_channel'
+                ? []
+                : await selectIds(
+                      connection,
+                      `SELECT DISTINCT source.${quoted(entityColumn)} AS id
+                       FROM ${quoted(table)} source
+                       INNER JOIN ${quoted(table)} other
+                           ON other.${quoted(entityColumn)} = source.${quoted(entityColumn)}
+                          AND other.channelId NOT IN (?, ?)
+                       WHERE source.channelId = ?
+                       ORDER BY source.${quoted(entityColumn)}${lock ? ' FOR UPDATE' : ''}`,
+                      [source.id, target.id, source.id],
+                  );
     }
 
     const copiedEntityIds = { customer_store_entry: [] };
+    let sourceCustomerStoreEntryIds = [];
     if (await tableExists(connection, 'customer_store_entry')) {
+        sourceCustomerStoreEntryIds = await selectIds(
+            connection,
+            `SELECT customerId AS id FROM customer_store_entry
+             WHERE channelId = ? ORDER BY customerId${lock ? ' FOR UPDATE' : ''}`,
+            [source.id],
+        );
         copiedEntityIds.customer_store_entry = await selectIds(
             connection,
             `SELECT source.customerId AS id
@@ -280,6 +326,30 @@ async function collectDetails(connection, lock = false) {
             [source.id, target.id],
         );
     }
+
+    const rolePlaceholders = REQUIRED_TARGET_ROLE_CODES.map(() => '?').join(', ');
+    const [requiredRoleRows] = await connection.execute(
+        `SELECT id, code FROM role WHERE code IN (${rolePlaceholders})
+         ORDER BY code${lock ? ' FOR UPDATE' : ''}`,
+        REQUIRED_TARGET_ROLE_CODES,
+    );
+    assert.equal(
+        requiredRoleRows.length,
+        REQUIRED_TARGET_ROLE_CODES.length,
+        'Required built-in roles are missing',
+    );
+    const requiredRoleIds = requiredRoleRows.map(row => String(row.id));
+    const missingTargetRoleIds = await selectIds(
+        connection,
+        `SELECT roleItem.id
+         FROM role roleItem
+         WHERE roleItem.code IN (${rolePlaceholders}) AND NOT EXISTS (
+             SELECT 1 FROM role_channels_channel relation
+             WHERE relation.roleId = roleItem.id AND relation.channelId = ?
+         )
+         ORDER BY roleItem.code${lock ? ' FOR UPDATE' : ''}`,
+        [...REQUIRED_TARGET_ROLE_CODES, target.id],
+    );
 
     const movedRows = {};
     const existingTargetRowCounts = {};
@@ -323,6 +393,12 @@ async function collectDetails(connection, lock = false) {
          ORDER BY item.id${lock ? ' FOR UPDATE' : ''}`,
         [source.id, SOURCE_CHANNEL_CODE, TARGET_CHANNEL_CODE],
     );
+    const sourceOrderMembershipIds = await selectIds(
+        connection,
+        `SELECT orderId AS id FROM order_channels_channel
+         WHERE channelId = ? ORDER BY orderId${lock ? ' FOR UPDATE' : ''}`,
+        [source.id],
+    );
     const [ambiguousOrderRows] = await connection.execute(
         `SELECT COUNT(*) AS value FROM \`order\` item
          WHERE item.salesChannelId = ? AND EXISTS (
@@ -343,20 +419,59 @@ async function collectDetails(connection, lock = false) {
     const targetProfileValues = Object.fromEntries(
         PROFILE_COLUMNS.map(column => [column, targetProfile[column]]),
     );
+    const sourceSellerOtherChannelIds = await selectIds(
+        connection,
+        `SELECT id FROM channel WHERE sellerId = ? AND id NOT IN (?, ?)
+         ORDER BY id${lock ? ' FOR UPDATE' : ''}`,
+        [source.sellerId, source.id, target.id],
+    );
+    const targetSellerOtherChannelIds =
+        target.sellerId && target.sellerId !== source.sellerId
+            ? await selectIds(
+                  connection,
+                  `SELECT id FROM channel WHERE sellerId = ? AND id NOT IN (?, ?)
+                   ORDER BY id${lock ? ' FOR UPDATE' : ''}`,
+                  [target.sellerId, source.id, target.id],
+              )
+            : [];
+    const migrationStillHasSourceBusinessData =
+        Object.values(sourceRelationEntityIds).some(ids => ids.length > 0) ||
+        Object.values(movedRows).some(ids => ids.length > 0) ||
+        sourceCustomerStoreEntryIds.length > 0 ||
+        sourceOrderMembershipIds.length > 0 ||
+        orderSalesOwnerIds.length > 0 ||
+        migrationDigest(targetProfileValues) !== migrationDigest(profileValues) ||
+        Number(targetSettings.heroAutoplayIntervalSeconds) !==
+            Number(sourceSettings.heroAutoplayIntervalSeconds);
+    const sellerSeparationAction =
+        source.sellerId === target.sellerId
+            ? 'CREATE_PLATFORM_SELLER'
+            : migrationStillHasSourceBusinessData
+              ? 'SWAP_EXISTING_SELLERS'
+              : 'NONE';
     return {
         sourceChannelId: source.id,
         targetChannelId: target.id,
         sourceSellerId: source.sellerId,
         targetSellerId: target.sellerId,
+        sourceSellerOtherChannelIds,
+        targetSellerOtherChannelIds,
+        sellerSeparationAction,
         sourceProfileVersion: sourceProfile.updatedAt,
         targetProfileVersion: targetProfile.updatedAt,
         profileDigest: migrationDigest(profileValues),
         targetProfileDigest: migrationDigest(targetProfileValues),
         relationEntityIds,
+        sourceRelationEntityIds,
+        crossStoreRelationEntityIds,
         copiedEntityIds,
+        requiredRoleIds,
+        missingTargetRoleIds,
+        sourceCustomerStoreEntryIds,
         movedRows,
         existingTargetRowCounts,
         orderSalesOwnerIds,
+        sourceOrderMembershipIds,
         sourceHeroAutoplayIntervalSeconds: Number(sourceSettings.heroAutoplayIntervalSeconds),
         targetHeroAutoplayIntervalSeconds: Number(targetSettings.heroAutoplayIntervalSeconds),
     };
@@ -391,19 +506,67 @@ async function applyMigration(environment, expectedDigest) {
             expectedDigest,
             'MOYAO migration state changed after review; rerun the read-only plan',
         );
+        const crossStoreConflicts = Object.entries(details.crossStoreRelationEntityIds).filter(
+            ([, ids]) => ids.length > 0,
+        );
+        assert.deepEqual(
+            crossStoreConflicts,
+            [],
+            'Default-owned resources also belong to another operating store; clone them before migration',
+        );
+        assert.equal(
+            details.sourceSellerOtherChannelIds.length + details.targetSellerOtherChannelIds.length,
+            0,
+            'A migration Seller is already used by another operating store',
+        );
+
+        if (details.missingTargetRoleIds.length > 0) {
+            const rolePlaceholders = REQUIRED_TARGET_ROLE_CODES.map(() => '?').join(', ');
+            const [roleResult] = await connection.execute(
+                `INSERT INTO role_channels_channel (roleId, channelId)
+                 SELECT roleItem.id, ? FROM role roleItem
+                 WHERE roleItem.code IN (${rolePlaceholders}) AND NOT EXISTS (
+                     SELECT 1 FROM role_channels_channel relation
+                     WHERE relation.roleId = roleItem.id AND relation.channelId = ?
+                 )`,
+                [details.targetChannelId, ...REQUIRED_TARGET_ROLE_CODES, details.targetChannelId],
+            );
+            assert.equal(
+                roleResult.affectedRows,
+                details.missingTargetRoleIds.length,
+                'Required target role assignment count drifted',
+            );
+        }
 
         for (const [table, entityColumn] of RELATION_TABLES) {
-            if (details.relationEntityIds[table].length === 0) continue;
-            await connection.execute(
-                `INSERT INTO ${quoted(table)} (${quoted(entityColumn)}, channelId)
-                 SELECT source.${quoted(entityColumn)}, ? FROM ${quoted(table)} source
-                 WHERE source.channelId = ? AND NOT EXISTS (
-                     SELECT 1 FROM ${quoted(table)} target
-                     WHERE target.${quoted(entityColumn)} = source.${quoted(entityColumn)}
-                       AND target.channelId = ?
-                 )`,
-                [details.targetChannelId, details.sourceChannelId, details.targetChannelId],
-            );
+            if (details.relationEntityIds[table].length > 0) {
+                const [insertResult] = await connection.execute(
+                    `INSERT INTO ${quoted(table)} (${quoted(entityColumn)}, channelId)
+                     SELECT source.${quoted(entityColumn)}, ? FROM ${quoted(table)} source
+                     WHERE source.channelId = ? AND NOT EXISTS (
+                         SELECT 1 FROM ${quoted(table)} target
+                         WHERE target.${quoted(entityColumn)} = source.${quoted(entityColumn)}
+                           AND target.channelId = ?
+                     )`,
+                    [details.targetChannelId, details.sourceChannelId, details.targetChannelId],
+                );
+                assert.equal(
+                    insertResult.affectedRows,
+                    details.relationEntityIds[table].length,
+                    `${table} target relation count drifted`,
+                );
+            }
+            if (details.sourceRelationEntityIds[table].length > 0) {
+                const [deleteResult] = await connection.execute(
+                    `DELETE FROM ${quoted(table)} WHERE channelId = ?`,
+                    [details.sourceChannelId],
+                );
+                assert.equal(
+                    deleteResult.affectedRows,
+                    details.sourceRelationEntityIds[table].length,
+                    `${table} default relation count drifted`,
+                );
+            }
         }
 
         if (details.copiedEntityIds.customer_store_entry.length > 0) {
@@ -423,6 +586,31 @@ async function applyMigration(environment, expectedDigest) {
                 copyResult.affectedRows,
                 details.copiedEntityIds.customer_store_entry.length,
                 'Customer store-entry count drifted during migration',
+            );
+        }
+        if (details.sourceCustomerStoreEntryIds.length > 0) {
+            await connection.execute(
+                `UPDATE customer_store_entry target
+                 INNER JOIN customer_store_entry source
+                    ON source.customerId = target.customerId AND source.channelId = ?
+                 SET target.createdAt = LEAST(target.createdAt, source.createdAt),
+                     target.updatedAt = GREATEST(target.updatedAt, source.updatedAt),
+                     target.firstSeenAt = CASE
+                         WHEN target.firstSeenAt IS NULL THEN source.firstSeenAt
+                         WHEN source.firstSeenAt IS NULL THEN target.firstSeenAt
+                         ELSE LEAST(target.firstSeenAt, source.firstSeenAt)
+                     END
+                 WHERE target.channelId = ?`,
+                [details.sourceChannelId, details.targetChannelId],
+            );
+            const [deleteResult] = await connection.execute(
+                'DELETE FROM customer_store_entry WHERE channelId = ?',
+                [details.sourceChannelId],
+            );
+            assert.equal(
+                deleteResult.affectedRows,
+                details.sourceCustomerStoreEntryIds.length,
+                'Default customer store-entry count drifted during migration',
             );
         }
 
@@ -446,14 +634,57 @@ async function applyMigration(environment, expectedDigest) {
                 'Default-owned order count drifted during migration',
             );
         }
+        if (details.sourceOrderMembershipIds.length > 0) {
+            const [deleteResult] = await connection.execute(
+                'DELETE FROM order_channels_channel WHERE channelId = ?',
+                [details.sourceChannelId],
+            );
+            assert.equal(
+                deleteResult.affectedRows,
+                details.sourceOrderMembershipIds.length,
+                'Default order membership count drifted during migration',
+            );
+        }
 
-        if (details.sourceSellerId !== details.targetSellerId) {
-            const [sellerResult] = await connection.execute(
+        if (details.sellerSeparationAction === 'SWAP_EXISTING_SELLERS') {
+            assert.ok(details.targetSellerId, 'MOYAO Channel requires its placeholder Seller');
+            const [targetSellerResult] = await connection.execute(
                 `UPDATE channel SET sellerId = ?, updatedAt = CURRENT_TIMESTAMP(6)
                  WHERE id = ? AND sellerId <=> ?`,
                 [details.sourceSellerId, details.targetChannelId, details.targetSellerId],
             );
-            assert.equal(sellerResult.affectedRows, 1, 'MOYAO Channel Seller was not updated exactly once');
+            assert.equal(
+                targetSellerResult.affectedRows,
+                1,
+                'MOYAO Channel Seller was not updated exactly once',
+            );
+            const [sourceSellerResult] = await connection.execute(
+                `UPDATE channel SET sellerId = ?, updatedAt = CURRENT_TIMESTAMP(6)
+                 WHERE id = ? AND sellerId <=> ?`,
+                [details.targetSellerId, details.sourceChannelId, details.sourceSellerId],
+            );
+            assert.equal(
+                sourceSellerResult.affectedRows,
+                1,
+                'Platform Channel Seller was not updated exactly once',
+            );
+        } else if (details.sellerSeparationAction === 'CREATE_PLATFORM_SELLER') {
+            const [insertSellerResult] = await connection.execute(
+                `INSERT INTO seller (createdAt, updatedAt, deletedAt, name)
+                 VALUES (CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6), NULL, ?)`,
+                ['Platform Management'],
+            );
+            assert.ok(insertSellerResult.insertId, 'Platform Seller was not created');
+            const [sourceSellerResult] = await connection.execute(
+                `UPDATE channel SET sellerId = ?, updatedAt = CURRENT_TIMESTAMP(6)
+                 WHERE id = ? AND sellerId <=> ?`,
+                [insertSellerResult.insertId, details.sourceChannelId, details.sourceSellerId],
+            );
+            assert.equal(
+                sourceSellerResult.affectedRows,
+                1,
+                'Platform Channel Seller was not separated exactly once',
+            );
         }
 
         const profileAssignments = PROFILE_COLUMNS.map(
@@ -501,10 +732,27 @@ async function verifyMigration(environment) {
     try {
         const source = await selectChannel(connection, SOURCE_CHANNEL_CODE, false);
         const target = await selectChannel(connection, TARGET_CHANNEL_CODE, false);
+        assert.ok(source.sellerId, 'Platform Channel requires a Seller');
+        assert.ok(target.sellerId, 'MOYAO Channel requires a Seller');
+        assert.notEqual(target.sellerId, source.sellerId, 'Platform and MOYAO must use separate Sellers');
+        const [sellerShareRows] = await connection.execute(
+            `SELECT sellerId, COUNT(*) AS value FROM channel
+             WHERE sellerId IN (?, ?) GROUP BY sellerId HAVING COUNT(*) > 1`,
+            [source.sellerId, target.sellerId],
+        );
+        assert.equal(sellerShareRows.length, 0, 'Platform or MOYAO Seller is shared with another Channel');
+        const rolePlaceholders = REQUIRED_TARGET_ROLE_CODES.map(() => '?').join(', ');
+        const [targetRoleRows] = await connection.execute(
+            `SELECT COUNT(DISTINCT roleItem.id) AS value
+             FROM role roleItem
+             INNER JOIN role_channels_channel relation ON relation.roleId = roleItem.id
+             WHERE roleItem.code IN (${rolePlaceholders}) AND relation.channelId = ?`,
+            [...REQUIRED_TARGET_ROLE_CODES, target.id],
+        );
         assert.equal(
-            target.sellerId,
-            source.sellerId,
-            'MOYAO Channel Seller does not match the default storefront',
+            Number(targetRoleRows[0]?.value ?? -1),
+            REQUIRED_TARGET_ROLE_CODES.length,
+            'MOYAO Channel is missing required SuperAdmin or customer role access',
         );
         const sourceProfile = await selectProfile(connection, source.id, false);
         const targetProfile = await selectProfile(connection, target.id, false);
@@ -543,31 +791,22 @@ async function verifyMigration(environment) {
         );
         assert.equal(sourceBlocks.length, 0, 'Default Channel still owns storefront content blocks');
         assert.ok(targetBlocks.length > 0, 'MOYAO Channel has no storefront content blocks');
-        for (const [table, entityColumn] of RELATION_TABLES) {
+        for (const [table] of RELATION_TABLES) {
             const [rows] = await connection.execute(
-                `SELECT COUNT(*) AS value FROM ${quoted(table)} source
-                 WHERE source.channelId = ? AND NOT EXISTS (
-                     SELECT 1 FROM ${quoted(table)} target
-                     WHERE target.${quoted(entityColumn)} = source.${quoted(entityColumn)}
-                       AND target.channelId = ?
-                 )`,
-                [source.id, target.id],
+                `SELECT COUNT(*) AS value FROM ${quoted(table)} WHERE channelId = ?`,
+                [source.id],
             );
-            assert.equal(Number(rows[0]?.value ?? -1), 0, `${table} still has unmigrated memberships`);
+            assert.equal(Number(rows[0]?.value ?? -1), 0, `${table} still belongs to the default Channel`);
         }
         if (await tableExists(connection, 'customer_store_entry')) {
             const [rows] = await connection.execute(
-                `SELECT COUNT(*) AS value FROM customer_store_entry source
-                 WHERE source.channelId = ? AND NOT EXISTS (
-                     SELECT 1 FROM customer_store_entry target
-                     WHERE target.customerId = source.customerId AND target.channelId = ?
-                 )`,
-                [source.id, target.id],
+                'SELECT COUNT(*) AS value FROM customer_store_entry WHERE channelId = ?',
+                [source.id],
             );
             assert.equal(
                 Number(rows[0]?.value ?? -1),
                 0,
-                'Customer store-entry history is incomplete for MOYAO',
+                'Customer store-entry history still belongs to the default Channel',
             );
         }
         for (const table of MOVED_CHANNEL_TABLES) {
@@ -592,6 +831,15 @@ async function verifyMigration(environment) {
             0,
             'Default Channel still owns historical sales',
         );
+        const [sourceOrderMembershipRows] = await connection.execute(
+            'SELECT COUNT(*) AS value FROM order_channels_channel WHERE channelId = ?',
+            [source.id],
+        );
+        assert.equal(
+            Number(sourceOrderMembershipRows[0]?.value ?? -1),
+            0,
+            'Default Channel still has order memberships',
+        );
         const [orderMembershipRows] = await connection.execute(
             `SELECT COUNT(*) AS value FROM \`order\` item
              WHERE item.salesChannelId = ? AND NOT EXISTS (
@@ -615,9 +863,13 @@ async function verifyMigration(environment) {
             copiedChannelTablesVerified: 1,
             movedChannelTablesVerified: MOVED_CHANNEL_TABLES.length,
             defaultOwnedOrderCount: 0,
+            defaultOrderMembershipCount: 0,
+            defaultRelationCount: 0,
+            defaultCustomerStoreEntryCount: 0,
             profileMatches: true,
             contentSettingsMatch: true,
-            sellerMatches: true,
+            sellerSeparated: true,
+            targetRequiredRoleCount: REQUIRED_TARGET_ROLE_CODES.length,
         };
     } finally {
         await connection.end();

@@ -37,7 +37,7 @@ const merchantScopeExemptions = new Set([
     'Mutation.logout',
 ]);
 
-const channelTransferMutations = new Set([
+const crossStoreAssignmentMutations = new Set([
     'assignAssetsToChannel',
     'assignCollectionsToChannel',
     'assignFacetsToChannel',
@@ -57,6 +57,9 @@ const channelTransferMutations = new Set([
     'removePromotionsFromChannel',
     'removeShippingMethodsFromChannel',
     'removeStockLocationsFromChannel',
+]);
+
+const merchantManagedStockLocationMutations = new Set([
     'createStockLocation',
     'deleteStockLocation',
     'deleteStockLocations',
@@ -114,7 +117,12 @@ export class MerchantCatalogAccessService {
             return;
         }
 
-        if (parentType === 'Mutation') await this.assertCouponManagementEntry(ctx, fieldName, args);
+        if (parentType === 'Mutation') {
+            await this.assertCouponManagementEntry(ctx, fieldName, args);
+            if (crossStoreAssignmentMutations.has(fieldName)) {
+                throw new UserInputError('店铺经营数据禁止跨店共享，请在目标店铺重新创建或导入独立副本');
+            }
+        }
 
         const channelIds = await this.getMerchantChannelIds(ctx);
         if (channelIds == null) {
@@ -127,7 +135,7 @@ export class MerchantCatalogAccessService {
         if (parentType !== 'Mutation') {
             return;
         }
-        if (channelTransferMutations.has(fieldName)) {
+        if (merchantManagedStockLocationMutations.has(fieldName)) {
             throw new ForbiddenError();
         }
         if (managedPromotionMutations.has(fieldName)) {

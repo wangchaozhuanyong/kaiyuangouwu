@@ -9,10 +9,18 @@ import {
     AdministratorService,
     Channel,
     ChannelService,
+    Collection,
+    CollectionService,
+    Facet,
+    FacetService,
+    FacetValueService,
     InternalServerError,
     isGraphQlErrorResult,
     PaymentMethod,
     PaymentMethodService,
+    ProductOptionGroup,
+    ProductOptionGroupService,
+    ProductOptionService,
     RequestContext,
     Role,
     RoleService,
@@ -44,6 +52,48 @@ import { USDT_TRC20_PAYMENT_METHOD_CODE } from './usdt/usdt-payment.constants';
 
 const CONTROLLED_TEST_PAYMENT_HANDLER_CODE = 'controlled-test-payment-handler';
 const CONTROLLED_TEST_PAYMENT_METHOD_PREFIX = 'controlled-test-payment-';
+
+export function remapTemplateOperationIds(value: unknown, idMap: ReadonlyMap<string, ID>): unknown {
+    if (typeof value === 'string') {
+        const direct = idMap.get(value);
+        if (direct != null) return direct;
+        if (
+            (value.startsWith('[') && value.endsWith(']')) ||
+            (value.startsWith('{') && value.endsWith('}'))
+        ) {
+            try {
+                const parsed = JSON.parse(value);
+                const remapped = remapTemplateOperationIds(parsed, idMap);
+                return JSON.stringify(remapped);
+            } catch {
+                return value;
+            }
+        }
+        return value;
+    }
+    if (Array.isArray(value)) return value.map(item => remapTemplateOperationIds(item, idMap));
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value).map(([key, item]) => [key, remapTemplateOperationIds(item, idMap)]),
+        );
+    }
+    return value;
+}
+
+export function cloneTemplateCollectionFilters(
+    filters: Array<{ code: string; args: Array<{ name: string; value: string }> }>,
+    facetValueIds: ReadonlyMap<string, ID>,
+) {
+    return filters
+        .filter(filter => !['product-id-filter', 'variant-id-filter'].includes(filter.code))
+        .map(filter => ({
+            code: filter.code,
+            arguments: filter.args.map(argument => ({
+                name: argument.name,
+                value: String(remapTemplateOperationIds(argument.value, facetValueIds)),
+            })),
+        }));
+}
 
 export const storeAdministratorPermissions: Permission[] = [
     Permission.ReadChannel,
@@ -116,12 +166,18 @@ export class StoreProvisioningService {
         private readonly storeProfileService: StoreProfileService,
         private readonly merchantInitialPasswordService: MerchantInitialPasswordService,
         private readonly contentTranslations: ContentTranslationService,
+        private readonly facetService: FacetService,
+        private readonly facetValueService: FacetValueService,
+        private readonly productOptionGroupService: ProductOptionGroupService,
+        private readonly productOptionService: ProductOptionService,
+        private readonly collectionService: CollectionService,
     ) {}
 
     async findTemplates(ctx: RequestContext): Promise<Channel[]> {
-        return this.connection.getRepository(ctx, Channel).find({
+        const channels = await this.connection.getRepository(ctx, Channel).find({
             order: { code: 'ASC' },
         });
+        return channels.filter(channel => channel.code !== '__default_channel__');
     }
 
     async provision(ctx: RequestContext, input: ProvisionStoreInput): Promise<ProvisionStoreResult> {
@@ -224,6 +280,7 @@ export class StoreProvisioningService {
         for (const shippingMethod of templateShippingMethods) {
             await this.cloneShippingMethod(channelCtx, channel, shippingMethod);
         }
+        await this.cloneClassification(ctx, channelCtx, template, channel);
         const profile = await this.storeProfileService.createDraft(ctx, channel);
         await this.recordStorefrontNameTranslation(ctx, profile, preparedStorefrontName);
 
@@ -323,6 +380,128 @@ export class StoreProvisioningService {
             _currencyCode: channel.defaultCurrencyCode,
         });
         return channelCtx;
+    }
+
+    private async cloneClassification(
+        ctx: RequestContext,
+        targetCtx: RequestContext,
+        template: Channel,
+        target: Channel,
+    ) {
+        const sourceCtx = this.contextForChannel(ctx, template);
+        const [facets, optionGroups, collections] = await Promise.all([
+            this.connection.getRepository(sourceCtx, Facet).find({
+                where: { channels: { id: template.id } },
+                relations: { translations: true, values: { translations: true } },
+                order: { createdAt: 'ASC' },
+            }),
+            this.connection.getRepository(sourceCtx, ProductOptionGroup).find({
+                where: { channels: { id: template.id }, deletedAt: IsNull() },
+                relations: { translations: true, options: { translations: true } },
+                order: { createdAt: 'ASC' },
+            }),
+            this.connection.getRepository(sourceCtx, Collection).find({
+                where: { channels: { id: template.id }, isRoot: false },
+                relations: { translations: true, parent: true },
+                order: { position: 'ASC', createdAt: 'ASC' },
+            }),
+        ]);
+
+        const facetValueIds = new Map<string, ID>();
+        let facetValueCount = 0;
+        for (const sourceFacet of facets ?? []) {
+            const targetFacet = await this.facetService.create(targetCtx, {
+                code: `${target.code}-${sourceFacet.code}`.slice(0, 255),
+                isPrivate: sourceFacet.isPrivate,
+                translations: sourceFacet.translations.map(translation => ({
+                    languageCode: translation.languageCode,
+                    name: translation.name,
+                    customFields: translation.customFields,
+                })),
+                customFields: sourceFacet.customFields,
+            });
+            for (const sourceValue of sourceFacet.values ?? []) {
+                const targetValue = await this.facetValueService.create(targetCtx, targetFacet, {
+                    code: sourceValue.code,
+                    translations: sourceValue.translations.map(translation => ({
+                        languageCode: translation.languageCode,
+                        name: translation.name,
+                        customFields: translation.customFields,
+                    })),
+                    customFields: sourceValue.customFields,
+                });
+                facetValueIds.set(String(sourceValue.id), targetValue.id);
+                facetValueCount++;
+            }
+        }
+
+        let optionCount = 0;
+        for (const sourceGroup of optionGroups ?? []) {
+            const targetGroup = await this.productOptionGroupService.create(targetCtx, {
+                code: `${target.code}-${sourceGroup.code}`.slice(0, 255),
+                translations: sourceGroup.translations.map(translation => ({
+                    languageCode: translation.languageCode,
+                    name: translation.name,
+                    customFields: translation.customFields,
+                })),
+                customFields: sourceGroup.customFields,
+            });
+            for (const sourceOption of sourceGroup.options ?? []) {
+                await this.productOptionService.create(targetCtx, targetGroup, {
+                    code: sourceOption.code,
+                    productOptionGroupId: targetGroup.id,
+                    translations: sourceOption.translations.map(translation => ({
+                        languageCode: translation.languageCode,
+                        name: translation.name,
+                        customFields: translation.customFields,
+                    })),
+                    customFields: sourceOption.customFields,
+                });
+                optionCount++;
+            }
+        }
+
+        const collectionIds = new Map<string, ID>();
+        const pending = [...(collections ?? [])];
+        while (pending.length > 0) {
+            const before = pending.length;
+            for (let index = pending.length - 1; index >= 0; index--) {
+                const sourceCollection = pending[index];
+                const sourceParentId = sourceCollection.parent?.isRoot
+                    ? null
+                    : sourceCollection.parentId == null
+                      ? null
+                      : String(sourceCollection.parentId);
+                if (sourceParentId && !collectionIds.has(sourceParentId)) continue;
+                const targetCollection = await this.collectionService.create(targetCtx, {
+                    parentId: sourceParentId ? collectionIds.get(sourceParentId) : undefined,
+                    isPrivate: sourceCollection.isPrivate,
+                    inheritFilters: sourceCollection.inheritFilters,
+                    filters: cloneTemplateCollectionFilters(sourceCollection.filters, facetValueIds),
+                    translations: sourceCollection.translations.map(translation => ({
+                        languageCode: translation.languageCode,
+                        name: translation.name,
+                        slug: translation.slug,
+                        description: translation.description,
+                        customFields: translation.customFields,
+                    })),
+                    customFields: sourceCollection.customFields,
+                });
+                collectionIds.set(String(sourceCollection.id), targetCollection.id);
+                pending.splice(index, 1);
+            }
+            if (pending.length === before) {
+                throw new InternalServerError('基础店铺的分类层级无法完整复制');
+            }
+        }
+
+        return {
+            facetCount: facets?.length ?? 0,
+            facetValueCount,
+            optionGroupCount: optionGroups?.length ?? 0,
+            optionCount,
+            collectionCount: collections?.length ?? 0,
+        };
     }
 
     private async cloneStockLocation(

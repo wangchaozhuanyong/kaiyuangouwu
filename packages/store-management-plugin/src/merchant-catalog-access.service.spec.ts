@@ -111,14 +111,21 @@ describe('MerchantCatalogAccessService', () => {
         ).resolves.toBeUndefined();
     });
 
-    it('does not restrict platform administrators', async () => {
+    it.each([
+        'assignAssetsToChannel',
+        'assignCollectionsToChannel',
+        'assignFacetsToChannel',
+        'assignProductOptionGroupsToChannel',
+        'assignProductsToChannel',
+        'assignProductVariantsToChannel',
+    ])('blocks platform administrators from sharing records via %s', async fieldName => {
         const { connection, service } = createService({ merchant: false });
 
         await expect(
-            service.assertRootFieldAccess(merchantContext, 'Mutation', 'assignProductsToChannel', {
+            service.assertRootFieldAccess(merchantContext, 'Mutation', fieldName, {
                 input: { channelId: 'store-b', productIds: ['product-b'] },
             }),
-        ).resolves.toBeUndefined();
+        ).rejects.toThrow('重新创建或导入独立副本');
         expect(connection.findByIdsInChannel).not.toHaveBeenCalled();
     });
 
@@ -134,14 +141,14 @@ describe('MerchantCatalogAccessService', () => {
         ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
-    it('blocks Channel assignment and platform-managed stock-location mutations', async () => {
+    it('blocks cross-store assignment and platform-managed stock-location mutations', async () => {
         const { service } = createService();
 
         await expect(
             service.assertRootFieldAccess(merchantContext, 'Mutation', 'assignProductsToChannel', {
                 input: { channelId: 'store-a', productIds: ['product-b'] },
             }),
-        ).rejects.toBeInstanceOf(ForbiddenError);
+        ).rejects.toThrow('重新创建或导入独立副本');
         await expect(
             service.assertRootFieldAccess(merchantContext, 'Mutation', 'updateStockLocation', {
                 input: { id: 'stock-a', name: 'Changed' },

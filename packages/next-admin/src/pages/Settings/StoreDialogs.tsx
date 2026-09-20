@@ -37,17 +37,12 @@ import {
     primaryButton,
     secondaryButton,
 } from './settings-ui';
-import {
-    saveStoreProfileWithBrandAssets,
-    storeProfileBrandAssets,
-    type BrandChannel,
-} from './store-brand-assets';
+import { saveStoreProfileWithBrandAssets, storeProfileBrandAssets } from './store-brand-assets';
 
 export function StoreEditor({
     profile,
     sellers = [],
     sellerOptionsReady = true,
-    sharedChannel,
     onClose,
     onCompleted,
     onError,
@@ -55,7 +50,6 @@ export function StoreEditor({
     profile: StoreProfileRecord;
     sellers?: Array<{ id: string; name: string }>;
     sellerOptionsReady?: boolean;
-    sharedChannel?: BrandChannel;
     onClose: () => void;
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
@@ -287,7 +281,6 @@ export function StoreEditor({
             <StoreBrandAssets
                 assets={brandAssets}
                 channel={profile.channel}
-                sharedChannel={sharedChannel}
                 disabled={saving}
                 onChange={setBrandAssets}
             />

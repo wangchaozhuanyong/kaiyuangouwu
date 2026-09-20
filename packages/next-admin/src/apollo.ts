@@ -38,13 +38,21 @@ export const getActiveChannelToken = () => sessionStorage.getItem(ACTIVE_CHANNEL
 
 export const hasActiveChannelSelection = () => Boolean(getActiveChannelToken());
 
+const replaceActiveChannelToken = (channelToken: string | null) => {
+    if (channelToken?.trim()) {
+        sessionStorage.setItem(ACTIVE_CHANNEL_TOKEN_KEY, channelToken);
+    } else {
+        sessionStorage.removeItem(ACTIVE_CHANNEL_TOKEN_KEY);
+    }
+};
+
 export const channelRequestContext = (channelToken: string) => {
     if (!channelToken.trim()) throw new Error('请先选择店铺后重试');
     return { headers: { [ACTIVE_CHANNEL_HEADER]: channelToken }, queryDeduplication: false };
 };
 
 export const setInitialActiveChannel = (channelToken: string) => {
-    if (channelToken.trim()) sessionStorage.setItem(ACTIVE_CHANNEL_TOKEN_KEY, channelToken);
+    if (channelToken.trim()) replaceActiveChannelToken(channelToken);
 };
 
 const persistAuthToken = (token: string) => {
@@ -284,6 +292,18 @@ export const switchActiveChannel = async (channelToken: string) => {
     if (!channelToken.trim()) {
         throw new Error('销售渠道标识不能为空');
     }
-    setInitialActiveChannel(channelToken);
-    await client.resetStore();
+    const previousChannelToken = getActiveChannelToken();
+    if (previousChannelToken === channelToken) return;
+    replaceActiveChannelToken(channelToken);
+    try {
+        await client.resetStore();
+    } catch (error) {
+        replaceActiveChannelToken(previousChannelToken);
+        try {
+            await client.resetStore();
+        } catch {
+            // Preserve the original switch failure. The restored token will be used on the next request.
+        }
+        throw error;
+    }
 };

@@ -633,10 +633,17 @@ void test('MOYAO migration logs only aggregate evidence and verifies after backu
         contentBlockCount: 24,
         movedChannelRows: { storefront_promotion_page: 1 },
         addedRelations: { customer_channels_channel: 3 },
+        removedDefaultRelations: { customer_channels_channel: 3 },
+        crossStoreRelationConflicts: { customer_channels_channel: 0 },
         copiedChannelRows: { customer_store_entry: 2 },
+        removedDefaultCustomerStoreEntries: 2,
+        removedDefaultOrderMemberships: 7,
         profileWillChange: true,
         contentSettingsWillChange: false,
         sellerWillChange: true,
+        sellerSeparationAction: 'SWAP_EXISTING_SELLERS',
+        sellerIsolationConflictCount: 0,
+        addedRequiredRoleAssignments: 2,
         orderSalesOwnerCount: 7,
         operationDigest,
     };
@@ -650,9 +657,13 @@ void test('MOYAO migration logs only aggregate evidence and verifies after backu
         copiedChannelTablesVerified: 1,
         movedChannelTablesVerified: 51,
         defaultOwnedOrderCount: 0,
+        defaultOrderMembershipCount: 0,
+        defaultRelationCount: 0,
+        defaultCustomerStoreEntryCount: 0,
         profileMatches: true,
         contentSettingsMatch: true,
-        sellerMatches: true,
+        sellerSeparated: true,
+        targetRequiredRoleCount: 2,
     };
     let backupCount = 0;
     const result = operations.runMoyaoDefaultStoreMigration(request, {

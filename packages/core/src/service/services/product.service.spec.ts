@@ -127,3 +127,39 @@ describe('ProductService category filtering', () => {
         );
     });
 });
+
+describe('ProductService store isolation', () => {
+    it('keeps SuperAdmin product lookup scoped even in the platform-management Channel', async () => {
+        const productRepository = { findOne: vi.fn().mockResolvedValue(null) };
+        const service = new ProductService(
+            { getRepository: vi.fn().mockReturnValue(productRepository) } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+        const ctx = {
+            apiType: 'admin',
+            channelId: 'platform-channel',
+            channel: { code: '__default_channel__' },
+            userHasPermissions: vi.fn().mockReturnValue(true),
+        } as any;
+
+        await expect(service.findOne(ctx, 'other-store-product')).resolves.toBeUndefined();
+        expect(productRepository.findOne).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    id: 'other-store-product',
+                    channels: { id: 'platform-channel' },
+                }),
+            }),
+        );
+    });
+});

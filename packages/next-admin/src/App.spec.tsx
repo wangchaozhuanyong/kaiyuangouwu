@@ -148,6 +148,32 @@ describe('admin bootstrap session recovery', () => {
         expect(requests.mock.calls.filter(([name]) => name === 'GetAdminBootstrap')).toHaveLength(2);
     });
 
+    it('keeps a SuperAdmin on a selected store even when me.channels is stale', async () => {
+        auth.selectedChannelToken = 'moyao-token';
+        const { host } = await renderApp(() => ({
+            data: {
+                me: {
+                    ...me,
+                    channels: [{ id: 'default', code: '__default_channel__', token: 'default-token' }],
+                },
+                activeAdministrator: {
+                    user: { roles: [{ code: '__super_admin_role__' }] },
+                },
+                channels: {
+                    items: [
+                        { id: 'default', code: '__default_channel__', token: 'default-token' },
+                        { id: 'moyao', code: 'moyao-ai', token: 'moyao-token' },
+                    ],
+                },
+                merchantInitialPasswordStatus: { mustChangePassword: false },
+            },
+        }));
+
+        expect(auth.select).not.toHaveBeenCalled();
+        expect(auth.selectedChannelToken).toBe('moyao-token');
+        expect(host.textContent).toContain('已进入管理界面');
+    });
+
     it('accepts the real anonymous Admin API me=null plus field-specific FORBIDDEN response', async () => {
         const { host } = await renderApp(name =>
             name === 'GetAdminBootstrap'

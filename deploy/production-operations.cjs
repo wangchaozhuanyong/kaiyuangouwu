@@ -611,26 +611,62 @@ function validateMoyaoDefaultStoreMigrationOutput(output, operation) {
         );
         assert.equal(plan?.copiedChannelTablesVerified, 1);
         assert.equal(plan?.defaultOwnedOrderCount, 0);
+        assert.equal(plan?.defaultOrderMembershipCount, 0);
+        assert.equal(plan?.defaultRelationCount, 0);
+        assert.equal(plan?.defaultCustomerStoreEntryCount, 0);
         assert.equal(plan?.profileMatches, true);
         assert.equal(plan?.contentSettingsMatch, true);
-        assert.equal(plan?.sellerMatches, true);
+        assert.equal(plan?.sellerSeparated, true);
+        assert.equal(plan?.targetRequiredRoleCount, 2);
     } else {
         assert.equal(plan?.schema, 'vendure-moyao-default-store-migration');
         assert.equal(plan?.mode, 'reviewed-default-to-dedicated-channel');
         assert.ok(Number.isSafeInteger(plan?.contentBlockCount) && plan.contentBlockCount > 0);
         assert.ok(Number.isSafeInteger(plan?.orderSalesOwnerCount) && plan.orderSalesOwnerCount >= 0);
         assert.equal(typeof plan?.sellerWillChange, 'boolean');
+        assert.ok(
+            ['NONE', 'SWAP_EXISTING_SELLERS', 'CREATE_PLATFORM_SELLER'].includes(
+                plan?.sellerSeparationAction,
+            ),
+        );
+        assert.equal(plan?.sellerIsolationConflictCount, 0);
+        assert.ok(
+            Number.isSafeInteger(plan?.addedRequiredRoleAssignments) &&
+                plan.addedRequiredRoleAssignments >= 0 &&
+                plan.addedRequiredRoleAssignments <= 2,
+        );
         assert.match(plan?.operationDigest || '', /^[a-f0-9]{64}$/u);
         assert.ok(plan?.addedRelations && typeof plan.addedRelations === 'object');
+        assert.ok(plan?.removedDefaultRelations && typeof plan.removedDefaultRelations === 'object');
+        assert.ok(
+            plan?.crossStoreRelationConflicts && typeof plan.crossStoreRelationConflicts === 'object',
+        );
         assert.ok(plan?.copiedChannelRows && typeof plan.copiedChannelRows === 'object');
         assert.ok(plan?.movedChannelRows && typeof plan.movedChannelRows === 'object');
+        assert.ok(
+            Number.isSafeInteger(plan?.removedDefaultCustomerStoreEntries) &&
+                plan.removedDefaultCustomerStoreEntries >= 0,
+        );
+        assert.ok(
+            Number.isSafeInteger(plan?.removedDefaultOrderMemberships) &&
+                plan.removedDefaultOrderMemberships >= 0,
+        );
         for (const [table, count] of Object.entries({
             ...plan.addedRelations,
+            ...plan.removedDefaultRelations,
+            ...plan.crossStoreRelationConflicts,
             ...plan.copiedChannelRows,
             ...plan.movedChannelRows,
         })) {
             assert.match(table, /^[a-z][a-z0-9_]*$/u);
             assert.ok(Number.isSafeInteger(count) && count >= 0);
+        }
+        if (operation === 'apply') {
+            assert.equal(
+                Object.values(plan.crossStoreRelationConflicts).reduce((sum, count) => sum + count, 0),
+                0,
+                'Cross-store resource conflicts must be cloned before applying the MOYAO migration',
+            );
         }
     }
     assert.equal(plan?.sourceChannelCode, '__default_channel__');

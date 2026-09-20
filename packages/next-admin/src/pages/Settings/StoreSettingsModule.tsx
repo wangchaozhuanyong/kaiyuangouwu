@@ -273,11 +273,6 @@ export function StoreSettingsModule() {
                     sellerOptionsReady={Boolean(
                         query.data && query.data.sellers.items.length >= query.data.sellers.totalItems,
                     )}
-                    sharedChannel={
-                        query.data?.storeProfiles.find(
-                            profile => profile.channel.code === '__default_channel__',
-                        )?.channel
-                    }
                     onClose={() => setStoreEditor(null)}
                     onCompleted={completed}
                     onError={setActionError}

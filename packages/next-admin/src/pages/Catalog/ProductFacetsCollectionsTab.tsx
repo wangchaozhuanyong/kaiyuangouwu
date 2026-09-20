@@ -10,11 +10,8 @@ import { useProductEditor } from './ProductEditorContext';
 export function ProductFacetsCollectionsTab() {
     const {
         selectedFacetValueIds,
-        setSelectedFacetValueIds,
         selectedCollectionIds,
         setSelectedCollectionIds,
-        selectedChannelIds,
-        setSelectedChannelIds,
         facetSearch,
         setFacetSearch,
         facetPage,

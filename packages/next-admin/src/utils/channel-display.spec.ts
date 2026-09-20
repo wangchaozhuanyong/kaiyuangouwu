@@ -12,7 +12,7 @@ describe('channel display helpers', () => {
         'turns the Vendure default channel code into a Chinese store name: %s',
         code => {
             expect(isDefaultChannelCode(code)).toBe(true);
-            expect(getChannelDisplayName(code)).toBe('默认店铺');
+            expect(getChannelDisplayName(code)).toBe('平台管理（不经营）');
         },
     );
 
@@ -35,7 +35,7 @@ describe('channel display helpers', () => {
         );
         expect(
             getCatalogEmptyStateDescription({ channelCode: '__default_channel__', searchTerm: '' }),
-        ).toContain('“默认店铺”当前暂无商品');
+        ).toContain('“平台管理（不经营）”当前暂无商品');
     });
 
     it('keeps search-result guidance focused on the search term', () => {

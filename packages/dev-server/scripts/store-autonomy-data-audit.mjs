@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+    FORBIDDEN_SHARED_ASSOCIATION_KEYS,
     collectStoreIsolationSnapshot,
     createStoreIsolationAdapter,
 } from './store-isolation-data-preflight.mjs';
@@ -570,6 +571,32 @@ function sanitizeSnapshot(snapshot, auditKey) {
     };
 }
 
+export function sharedResourceIsolationChecks(snapshot) {
+    return FORBIDDEN_SHARED_ASSOCIATION_KEYS.map(key => {
+        const association = snapshot.associations[key];
+        if (!association?.available) {
+            return {
+                key: `shared-${key}`,
+                severity: 'P1',
+                status: 'UNAVAILABLE',
+                count: null,
+                detail: 'Required ownership relation is unavailable',
+            };
+        }
+        const value = association.shared.length;
+        return {
+            key: `shared-${key}`,
+            severity: 'P1',
+            status: value === 0 ? 'PASS' : 'FAIL',
+            count: value,
+            detail:
+                value === 0
+                    ? 'No resource is shared across operating Channels'
+                    : 'Store-owned resources must be cloned instead of shared across Channels',
+        };
+    });
+}
+
 export async function collectStoreAutonomyAudit(adapter, options = {}) {
     const auditKey = options.auditKey || randomBytes(32).toString('hex');
     const schema = await createSchemaReader(adapter);
@@ -588,6 +615,7 @@ export async function collectStoreAutonomyAudit(adapter, options = {}) {
     checks.push(...(await collectConfigurationChecks(adapter, schema)));
     const coverage = await collectTableCoverage(schema);
     const snapshot = await collectStoreIsolationSnapshot(adapter, options.digitalDeliveryRoot);
+    checks.push(...sharedResourceIsolationChecks(snapshot));
     const targetChannelCode = options.targetChannelCode || 'moyao-ai';
     const unavailable = checks.filter(check => check.status === 'UNAVAILABLE').length;
     const failed = [...structure, ...checks].filter(check => check.status === 'FAIL');

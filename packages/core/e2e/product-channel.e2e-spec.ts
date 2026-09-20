@@ -624,15 +624,15 @@ describe('ChannelAware Products and ProductVariants', () => {
 
             adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
 
-            // The platform administrator can aggregate; the default Shop API still requires assignment.
-            await expectCatalogVisibility(true);
+            // SuperAdmin can enter every store, but catalog reads remain scoped to the selected store.
+            await expectCatalogVisibility(false);
             await expectDefaultShopVisibility(false);
             adminClient.setChannelToken(SECOND_CHANNEL_TOKEN);
             await expectCatalogVisibility(true);
             adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
         });
 
-        it('shares into the default Shop API explicitly while preserving the platform aggregate', async () => {
+        it('only exposes a sub-channel product in default Admin and Shop APIs after explicit assignment', async () => {
             adminClient.setChannelToken(SECOND_CHANNEL_TOKEN);
             await adminClient.query(assignProductToChannelDocument, {
                 input: { productIds: [createdProduct.id], channelId: 'T_1' },
@@ -644,7 +644,7 @@ describe('ChannelAware Products and ProductVariants', () => {
             await adminClient.query(removeProductFromChannelDocument, {
                 input: { productIds: [createdProduct.id], channelId: 'T_1' },
             });
-            await expectCatalogVisibility(true);
+            await expectCatalogVisibility(false);
             await expectDefaultShopVisibility(false);
             adminClient.setChannelToken(SECOND_CHANNEL_TOKEN);
             await expectCatalogVisibility(true);
