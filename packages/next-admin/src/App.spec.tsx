@@ -7,11 +7,15 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
-const auth = vi.hoisted(() => ({ clear: vi.fn(), select: vi.fn() }));
+const auth = vi.hoisted(() => ({ clear: vi.fn(), selectedChannelToken: 'store-a', select: vi.fn() }));
 vi.mock('./apollo', () => ({
     clearAuthSession: auth.clear,
-    hasActiveChannelSelection: () => true,
-    setInitialActiveChannel: auth.select,
+    getActiveChannelToken: () => auth.selectedChannelToken,
+    hasActiveChannelSelection: () => Boolean(auth.selectedChannelToken),
+    setInitialActiveChannel: (channelToken: string) => {
+        auth.selectedChannelToken = channelToken;
+        auth.select(channelToken);
+    },
 }));
 vi.mock('./extensions/installed-extensions', () => ({}));
 vi.mock('./extensions/extension-api', () => ({
@@ -42,6 +46,7 @@ beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     auth.clear.mockClear();
     auth.select.mockClear();
+    auth.selectedChannelToken = 'store-a';
     window.history.replaceState(null, '', '/dashboard');
 });
 afterEach(async () => {
@@ -107,6 +112,41 @@ describe('admin bootstrap session recovery', () => {
             expect(auth.clear).not.toHaveBeenCalled();
         },
     );
+
+    it('recovers a restricted administrator from a stale unauthorized channel selection', async () => {
+        let bootstrapAttempts = 0;
+        const restrictedMe = {
+            ...me,
+            channels: [{ id: 'moyao', code: 'moyao-ai', token: 'moyao-token' }],
+        };
+        const { host, requests } = await renderApp(name => {
+            if (name !== 'GetAdminBootstrap') return { data: { me: { id: me.id } } };
+            bootstrapAttempts += 1;
+            if (bootstrapAttempts === 1) {
+                return {
+                    data: { me: restrictedMe, merchantInitialPasswordStatus: null },
+                    errors: [
+                        new GraphQLError('你当前无权执行此操作', {
+                            path: ['merchantInitialPasswordStatus'],
+                            extensions: { code: 'FORBIDDEN' },
+                        }),
+                    ],
+                };
+            }
+            return {
+                data: {
+                    me: restrictedMe,
+                    merchantInitialPasswordStatus: { mustChangePassword: false },
+                },
+            };
+        });
+
+        expect(auth.select).toHaveBeenCalledWith('moyao-token');
+        expect(auth.selectedChannelToken).toBe('moyao-token');
+        expect(host.textContent).toContain('已进入管理界面');
+        expect(host.querySelector('[role="alert"]')).toBeNull();
+        expect(requests.mock.calls.filter(([name]) => name === 'GetAdminBootstrap')).toHaveLength(2);
+    });
 
     it('accepts the real anonymous Admin API me=null plus field-specific FORBIDDEN response', async () => {
         const { host } = await renderApp(name =>

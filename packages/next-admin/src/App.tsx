@@ -3,7 +3,12 @@ import { useQuery } from '@apollo/client/react';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
-import { clearAuthSession, hasActiveChannelSelection, setInitialActiveChannel } from './apollo';
+import {
+    clearAuthSession,
+    getActiveChannelToken,
+    hasActiveChannelSelection,
+    setInitialActiveChannel,
+} from './apollo';
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
 import { FeatureHelpProvider } from './components/FeatureHelp';
 import { getNextAdminExtensionLegacyRoutes, getNextAdminExtensionRoutes } from './extensions/extension-api';
@@ -106,6 +111,7 @@ function AuthenticatedShell() {
     const [channelReady, setChannelReady] = useState(() => hasActiveChannelSelection());
     const authQuery = useQuery<AdminBootstrapData>(GET_ADMIN_BOOTSTRAP, {
         fetchPolicy: 'network-only',
+        errorPolicy: 'all',
     });
     const data = authQuery.data;
     const loading = authQuery.loading;
@@ -118,16 +124,30 @@ function AuthenticatedShell() {
         errorPolicy: 'all',
     });
 
+    const selectedChannelToken = getActiveChannelToken();
+    const fallbackChannel = data?.me?.channels[0];
+    const selectedChannelIsAccessible = Boolean(
+        selectedChannelToken && data?.me?.channels.some(channel => channel.token === selectedChannelToken),
+    );
+    const needsChannelRecovery = Boolean(fallbackChannel && !selectedChannelIsAccessible);
+
     // 会话恢复时先明确选取一个可访问 Channel，再挂载业务页面。
+    // 若历史标签页保存了当前管理员无权访问的 Channel，则用 me.channels
+    // 中的第一个已授权 Channel 自动恢复，避免管理员被卡在验证失败页。
     /* oxlint-disable react/set-state-in-effect */
     useEffect(() => {
-        if (!data?.me || channelReady) return;
-        if (data.me.channels.length > 0) setInitialActiveChannel(data.me.channels[0].token);
+        if (!data?.me) return;
+        if (fallbackChannel && !selectedChannelIsAccessible) {
+            setChannelReady(false);
+            setInitialActiveChannel(fallbackChannel.token);
+            void authQuery.refetch();
+            return;
+        }
         setChannelReady(true);
-    }, [channelReady, data?.me]);
+    }, [authQuery, data?.me, fallbackChannel, selectedChannelIsAccessible]);
     /* oxlint-enable react/set-state-in-effect */
 
-    if (loading || (error && sessionQuery.loading)) {
+    if (loading || needsChannelRecovery || (error && sessionQuery.loading)) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-medium text-slate-500">
                 正在验证管理员会话...
