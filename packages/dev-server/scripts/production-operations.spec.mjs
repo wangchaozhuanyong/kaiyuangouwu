@@ -89,6 +89,7 @@ void test('release workflow ships the fixed live preflight inputs and migration 
         'packages/dev-server/scripts/store-isolation-data-preflight.mjs',
         'packages/dev-server/scripts/store-isolation-ownership-evidence.mjs',
         'packages/dev-server/scripts/store-isolation-customer-dependencies.mjs',
+        'packages/dev-server/scripts/order-sales-ownership-backfill.mjs',
     ];
     const encodedBytes = transportedFiles.reduce(
         (total, file) =>
@@ -400,6 +401,87 @@ void test('store isolation audit requires one exact runtime SHA and rejects it f
             OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
         }),
     );
+});
+
+void test('order ownership backfill separates read-only planning from reviewed writes', () => {
+    const runtimeSha = 'b'.repeat(40);
+    assert.deepEqual(
+        operations.validateRequest({
+            OPS_OPERATION: 'plan-order-sales-ownership-backfill',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+        }),
+        {
+            operation: 'plan-order-sales-ownership-backfill',
+            sourceSha,
+            expectedPlanSha256: '',
+            expectedChannelCodes: '',
+            expectedRuntimeSha: runtimeSha,
+        },
+    );
+    assert.equal(
+        operations.validateRequest({
+            OPS_OPERATION: 'apply-order-sales-ownership-backfill-reviewed',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+            OPS_EXPECTED_PLAN_SHA256: 'c'.repeat(64),
+        }).expectedPlanSha256,
+        'c'.repeat(64),
+    );
+    assert.throws(() =>
+        operations.validateRequest({
+            OPS_OPERATION: 'apply-order-sales-ownership-backfill-reviewed',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+        }),
+    );
+});
+
+void test('order ownership operation logs only aggregate evidence and preserves the runtime', () => {
+    const runtimeSha = 'b'.repeat(40);
+    const operationDigest = 'c'.repeat(64);
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'apply-order-sales-ownership-backfill-reviewed',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+        OPS_EXPECTED_PLAN_SHA256: operationDigest,
+    });
+    const runtime = { markerSha: runtimeSha, currentRuntime: '/immutable/runtime' };
+    const aggregate = {
+        format: 1,
+        schema: 'vendure-order-sales-ownership-backfill',
+        mode: 'deterministic-channel-membership',
+        candidateCount: 10,
+        countsByChannel: { __default_channel__: 7, 'moyao-ai': 3 },
+        operationDigest,
+    };
+    let backupCount = 0;
+    const result = operations.runOrderSalesOwnershipBackfill(request, {
+        inspect: () => structuredClone(runtime),
+        health: () => ({
+            status: 'ok',
+            output: 'Result=success\nExecMainStatus=0\nActiveState=inactive',
+        }),
+        backup: () => {
+            backupCount++;
+            return { file: '/safe/backup.sql.gz', invocationId: 'd'.repeat(32), offsite: true };
+        },
+        spawn: (_command, arguments_, options) => {
+            const operation = arguments_.at(-1) === operationDigest ? 'apply' : 'plan';
+            assert.equal(options.env.STORE_ISOLATION_MODULE_ROOT, runtime.currentRuntime);
+            return {
+                status: 0,
+                stdout:
+                    `ORDER_SALES_OWNERSHIP_${operation.toUpperCase()} ${JSON.stringify(aggregate)}\n` +
+                    `ORDER_SALES_OWNERSHIP_BACKFILL_OK operation=${operation}\n`,
+                stderr: 'PRIVATE_ERROR_NOT_FORWARDED',
+            };
+        },
+        script: '/fixed/backfill.mjs',
+    });
+    assert.equal(backupCount, 1);
+    assert.equal(result.applied, true);
+    assert.equal(result.plan.candidateCount, 10);
 });
 
 void test('store isolation audit validates sanitized output and stable runtime evidence', () => {

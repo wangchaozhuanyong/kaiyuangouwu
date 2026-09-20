@@ -45,6 +45,40 @@ Normal deployment, verification, rollback and branch cleanup continue to use
 the existing workflows described in `DEPLOYMENT_RUNBOOK.md`. This operation
 does not promote an application release or change its version marker.
 
+## Backfill historical order sales ownership
+
+The store-isolation audit can identify legacy orders whose immutable
+`salesChannelId` is missing even though their existing Channel memberships are
+unambiguous. Plan the repair against the exact running runtime:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=plan-order-sales-ownership-backfill \
+    -f source_sha=<latest-main-sha> \
+    -f expected_runtime_sha=<running-runtime-sha>
+```
+
+The plan reports only aggregate counts by Channel and an operation digest; order
+identifiers never leave the production host. The fixed mapping prefers the sole
+non-default membership and otherwise retains the default-only membership. Missing
+memberships or multiple non-default memberships stop the plan.
+
+After reviewing the aggregate counts and exact digest, run the reviewed write:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=apply-order-sales-ownership-backfill-reviewed \
+    -f source_sha=<latest-main-sha> \
+    -f expected_runtime_sha=<running-runtime-sha> \
+    -f expected_plan_sha256=<reviewed-operation-digest>
+```
+
+The write holds the production deployment lock, recomputes the plan, creates and
+verifies a fresh offsite MySQL backup, updates only still-null owner fields in one
+transaction, and checks both completeness and Channel membership before commit.
+Any drift requires a new read-only plan. Re-run `audit-store-isolation-data`
+afterward; this operation does not move domains, content, catalog, or customers.
+
 ## Separate 2FA key recovery
 
 The same fixed workflow can back up the two existing 2FA encryption keys to
