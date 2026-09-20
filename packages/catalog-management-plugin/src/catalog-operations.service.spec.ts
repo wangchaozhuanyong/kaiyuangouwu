@@ -70,6 +70,17 @@ function createService() {
     };
 }
 
+function queryBuilderReturning<T>(items: T[]) {
+    const builder = {
+        leftJoinAndSelect: vi.fn(),
+        where: vi.fn(),
+        getMany: vi.fn().mockResolvedValue(items),
+    };
+    builder.leftJoinAndSelect.mockReturnValue(builder);
+    builder.where.mockReturnValue(builder);
+    return builder;
+}
+
 const productInput = {
     id: 'product-1',
     enabled: true,
@@ -658,48 +669,51 @@ describe('CatalogOperationsService', () => {
             items: [
                 {
                     id: 'variant-1',
+                    productId: 'product-1',
                     sku: 'SKU-SAFE-1',
                     price: 200,
                     currencyCode: CurrencyCode.CNY,
                     enabled: true,
+                    customFields: {},
                 },
             ],
             totalItems: 1,
         });
-        const mockRepo = {
-            find: vi.fn((query: any) => {
-                if (query?.relations?.includes('product')) {
-                    return Promise.resolve([
-                        {
-                            id: 'variant-1',
-                            sku: 'SKU-SAFE-1',
-                            price: 200,
-                            currencyCode: CurrencyCode.CNY,
-                            enabled: true,
-                            product: {
-                                id: 'product-1',
-                                enabled: true,
-                                createdAt: new Date(),
-                                translations: [],
-                                facetValues: [],
-                            },
-                            // collections and stockLevels may be unpopulated or missing
-                            collections: undefined,
-                            stockLevels: [
-                                {
-                                    stockLocationId: 'stock-1',
-                                    stockLocation: undefined, // unpopulated relation!
-                                    stockOnHand: 15,
-                                    stockAllocated: 2,
-                                },
-                            ],
-                        },
-                    ]);
-                }
-                return Promise.resolve([]);
-            }),
+        const productQuery = queryBuilderReturning([
+            {
+                id: 'product-1',
+                enabled: true,
+                createdAt: new Date(),
+                translations: [],
+                facetValues: [],
+            },
+        ]);
+        const collectionQuery = queryBuilderReturning([
+            {
+                id: 'variant-1',
+                // collections may be unpopulated or missing
+                collections: undefined,
+            },
+        ]);
+        const stockLevelRepository = {
+            find: vi.fn().mockResolvedValue([
+                {
+                    productVariantId: 'variant-1',
+                    stockLocationId: 'stock-1',
+                    stockLocation: undefined, // unpopulated relation!
+                    stockOnHand: 15,
+                    stockAllocated: 2,
+                },
+            ]),
         };
-        (connection as any).getRepository = vi.fn(() => mockRepo);
+        const emptyRepository = { find: vi.fn().mockResolvedValue([]) };
+        (connection as any).getRepository = vi.fn((_ctx: unknown, entity: unknown) => {
+            const entityName = (entity as { name?: string })?.name;
+            if (entityName === 'Product') return { createQueryBuilder: vi.fn(() => productQuery) };
+            if (entityName === 'ProductVariant') return { createQueryBuilder: vi.fn(() => collectionQuery) };
+            if (entityName === 'StockLevel') return stockLevelRepository;
+            return emptyRepository;
+        });
         const suppliersAssociations = vi.fn().mockResolvedValue([]);
         (service as any).suppliers = { associations: suppliersAssociations };
 
@@ -711,11 +725,13 @@ describe('CatalogOperationsService', () => {
             expect.anything(),
             expect.objectContaining({ skip: 0, take: 10 }),
         );
-        expect(mockRepo.find).toHaveBeenCalledWith(
-            expect.objectContaining({
-                relationLoadStrategy: 'query',
-                relations: expect.arrayContaining(['product', 'collections', 'stockLevels']),
-            }),
+        expect(productQuery.leftJoinAndSelect).toHaveBeenCalledWith('product.facetValues', 'facetValue');
+        expect(collectionQuery.leftJoinAndSelect).toHaveBeenCalledWith(
+            'collection.parent',
+            'parentCollection',
+        );
+        expect(stockLevelRepository.find).toHaveBeenCalledWith(
+            expect.objectContaining({ relations: ['stockLocation'] }),
         );
         expect(result.items).toHaveLength(1);
         expect(result.items[0].stockLevels).toEqual([
@@ -739,10 +755,12 @@ describe('CatalogOperationsService', () => {
             items: [
                 {
                     id: 'variant-tobacco',
+                    productId: 'product-tobacco',
                     sku: 'TOBACCO-1',
                     price: 200,
                     currencyCode: CurrencyCode.CNY,
                     enabled: true,
+                    customFields: {},
                 },
             ],
             totalItems: 1,
@@ -755,41 +773,28 @@ describe('CatalogOperationsService', () => {
                 translations: [{ languageCode: 'zh_Hans', name: '正品烟草' }],
             },
         };
-        const mockRepo = {
-            find: vi.fn((query: any) => {
-                if (query?.relations?.includes('product')) {
-                    expect(query.relations).toEqual(
-                        expect.arrayContaining(['collections.parent', 'collections.parent.translations']),
-                    );
-                    return Promise.resolve([
-                        {
-                            id: 'variant-tobacco',
-                            sku: 'TOBACCO-1',
-                            price: 200,
-                            currencyCode: CurrencyCode.CNY,
-                            enabled: true,
-                            customFields: {},
-                            product: {
-                                id: 'product-tobacco',
-                                enabled: true,
-                                createdAt: new Date(),
-                                translations: [{ languageCode: 'zh_Hans', name: '泰山商品' }],
-                                facetValues: [
-                                    {
-                                        facet: { code: 'catalog-import-category' },
-                                        translations: [{ languageCode: 'zh_Hans', name: '泰山' }],
-                                    },
-                                ],
-                            },
-                            collections: [child],
-                            stockLevels: [],
-                        },
-                    ]);
-                }
-                return Promise.resolve([]);
-            }),
-        };
-        (connection as any).getRepository = vi.fn(() => mockRepo);
+        const productQuery = queryBuilderReturning([
+            {
+                id: 'product-tobacco',
+                enabled: true,
+                createdAt: new Date(),
+                translations: [{ languageCode: 'zh_Hans', name: '泰山商品' }],
+                facetValues: [
+                    {
+                        facet: { code: 'catalog-import-category' },
+                        translations: [{ languageCode: 'zh_Hans', name: '泰山' }],
+                    },
+                ],
+            },
+        ]);
+        const collectionQuery = queryBuilderReturning([{ id: 'variant-tobacco', collections: [child] }]);
+        const emptyRepository = { find: vi.fn().mockResolvedValue([]) };
+        (connection as any).getRepository = vi.fn((_ctx: unknown, entity: unknown) => {
+            const entityName = (entity as { name?: string })?.name;
+            if (entityName === 'Product') return { createQueryBuilder: vi.fn(() => productQuery) };
+            if (entityName === 'ProductVariant') return { createQueryBuilder: vi.fn(() => collectionQuery) };
+            return emptyRepository;
+        });
         (service as any).suppliers = { associations: vi.fn().mockResolvedValue([]) };
 
         const result = await service.exportRows({
@@ -799,6 +804,10 @@ describe('CatalogOperationsService', () => {
 
         expect(result.items[0].importCategory).toBe('正品烟草 > 泰山');
         expect(result.items[0].categories).toEqual(expect.arrayContaining(['正品烟草 > 泰山', '泰山']));
+        expect(collectionQuery.leftJoinAndSelect).toHaveBeenCalledWith(
+            'parentCollection.translations',
+            'parentCollectionTranslation',
+        );
     });
 
     it('falls back to basic counts in integritySummary if an exception occurs during exportRows scan', async () => {
