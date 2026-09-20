@@ -5,8 +5,15 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { PaymentPage } from './payment-pages';
 
-const mocks = vi.hoisted(() => ({ refetch: vi.fn().mockResolvedValue({}), methods: [] }));
+const mocks = vi.hoisted(() => ({
+    refetch: vi.fn().mockResolvedValue({}),
+    methods: [],
+    preloadRoute: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
+vi.mock('./route-component-preload', () => ({
+    preloadStorefrontRouteComponent: mocks.preloadRoute,
+}));
 vi.mock('@tanstack/react-query', async importOriginal => ({
     ...(await importOriginal<typeof import('@tanstack/react-query')>()),
     useQuery: (options: { queryKey: string[] }) => ({

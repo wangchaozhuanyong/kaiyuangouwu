@@ -23,6 +23,7 @@ import { formatUsdtPaymentAmount, usdtPaymentReceipt } from './order-payment-dis
 import { orderStatusRefreshInterval } from './order-refresh';
 import { isPaymentCompletedOrderState, isTestPaymentMethod, paymentAvailability } from './payment-readiness';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
+import { preloadStorefrontRouteComponent } from './route-component-preload';
 import { PageSkeleton } from './route-loading';
 import { storefrontErrorCode, storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
@@ -288,10 +289,12 @@ export function PaymentPage({
         submissionLock.current = true;
         setSubmitting(true);
         setPaymentError('');
+        const confirmationRouteRequest = preloadStorefrontRouteComponent('order-confirmation');
         try {
             const confirmationToken =
                 confirmationTokenRef.current || (await api.createOrderConfirmationToken()).token;
             const paidOrder = await api.addPaymentToOrder(selectedMethod);
+            await confirmationRouteRequest;
             await onComplete(paidOrder, confirmationToken);
         } catch (requestError) {
             if (storefrontErrorCode(requestError) === 'COUPON_REMOVED_DURING_CHECKOUT_ERROR') {

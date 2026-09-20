@@ -3,6 +3,7 @@ import { Check, ChevronRight, Minus, Package, ShoppingBag, TicketPercent } from 
 import { useCallback, useEffect, useState } from 'react';
 
 import { cartLineCanSelect, cartSelectionState } from '../product-availability';
+import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { appliedCouponLabel } from '../storefront-coupons';
 import { CartPageContext } from '../storefront-page-contexts';
 import { routeHref, routeNavigateOptions, type RouteState } from '../storefront-router';
@@ -31,6 +32,7 @@ export interface CartPageProps {
     language: StorefrontLanguage;
     loading: boolean;
     selectionPending?: boolean;
+    checkoutPending?: boolean;
     editingBlocked?: boolean;
     commandUnknown?: boolean;
     onCancelPending?: () => void;
@@ -64,6 +66,7 @@ export function CartPage() {
         language,
         loading,
         selectionPending = false,
+        checkoutPending = false,
         editingBlocked = false,
         commandUnknown = false,
         onCancelPending,
@@ -477,15 +480,29 @@ export function CartPage() {
                     <button
                         type="button"
                         onClick={onCheckout}
-                        disabled={loading || locked || !cart?.selectedQuantity || selectedStockInvalid}
+                        onPointerEnter={() => void preloadStorefrontRouteComponent('checkout')}
+                        onFocus={() => void preloadStorefrontRouteComponent('checkout')}
+                        onTouchStart={() => void preloadStorefrontRouteComponent('checkout')}
+                        aria-busy={checkoutPending || undefined}
+                        disabled={
+                            loading ||
+                            checkoutPending ||
+                            locked ||
+                            !cart?.selectedQuantity ||
+                            selectedStockInvalid
+                        }
                     >
-                        {locked
+                        {checkoutPending
                             ? isZh
-                                ? '订单待支付'
-                                : 'Payment pending'
-                            : isZh
-                              ? `结算（${cart?.selectedQuantity ?? 0}）`
-                              : `Checkout (${cart?.selectedQuantity ?? 0})`}
+                                ? '正在进入结算…'
+                                : 'Opening checkout…'
+                            : locked
+                              ? isZh
+                                  ? '订单待支付'
+                                  : 'Payment pending'
+                              : isZh
+                                ? `结算（${cart?.selectedQuantity ?? 0}）`
+                                : `Checkout (${cart?.selectedQuantity ?? 0})`}
                     </button>
                 </div>
             )}

@@ -80,20 +80,20 @@ export function PaymentRoutePage() {
                     language={runtime.language}
                     onCancel={(order: Order) => void runtime.reopenPendingOrder(order)}
                     onOrderChange={(order: Order) => runtime.setCheckoutOrder(order)}
-                    onComplete={async (order: Order, confirmationToken: string) => {
+                    onComplete={(order: Order, confirmationToken: string) => {
                         runtime.setCompletedOrder(order);
                         runtime.setCheckoutOrder(order);
-                        await runtime.invalidateCustomerRouteQueries();
                         runtime.notify(isZh ? '支付状态已更新' : 'Payment status updated');
-                        try {
-                            runtime.setCart(await runtime.api.cart());
-                        } catch {
-                            // The cart query will recover independently after a successful payment.
-                        }
                         runtime.navigate(
                             { name: 'order-confirmation', id: order.code, token: confirmationToken },
                             true,
                         );
+                        void runtime.invalidateCustomerRouteQueries().catch(() => undefined);
+                        void runtime.api
+                            .cart()
+                            .then((cart: StorefrontCart) => runtime.setCart(cart))
+                            .catch(() => undefined);
+                        return Promise.resolve();
                     }}
                 />
             </AuthPageBoundary>

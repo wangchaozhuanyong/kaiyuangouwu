@@ -267,6 +267,19 @@ describe('unified cart controller', () => {
         expect(controller.getSnapshot().cart?.lines[0].quantity).toBe(1);
     });
 
+    it('keeps confirmed totals visible while a checkout command is pending', async () => {
+        vi.useFakeTimers();
+        const { controller } = await setup();
+        const checkout = controller.execute({ beginCheckout: true });
+        expect(controller.getSnapshot()).toMatchObject({
+            pending: true,
+            totalsPending: false,
+            editingBlocked: true,
+        });
+        await vi.advanceTimersByTimeAsync(80);
+        await checkout;
+    });
+
     it('recovers a committed response loss by its original id without repeating the write', async () => {
         vi.useFakeTimers();
         const { controller, apply, recover } = await setup();

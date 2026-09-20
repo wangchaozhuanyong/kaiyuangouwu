@@ -359,6 +359,15 @@ export class CartController {
     private publish(): void {
         const confirmed = this.repository.snapshot;
         const pending = this.queue.length > 0;
+        const totalsPending = this.queue.some(item => {
+            const operation = item.operation;
+            if ('changes' in operation || 'coupon' in operation || 'buyNow' in operation) return true;
+            if ('prepareShipping' in operation) return true;
+            return (
+                'order' in operation &&
+                ('currencyCode' in operation.order || 'shippingMethodId' in operation.order)
+            );
+        });
         this.state = {
             confirmed,
             cart: cartView(
@@ -367,7 +376,7 @@ export class CartController {
             ),
             phase: this.phase,
             pending,
-            totalsPending: pending,
+            totalsPending,
             editingBlocked:
                 this.phase === 'unknown' ||
                 this.phase === 'recovering' ||
@@ -376,6 +385,7 @@ export class CartController {
                 this.queue.some(
                     item =>
                         ('order' in item.operation && 'currencyCode' in item.operation.order) ||
+                        'beginCheckout' in item.operation ||
                         'preparePayment' in item.operation ||
                         'buyNow' in item.operation,
                 ),
