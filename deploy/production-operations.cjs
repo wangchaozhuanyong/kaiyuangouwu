@@ -211,16 +211,16 @@ function inspectDeploymentCacheCleanup(
         directories = DEPLOYMENT_CACHE_DIRECTORIES,
         inspectRepository = inspectRepositoryState,
         inspectRuntime = inspectProductionReleases,
+        assertRepositoryRevision = assertStorefrontInspectionRevision,
         sizeDirectory = directorySizeKib,
     } = {},
 ) {
+    const initialRepository = inspectRepository(sourceSha);
+    assert.equal(initialRepository.status, 'ok', 'Repository state is unavailable');
+    assertRepositoryRevision(initialRepository.head, sourceSha);
     const repository = inspectRepository(sourceSha);
     assert.equal(repository.status, 'ok', 'Repository state is unavailable');
-    assert.equal(
-        repository.headMatchesOperationsSource,
-        true,
-        'Repository HEAD does not match operations source',
-    );
+    assert.equal(repository.head, initialRepository.head, 'Repository HEAD changed during cache inspection');
     assert.equal(
         repository.originMainMatchesOperationsSource,
         true,

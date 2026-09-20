@@ -58,10 +58,10 @@ gh workflow run production_operations.yml --ref main \
 ```
 
 The plan is limited to fixed package-cache paths. It requires the server source
-checkout to match the reviewed `main` revision with no tracked changes, proves
-that no candidate contains the current immutable runtime, and reports each
-candidate's size. It never includes `.env` files, uploads, logs, database
-backups, release directories, Git data or application data.
+checkout to be an ancestor of the reviewed `main` revision with no tracked
+changes, proves that no candidate contains the current immutable runtime, and
+reports each candidate's size. It never includes `.env` files, uploads, logs,
+database backups, release directories, Git data or application data.
 
 After reviewing the exact candidates and total size, apply the bound plan:
 
