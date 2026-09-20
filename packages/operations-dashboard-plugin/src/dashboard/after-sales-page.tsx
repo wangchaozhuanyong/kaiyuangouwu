@@ -52,11 +52,17 @@ import {
     AfterSalesRequestsResult,
     AfterSalesState,
     afterSalesRequestsQuery,
+    afterSalesStockLocationsQuery,
+    inspectAfterSalesReturnMutation,
+    receiveAfterSalesReturnMutation,
     transitionAfterSalesRequestMutation,
+    updateAfterSalesReplacementMutation,
 } from './after-sales.graphql';
 
 type TransitionTarget = Extract<AfterSalesState, 'APPROVED' | 'REJECTED' | 'COMPLETED'>;
-type AfterSalesView = Extract<AfterSalesState, 'PENDING' | 'APPROVED' | 'COMPLETED'> | 'CLOSED';
+type AfterSalesView =
+    Extract<AfterSalesState, 'PENDING' | 'APPROVED' | 'COMPLETED'> | 'EXCEPTIONS' | 'CLOSED';
+type WorkflowAction = 'RECEIVE' | 'INSPECT' | 'SHIP' | 'EXCEPTION' | 'DELIVERED';
 
 interface TransitionDraft {
     request: AfterSalesRequestRecord;
@@ -64,6 +70,25 @@ interface TransitionDraft {
     resolution: string;
     approvedAmount: string;
     refundId: string;
+    returnInstructions: string;
+}
+
+interface WorkflowDraft {
+    request: AfterSalesRequestRecord;
+    action: WorkflowAction;
+    idempotencyKey: string;
+    note: string;
+    carrier: string;
+    trackingCode: string;
+    proofReference: string;
+    items: Record<
+        string,
+        { acceptedQuantity: number; rejectedQuantity: number; stockLocationId: string; lotCode: string }
+    >;
+}
+
+interface StockLocationsResult {
+    stockLocations: { items: Array<{ id: string; name: string }> };
 }
 
 const messages = {
@@ -161,6 +186,62 @@ const messages = {
         message: 'Return and refund',
     }),
     typeRefundOnly: msg({ id: 'operations.afterSales.type.refundOnly', message: 'Refund only' }),
+    typeExchange: msg({ id: 'operations.afterSales.type.exchange', message: 'Exchange' }),
+    typeReship: msg({ id: 'operations.afterSales.type.reship', message: 'Reship' }),
+    exceptions: msg({ id: 'operations.afterSales.exceptions', message: 'Overdue / exception' }),
+    workflow: msg({ id: 'operations.afterSales.workflow', message: 'Return and replacement workflow' }),
+    returnStatus: msg({ id: 'operations.afterSales.returnStatus', message: 'Return status' }),
+    replacementStatus: msg({
+        id: 'operations.afterSales.replacementStatus',
+        message: 'Replacement status',
+    }),
+    nextActionDue: msg({ id: 'operations.afterSales.nextActionDue', message: 'Next action due' }),
+    overdue: msg({ id: 'operations.afterSales.overdue', message: 'Overdue' }),
+    returnInstructions: msg({
+        id: 'operations.afterSales.returnInstructions',
+        message: 'Return instructions',
+    }),
+    returnInstructionsHint: msg({
+        id: 'operations.afterSales.returnInstructionsHint',
+        message: 'Required for return and exchange approvals. The customer will see these instructions.',
+    }),
+    receiveReturn: msg({ id: 'operations.afterSales.receiveReturn', message: 'Confirm return received' }),
+    inspectReturn: msg({ id: 'operations.afterSales.inspectReturn', message: 'Inspect and restock' }),
+    shipReplacement: msg({
+        id: 'operations.afterSales.shipReplacement',
+        message: 'Record replacement shipment',
+    }),
+    reportException: msg({
+        id: 'operations.afterSales.reportException',
+        message: 'Record shipment exception',
+    }),
+    markDelivered: msg({ id: 'operations.afterSales.markDelivered', message: 'Mark delivered' }),
+    workflowNote: msg({ id: 'operations.afterSales.workflowNote', message: 'Operation note' }),
+    carrier: msg({ id: 'operations.afterSales.carrier', message: 'Carrier' }),
+    trackingCode: msg({ id: 'operations.afterSales.trackingCode', message: 'Tracking code' }),
+    deliveryProof: msg({ id: 'operations.afterSales.deliveryProof', message: 'Delivery proof reference' }),
+    acceptedQuantity: msg({
+        id: 'operations.afterSales.acceptedQuantity',
+        message: 'Accepted quantity',
+    }),
+    rejectedQuantity: msg({
+        id: 'operations.afterSales.rejectedQuantity',
+        message: 'Rejected quantity',
+    }),
+    stockLocation: msg({ id: 'operations.afterSales.stockLocation', message: 'Stock location' }),
+    lotCode: msg({ id: 'operations.afterSales.lotCode', message: 'Return lot code' }),
+    invalidWorkflow: msg({
+        id: 'operations.afterSales.invalidWorkflow',
+        message: 'Complete all required workflow fields before saving',
+    }),
+    workflowUpdated: msg({
+        id: 'operations.afterSales.workflowUpdated',
+        message: 'After-sales workflow updated',
+    }),
+    completionBlocked: msg({
+        id: 'operations.afterSales.completionBlocked',
+        message: 'Complete return inspection and replacement delivery before closing this request.',
+    }),
     transitionApprove: msg({
         id: 'operations.afterSales.transition.approve',
         message: 'Approve request',
@@ -177,7 +258,7 @@ const messages = {
 
 type AfterSalesText = Record<keyof typeof messages, string>;
 
-const views: AfterSalesView[] = ['PENDING', 'APPROVED', 'COMPLETED', 'CLOSED'];
+const views: AfterSalesView[] = ['PENDING', 'APPROVED', 'EXCEPTIONS', 'COMPLETED', 'CLOSED'];
 const PAGE_SIZE = 20;
 
 export const afterSalesRoute: DashboardRouteDefinition = {
@@ -202,6 +283,7 @@ function AfterSalesPage() {
     const [skip, setSkip] = useState(0);
     const [selected, setSelected] = useState<AfterSalesRequestRecord | null>(null);
     const [draft, setDraft] = useState<TransitionDraft | null>(null);
+    const [workflowDraft, setWorkflowDraft] = useState<WorkflowDraft | null>(null);
     const query = useQuery({
         queryKey: ['operations-after-sales', activeChannel?.id, view, skip],
         queryFn: () =>
@@ -209,9 +291,18 @@ function AfterSalesPage() {
                 options: {
                     skip,
                     take: PAGE_SIZE,
-                    ...(view === 'CLOSED' ? { states: ['REJECTED', 'CANCELLED'] } : { state: view }),
+                    ...(view === 'CLOSED'
+                        ? { states: ['REJECTED', 'CANCELLED'] }
+                        : view === 'EXCEPTIONS'
+                          ? { exceptionsOnly: true }
+                          : { state: view }),
                 },
             }),
+        enabled: Boolean(activeChannel?.id),
+    });
+    const stockLocationsQuery = useQuery({
+        queryKey: ['operations-after-sales-stock-locations', activeChannel?.id],
+        queryFn: () => api.query<StockLocationsResult>(afterSalesStockLocationsQuery),
         enabled: Boolean(activeChannel?.id),
     });
     const requests = query.data?.afterSalesRequests.items ?? [];
@@ -229,12 +320,70 @@ function AfterSalesPage() {
                     resolution: input.resolution.trim(),
                     ...(approvedAmount == null ? {} : { approvedAmount }),
                     ...(input.state === 'COMPLETED' && input.refundId ? { refundId: input.refundId } : {}),
+                    ...(input.state === 'APPROVED' && input.returnInstructions.trim()
+                        ? { returnInstructions: input.returnInstructions.trim() }
+                        : {}),
                 },
             });
         },
         onSuccess: async () => {
             toast.success(text.updated);
             setDraft(null);
+            setSelected(null);
+            await query.refetch();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const workflow = useMutation({
+        mutationFn: (input: WorkflowDraft) => {
+            const baseInput = {
+                id: input.request.id,
+                note: input.note.trim(),
+                idempotencyKey: input.idempotencyKey,
+            };
+            if (input.action === 'RECEIVE') {
+                return api.mutate(receiveAfterSalesReturnMutation, { input: baseInput });
+            }
+            if (input.action === 'INSPECT') {
+                return api.mutate(inspectAfterSalesReturnMutation, {
+                    input: {
+                        ...baseInput,
+                        items: input.request.items.map(item => {
+                            const line = input.items[item.id];
+                            return {
+                                itemId: item.id,
+                                acceptedQuantity: line.acceptedQuantity,
+                                rejectedQuantity: line.rejectedQuantity,
+                                ...(line.acceptedQuantity > 0
+                                    ? {
+                                          stockLocationId: line.stockLocationId,
+                                          lotCode: line.lotCode.trim(),
+                                      }
+                                    : {}),
+                            };
+                        }),
+                    },
+                });
+            }
+            const status =
+                input.action === 'SHIP'
+                    ? 'SHIPPED'
+                    : input.action === 'EXCEPTION'
+                      ? 'EXCEPTION'
+                      : 'DELIVERED';
+            return api.mutate(updateAfterSalesReplacementMutation, {
+                input: {
+                    ...baseInput,
+                    status,
+                    ...(input.carrier.trim() ? { carrier: input.carrier.trim() } : {}),
+                    ...(input.trackingCode.trim() ? { trackingCode: input.trackingCode.trim() } : {}),
+                    ...(input.proofReference.trim() ? { proofReference: input.proofReference.trim() } : {}),
+                },
+            });
+        },
+        onSuccess: async () => {
+            toast.success(text.workflowUpdated);
+            setWorkflowDraft(null);
             setSelected(null);
             await query.refetch();
         },
@@ -248,6 +397,30 @@ function AfterSalesPage() {
             resolution: request.resolution ?? '',
             approvedAmount: formatMajorAmount(request.approvedAmount ?? request.requestedAmount),
             refundId: defaultSettledRefund(request)?.id ?? '',
+            returnInstructions: request.returnInstructions ?? '',
+        });
+    };
+    const openWorkflow = (request: AfterSalesRequestRecord, action: WorkflowAction) => {
+        const defaultLocation = stockLocationsQuery.data?.stockLocations.items[0]?.id ?? '';
+        setWorkflowDraft({
+            request,
+            action,
+            idempotencyKey: operationKey(request.id, action),
+            note: '',
+            carrier: request.replacementCarrier ?? '',
+            trackingCode: request.replacementTrackingCode ?? '',
+            proofReference: request.replacementProofReference ?? '',
+            items: Object.fromEntries(
+                request.items.map(item => [
+                    item.id,
+                    {
+                        acceptedQuantity: item.quantity,
+                        rejectedQuantity: 0,
+                        stockLocationId: item.returnStockLocation?.id ?? defaultLocation,
+                        lotCode: item.returnLotCode ?? `RETURN-${request.code}-${item.sku}`,
+                    },
+                ]),
+            ),
         });
     };
     const submit = () => {
@@ -262,12 +435,51 @@ function AfterSalesPage() {
                 toast.error(text.invalidAmount);
                 return;
             }
+            if (requiresReturn(draft.request) && !draft.returnInstructions.trim()) {
+                toast.error(text.returnInstructionsHint);
+                return;
+            }
         }
         if (draft.state === 'COMPLETED' && (draft.request.approvedAmount ?? 0) > 0 && !draft.refundId) {
             toast.error(text.missingRefund);
             return;
         }
         transition.mutate(draft);
+    };
+    const submitWorkflow = () => {
+        if (!workflowDraft) return;
+        if (!workflowDraft.note.trim()) {
+            toast.error(text.invalidWorkflow);
+            return;
+        }
+        if (
+            workflowDraft.action === 'SHIP' &&
+            (!workflowDraft.carrier.trim() || !workflowDraft.trackingCode.trim())
+        ) {
+            toast.error(text.invalidWorkflow);
+            return;
+        }
+        if (workflowDraft.action === 'DELIVERED' && !workflowDraft.proofReference.trim()) {
+            toast.error(text.invalidWorkflow);
+            return;
+        }
+        if (workflowDraft.action === 'INSPECT') {
+            const invalid = workflowDraft.request.items.some(item => {
+                const line = workflowDraft.items[item.id];
+                return (
+                    !line ||
+                    line.acceptedQuantity < 0 ||
+                    line.rejectedQuantity < 0 ||
+                    line.acceptedQuantity + line.rejectedQuantity !== item.quantity ||
+                    (line.acceptedQuantity > 0 && (!line.stockLocationId || !line.lotCode.trim()))
+                );
+            });
+            if (invalid) {
+                toast.error(text.invalidWorkflow);
+                return;
+            }
+        }
+        workflow.mutate(workflowDraft);
     };
 
     return (
@@ -372,9 +584,10 @@ function AfterSalesPage() {
             <RequestDetailsSheet
                 request={selected}
                 text={text}
-                pending={transition.isPending}
+                pending={transition.isPending || workflow.isPending}
                 onClose={() => setSelected(null)}
                 onTransition={target => selected && openTransition(selected, target)}
+                onWorkflow={action => selected && openWorkflow(selected, action)}
             />
             <TransitionDialog
                 draft={draft}
@@ -383,6 +596,15 @@ function AfterSalesPage() {
                 onChange={setDraft}
                 onClose={() => !transition.isPending && setDraft(null)}
                 onSubmit={submit}
+            />
+            <WorkflowDialog
+                draft={workflowDraft}
+                text={text}
+                pending={workflow.isPending}
+                stockLocations={stockLocationsQuery.data?.stockLocations.items ?? []}
+                onChange={setWorkflowDraft}
+                onClose={() => !workflow.isPending && setWorkflowDraft(null)}
+                onSubmit={submitWorkflow}
             />
         </Page>
     );
@@ -441,14 +663,17 @@ function RequestDetailsSheet({
     pending,
     onClose,
     onTransition,
+    onWorkflow,
 }: {
     request: AfterSalesRequestRecord | null;
     text: AfterSalesText;
     pending: boolean;
     onClose: () => void;
     onTransition: (state: TransitionTarget) => void;
+    onWorkflow: (action: WorkflowAction) => void;
 }) {
     const requiresVerifiedRefund = request?.state === 'APPROVED' && (request.approvedAmount ?? 0) > 0;
+    const completionReady = request ? isCompletionReady(request) : false;
     return (
         <Sheet open={Boolean(request)} onOpenChange={open => !open && onClose()}>
             <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
@@ -462,6 +687,68 @@ function RequestDetailsSheet({
                                 </Badge>
                                 <Badge variant="outline">{typeLabel(request.type, text)}</Badge>
                             </div>
+                            <section className="rounded-lg border p-4">
+                                <h3 className="text-sm font-medium">{text.workflow}</h3>
+                                <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                                    <div>
+                                        <dt className="text-muted-foreground">{text.returnStatus}</dt>
+                                        <dd className="mt-1 font-medium">
+                                            {returnStatusLabel(request.returnStatus)}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-muted-foreground">{text.replacementStatus}</dt>
+                                        <dd className="mt-1 font-medium">
+                                            {replacementStatusLabel(request.replacementStatus)}
+                                        </dd>
+                                    </div>
+                                    {request.nextActionDueAt && (
+                                        <div className="sm:col-span-2">
+                                            <dt className="text-muted-foreground">{text.nextActionDue}</dt>
+                                            <dd className="mt-1 flex items-center gap-2 font-medium">
+                                                {formatDate(request.nextActionDueAt)}
+                                                {request.overdue && (
+                                                    <Badge variant="destructive">{text.overdue}</Badge>
+                                                )}
+                                            </dd>
+                                        </div>
+                                    )}
+                                    {request.returnInstructions && (
+                                        <div className="sm:col-span-2">
+                                            <dt className="text-muted-foreground">
+                                                {text.returnInstructions}
+                                            </dt>
+                                            <dd className="mt-1 whitespace-pre-wrap">
+                                                {request.returnInstructions}
+                                            </dd>
+                                        </div>
+                                    )}
+                                    {request.returnTrackingCode && (
+                                        <div className="sm:col-span-2">
+                                            <dt className="text-muted-foreground">{text.trackingCode}</dt>
+                                            <dd className="mt-1 font-medium">
+                                                {request.returnCarrier} · {request.returnTrackingCode}
+                                            </dd>
+                                        </div>
+                                    )}
+                                    {request.replacementTrackingCode && (
+                                        <div className="sm:col-span-2">
+                                            <dt className="text-muted-foreground">
+                                                {text.replacementStatus}
+                                            </dt>
+                                            <dd className="mt-1 font-medium">
+                                                {request.replacementCarrier} ·{' '}
+                                                {request.replacementTrackingCode}
+                                            </dd>
+                                        </div>
+                                    )}
+                                    {request.replacementException && (
+                                        <div className="sm:col-span-2 text-destructive">
+                                            {request.replacementException}
+                                        </div>
+                                    )}
+                                </dl>
+                            </section>
                             <SheetDescription>
                                 {text.order} {request.order.code} · {text.customer} {request.customerName} (
                                 {request.customerEmail})
@@ -546,6 +833,11 @@ function RequestDetailsSheet({
                                     <AlertDescription>{text.refundReminder}</AlertDescription>
                                 </Alert>
                             )}
+                            {request.state === 'APPROVED' && !completionReady && (
+                                <Alert>
+                                    <AlertDescription>{text.completionBlocked}</AlertDescription>
+                                </Alert>
+                            )}
                         </div>
                         {(request.state === 'PENDING' || request.state === 'APPROVED') && (
                             <SheetFooter className="flex-row flex-wrap border-t px-6 py-4 sm:justify-end">
@@ -567,6 +859,60 @@ function RequestDetailsSheet({
                                 )}
                                 {request.state === 'APPROVED' && (
                                     <>
+                                        {request.returnStatus === 'IN_TRANSIT' && (
+                                            <Button
+                                                variant="outline"
+                                                disabled={pending}
+                                                onClick={() => onWorkflow('RECEIVE')}
+                                            >
+                                                {text.receiveReturn}
+                                            </Button>
+                                        )}
+                                        {request.returnStatus === 'RECEIVED' && (
+                                            <Button
+                                                variant="outline"
+                                                disabled={pending}
+                                                onClick={() => onWorkflow('INSPECT')}
+                                            >
+                                                {text.inspectReturn}
+                                            </Button>
+                                        )}
+                                        {request.replacementStatus === 'PENDING' && (
+                                            <Button
+                                                variant="outline"
+                                                disabled={pending}
+                                                onClick={() => onWorkflow('SHIP')}
+                                            >
+                                                {text.shipReplacement}
+                                            </Button>
+                                        )}
+                                        {request.replacementStatus === 'SHIPPED' && (
+                                            <Button
+                                                variant="outline"
+                                                disabled={pending}
+                                                onClick={() => onWorkflow('EXCEPTION')}
+                                            >
+                                                {text.reportException}
+                                            </Button>
+                                        )}
+                                        {['SHIPPED', 'EXCEPTION'].includes(request.replacementStatus) && (
+                                            <Button
+                                                variant="outline"
+                                                disabled={pending}
+                                                onClick={() => onWorkflow('DELIVERED')}
+                                            >
+                                                {text.markDelivered}
+                                            </Button>
+                                        )}
+                                        {request.replacementStatus === 'EXCEPTION' && (
+                                            <Button
+                                                variant="outline"
+                                                disabled={pending}
+                                                onClick={() => onWorkflow('SHIP')}
+                                            >
+                                                {text.shipReplacement}
+                                            </Button>
+                                        )}
                                         {requiresVerifiedRefund && (
                                             <Button
                                                 variant="outline"
@@ -581,7 +927,10 @@ function RequestDetailsSheet({
                                                 {text.openOrder}
                                             </Button>
                                         )}
-                                        <Button disabled={pending} onClick={() => onTransition('COMPLETED')}>
+                                        <Button
+                                            disabled={pending || !completionReady}
+                                            onClick={() => onTransition('COMPLETED')}
+                                        >
                                             <CheckCircle2 className="size-4" aria-hidden="true" />
                                             {requiresVerifiedRefund
                                                 ? text.completeAfterRefund
@@ -625,19 +974,43 @@ function TransitionDialog({
                 </DialogHeader>
                 <div className="space-y-4 py-2">
                     {draft.state === 'APPROVED' && (
-                        <div className="space-y-1.5">
-                            <Label htmlFor="after-sales-approved-amount">{text.amount}</Label>
-                            <Input
-                                id="after-sales-approved-amount"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={draft.approvedAmount}
-                                disabled={pending}
-                                onChange={event => onChange({ ...draft, approvedAmount: event.target.value })}
-                            />
-                            <p className="text-xs text-muted-foreground">{text.amountHint}</p>
-                        </div>
+                        <>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="after-sales-approved-amount">{text.amount}</Label>
+                                <Input
+                                    id="after-sales-approved-amount"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={draft.approvedAmount}
+                                    disabled={pending}
+                                    onChange={event =>
+                                        onChange({ ...draft, approvedAmount: event.target.value })
+                                    }
+                                />
+                                <p className="text-xs text-muted-foreground">{text.amountHint}</p>
+                            </div>
+                            {requiresReturn(draft.request) && (
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="after-sales-return-instructions">
+                                        {text.returnInstructions}
+                                    </Label>
+                                    <Textarea
+                                        id="after-sales-return-instructions"
+                                        rows={4}
+                                        maxLength={2000}
+                                        value={draft.returnInstructions}
+                                        disabled={pending}
+                                        onChange={event =>
+                                            onChange({ ...draft, returnInstructions: event.target.value })
+                                        }
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        {text.returnInstructionsHint}
+                                    </p>
+                                </div>
+                            )}
+                        </>
                     )}
                     {draft.state === 'COMPLETED' && (draft.request.approvedAmount ?? 0) > 0 && (
                         <div className="space-y-1.5">
@@ -691,6 +1064,187 @@ function TransitionDialog({
     );
 }
 
+function WorkflowDialog({
+    draft,
+    text,
+    pending,
+    stockLocations,
+    onChange,
+    onClose,
+    onSubmit,
+}: {
+    draft: WorkflowDraft | null;
+    text: AfterSalesText;
+    pending: boolean;
+    stockLocations: Array<{ id: string; name: string }>;
+    onChange: (draft: WorkflowDraft | null) => void;
+    onClose: () => void;
+    onSubmit: () => void;
+}) {
+    if (!draft) return null;
+    const title = workflowActionLabel(draft.action, text);
+    return (
+        <Dialog open onOpenChange={open => !open && onClose()}>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>{title}</DialogTitle>
+                    <DialogDescription>
+                        {draft.request.code} · {draft.request.order.code}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                    {draft.action === 'INSPECT' && (
+                        <div className="space-y-3">
+                            {draft.request.items.map(item => {
+                                const line = draft.items[item.id];
+                                const updateLine = (patch: Partial<WorkflowDraft['items'][string]>) =>
+                                    onChange({
+                                        ...draft,
+                                        items: {
+                                            ...draft.items,
+                                            [item.id]: { ...line, ...patch },
+                                        },
+                                    });
+                                return (
+                                    <div key={item.id} className="space-y-3 rounded-lg border p-3">
+                                        <div>
+                                            <strong className="text-sm">{item.productName}</strong>
+                                            <p className="text-xs text-muted-foreground">
+                                                {item.sku} ×{item.quantity}
+                                            </p>
+                                        </div>
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            <div className="space-y-1.5">
+                                                <Label>{text.acceptedQuantity}</Label>
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    max={item.quantity}
+                                                    value={line.acceptedQuantity}
+                                                    disabled={pending}
+                                                    onChange={event =>
+                                                        updateLine({
+                                                            acceptedQuantity: Number(event.target.value),
+                                                        })
+                                                    }
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>{text.rejectedQuantity}</Label>
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    max={item.quantity}
+                                                    value={line.rejectedQuantity}
+                                                    disabled={pending}
+                                                    onChange={event =>
+                                                        updateLine({
+                                                            rejectedQuantity: Number(event.target.value),
+                                                        })
+                                                    }
+                                                />
+                                            </div>
+                                            {line.acceptedQuantity > 0 && (
+                                                <>
+                                                    <div className="space-y-1.5">
+                                                        <Label>{text.stockLocation}</Label>
+                                                        <Select
+                                                            value={line.stockLocationId}
+                                                            onValueChange={value =>
+                                                                value &&
+                                                                updateLine({ stockLocationId: value })
+                                                            }
+                                                            disabled={pending}
+                                                        >
+                                                            <SelectTrigger>
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {stockLocations.map(location => (
+                                                                    <SelectItem
+                                                                        key={location.id}
+                                                                        value={location.id}
+                                                                    >
+                                                                        {location.name}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label>{text.lotCode}</Label>
+                                                        <Input
+                                                            value={line.lotCode}
+                                                            disabled={pending}
+                                                            onChange={event =>
+                                                                updateLine({ lotCode: event.target.value })
+                                                            }
+                                                        />
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                    {draft.action === 'SHIP' && (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="space-y-1.5">
+                                <Label>{text.carrier}</Label>
+                                <Input
+                                    value={draft.carrier}
+                                    disabled={pending}
+                                    onChange={event => onChange({ ...draft, carrier: event.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>{text.trackingCode}</Label>
+                                <Input
+                                    value={draft.trackingCode}
+                                    disabled={pending}
+                                    onChange={event =>
+                                        onChange({ ...draft, trackingCode: event.target.value })
+                                    }
+                                />
+                            </div>
+                        </div>
+                    )}
+                    {draft.action === 'DELIVERED' && (
+                        <div className="space-y-1.5">
+                            <Label>{text.deliveryProof}</Label>
+                            <Input
+                                value={draft.proofReference}
+                                disabled={pending}
+                                onChange={event => onChange({ ...draft, proofReference: event.target.value })}
+                            />
+                        </div>
+                    )}
+                    <div className="space-y-1.5">
+                        <Label>{text.workflowNote}</Label>
+                        <Textarea
+                            rows={4}
+                            maxLength={2000}
+                            value={draft.note}
+                            disabled={pending}
+                            onChange={event => onChange({ ...draft, note: event.target.value })}
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" disabled={pending} onClick={onClose}>
+                        {text.cancel}
+                    </Button>
+                    <Button disabled={pending || !draft.note.trim()} onClick={onSubmit}>
+                        {pending ? text.saving : text.save}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function translateMessages(t: ReturnType<typeof useLingui>['t']): AfterSalesText {
     return Object.fromEntries(
         Object.entries(messages).map(([key, descriptor]) => [key, t(descriptor)]),
@@ -710,11 +1264,60 @@ function stateLabel(state: AfterSalesState, text: AfterSalesText): string {
 
 function viewLabel(view: AfterSalesView, text: AfterSalesText): string {
     if (view === 'CLOSED') return text.closed;
+    if (view === 'EXCEPTIONS') return text.exceptions;
     return stateLabel(view, text);
 }
 
 function typeLabel(type: AfterSalesRequestRecord['type'], text: AfterSalesText): string {
-    return type === 'RETURN_AND_REFUND' ? text.typeReturnAndRefund : text.typeRefundOnly;
+    if (type === 'RETURN_AND_REFUND') return text.typeReturnAndRefund;
+    if (type === 'EXCHANGE') return text.typeExchange;
+    if (type === 'RESHIP') return text.typeReship;
+    return text.typeRefundOnly;
+}
+
+function returnStatusLabel(status: AfterSalesRequestRecord['returnStatus']): string {
+    const labels: Record<AfterSalesRequestRecord['returnStatus'], string> = {
+        NOT_REQUIRED: 'Not required',
+        AWAITING_SHIPMENT: 'Awaiting customer shipment',
+        IN_TRANSIT: 'Return in transit',
+        RECEIVED: 'Warehouse received',
+        INSPECTED: 'Inspection completed',
+    };
+    return labels[status];
+}
+
+function replacementStatusLabel(status: AfterSalesRequestRecord['replacementStatus']): string {
+    const labels: Record<AfterSalesRequestRecord['replacementStatus'], string> = {
+        NOT_REQUIRED: 'Not required',
+        PENDING: 'Awaiting shipment',
+        SHIPPED: 'In transit',
+        EXCEPTION: 'Shipment exception',
+        DELIVERED: 'Delivered',
+    };
+    return labels[status];
+}
+
+function workflowActionLabel(action: WorkflowAction, text: AfterSalesText): string {
+    if (action === 'RECEIVE') return text.receiveReturn;
+    if (action === 'INSPECT') return text.inspectReturn;
+    if (action === 'SHIP') return text.shipReplacement;
+    if (action === 'EXCEPTION') return text.reportException;
+    return text.markDelivered;
+}
+
+function requiresReturn(request: AfterSalesRequestRecord): boolean {
+    return request.type === 'RETURN_AND_REFUND' || request.type === 'EXCHANGE';
+}
+
+function isCompletionReady(request: AfterSalesRequestRecord): boolean {
+    const returnReady = !requiresReturn(request) || request.returnStatus === 'INSPECTED';
+    const replacementReady =
+        !['EXCHANGE', 'RESHIP'].includes(request.type) || request.replacementStatus === 'DELIVERED';
+    return returnReady && replacementReady;
+}
+
+function operationKey(requestId: string, action: WorkflowAction): string {
+    return `dashboard-${action.toLowerCase()}-${requestId}-${Date.now()}`;
 }
 
 function transitionLabel(state: TransitionTarget, text: AfterSalesText): string {

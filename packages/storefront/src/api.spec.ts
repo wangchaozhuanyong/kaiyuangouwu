@@ -2106,6 +2106,41 @@ describe('ShopApi storefront mutations', () => {
         expect(JSON.stringify(request.variables)).not.toContain('requestedAmount');
     });
 
+    it('submits customer return tracking through the guarded workflow mutation', async () => {
+        const response = { id: 'request-1', returnStatus: 'IN_TRANSIT' };
+        const fetchMock = mockGraphQlResponse({ submitMyAfterSalesReturnShipment: response });
+        const input = {
+            id: 'request-1',
+            carrier: 'Test Carrier',
+            trackingCode: 'RETURN-001',
+            idempotencyKey: 'return-key-1',
+        };
+
+        await expect(new ShopApi(market).submitAfterSalesReturnShipment(input)).resolves.toEqual(response);
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.query).toContain('mutation SubmitMyAfterSalesReturnShipment');
+        expect(request.variables).toEqual({ input });
+    });
+
+    it('lets the customer confirm replacement delivery with an idempotency key', async () => {
+        const response = { id: 'request-1', replacementStatus: 'DELIVERED' };
+        const fetchMock = mockGraphQlResponse({ confirmMyAfterSalesReplacement: response });
+        const input = { id: 'request-1', idempotencyKey: 'replacement-key-1' };
+
+        await expect(new ShopApi(market).confirmAfterSalesReplacement(input)).resolves.toEqual(response);
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.query).toContain('mutation ConfirmMyAfterSalesReplacement');
+        expect(request.variables).toEqual({ input });
+    });
+
     it('loads only server-approved product reviews through the public review query', async () => {
         const response = { items: [], totalItems: 0, averageRating: 4.25 };
         const fetchMock = mockGraphQlResponse({ storefrontProductReviews: response });

@@ -17,6 +17,7 @@ import { InventoryOperationLine } from './entities/inventory-operation-line.enti
 import { InventoryOperation, InventoryOperationType } from './entities/inventory-operation.entity';
 import {
     AdjustLegacyInventoryInput,
+    ReceiveCustomerReturnInput,
     ResolveInventoryReconciliationInput,
     SaveManualInventoryLotInput,
     TransferInventoryLotInput,
@@ -105,6 +106,93 @@ export class InventoryControlService {
 
     async adjustLegacyStock(ctx: RequestContext, input: AdjustLegacyInventoryInput) {
         return this.operations.adjustLegacyStock(ctx, input);
+    }
+
+    async receiveCustomerReturn(ctx: RequestContext, input: ReceiveCustomerReturnInput) {
+        const reason = requiredText(input.reason, 500, '退货入库原因');
+        const key = requiredText(input.idempotencyKey, 80, '幂等键');
+        const reference = requiredText(input.reference, 160, '售后引用');
+        if (!input.lines.length || input.lines.length > 100) {
+            throw new UserInputError('退货入库必须包含 1 到 100 个批次行');
+        }
+        const scopeKeys = new Set<string>();
+        for (const line of input.lines) {
+            validatePositiveInteger(line.quantity, '退货入库数量');
+            const lotCode = requiredText(line.lotCode, 80, '退货批次号');
+            const scopeKey = `${String(line.productVariantId)}:${String(line.stockLocationId)}:${lotCode}`;
+            if (scopeKeys.has(scopeKey)) throw new UserInputError('同一退货批次不能重复提交');
+            scopeKeys.add(scopeKey);
+        }
+        const sortedLines = [...input.lines].sort((left, right) =>
+            `${String(left.productVariantId)}:${String(left.stockLocationId)}:${left.lotCode}`.localeCompare(
+                `${String(right.productVariantId)}:${String(right.stockLocationId)}:${right.lotCode}`,
+            ),
+        );
+        return this.connection.withTransaction(ctx, async txCtx => {
+            const duplicate = await this.findOperationByKey(txCtx, key);
+            if (duplicate) {
+                requireOperationType(duplicate, 'CUSTOMER_RETURN');
+                return duplicate;
+            }
+            const snapshots: Array<{
+                line: ReceiveCustomerReturnInput['lines'][number];
+                inventoryLotId: ID;
+                previousLotQuantity: number;
+                resultingLotQuantity: number;
+                previousStockOnHand: number;
+                resultingStockOnHand: number;
+            }> = [];
+            for (const line of sortedLines) {
+                const previousStockOnHand = await this.lockStockOnHand(
+                    txCtx,
+                    line.productVariantId,
+                    line.stockLocationId,
+                );
+                const existing = await this.lockLotByIdentity(
+                    txCtx,
+                    line.productVariantId,
+                    line.stockLocationId,
+                    line.lotCode.trim(),
+                );
+                const previousLotQuantity = existing?.quantityOnHand ?? 0;
+                const saved = await this.operations.changeLotQuantity(txCtx, {
+                    id: existing?.id,
+                    productVariantId: line.productVariantId,
+                    stockLocationId: line.stockLocationId,
+                    lotCode: line.lotCode.trim(),
+                    quantityDelta: line.quantity,
+                    currencyCode: line.currencyCode,
+                    purchaseCostMicrounits: line.purchaseCostMicrounits,
+                });
+                snapshots.push({
+                    line,
+                    inventoryLotId: saved.id,
+                    previousLotQuantity,
+                    resultingLotQuantity: previousLotQuantity + line.quantity,
+                    previousStockOnHand,
+                    resultingStockOnHand: previousStockOnHand + line.quantity,
+                });
+            }
+            const operation = await this.createOperation(txCtx, 'CUSTOMER_RETURN', key, reason, reference);
+            await this.connection.getRepository(txCtx, InventoryOperationLine).save(
+                snapshots.map(
+                    snapshot =>
+                        new InventoryOperationLine({
+                            operationId: operation.id,
+                            variantId: snapshot.line.productVariantId,
+                            stockLocationId: snapshot.line.stockLocationId,
+                            inventoryLotId: snapshot.inventoryLotId,
+                            quantityDelta: snapshot.line.quantity,
+                            previousLotQuantity: snapshot.previousLotQuantity,
+                            resultingLotQuantity: snapshot.resultingLotQuantity,
+                            previousStockOnHand: snapshot.previousStockOnHand,
+                            resultingStockOnHand: snapshot.resultingStockOnHand,
+                            reconciliationMode: null,
+                        }),
+                ),
+            );
+            return this.operationById(txCtx, operation.id);
+        });
     }
 
     async transferLot(ctx: RequestContext, input: TransferInventoryLotInput) {
@@ -405,6 +493,28 @@ export class InventoryControlService {
         const lot = await query.getOne();
         if (!lot) throw new UserInputError('库存批次不存在');
         return lot;
+    }
+
+    private async lockLotByIdentity(
+        ctx: RequestContext,
+        variantId: ID,
+        stockLocationId: ID,
+        lotCode: string,
+    ): Promise<InventoryLot | null> {
+        const repository = this.connection.getRepository(ctx, InventoryLot);
+        const query = repository
+            .createQueryBuilder('lot')
+            .where('lot.variantId = :variantId', { variantId })
+            .andWhere('lot.stockLocationId = :stockLocationId', { stockLocationId })
+            .andWhere('lot.lotCode = :lotCode', { lotCode });
+        const type = String(repository.manager.connection.options.type);
+        if (
+            !['sqlite', 'better-sqlite3', 'sqljs'].includes(type) &&
+            repository.manager.queryRunner?.isTransactionActive
+        ) {
+            query.setLock('pessimistic_write');
+        }
+        return query.getOne();
     }
 
     private async lockLotsInScope(

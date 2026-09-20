@@ -5,7 +5,7 @@ import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from 'typeorm
 import { InventoryOperationLine } from './inventory-operation-line.entity';
 
 export type InventoryOperationType =
-    'MANUAL_LOT_COUNT' | 'LEGACY_STOCK_ADJUSTMENT' | 'LOT_TRANSFER' | 'RECONCILIATION';
+    'MANUAL_LOT_COUNT' | 'LEGACY_STOCK_ADJUSTMENT' | 'LOT_TRANSFER' | 'RECONCILIATION' | 'CUSTOMER_RETURN';
 
 @Entity({ name: 'catalog_inventory_operation' })
 @Index('IDX_catalog_inventory_operation_channel_key', ['channelId', 'idempotencyKey'], { unique: true })

@@ -14,7 +14,7 @@ This plan tracks whether each business capability has a complete loop rather tha
 | P0       | Incident response          | Security-event severity, owner, evidence preservation, notification workflow and recovery review                          | Implemented and locally verified; production migration and live alert exercise remain        |
 | P1       | Procurement                | Supplier, purchase order, receiving, variance, payable, return-to-supplier and performance score                          | Implemented and locally verified; production migration and browser exercise remain           |
 | P1       | Inventory                  | Reservation, receiving, adjustment, transfer, return disposition, low-stock alert and reconciliation                      | Implemented and locally verified; production migration and browser exercise remain           |
-| P1       | Fulfilment and after-sales | Shipment, carrier exception, delivery proof, cancellation, return, exchange, reship and refund                            | Existing pieces require closure audit                                                        |
+| P1       | Fulfilment and after-sales | Shipment, carrier exception, delivery proof, cancellation, return, exchange, reship and refund                            | After-sales recovery loop implemented and locally verified; outbound carrier proof remains   |
 | P1       | Customer operations        | Customer 360, service history, segmentation, RFM/LTV, churn signal and follow-up outcome                                  | Not started                                                                                  |
 | P1       | Marketing analytics        | Acquisition attribution, search terms, funnel, campaign cost, revenue, refund-adjusted ROI                                | Traffic exists; cost/attribution closure not verified                                        |
 | P1       | Finance                    | Revenue, discount, tax, cost, gateway fee, refund, chargeback and profit reconciliation                                   | Existing reports require closure audit                                                       |
@@ -156,6 +156,32 @@ Inventory acceptance gates:
 - [ ] Migration applied and inventory workflow exercised in a production-like database.
 - [ ] Release, running SHA and browser acceptance evidence.
 
+## Current P1 implementation: fulfilment and after-sales recovery
+
+After-sales requests now support refund-only, return-and-refund, exchange and reship workflows. Digital products remain limited to refund-only; the server calculates refundable amounts, enforces order ownership and channel isolation, and prevents overlapping quantities from being claimed more than once. Approval records the customer-visible resolution, requires return instructions where applicable, establishes the next workflow state and starts an explicit response deadline.
+
+Customers can submit a carrier and tracking code only while a return is awaiting shipment. Store operators then record warehouse receipt and inspect every returned line. Accepted plus rejected quantities must exactly equal the returned quantity; accepted units require an exact warehouse and return-lot identity and are restored through the append-only inventory-control boundary. That single transaction records both lot and aggregate-stock deltas under a customer-return operation linked to the after-sales request. Rejected units never increase stock.
+
+Exchange and reship cases have a separate replacement state machine. Operators record shipment carrier and tracking, route delivery failures into the exception queue, and close delivery with a proof reference. Customers can also confirm receipt. A case cannot be marked completed until any required return is inspected, any required replacement is delivered, and any approved paid refund is linked to a real settled refund from the same order. Both administrator interfaces expose the same actions, deadlines, exception view and timeline; the storefront exposes return instructions, both tracking directions and the customer actions.
+
+After-sales acceptance gates:
+
+- [x] Request type, line quantities, refundable amount, customer ownership and channel boundary are server enforced.
+- [x] Approval requires return instructions for return/exchange and creates explicit return/replacement states and deadlines.
+- [x] Customer return-shipment submission and replacement-delivery confirmation are idempotent and state guarded.
+- [x] Warehouse receipt and inspection cover every line and require accepted plus rejected quantity to match the return.
+- [x] Accepted returns restore exact-lot and aggregate inventory through one audited customer-return operation.
+- [x] Rejected returns do not increase inventory.
+- [x] Exchange cannot ship before return inspection; reship can proceed without a return.
+- [x] Replacement shipment, carrier exception and delivery proof are durable timeline events.
+- [x] Completion is blocked until return inspection, replacement delivery and real settled refund evidence are complete.
+- [x] Storefront, Next Admin and Vendure Dashboard expose the relevant workflow and exception state.
+- [x] Migration is idempotent on SQLite-shaped schemas and uses portable MySQL/PostgreSQL types.
+- [x] Unit and API tests cover the complete exchange path from approval through audited restock and receipt confirmation.
+- [ ] Migration applied and workflow exercised in a production-like database.
+- [ ] Outbound fulfilment carrier events, delivery proof and exception reconciliation unified with this workflow.
+- [ ] Release, running SHA and browser acceptance evidence.
+
 Customer-avatar acceptance gates:
 
 - [x] Replacement is atomic: a failed upload leaves the current avatar active.
@@ -175,7 +201,7 @@ Customer-avatar acceptance gates:
 ## Execution order
 
 1. Apply and exercise the completed P0 controls in a production-like environment without publishing from this worktree.
-2. Close fulfilment and after-sales state machines with reconciliation and exception queues.
+2. Close outbound fulfilment carrier events and delivery-proof reconciliation on the completed after-sales recovery loop.
 3. Add customer 360, attribution and refund-adjusted profitability on top of trustworthy operational data.
 4. Consolidate audit, approvals, scheduled reports, alerts and fraud review across all domains.
 

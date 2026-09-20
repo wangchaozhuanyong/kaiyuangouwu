@@ -1,6 +1,8 @@
 export type {
     AfterSalesActorType,
     AfterSalesReason,
+    AfterSalesReplacementStatus,
+    AfterSalesReturnStatus,
     AfterSalesState,
     AfterSalesType,
 } from './after-sales.constants';

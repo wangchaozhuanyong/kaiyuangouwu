@@ -124,6 +124,7 @@ import { AddUsdtReconciliationActions1789498800000 } from './1789498800000-add-u
 import { AddIncidentResponseWorkflow1789502400000 } from './1789502400000-add-incident-response-workflow';
 import { AddPurchaseOrderWorkflow1789506000000 } from './1789506000000-add-purchase-order-workflow';
 import { AddInventoryControlWorkflow1789509600000 } from './1789509600000-add-inventory-control-workflow';
+import { CloseAfterSalesWorkflow1789596000000 } from './1789596000000-close-after-sales-workflow';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -252,4 +253,5 @@ export const devServerMigrations = [
     AddIncidentResponseWorkflow1789502400000,
     AddPurchaseOrderWorkflow1789506000000,
     AddInventoryControlWorkflow1789509600000,
+    CloseAfterSalesWorkflow1789596000000,
 ];

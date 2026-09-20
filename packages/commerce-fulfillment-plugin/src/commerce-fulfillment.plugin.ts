@@ -1,3 +1,4 @@
+import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { configureDefaultOrderProcess, LanguageCode, PluginCommonModule, VendurePlugin } from '@vendure/core';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
@@ -65,7 +66,7 @@ import { ProductPackagingService } from './product-packaging.service';
 import './types';
 
 @VendurePlugin({
-    imports: [PluginCommonModule, ContentTranslationPlugin, StorefrontCartPlugin],
+    imports: [PluginCommonModule, ContentTranslationPlugin, StorefrontCartPlugin, CatalogManagementPlugin],
     entities: [
         AfterSalesRequest,
         AfterSalesItem,

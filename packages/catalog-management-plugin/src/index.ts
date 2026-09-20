@@ -20,6 +20,7 @@ export { PurchaseReceipt } from './entities/purchase-receipt.entity.js';
 export { PurchaseSupplierReturnLine } from './entities/purchase-supplier-return-line.entity.js';
 export { PurchaseSupplierReturn } from './entities/purchase-supplier-return.entity.js';
 export { VariantCostRecord } from './entities/variant-cost-record.entity.js';
+export { InventoryControlService } from './inventory-control.service.js';
 export type {
     CatalogImportAction,
     CatalogImportResolution,
@@ -27,5 +28,6 @@ export type {
     CatalogProductSummaryFilterInput,
     CreateCatalogProductInput,
     NormalizedCatalogRow,
+    ReceiveCustomerReturnInput,
     SaveCatalogProductInput,
 } from './types.js';

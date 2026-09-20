@@ -313,6 +313,20 @@ export interface ResolveInventoryReconciliationInput {
     reason: string;
 }
 
+export interface ReceiveCustomerReturnInput {
+    idempotencyKey: string;
+    reason: string;
+    reference: string;
+    lines: Array<{
+        productVariantId: ID;
+        stockLocationId: ID;
+        lotCode: string;
+        quantity: number;
+        currencyCode: CurrencyCode;
+        purchaseCostMicrounits?: number | null;
+    }>;
+}
+
 export interface NormalizedCatalogRow {
     rowNumber: number;
     /** Stable per-source record identity used to make retries and legacy rows idempotent. */

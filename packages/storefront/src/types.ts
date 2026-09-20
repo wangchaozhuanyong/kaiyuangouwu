@@ -135,8 +135,11 @@ export interface ManualDigitalOrderDelivery {
     orderLineId: string;
 }
 
-export type AfterSalesType = 'REFUND_ONLY' | 'RETURN_AND_REFUND';
+export type AfterSalesType = 'REFUND_ONLY' | 'RETURN_AND_REFUND' | 'EXCHANGE' | 'RESHIP';
 export type AfterSalesState = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'COMPLETED';
+export type AfterSalesReturnStatus =
+    'NOT_REQUIRED' | 'AWAITING_SHIPMENT' | 'IN_TRANSIT' | 'RECEIVED' | 'INSPECTED';
+export type AfterSalesReplacementStatus = 'NOT_REQUIRED' | 'PENDING' | 'SHIPPED' | 'EXCEPTION' | 'DELIVERED';
 export type AfterSalesReason =
     | 'CHANGED_MIND'
     | 'NOT_AS_DESCRIBED'
@@ -155,12 +158,18 @@ export interface AfterSalesItem {
     productName: string;
     sku: string;
     fulfillmentType: FulfillmentType;
+    acceptedReturnQuantity: number;
+    rejectedReturnQuantity: number;
+    returnLotCode?: string | null;
+    inventoryOperationId?: string | null;
+    returnStockLocation?: { id: string; name: string } | null;
 }
 
 export interface AfterSalesEvent {
     id: string;
     createdAt: string;
     state: AfterSalesState;
+    eventType: string;
     actorType: 'CUSTOMER' | 'ADMIN' | 'SYSTEM';
     actorLabel: string;
     note: string;
@@ -179,6 +188,23 @@ export interface AfterSalesRequest {
     requestedAmount: number;
     approvedAmount?: number | null;
     resolution?: string | null;
+    returnStatus: AfterSalesReturnStatus;
+    returnInstructions?: string | null;
+    returnCarrier?: string | null;
+    returnTrackingCode?: string | null;
+    returnShippedAt?: string | null;
+    returnReceivedAt?: string | null;
+    inspectedAt?: string | null;
+    inspectionNote?: string | null;
+    replacementStatus: AfterSalesReplacementStatus;
+    replacementCarrier?: string | null;
+    replacementTrackingCode?: string | null;
+    replacementProofReference?: string | null;
+    replacementException?: string | null;
+    replacementShippedAt?: string | null;
+    replacementDeliveredAt?: string | null;
+    nextActionDueAt?: string | null;
+    overdue: boolean;
     respondedAt?: string | null;
     completedAt?: string | null;
     cancelledAt?: string | null;
@@ -193,6 +219,18 @@ export interface CreateAfterSalesRequestInput {
     reason: AfterSalesReason;
     description: string;
     items: Array<{ orderLineId: string; quantity: number }>;
+}
+
+export interface SubmitAfterSalesReturnShipmentInput {
+    id: string;
+    carrier: string;
+    trackingCode: string;
+    idempotencyKey: string;
+}
+
+export interface ConfirmAfterSalesReplacementInput {
+    id: string;
+    idempotencyKey: string;
 }
 
 export type StorefrontReviewState = 'PENDING' | 'APPROVED' | 'REJECTED';

@@ -80,6 +80,7 @@ import './types';
         CatalogVariantMatrixService,
         PurchaseOrderService,
     ],
+    exports: [InventoryControlService],
     configuration: config => {
         config.authOptions.customPermissions.push(
             manageCatalogImportPermission,

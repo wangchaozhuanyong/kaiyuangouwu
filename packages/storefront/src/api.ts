@@ -6,6 +6,7 @@ import type {
     AfterSalesRequest,
     Asset,
     CollectionSummary,
+    ConfirmAfterSalesReplacementInput,
     CreateAfterSalesRequestInput,
     CreateImageGenerationInput,
     CustomerAddress,
@@ -48,6 +49,7 @@ import type {
     StorefrontReviewCandidate,
     StorefrontReviewList,
     StorefrontUsdtCheckoutQuote,
+    SubmitAfterSalesReturnShipmentInput,
     SubmitStorefrontReviewInput,
     VendureLanguageCode,
 } from './types';
@@ -268,6 +270,16 @@ export class ShopApi {
 
     async cancelAfterSalesRequest(id: string): Promise<AfterSalesRequest> {
         return this.contentReviewsApi.cancelAfterSalesRequest(id);
+    }
+
+    async submitAfterSalesReturnShipment(
+        input: SubmitAfterSalesReturnShipmentInput,
+    ): Promise<AfterSalesRequest> {
+        return this.contentReviewsApi.submitAfterSalesReturnShipment(input);
+    }
+
+    async confirmAfterSalesReplacement(input: ConfirmAfterSalesReplacementInput): Promise<AfterSalesRequest> {
+        return this.contentReviewsApi.confirmAfterSalesReplacement(input);
     }
 
     async productReviews(productId: string, signal?: AbortSignal): Promise<StorefrontReviewList> {
