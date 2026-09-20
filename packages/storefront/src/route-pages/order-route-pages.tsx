@@ -1,4 +1,5 @@
 import { Package, UserRound } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import { checkoutAddress } from '../checkout-address';
 import {
@@ -10,7 +11,7 @@ import {
 } from '../lazy-storefront-pages';
 import { PageSkeleton } from '../route-loading';
 import { AuthPageBoundary, EmptyState, Subpage } from '../storefront-ui/page-shell';
-import { ActiveCustomer } from '../types';
+import { ActiveCustomer, CustomerAvatarHistoryEntry } from '../types';
 
 import '../commerce-styles';
 import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
@@ -179,6 +180,56 @@ export function AddressesRoutePage() {
 export function AccountSecurityRoutePage() {
     const runtime = useRuntime();
     const isZh = runtime.language === 'zh';
+    const [avatarHistory, setAvatarHistory] = useState<CustomerAvatarHistoryEntry[]>([]);
+    const [avatarHistoryLoading, setAvatarHistoryLoading] = useState(Boolean(runtime.customer));
+    const refreshAvatarHistory = async () => {
+        if (!runtime.customer) {
+            setAvatarHistory([]);
+            setAvatarHistoryLoading(false);
+            return;
+        }
+        setAvatarHistoryLoading(true);
+        try {
+            setAvatarHistory(await runtime.api.customerAvatarHistory());
+        } catch (error) {
+            runtime.notify(
+                error instanceof Error
+                    ? error.message
+                    : isZh
+                      ? '头像恢复记录加载失败'
+                      : 'Could not load profile photo history',
+            );
+        } finally {
+            setAvatarHistoryLoading(false);
+        }
+    };
+    useEffect(() => {
+        const controller = new AbortController();
+        if (!runtime.customer) {
+            setAvatarHistory([]);
+            setAvatarHistoryLoading(false);
+            return () => controller.abort();
+        }
+        setAvatarHistoryLoading(true);
+        void runtime.api
+            .customerAvatarHistory(controller.signal)
+            .then(history => setAvatarHistory(history))
+            .catch(error => {
+                if (!controller.signal.aborted) {
+                    runtime.notify(
+                        error instanceof Error
+                            ? error.message
+                            : isZh
+                              ? '头像恢复记录加载失败'
+                              : 'Could not load profile photo history',
+                    );
+                }
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setAvatarHistoryLoading(false);
+            });
+        return () => controller.abort();
+    }, [isZh, runtime.api, runtime.customer?.id, runtime.notify]);
     return (
         <RouteGate name="account-security">
             <AuthPageBoundary language={runtime.language} onBack={runtime.goBack}>
@@ -188,12 +239,33 @@ export function AccountSecurityRoutePage() {
                     storefrontName={runtime.storefrontName}
                     commerceMode={runtime.commerceMode}
                     onBack={runtime.goBack}
+                    avatarHistory={avatarHistory}
+                    avatarHistoryLoading={avatarHistoryLoading}
                     onAvatarChange={async (file: File) => {
                         const avatar = await runtime.api.uploadCustomerAvatar(file);
                         runtime.setCustomer((current: ActiveCustomer | null) =>
                             current ? { ...current, avatar } : current,
                         );
+                        await refreshAvatarHistory();
                         runtime.notify(isZh ? '头像已更新' : 'Profile photo updated');
+                    }}
+                    onAvatarRestore={async retentionId => {
+                        const avatar = await runtime.api.restoreCustomerAvatar(retentionId);
+                        runtime.setCustomer((current: ActiveCustomer | null) =>
+                            current ? { ...current, avatar } : current,
+                        );
+                        await refreshAvatarHistory();
+                        runtime.notify(isZh ? '历史头像已恢复' : 'Previous profile photo restored');
+                    }}
+                    onAvatarRemove={async () => {
+                        await runtime.api.removeCustomerAvatar();
+                        runtime.setCustomer((current: ActiveCustomer | null) =>
+                            current ? { ...current, avatar: null } : current,
+                        );
+                        await refreshAvatarHistory();
+                        runtime.notify(
+                            isZh ? '头像已移入30天恢复区' : 'Profile photo moved to 30-day recovery',
+                        );
                     }}
                     onLogout={() => {
                         void runtime.api.logout().then(() => {

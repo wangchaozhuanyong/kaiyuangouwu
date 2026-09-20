@@ -1,5 +1,15 @@
 /* oxlint-disable react/only-export-components -- this module intentionally registers lazy extension components as import side effects */
-import { KeyRound, Mail, Puzzle, Share2, Sparkles, Terminal, Truck, WalletCards } from 'lucide-react';
+import {
+    Database,
+    KeyRound,
+    Mail,
+    Puzzle,
+    Share2,
+    Sparkles,
+    Terminal,
+    Truck,
+    WalletCards,
+} from 'lucide-react';
 import { lazy, type ComponentType } from 'react';
 import { Navigate } from 'react-router-dom';
 
@@ -84,6 +94,9 @@ const SuppliersModule = lazy(() =>
 );
 const UsdtPaymentManagementModule = lazy(() =>
     routeModuleLoaders.usdtPayments().then(module => ({ default: module.UsdtPaymentManagementModule })),
+);
+const DataManagementModule = lazy(() =>
+    routeModuleLoaders.dataManagement().then(module => ({ default: module.DataManagementModule })),
 );
 
 function redirectTo(target: string): ComponentType {
@@ -460,6 +473,20 @@ defineNextAdminExtension({
                 order: 30,
             },
             preload: routeModuleLoaders.usdtPayments,
+        },
+        {
+            id: 'store-data-management',
+            path: '/settings/data-management',
+            title: '数据管理中心',
+            component: DataManagementModule,
+            permissions: ['SuperAdmin'],
+            navItem: {
+                label: '数据管理中心',
+                sectionId: 'settings',
+                icon: Database,
+                order: 20,
+            },
+            preload: routeModuleLoaders.dataManagement,
         },
         {
             id: 'store-management-promotions',

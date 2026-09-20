@@ -4,6 +4,7 @@ import type {
     CustomerAddress,
     CustomerAddressInput,
     CustomerAddressUpdateInput,
+    CustomerAvatarHistoryEntry,
     CustomerOrderCounts,
     Order,
     OrderConfirmationToken,
@@ -103,6 +104,47 @@ export class AccountApi extends BaseDomainApi {
             throw new Error(body.errors?.[0]?.message ?? `Avatar upload failed (${response.status})`);
         }
         return body.data.setCustomerAvatar;
+    }
+
+    async customerAvatarHistory(signal?: AbortSignal): Promise<CustomerAvatarHistoryEntry[]> {
+        const result = await this.request<{ myCustomerAvatarHistory: CustomerAvatarHistoryEntry[] }>(
+            `
+                query CustomerAvatarHistory {
+                    myCustomerAvatarHistory {
+                        id
+                        status
+                        quarantinedAt
+                        purgeAfter
+                        legalHold
+                        asset { id preview }
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.myCustomerAvatarHistory;
+    }
+
+    async restoreCustomerAvatar(retentionId: string): Promise<Asset> {
+        const result = await this.request<{ restoreCustomerAvatar: Asset }>(
+            `
+                mutation RestoreCustomerAvatar($retentionId: ID!) {
+                    restoreCustomerAvatar(retentionId: $retentionId) { id preview }
+                }
+            `,
+            { retentionId },
+        );
+        return result.restoreCustomerAvatar;
+    }
+
+    async removeCustomerAvatar(): Promise<boolean> {
+        const result = await this.request<{ removeCustomerAvatar: boolean }>(`
+            mutation RemoveCustomerAvatar {
+                removeCustomerAvatar
+            }
+        `);
+        return result.removeCustomerAvatar;
     }
 
     async customerOrders(

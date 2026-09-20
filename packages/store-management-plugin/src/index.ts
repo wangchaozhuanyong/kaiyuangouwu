@@ -1,4 +1,10 @@
 export { storeProfilePermission } from './constants.js';
+export {
+    CUSTOMER_AVATAR_RETENTION_DAYS,
+    CUSTOMER_AVATAR_RETENTION_POLICY,
+    DataRetentionService,
+} from './data-retention.service.js';
+export { DataRetentionRecord } from './entities/data-retention-record.entity.js';
 export { ReferralAccount } from './entities/referral-account.entity.js';
 export { ReferralLedgerEntry } from './entities/referral-ledger-entry.entity.js';
 export { ReferralProgramConfig } from './entities/referral-program-config.entity.js';

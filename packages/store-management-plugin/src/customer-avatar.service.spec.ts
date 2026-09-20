@@ -13,6 +13,13 @@ function createService() {
     const customerService = {
         findOneByUserId: vi.fn().mockResolvedValue({ id: 'customer-1' }),
     };
+    const dataRetention = {
+        retiredAvatarIds: vi.fn().mockResolvedValue(new Set<string>()),
+        quarantineAvatar: vi.fn().mockResolvedValue({ id: 'retention-1' }),
+        avatarHistory: vi.fn().mockResolvedValue([]),
+        ownedAvatarRecordForRestore: vi.fn(),
+        restoreAvatarRecord: vi.fn(),
+    };
     const query: any = {
         getOneOrFail: vi.fn().mockResolvedValue({ id: 'channel-1' }),
         getRawOne: vi.fn().mockResolvedValue({ bytes: '0' }),
@@ -30,20 +37,18 @@ function createService() {
         getRepository: vi.fn(() => repository),
         withTransaction: vi.fn((_ctx, work) => work(_ctx)),
     };
-    const storage = { deleteFile: vi.fn().mockResolvedValue(undefined) };
     return {
         assetService,
         customerService,
+        dataRetention,
         query,
         repository,
         connection,
-        storage,
         service: new CustomerAvatarService(
             assetService as any,
             customerService as any,
             connection as any,
-            { assetOptions: { assetStorageStrategy: storage } } as any,
-            { getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default' }) } as any,
+            dataRetention as any,
         ),
     };
 }
@@ -68,7 +73,7 @@ describe('CustomerAvatarService', () => {
 
         await expect(service.findMine(ctx)).resolves.toBe(avatar);
         expect(assetService.findAll).toHaveBeenCalledWith(ctx, {
-            take: 1,
+            take: 32,
             tags: ['customer-avatar', 'customer-avatar-owner:customer-1'],
             tagsOperator: LogicalOperator.AND,
             sort: { createdAt: SortOrder.DESC },
@@ -104,7 +109,7 @@ describe('CustomerAvatarService', () => {
         async condition => {
             const test = createService();
             if (condition === 'customer quota')
-                test.assetService.findAll.mockResolvedValue({ items: [], totalItems: 5 });
+                test.assetService.findAll.mockResolvedValue({ items: [], totalItems: 32 });
             if (condition === 'channel quota')
                 test.query.getRawOne.mockResolvedValue({ bytes: String(1024 ** 3) });
             if (condition === 'channel file count')
@@ -152,27 +157,21 @@ describe('CustomerAvatarService', () => {
         expect(normalized.exif).toBeUndefined();
     });
 
-    it('retains old avatars on upload failure and deletes an unreferenced replacement only after commit', async () => {
+    it('retains old avatars on upload failure and quarantines them only with a committed replacement', async () => {
         const test = createService();
         const old = {
             id: 'old',
             createdAt: new Date(0),
-            source: 'old.webp',
-            preview: 'preview.webp',
-            tags: [{ value: 'customer-avatar' }, { value: 'customer-avatar-owner:customer-1' }],
-            channels: [{ id: 'channel-1' }, { id: 'default' }],
         };
         test.assetService.findAll.mockResolvedValue({ items: [old], totalItems: 1 });
-        test.repository.findOne.mockResolvedValue(old as any);
         test.assetService.create.mockRejectedValueOnce(new Error('DB unavailable'));
         await expect(test.service.uploadMine(ctx, upload(await imageBytes()))).rejects.toThrow(
             'DB unavailable',
         );
-        expect(test.repository.remove).not.toHaveBeenCalled();
+        expect(test.dataRetention.quarantineAvatar).not.toHaveBeenCalled();
         test.assetService.create.mockResolvedValue({ id: 'new' });
         await test.service.uploadMine(ctx, upload(await imageBytes()));
-        expect(test.repository.remove).toHaveBeenCalledWith(old);
-        expect(test.storage.deleteFile.mock.calls).toEqual([['old.webp'], ['preview.webp']]);
+        expect(test.dataRetention.quarantineAvatar).toHaveBeenCalledWith(ctx, old, 'customer-1', 'REPLACED');
     });
 
     it('rejects unsupported, empty, and oversized files before creating an asset', async () => {
@@ -211,29 +210,29 @@ describe('CustomerAvatarService', () => {
         expect(assetService.create).not.toHaveBeenCalled();
     });
 
-    it.each(['source', 'preview'])('retains the old quota row when %s cleanup fails', async failing => {
+    it('hides quarantined avatars without deleting the underlying asset', async () => {
         const test = createService();
-        const old = {
-            id: 'old',
-            createdAt: new Date(0),
-            source: 'source',
-            preview: 'preview',
-            tags: [{ value: 'customer-avatar' }, { value: 'customer-avatar-owner:customer-1' }],
-            channels: [{ id: 'channel-1' }, { id: 'default' }],
-        };
-        test.assetService.findAll.mockResolvedValue({ items: [old], totalItems: 1 });
-        test.repository.findOne.mockResolvedValue(old as any);
-        test.assetService.create.mockResolvedValue({ id: 'new' });
-        test.storage.deleteFile.mockImplementation(key =>
-            key === failing ? Promise.reject(new Error('synthetic storage outage')) : Promise.resolve(),
-        );
-        await expect(test.service.uploadMine(ctx, upload(await imageBytes()))).resolves.toEqual({
-            id: 'new',
-        });
+        const old = { id: 'old' };
+        const active = { id: 'active' };
+        test.assetService.findAll.mockResolvedValue({ items: [active, old], totalItems: 2 });
+        test.dataRetention.retiredAvatarIds.mockResolvedValue(new Set(['old']));
+
+        await expect(test.service.findMine(ctx)).resolves.toBe(active);
         expect(test.repository.remove).not.toHaveBeenCalled();
-        test.storage.deleteFile.mockResolvedValue(undefined);
-        await test.service.uploadMine(ctx, upload(await imageBytes()));
-        expect(test.repository.remove).toHaveBeenCalledWith(old);
+    });
+
+    it('removes the visible avatar by quarantining it for recovery', async () => {
+        const test = createService();
+        const active = { id: 'active' };
+        test.assetService.findAll.mockResolvedValue({ items: [active], totalItems: 1 });
+
+        await expect(test.service.removeMine(ctx)).resolves.toBe(true);
+        expect(test.dataRetention.quarantineAvatar).toHaveBeenCalledWith(
+            ctx,
+            active,
+            'customer-1',
+            'REMOVED',
+        );
     });
 
     it('returns no avatar for a guest or an account without a customer profile', async () => {

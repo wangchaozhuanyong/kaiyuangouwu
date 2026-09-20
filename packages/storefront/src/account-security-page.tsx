@@ -4,12 +4,15 @@ import {
     Camera,
     CheckCircle2,
     ChevronRight,
+    History,
     KeyRound,
     LoaderCircle,
     LogOut,
     Mail,
     MapPin,
+    RotateCcw,
     ShieldCheck,
+    Trash2,
     UserRound,
 } from 'lucide-react';
 import { ChangeEvent, ReactNode, useEffect, useRef, useState } from 'react';
@@ -17,7 +20,7 @@ import { ChangeEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { SafeImage } from './safe-image';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
-import { ActiveCustomer, StoreCommerceMode, StorefrontLanguage } from './types';
+import { ActiveCustomer, CustomerAvatarHistoryEntry, StoreCommerceMode, StorefrontLanguage } from './types';
 
 type AccountRoute = { name: 'login' | 'forgot-password' | 'addresses' };
 
@@ -46,6 +49,10 @@ export function AccountSecurityPage({
     commerceMode,
     onBack,
     onAvatarChange,
+    avatarHistory = [],
+    avatarHistoryLoading = false,
+    onAvatarRestore,
+    onAvatarRemove,
     onLogout,
 }: {
     customer: ActiveCustomer | null;
@@ -54,6 +61,10 @@ export function AccountSecurityPage({
     commerceMode?: StoreCommerceMode | null;
     onBack: () => void;
     onAvatarChange: (file: File) => Promise<void>;
+    avatarHistory?: CustomerAvatarHistoryEntry[];
+    avatarHistoryLoading?: boolean;
+    onAvatarRestore?: (retentionId: string) => Promise<void>;
+    onAvatarRemove?: () => Promise<void>;
     onLogout: () => void;
 }) {
     const navigate = useNavigate();
@@ -63,6 +74,7 @@ export function AccountSecurityPage({
     const previewUrlRef = useRef<string | null>(null);
     const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
     const [avatarUploading, setAvatarUploading] = useState(false);
+    const [avatarAction, setAvatarAction] = useState<string | null>(null);
     const [avatarError, setAvatarError] = useState<string | null>(null);
 
     useEffect(
@@ -102,6 +114,24 @@ export function AccountSecurityPage({
             if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
             previewUrlRef.current = null;
             setAvatarPreviewUrl(null);
+        }
+    };
+
+    const runAvatarAction = async (key: string, action: () => Promise<void>) => {
+        setAvatarAction(key);
+        setAvatarError(null);
+        try {
+            await action();
+        } catch (error) {
+            setAvatarError(
+                error instanceof Error
+                    ? storefrontErrorMessage(error, language)
+                    : isZh
+                      ? '头像操作失败，请重试'
+                      : 'Profile photo action failed. Try again.',
+            );
+        } finally {
+            setAvatarAction(null);
         }
     };
 
@@ -175,6 +205,31 @@ export function AccountSecurityPage({
                             </span>
                         </div>
                         <p className="security-user-email">{customer.emailAddress}</p>
+                        <div className="security-avatar-actions">
+                            <button
+                                type="button"
+                                disabled={avatarUploading || avatarAction !== null}
+                                onClick={() => avatarInputRef.current?.click()}
+                            >
+                                <Camera size={12} aria-hidden="true" />
+                                {isZh ? '更换头像' : 'Change photo'}
+                            </button>
+                            {avatarUrl && onAvatarRemove && (
+                                <button
+                                    type="button"
+                                    className="is-danger"
+                                    disabled={avatarUploading || avatarAction !== null}
+                                    onClick={() => void runAvatarAction('remove', onAvatarRemove)}
+                                >
+                                    {avatarAction === 'remove' ? (
+                                        <LoaderCircle size={12} aria-hidden="true" />
+                                    ) : (
+                                        <Trash2 size={12} aria-hidden="true" />
+                                    )}
+                                    {isZh ? '移除' : 'Remove'}
+                                </button>
+                            )}
+                        </div>
                         {(avatarUploading || avatarError) && (
                             <p
                                 id="avatar-upload-message"
@@ -186,6 +241,86 @@ export function AccountSecurityPage({
                         )}
                     </div>
                 </section>
+
+                <div className="security-group">
+                    <div className="security-group-header">
+                        <span>{isZh ? '头像保护' : 'Profile photo protection'}</span>
+                    </div>
+                    <div className="security-card-list">
+                        <div className="security-item-static">
+                            <span className="security-item-icon icon-avatar-history" aria-hidden="true">
+                                <History size={17} />
+                            </span>
+                            <div className="security-item-info">
+                                <strong className="security-item-title">
+                                    {isZh ? '30 天可恢复保护' : '30-day recovery protection'}
+                                </strong>
+                                <span className="security-item-subtitle">
+                                    {isZh
+                                        ? '当前头像不会因时间自动删除；更换或移除后才进入恢复区'
+                                        : 'Your current photo never expires; replaced photos enter recovery first'}
+                                </span>
+                            </div>
+                        </div>
+                        {(avatarHistoryLoading || avatarHistory.length > 0) && (
+                            <div className="security-avatar-history" aria-live="polite">
+                                {avatarHistoryLoading ? (
+                                    <span className="security-avatar-history-loading">
+                                        <LoaderCircle size={14} aria-hidden="true" />
+                                        {isZh ? '正在加载恢复记录…' : 'Loading recovery history…'}
+                                    </span>
+                                ) : (
+                                    avatarHistory.map(entry => (
+                                        <div className="security-avatar-history-row" key={entry.id}>
+                                            {entry.asset?.preview ? (
+                                                <SafeImage
+                                                    frameClassName="security-avatar-history-image"
+                                                    className="security-avatar-history-image"
+                                                    src={entry.asset.preview}
+                                                    alt=""
+                                                />
+                                            ) : (
+                                                <span
+                                                    className="security-avatar-history-image is-empty"
+                                                    aria-hidden="true"
+                                                >
+                                                    <UserRound size={16} />
+                                                </span>
+                                            )}
+                                            <span className="security-avatar-history-copy">
+                                                <strong>{isZh ? '可恢复头像' : 'Recoverable photo'}</strong>
+                                                <small>
+                                                    {isZh ? '保留至 ' : 'Retained until '}
+                                                    {formatAvatarRetentionDate(entry.purgeAfter, language)}
+                                                    {entry.legalHold ? (isZh ? '（保留中）' : ' (held)') : ''}
+                                                </small>
+                                            </span>
+                                            {entry.asset && onAvatarRestore && (
+                                                <button
+                                                    type="button"
+                                                    className="security-avatar-restore"
+                                                    disabled={avatarAction !== null}
+                                                    onClick={() =>
+                                                        void runAvatarAction(entry.id, () =>
+                                                            onAvatarRestore(entry.id),
+                                                        )
+                                                    }
+                                                >
+                                                    {avatarAction === entry.id ? (
+                                                        <LoaderCircle size={13} aria-hidden="true" />
+                                                    ) : (
+                                                        <RotateCcw size={13} aria-hidden="true" />
+                                                    )}
+                                                    {isZh ? '恢复' : 'Restore'}
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
 
                 {/* 2. 核心设置列表 */}
                 <div className="security-group">
@@ -296,6 +431,16 @@ export function AccountSecurityPage({
             </div>
         </main>
     );
+}
+
+function formatAvatarRetentionDate(value: string, language: StorefrontLanguage): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+    }).format(date);
 }
 
 function SubHeader({

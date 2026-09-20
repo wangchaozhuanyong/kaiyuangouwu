@@ -11,6 +11,7 @@ import type {
     CustomerAddress,
     CustomerAddressInput,
     CustomerAddressUpdateInput,
+    CustomerAvatarHistoryEntry,
     CustomerDeliveryEmail,
     CustomerOrderCounts,
     ImageGenerationJob,
@@ -194,6 +195,18 @@ export class ShopApi {
 
     async uploadCustomerAvatar(file: File): Promise<Asset> {
         return this.accountApi.uploadCustomerAvatar(file);
+    }
+
+    async customerAvatarHistory(signal?: AbortSignal): Promise<CustomerAvatarHistoryEntry[]> {
+        return this.accountApi.customerAvatarHistory(signal);
+    }
+
+    async restoreCustomerAvatar(retentionId: string): Promise<Asset> {
+        return this.accountApi.restoreCustomerAvatar(retentionId);
+    }
+
+    async removeCustomerAvatar(): Promise<boolean> {
+        return this.accountApi.removeCustomerAvatar();
     }
 
     async customerOrders(

@@ -23,9 +23,13 @@ import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 import { STOREFRONT_PROMOTION_OPTIONS, storeProfilePermission } from './constants';
 import { CustomerAvatarShopResolver } from './customer-avatar.resolver';
 import { CustomerAvatarService } from './customer-avatar.service';
+import { DataRetentionAdminResolver } from './data-retention.resolver';
+import { DataRetentionService } from './data-retention.service';
+import { purgeDueDataRetentionTask } from './data-retention.tasks';
 import { CouponLedgerEntry } from './entities/coupon-ledger-entry.entity';
 import { CouponOrderAllocation } from './entities/coupon-order-allocation.entity';
 import { CustomerCoupon } from './entities/customer-coupon.entity';
+import { DataRetentionRecord } from './entities/data-retention-record.entity';
 import { ReferralAccount } from './entities/referral-account.entity';
 import { ReferralBalanceUse } from './entities/referral-balance-use.entity';
 import { ReferralLedgerEntry } from './entities/referral-ledger-entry.entity';
@@ -179,6 +183,7 @@ import {
         StoreUsdtManualRefund,
         StoreUsdtWallet,
         StoreUsdtWalletAudit,
+        DataRetentionRecord,
     ],
     controllers: [StorefrontPromotionController, StorefrontRealtimeController],
     providers: [
@@ -214,6 +219,7 @@ import {
         SystemAnnouncementService,
         StorefrontRealtimeService,
         CustomerAvatarService,
+        DataRetentionService,
         {
             provide: STOREFRONT_PROMOTION_OPTIONS,
             useFactory: () => StoreManagementPlugin.promotionOptions,
@@ -321,6 +327,7 @@ import {
         config.schedulerOptions.tasks.push(syncAutomaticStoreCurrencyPricesTask);
         config.schedulerOptions.tasks.push(refreshStoreUsdtRatesTask);
         config.schedulerOptions.tasks.push(reconcileStoreUsdtPaymentsTask);
+        config.schedulerOptions.tasks.push(purgeDueDataRetentionTask);
         return config;
     },
     adminApiExtensions: {
@@ -338,6 +345,7 @@ import {
             SystemAnnouncementAdminResolver,
             ReferralAdminResolver,
             StorefrontTrafficAdminResolver,
+            DataRetentionAdminResolver,
         ],
     },
     shopApiExtensions: {

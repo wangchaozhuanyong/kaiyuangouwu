@@ -1,0 +1,64 @@
+# Website business closure plan
+
+This plan tracks whether each business capability has a complete loop rather than only a visible page. A capability is complete only when it has an entry point, validation, durable state, permission boundaries, failure recovery, audit evidence, monitoring, and verified user/admin behavior.
+
+## Delivery status
+
+| Priority | Domain | Required closure | Status |
+| --- | --- | --- | --- |
+| P0 | Data retention | Policy, quarantine, recovery, reference checks, legal hold, due purge, retry, retained audit record | In progress: customer avatar flow implemented and locally verified |
+| P0 | Data subject requests | Customer export, correction, account closure, identity re-check, cooling-off period, legal/financial retention exceptions | Not started |
+| P0 | Consent and privacy | Versioned privacy terms, consent evidence, withdrawal, cookie/tracking controls, purpose inventory | Not started |
+| P0 | Payment reconciliation | Gateway/chain callback idempotency, order-payment matching, exceptions, refund reconciliation, daily close | Existing pieces require end-to-end audit |
+| P0 | Backup and recovery | Backup ownership, retention, encryption, restore drill, RPO/RTO evidence and alerting | Operational verification required |
+| P0 | Incident response | Security-event severity, owner, evidence preservation, notification workflow and recovery review | Not started |
+| P1 | Procurement | Supplier, purchase order, receiving, variance, payable, return-to-supplier and performance score | Existing supplier area requires closure audit |
+| P1 | Inventory | Reservation, receiving, adjustment, transfer, return disposition, low-stock alert and reconciliation | Existing pieces require closure audit |
+| P1 | Fulfilment and after-sales | Shipment, carrier exception, delivery proof, cancellation, return, exchange, reship and refund | Existing pieces require closure audit |
+| P1 | Customer operations | Customer 360, service history, segmentation, RFM/LTV, churn signal and follow-up outcome | Not started |
+| P1 | Marketing analytics | Acquisition attribution, search terms, funnel, campaign cost, revenue, refund-adjusted ROI | Traffic exists; cost/attribution closure not verified |
+| P1 | Finance | Revenue, discount, tax, cost, gateway fee, refund, chargeback and profit reconciliation | Existing reports require closure audit |
+| P2 | Governance | Unified immutable audit, four-eyes approval, content/config versioning, scheduled reports and anomaly alerts | Partial and distributed |
+| P2 | Fraud and abuse | Account/order/payment/referral risk rules, review queue, decision evidence and appeal | Partial and distributed |
+
+## Current P0 implementation: customer avatar retention
+
+The active avatar is not placed in a time-based deletion queue. Only an avatar replaced or removed by its owner is quarantined for 30 days. During that period the owner can restore it. At expiry the worker checks ownership, channel boundaries, business references and legal hold before deletion. Referenced assets are blocked, technical failures are retried, and completed deletion keeps its database audit record.
+
+Acceptance gates:
+
+- [x] Replacement is atomic: a failed upload leaves the current avatar active.
+- [x] Active avatars do not expire automatically.
+- [x] Replaced or removed avatars are recoverable for 30 days.
+- [x] Restore atomically retires the currently active avatar.
+- [x] Purge checks business references and store ownership again.
+- [x] Legal hold requires an administrator reason and blocks purge.
+- [x] Failed or reference-blocked purges remain visible and retryable.
+- [x] Customer UI explains the rule and exposes restore/remove actions.
+- [x] Super-admin UI exposes queue state, failures, holds and retries.
+- [x] Migration is idempotent and tested on MySQL, PostgreSQL and SQLite-shaped schemas.
+- [ ] Migration applied in a production-like database.
+- [ ] Worker execution observed against production-like object storage.
+- [ ] Release, running SHA, browser acceptance and monitoring evidence.
+
+## Execution order
+
+1. Finish P0 data governance: data-subject request workflow, consent evidence, policy registry and export/deletion exceptions.
+2. Close payment/refund reconciliation and operational recovery before expanding revenue-driving automation.
+3. Close procurement, inventory and after-sales state machines with reconciliation and exception queues.
+4. Add customer 360, attribution and refund-adjusted profitability on top of trustworthy operational data.
+5. Consolidate audit, approvals, scheduled reports, alerts and fraud review across all domains.
+
+## Definition of done for every domain
+
+Each domain must demonstrate all of the following:
+
+1. A user or administrator can start the workflow and see its current state.
+2. The server enforces permissions, validation, idempotency and store isolation.
+3. State transitions are durable and invalid transitions are rejected.
+4. Side effects have retry, reconciliation and a human exception queue.
+5. Sensitive or destructive actions have confirmation, reason and audit evidence.
+6. Data retention, legal hold and deletion exceptions are explicit.
+7. Metrics and alerts distinguish pending, failed, blocked and completed work.
+8. Automated tests cover success, duplicate, unauthorized and failure paths.
+9. Local checks, CI, migration, release, running SHA and browser acceptance are recorded separately.

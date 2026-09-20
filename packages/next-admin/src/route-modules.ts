@@ -32,6 +32,7 @@ export const routeModuleLoaders = {
     usdtPayments: () => import('./pages/Settings/UsdtPaymentManagementModule'),
     roles: () => import('./pages/Settings/RolesModule'),
     systemOps: () => import('./pages/Settings/SystemOpsModule'),
+    dataManagement: () => import('./pages/Settings/DataManagementModule'),
 } as const;
 
 export type RouteModuleKey = keyof typeof routeModuleLoaders;
@@ -71,6 +72,7 @@ export function getRouteModuleKey(target: string): RouteModuleKey | null {
     if (pathname.startsWith('/plugins')) return 'clientPlugins';
     if (pathname === '/settings/team') return 'roles';
     if (pathname === '/settings/system-ops') return 'systemOps';
+    if (pathname === '/settings/data-management') return 'dataManagement';
     if (pathname === '/settings/usdt-payments') return 'usdtPayments';
     if (pathname.startsWith('/settings')) return 'storeSettings';
     return null;
@@ -93,6 +95,7 @@ export const SETTINGS_ROUTE_PRELOAD_TARGETS = [
     '/settings/store-profile',
     '/settings/team',
     '/settings/system-ops',
+    '/settings/data-management',
     '/settings/usdt-payments',
 ] as const;
 

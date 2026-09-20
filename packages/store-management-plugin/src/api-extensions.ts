@@ -63,6 +63,46 @@ const referralPosterFields = `
 `;
 
 const commonTypes = gql`
+    enum DataRetentionStatus {
+        PENDING
+        BLOCKED_REFERENCE
+        FAILED
+        RESTORED
+        PURGED
+    }
+
+    type DataRetentionRecord implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        channelId: ID!
+        resourceType: String!
+        resourceKey: String!
+        policyCode: String!
+        reason: String!
+        status: DataRetentionStatus!
+        quarantinedAt: DateTime!
+        purgeAfter: DateTime!
+        nextAttemptAt: DateTime
+        legalHold: Boolean!
+        legalHoldReason: String
+        legalHoldChangedByUserId: ID
+        legalHoldChangedAt: DateTime
+        attemptCount: Int!
+        lastAttemptAt: DateTime
+        lastError: String
+        completedAt: DateTime
+    }
+
+    type CustomerAvatarHistoryEntry {
+        id: ID!
+        status: DataRetentionStatus!
+        quarantinedAt: DateTime!
+        purgeAfter: DateTime!
+        legalHold: Boolean!
+        asset: Asset
+    }
+
     enum StoreProfileStatus {
         DRAFT
         ACTIVE
@@ -1159,6 +1199,7 @@ export const adminApiExtensions = gql`
         referralTodayMetrics: ReferralTodayMetrics!
         storefrontTraffic(days: Int = 7): StorefrontTrafficReport!
         referralBalanceAudit: ReferralBalanceAuditResult!
+        dataRetentionRecords: [DataRetentionRecord!]!
     }
 
     extend type Mutation {
@@ -1220,6 +1261,8 @@ export const adminApiExtensions = gql`
             amount: Money!
             reason: String!
         ): ReferralWallet!
+        setDataRetentionLegalHold(id: ID!, enabled: Boolean!, reason: String): DataRetentionRecord!
+        retryDataRetentionRecord(id: ID!): DataRetentionRecord!
     }
 
     extend type Order {
@@ -1324,6 +1367,7 @@ export const shopApiExtensions = gql`
         storefrontBranding: StorefrontBranding!
         availableStorefrontProvinces: [StorefrontProvinceOption!]!
         myCustomerAvatar: Asset
+        myCustomerAvatarHistory: [CustomerAvatarHistoryEntry!]!
         storefrontCurrencyConfiguration: StoreCurrencyConfiguration!
         activeStorefrontCoupons: [StorefrontCoupon!]!
         myStorefrontCoupons: [StoreCustomerCoupon!]!
@@ -1354,6 +1398,8 @@ export const shopApiExtensions = gql`
     }
     extend type Mutation {
         setCustomerAvatar(file: Upload!): Asset!
+        restoreCustomerAvatar(retentionId: ID!): Asset!
+        removeCustomerAvatar: Boolean!
         setStorefrontPaymentCurrency(currencyCode: String!): Order!
         createStorefrontUsdtCheckoutQuote: StorefrontUsdtCheckoutQuote!
         claimStorefrontCoupon(campaignId: ID!): StoreCustomerCoupon!

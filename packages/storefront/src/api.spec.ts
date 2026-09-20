@@ -1804,6 +1804,47 @@ describe('ShopApi storefront mutations', () => {
         expect((form.get('0') as File).name).toBe('avatar.png');
     });
 
+    it('lists, restores and removes avatars through the recovery API', async () => {
+        const history = [
+            {
+                id: 'retention-1',
+                status: 'PENDING',
+                quarantinedAt: '2026-09-20T00:00:00.000Z',
+                purgeAfter: '2026-10-20T00:00:00.000Z',
+                legalHold: false,
+                asset: { id: 'asset-1', preview: '/assets/avatar.webp' },
+            },
+        ];
+        const restored = { id: 'asset-1', preview: '/assets/avatar.webp' };
+        const fetchMock = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ data: { myCustomerAvatarHistory: history } })),
+            )
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ data: { restoreCustomerAvatar: restored } })),
+            )
+            .mockResolvedValueOnce(new Response(JSON.stringify({ data: { removeCustomerAvatar: true } })));
+        vi.stubGlobal('fetch', fetchMock);
+        const api = new ShopApi(market);
+
+        await expect(api.customerAvatarHistory()).resolves.toEqual(history);
+        await expect(api.restoreCustomerAvatar('retention-1')).resolves.toEqual(restored);
+        await expect(api.removeCustomerAvatar()).resolves.toBe(true);
+
+        const requests = fetchMock.mock.calls.map(
+            call =>
+                JSON.parse(jsonRequestBody(call[1])) as {
+                    query: string;
+                    variables?: Record<string, unknown>;
+                },
+        );
+        expect(requests[0].query).toContain('myCustomerAvatarHistory');
+        expect(requests[1]).toMatchObject({ variables: { retentionId: 'retention-1' } });
+        expect(requests[1].query).toContain('restoreCustomerAvatar');
+        expect(requests[2].query).toContain('removeCustomerAvatar');
+    });
+
     it('requires a CORS preflight for image reference uploads while preserving multipart metadata', async () => {
         const reference = { id: 'reference-fixture' };
         const fetchMock = mockGraphQlResponse({ uploadImageReference: reference });

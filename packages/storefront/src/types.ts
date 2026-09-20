@@ -570,6 +570,15 @@ export interface ActiveCustomer {
     orders: { items: OrderSummary[]; totalItems: number };
 }
 
+export interface CustomerAvatarHistoryEntry {
+    id: string;
+    status: 'PENDING' | 'BLOCKED_REFERENCE' | 'FAILED';
+    quarantinedAt: string;
+    purgeAfter: string;
+    legalHold: boolean;
+    asset: Asset | null;
+}
+
 export type StorefrontCartState = 'OPEN' | 'PAYMENT_PENDING';
 export type StorefrontCartSelectionState = 'NONE' | 'PARTIAL' | 'ALL';
 

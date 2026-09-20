@@ -98,6 +98,37 @@
     color: #dc2626;
 }
 
+.security-avatar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+}
+
+.security-avatar-actions button,
+.security-avatar-restore {
+    border: 0;
+    background: transparent;
+    color: #2563eb;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+
+.security-avatar-actions button.is-danger {
+    color: #dc2626;
+}
+
+.security-avatar-actions button:disabled,
+.security-avatar-restore:disabled {
+    cursor: wait;
+    opacity: 0.55;
+}
+
 @keyframes security-avatar-spin {
     to {
         transform: rotate(360deg);
@@ -225,6 +256,74 @@
 .security-item-icon.icon-shield {
     background: #eff6ff;
     color: #2563eb;
+}
+
+.security-item-icon.icon-avatar-history {
+    background: #f5f3ff;
+    color: #7c3aed;
+}
+
+.security-avatar-history {
+    border-top: 1px solid #f1f5f9;
+    padding: 4px 14px;
+}
+
+.security-avatar-history-loading,
+.security-avatar-history-row {
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #64748b;
+    font-size: 12px;
+}
+
+.security-avatar-history-loading svg,
+.security-avatar-actions button[disabled] svg,
+.security-avatar-restore[disabled] svg {
+    animation: security-avatar-spin 0.8s linear infinite;
+}
+
+.security-avatar-history-row + .security-avatar-history-row {
+    border-top: 1px solid #f8fafc;
+}
+
+.security-avatar-history-image {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    overflow: hidden;
+}
+
+.security-avatar-history-image.is-empty {
+    display: grid;
+    place-items: center;
+    background: #f1f5f9;
+    color: #94a3b8;
+}
+
+.security-avatar-history-copy {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.security-avatar-history-copy strong {
+    color: #334155;
+    font-size: 12px;
+}
+
+.security-avatar-history-copy small {
+    color: #94a3b8;
+    font-size: 10px;
+}
+
+.security-avatar-restore {
+    flex: 0 0 auto;
 }
 
 .security-item-info {
@@ -1176,7 +1275,9 @@
     font-size: 13.5px;
     font-weight: 700;
     box-shadow: var(--shadow-sm);
-    transition: transform 120ms ease, background 160ms ease;
+    transition:
+        transform 120ms ease,
+        background 160ms ease;
 }
 
 .detail-action-bar button:nth-last-child(2):active:not(:disabled) {
@@ -1193,7 +1294,10 @@
     font-size: 13.5px;
     font-weight: 700;
     box-shadow: var(--accent-shadow);
-    transition: transform 120ms ease, background 160ms ease, box-shadow 160ms ease;
+    transition:
+        transform 120ms ease,
+        background 160ms ease,
+        box-shadow 160ms ease;
 }
 
 .detail-action-bar button:last-child:hover:not(:disabled) {
