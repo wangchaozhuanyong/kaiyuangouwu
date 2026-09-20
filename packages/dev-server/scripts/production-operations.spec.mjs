@@ -403,6 +403,59 @@ void test('store isolation audit requires one exact runtime SHA and rejects it f
     );
 });
 
+void test('database backup pins the reviewed runtime and preserves release and health state', () => {
+    const runtimeSha = 'b'.repeat(40);
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'backup-database',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+    });
+    assert.deepEqual(request, {
+        operation: 'backup-database',
+        sourceSha,
+        expectedPlanSha256: '',
+        expectedChannelCodes: '',
+        expectedRuntimeSha: runtimeSha,
+    });
+    assert.throws(() =>
+        operations.validateRequest({
+            OPS_OPERATION: 'backup-database',
+            OPS_SOURCE_SHA: sourceSha,
+        }),
+    );
+    assert.throws(() =>
+        operations.validateRequest({
+            OPS_OPERATION: 'backup-database',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+            OPS_EXPECTED_PLAN_SHA256: 'd'.repeat(64),
+        }),
+    );
+
+    const release = { markerSha: runtimeSha, currentRuntime: '/runtime/current' };
+    const health = { status: 'ok', output: 'Result=success\nExecMainStatus=0\nActiveState=inactive\n' };
+    let backupCalls = 0;
+    const result = operations.runDatabaseBackup(request, {
+        inspect: () => ({ ...release }),
+        health: () => ({ ...health }),
+        backup: () => {
+            backupCalls += 1;
+            return {
+                file: '/var/backups/vendure-mysql/vendure-20260920T080000Z.sql.gz',
+                invocationId: 'a'.repeat(32),
+                offsite: true,
+            };
+        },
+    });
+
+    assert.equal(backupCalls, 1);
+    assert.equal(result.sourceSha, sourceSha);
+    assert.equal(result.runtimeSha, runtimeSha);
+    assert.equal(result.backup.offsite, true);
+    assert.deepEqual(result.healthBefore, health);
+    assert.deepEqual(result.healthAfter, health);
+});
+
 void test('order ownership backfill separates read-only planning from reviewed writes', () => {
     const runtimeSha = 'b'.repeat(40);
     assert.deepEqual(

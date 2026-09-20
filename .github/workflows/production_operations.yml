@@ -34,13 +34,14 @@ on:
     workflow_dispatch:
         inputs:
             operation:
-                description: Diagnose production, retain reviewed releases, or back up and verify 2FA keys
+                description: Diagnose production, back up the database, retain reviewed releases, or manage 2FA backups
                 required: true
                 default: diagnose
                 type: choice
                 options:
                     - preflight-release
                     - diagnose
+                    - backup-database
                     - retain-reviewed
                     - plan-two-factor-backup
                     - backup-two-factor-reviewed
@@ -66,7 +67,7 @@ on:
                 default: ''
                 type: string
             expected_runtime_sha:
-                description: Exact running production SHA reviewed for the read-only store isolation audit
+                description: Exact running production SHA reviewed for pinned store-data operations
                 required: false
                 default: ''
                 type: string
@@ -111,9 +112,9 @@ jobs:
                   }
                   [[ "$OPS_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
                   case "$OPS_OPERATION" in
-                    preflight-release|postflight-release|diagnose|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|audit-store-isolation-data|plan-order-sales-ownership-backfill)
+                    preflight-release|postflight-release|diagnose|backup-database|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|audit-store-isolation-data|plan-order-sales-ownership-backfill)
                       [[ -z "$OPS_EXPECTED_PLAN_SHA256" ]] || {
-                        echo 'Read-only operations must not include an expected plan' >&2
+                        echo 'Operations without reviewed data changes must not include an expected plan' >&2
                         exit 1
                       }
                       ;;
@@ -136,7 +137,7 @@ jobs:
                     echo 'Only release validation accepts expected Channel codes' >&2
                     exit 1
                   fi
-                  if [[ "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" ]]; then
+                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" ]]; then
                     [[ "$OPS_EXPECTED_RUNTIME_SHA" =~ ^[0-9a-f]{40}$ ]] || {
                       echo 'Pinned store-data operations require an exact expected runtime SHA' >&2
                       exit 1
@@ -163,7 +164,7 @@ jobs:
                   set -Eeuo pipefail
                   [[ "$(git rev-parse HEAD)" == "$OPS_SOURCE_SHA" ]]
                   test -z "$(git status --porcelain --untracked-files=no)"
-                  if [[ "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" ]]; then
+                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" ]]; then
                     git cat-file -e "${OPS_EXPECTED_RUNTIME_SHA}^{commit}"
                     git merge-base --is-ancestor "$OPS_EXPECTED_RUNTIME_SHA" "$OPS_SOURCE_SHA"
                   fi
