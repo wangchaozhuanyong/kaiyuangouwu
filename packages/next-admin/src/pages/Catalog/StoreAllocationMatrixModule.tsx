@@ -160,7 +160,7 @@ export function StoreAllocationMatrixModule() {
                         </div>
                         <div className="mt-2 text-2xl font-extrabold text-slate-900">{metrics.total}</div>
                         <p className="mt-1 text-[11px] text-slate-400">
-                            {scopeChannel ? getChannelDisplayName(scopeChannel.code) : '当前渠道'}统计范围
+                            {scopeChannel ? getChannelDisplayName(scopeChannel) : '当前渠道'}统计范围
                         </p>
                     </div>
 
@@ -202,9 +202,9 @@ export function StoreAllocationMatrixModule() {
                                 <div className="flex items-center justify-between">
                                     <span
                                         className="truncate text-xs font-bold text-slate-700"
-                                        title={getChannelDisplayName(channel.code)}
+                                        title={getChannelDisplayName(channel)}
                                     >
-                                        {getChannelDisplayName(channel.code)}
+                                        {getChannelDisplayName(channel)}
                                     </span>
                                     <Store className="h-4 w-4 text-slate-400 shrink-0" />
                                 </div>
@@ -374,12 +374,13 @@ export function StoreAllocationMatrixModule() {
                                             >
                                                 <div className="flex flex-col items-center gap-0.5">
                                                     <span className="font-extrabold text-slate-800">
-                                                        {getChannelDisplayName(channel.code)}
+                                                        {getChannelDisplayName(channel)}
                                                     </span>
-                                                    <span className="font-mono text-[10px] text-slate-400">
-                                                        {channel.code}
-                                                        {channel.isDefault ? ' (主店)' : ''}
-                                                    </span>
+                                                    {channel.isDefault && (
+                                                        <span className="text-[10px] font-medium text-slate-500">
+                                                            主店铺
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </th>
                                         ))}

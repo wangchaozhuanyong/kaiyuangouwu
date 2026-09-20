@@ -6,6 +6,10 @@ export const DASHBOARD_METRICS_QUERY = gql`
             id
             code
             defaultCurrencyCode
+            customFields {
+                storefrontNameZh
+                storefrontNameEn
+            }
         }
         dashboardMetricSummary(input: $input) {
             type
@@ -66,6 +70,10 @@ export const DASHBOARD_BOOTSTRAP_QUERY = gql`
             id
             code
             defaultCurrencyCode
+            customFields {
+                storefrontNameZh
+                storefrontNameEn
+            }
         }
         dashboardMetricSummary(input: $input) {
             type
@@ -117,7 +125,15 @@ export interface DashboardMetricSummary {
 }
 
 export interface DashboardMetricsData {
-    activeChannel: { id: string; code: string; defaultCurrencyCode: string };
+    activeChannel: {
+        id: string;
+        code: string;
+        defaultCurrencyCode: string;
+        customFields?: {
+            storefrontNameZh?: string | null;
+            storefrontNameEn?: string | null;
+        } | null;
+    };
     dashboardMetricSummary: DashboardMetricSummary[];
     pendingSearchIndexUpdates: number;
 }

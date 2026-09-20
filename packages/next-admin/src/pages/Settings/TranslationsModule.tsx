@@ -179,11 +179,7 @@ export function TranslationsModule() {
                                 />
                                 <Metric
                                     label="当前店铺"
-                                    value={
-                                        query.data
-                                            ? getChannelDisplayName(query.data.activeChannel.code)
-                                            : '—'
-                                    }
+                                    value={query.data ? getChannelDisplayName(query.data.activeChannel) : '—'}
                                     detail={
                                         (result?.activeChannel.availableLanguageCodes ?? []).join(' / ') ||
                                         '未返回语言'

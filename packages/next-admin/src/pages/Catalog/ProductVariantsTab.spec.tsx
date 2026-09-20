@@ -17,11 +17,28 @@ const editorState = vi.hoisted(() => ({
     optionGroupPageSize: 20,
     optionGroupsData: { productOptionGroups: { items: [], totalItems: 0 } },
     catalogChannelsData: {
-        activeChannel: { id: 'default', code: '__default_channel__' },
+        activeChannel: {
+            id: 'default',
+            code: '__default_channel__',
+            customFields: null as {
+                storefrontNameZh?: string | null;
+                storefrontNameEn?: string | null;
+            } | null,
+        },
         channels: {
             items: [
-                { id: 'default', code: '__default_channel__', defaultCurrencyCode: 'CNY' },
-                { id: 'meiyijia', code: '美宜佳', defaultCurrencyCode: 'MYR' },
+                {
+                    id: 'default',
+                    code: '__default_channel__',
+                    defaultCurrencyCode: 'CNY',
+                    customFields: null,
+                },
+                {
+                    id: 'meiyijia',
+                    code: 'meiyijia',
+                    defaultCurrencyCode: 'MYR',
+                    customFields: { storefrontNameZh: '美宜佳', storefrontNameEn: 'MYNEWS' },
+                },
             ],
         },
     },
@@ -41,7 +58,11 @@ vi.mock('./ProductEditorContext', () => ({ useProductEditor: () => editorState }
 
 describe('ProductVariantsTab store isolation', () => {
     it('shows only the selected store as the product owner and offers no cross-store checkbox', () => {
-        editorState.catalogChannelsData.activeChannel = { id: 'meiyijia', code: '美宜佳' };
+        editorState.catalogChannelsData.activeChannel = {
+            id: 'meiyijia',
+            code: 'my-malaysia',
+            customFields: { storefrontNameZh: '美宜佳', storefrontNameEn: 'MYNEWS' },
+        };
         const container = document.createElement('div');
         container.innerHTML = renderToStaticMarkup(
             <FeatureHelpProvider>

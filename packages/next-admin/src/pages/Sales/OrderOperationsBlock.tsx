@@ -22,6 +22,7 @@ import {
     type PaymentMethodsForManualData,
 } from '../../graphql/order-operations.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { canAddManualPayment } from './order-operation-availability';
 import {
@@ -260,8 +261,10 @@ export function OrderOperationsBlock({ context }: { context: NextAdminPageBlockC
                                     <b>{formatMoney(sellerOrder.totalWithTax, sellerOrder.currencyCode)}</b>
                                 </div>
                                 <p className="mt-2 text-slate-500">
-                                    {sellerOrder.salesChannel?.code ?? '归属待核实'} ·{' '}
-                                    {getOrderStateLabel(sellerOrder.state)}
+                                    {sellerOrder.salesChannel
+                                        ? getChannelDisplayName(sellerOrder.salesChannel)
+                                        : '归属待核实'}{' '}
+                                    · {getOrderStateLabel(sellerOrder.state)}
                                 </p>
                                 <Link
                                     to={`/sales/orders/${sellerOrder.id}`}
@@ -457,7 +460,7 @@ function ManualPaymentEditor({
                     <option value="">请选择</option>
                     {methods.map(item => (
                         <option key={item.code} value={item.code}>
-                            {item.name} ({item.code})
+                            {item.name}
                         </option>
                     ))}
                 </select>

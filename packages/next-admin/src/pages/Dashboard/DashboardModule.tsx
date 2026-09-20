@@ -316,9 +316,7 @@ export function DashboardModule() {
                             </h1>
                             <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
                                 当前店铺：
-                                {metrics.data
-                                    ? getChannelDisplayName(metrics.data.activeChannel.code)
-                                    : '读取中'}
+                                {metrics.data ? getChannelDisplayName(metrics.data.activeChannel) : '读取中'}
                             </span>
                         </div>
                         <p className="mt-1 text-xs text-slate-500">订单、履约与售后数据每分钟自动更新</p>

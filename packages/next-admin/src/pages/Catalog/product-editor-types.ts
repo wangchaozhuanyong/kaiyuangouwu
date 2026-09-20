@@ -80,6 +80,7 @@ export interface CatalogChannel {
     code: string;
     token: string;
     defaultCurrencyCode: string;
+    customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
 }
 
 export interface ProductDetailRecord {

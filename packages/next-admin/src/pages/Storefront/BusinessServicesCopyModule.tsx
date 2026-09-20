@@ -161,7 +161,7 @@ export function BusinessServicesCopyModule() {
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             编辑商业服务页顶部卡片的中英文标题、说明与跳转链接 · 当前店铺{' '}
-                            {query.data ? getChannelDisplayName(query.data.activeChannel.code) : '读取中'}
+                            {query.data ? getChannelDisplayName(query.data.activeChannel) : '读取中'}
                         </p>
                     </div>
                     <div className="flex gap-2">

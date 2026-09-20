@@ -1257,9 +1257,6 @@ export function CategoriesModule() {
                                                 <div className="truncate text-sm font-bold text-slate-900">
                                                     {group.name}
                                                 </div>
-                                                <div className="truncate font-mono text-[11px] text-slate-400">
-                                                    {group.code}
-                                                </div>
                                                 <button
                                                     type="button"
                                                     onClick={() => setUsageGroup(group)}
@@ -1364,9 +1361,6 @@ export function CategoriesModule() {
                                                     内部属性
                                                 </span>
                                             )}
-                                        </div>
-                                        <div className="font-mono text-[11px] text-slate-400">
-                                            {facet.code}
                                         </div>
                                     </div>
                                     <div className="flex gap-1">

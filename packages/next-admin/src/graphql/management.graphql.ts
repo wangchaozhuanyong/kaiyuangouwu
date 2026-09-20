@@ -15,6 +15,7 @@ export const TEAM_MANAGEMENT_QUERY = gql`
                 code
                 customFields {
                     storefrontNameZh
+                    storefrontNameEn
                 }
             }
         }
@@ -28,6 +29,7 @@ export const TEAM_MANAGEMENT_QUERY = gql`
                 code
                 customFields {
                     storefrontNameZh
+                    storefrontNameEn
                 }
             }
             administrator {
@@ -61,6 +63,7 @@ export const TEAM_MANAGEMENT_QUERY = gql`
                 code
                 customFields {
                     storefrontNameZh
+                    storefrontNameEn
                 }
             }
         }
@@ -69,6 +72,7 @@ export const TEAM_MANAGEMENT_QUERY = gql`
             code
             customFields {
                 storefrontNameZh
+                storefrontNameEn
             }
         }
         permissionPolicyCatalog {
@@ -531,6 +535,10 @@ export const STORE_MANAGEMENT_QUERY = gql`
             code
             defaultLanguageCode
             defaultCurrencyCode
+            customFields {
+                storefrontNameZh
+                storefrontNameEn
+            }
         }
         sellers(options: $sellerOptions) {
             totalItems
@@ -653,6 +661,10 @@ export const BUSINESS_SETTINGS_QUERY = gql`
             items {
                 id
                 code
+                customFields {
+                    storefrontNameZh
+                    storefrontNameEn
+                }
                 defaultTaxZone {
                     id
                 }
@@ -1336,7 +1348,7 @@ export interface RoleRecord {
     channels: Array<{
         id: string;
         code: string;
-        customFields?: { storefrontNameZh?: string | null } | null;
+        customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
     }>;
 }
 
@@ -1367,7 +1379,7 @@ export interface AdministratorAccessRecord {
     channel: {
         id: string;
         code: string;
-        customFields?: { storefrontNameZh?: string | null } | null;
+        customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
     } | null;
 }
 
@@ -1393,7 +1405,7 @@ export interface TeamManagementResult {
     manageableChannels: Array<{
         id: string;
         code: string;
-        customFields?: { storefrontNameZh?: string | null } | null;
+        customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
     }>;
     permissionPolicyCatalog: {
         permissions: PermissionPolicyRecord[];
@@ -1577,6 +1589,7 @@ export interface StoreManagementResult {
         code: string;
         defaultLanguageCode: string;
         defaultCurrencyCode: string;
+        customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
     }>;
     sellers: {
         totalItems: number;
@@ -1648,6 +1661,10 @@ export interface BusinessSettingsResult {
         items: Array<{
             id: string;
             code: string;
+            customFields?: {
+                storefrontNameZh?: string | null;
+                storefrontNameEn?: string | null;
+            } | null;
             defaultTaxZone: { id: string } | null;
             defaultShippingZone: { id: string } | null;
         }>;

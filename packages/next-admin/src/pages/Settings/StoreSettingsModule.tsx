@@ -9,6 +9,7 @@ import { MyStoreSettingsModule } from './MyStoreSettingsModule';
 import { PlatformGovernanceCenter } from './PlatformGovernanceCenter';
 import { PlatformGovernanceReviewCenter } from './PlatformGovernanceReviewCenter';
 import { ErrorState, SettingsContentSkeleton } from './settings-ui';
+
 export function StoreSettingsModule() {
     const { hasAnyPermission } = useAdminPermissions();
     const accessQuery = useQuery<AdministratorAccessScopeResult>(ADMINISTRATOR_ACCESS_SCOPE_QUERY, {

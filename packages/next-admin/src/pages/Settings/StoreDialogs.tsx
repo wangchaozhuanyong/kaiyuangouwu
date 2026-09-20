@@ -23,6 +23,7 @@ import {
     type StoreProfileRecord,
 } from '../../graphql/management.graphql';
 import { copyAdminText } from '../../utils/admin-clipboard';
+import { getAdminDisplayLanguage } from '../../utils/admin-language';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { omitUnchangedEnglish } from '../../utils/english-edit-intent';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -170,7 +171,7 @@ export function StoreEditor({
     return (
         <Modal
             title="编辑店铺档案"
-            description={`${profile.channel.code} · 使用乐观锁避免覆盖他人修改`}
+            description={`${storeName(profile)} · 使用乐观锁避免覆盖他人修改`}
             onClose={() => {
                 if (!saving) onClose();
             }}
@@ -522,8 +523,8 @@ export function StoreDeprovisionDialog({
             title={allowPermanentDeprovision ? '暂停或安全清退店铺' : '暂停店铺营业'}
             description={
                 allowPermanentDeprovision
-                    ? `${storeName(profile)} · ${profile.channel.code} · 先看影响、再暂停，只有没有业务数据的店铺才允许彻底删除`
-                    : `${storeName(profile)} · ${profile.channel.code} · 平台管理员可以暂停营业，彻底清退仅平台所有者可执行`
+                    ? `${storeName(profile)} · 先看影响、再暂停，只有没有业务数据的店铺才允许彻底删除`
+                    : `${storeName(profile)} · 平台管理员可以暂停营业，彻底清退仅平台所有者可执行`
             }
             onClose={onClose}
         >
@@ -831,7 +832,7 @@ export function ProvisionStoreDialog({
                         <option value="">请选择要复制配置的现有店铺</option>
                         {templates.map(template => (
                             <option key={template.id} value={template.id}>
-                                {getChannelDisplayName(template.code)} · {template.defaultLanguageCode} /{' '}
+                                {getChannelDisplayName(template)} · {template.defaultLanguageCode} /{' '}
                                 {template.defaultCurrencyCode}
                             </option>
                         ))}
@@ -957,10 +958,11 @@ export function SellerDialog({
     );
 }
 export function storeName(profile: StoreProfileRecord) {
+    const languageCode = getAdminDisplayLanguage();
     return (
-        profile.channel.customFields.storefrontNameZh ||
-        profile.channel.customFields.storefrontNameEn ||
-        getChannelDisplayName(profile.channel.code)
+        (languageCode === 'zh_Hans'
+            ? profile.channel.customFields.storefrontNameZh
+            : profile.channel.customFields.storefrontNameEn) || getChannelDisplayName(profile.channel)
     );
 }
 

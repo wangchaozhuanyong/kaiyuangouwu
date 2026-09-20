@@ -58,7 +58,7 @@ export function StorefrontVisualPresetPanel() {
     const [feedbackChannel, setFeedbackChannel] = useState<string | null>(null);
     const queryData = query.data;
     const channel = queryData?.activeChannel;
-    const storeName = channel ? getChannelDisplayName(channel.code) : '当前店铺';
+    const storeName = channel ? getChannelDisplayName(channel) : '当前店铺';
     const storefrontUrl = previewUrlQuery.data?.storeProfiles?.find(
         profile => profile.channel.id === channel?.id,
     )?.storefrontUrl;

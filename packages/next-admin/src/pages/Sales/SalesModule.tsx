@@ -32,6 +32,7 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUrlListState } from '../../hooks/use-url-list-state';
 import { type SortDirection, useUrlSortState } from '../../hooks/use-url-sort-state';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 import { csvCell } from './sales-csv';
@@ -390,7 +391,7 @@ export function SalesModule() {
             '收货地址',
         ];
         const rows = orders.map(order => [
-            order.salesChannel?.code ?? '归属待核实',
+            order.salesChannel ? getChannelDisplayName(order.salesChannel) : '归属待核实',
             order.code,
             formatDateTime(order.orderPlacedAt ?? order.createdAt),
             getCustomerName(order.customer),
@@ -802,10 +803,18 @@ export function SalesModule() {
                                                             <span
                                                                 className="block truncate text-[10px] text-slate-500"
                                                                 title={
-                                                                    order.salesChannel?.code ?? '归属待核实'
+                                                                    order.salesChannel
+                                                                        ? getChannelDisplayName(
+                                                                              order.salesChannel,
+                                                                          )
+                                                                        : '归属待核实'
                                                                 }
                                                             >
-                                                                {order.salesChannel?.code ?? '归属待核实'}
+                                                                {order.salesChannel
+                                                                    ? getChannelDisplayName(
+                                                                          order.salesChannel,
+                                                                      )
+                                                                    : '归属待核实'}
                                                             </span>
                                                         </td>
                                                         <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">

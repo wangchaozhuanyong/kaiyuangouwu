@@ -34,6 +34,7 @@ import {
     TRANSITION_SALES_ORDER,
 } from '../../graphql/sales.graphql';
 import { useAdminReturn } from '../../hooks/use-admin-return';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
     canManageOrderInChannel,
@@ -527,7 +528,7 @@ export function DraftOrderEditor() {
             <WorkflowError
                 message={
                     order.salesChannel
-                        ? `请通过顶部店铺选择器切换到销售店铺“${order.salesChannel.code}”后操作。`
+                        ? `请通过顶部店铺选择器切换到销售店铺“${getChannelDisplayName(order.salesChannel)}”后操作。`
                         : '历史订单归属待核实，暂时只能查看。'
                 }
                 onBack={() => navigate(`/sales/orders/${order.id}`, { state: location.state })}
@@ -1040,7 +1041,7 @@ export function ModifyOrderEditor() {
             <WorkflowError
                 message={
                     order.salesChannel
-                        ? `请通过顶部店铺选择器切换到销售店铺“${order.salesChannel.code}”后操作。`
+                        ? `请通过顶部店铺选择器切换到销售店铺“${getChannelDisplayName(order.salesChannel)}”后操作。`
                         : '历史订单归属待核实，暂时只能查看。'
                 }
                 onBack={() => navigate(`/sales/orders/${order.id}`, { state: location.state })}

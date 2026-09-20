@@ -3,6 +3,7 @@ import { gql } from '@apollo/client';
 export interface AssignmentChannel {
     id: string;
     code: string;
+    displayName: string;
     isDefault: boolean;
 }
 
@@ -52,6 +53,7 @@ export const GET_CATALOG_CHANNEL_ASSIGNMENTS = gql`
             channels {
                 id
                 code
+                displayName
                 isDefault
             }
             items {
@@ -61,6 +63,7 @@ export const GET_CATALOG_CHANNEL_ASSIGNMENTS = gql`
                 channels {
                     id
                     code
+                    displayName
                     isDefault
                 }
             }

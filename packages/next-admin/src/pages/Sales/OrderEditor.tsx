@@ -1429,7 +1429,7 @@ export function OrderEditor() {
                                             <span className="text-slate-500">销售店铺</span>
                                             <span className="font-semibold text-slate-800">
                                                 {order.salesChannel
-                                                    ? getChannelDisplayName(order.salesChannel.code)
+                                                    ? getChannelDisplayName(order.salesChannel)
                                                     : '归属待核实'}
                                             </span>
                                         </div>

@@ -139,9 +139,23 @@ describe('admin channel request routing', () => {
         expect(localStorage.getItem('vendure-active-channel-token')).toBe('legacy-shared-store');
     });
 
-    it('uses Simplified Chinese as the display language for all Admin API requests', () => {
+    it('uses one Simplified Chinese language for entity fields and server messages', () => {
         const url = new URL(getLocalizedAdminApiUrl(), 'http://localhost');
+        expect(url.searchParams.get('languageCode')).toBe('zh_Hans');
         expect(url.searchParams.get('displayLanguageCode')).toBe('zh_Hans');
+    });
+
+    it('keeps entity fields and server messages English on an English Admin page', () => {
+        vi.stubGlobal('window', {
+            location: {
+                origin: 'https://admin.example.test',
+                search: '?displayLanguageCode=en',
+            },
+        });
+
+        const url = new URL(getLocalizedAdminApiUrl(), 'http://localhost');
+        expect(url.searchParams.get('languageCode')).toBe('en');
+        expect(url.searchParams.get('displayLanguageCode')).toBe('en');
     });
 
     it('uploads multipart files into the selected store and retains the session', async () => {
@@ -156,6 +170,9 @@ describe('admin channel request routing', () => {
             new URL(String(request.mock.calls[0][0]), 'http://localhost').searchParams.get(
                 'displayLanguageCode',
             ),
+        ).toBe('zh_Hans');
+        expect(
+            new URL(String(request.mock.calls[0][0]), 'http://localhost').searchParams.get('languageCode'),
         ).toBe('zh_Hans');
         expect(init.headers).toEqual({
             'vendure-token': 'store-a',

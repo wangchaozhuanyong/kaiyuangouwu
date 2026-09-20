@@ -5,13 +5,13 @@ import { adminMutationFeedbackLink } from './apollo-mutation-feedback';
 import { sensitiveActionPasswordLink } from './apollo-sensitive-action';
 import { CUSTOM_FIELD_POSSIBLE_TYPES } from './custom-fields/custom-fields.graphql';
 import { runAdminActionWithFeedback } from './utils/admin-action-feedback';
+import { getAdminDisplayLanguage } from './utils/admin-language';
 
 const AUTH_TOKEN_KEY = 'vendure-auth-token';
 const AUTH_PERSISTENCE_KEY = 'vendure-auth-persistence';
 const AUTH_TOKEN_HEADER = 'vendure-auth-token';
 const ACTIVE_CHANNEL_HEADER = 'vendure-token';
 const ACTIVE_CHANNEL_TOKEN_KEY = 'vendure-active-channel-token';
-const ADMIN_DISPLAY_LANGUAGE = 'zh_Hans';
 export { sensitiveActionContext } from './apollo-sensitive-action';
 
 export const ADMIN_API_URL = import.meta.env.VITE_VENDURE_ADMIN_API_URL?.trim() || '/admin-api';
@@ -20,7 +20,12 @@ export const getLocalizedAdminApiUrl = () => {
     const isAbsoluteUrl = /^(?:[a-z][a-z\d+.-]*:)?\/\//iu.test(ADMIN_API_URL);
     const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
     const url = new URL(ADMIN_API_URL, origin);
-    url.searchParams.set('displayLanguageCode', ADMIN_DISPLAY_LANGUAGE);
+    const languageCode = getAdminDisplayLanguage();
+    // Vendure uses `languageCode` for translated entity fields and `displayLanguageCode` for
+    // localized server messages. Keeping them identical prevents a single response from mixing
+    // Chinese entity names with English messages (or the reverse).
+    url.searchParams.set('languageCode', languageCode);
+    url.searchParams.set('displayLanguageCode', languageCode);
     return isAbsoluteUrl ? url.toString() : `${url.pathname}${url.search}${url.hash}`;
 };
 

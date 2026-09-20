@@ -360,6 +360,10 @@ export const GET_CATALOG_CHANNELS = gql`
             code
             token
             defaultCurrencyCode
+            customFields {
+                storefrontNameZh
+                storefrontNameEn
+            }
         }
         channels(options: $options) {
             items {
@@ -367,6 +371,10 @@ export const GET_CATALOG_CHANNELS = gql`
                 code
                 token
                 defaultCurrencyCode
+                customFields {
+                    storefrontNameZh
+                    storefrontNameEn
+                }
             }
             totalItems
         }

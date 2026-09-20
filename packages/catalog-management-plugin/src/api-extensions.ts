@@ -988,6 +988,7 @@ export const adminApiExtensions = gql`
     type CatalogAssignmentChannel {
         id: ID!
         code: String!
+        displayName: String!
         isDefault: Boolean!
     }
 

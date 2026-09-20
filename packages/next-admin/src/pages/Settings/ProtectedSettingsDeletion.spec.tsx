@@ -368,12 +368,13 @@ describe('protected settings deletion', () => {
             );
         });
 
-        expect(container.textContent).toContain('被 美宜佳店铺（Channel：my-malaysia） 使用');
+        expect(container.textContent).toContain('被 美宜佳店铺 使用');
+        expect(container.textContent).not.toContain('Channel：my-malaysia');
         const button = container.querySelector<HTMLButtonElement>('button[aria-label="删除美宜佳"]');
         await act(async () => button?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
 
         expect(onError).toHaveBeenCalledWith(
-            '无法删除商家主体“美宜佳”，正在占用的店铺：美宜佳店铺（Channel：my-malaysia）。处理方法：保留店铺时，请先将对应 Channel 改绑到其他商家主体；整间店铺不再使用时，请到“店铺实例”使用“安全清退”。',
+            '无法删除商家主体“美宜佳”，正在占用的店铺：美宜佳店铺。处理方法：保留店铺时，请先将对应 Channel 改绑到其他商家主体；整间店铺不再使用时，请到“店铺实例”使用“安全清退”。',
         );
         expect(requestConfirmation).not.toHaveBeenCalled();
         expect(deleteSeller).not.toHaveBeenCalled();

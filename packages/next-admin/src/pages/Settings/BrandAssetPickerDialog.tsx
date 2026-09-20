@@ -6,6 +6,7 @@ import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurfac
 import { ImageAssetUploadButton } from '../../components/ImageAssetUploadButton';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
 import { usePageSize } from '../../hooks/use-page-size';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from '../Catalog/LookupPager';
 import { inputClass, secondaryButton } from './settings-ui';
@@ -88,7 +89,7 @@ function BrandAssetResults({
                     }}
                 />
                 <ImageAssetUploadButton
-                    ariaLabel={`上传品牌图片到${channel.code}素材库`}
+                    ariaLabel={`上传品牌图片到${getChannelDisplayName(channel)}素材库`}
                     channelToken={channel.token}
                     onUploaded={uploaded => {
                         const [asset] = uploaded;

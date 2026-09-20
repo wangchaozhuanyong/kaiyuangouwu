@@ -16,17 +16,47 @@ describe('channel display helpers', () => {
         },
     );
 
-    it('keeps merchant-defined store names and adds their currency', () => {
-        expect(getChannelDisplayLabel({ code: '美宜佳', defaultCurrencyCode: 'MYR' })).toBe('美宜佳 · MYR');
+    it('uses an English display name on an English page without exposing the technical code', () => {
+        expect(getChannelDisplayName('__default_channel__', 'en')).toBe(
+            'Platform management (non-operating)',
+        );
+        expect(
+            getChannelDisplayLabel({ code: '__default_channel__', defaultCurrencyCode: 'CNY' }, 'en'),
+        ).toBe('Platform management (non-operating) · CNY');
     });
 
-    it('uses the configured Chinese store name instead of a technical channel code', () => {
+    it('keeps merchant-defined store names and adds their currency', () => {
         expect(
-            getChannelDisplayName({
-                code: 'moyao-ai',
-                customFields: { storefrontNameZh: '模铝科技' },
+            getChannelDisplayLabel({
+                code: 'my-malaysia',
+                defaultCurrencyCode: 'MYR',
+                customFields: { storefrontNameZh: '美宜佳' },
             }),
-        ).toBe('模铝科技');
+        ).toBe('美宜佳 · MYR');
+    });
+
+    it('never exposes a non-default technical code when localized metadata is unavailable', () => {
+        expect(getChannelDisplayName('my-malaysia')).toBe('店铺名称不可用');
+        expect(getChannelDisplayName('my-malaysia', 'en')).toBe('Store name unavailable');
+    });
+
+    it('uses configured store names instead of the technical Channel code', () => {
+        const channel = {
+            code: 'my-malaysia',
+            customFields: { storefrontNameZh: '大马通', storefrontNameEn: 'DAMATONG' },
+        };
+
+        expect(getChannelDisplayName(channel, 'zh_Hans')).toBe('大马通');
+        expect(getChannelDisplayName(channel, 'en')).toBe('DAMATONG');
+    });
+
+    it('does not fall back to the other store language when localized metadata is present', () => {
+        expect(
+            getChannelDisplayName(
+                { code: 'my-malaysia', customFields: { storefrontNameZh: '大马通', storefrontNameEn: '' } },
+                'en',
+            ),
+        ).toBe('English store name not set');
     });
 
     it('explains that an empty catalog only applies to the current store', () => {

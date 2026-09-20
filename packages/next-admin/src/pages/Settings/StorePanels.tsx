@@ -216,7 +216,7 @@ export function StoresPanel({
                                     {storeName(profile)}
                                 </h2>
                                 <p className="mt-1 font-mono text-[10px] text-slate-400">
-                                    {getChannelDisplayName(profile.channel.code)}
+                                    {getChannelDisplayName(profile.channel)}
                                 </p>
                             </div>
                         </div>
@@ -402,7 +402,7 @@ export function DomainsPanel({
             if (!impact.canTransfer) throw new Error(impact.blocker || '当前域名不能转移');
             const target = profiles.find(candidate => candidate.channel.id === targetChannelId);
             const confirmed = await requestConfirmation({
-                title: `把 ${item.domain} 转移到 ${target ? storeName(target) : impact.targetChannel.code}？`,
+                title: `把 ${item.domain} 转移到 ${target ? storeName(target) : getChannelDisplayName(impact.targetChannel)}？`,
                 description: [
                     '验证状态与证书配置将保留，域名会立即成为目标店铺的主域名。',
                     impact.targetPrimaryDomain
@@ -801,5 +801,5 @@ export function SellersPanel({
 function sellerUsageLabels(profiles: StoreProfileRecord[], sellerId: string) {
     return profiles
         .filter(profile => profile.channel.seller?.id === sellerId)
-        .map(profile => `${storeName(profile)}（Channel：${profile.channel.code}）`);
+        .map(profile => storeName(profile));
 }

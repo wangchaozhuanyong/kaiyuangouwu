@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import type { ReferralPosterRecord } from '../../graphql/marketing.graphql';
 import { SHARING_SETTINGS_QUERY, type SharingSettingsResult } from '../../graphql/sharing.graphql';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { ErrorState, LoadingState, Message } from '../Settings/settings-ui';
 import { PosterEditor } from './ReferralDialogs';
@@ -75,7 +76,8 @@ function SharingSettings({
                             分享设置 <FeatureHelpButton topic="marketing.poster-templates" title="分享设置" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            {data.activeChannel.code} · 管理客户端分享海报的默认模板、启停、背景与中英文文案
+                            {getChannelDisplayName(data.activeChannel)} ·
+                            管理客户端分享海报的默认模板、启停、背景与中英文文案
                         </p>
                     </div>
                     <button

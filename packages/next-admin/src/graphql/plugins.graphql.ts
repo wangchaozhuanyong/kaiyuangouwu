@@ -225,6 +225,10 @@ export const CONTENT_TRANSLATION_AUDIT_QUERY = gql`
             code
             defaultLanguageCode
             availableLanguageCodes
+            customFields {
+                storefrontNameZh
+                storefrontNameEn
+            }
         }
         contentTranslationStaleCount
         contentTranslationAudit(options: $options) {
@@ -435,6 +439,10 @@ export interface ContentTranslationAuditResult {
         code: string;
         defaultLanguageCode: string;
         availableLanguageCodes: string[];
+        customFields?: {
+            storefrontNameZh?: string | null;
+            storefrontNameEn?: string | null;
+        } | null;
     };
     contentTranslationStaleCount: number;
     contentTranslationAudit: {

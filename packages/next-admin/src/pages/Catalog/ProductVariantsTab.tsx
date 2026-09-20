@@ -97,7 +97,7 @@ export function ProductVariantsTab() {
                             本商品仅属于{' '}
                             <strong className="text-blue-700">
                                 {catalogChannelsData
-                                    ? getChannelDisplayName(catalogChannelsData.activeChannel.code)
+                                    ? getChannelDisplayName(catalogChannelsData.activeChannel)
                                     : '当前店铺'}
                             </strong>
                             ，在本店独立设置 {activeCurrencyCode} 销售价。

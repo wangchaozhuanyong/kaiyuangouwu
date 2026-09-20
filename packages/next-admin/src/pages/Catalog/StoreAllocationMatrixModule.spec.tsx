@@ -20,9 +20,14 @@ async function renderAllocationMatrix() {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
     const channels = [
-        { id: 'channel-default', code: '__default_channel__', isDefault: true },
-        { id: 'channel-branch-1', code: 'meiyijia', isDefault: false },
-        { id: 'channel-branch-2', code: 'direct-store', isDefault: false },
+        {
+            id: 'channel-default',
+            code: '__default_channel__',
+            displayName: '默认店铺',
+            isDefault: true,
+        },
+        { id: 'channel-branch-1', code: 'meiyijia', displayName: '美宜佳', isDefault: false },
+        { id: 'channel-branch-2', code: 'direct-store', displayName: '直营店', isDefault: false },
     ];
 
     const items = [
@@ -30,16 +35,13 @@ async function renderAllocationMatrix() {
             id: 'product-1',
             name: '白利群2',
             enabled: true,
-            channels: [{ id: 'channel-default', code: '__default_channel__', isDefault: true }],
+            channels: [channels[0]],
         },
         {
             id: 'product-2',
             name: '红双喜',
             enabled: true,
-            channels: [
-                { id: 'channel-default', code: '__default_channel__', isDefault: true },
-                { id: 'channel-branch-1', code: 'meiyijia', isDefault: false },
-            ],
+            channels: [channels[0], channels[1]],
         },
     ];
 
@@ -112,8 +114,11 @@ describe('StoreAllocationMatrixModule', () => {
         expect(container.textContent).toContain('当前第 1 / 3 页');
         expect(container.textContent).toContain('平台归属异常');
         expect(container.textContent).toContain('平台管理（不经营）');
-        expect(container.textContent).toContain('meiyijia');
-        expect(container.textContent).toContain('direct-store');
+        expect(container.textContent).toContain('美宜佳');
+        expect(container.textContent).toContain('直营店');
+        expect(container.textContent).not.toContain('__default_channel__');
+        expect(container.textContent).not.toContain('meiyijia');
+        expect(container.textContent).not.toContain('direct-store');
     });
 
     it('renders allocation matrix table with status cells per store', async () => {

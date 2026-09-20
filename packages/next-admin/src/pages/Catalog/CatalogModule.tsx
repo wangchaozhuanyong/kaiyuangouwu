@@ -127,6 +127,7 @@ interface GetCatalogChannelsData {
         code: string;
         token: string;
         defaultCurrencyCode: string;
+        customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
     };
     channels: {
         items: Array<{
@@ -134,6 +135,7 @@ interface GetCatalogChannelsData {
             code: string;
             token: string;
             defaultCurrencyCode: string;
+            customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
         }>;
         totalItems: number;
     };
@@ -602,7 +604,7 @@ export function CatalogModule() {
                                 <div className="text-sm font-bold text-slate-700">暂无匹配的商品</div>
                                 <p className="text-xs text-slate-400 max-w-xs">
                                     {getCatalogEmptyStateDescription({
-                                        channelCode: activeChannel?.code,
+                                        channel: activeChannel,
                                         searchTerm,
                                         hasFilters:
                                             statusFilter !== 'ALL' ||
@@ -945,10 +947,10 @@ export function CatalogModule() {
                                                                             title={
                                                                                 ch.isDefault
                                                                                     ? '默认店铺'
-                                                                                    : `分店: ${getChannelDisplayName(ch.code)}`
+                                                                                    : `分店: ${getChannelDisplayName(ch)}`
                                                                             }
                                                                         >
-                                                                            {getChannelDisplayName(ch.code)}
+                                                                            {getChannelDisplayName(ch)}
                                                                         </span>
                                                                     ))
                                                                 )}

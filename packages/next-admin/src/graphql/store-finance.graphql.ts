@@ -249,6 +249,16 @@ export const PLATFORM_USDT_PAYMENT_MANAGEMENT_QUERY = gql`
         $paymentOptions: StorePaymentReportOptionsInput
         $refundOptions: StorePaymentReportOptionsInput
     ) {
+        channels(options: { take: 1000 }) {
+            items {
+                id
+                code
+                customFields {
+                    storefrontNameZh
+                    storefrontNameEn
+                }
+            }
+        }
         storeUsdtWallets {
             ...NextAdminUsdtWalletFields
         }
@@ -533,6 +543,16 @@ export interface FinanceData {
 }
 
 export interface PlatformFinanceData {
+    channels: {
+        items: Array<{
+            id: string;
+            code: string;
+            customFields?: {
+                storefrontNameZh?: string | null;
+                storefrontNameEn?: string | null;
+            } | null;
+        }>;
+    };
     storeUsdtWallets: UsdtWalletRecord[];
     storeUsdtPaymentStats: UsdtPaymentStatsRecord[];
     storeUsdtPaymentIntents: UsdtPaymentIntentRecord[];

@@ -117,5 +117,5 @@ export function formatFulfillmentHandlerSummary(
     if (code === 'manual-fulfillment') {
         return '手动履约';
     }
-    return code;
+    return '履约方式';
 }

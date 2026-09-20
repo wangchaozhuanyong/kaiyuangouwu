@@ -92,11 +92,8 @@ export function OptionGroupProductsDialog({
                                 {loading && !data ? '读取中' : `共 ${totalItems} 个`}
                             </span>
                         </div>
-                        <p
-                            className="mt-1 truncate text-xs text-slate-500"
-                            title={`${group.name} · ${group.code}`}
-                        >
-                            {group.name} · <span className="font-mono">{group.code}</span>
+                        <p className="mt-1 truncate text-xs text-slate-500" title={group.name}>
+                            {group.name}
                         </p>
                         <p className="mt-1 text-[11px] text-slate-400">打开商品后可修改或移除该规格模板。</p>
                     </div>

@@ -122,6 +122,12 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
                                     code: channelCode,
                                     token: 'meiyijia',
                                     defaultCurrencyCode: 'MYR',
+                                    customFields: {
+                                        storefrontNameZh:
+                                            channelCode === '__default_channel__' ? '' : channelCode,
+                                        storefrontNameEn:
+                                            channelCode === '__default_channel__' ? '' : channelCode,
+                                    },
                                 },
                                 channels: {
                                     totalItems: 1,
@@ -131,6 +137,12 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
                                             code: channelCode,
                                             token: 'meiyijia',
                                             defaultCurrencyCode: 'MYR',
+                                            customFields: {
+                                                storefrontNameZh:
+                                                    channelCode === '__default_channel__' ? '' : channelCode,
+                                                storefrontNameEn:
+                                                    channelCode === '__default_channel__' ? '' : channelCode,
+                                            },
                                         },
                                     ],
                                 },
@@ -166,9 +178,15 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
                                         {
                                             id: 'channel-default',
                                             code: '__default_channel__',
+                                            displayName: '平台管理（不经营）',
                                             isDefault: true,
                                         },
-                                        { id: 'channel-branch-1', code: 'branch-store', isDefault: false },
+                                        {
+                                            id: 'channel-branch-1',
+                                            code: 'branch-store',
+                                            displayName: '分店',
+                                            isDefault: false,
+                                        },
                                     ],
                                     items: [
                                         {
@@ -179,6 +197,7 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
                                                 {
                                                     id: 'channel-default',
                                                     code: '__default_channel__',
+                                                    displayName: '平台管理（不经营）',
                                                     isDefault: true,
                                                 },
                                             ],

@@ -607,7 +607,7 @@ describe('CatalogOperationsService', () => {
         const lotRepository = { manager, createQueryBuilder: vi.fn().mockReturnValue(lotQuery) };
         vi.spyOn(service, 'requireStockLocation').mockResolvedValue({} as never);
         connection.getEntityOrThrow.mockResolvedValue({ id: 'variant-1' });
-        connection.getRepository.mockImplementation((_ctx: unknown, entity: unknown) => {
+        (connection.getRepository as any).mockImplementation((_ctx: unknown, entity: unknown) => {
             if (entity === StockLevel) return stockRepository as never;
             if (entity === InventoryLot) return lotRepository as never;
             throw new Error(`Unexpected repository ${String(entity)}`);

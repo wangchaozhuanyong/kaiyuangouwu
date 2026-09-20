@@ -229,6 +229,7 @@ describe('ProvisionStoreDialog', () => {
                 code: '美宜佳',
                 defaultLanguageCode: 'zh_Hans',
                 defaultCurrencyCode: 'MYR',
+                customFields: { storefrontNameZh: '美宜佳', storefrontNameEn: 'MYNEWS' },
             },
         ];
 

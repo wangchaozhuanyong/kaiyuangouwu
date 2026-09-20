@@ -16,6 +16,10 @@ export const CHANNEL_SWITCHER_QUERY = gql`
             token
             defaultCurrencyCode
             defaultLanguageCode
+            customFields {
+                storefrontNameZh
+                storefrontNameEn
+            }
         }
         channels(options: $options) {
             items {
@@ -24,6 +28,10 @@ export const CHANNEL_SWITCHER_QUERY = gql`
                 token
                 defaultCurrencyCode
                 defaultLanguageCode
+                customFields {
+                    storefrontNameZh
+                    storefrontNameEn
+                }
             }
             totalItems
         }
@@ -56,6 +64,10 @@ export const ACTIVE_ADMINISTRATOR_PROFILE_QUERY = gql`
                     channels {
                         id
                         code
+                        customFields {
+                            storefrontNameZh
+                            storefrontNameEn
+                        }
                     }
                 }
             }
@@ -99,6 +111,10 @@ export const APP_SHELL_BOOTSTRAP_QUERY = gql`
                     channels {
                         id
                         code
+                        customFields {
+                            storefrontNameZh
+                            storefrontNameEn
+                        }
                     }
                 }
             }
@@ -109,6 +125,10 @@ export const APP_SHELL_BOOTSTRAP_QUERY = gql`
             token
             defaultCurrencyCode
             defaultLanguageCode
+            customFields {
+                storefrontNameZh
+                storefrontNameEn
+            }
         }
         channels(options: $options) {
             items {
@@ -117,6 +137,10 @@ export const APP_SHELL_BOOTSTRAP_QUERY = gql`
                 token
                 defaultCurrencyCode
                 defaultLanguageCode
+                customFields {
+                    storefrontNameZh
+                    storefrontNameEn
+                }
             }
             totalItems
         }
@@ -169,7 +193,14 @@ export interface ActiveAdministratorProfile {
             id: string;
             code: string;
             description: string;
-            channels: Array<{ id: string; code: string }>;
+            channels: Array<{
+                id: string;
+                code: string;
+                customFields?: {
+                    storefrontNameZh?: string | null;
+                    storefrontNameEn?: string | null;
+                } | null;
+            }>;
         }>;
     };
 }
@@ -197,6 +228,10 @@ export interface AdministrationChannel {
     token: string;
     defaultCurrencyCode: string;
     defaultLanguageCode: string;
+    customFields?: {
+        storefrontNameZh?: string | null;
+        storefrontNameEn?: string | null;
+    } | null;
 }
 
 export interface ChannelSwitcherData {

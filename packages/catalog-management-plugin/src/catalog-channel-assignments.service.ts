@@ -47,7 +47,7 @@ export class CatalogChannelAssignmentsService {
             isOwner || readableIds.length
                 ? await this.connection.getRepository(ctx, Channel).find({
                       ...(isOwner ? {} : { where: { id: In(readableIds) } }),
-                      select: { id: true, code: true },
+                      select: { id: true, code: true, customFields: true },
                       order: { code: 'ASC' },
                       loadEagerRelations: false,
                   })
@@ -82,11 +82,28 @@ export class CatalogChannelAssignmentsService {
             );
         }
         const byId = new Map(assignments.map(product => [String(product.id), product.channels]));
-        const toChannel = (channel: Channel) => ({
-            id: channel.id,
-            code: channel.code,
-            isDefault: channel.code === DEFAULT_CHANNEL_CODE,
-        });
+        const isChinese = String(ctx.languageCode).toLowerCase().startsWith('zh');
+        const toChannel = (channel: Channel) => {
+            const isDefault = channel.code === DEFAULT_CHANNEL_CODE;
+            const fields = (channel.customFields ?? {}) as {
+                storefrontNameZh?: string | null;
+                storefrontNameEn?: string | null;
+            };
+            const localizedName = isChinese
+                ? fields.storefrontNameZh?.trim()
+                : fields.storefrontNameEn?.trim();
+            return {
+                id: channel.id,
+                code: channel.code,
+                displayName:
+                    (isDefault
+                        ? isChinese
+                            ? '平台管理（不经营）'
+                            : 'Platform management (non-operating)'
+                        : localizedName) || (isChinese ? '未填写中文店名' : 'English store name not set'),
+                isDefault,
+            };
+        };
         const items = products.map(product => ({
             id: product.id,
             name: product.name,

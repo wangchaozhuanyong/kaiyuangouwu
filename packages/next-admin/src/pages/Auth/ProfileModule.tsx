@@ -129,9 +129,7 @@ function ProfileContent({
     const initials = `${lastName.charAt(0)}${firstName.charAt(0)}` || '管';
     const channels = [
         ...new Set(
-            profile.user.roles.flatMap(role =>
-                role.channels.map(channel => getChannelDisplayName(channel.code)),
-            ),
+            profile.user.roles.flatMap(role => role.channels.map(channel => getChannelDisplayName(channel))),
         ),
     ];
 
