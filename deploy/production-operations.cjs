@@ -54,6 +54,8 @@ function validateRequest(environment) {
             'verify-security-dependencies',
             'inspect-storefront-config',
             'audit-store-isolation-data',
+            'plan-order-sales-ownership-backfill',
+            'apply-order-sales-ownership-backfill-reviewed',
             'preflight-release',
             'postflight-release',
         ].includes(operation),
@@ -63,10 +65,16 @@ function validateRequest(environment) {
     const expectedPlanSha256 = environment.OPS_EXPECTED_PLAN_SHA256 || '';
     const expectedChannelCodes = environment.OPS_EXPECTED_CHANNEL_CODES || '';
     const expectedRuntimeSha = environment.OPS_EXPECTED_RUNTIME_SHA || '';
-    if (['retain-reviewed', 'backup-two-factor-reviewed'].includes(operation)) {
-        assert.match(expectedPlanSha256, /^[a-f0-9]{64}$/u, 'A reviewed retention plan SHA-256 is required');
+    if (
+        [
+            'retain-reviewed',
+            'backup-two-factor-reviewed',
+            'apply-order-sales-ownership-backfill-reviewed',
+        ].includes(operation)
+    ) {
+        assert.match(expectedPlanSha256, /^[a-f0-9]{64}$/u, 'A reviewed plan SHA-256 is required');
     } else {
-        assert.equal(expectedPlanSha256, '', 'A read-only diagnosis does not accept a retention approval');
+        assert.equal(expectedPlanSha256, '', 'A read-only operation does not accept a write approval');
     }
     assert.ok(
         !expectedChannelCodes ||
@@ -81,13 +89,19 @@ function validateRequest(environment) {
             'Expected Channel codes are only valid for release validation',
         );
     }
-    if (operation === 'audit-store-isolation-data') {
+    if (
+        [
+            'audit-store-isolation-data',
+            'plan-order-sales-ownership-backfill',
+            'apply-order-sales-ownership-backfill-reviewed',
+        ].includes(operation)
+    ) {
         assert.match(expectedRuntimeSha, /^[a-f0-9]{40}$/u, 'An exact expected runtime SHA is required');
     } else {
         assert.equal(
             expectedRuntimeSha,
             '',
-            'Expected runtime SHA is only valid for the store isolation audit',
+            'Expected runtime SHA is only valid for a pinned store-data operation',
         );
     }
     return {
@@ -420,6 +434,159 @@ function productionHealthSnapshot() {
     ]);
 }
 
+function validateOrderSalesOwnershipOutput(output, operation) {
+    assert.ok(Buffer.byteLength(output) <= 4096, 'Order ownership evidence exceeds the safe limit');
+    const prefix = `ORDER_SALES_OWNERSHIP_${operation.toUpperCase()} `;
+    const planLine = output.split('\n').find(line => line.startsWith(prefix));
+    assert.ok(planLine, 'Order ownership evidence is unavailable');
+    assert.ok(
+        output.endsWith(`ORDER_SALES_OWNERSHIP_BACKFILL_OK operation=${operation}\n`),
+        'Order ownership completion evidence is missing',
+    );
+    let plan;
+    try {
+        plan = JSON.parse(planLine.slice(prefix.length));
+    } catch {
+        throw new Error('Order ownership evidence is not valid JSON');
+    }
+    assert.equal(plan?.format, 1, 'Unexpected order ownership plan format');
+    assert.equal(
+        plan?.schema,
+        'vendure-order-sales-ownership-backfill',
+        'Unexpected order ownership plan schema',
+    );
+    assert.equal(plan?.mode, 'deterministic-channel-membership', 'Unexpected ownership mapping mode');
+    assert.ok(Number.isSafeInteger(plan?.candidateCount) && plan.candidateCount >= 0);
+    assert.match(plan?.operationDigest || '', /^[a-f0-9]{64}$/u);
+    assert.ok(plan?.countsByChannel && typeof plan.countsByChannel === 'object');
+    for (const [channelCode, count] of Object.entries(plan.countsByChannel)) {
+        assert.match(channelCode, /^(?:__default_channel__|[a-z0-9_][a-z0-9_-]*|美宜佳)$/u);
+        assert.ok(Number.isSafeInteger(count) && count >= 0);
+    }
+    assert.equal(
+        Object.values(plan.countsByChannel).reduce((total, count) => total + count, 0),
+        plan.candidateCount,
+    );
+    assert.equal('operations' in plan, false, 'Raw order references must not leave the server');
+    return plan;
+}
+
+function startVerifiedMysqlBackup() {
+    execFileSync('sudo', ['-n', 'systemctl', 'start', 'vendure-mysql-backup.service'], {
+        encoding: 'utf8',
+        timeout: 540000,
+        maxBuffer: 65536,
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const state = execFileSync(
+        'systemctl',
+        ['show', 'vendure-mysql-backup.service', '--property=Result,ExecMainStatus,ActiveState,InvocationID'],
+        { encoding: 'utf8', timeout: 30000, maxBuffer: 65536, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    assert.match(state, /^Result=success$/mu, 'Database backup did not succeed');
+    assert.match(state, /^ExecMainStatus=0$/mu, 'Database backup command failed');
+    assert.match(state, /^ActiveState=inactive$/mu, 'Database backup service did not finish');
+    const invocationId = state.match(/^InvocationID=([a-f0-9]{32})$/mu)?.[1];
+    assert.ok(invocationId, 'Database backup invocation evidence is unavailable');
+    const journal = execFileSync(
+        'sudo',
+        ['-n', 'journalctl', `_SYSTEMD_INVOCATION_ID=${invocationId}`, '--no-pager', '-o', 'cat'],
+        { encoding: 'utf8', timeout: 30000, maxBuffer: 65536, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    const evidence = journal.match(
+        /^Created verified MySQL backup: (\/var\/backups\/vendure-mysql\/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz) offsite=yes$/mu,
+    );
+    assert.ok(evidence, 'Database backup is missing verified offsite evidence');
+    const file = evidence[1];
+    for (const candidate of [file, `${file}.sha256`, `${file}.manifest.json`]) {
+        assert.ok(
+            existsSync(candidate) && statSync(candidate).isFile(),
+            'Database backup file is unavailable',
+        );
+    }
+    return { file, invocationId, offsite: true };
+}
+
+function runOrderSalesOwnershipBackfill(
+    request,
+    {
+        inspect = inspectProductionReleases,
+        health = productionHealthSnapshot,
+        spawn = spawnSync,
+        backup = startVerifiedMysqlBackup,
+        script = path.join(
+            __dirname,
+            'repository',
+            'packages',
+            'dev-server',
+            'scripts',
+            'order-sales-ownership-backfill.mjs',
+        ),
+    } = {},
+) {
+    const apply = request.operation === 'apply-order-sales-ownership-backfill-reviewed';
+    assert.ok(apply || request.operation === 'plan-order-sales-ownership-backfill');
+    const before = inspect();
+    assert.equal(
+        before.markerSha,
+        request.expectedRuntimeSha,
+        'Production runtime SHA changed or was not reviewed',
+    );
+    const healthBefore = health();
+    assertProductionHealthSnapshot(healthBefore, 'before');
+    const run = (operation, digest = '') => {
+        const result = spawn(
+            '/usr/bin/node',
+            [
+                '--env-file=/var/www/kaiyuangouwu/packages/dev-server/.env',
+                script,
+                operation,
+                ...(digest ? [digest] : []),
+            ],
+            {
+                encoding: 'utf8',
+                timeout: 540000,
+                maxBuffer: 65536,
+                stdio: ['ignore', 'pipe', 'pipe'],
+                env: { ...process.env, STORE_ISOLATION_MODULE_ROOT: before.currentRuntime },
+            },
+        );
+        assert.equal(result.status, 0, `The fixed order ownership ${operation} failed`);
+        return validateOrderSalesOwnershipOutput(String(result.stdout || ''), operation);
+    };
+    const reviewedPlan = run('plan');
+    let backupEvidence = null;
+    let appliedPlan = null;
+    if (apply) {
+        assert.equal(
+            reviewedPlan.operationDigest,
+            request.expectedPlanSha256,
+            'Order ownership plan changed; rerun the read-only plan and review it again',
+        );
+        assert.ok(reviewedPlan.candidateCount > 0, 'No historical orders require ownership backfill');
+        backupEvidence = backup();
+        appliedPlan = run('apply', request.expectedPlanSha256);
+        assert.deepEqual(
+            appliedPlan,
+            reviewedPlan,
+            'Applied ownership evidence differs from the reviewed plan',
+        );
+    }
+    const after = inspect();
+    assert.deepEqual(after, before, 'Production release state changed during order ownership backfill');
+    const healthAfter = health();
+    assertProductionHealthSnapshot(healthAfter, 'after');
+    return {
+        sourceSha: request.sourceSha,
+        runtimeSha: before.markerSha,
+        healthBefore,
+        healthAfter,
+        plan: reviewedPlan,
+        ...(backupEvidence ? { backup: backupEvidence } : {}),
+        applied: Boolean(appliedPlan),
+    };
+}
+
 function assertProductionHealthSnapshot(snapshot, stage) {
     assert.equal(snapshot.status, 'ok', `Production health state is unavailable ${stage} the audit`);
     assert.match(
@@ -542,6 +709,19 @@ function runStoreIsolationAudit(
 
 function runLocked(environment = process.env) {
     const request = validateRequest(environment);
+    if (
+        ['plan-order-sales-ownership-backfill', 'apply-order-sales-ownership-backfill-reviewed'].includes(
+            request.operation,
+        )
+    ) {
+        const result = runOrderSalesOwnershipBackfill(request);
+        process.stdout.write(
+            `PRODUCTION_ORDER_SALES_OWNERSHIP_REVISIONS source=${request.sourceSha} runtime=${result.runtimeSha}\n`,
+        );
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+        process.stdout.write(`PRODUCTION_OPERATIONS_COMPLETE operation=${request.operation}\n`);
+        return;
+    }
     if (request.operation === 'audit-store-isolation-data') {
         const result = runStoreIsolationAudit(request);
         process.stdout.write(
@@ -757,7 +937,10 @@ module.exports = {
     retainReviewedPlan,
     storefrontInspectionFailure,
     runStoreIsolationAudit,
+    runOrderSalesOwnershipBackfill,
+    startVerifiedMysqlBackup,
     validateMigrationAuditOutput,
+    validateOrderSalesOwnershipOutput,
     validateStoreAutonomyAuditPayload,
     validateRequest,
     withProductionLock,
