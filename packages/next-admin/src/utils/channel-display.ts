@@ -1,21 +1,30 @@
 export interface ChannelDisplayValue {
     code: string;
     defaultCurrencyCode?: string | null;
+    customFields?: {
+        storefrontNameZh?: string | null;
+    } | null;
 }
 
 const DEFAULT_CHANNEL_CODE_PATTERN = /^_+default_channel_+$/iu;
 
 export const isDefaultChannelCode = (code: string) => DEFAULT_CHANNEL_CODE_PATTERN.test(code.trim());
 
-export const getChannelDisplayName = (code: string) => {
+export const getChannelDisplayName = (value: string | ChannelDisplayValue) => {
+    const code = typeof value === 'string' ? value : value.code;
     const normalizedCode = code.trim();
     if (!normalizedCode) return '未命名店铺';
-    return isDefaultChannelCode(normalizedCode) ? '默认店铺' : normalizedCode;
+    if (isDefaultChannelCode(normalizedCode)) return '默认店铺';
+    if (typeof value !== 'string') {
+        const localizedName = value.customFields?.storefrontNameZh?.trim();
+        if (localizedName) return localizedName;
+    }
+    return normalizedCode;
 };
 
-export const getChannelDisplayLabel = ({ code, defaultCurrencyCode }: ChannelDisplayValue) => {
-    const name = getChannelDisplayName(code);
-    const currencyCode = defaultCurrencyCode?.trim();
+export const getChannelDisplayLabel = (value: ChannelDisplayValue) => {
+    const name = getChannelDisplayName(value);
+    const currencyCode = value.defaultCurrencyCode?.trim();
     return currencyCode ? `${name} · ${currencyCode}` : name;
 };
 

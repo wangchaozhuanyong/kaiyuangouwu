@@ -97,6 +97,8 @@ export function getRoleLabel(role?: { code?: string; description?: string } | st
     const desc = role.description?.trim() || '';
     if (code && SYSTEM_ROLE_LABELS[code]) return SYSTEM_ROLE_LABELS[code];
     if (desc && SYSTEM_ROLE_LABELS[desc]) return SYSTEM_ROLE_LABELS[desc];
+    const storeAdministrator = desc.match(/^Administrator of\s+(.+)$/i)?.[1]?.trim();
+    if (storeAdministrator) return `${storeAdministrator}管理员`;
     return desc || code || '未命名角色';
 }
 

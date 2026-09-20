@@ -31,6 +31,8 @@ import {
     type TeamManagementResult,
 } from '../../graphql/management.graphql';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { getChannelDisplayName } from '../../utils/channel-display';
+import { getPermissionDisplay } from '../../utils/permission-display';
 import { getRoleCodeLabel, getRoleLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
@@ -127,7 +129,7 @@ export function RolesModule() {
     );
     const filteredRoles = roles.filter(item =>
         includesSearch(
-            `${item.code} ${item.description} ${getRoleLabel(item)} ${item.channels.map(channel => channel.code).join(' ')} ${item.permissions.join(' ')}`,
+            `${item.code} ${item.description} ${getRoleLabel(item)} ${item.channels.map(channel => `${channel.code} ${getChannelDisplayName(channel)}`).join(' ')} ${item.permissions.join(' ')}`,
             search,
         ),
     );
@@ -535,14 +537,18 @@ function RolesTable({
                                                 system
                                                     ? '全部渠道'
                                                     : role.channels.length
-                                                      ? role.channels.map(channel => channel.code).join('、')
+                                                      ? role.channels
+                                                            .map(channel => getChannelDisplayName(channel))
+                                                            .join('、')
                                                       : '未限定渠道'
                                             }
                                         >
                                             {system
                                                 ? '全部渠道'
                                                 : role.channels.length
-                                                  ? role.channels.map(channel => channel.code).join('、')
+                                                  ? role.channels
+                                                        .map(channel => getChannelDisplayName(channel))
+                                                        .join('、')
                                                   : '未限定渠道'}
                                         </span>
                                     </td>
@@ -734,7 +740,11 @@ function RoleEditor({
 }: {
     value: RoleRecord | 'NEW';
     roles: RoleRecord[];
-    channels: Array<{ id: string; code: string }>;
+    channels: Array<{
+        id: string;
+        code: string;
+        customFields?: { storefrontNameZh?: string | null } | null;
+    }>;
     permissionDefinitions: Array<{ name: string; description: string; assignable: boolean }>;
     onClose: () => void;
     onCompleted: (message: string) => Promise<void>;
@@ -744,7 +754,8 @@ function RoleEditor({
     const existing = value === 'NEW' ? null : value;
     const system = Boolean(existing && isSystemRole(existing));
     const [code, setCode] = useState(existing?.code ?? '');
-    const [description, setDescription] = useState(existing?.description ?? '');
+    const initialDescription = existing ? getRoleLabel(existing) : '';
+    const [description, setDescription] = useState(initialDescription);
     const [channelIds, setChannelIds] = useState(existing?.channels.map(channel => channel.id) ?? []);
     const [permissions, setPermissions] = useState(existing?.permissions ?? []);
     const [create, createState] = useMutation(CREATE_ROLE_MUTATION);
@@ -760,7 +771,11 @@ function RoleEditor({
         if (!existing && roles.some(role => role.code.toLowerCase() === code.trim().toLowerCase()))
             return onError('角色代码已存在，请更换');
         try {
-            const input = { code: code.trim(), description: description.trim(), channelIds, permissions };
+            const persistedDescription =
+                existing && description.trim() === initialDescription
+                    ? existing.description
+                    : description.trim();
+            const input = { code: code.trim(), description: persistedDescription, channelIds, permissions };
             if (existing) {
                 const confirmation = await requestConfirmation({
                     title: `保存角色“${getRoleLabel(existing)}”的权限变更？`,
@@ -844,7 +859,7 @@ function RoleEditor({
                                 }
                                 disabled={system}
                             />
-                            {channel.code}
+                            {getChannelDisplayName(channel)}
                         </label>
                     ))}
                 </div>
@@ -895,11 +910,14 @@ function RoleEditor({
                                             className="mt-0.5"
                                         />
                                         <span>
-                                            <span className="block font-mono text-[10px] font-bold text-slate-700">
-                                                {permissionLabel(item.name)}
+                                            <span
+                                                className="block text-[10px] font-bold text-slate-700"
+                                                title={item.name}
+                                            >
+                                                {item.display.label}
                                             </span>
                                             <span className="mt-0.5 block text-[9px] leading-4 text-slate-400">
-                                                {item.description}
+                                                {item.display.description}
                                             </span>
                                         </span>
                                     </label>
@@ -921,60 +939,19 @@ function RoleEditor({
 }
 
 function groupPermissions(items: Array<{ name: string; description: string; assignable: boolean }>) {
-    const groups = new Map<string, typeof items>();
-    items.forEach(item => {
-        const key = permissionSubject(item.name);
+    const localizedItems = items.map(item => ({ ...item, display: getPermissionDisplay(item.name) }));
+    const groups = new Map<string, typeof localizedItems>();
+    localizedItems.forEach(item => {
+        const key = item.display.group;
         groups.set(key, [...(groups.get(key) ?? []), item]);
     });
     return [...groups.entries()]
         .sort(([a], [b]) => a.localeCompare(b, 'zh-CN'))
         .map(([name, values]) => ({
             name,
-            label: subjectLabel(name),
-            items: values.sort((a, b) => actionOrder(a.name) - actionOrder(b.name)),
+            label: values[0]?.display.groupLabel ?? '其他权限',
+            items: values.sort((a, b) => a.display.order - b.display.order),
         }));
-}
-function permissionSubject(name: string) {
-    return name.replace(/^(Create|Read|Update|Delete)/, '') || 'Other';
-}
-function actionOrder(name: string) {
-    const index = ['Read', 'Create', 'Update', 'Delete'].findIndex(prefix => name.startsWith(prefix));
-    return index < 0 ? 99 : index;
-}
-function subjectLabel(subject: string) {
-    const labels: Record<string, string> = {
-        Administrator: '员工账号',
-        ApiKey: 'API 密钥',
-        Asset: '素材',
-        Catalog: '商品目录',
-        CatalogImport: '商品批量导入',
-        Channel: '渠道',
-        Collection: '集合',
-        Country: '国家地区',
-        Customer: '客户',
-        CustomerGroup: '客户分组',
-        Facet: '筛选属性',
-        Order: '订单',
-        PaymentMethod: '支付方式',
-        Product: '商品',
-        Promotion: '促销',
-        Seller: '商家主体',
-        Settings: '业务设置',
-        ShippingMethod: '配送方式',
-        StockLocation: '库存点',
-        System: '系统运维',
-        Tag: '标签',
-        TaxCategory: '税种',
-        TaxRate: '税率',
-        Zone: '区域',
-    };
-    return labels[subject] ?? subject;
-}
-function permissionLabel(name: string) {
-    const action = name.match(/^(Create|Read|Update|Delete)/)?.[1];
-    const subject = permissionSubject(name);
-    const actions: Record<string, string> = { Create: '新增', Read: '查看', Update: '修改', Delete: '删除' };
-    return action ? `${actions[action]}${subjectLabel(subject)} · ${name}` : name;
 }
 function isSystemRole(role: RoleRecord) {
     return role.code === '__super_admin_role__' || role.permissions.includes('SuperAdmin');

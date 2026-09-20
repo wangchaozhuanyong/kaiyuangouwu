@@ -42,6 +42,9 @@ export const TEAM_MANAGEMENT_QUERY = gql`
                 channels {
                     id
                     code
+                    customFields {
+                        storefrontNameZh
+                    }
                 }
             }
         }
@@ -50,6 +53,9 @@ export const TEAM_MANAGEMENT_QUERY = gql`
             items {
                 id
                 code
+                customFields {
+                    storefrontNameZh
+                }
             }
         }
         globalSettings {
@@ -1071,7 +1077,11 @@ export interface RoleRecord {
     code: string;
     description: string;
     permissions: string[];
-    channels: Array<{ id: string; code: string }>;
+    channels: Array<{
+        id: string;
+        code: string;
+        customFields?: { storefrontNameZh?: string | null } | null;
+    }>;
 }
 
 export interface AdministratorRecord {
@@ -1093,7 +1103,14 @@ export interface TeamManagementResult {
     activeAdministrator: { id: string } | null;
     administrators: { totalItems: number; items: AdministratorRecord[] };
     roles: { totalItems: number; items: RoleRecord[] };
-    channels: { totalItems: number; items: Array<{ id: string; code: string }> };
+    channels: {
+        totalItems: number;
+        items: Array<{
+            id: string;
+            code: string;
+            customFields?: { storefrontNameZh?: string | null } | null;
+        }>;
+    };
     globalSettings: {
         serverConfig: {
             permissions: Array<{ name: string; description: string; assignable: boolean }>;
