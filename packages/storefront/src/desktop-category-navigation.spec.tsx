@@ -152,4 +152,66 @@ describe('desktop catalog category navigation', () => {
         expect(result.map(c => c.id)).toEqual(['cat-1', 'cat-2']);
         expect(result[1].children?.map(c => c.id)).toEqual(['child-2a', 'child-2b']);
     });
+
+    it('keeps nested categories out of primary navigation when an import created a suffixed root duplicate', async () => {
+        const mockRequest = vi.fn().mockResolvedValue({
+            collections: {
+                items: [
+                    {
+                        ...child,
+                        id: 'tobacco',
+                        name: '正品烟草',
+                        slug: 'tobacco',
+                        parentId: 'root',
+                        children: [
+                            {
+                                ...child,
+                                id: 'peony-child',
+                                name: '牡丹',
+                                slug: '牡丹',
+                                parentId: 'tobacco',
+                            },
+                        ],
+                    },
+                    {
+                        ...child,
+                        id: 'peony-root-duplicate',
+                        name: '牡丹',
+                        slug: '牡丹-2',
+                        parentId: 'root',
+                        children: [],
+                    },
+                    {
+                        ...child,
+                        id: 'legitimate-root',
+                        name: '牡丹',
+                        slug: 'seasonal-peony',
+                        parentId: 'root',
+                        children: [],
+                    },
+                    {
+                        ...child,
+                        id: 'ai-subscription',
+                        name: 'AI 订阅',
+                        slug: 'ai-subscription',
+                        parentId: 'root',
+                        children: [],
+                    },
+                ],
+            },
+        });
+        const api = new CatalogApi({
+            market: { code: 'MY', locale: 'zh-CN', currencyCode: 'MYR' } as any,
+            request: mockRequest,
+        } as any);
+
+        const result = await api.collections();
+
+        expect(result.map(collection => collection.id)).toEqual([
+            'tobacco',
+            'legitimate-root',
+            'ai-subscription',
+        ]);
+        expect(result[0].children?.map(collection => collection.id)).toEqual(['peony-child']);
+    });
 });
