@@ -43,6 +43,7 @@ import {
     CREATE_OPTION_GROUP,
     CREATE_PRODUCT_OPTION,
     DELETE_COLLECTION,
+    DELETE_COLLECTIONS,
     DELETE_FACET,
     DELETE_FACET_VALUE,
     DELETE_OPTION_GROUP,
@@ -196,6 +197,8 @@ export function CategoriesModule() {
     const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>({});
     const [saving, setSaving] = useState(false);
     const [expandedCollectionIds, setExpandedCollectionIds] = useState<Set<string>>(() => new Set());
+    const [selectedCollectionIds, setSelectedCollectionIds] = useState<Set<string>>(() => new Set());
+    const [bulkDeletingCollections, setBulkDeletingCollections] = useState(false);
     const [optionGroupSearch, setOptionGroupSearch] = useState('');
     const [optionGroupPage, setOptionGroupPage] = useState(0);
     const [usageGroup, setUsageGroup] = useState<OptionGroupItem | null>(null);
@@ -278,6 +281,9 @@ export function CategoriesModule() {
     const [deleteCollection] = useMutation<{ deleteCollection: { result: string; message?: string } }>(
         DELETE_COLLECTION,
     );
+    const [deleteCollections] = useMutation<{
+        deleteCollections: Array<{ result: string; message?: string }>;
+    }>(DELETE_COLLECTIONS);
     const [moveCollection] = useMutation(MOVE_COLLECTION);
     const [createOptionGroup] = useMutation(CREATE_OPTION_GROUP);
     const [updateOptionGroup] = useMutation(UPDATE_OPTION_GROUP);
@@ -320,6 +326,8 @@ export function CategoriesModule() {
     useEffect(() => {
         // oxlint-disable-next-line react/set-state-in-effect
         setExpandedCollectionIds(new Set());
+        // oxlint-disable-next-line react/set-state-in-effect
+        setSelectedCollectionIds(new Set());
     }, [data?.activeChannel.id]);
     // 内容翻译插件要求所有原生目录内容都从简体中文源语言写入。
     const languageCode = SOURCE_LANGUAGE_CODE;
@@ -781,6 +789,68 @@ export function CategoriesModule() {
         }
     };
 
+    const toggleCollectionSelection = (collectionId: string) => {
+        setSelectedCollectionIds(current => {
+            const next = new Set(current);
+            if (next.has(collectionId)) next.delete(collectionId);
+            else next.add(collectionId);
+            return next;
+        });
+    };
+
+    const handleBulkDeleteCollections = async () => {
+        if (selectedCollectionIds.size === 0 || bulkDeletingCollections) return;
+        const selected = collections.filter(collection => selectedCollectionIds.has(collection.id));
+        const unsafe = selected.find(collection => {
+            const hasChildren = collections.some(candidate => candidate.parentId === collection.id);
+            return hasChildren || collection.productVariantCount > 0;
+        });
+        if (selected.length !== selectedCollectionIds.size || unsafe) {
+            showError('所选分类已发生变化，请刷新后重新选择空分类');
+            return;
+        }
+        const preview = selected
+            .slice(0, 5)
+            .map(collection => `《${collection.name}》`)
+            .join('、');
+        const suffix = selected.length > 5 ? `等 ${selected.length} 个分类` : '';
+        const confirmation = await requestConfirmation({
+            title: `批量删除 ${selected.length} 个空分类？`,
+            description: `将删除 ${preview}${suffix}。仅无子分类、无 SKU 的分类可被批量选择。`,
+            confirmLabel: '确认批量删除',
+            tone: 'danger',
+            requireCurrentPassword: true,
+        });
+        if (!confirmation) return;
+
+        setActionError('');
+        setBulkDeletingCollections(true);
+        try {
+            const ids = selected.map(collection => collection.id);
+            const result = await deleteCollections({
+                variables: { ids },
+                context: sensitiveActionContext(confirmation.currentPassword ?? ''),
+            });
+            const responses = result.data?.deleteCollections ?? [];
+            const failedIds = ids.filter((_, index) => responses[index]?.result !== 'DELETED');
+            await refetch();
+            if (failedIds.length > 0 || responses.length !== ids.length) {
+                setSelectedCollectionIds(new Set(failedIds));
+                const firstFailure = responses.find(response => response.result !== 'DELETED');
+                throw new Error(
+                    firstFailure?.message ||
+                        `已删除 ${ids.length - failedIds.length} 个，${failedIds.length} 个删除失败`,
+                );
+            }
+            setSelectedCollectionIds(new Set());
+            showNotice(`已批量删除 ${ids.length} 个空分类`);
+        } catch (deleteError) {
+            showError(toUserFacingError(deleteError, '批量删除失败，请刷新后重试'));
+        } finally {
+            setBulkDeletingCollections(false);
+        }
+    };
+
     const renderCollection = (
         node: CollectionTreeNode,
         depth = 0,
@@ -791,6 +861,7 @@ export function CategoriesModule() {
         const hasChildren = node.children.length > 0;
         const isExpanded = !isTopLevel || visibleExpandedCollectionIds.has(node.id);
         const locked = isReordering || siblings.length < 2;
+        const canBulkDelete = !hasChildren && node.productVariantCount === 0;
 
         return (
             <div
@@ -845,6 +916,15 @@ export function CategoriesModule() {
                     style={{ marginLeft: Math.min(depth, 3) * 20 }}
                 >
                     <div className="flex min-w-0 items-center gap-2">
+                        <input
+                            type="checkbox"
+                            checked={selectedCollectionIds.has(node.id)}
+                            disabled={!canBulkDelete || bulkDeletingCollections}
+                            onChange={() => toggleCollectionSelection(node.id)}
+                            aria-label={`选择分类 ${node.name}`}
+                            title={canBulkDelete ? '选择这个空分类' : '仅无子分类、无 SKU 的分类可批量选择'}
+                            className="h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                        />
                         <button
                             type="button"
                             draggable={!locked}
@@ -1079,6 +1159,31 @@ export function CategoriesModule() {
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
+                                {selectedCollectionIds.size > 0 && (
+                                    <>
+                                        <span className="text-[11px] font-bold text-slate-600">
+                                            已选 {selectedCollectionIds.size} 个空分类
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedCollectionIds(new Set())}
+                                            disabled={bulkDeletingCollections}
+                                            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                                        >
+                                            取消选择
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleBulkDeleteCollections}
+                                            disabled={bulkDeletingCollections}
+                                            className="rounded-lg bg-rose-600 px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
+                                        >
+                                            {bulkDeletingCollections
+                                                ? '正在删除…'
+                                                : `批量删除 (${selectedCollectionIds.size})`}
+                                        </button>
+                                    </>
+                                )}
                                 <button
                                     type="button"
                                     onClick={expandAllCollections}
