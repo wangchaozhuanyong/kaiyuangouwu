@@ -305,7 +305,7 @@ void test('all Channel reads use scoped tokens and both client locale inputs wit
     assert.equal(calls.filter(call => call.query.startsWith('mutation')).length, 1);
 });
 
-void test('platform Channels without a StoreProfile are excluded from storefront verification', async () => {
+void test('the native default Channel without an active domain is excluded after store migration', async () => {
     const store = storeFixture();
     const calls = [];
     const request = async (_url, options) => {
@@ -323,7 +323,16 @@ void test('platform Channels without a StoreProfile are excluded from storefront
                 },
             };
         } else if (query.includes('ConfigurationGuardProfiles')) {
-            data = { storeProfiles: [{ ...store.profile, channel: { id: store.channelId } }] };
+            data = {
+                storeProfiles: [
+                    {
+                        id: 'platform-profile',
+                        primaryDomain: null,
+                        channel: { id: '0', code: '__default_channel__' },
+                    },
+                    { ...store.profile, channel: { id: store.channelId, code: store.channelCode } },
+                ],
+            };
         } else if (query.includes('ConfigurationGuardPublished')) {
             const locale = new URL(_url).searchParams.get('languageCode');
             data = { activeChannel: { id: store.channelId }, storefrontContent: store.published[locale] };
@@ -438,8 +447,21 @@ void test('missing verified domain fails before any public read instead of falli
                 const { query } = JSON.parse(options.body);
                 queries.push(query);
                 const data = query.includes('ConfigurationGuardLogin')
-                    ? { login: { id: 'admin', channels: [{ id: '1', token: 'fixture' }] } }
-                    : { storeProfiles: [{ id: '1', channel: { id: '1' }, primaryDomain: null }] };
+                    ? {
+                          login: {
+                              id: 'admin',
+                              channels: [{ id: '1', code: 'configured-store', token: 'fixture' }],
+                          },
+                      }
+                    : {
+                          storeProfiles: [
+                              {
+                                  id: '1',
+                                  channel: { id: '1', code: 'configured-store' },
+                                  primaryDomain: null,
+                              },
+                          ],
+                      };
                 return new Response(JSON.stringify({ data }), {
                     headers: { 'vendure-auth-token': 'fixture' },
                 });

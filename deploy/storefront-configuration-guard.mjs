@@ -306,9 +306,10 @@ export async function captureStorefrontConfiguration({
     const stores = [];
     for (const channel of [...login.channels].sort((a, b) => String(a.id).localeCompare(String(b.id)))) {
         const profile = storeProfiles.find(candidate => candidate.channel.id === channel.id) ?? null;
-        // The native default Channel remains available to administrators as platform context after
-        // store migration. Only Channels with an explicit StoreProfile are production storefronts.
+        // The native default Channel remains as platform context after store migration and can keep
+        // a historical profile without an active domain. A domain still makes it a real storefront.
         if (!profile) continue;
+        if (channel.code === '__default_channel__' && !profile.primaryDomain) continue;
         const host = profile?.primaryDomain;
         assert.ok(
             host && new URL(`https://${host}`).hostname === host,
