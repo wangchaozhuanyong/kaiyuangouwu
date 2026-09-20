@@ -305,6 +305,55 @@ void test('all Channel reads use scoped tokens and both client locale inputs wit
     assert.equal(calls.filter(call => call.query.startsWith('mutation')).length, 1);
 });
 
+void test('platform Channels without a StoreProfile are excluded from storefront verification', async () => {
+    const store = storeFixture();
+    const calls = [];
+    const request = async (_url, options) => {
+        const { query } = JSON.parse(options.body);
+        calls.push(query);
+        let data;
+        if (query.includes('ConfigurationGuardLogin')) {
+            data = {
+                login: {
+                    id: 'admin',
+                    channels: [
+                        { id: '0', code: '__default_channel__', token: 'PRIVATE_PLATFORM_TOKEN' },
+                        { id: store.channelId, code: store.channelCode, token: 'PRIVATE_STORE_TOKEN' },
+                    ],
+                },
+            };
+        } else if (query.includes('ConfigurationGuardProfiles')) {
+            data = { storeProfiles: [{ ...store.profile, channel: { id: store.channelId } }] };
+        } else if (query.includes('ConfigurationGuardPublished')) {
+            const locale = new URL(_url).searchParams.get('languageCode');
+            data = { activeChannel: { id: store.channelId }, storefrontContent: store.published[locale] };
+        } else {
+            assert.equal(options.headers['vendure-token'], 'PRIVATE_STORE_TOKEN');
+            data = {
+                activeChannel: { id: store.channelId },
+                storefrontContentBlocks: store.blocks,
+                storefrontContentSettings: store.settings,
+                referralProgram: store.sharing,
+            };
+        }
+        return new Response(JSON.stringify({ data }), {
+            headers: { 'vendure-auth-token': 'PRIVATE_ADMIN_SESSION' },
+        });
+    };
+
+    const result = await captureStorefrontConfiguration({
+        username: 'FIXTURE_USER',
+        password: 'FIXTURE_PASSWORD',
+        request,
+    });
+
+    assert.deepEqual(
+        result.stores.map(item => item.channelCode),
+        [store.channelCode],
+    );
+    assert.equal(calls.length, 5);
+});
+
 void test('real loopback transport reads each store through its verified domain without forwarding the admin session', async t => {
     const fixtures = [storeFixture(), storeFixture('2')];
     const seen = [];

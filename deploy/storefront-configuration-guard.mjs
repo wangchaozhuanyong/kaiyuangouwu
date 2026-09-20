@@ -306,6 +306,9 @@ export async function captureStorefrontConfiguration({
     const stores = [];
     for (const channel of [...login.channels].sort((a, b) => String(a.id).localeCompare(String(b.id)))) {
         const profile = storeProfiles.find(candidate => candidate.channel.id === channel.id) ?? null;
+        // The native default Channel remains available to administrators as platform context after
+        // store migration. Only Channels with an explicit StoreProfile are production storefronts.
+        if (!profile) continue;
         const host = profile?.primaryDomain;
         assert.ok(
             host && new URL(`https://${host}`).hostname === host,
