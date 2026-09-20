@@ -2075,7 +2075,10 @@ html[lang='en'] .quick-grid b {
     border: 1px solid var(--line, rgba(0, 0, 0, 0.06));
     background: var(--paper, #ffffff);
     box-shadow: var(--shadow-sm, 0 1px 3px rgba(15, 23, 42, 0.05));
-    transition: transform 200ms ease-out, box-shadow 200ms ease-out, border-color 200ms ease-out;
+    transition:
+        transform 200ms ease-out,
+        box-shadow 200ms ease-out,
+        border-color 200ms ease-out;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -3184,11 +3187,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     align-items: center;
     gap: 13px;
     background:
-        radial-gradient(
-            circle at 90% 8%,
-            color-mix(in srgb, var(--paper) 82%, transparent),
-            transparent 34%
-        ),
+        radial-gradient(circle at 90% 8%, color-mix(in srgb, var(--paper) 82%, transparent), transparent 34%),
         linear-gradient(
             135deg,
             color-mix(in srgb, var(--accent-soft) 88%, var(--paper)) 0%,

@@ -1,6 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import type { Order, StorefrontCart } from './types';
+
+import { PaymentRoutePage } from './route-pages/checkout-route-pages';
+
+type Order = import('./types').Order;
+type StorefrontCart = import('./types').StorefrontCart;
 
 const testState = vi.hoisted(() => ({
     paymentProps: null as null | {
@@ -25,8 +29,6 @@ vi.mock('./route-pages/shared', () => ({
     RouteGate: ({ children }: { children: unknown }) => children,
     useRouteRuntime: () => testState.runtime,
 }));
-
-import { PaymentRoutePage } from './route-pages/checkout-route-pages';
 
 describe('checkout route handoff', () => {
     it('shows confirmation before refreshing customer and cart data in the background', async () => {
