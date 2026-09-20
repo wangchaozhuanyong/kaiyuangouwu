@@ -26,6 +26,7 @@ import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } fro
 import { PageSkeleton } from './route-loading';
 import { storefrontErrorCode, storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
+import { InlineError } from './storefront-ui/page-shell';
 import { TaxSummaryRows } from './tax-summary';
 import {
     ActiveCustomer,
@@ -1097,26 +1098,6 @@ function EmptyState({
                 </button>
             )}
         </section>
-    );
-}
-function InlineError({
-    message,
-    action,
-    onAction,
-}: {
-    message: string;
-    action?: string;
-    onAction?: () => void;
-}) {
-    return (
-        <div className="inline-error" role="alert">
-            <span>{message}</span>
-            {action && (
-                <button type="button" onClick={onAction}>
-                    {action}
-                </button>
-            )}
-        </div>
     );
 }
 function formatMoney(value: number, currency: string, locale: string): string {
