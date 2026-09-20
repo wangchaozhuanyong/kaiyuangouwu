@@ -43,7 +43,11 @@ import {
     UpdateCatalogVariantOperationsInput,
 } from './types';
 
-const CATALOG_EXPORT_PAGE_LIMIT = 50;
+// The export hydrates several one-to-many relations for every variant. Production
+// catalogs can therefore expand a single logical page into a much larger object
+// graph. Keep the server-side page deliberately small; clients advance by the
+// returned scannedItems value, so this does not skip or truncate any rows.
+const CATALOG_EXPORT_PAGE_LIMIT = 10;
 
 export const DEFAULT_REPLENISHMENT_THRESHOLD = 5;
 

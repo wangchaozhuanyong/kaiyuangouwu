@@ -709,7 +709,7 @@ describe('CatalogOperationsService', () => {
         } as never);
         expect(productVariantService.findAll).toHaveBeenCalledWith(
             expect.anything(),
-            expect.objectContaining({ skip: 0, take: 50 }),
+            expect.objectContaining({ skip: 0, take: 10 }),
         );
         expect(mockRepo.find).toHaveBeenCalledWith(
             expect.objectContaining({
