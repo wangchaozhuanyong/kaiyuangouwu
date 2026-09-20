@@ -67,6 +67,12 @@ describe('balance payment completion', () => {
             expect(buttons.find(item => item.textContent === '余额已抵扣，订单需完成支付')?.disabled).toBe(
                 true,
             );
+            const paymentMethodError = host.querySelector('.payment-method-section > .inline-error');
+            expect(paymentMethodError?.children[0]?.tagName).toBe('svg');
+            expect(paymentMethodError?.querySelector('span')?.textContent).toBe(
+                '当前店铺尚未接入支付方式，订单已保留',
+            );
+            expect(paymentMethodError?.querySelector('button')?.textContent).toBe('重试');
         } finally {
             act(() => root.unmount());
             host.remove();
