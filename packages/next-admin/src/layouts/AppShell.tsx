@@ -85,6 +85,7 @@ import { isInputMethodKey } from '../utils/input-method';
 import { toUserFacingError } from '../utils/user-facing-error';
 
 import {
+    filterAccessibleAdminChannels,
     hasAppShellPermissionSnapshot,
     isAppShellPermissionLoading,
     resolveAppShellOpenMenu,
@@ -256,6 +257,11 @@ export function AppShell() {
         : '管';
     const isSuperAdmin =
         activeAdministrator?.user.roles.some(role => role.code === '__super_admin_role__') ?? false;
+    const accessibleChannels = useMemo(
+        () =>
+            filterAccessibleAdminChannels(channelData?.channels.items ?? [], channelData?.me?.channels ?? []),
+        [channelData?.channels.items, channelData?.me?.channels],
+    );
     const activePermissions = useMemo(() => {
         const permissions =
             channelData?.me?.channels.find(channel => channel.id === channelData.activeChannel?.id)
@@ -533,6 +539,10 @@ export function AppShell() {
     };
 
     const handleChannelChange = async (channelToken: string) => {
+        if (!accessibleChannels.some(channel => channel.token === channelToken)) {
+            setChannelError('当前账号没有管理该店铺的权限');
+            return;
+        }
         if (
             isChannelSwitching ||
             channelToken === channelData?.activeChannel.token ||
@@ -1191,13 +1201,18 @@ export function AppShell() {
                             <select
                                 value={channelData?.activeChannel.token ?? ''}
                                 onChange={event => void handleChannelChange(event.target.value)}
-                                disabled={channelControlsLoading || isChannelSwitching || !channelData}
+                                disabled={
+                                    channelControlsLoading ||
+                                    isChannelSwitching ||
+                                    !channelData ||
+                                    accessibleChannels.length <= 1
+                                }
                                 aria-label="切换当前店铺"
                                 title={channelError || '切换后商品、订单、库存等数据将按所选店铺重新加载'}
                                 className={`h-8 max-w-28 rounded-lg border bg-white pl-2 pr-6 text-xs font-bold outline-none sm:max-w-44 ${channelError ? 'border-rose-300 text-rose-700' : 'border-slate-200 text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'}`}
                             >
                                 {!channelData && <option value="">读取店铺…</option>}
-                                {channelData?.channels.items.map(channel => (
+                                {accessibleChannels.map(channel => (
                                     <option key={channel.id} value={channel.token}>
                                         {getChannelDisplayLabel(channel)}
                                     </option>

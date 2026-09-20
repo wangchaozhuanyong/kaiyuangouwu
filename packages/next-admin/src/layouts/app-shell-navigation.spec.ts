@@ -1,10 +1,38 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    filterAccessibleAdminChannels,
     hasAppShellPermissionSnapshot,
     isAppShellPermissionLoading,
     resolveAppShellOpenMenu,
 } from './app-shell-navigation';
+
+describe('admin channel switcher', () => {
+    it('only exposes channels assigned to the current administrator', () => {
+        const channels = [
+            { id: 'default', token: 'default-token' },
+            { id: 'moyao', token: 'moyao-token' },
+            { id: 'mjj', token: 'mjj-token' },
+        ];
+
+        expect(filterAccessibleAdminChannels(channels, [{ id: 'moyao' }])).toEqual([
+            { id: 'moyao', token: 'moyao-token' },
+        ]);
+    });
+
+    it('keeps every assigned channel for administrators with multi-store access', () => {
+        const channels = [
+            { id: 'default', token: 'default-token' },
+            { id: 'moyao', token: 'moyao-token' },
+            { id: 'mjj', token: 'mjj-token' },
+        ];
+
+        expect(filterAccessibleAdminChannels(channels, [{ id: 'default' }, { id: 'mjj' }])).toEqual([
+            { id: 'default', token: 'default-token' },
+            { id: 'mjj', token: 'mjj-token' },
+        ]);
+    });
+});
 
 describe('app shell navigation', () => {
     it('keeps an extension in its registered menu even when its URL uses another section prefix', () => {

@@ -17,6 +17,18 @@ interface AppShellPermissionSnapshot {
     } | null;
 }
 
+interface ChannelIdentity {
+    id: string;
+}
+
+export function filterAccessibleAdminChannels<T extends ChannelIdentity>(
+    channels: readonly T[],
+    administratorChannels: ReadonlyArray<ChannelIdentity>,
+) {
+    const accessibleChannelIds = new Set(administratorChannels.map(channel => channel.id));
+    return channels.filter(channel => accessibleChannelIds.has(channel.id));
+}
+
 export function resolveAppShellOpenMenu(pathname: string, extensionSectionId?: string) {
     const extensionMenu = extensionSectionId?.trim();
     if (extensionMenu) return extensionMenu;
