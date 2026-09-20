@@ -77,28 +77,45 @@ void test('release workflow ships the fixed live preflight inputs and migration 
     assert.match(workflow, /git merge-base --is-ancestor "\$OPS_EXPECTED_RUNTIME_SHA" "\$OPS_SOURCE_SHA"/u);
     assert.doesNotMatch(workflow, /git diff --name-only "\$OPS_EXPECTED_RUNTIME_SHA"/u);
 
-    const transportedFiles = [
+    const commonFiles = [
         'deploy/production-operations.cjs',
         'deploy/systemd/vendure-production-release-retention.cjs',
-        'deploy/two-factor-key-backup.py',
-        'deploy/verify-runtime-security-dependencies.cjs',
-        'deploy/storefront-configuration-guard.mjs',
-        'deploy/usdt-migration-guard.cjs',
-        'packages/dev-server/migrations/index.ts',
-        'packages/dev-server/scripts/store-autonomy-data-audit.mjs',
-        'packages/dev-server/scripts/store-isolation-data-preflight.mjs',
-        'packages/dev-server/scripts/store-isolation-ownership-evidence.mjs',
-        'packages/dev-server/scripts/store-isolation-customer-dependencies.mjs',
-        'packages/dev-server/scripts/order-sales-ownership-backfill.mjs',
     ];
-    const encodedBytes = transportedFiles.reduce(
-        (total, file) =>
-            total +
-            gzipSync(readFileSync(path.join(repositoryRoot, file), 'utf8'), { mtime: 0 }).toString('base64')
-                .length,
-        0,
+    const bundles = [
+        [...commonFiles, 'deploy/two-factor-key-backup.py'],
+        [...commonFiles, 'deploy/verify-runtime-security-dependencies.cjs'],
+        [
+            ...commonFiles,
+            'deploy/storefront-configuration-guard.mjs',
+            'deploy/usdt-migration-guard.cjs',
+            'packages/dev-server/migrations/index.ts',
+        ],
+        [
+            ...commonFiles,
+            'deploy/usdt-migration-guard.cjs',
+            'packages/dev-server/migrations/index.ts',
+            'packages/dev-server/scripts/store-autonomy-data-audit.mjs',
+            'packages/dev-server/scripts/store-isolation-data-preflight.mjs',
+            'packages/dev-server/scripts/store-isolation-ownership-evidence.mjs',
+            'packages/dev-server/scripts/store-isolation-customer-dependencies.mjs',
+        ],
+        [...commonFiles, 'packages/dev-server/scripts/order-sales-ownership-backfill.mjs'],
+        [...commonFiles, 'packages/dev-server/scripts/moyao-default-store-migration.mjs'],
+    ];
+    const encodedBytes = bundles.map(files =>
+        files.reduce(
+            (total, file) =>
+                total +
+                gzipSync(readFileSync(path.join(repositoryRoot, file), 'utf8'), { mtime: 0 }).toString(
+                    'base64',
+                ).length,
+            0,
+        ),
     );
-    assert.ok(encodedBytes < 78_000, `Compressed production operation sources use ${encodedBytes} bytes`);
+    assert.ok(
+        Math.max(...encodedBytes) < 78_000,
+        `Largest compressed production operation bundle uses ${Math.max(...encodedBytes)} bytes`,
+    );
 });
 
 void test('read-only storefront inspection accepts an older running ancestor but rejects unrelated revisions', () => {
@@ -488,6 +505,112 @@ void test('order ownership backfill separates read-only planning from reviewed w
             OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
         }),
     );
+});
+
+void test('MOYAO migration separates reviewed planning, apply and verification', () => {
+    const runtimeSha = 'b'.repeat(40);
+    assert.equal(
+        operations.validateRequest({
+            OPS_OPERATION: 'plan-moyao-default-store-migration',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+        }).operation,
+        'plan-moyao-default-store-migration',
+    );
+    assert.equal(
+        operations.validateRequest({
+            OPS_OPERATION: 'verify-moyao-default-store-migration',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+        }).operation,
+        'verify-moyao-default-store-migration',
+    );
+    assert.equal(
+        operations.validateRequest({
+            OPS_OPERATION: 'apply-moyao-default-store-migration-reviewed',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+            OPS_EXPECTED_PLAN_SHA256: 'c'.repeat(64),
+        }).expectedPlanSha256,
+        'c'.repeat(64),
+    );
+    assert.throws(() =>
+        operations.validateRequest({
+            OPS_OPERATION: 'apply-moyao-default-store-migration-reviewed',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+        }),
+    );
+});
+
+void test('MOYAO migration logs only aggregate evidence and verifies after backup', () => {
+    const runtimeSha = 'b'.repeat(40);
+    const operationDigest = 'c'.repeat(64);
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'apply-moyao-default-store-migration-reviewed',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+        OPS_EXPECTED_PLAN_SHA256: operationDigest,
+    });
+    const runtime = { markerSha: runtimeSha, currentRuntime: '/immutable/runtime' };
+    const plan = {
+        format: 1,
+        schema: 'vendure-moyao-default-store-migration',
+        mode: 'reviewed-default-to-dedicated-channel',
+        sourceChannelCode: '__default_channel__',
+        targetChannelCode: 'moyao-ai',
+        contentBlockCount: 24,
+        movedChannelRows: { storefront_promotion_page: 1 },
+        addedRelations: { customer_channels_channel: 3 },
+        profileWillChange: true,
+        contentSettingsWillChange: false,
+        orderSalesOwnerCount: 7,
+        operationDigest,
+    };
+    const verification = {
+        format: 1,
+        schema: 'vendure-moyao-default-store-migration-verification',
+        sourceChannelCode: '__default_channel__',
+        targetChannelCode: 'moyao-ai',
+        targetContentBlockCount: 24,
+        relationTablesVerified: 11,
+        movedChannelTablesVerified: 52,
+        defaultOwnedOrderCount: 0,
+        profileMatches: true,
+        contentSettingsMatch: true,
+    };
+    let backupCount = 0;
+    const result = operations.runMoyaoDefaultStoreMigration(request, {
+        inspect: () => structuredClone(runtime),
+        health: () => ({
+            status: 'ok',
+            output: 'Result=success\nExecMainStatus=0\nActiveState=inactive',
+        }),
+        backup: () => {
+            backupCount++;
+            return { file: '/safe/backup.sql.gz', invocationId: 'd'.repeat(32), offsite: true };
+        },
+        spawn: (_command, arguments_, options) => {
+            assert.equal(options.env.STORE_ISOLATION_MODULE_ROOT, runtime.currentRuntime);
+            const operation = arguments_.includes('verify')
+                ? 'verify'
+                : arguments_.at(-1) === operationDigest
+                  ? 'apply'
+                  : 'plan';
+            const payload = operation === 'verify' ? verification : plan;
+            return {
+                status: 0,
+                stdout:
+                    `MOYAO_DEFAULT_STORE_${operation.toUpperCase()} ${JSON.stringify(payload)}\n` +
+                    `MOYAO_DEFAULT_STORE_MIGRATION_OK operation=${operation}\n`,
+                stderr: 'PRIVATE_ERROR_NOT_FORWARDED',
+            };
+        },
+        script: '/fixed/migration.mjs',
+    });
+    assert.equal(backupCount, 1);
+    assert.equal(result.applied, true);
+    assert.equal(result.verification.targetContentBlockCount, 24);
 });
 
 void test('order ownership operation logs only aggregate evidence and preserves the runtime', () => {

@@ -57,6 +57,9 @@ function validateRequest(environment) {
             'audit-store-isolation-data',
             'plan-order-sales-ownership-backfill',
             'apply-order-sales-ownership-backfill-reviewed',
+            'plan-moyao-default-store-migration',
+            'apply-moyao-default-store-migration-reviewed',
+            'verify-moyao-default-store-migration',
             'preflight-release',
             'postflight-release',
         ].includes(operation),
@@ -71,6 +74,7 @@ function validateRequest(environment) {
             'retain-reviewed',
             'backup-two-factor-reviewed',
             'apply-order-sales-ownership-backfill-reviewed',
+            'apply-moyao-default-store-migration-reviewed',
         ].includes(operation)
     ) {
         assert.match(expectedPlanSha256, /^[a-f0-9]{64}$/u, 'A reviewed plan SHA-256 is required');
@@ -100,6 +104,9 @@ function validateRequest(environment) {
             'audit-store-isolation-data',
             'plan-order-sales-ownership-backfill',
             'apply-order-sales-ownership-backfill-reviewed',
+            'plan-moyao-default-store-migration',
+            'apply-moyao-default-store-migration-reviewed',
+            'verify-moyao-default-store-migration',
         ].includes(operation)
     ) {
         assert.match(expectedRuntimeSha, /^[a-f0-9]{40}$/u, 'An exact expected runtime SHA is required');
@@ -477,6 +484,53 @@ function validateOrderSalesOwnershipOutput(output, operation) {
     return plan;
 }
 
+function validateMoyaoDefaultStoreMigrationOutput(output, operation) {
+    assert.ok(Buffer.byteLength(output) <= 8192, 'MOYAO migration evidence exceeds the safe limit');
+    const prefix = `MOYAO_DEFAULT_STORE_${operation.toUpperCase()} `;
+    const planLine = output.split('\n').find(line => line.startsWith(prefix));
+    assert.ok(planLine, 'MOYAO migration evidence is unavailable');
+    assert.ok(
+        output.endsWith(`MOYAO_DEFAULT_STORE_MIGRATION_OK operation=${operation}\n`),
+        'MOYAO migration completion evidence is missing',
+    );
+    let plan;
+    try {
+        plan = JSON.parse(planLine.slice(prefix.length));
+    } catch {
+        throw new Error('MOYAO migration evidence is not valid JSON');
+    }
+    assert.equal(plan?.format, 1, 'Unexpected MOYAO migration plan format');
+    if (operation === 'verify') {
+        assert.equal(plan?.schema, 'vendure-moyao-default-store-migration-verification');
+        assert.ok(Number.isSafeInteger(plan?.targetContentBlockCount) && plan.targetContentBlockCount > 0);
+        assert.ok(Number.isSafeInteger(plan?.relationTablesVerified) && plan.relationTablesVerified > 0);
+        assert.ok(
+            Number.isSafeInteger(plan?.movedChannelTablesVerified) && plan.movedChannelTablesVerified > 0,
+        );
+        assert.equal(plan?.defaultOwnedOrderCount, 0);
+        assert.equal(plan?.profileMatches, true);
+        assert.equal(plan?.contentSettingsMatch, true);
+    } else {
+        assert.equal(plan?.schema, 'vendure-moyao-default-store-migration');
+        assert.equal(plan?.mode, 'reviewed-default-to-dedicated-channel');
+        assert.ok(Number.isSafeInteger(plan?.contentBlockCount) && plan.contentBlockCount > 0);
+        assert.ok(Number.isSafeInteger(plan?.orderSalesOwnerCount) && plan.orderSalesOwnerCount >= 0);
+        assert.match(plan?.operationDigest || '', /^[a-f0-9]{64}$/u);
+        assert.ok(plan?.addedRelations && typeof plan.addedRelations === 'object');
+        assert.ok(plan?.movedChannelRows && typeof plan.movedChannelRows === 'object');
+        for (const [table, count] of Object.entries({
+            ...plan.addedRelations,
+            ...plan.movedChannelRows,
+        })) {
+            assert.match(table, /^[a-z][a-z0-9_]*$/u);
+            assert.ok(Number.isSafeInteger(count) && count >= 0);
+        }
+    }
+    assert.equal(plan?.sourceChannelCode, '__default_channel__');
+    assert.equal(plan?.targetChannelCode, 'moyao-ai');
+    return plan;
+}
+
 function startVerifiedMysqlBackup() {
     execFileSync('sudo', ['-n', 'systemctl', 'start', 'vendure-mysql-backup.service'], {
         encoding: 'utf8',
@@ -624,6 +678,93 @@ function runOrderSalesOwnershipBackfill(
     };
 }
 
+function runMoyaoDefaultStoreMigration(
+    request,
+    {
+        inspect = inspectProductionReleases,
+        health = productionHealthSnapshot,
+        spawn = spawnSync,
+        backup = startVerifiedMysqlBackup,
+        script = path.join(
+            __dirname,
+            'repository',
+            'packages',
+            'dev-server',
+            'scripts',
+            'moyao-default-store-migration.mjs',
+        ),
+    } = {},
+) {
+    const apply = request.operation === 'apply-moyao-default-store-migration-reviewed';
+    const verify = request.operation === 'verify-moyao-default-store-migration';
+    assert.ok(apply || verify || request.operation === 'plan-moyao-default-store-migration');
+    const before = inspect();
+    assert.equal(
+        before.markerSha,
+        request.expectedRuntimeSha,
+        'Production runtime SHA changed or was not reviewed',
+    );
+    const healthBefore = health();
+    assertProductionHealthSnapshot(healthBefore, 'before');
+    const run = (operation, digest = '') => {
+        const result = spawn(
+            '/usr/bin/node',
+            [
+                '--env-file=/var/www/kaiyuangouwu/packages/dev-server/.env',
+                script,
+                operation,
+                ...(digest ? [digest] : []),
+            ],
+            {
+                encoding: 'utf8',
+                timeout: 540000,
+                maxBuffer: 65536,
+                stdio: ['ignore', 'pipe', 'pipe'],
+                env: { ...process.env, STORE_ISOLATION_MODULE_ROOT: before.currentRuntime },
+            },
+        );
+        assert.equal(result.status, 0, `The fixed MOYAO migration ${operation} failed`);
+        return validateMoyaoDefaultStoreMigrationOutput(String(result.stdout || ''), operation);
+    };
+    let plan = null;
+    let backupEvidence = null;
+    let verification = null;
+    if (verify) {
+        verification = run('verify');
+    } else {
+        plan = run('plan');
+        if (apply) {
+            assert.equal(
+                plan.operationDigest,
+                request.expectedPlanSha256,
+                'MOYAO migration plan changed; rerun the read-only plan and review it again',
+            );
+            backupEvidence = backup();
+            const applied = run('apply', request.expectedPlanSha256);
+            assert.deepEqual(
+                applied,
+                plan,
+                'Applied MOYAO migration evidence differs from the reviewed plan',
+            );
+            verification = run('verify');
+        }
+    }
+    const after = inspect();
+    assert.deepEqual(after, before, 'Production release state changed during MOYAO migration');
+    const healthAfter = health();
+    assertProductionHealthSnapshot(healthAfter, 'after');
+    return {
+        sourceSha: request.sourceSha,
+        runtimeSha: before.markerSha,
+        healthBefore,
+        healthAfter,
+        ...(plan ? { plan } : {}),
+        ...(backupEvidence ? { backup: backupEvidence } : {}),
+        ...(verification ? { verification } : {}),
+        applied: apply,
+    };
+}
+
 function assertProductionHealthSnapshot(snapshot, stage) {
     assert.equal(snapshot.status, 'ok', `Production health state is unavailable ${stage} the audit`);
     assert.match(
@@ -753,6 +894,21 @@ function runLocked(environment = process.env) {
         );
         process.stdout.write(`${JSON.stringify(result)}\n`);
         process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=backup-database\n');
+        return;
+    }
+    if (
+        [
+            'plan-moyao-default-store-migration',
+            'apply-moyao-default-store-migration-reviewed',
+            'verify-moyao-default-store-migration',
+        ].includes(request.operation)
+    ) {
+        const result = runMoyaoDefaultStoreMigration(request);
+        process.stdout.write(
+            `PRODUCTION_MOYAO_DEFAULT_STORE_REVISIONS source=${request.sourceSha} runtime=${result.runtimeSha}\n`,
+        );
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+        process.stdout.write(`PRODUCTION_OPERATIONS_COMPLETE operation=${request.operation}\n`);
         return;
     }
     if (
@@ -985,9 +1141,11 @@ module.exports = {
     runStoreIsolationAudit,
     runDatabaseBackup,
     runOrderSalesOwnershipBackfill,
+    runMoyaoDefaultStoreMigration,
     startVerifiedMysqlBackup,
     validateMigrationAuditOutput,
     validateOrderSalesOwnershipOutput,
+    validateMoyaoDefaultStoreMigrationOutput,
     validateStoreAutonomyAuditPayload,
     validateRequest,
     withProductionLock,

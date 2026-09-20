@@ -79,6 +79,43 @@ transaction, and checks both completeness and Channel membership before commit.
 Any drift requires a new read-only plan. Re-run `audit-store-isolation-data`
 afterward; this operation does not move domains, content, catalog, or customers.
 
+## Move the MOYAO storefront out of the native default Channel
+
+After the dedicated `moyao-ai` Channel exists, its catalog assignment has been
+reviewed, and the order-owner backfill is complete, plan the remaining storefront
+migration against the exact running runtime:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=plan-moyao-default-store-migration \
+    -f source_sha=<latest-main-sha> \
+    -f expected_runtime_sha=<running-runtime-sha>
+```
+
+The plan contains aggregate counts and one exact operation digest, never customer,
+product, asset, content, or profile identifiers. It requires the target storefront
+to contain no content blocks, copies the default Channel's customer and catalog
+memberships to `moyao-ai`, copies the StoreProfile and content setting, moves the
+default storefront business data to the dedicated Channel, and transfers any
+default-owned historical sales after proving they have no other public-store owner.
+
+After reviewing the counts and digest, apply the fixed plan:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=apply-moyao-default-store-migration-reviewed \
+    -f source_sha=<latest-main-sha> \
+    -f expected_runtime_sha=<running-runtime-sha> \
+    -f expected_plan_sha256=<reviewed-operation-digest>
+```
+
+The reviewed write holds the deployment lock, rechecks the complete plan, creates
+and verifies a fresh offsite MySQL backup, commits one transaction, verifies that
+all source memberships are represented in `moyao-ai`, and confirms that storefront
+content no longer belongs to the native default Channel. A standalone read-only
+verification is available as `verify-moyao-default-store-migration`. Domain transfer
+still happens separately through the Admin impact preview after public API checks.
+
 ## Separate 2FA key recovery
 
 The same fixed workflow can back up the two existing 2FA encryption keys to
