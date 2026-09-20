@@ -127,6 +127,8 @@ import { AddInventoryControlWorkflow1789509600000 } from './1789509600000-add-in
 import { CloseAfterSalesWorkflow1789596000000 } from './1789596000000-close-after-sales-workflow';
 import { CloseFulfillmentDelivery1789599600000 } from './1789599600000-close-fulfillment-delivery';
 import { AddCustomerOperations1789686000000 } from './1789686000000-add-customer-operations';
+import { AddMarketingAttribution1789689600000 } from './1789689600000-add-marketing-attribution';
+import { CloseFinanceProfitReconciliation1789693200000 } from './1789693200000-close-finance-profit-reconciliation';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -258,4 +260,6 @@ export const devServerMigrations = [
     CloseAfterSalesWorkflow1789596000000,
     CloseFulfillmentDelivery1789599600000,
     AddCustomerOperations1789686000000,
+    AddMarketingAttribution1789689600000,
+    CloseFinanceProfitReconciliation1789693200000,
 ];

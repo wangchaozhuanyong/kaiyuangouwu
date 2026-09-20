@@ -1,7 +1,8 @@
 import * as XLSX from 'xlsx';
 
 type CellValue = string | number | boolean | Date | null | undefined;
-type ExpenseField = 'orderCode' | 'carrierShippingCostMicrounits' | 'paymentFeeMicrounits' | 'note';
+type ExpenseField =
+    'orderCode' | 'carrierShippingCostMicrounits' | 'paymentFeeMicrounits' | 'chargebackMicrounits' | 'note';
 
 export const MAX_ORDER_EXPENSE_IMPORT_ROWS = 5_000;
 const MAX_ORDER_EXPENSE_IMPORT_BYTES = 20 * 1024 * 1024;
@@ -19,6 +20,9 @@ const headerAliases = new Map<string, ExpenseField>([
     ['支付手续费', 'paymentFeeMicrounits'],
     ['支付渠道手续费', 'paymentFeeMicrounits'],
     ['paymentfee', 'paymentFeeMicrounits'],
+    ['拒付损失', 'chargebackMicrounits'],
+    ['拒付金额', 'chargebackMicrounits'],
+    ['chargeback', 'chargebackMicrounits'],
     ['备注', 'note'],
     ['note', 'note'],
 ]);
@@ -28,6 +32,7 @@ export interface OrderExpenseImportRow {
     orderCode: string;
     carrierShippingCostMicrounits?: number;
     paymentFeeMicrounits?: number;
+    chargebackMicrounits?: number;
     note?: string;
 }
 
@@ -75,8 +80,12 @@ export async function parseOrderExpenseArrayBuffer(
     const headers = matrix[0].map(normalizeHeader);
     const fields = headers.map(header => headerAliases.get(normalizeAlias(header)));
     if (!fields.includes('orderCode')) throw new Error('费用文件缺少“订单号”列');
-    if (!fields.includes('carrierShippingCostMicrounits') && !fields.includes('paymentFeeMicrounits')) {
-        throw new Error('费用文件至少需要“实际物流成本”或“支付手续费”列');
+    if (
+        !fields.includes('carrierShippingCostMicrounits') &&
+        !fields.includes('paymentFeeMicrounits') &&
+        !fields.includes('chargebackMicrounits')
+    ) {
+        throw new Error('费用文件至少需要“实际物流成本”、“支付手续费”或“拒付损失”列');
     }
     const duplicateFields = fields.filter((field, index): field is ExpenseField =>
         Boolean(field && fields.indexOf(field) !== index),
@@ -107,7 +116,16 @@ export async function parseOrderExpenseArrayBuffer(
                 rowNumber,
                 '支付手续费',
             );
-            if (carrierShippingCostMicrounits === undefined && paymentFeeMicrounits === undefined) {
+            const chargebackMicrounits = moneyMicrounits(
+                values.get('chargebackMicrounits'),
+                rowNumber,
+                '拒付损失',
+            );
+            if (
+                carrierShippingCostMicrounits === undefined &&
+                paymentFeeMicrounits === undefined &&
+                chargebackMicrounits === undefined
+            ) {
                 throw new Error(`第 ${rowNumber} 行：至少填写一项实际费用，0 元请明确填 0`);
             }
             const note = textValue(values.get('note'));
@@ -117,6 +135,7 @@ export async function parseOrderExpenseArrayBuffer(
                 orderCode,
                 ...(carrierShippingCostMicrounits === undefined ? {} : { carrierShippingCostMicrounits }),
                 ...(paymentFeeMicrounits === undefined ? {} : { paymentFeeMicrounits }),
+                ...(chargebackMicrounits === undefined ? {} : { chargebackMicrounits }),
                 ...(note ? { note } : {}),
             });
         } catch (error) {

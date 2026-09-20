@@ -4,6 +4,7 @@ import { DataSource, EntitySchema } from 'typeorm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AddStorefrontPageViews1788678000000 } from '../../../dev-server/migrations/1788678000000-add-storefront-page-views';
+import { AddMarketingAttribution1789689600000 } from '../../../dev-server/migrations/1789689600000-add-marketing-attribution';
 import { StorefrontPageView } from '../entities/storefront-page-view.entity';
 
 import { StorefrontTrafficService, trafficPublicIp } from './storefront-traffic.service';
@@ -23,6 +24,14 @@ const schema = new EntitySchema<StorefrontPageView>({
         visitorKeyHash: { type: String },
         customerKeyHash: { type: String, nullable: true },
         ipHash: { type: String, nullable: true },
+        attributionKeyHash: { type: String, nullable: true },
+        path: { type: String, nullable: true },
+        referrerHost: { type: String, nullable: true },
+        source: { type: String, nullable: true },
+        medium: { type: String, nullable: true },
+        campaign: { type: String, nullable: true },
+        term: { type: String, nullable: true },
+        content: { type: String, nullable: true },
     },
 });
 const secret = 'test-traffic-signing-secret-not-a-production-credential';
@@ -63,8 +72,10 @@ describe('storefront traffic persistence', () => {
             db = await new DataSource({ type: 'sqljs', entities: [schema], synchronize: false }).initialize();
         }
         await db.query('CREATE TABLE channel (id INTEGER PRIMARY KEY)');
+        await db.query('CREATE TABLE "order" (id INTEGER PRIMARY KEY)');
         await db.query('INSERT INTO channel VALUES (1), (2)');
         await new AddStorefrontPageViews1788678000000().up(db.createQueryRunner());
+        await new AddMarketingAttribution1789689600000().up(db.createQueryRunner());
         service = new StorefrontTrafficService(
             {
                 getRepository: () => db.getRepository(StorefrontPageView),

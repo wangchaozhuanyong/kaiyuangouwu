@@ -563,6 +563,9 @@ export const adminApiExtensions = gql`
         refundedRevenueMicrounits: Float!
         netRevenueMicrounits: Float!
         shippingRevenueMicrounits: Float!
+        grossSalesMicrounits: Float!
+        discountMicrounits: Float!
+        taxMicrounits: Float!
         productCostMicrounits: Float
         grossProfitMicrounits: Float
         grossMargin: Float
@@ -572,12 +575,15 @@ export const adminApiExtensions = gql`
         estimatedCostLineCount: Int!
         carrierShippingCostMicrounits: Float
         paymentFeeMicrounits: Float
+        chargebackMicrounits: Float
         netProfitMicrounits: Float
         netMargin: Float
         missingCarrierShippingCostOrderCount: Int!
         missingPaymentFeeOrderCount: Int!
+        missingChargebackOrderCount: Int!
         includesCarrierShippingCost: Boolean!
         includesPaymentFees: Boolean!
+        includesChargebacks: Boolean!
     }
 
     type CatalogProfitOrder implements Node {
@@ -590,11 +596,15 @@ export const adminApiExtensions = gql`
         refundedRevenueMicrounits: Float!
         netRevenueMicrounits: Float!
         shippingRevenueMicrounits: Float!
+        grossSalesMicrounits: Float!
+        discountMicrounits: Float!
+        taxMicrounits: Float!
         productCostMicrounits: Float
         grossProfitMicrounits: Float
         grossMargin: Float
         carrierShippingCostMicrounits: Float
         paymentFeeMicrounits: Float
+        chargebackMicrounits: Float
         netProfitMicrounits: Float
         netMargin: Float
         missingCostLineCount: Int!
@@ -615,17 +625,30 @@ export const adminApiExtensions = gql`
         currencyCode: CurrencyCode!
         carrierShippingCostMicrounits: Float
         paymentFeeMicrounits: Float
+        chargebackMicrounits: Float
         source: String!
         sourceReference: String
         note: String
+    }
+
+    type CatalogOrderProfitExpenseEvent implements Node {
+        id: ID!
+        createdAt: DateTime!
+        eventType: String!
+        actorUserId: String
+        sourceReference: String
+        before: JSON
+        after: JSON!
     }
 
     input SaveCatalogOrderProfitExpenseInput {
         orderId: ID!
         carrierShippingCostMicrounits: Float
         paymentFeeMicrounits: Float
+        chargebackMicrounits: Float
         note: String
         expectedUpdatedAt: DateTime
+        idempotencyKey: String
     }
 
     input CatalogOrderProfitExpenseImportRowInput {
@@ -633,6 +656,7 @@ export const adminApiExtensions = gql`
         orderCode: String!
         carrierShippingCostMicrounits: Float
         paymentFeeMicrounits: Float
+        chargebackMicrounits: Float
         note: String
     }
 
@@ -1030,6 +1054,7 @@ export const adminApiExtensions = gql`
         ): CatalogProductSummaryList!
         catalogProductOperations(productIds: [ID!]!): [CatalogProductOperationsSummary!]!
         catalogOrderProfitExpense(orderId: ID!): CatalogOrderProfitExpense
+        catalogOrderProfitExpenseEvents(orderId: ID!): [CatalogOrderProfitExpenseEvent!]!
         catalogProfitReport(input: CatalogProfitReportInput!): CatalogProfitReport!
         catalogProducts(filter: CatalogProductSummaryFilterInput, options: ProductListOptions): ProductList!
         catalogExportRows(skip: Int, take: Int): CatalogExportPage!

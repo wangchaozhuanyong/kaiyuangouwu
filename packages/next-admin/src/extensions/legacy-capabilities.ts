@@ -69,6 +69,12 @@ export const LEGACY_ROUTE_CAPABILITIES: LegacyRouteCapability[] = [
         status: 'MIGRATED',
     },
     {
+        id: 'marketing-attribution',
+        legacyPath: '/marketing-attribution',
+        target: '/marketing/promotions?tab=attribution',
+        status: 'MIGRATED',
+    },
+    {
         id: 'my-store-domains',
         legacyPath: '/my-store-domains',
         target: '/settings/store-profile?tab=domains',

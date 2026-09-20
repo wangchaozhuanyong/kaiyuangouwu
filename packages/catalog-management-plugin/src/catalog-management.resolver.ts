@@ -154,6 +154,12 @@ export class CatalogManagementAdminResolver {
 
     @Query()
     @Allow(Permission.ReadOrder, manageCatalogOperationsPermission.Read)
+    catalogOrderProfitExpenseEvents(@Ctx() ctx: RequestContext, @Args('orderId') orderId: ID) {
+        return this.profit.orderExpenseEvents(ctx, String(orderId));
+    }
+
+    @Query()
+    @Allow(Permission.ReadOrder, manageCatalogOperationsPermission.Read)
     catalogProfitReport(@Ctx() ctx: RequestContext, @Args('input') input: CatalogProfitReportInput) {
         return this.profit.report(ctx, input);
     }

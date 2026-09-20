@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CatalogProfitService } from './catalog-profit.service';
 import { manageCatalogOperationsPermission } from './constants';
+import { OrderProfitExpenseEvent } from './entities/order-profit-expense-event.entity';
 import { OrderProfitExpense } from './entities/order-profit-expense.entity';
 
 const expenseSchema = new EntitySchema<OrderProfitExpense>({
@@ -19,6 +20,7 @@ const expenseSchema = new EntitySchema<OrderProfitExpense>({
         currencyCode: { type: String },
         carrierShippingCostMicrounits: { type: 'bigint', nullable: true },
         paymentFeeMicrounits: { type: 'bigint', nullable: true },
+        chargebackMicrounits: { type: 'bigint', nullable: true },
         source: { type: String },
         sourceReference: { type: String, nullable: true },
         note: { type: String, nullable: true },
@@ -60,6 +62,7 @@ describe.each(databases)('order expense persistence with $name', ({ options }) =
                 currencyCode: CurrencyCode.MYR,
                 carrierShippingCostMicrounits: '5000',
                 paymentFeeMicrounits: '2000',
+                chargebackMicrounits: '0',
                 source: 'IMPORT',
                 note: 'keep this note',
             });
@@ -94,7 +97,13 @@ describe.each(databases)('order expense persistence with $name', ({ options }) =
                 getRepository: (_: RequestContext, entity: unknown) =>
                     entity === Order
                         ? { createQueryBuilder: () => orderQuery }
-                        : manager.getRepository(expenseSchema),
+                        : entity === OrderProfitExpenseEvent
+                          ? {
+                                findOneBy: vi.fn().mockResolvedValue(null),
+                                create: vi.fn().mockImplementation(value => value),
+                                save: vi.fn().mockImplementation(value => Promise.resolve(value)),
+                            }
+                          : manager.getRepository(expenseSchema),
             } as unknown as TransactionalConnection;
             const service = new CatalogProfitService(connection);
             vi.spyOn(Date, 'now').mockReturnValue(previous.updatedAt.getTime());

@@ -89,6 +89,9 @@ export const CATALOG_PROFIT_REPORT_QUERY = gql`
                 refundedRevenueMicrounits
                 netRevenueMicrounits
                 shippingRevenueMicrounits
+                grossSalesMicrounits
+                discountMicrounits
+                taxMicrounits
                 productCostMicrounits
                 grossProfitMicrounits
                 grossMargin
@@ -98,12 +101,15 @@ export const CATALOG_PROFIT_REPORT_QUERY = gql`
                 estimatedCostLineCount
                 carrierShippingCostMicrounits
                 paymentFeeMicrounits
+                chargebackMicrounits
                 netProfitMicrounits
                 netMargin
                 missingCarrierShippingCostOrderCount
                 missingPaymentFeeOrderCount
+                missingChargebackOrderCount
                 includesCarrierShippingCost
                 includesPaymentFees
+                includesChargebacks
             }
             items {
                 id
@@ -115,11 +121,15 @@ export const CATALOG_PROFIT_REPORT_QUERY = gql`
                 refundedRevenueMicrounits
                 netRevenueMicrounits
                 shippingRevenueMicrounits
+                grossSalesMicrounits
+                discountMicrounits
+                taxMicrounits
                 productCostMicrounits
                 grossProfitMicrounits
                 grossMargin
                 carrierShippingCostMicrounits
                 paymentFeeMicrounits
+                chargebackMicrounits
                 netProfitMicrounits
                 netMargin
                 missingCostLineCount
@@ -139,6 +149,7 @@ const CATALOG_ORDER_PROFIT_EXPENSE_FIELDS = gql`
         currencyCode
         carrierShippingCostMicrounits
         paymentFeeMicrounits
+        chargebackMicrounits
         source
         sourceReference
         note
@@ -149,6 +160,15 @@ export const CATALOG_ORDER_PROFIT_EXPENSE_QUERY = gql`
     query NextAdminCatalogOrderProfitExpense($orderId: ID!) {
         catalogOrderProfitExpense(orderId: $orderId) {
             ...NextAdminCatalogOrderProfitExpenseFields
+        }
+        catalogOrderProfitExpenseEvents(orderId: $orderId) {
+            id
+            createdAt
+            eventType
+            actorUserId
+            sourceReference
+            before
+            after
         }
     }
     ${CATALOG_ORDER_PROFIT_EXPENSE_FIELDS}
@@ -1038,6 +1058,9 @@ export interface CatalogProfitReportSummary {
     refundedRevenueMicrounits: number;
     netRevenueMicrounits: number;
     shippingRevenueMicrounits: number;
+    grossSalesMicrounits: number;
+    discountMicrounits: number;
+    taxMicrounits: number;
     productCostMicrounits?: number | null;
     grossProfitMicrounits?: number | null;
     grossMargin?: number | null;
@@ -1047,12 +1070,15 @@ export interface CatalogProfitReportSummary {
     estimatedCostLineCount: number;
     carrierShippingCostMicrounits?: number | null;
     paymentFeeMicrounits?: number | null;
+    chargebackMicrounits?: number | null;
     netProfitMicrounits?: number | null;
     netMargin?: number | null;
     missingCarrierShippingCostOrderCount: number;
     missingPaymentFeeOrderCount: number;
+    missingChargebackOrderCount: number;
     includesCarrierShippingCost: boolean;
     includesPaymentFees: boolean;
+    includesChargebacks: boolean;
 }
 
 export interface CatalogProfitOrderRecord {
@@ -1065,11 +1091,15 @@ export interface CatalogProfitOrderRecord {
     refundedRevenueMicrounits: number;
     netRevenueMicrounits: number;
     shippingRevenueMicrounits: number;
+    grossSalesMicrounits: number;
+    discountMicrounits: number;
+    taxMicrounits: number;
     productCostMicrounits?: number | null;
     grossProfitMicrounits?: number | null;
     grossMargin?: number | null;
     carrierShippingCostMicrounits?: number | null;
     paymentFeeMicrounits?: number | null;
+    chargebackMicrounits?: number | null;
     netProfitMicrounits?: number | null;
     netMargin?: number | null;
     missingCostLineCount: number;
@@ -1092,6 +1122,7 @@ export interface CatalogOrderProfitExpenseRecord {
     currencyCode: string;
     carrierShippingCostMicrounits?: number | null;
     paymentFeeMicrounits?: number | null;
+    chargebackMicrounits?: number | null;
     source: string;
     sourceReference?: string | null;
     note?: string | null;
@@ -1099,6 +1130,15 @@ export interface CatalogOrderProfitExpenseRecord {
 
 export interface CatalogOrderProfitExpenseQueryResult {
     catalogOrderProfitExpense?: CatalogOrderProfitExpenseRecord | null;
+    catalogOrderProfitExpenseEvents: Array<{
+        id: string;
+        createdAt: string;
+        eventType: string;
+        actorUserId?: string | null;
+        sourceReference?: string | null;
+        before?: Record<string, unknown> | null;
+        after: Record<string, unknown>;
+    }>;
 }
 
 export interface CatalogOrderProfitExpenseImportResult {

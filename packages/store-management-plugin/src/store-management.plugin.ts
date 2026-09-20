@@ -47,6 +47,7 @@ import { CustomerOperationsProfile } from './entities/customer-operations-profil
 import { DataConsentRecord } from './entities/data-consent-record.entity';
 import { DataRetentionRecord } from './entities/data-retention-record.entity';
 import { DataSubjectRequest } from './entities/data-subject-request.entity';
+import { MarketingCampaignCost } from './entities/marketing-campaign-cost.entity';
 import { ReferralAccount } from './entities/referral-account.entity';
 import { ReferralBalanceUse } from './entities/referral-balance-use.entity';
 import { ReferralLedgerEntry } from './entities/referral-ledger-entry.entity';
@@ -65,11 +66,14 @@ import { StoreUsdtReconciliationAction } from './entities/store-usdt-reconciliat
 import { StoreUsdtWalletAudit } from './entities/store-usdt-wallet-audit.entity';
 import { StoreUsdtWallet } from './entities/store-usdt-wallet.entity';
 import { StorefrontDailyVisitor } from './entities/storefront-daily-visitor.entity';
+import { StorefrontOrderAttribution } from './entities/storefront-order-attribution.entity';
 import { StorefrontPageView } from './entities/storefront-page-view.entity';
 import { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity';
 import { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity';
 import { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity';
 import { SystemAnnouncement } from './entities/system-announcement.entity';
+import { MarketingAttributionService } from './marketing-attribution.service';
+import { purgeExpiredMarketingAnalyticsTask } from './marketing-attribution.tasks';
 import { MerchantCatalogAccessInterceptor } from './merchant-catalog-access.interceptor';
 import { MerchantCatalogAccessService } from './merchant-catalog-access.service';
 import { MerchantInitialPasswordInterceptor } from './merchant-initial-password.interceptor';
@@ -198,6 +202,8 @@ import {
         ReferralWithdrawal,
         StorefrontDailyVisitor,
         StorefrontPageView,
+        StorefrontOrderAttribution,
+        MarketingCampaignCost,
         StorefrontUsdtCheckoutQuote,
         StorefrontUsdtPaymentIntent,
         StoreUsdtManualRefund,
@@ -242,6 +248,7 @@ import {
         StoreCouponClosureRepairService,
         ReferralService,
         StorefrontTrafficService,
+        MarketingAttributionService,
         ReferralWalletSpendService,
         SystemAnnouncementService,
         StorefrontRealtimeService,
@@ -362,6 +369,7 @@ import {
         config.schedulerOptions.tasks.push(purgeDueDataRetentionTask);
         config.schedulerOptions.tasks.push(processDueAccountClosuresTask);
         config.schedulerOptions.tasks.push(reconcileCustomerOperationsTask);
+        config.schedulerOptions.tasks.push(purgeExpiredMarketingAnalyticsTask);
         return config;
     },
     adminApiExtensions: {

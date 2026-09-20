@@ -16,8 +16,8 @@ This plan tracks whether each business capability has a complete loop rather tha
 | P1       | Inventory                  | Reservation, receiving, adjustment, transfer, return disposition, low-stock alert and reconciliation                      | Implemented and locally verified; production migration and browser exercise remain           |
 | P1       | Fulfilment and after-sales | Shipment, carrier exception, delivery proof, cancellation, return, exchange, reship and refund                            | Implemented and locally verified; production migration and browser exercise remain           |
 | P1       | Customer operations        | Customer 360, service history, segmentation, RFM/LTV, churn signal and follow-up outcome                                  | Implemented and locally verified; production migration and browser exercise remain           |
-| P1       | Marketing analytics        | Acquisition attribution, search terms, funnel, campaign cost, revenue, refund-adjusted ROI                                | Traffic exists; cost/attribution closure not verified                                        |
-| P1       | Finance                    | Revenue, discount, tax, cost, gateway fee, refund, chargeback and profit reconciliation                                   | Existing reports require closure audit                                                       |
+| P1       | Marketing analytics        | Acquisition attribution, search terms, funnel, campaign cost, revenue, refund-adjusted ROI                                | Implemented and locally verified; production migration and browser exercise remain           |
+| P1       | Finance                    | Revenue, discount, tax, cost, gateway fee, refund, chargeback and profit reconciliation                                   | Implemented and locally verified; production migration and browser exercise remain           |
 | P2       | Governance                 | Unified immutable audit, four-eyes approval, content/config versioning, scheduled reports and anomaly alerts              | Partial and distributed                                                                      |
 | P2       | Fraud and abuse            | Account/order/payment/referral risk rules, review queue, decision evidence and appeal                                     | Partial and distributed                                                                      |
 
@@ -220,6 +220,51 @@ Customer-operations acceptance gates:
 - [ ] Six-hour reconciliation, overdue incident delivery and browser workflow observed end to end.
 - [ ] Release, running SHA and monitoring evidence.
 
+## Current P1 implementation: marketing attribution and campaign return
+
+Consent-gated storefront traffic now captures normalized UTM source, medium, campaign, term and content plus the referring host and path. It does not persist full landing-page queries or advertising click identifiers. A channel-scoped keyed hash links consented visits without exposing the raw browser identifier. When an order reaches `PaymentSettled`, the service freezes the most recent non-direct touch within 30 days; if none exists, it records an explicit direct attribution. Later traffic retention cannot rewrite the order's acquisition evidence.
+
+Campaign cost is an append-only ledger scoped by store, currency, source, medium, campaign and cost date. Every entry requires an idempotency key and operator evidence. Corrections use a new negative entry instead of overwriting history. The report combines unique visitors, product views, cart additions, checkout starts, payment starts, settled orders, settled revenue, refunds, net revenue and campaign cost. ROAS and ROI use refund-adjusted net revenue rather than gross order value, and search terms remain visible without storing full external URLs.
+
+Raw page views are retained for 90 days and purged daily. Frozen order attribution and campaign-cost ledger entries remain as durable financial evidence and are included in personal-data export where linked to the customer. Both administrator surfaces expose the report; the Next Admin also supports controlled campaign-cost entry.
+
+Marketing-attribution acceptance gates:
+
+- [x] Tracking is disabled until the visitor grants analytics consent.
+- [x] Full landing-page query strings and click-identifier values are not persisted.
+- [x] Visitor linkage uses a channel-scoped keyed hash rather than a raw identifier.
+- [x] Payment settlement freezes a 30-day last-non-direct attribution snapshot.
+- [x] Direct traffic is explicit and later visits cannot rewrite a settled order's attribution.
+- [x] Campaign-cost writes are channel/currency scoped, idempotent and append-only.
+- [x] Corrections preserve history as negative ledger entries.
+- [x] Funnel, settled revenue, refunds, net revenue, cost, ROAS and ROI share the same reporting boundary.
+- [x] Raw traffic has an explicit 90-day purge while frozen financial evidence remains.
+- [x] Both administrator interfaces expose the report and the Next Admin exposes cost entry.
+- [x] Migration is idempotent and tested on MySQL, PostgreSQL and SQLite-shaped schemas.
+- [ ] Migration applied and attribution/cost workflow exercised in a production-like database.
+- [ ] Daily traffic purge and order-settlement subscription observed end to end.
+- [ ] Release, running SHA, browser acceptance and monitoring evidence.
+
+## Current P1 implementation: financial profit reconciliation
+
+The profit report now reconciles settled payments, refunds, gross sales before discount, discounts, tax, historical product cost, actual carrier cost, payment fees and chargeback losses for the selected store, currency and order-date boundary. Buyer-paid shipping remains part of settled revenue and is not added twice. A missing actual expense stays `null`; an explicitly confirmed zero remains `0`. Net profit is withheld whenever required cost evidence is missing, preventing an incomplete order from appearing profitable.
+
+Manual expense changes require optimistic version matching and an idempotency key. Every create or update appends an immutable before/after event with operator and source evidence. Spreadsheet imports support carrier cost, payment fee and chargeback loss; each file row has a deterministic idempotency key so retries do not write the same adjustment twice. The order expense panel exposes event history and the aggregate report exposes missing-cost counts and coverage alongside every profit component.
+
+Financial-reconciliation acceptance gates:
+
+- [x] Settled payments and settled refunds form the revenue boundary.
+- [x] Gross sales before discount, discounts and taxes are reported independently.
+- [x] Historical product cost, actual carrier cost, payment fee and chargeback loss are separate inputs.
+- [x] Explicit zero is distinguished from missing cost evidence.
+- [x] Net profit is not emitted when required cost evidence is incomplete.
+- [x] Manual saves are optimistic, idempotent and append immutable before/after events.
+- [x] Import retries are idempotent per file row and support chargeback loss.
+- [x] Order detail exposes expense audit history and the report exposes coverage/missing counts.
+- [x] Migration is idempotent and tested on MySQL, PostgreSQL and SQLite-shaped schemas.
+- [ ] Migration applied and a representative order/refund/chargeback set reconciled in a production-like database.
+- [ ] Release, running SHA, browser acceptance and finance sign-off evidence.
+
 Customer-avatar acceptance gates:
 
 - [x] Replacement is atomic: a failed upload leaves the current avatar active.
@@ -240,7 +285,7 @@ Customer-avatar acceptance gates:
 
 1. Apply and exercise the completed P0 controls in a production-like environment without publishing from this worktree.
 2. Apply and exercise outbound fulfilment delivery evidence, exception recovery and scheduled alerts.
-3. Add acquisition attribution and refund-adjusted profitability on top of trustworthy operational and customer data.
+3. Apply and exercise acquisition attribution and refund-adjusted profitability in a production-like environment.
 4. Consolidate audit, approvals, scheduled reports, alerts and fraud review across all domains.
 
 ## Definition of done for every domain

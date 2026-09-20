@@ -30,6 +30,7 @@ export { CustomerOperationsProfile } from './entities/customer-operations-profil
 export { DataConsentRecord } from './entities/data-consent-record.entity.js';
 export { DataRetentionRecord } from './entities/data-retention-record.entity.js';
 export { DataSubjectRequest } from './entities/data-subject-request.entity.js';
+export { MarketingCampaignCost } from './entities/marketing-campaign-cost.entity.js';
 export { ReferralAccount } from './entities/referral-account.entity.js';
 export { ReferralLedgerEntry } from './entities/referral-ledger-entry.entity.js';
 export { ReferralProgramConfig } from './entities/referral-program-config.entity.js';
@@ -44,10 +45,12 @@ export { StoreUsdtManualRefund } from './entities/store-usdt-manual-refund.entit
 export { StoreUsdtReconciliationAction } from './entities/store-usdt-reconciliation-action.entity.js';
 export { StoreUsdtWalletAudit } from './entities/store-usdt-wallet-audit.entity.js';
 export { StoreUsdtWallet } from './entities/store-usdt-wallet.entity.js';
+export { StorefrontOrderAttribution } from './entities/storefront-order-attribution.entity.js';
 export { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity.js';
 export { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity.js';
 export { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity.js';
 export { SystemAnnouncement } from './entities/system-announcement.entity.js';
+export { MarketingAttributionService } from './marketing-attribution.service.js';
 export { MerchantCatalogAccessService } from './merchant-catalog-access.service.js';
 export {
     accountEntryRoutes,

@@ -540,6 +540,7 @@ defineNextAdminExtension({
                 { path: '/store-coupons', target: '/marketing/promotions?tab=coupons' },
                 { path: '/store-flash-sales', target: '/marketing/promotions?tab=flash-sales' },
                 { path: '/store-promotion-campaigns', target: '/marketing/promotions?tab=coupons' },
+                { path: '/marketing-attribution', target: '/marketing/promotions?tab=attribution' },
             ],
             title: '优惠与促销',
             component: PromotionsModule,

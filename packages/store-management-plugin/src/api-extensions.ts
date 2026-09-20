@@ -1476,6 +1476,7 @@ export const adminApiExtensions = gql`
         referralCustomerWallets(customerId: ID!): [ReferralWallet!]!
         referralTodayMetrics: ReferralTodayMetrics!
         storefrontTraffic(days: Int = 7): StorefrontTrafficReport!
+        marketingAttributionReport(input: MarketingAttributionReportInput!): MarketingAttributionReport!
         referralBalanceAudit: ReferralBalanceAuditResult!
         dataRetentionRecords: [DataRetentionRecord!]!
         dataSubjectRequests: [DataSubjectRequest!]!
@@ -1553,6 +1554,7 @@ export const adminApiExtensions = gql`
         refreshCustomerOperationsProfile(customerId: ID!): CustomerOperationsProfile!
         createCustomerFollowUp(input: CreateCustomerFollowUpInput!): CustomerFollowUp!
         updateCustomerFollowUp(input: UpdateCustomerFollowUpInput!): CustomerFollowUp!
+        recordMarketingCampaignCost(input: RecordMarketingCampaignCostInput!): MarketingCampaignCost!
     }
 
     extend type Order {

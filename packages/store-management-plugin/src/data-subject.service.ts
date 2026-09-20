@@ -26,6 +26,7 @@ import { DataSubjectRequest, DataSubjectRequestStatus } from './entities/data-su
 import { ReferralAccount } from './entities/referral-account.entity';
 import { ReferralWallet } from './entities/referral-wallet.entity';
 import { ReferralWithdrawal } from './entities/referral-withdrawal.entity';
+import { StorefrontOrderAttribution } from './entities/storefront-order-attribution.entity';
 import { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity';
 
 export const ACCOUNT_CLOSURE_COOLING_OFF_DAYS = 7;
@@ -110,6 +111,7 @@ export class DataSubjectService {
                 imageJobCount: payload.imageStudio.jobs.length,
                 consentRecordCount: payload.consentRecords.length,
                 customerFollowUpCount: payload.customerOperations.followUps.length,
+                orderAttributionCount: payload.analytics.orderAttributions.length,
             });
             request.completedAt = new Date();
             await repository.save(request, { reload: false });
@@ -492,6 +494,7 @@ export class DataSubjectService {
             customerOperationsProfiles,
             customerFollowUps,
             customerFollowUpEvents,
+            orderAttributions,
         ] = await Promise.all([
             this.optionalCustomerRows(ctx, 'StorefrontReview', customerId, [
                 'id',
@@ -779,6 +782,12 @@ export class DataSubjectService {
                 'note',
                 'payloadJson',
             ]),
+            orders.length
+                ? this.connection.getRepository(ctx, StorefrontOrderAttribution).find({
+                      where: { orderId: In(orders.map(order => order.id)) },
+                      order: { createdAt: 'DESC' },
+                  })
+                : [],
         ]);
         return {
             format: 'website-personal-data-export',
@@ -924,7 +933,21 @@ export class DataSubjectService {
                 privateAssets,
                 usageQuotas,
             },
-            analytics: { dailyVisits },
+            analytics: {
+                dailyVisits,
+                orderAttributions: orderAttributions.map(attribution => ({
+                    orderId: String(attribution.orderId),
+                    attributionModel: attribution.attributionModel,
+                    source: attribution.source,
+                    medium: attribution.medium,
+                    campaign: attribution.campaign,
+                    term: attribution.term,
+                    content: attribution.content,
+                    landingPath: attribution.landingPath,
+                    referrerHost: attribution.referrerHost,
+                    touchAt: iso(attribution.touchAt),
+                })),
+            },
             customerOperations: {
                 profiles: customerOperationsProfiles,
                 followUps: customerFollowUps,

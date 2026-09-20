@@ -11,6 +11,9 @@ function order(overrides: Partial<ProfitOrderSource> = {}): ProfitOrderSource {
         code: 'T-1001',
         orderPlacedAt: placedAt,
         currencyCode: CurrencyCode.MYR,
+        total: 9_500,
+        totalWithTax: 10_000,
+        discountWithTax: 1_000,
         shippingWithTax: 500,
         lines: [{ productVariantId: 'variant-1', quantity: 2 }],
         payments: [
@@ -44,6 +47,9 @@ describe('catalog profit report calculation', () => {
             refundedRevenueMicrounits: 10_000,
             netRevenueMicrounits: 90_000,
             shippingRevenueMicrounits: 5_000,
+            grossSalesMicrounits: 110_000,
+            discountMicrounits: 10_000,
+            taxMicrounits: 5_000,
             productCostMicrounits: 40_000,
             grossProfitMicrounits: 50_000,
             grossMargin: 50_000 / 90_000,
@@ -146,19 +152,30 @@ describe('catalog profit report calculation', () => {
                     [{ effectiveAt: new Date('2026-09-01T00:00:00.000Z'), costMicrounits: 20_000 }],
                 ],
             ]),
-            new Map([['order-1', { carrierShippingCostMicrounits: 5_000, paymentFeeMicrounits: 2_000 }]]),
+            new Map([
+                [
+                    'order-1',
+                    {
+                        carrierShippingCostMicrounits: 5_000,
+                        paymentFeeMicrounits: 2_000,
+                        chargebackMicrounits: 3_000,
+                    },
+                ],
+            ]),
         );
 
         expect(result.summary).toMatchObject({
             grossProfitMicrounits: 50_000,
             carrierShippingCostMicrounits: 5_000,
             paymentFeeMicrounits: 2_000,
-            netProfitMicrounits: 43_000,
-            netMargin: 43_000 / 90_000,
+            chargebackMicrounits: 3_000,
+            netProfitMicrounits: 40_000,
+            netMargin: 40_000 / 90_000,
             missingCarrierShippingCostOrderCount: 0,
             missingPaymentFeeOrderCount: 0,
             includesCarrierShippingCost: true,
             includesPaymentFees: true,
+            includesChargebacks: true,
         });
     });
 
@@ -171,7 +188,16 @@ describe('catalog profit report calculation', () => {
                     [{ effectiveAt: new Date('2026-09-01T00:00:00.000Z'), costMicrounits: 20_000 }],
                 ],
             ]),
-            new Map([['order-1', { carrierShippingCostMicrounits: 0, paymentFeeMicrounits: null }]]),
+            new Map([
+                [
+                    'order-1',
+                    {
+                        carrierShippingCostMicrounits: 0,
+                        paymentFeeMicrounits: null,
+                        chargebackMicrounits: 0,
+                    },
+                ],
+            ]),
         );
 
         expect(result.summary).toMatchObject({
@@ -183,6 +209,35 @@ describe('catalog profit report calculation', () => {
             missingPaymentFeeOrderCount: 1,
             includesCarrierShippingCost: true,
             includesPaymentFees: false,
+            includesChargebacks: true,
+        });
+    });
+
+    it('does not publish net profit until chargebacks are explicitly confirmed, including zero', () => {
+        const result = calculateCatalogProfitReport(
+            [order()],
+            new Map([
+                [
+                    'variant-1',
+                    [{ effectiveAt: new Date('2026-09-01T00:00:00.000Z'), costMicrounits: 20_000 }],
+                ],
+            ]),
+            new Map([
+                [
+                    'order-1',
+                    {
+                        carrierShippingCostMicrounits: 0,
+                        paymentFeeMicrounits: 0,
+                        chargebackMicrounits: null,
+                    },
+                ],
+            ]),
+        );
+        expect(result.summary).toMatchObject({
+            chargebackMicrounits: null,
+            missingChargebackOrderCount: 1,
+            includesChargebacks: false,
+            netProfitMicrounits: null,
         });
     });
 });

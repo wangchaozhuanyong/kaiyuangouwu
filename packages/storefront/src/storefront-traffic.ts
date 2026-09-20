@@ -65,6 +65,13 @@ export interface StorefrontPageViewInput {
     eventId: string;
     visitorId: string | null;
     pageView: boolean;
+    path?: string | null;
+    referrerHost?: string | null;
+    source?: string | null;
+    medium?: string | null;
+    campaign?: string | null;
+    term?: string | null;
+    content?: string | null;
 }
 
 interface TrafficPage {
@@ -72,6 +79,7 @@ interface TrafficPage {
     location: string;
     businessDate: string;
     customerId: string | null;
+    referrerHost?: string | null;
 }
 
 /** One event per displayed route; rerenders and login only identify the existing view. */
@@ -108,6 +116,7 @@ export function createStorefrontTrafficTracker(generateId = () => crypto.randomU
                     eventId: operation.page.eventId,
                     visitorId,
                     pageView: !operation.page.recorded,
+                    ...storefrontAttributionInput(page.location, page.referrerHost),
                 };
                 try {
                     operation.acknowledged = await send(input);
@@ -124,6 +133,26 @@ export function createStorefrontTrafficTracker(generateId = () => crypto.randomU
             });
             return queue;
         },
+    };
+}
+
+export function storefrontAttributionInput(location: string, referrerHost?: string | null) {
+    const parsed = new URL(location, 'https://storefront.invalid');
+    const parameter = (name: string) => parsed.searchParams.get(name)?.trim() || null;
+    const googleClick = parameter('gclid');
+    const metaClick = parameter('fbclid');
+    return {
+        path: parsed.pathname,
+        referrerHost:
+            referrerHost
+                ?.trim()
+                .toLowerCase()
+                .replace(/^www\./u, '') || null,
+        source: parameter('utm_source') ?? (googleClick ? 'google' : metaClick ? 'facebook' : null),
+        medium: parameter('utm_medium') ?? (googleClick || metaClick ? 'cpc' : null),
+        campaign: parameter('utm_campaign'),
+        term: parameter('utm_term'),
+        content: parameter('utm_content'),
     };
 }
 

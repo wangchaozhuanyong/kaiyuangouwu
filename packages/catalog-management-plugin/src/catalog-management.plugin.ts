@@ -28,6 +28,7 @@ import { InventoryLot } from './entities/inventory-lot.entity';
 import { InventoryOperationLine } from './entities/inventory-operation-line.entity';
 import { InventoryOperation } from './entities/inventory-operation.entity';
 import { InventoryPolicy } from './entities/inventory-policy.entity';
+import { OrderProfitExpenseEvent } from './entities/order-profit-expense-event.entity';
 import { OrderProfitExpense } from './entities/order-profit-expense.entity';
 import { PurchaseOrderEvent } from './entities/purchase-order-event.entity';
 import { PurchaseOrderLine } from './entities/purchase-order-line.entity';
@@ -55,6 +56,7 @@ import './types';
         InventoryOperation,
         InventoryOperationLine,
         OrderProfitExpense,
+        OrderProfitExpenseEvent,
         CatalogSupplier,
         CatalogVariantSupplier,
         PurchaseOrder,

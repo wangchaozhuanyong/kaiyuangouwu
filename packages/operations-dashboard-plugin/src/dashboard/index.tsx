@@ -7,6 +7,7 @@ import { CustomerOperationsPageBlock } from './customer-operations-page-block';
 import { FulfillmentDeliveryPageBlock } from './fulfillment-delivery-page-block';
 import { incidentResponseRoute } from './incident-response-page';
 import { manualDigitalDeliveryRoute } from './manual-digital-delivery-page';
+import { marketingAttributionRoute } from './marketing-attribution-page';
 import { organizeOperationsNavigation, type OperationsNavigationTitles } from './operations-navigation';
 import { OperationsTodoWidget } from './operations-todo-widget';
 import { ProductPackagingPageBlock } from './product-packaging-page-block';
@@ -69,6 +70,7 @@ defineDashboardExtension({
         autoCardRoute,
         incidentResponseRoute,
         manualDigitalDeliveryRoute,
+        marketingAttributionRoute,
         reviewModerationRoute,
     ],
     pageBlocks: [

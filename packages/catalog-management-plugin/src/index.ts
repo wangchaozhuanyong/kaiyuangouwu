@@ -12,6 +12,7 @@ export { InventoryLot } from './entities/inventory-lot.entity.js';
 export { InventoryOperationLine } from './entities/inventory-operation-line.entity.js';
 export { InventoryOperation } from './entities/inventory-operation.entity.js';
 export { InventoryPolicy } from './entities/inventory-policy.entity.js';
+export { OrderProfitExpenseEvent } from './entities/order-profit-expense-event.entity.js';
 export { OrderProfitExpense } from './entities/order-profit-expense.entity.js';
 export { PurchaseOrderLine } from './entities/purchase-order-line.entity.js';
 export { PurchaseOrder } from './entities/purchase-order.entity.js';
