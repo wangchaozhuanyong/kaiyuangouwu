@@ -511,11 +511,13 @@ function validateMoyaoDefaultStoreMigrationOutput(output, operation) {
         assert.equal(plan?.defaultOwnedOrderCount, 0);
         assert.equal(plan?.profileMatches, true);
         assert.equal(plan?.contentSettingsMatch, true);
+        assert.equal(plan?.sellerMatches, true);
     } else {
         assert.equal(plan?.schema, 'vendure-moyao-default-store-migration');
         assert.equal(plan?.mode, 'reviewed-default-to-dedicated-channel');
         assert.ok(Number.isSafeInteger(plan?.contentBlockCount) && plan.contentBlockCount > 0);
         assert.ok(Number.isSafeInteger(plan?.orderSalesOwnerCount) && plan.orderSalesOwnerCount >= 0);
+        assert.equal(typeof plan?.sellerWillChange, 'boolean');
         assert.match(plan?.operationDigest || '', /^[a-f0-9]{64}$/u);
         assert.ok(plan?.addedRelations && typeof plan.addedRelations === 'object');
         assert.ok(plan?.copiedChannelRows && typeof plan.copiedChannelRows === 'object');
