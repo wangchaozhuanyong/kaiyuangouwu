@@ -22,14 +22,40 @@ export async function exportCatalogRowsLocally(
     format: CatalogExportFormat,
     stockLocationId?: string,
 ): Promise<{ blob: Blob; extension: CatalogExportFormat }> {
-    if (typeof Worker === 'undefined') {
+    const buildOnMainThread = () => {
         const result = buildCatalogExport(rows, format, stockLocationId);
         return { blob: new Blob([result.buffer], { type: result.mimeType }), extension: result.extension };
+    };
+    if (typeof Worker === 'undefined') {
+        return buildOnMainThread();
     }
     return new Promise((resolve, reject) => {
-        const worker = new CatalogExportFileWorker({ name: 'catalog-export-builder' });
-        const close = () => worker.terminate();
+        let worker: Worker;
+        try {
+            worker = new CatalogExportFileWorker({ name: 'catalog-export-builder' });
+        } catch {
+            resolve(buildOnMainThread());
+            return;
+        }
+        let settled = false;
+        const timeout = window.setTimeout(() => fallbackToMainThread(), 30_000);
+        const close = () => {
+            window.clearTimeout(timeout);
+            worker.terminate();
+        };
+        const fallbackToMainThread = () => {
+            if (settled) return;
+            settled = true;
+            close();
+            try {
+                resolve(buildOnMainThread());
+            } catch (error) {
+                reject(error instanceof Error ? error : new Error('浏览器本地生成报表失败'));
+            }
+        };
         worker.onmessage = (event: MessageEvent<CatalogExportWorkerResponse>) => {
+            if (settled) return;
+            settled = true;
             close();
             if ('message' in event.data) {
                 reject(new Error(event.data.message));
@@ -40,11 +66,13 @@ export async function exportCatalogRowsLocally(
                 extension: event.data.extension,
             });
         };
-        worker.onerror = event => {
-            close();
-            reject(new Error(event.message || '浏览器本地生成报表失败'));
-        };
-        worker.postMessage({ rows, format, stockLocationId } satisfies CatalogExportWorkerRequest);
+        worker.onerror = fallbackToMainThread;
+        worker.onmessageerror = fallbackToMainThread;
+        try {
+            worker.postMessage({ rows, format, stockLocationId } satisfies CatalogExportWorkerRequest);
+        } catch {
+            fallbackToMainThread();
+        }
     });
 }
 

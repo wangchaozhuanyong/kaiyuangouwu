@@ -256,6 +256,7 @@ export const adminApiExtensions = gql`
     type CatalogExportPage {
         items: [CatalogExportRow!]!
         totalItems: Int!
+        scannedItems: Int!
     }
 
     enum CatalogInventoryAlertStatus {

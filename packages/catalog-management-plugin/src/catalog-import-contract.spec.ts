@@ -52,6 +52,7 @@ describe('catalog import privacy contract', () => {
 
         expect(schema).not.toContain('type CatalogExportPage implements PaginatedList');
         expect(schema).toContain('type CatalogExportPage {');
+        expect(schema).toContain('scannedItems: Int!');
     });
 
     it('uses Node items for every Vendure PaginatedList implementation', () => {

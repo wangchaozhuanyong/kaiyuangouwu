@@ -243,6 +243,7 @@ export const catalogExportRowsQuery = gql`
     query CatalogExportRows($skip: Int, $take: Int) {
         catalogExportRows(skip: $skip, take: $take) {
             totalItems
+            scannedItems
             items {
                 productId
                 variantId
