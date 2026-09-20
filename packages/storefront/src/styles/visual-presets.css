@@ -55,13 +55,52 @@ html[data-storefront-preset='modern-oriental'] {
     --color-slate-700: #384551;
     --color-slate-800: #293c4d;
     --color-slate-900: #203346;
+    --proto-header-bg: rgba(246, 242, 234, 0.94);
+    --proto-header-border: rgba(32, 51, 70, 0.12);
+    --proto-header-shadow: 0 4px 20px rgba(62, 45, 25, 0.06);
+    --proto-brand-text: #203346;
+    --proto-nav-link: #334155;
+    --proto-nav-link-hover: #a63d32;
+    --proto-search-bg: #fffdf8;
+    --proto-search-border: rgba(32, 51, 70, 0.15);
+    --proto-search-text: #203346;
+    --proto-search-kbd-bg: #efe9df;
+    --proto-login-btn-bg: #203346;
+    --proto-login-btn-text: #fffdf8;
+    --proto-hero-bg: linear-gradient(135deg, #fffdf8 0%, #f3ede2 100%);
+    --proto-hero-border: rgba(166, 61, 50, 0.25);
+    --proto-hero-title: #203346;
+    --proto-hero-desc: #585951;
+    --proto-tools-bg: #fffdf8;
+    --proto-tools-border: rgba(32, 51, 70, 0.12);
+    --proto-tools-title: #203346;
+    --proto-tool-item-bg: #f6f2ea;
+    --proto-tool-item-border: rgba(32, 51, 70, 0.08);
+    --proto-tool-item-hover-bg: #efe9df;
+    --proto-tool-name: #203346;
+    --proto-tool-sub: #706e68;
+    --proto-card-bg: #fffdf8;
+    --proto-card-border: rgba(32, 51, 70, 0.12);
+    --proto-card-hover-bg: #ffffff;
+    --proto-card-hover-border: #a63d32;
+    --proto-card-title: #203346;
+    --proto-card-status: #706e68;
+    --proto-card-specs-bg: #f6f2ea;
+    --proto-card-specs-border: rgba(32, 51, 70, 0.08);
+    --proto-card-specs-text: #334155;
+    --proto-filter-border: rgba(32, 51, 70, 0.12);
+    --proto-pill-color: #706e68;
+    --proto-sort-group-bg: #f6f2ea;
+    --proto-sort-group-border: rgba(32, 51, 70, 0.12);
+    --proto-btn-benchmarks-bg: #f6f2ea;
+    --proto-btn-benchmarks-text: #203346;
+    --proto-btn-benchmarks-border: rgba(32, 51, 70, 0.15);
     color: var(--text);
     background: var(--bg);
     accent-color: var(--accent);
 }
 
-html[data-storefront-preset='modern-oriental']
-    :is(.storefront-app, .page, .auth-page) {
+html[data-storefront-preset='modern-oriental'] :is(.storefront-app, .page, .auth-page) {
     background: var(--bg);
     color: var(--text);
 }
@@ -111,12 +150,7 @@ html[data-storefront-preset='modern-oriental']
 }
 
 html[data-storefront-preset='modern-oriental']
-    :is(
-        .section-header-icon-pill,
-        .quick-grid button,
-        .home-trust-bar,
-        .notice-strip
-    ) {
+    :is(.section-header-icon-pill, .quick-grid button, .home-trust-bar, .notice-strip) {
     background: var(--paper);
     border-color: var(--line);
     color: var(--text);
@@ -133,7 +167,6 @@ html[data-storefront-preset='modern-oriental'] :is(button, a, input, select, tex
     outline-offset: 3px;
 }
 
-
 html[data-storefront-preset='modern-oriental'] .auth-page {
     --auth-accent: var(--accent);
     --auth-accent-hover: var(--accent-hover);
@@ -142,8 +175,7 @@ html[data-storefront-preset='modern-oriental'] .auth-page {
     --auth-line: var(--line);
 }
 
-html[data-storefront-preset='modern-oriental']
-    :is(.auth-page input, .auth-page select, .auth-page textarea) {
+html[data-storefront-preset='modern-oriental'] :is(.auth-page input, .auth-page select, .auth-page textarea) {
     color: var(--text);
     background: var(--paper);
     border-color: var(--line);
@@ -243,7 +275,13 @@ html[data-storefront-preset='modern-oriental'] .auth-route-tabs > button[aria-cu
 }
 
 html[data-storefront-preset='modern-oriental']
-    :is(.section-header h2, .subpage-header h1, .store-auth-copy h2, .brand strong, .all-primary-categories h2) {
+    :is(
+        .section-header h2,
+        .subpage-header h1,
+        .store-auth-copy h2,
+        .brand strong,
+        .all-primary-categories h2
+    ) {
     font-family: var(--font-display);
 }
 
@@ -283,8 +321,7 @@ html[data-storefront-preset='neo-minimalist'] {
     accent-color: var(--accent);
 }
 
-html[data-storefront-preset='neo-minimalist']
-    :is(.storefront-app, .page, .auth-page) {
+html[data-storefront-preset='neo-minimalist'] :is(.storefront-app, .page, .auth-page) {
     background: var(--bg);
     color: var(--text);
 }
@@ -306,3 +343,49 @@ html[data-storefront-preset='neo-minimalist']
     color: var(--text);
 }
 
+/* ==========================================================================
+   Classic Preset (经典明亮) - Unified Bento Template Tokens
+   ========================================================================== */
+html:not([data-storefront-preset]),
+html[data-storefront-preset='classic'] {
+    --proto-header-bg: rgba(255, 255, 255, 0.94);
+    --proto-header-border: #e2e8f0;
+    --proto-header-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    --proto-brand-text: #0f172a;
+    --proto-nav-link: #475569;
+    --proto-nav-link-hover: #0f172a;
+    --proto-search-bg: #f8fafc;
+    --proto-search-border: #e2e8f0;
+    --proto-search-text: #0f172a;
+    --proto-search-kbd-bg: #e2e8f0;
+    --proto-login-btn-bg: #0f172a;
+    --proto-login-btn-text: #ffffff;
+    --proto-hero-bg: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    --proto-hero-border: #e2e8f0;
+    --proto-hero-title: #0f172a;
+    --proto-hero-desc: #475569;
+    --proto-tools-bg: #ffffff;
+    --proto-tools-border: #e2e8f0;
+    --proto-tools-title: #0f172a;
+    --proto-tool-item-bg: #f8fafc;
+    --proto-tool-item-border: #e2e8f0;
+    --proto-tool-item-hover-bg: #f1f5f9;
+    --proto-tool-name: #0f172a;
+    --proto-tool-sub: #64748b;
+    --proto-card-bg: #ffffff;
+    --proto-card-border: #e2e8f0;
+    --proto-card-hover-bg: #ffffff;
+    --proto-card-hover-border: var(--accent);
+    --proto-card-title: #0f172a;
+    --proto-card-status: #64748b;
+    --proto-card-specs-bg: #f8fafc;
+    --proto-card-specs-border: #e2e8f0;
+    --proto-card-specs-text: #475569;
+    --proto-filter-border: #e2e8f0;
+    --proto-pill-color: #64748b;
+    --proto-sort-group-bg: #f1f5f9;
+    --proto-sort-group-border: #e2e8f0;
+    --proto-btn-benchmarks-bg: #f1f5f9;
+    --proto-btn-benchmarks-text: #0f172a;
+    --proto-btn-benchmarks-border: #e2e8f0;
+}
