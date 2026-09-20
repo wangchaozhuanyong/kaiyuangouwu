@@ -39,6 +39,18 @@ function createService() {
                 translations: [{ languageCode: 'en', name: 'USDT', description: 'USDT' }],
                 customFields: {},
             },
+            {
+                id: 'payment-method-3',
+                code: 'controlled-test-payment-template-1',
+                enabled: true,
+                checker: { code: 'controlled-test-payment-checker', args: [] },
+                handler: {
+                    code: 'controlled-test-payment-handler',
+                    args: [{ name: 'channelId', value: 'template-1' }],
+                },
+                translations: [{ languageCode: 'en', name: 'Test payment', description: 'Test only' }],
+                customFields: {},
+            },
         ]),
     };
     const shippingMethodRepository = {
