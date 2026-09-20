@@ -47,6 +47,7 @@ function validateRequest(environment) {
     assert.ok(
         [
             'diagnose',
+            'backup-database',
             'retain-reviewed',
             'plan-two-factor-backup',
             'backup-two-factor-reviewed',
@@ -74,7 +75,11 @@ function validateRequest(environment) {
     ) {
         assert.match(expectedPlanSha256, /^[a-f0-9]{64}$/u, 'A reviewed plan SHA-256 is required');
     } else {
-        assert.equal(expectedPlanSha256, '', 'A read-only operation does not accept a write approval');
+        assert.equal(
+            expectedPlanSha256,
+            '',
+            'An operation without reviewed data changes does not accept a write approval',
+        );
     }
     assert.ok(
         !expectedChannelCodes ||
@@ -91,6 +96,7 @@ function validateRequest(environment) {
     }
     if (
         [
+            'backup-database',
             'audit-store-isolation-data',
             'plan-order-sales-ownership-backfill',
             'apply-order-sales-ownership-backfill-reviewed',
@@ -507,6 +513,37 @@ function startVerifiedMysqlBackup() {
     return { file, invocationId, offsite: true };
 }
 
+function runDatabaseBackup(
+    request,
+    {
+        inspect = inspectProductionReleases,
+        health = productionHealthSnapshot,
+        backup = startVerifiedMysqlBackup,
+    } = {},
+) {
+    assert.equal(request.operation, 'backup-database');
+    const before = inspect();
+    assert.equal(
+        before.markerSha,
+        request.expectedRuntimeSha,
+        'Production runtime SHA changed or was not reviewed',
+    );
+    const healthBefore = health();
+    assertProductionHealthSnapshot(healthBefore, 'before');
+    const backupEvidence = backup();
+    const after = inspect();
+    assert.deepEqual(after, before, 'Production release state changed during the database backup');
+    const healthAfter = health();
+    assertProductionHealthSnapshot(healthAfter, 'after');
+    return {
+        sourceSha: request.sourceSha,
+        runtimeSha: before.markerSha,
+        healthBefore,
+        healthAfter,
+        backup: backupEvidence,
+    };
+}
+
 function runOrderSalesOwnershipBackfill(
     request,
     {
@@ -709,6 +746,15 @@ function runStoreIsolationAudit(
 
 function runLocked(environment = process.env) {
     const request = validateRequest(environment);
+    if (request.operation === 'backup-database') {
+        const result = runDatabaseBackup(request);
+        process.stdout.write(
+            `PRODUCTION_DATABASE_BACKUP_REVISIONS source=${request.sourceSha} runtime=${result.runtimeSha}\n`,
+        );
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=backup-database\n');
+        return;
+    }
     if (
         ['plan-order-sales-ownership-backfill', 'apply-order-sales-ownership-backfill-reviewed'].includes(
             request.operation,
@@ -937,6 +983,7 @@ module.exports = {
     retainReviewedPlan,
     storefrontInspectionFailure,
     runStoreIsolationAudit,
+    runDatabaseBackup,
     runOrderSalesOwnershipBackfill,
     startVerifiedMysqlBackup,
     validateMigrationAuditOutput,
