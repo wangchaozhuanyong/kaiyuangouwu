@@ -59,6 +59,7 @@ interface RenderCategoriesOptions {
     linkedProducts?: TestLinkedProduct[];
     initialEntry?: string;
     nestedCategories?: boolean;
+    confirmationResult?: false | { currentPassword?: string };
     customCollections?: Array<{
         __typename: string;
         id: string;
@@ -95,6 +96,7 @@ async function renderCategories({
     linkedProducts = [],
     initialEntry = '/catalog/categories',
     nestedCategories = false,
+    confirmationResult = false,
     customCollections,
 }: RenderCategoriesOptions = {}) {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -232,6 +234,16 @@ async function renderCategories({
                                 },
                             },
                         });
+                    } else if (operation.operationName === 'DeleteCatalogCollections') {
+                        observer.next({
+                            data: {
+                                deleteCollections: operation.variables.ids.map(() => ({
+                                    __typename: 'DeletionResponse',
+                                    result: 'DELETED',
+                                    message: null,
+                                })),
+                            },
+                        });
                     } else {
                         observer.error(new Error(`Unexpected operation: ${operation.operationName}`));
                         return;
@@ -252,7 +264,7 @@ async function renderCategories({
         root.render(
             <ApolloProvider client={client}>
                 <MemoryRouter initialEntries={[initialEntry]}>
-                    <ConfirmDialogContext.Provider value={async () => false}>
+                    <ConfirmDialogContext.Provider value={async () => confirmationResult}>
                         <AdminPermissionsContext.Provider
                             value={{ permissions: [], hasAnyPermission: () => canReadAssets }}
                         >
@@ -308,6 +320,108 @@ describe('category tree expansion', () => {
         await changeChannel('channel-2');
         expect(container.querySelector('[aria-label="编辑分类 绿茶"]')).toBeNull();
         expect(container.querySelector('[aria-label="展开一级分类 茶叶"]')).not.toBeNull();
+    });
+});
+
+describe('category bulk deletion', () => {
+    it('deletes selected empty leaf categories with one password confirmation and one mutation', async () => {
+        const emptyCollections = ['牡丹', '中华'].map((name, index) => ({
+            __typename: 'Collection',
+            id: `empty-${index + 1}`,
+            name,
+            slug: `empty-${index + 1}`,
+            description: '',
+            isPrivate: false,
+            parentId: null,
+            position: index,
+            productVariantCount: 0,
+            inheritFilters: true,
+            filters: [],
+            featuredAsset: null,
+            translations: [
+                {
+                    id: `translation-empty-${index + 1}`,
+                    languageCode: 'zh_Hans',
+                    name,
+                    slug: `empty-${index + 1}`,
+                    description: '',
+                },
+            ],
+        }));
+        const { container, requests, click } = await renderCategories({
+            customCollections: emptyCollections,
+            confirmationResult: { currentPassword: 'Current123!' },
+        });
+
+        await act(async () => {
+            (container.querySelector('[aria-label="选择分类 牡丹"]') as HTMLInputElement).click();
+            (container.querySelector('[aria-label="选择分类 中华"]') as HTMLInputElement).click();
+        });
+        await click('批量删除 (2)');
+
+        expect(requests).toHaveBeenCalledWith('DeleteCatalogCollections', {
+            ids: ['empty-1', 'empty-2'],
+        });
+    });
+
+    it('does not allow selecting a category with products or children', async () => {
+        const blockedCollections = [
+            {
+                __typename: 'Collection',
+                id: 'parent',
+                name: '父分类',
+                slug: 'parent',
+                description: '',
+                isPrivate: false,
+                parentId: null,
+                position: 0,
+                productVariantCount: 0,
+                inheritFilters: true,
+                filters: [],
+                featuredAsset: null,
+                translations: [
+                    {
+                        id: 'translation-parent',
+                        languageCode: 'zh_Hans',
+                        name: '父分类',
+                        slug: 'parent',
+                        description: '',
+                    },
+                ],
+            },
+            {
+                __typename: 'Collection',
+                id: 'child',
+                name: '有商品子分类',
+                slug: 'child',
+                description: '',
+                isPrivate: false,
+                parentId: 'parent',
+                position: 0,
+                productVariantCount: 1,
+                inheritFilters: true,
+                filters: [],
+                featuredAsset: null,
+                translations: [
+                    {
+                        id: 'translation-child',
+                        languageCode: 'zh_Hans',
+                        name: '有商品子分类',
+                        slug: 'child',
+                        description: '',
+                    },
+                ],
+            },
+        ];
+        const { container, click } = await renderCategories({ customCollections: blockedCollections });
+
+        expect((container.querySelector('[aria-label="选择分类 父分类"]') as HTMLInputElement).disabled).toBe(
+            true,
+        );
+        await click('展开一级分类 父分类');
+        expect(
+            (container.querySelector('[aria-label="选择分类 有商品子分类"]') as HTMLInputElement).disabled,
+        ).toBe(true);
     });
 });
 

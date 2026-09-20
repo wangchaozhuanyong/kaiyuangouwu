@@ -182,6 +182,15 @@ export const DELETE_COLLECTION = gql`
     }
 `;
 
+export const DELETE_COLLECTIONS = gql`
+    mutation DeleteCatalogCollections($ids: [ID!]!) {
+        deleteCollections(ids: $ids) {
+            result
+            message
+        }
+    }
+`;
+
 export const MOVE_COLLECTION = gql`
     mutation MoveCatalogCollection($input: MoveCollectionInput!) {
         moveCollection(input: $input) {
