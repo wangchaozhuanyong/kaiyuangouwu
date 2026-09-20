@@ -128,6 +128,11 @@ export function migrationDigest(details) {
         .digest('hex');
 }
 
+export function assertMoveTargetAvailable(table, sourceIds, targetIds) {
+    if (sourceIds.length === 0) return;
+    assert.equal(targetIds.length, 0, `${table} already contains target Channel data; review a merge plan`);
+}
+
 export function publicMigrationPlan(details) {
     return {
         format: 1,
@@ -260,21 +265,18 @@ async function collectDetails(connection, lock = false) {
             movedRows[table] = [];
             continue;
         }
+        const sourceRows = await selectIds(
+            connection,
+            `SELECT id FROM ${quoted(table)} WHERE channelId = ? ORDER BY id${lock ? ' FOR UPDATE' : ''}`,
+            [source.id],
+        );
         const targetRows = await selectIds(
             connection,
             `SELECT id FROM ${quoted(table)} WHERE channelId = ? ORDER BY id${lock ? ' FOR UPDATE' : ''}`,
             [target.id],
         );
-        assert.equal(
-            targetRows.length,
-            0,
-            `${table} already contains target Channel data; review a merge plan`,
-        );
-        movedRows[table] = await selectIds(
-            connection,
-            `SELECT id FROM ${quoted(table)} WHERE channelId = ? ORDER BY id${lock ? ' FOR UPDATE' : ''}`,
-            [source.id],
-        );
+        assertMoveTargetAvailable(table, sourceRows, targetRows);
+        movedRows[table] = sourceRows;
     }
     assert.ok(
         movedRows.storefront_content_block.length > 0,
