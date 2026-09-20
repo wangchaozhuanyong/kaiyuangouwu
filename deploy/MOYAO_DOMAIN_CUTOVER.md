@@ -4,14 +4,14 @@
 
 ## 目标映射
 
-| 入口                   | Vendure 归属                                          | 用途           |
-| ---------------------- | ----------------------------------------------------- | -------------- |
-| `moyaoai.com`          | MOYAO AI 专用 Channel（计划 code `moyao-ai`）         | 主网店         |
-| `www.moyaoai.com`      | 301 到 `moyaoai.com`                                  | 主网店别名     |
-| `damatong.net`         | 美宜佳 Channel（上线前必须确认实际 code/id）          | 美宜佳店铺     |
-| `www.damatong.net`     | 301 到 `damatong.net`                                 | 美宜佳别名     |
-| `console.moyaoai.com`  | 同一 Vendure Admin API                                | 统一管理后台   |
-| `console.damatong.net` | 301 到 `console.moyaoai.com`                          | 旧后台兼容入口 |
+| 入口                   | Vendure 归属                                  | 用途           |
+| ---------------------- | --------------------------------------------- | -------------- |
+| `moyaoai.com`          | MOYAO AI 专用 Channel（计划 code `moyao-ai`） | 主网店         |
+| `www.moyaoai.com`      | 301 到 `moyaoai.com`                          | 主网店别名     |
+| `damatong.net`         | 美宜佳 Channel（上线前必须确认实际 code/id）  | 美宜佳店铺     |
+| `www.damatong.net`     | 301 到 `damatong.net`                         | 美宜佳别名     |
+| `console.moyaoai.com`  | 同一 Vendure Admin API                        | 统一管理后台   |
+| `console.damatong.net` | 301 到 `console.moyaoai.com`                  | 旧后台兼容入口 |
 
 两个前台复用同一套 Storefront 构建和同一套 Vendure 服务，但请求 Host 先由 Store Domain 插件解析为 Channel。商品、价格、库存、订单、客户、品牌和页面配置都按 Channel 读取；不维护第二份前台数据库，也不依靠前端硬编码 Channel Token。
 
@@ -41,7 +41,7 @@ Vendure 内置 `__default_channel__` 只作为系统保留 Channel，不绑定�
 
 1. 在现网旧结构上先运行生产只读快照，人工确认历史订单的唯一归属和默认 Channel 分离映射；存在无法确定的订单就保持 `HOLD`。
 2. 创建并核验 MOYAO AI 专用 `moyao-ai` Channel，准备经审核的数据回填方案；不得让公开域名继续指向默认 Channel。
-3. 部署并运行数据库迁移及经审核的精确回填，但暂不改 DNS；启动新 API/Worker 后检查 `/health`。
+3. 先执行订单归属回填，再用 `plan-moyao-default-store-migration` 生成摘要计数与精确哈希；审核后执行 `apply-moyao-default-store-migration-reviewed`，它会先完成异地 MySQL 备份，在单个事务中复制客户/目录关联和品牌资料、将前台内容从默认 Channel 移到 `moyao-ai`，最后执行独立验证；此时仍不转移域名。
 4. 对 `moyao-ai` 运行 `sync-moyao-brand.mjs --channel-code moyao-ai --dry-run`，审核目标 profile/channel 和素材哈希；再以 `--apply --allow-remote` 执行并完成中英文 Shop API 反查。
 5. 在后台先添加并验证 `moyaoai.com`，确认它属于 `moyao-ai`；此时仍不移走 `damatong.net`。
 6. 只读检查美宜佳 Channel 的商品、价格、库存、配送/税区、支付和 StoreProfile；缺任一门禁就停止。

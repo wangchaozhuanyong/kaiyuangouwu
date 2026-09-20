@@ -51,6 +51,9 @@ on:
                     - audit-store-isolation-data
                     - plan-order-sales-ownership-backfill
                     - apply-order-sales-ownership-backfill-reviewed
+                    - plan-moyao-default-store-migration
+                    - apply-moyao-default-store-migration-reviewed
+                    - verify-moyao-default-store-migration
             expected_plan_sha256:
                 description: Exact plan SHA-256 from the corresponding read-only plan; required for reviewed writes
                 required: false
@@ -112,13 +115,13 @@ jobs:
                   }
                   [[ "$OPS_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
                   case "$OPS_OPERATION" in
-                    preflight-release|postflight-release|diagnose|backup-database|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|audit-store-isolation-data|plan-order-sales-ownership-backfill)
+                    preflight-release|postflight-release|diagnose|backup-database|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|audit-store-isolation-data|plan-order-sales-ownership-backfill|plan-moyao-default-store-migration|verify-moyao-default-store-migration)
                       [[ -z "$OPS_EXPECTED_PLAN_SHA256" ]] || {
                         echo 'Operations without reviewed data changes must not include an expected plan' >&2
                         exit 1
                       }
                       ;;
-                    retain-reviewed|backup-two-factor-reviewed|apply-order-sales-ownership-backfill-reviewed)
+                    retain-reviewed|backup-two-factor-reviewed|apply-order-sales-ownership-backfill-reviewed|apply-moyao-default-store-migration-reviewed)
                       [[ "$OPS_EXPECTED_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
                         echo 'Reviewed writes require the exact lowercase plan SHA-256' >&2
                         exit 1
@@ -137,7 +140,7 @@ jobs:
                     echo 'Only release validation accepts expected Channel codes' >&2
                     exit 1
                   fi
-                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" ]]; then
+                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" ]]; then
                     [[ "$OPS_EXPECTED_RUNTIME_SHA" =~ ^[0-9a-f]{40}$ ]] || {
                       echo 'Pinned store-data operations require an exact expected runtime SHA' >&2
                       exit 1
@@ -164,7 +167,7 @@ jobs:
                   set -Eeuo pipefail
                   [[ "$(git rev-parse HEAD)" == "$OPS_SOURCE_SHA" ]]
                   test -z "$(git status --porcelain --untracked-files=no)"
-                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" ]]; then
+                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" ]]; then
                     git cat-file -e "${OPS_EXPECTED_RUNTIME_SHA}^{commit}"
                     git merge-base --is-ancestor "$OPS_EXPECTED_RUNTIME_SHA" "$OPS_SOURCE_SHA"
                   fi
@@ -179,43 +182,53 @@ jobs:
                   def encode_file(path):
                       return base64.b64encode(gzip.compress(Path(path).read_bytes(), mtime=0)).decode('ascii')
 
-                  operation = shlex.quote(os.environ['OPS_OPERATION'])
+                  def transport(path, target):
+                      encoded = encode_file(path)
+                      return f"printf '%s' '{encoded}' | base64 -d | gzip -d > \"$operations_dir/{target}\""
+
+                  operation_name = os.environ['OPS_OPERATION']
+                  operation = shlex.quote(operation_name)
                   expected_plan = shlex.quote(os.environ['OPS_EXPECTED_PLAN_SHA256'])
                   source_sha = shlex.quote(os.environ['OPS_SOURCE_SHA'])
                   expected_channels = shlex.quote(os.environ['OPS_EXPECTED_CHANNEL_CODES'])
                   expected_runtime = shlex.quote(os.environ['OPS_EXPECTED_RUNTIME_SHA'])
-                  operations_script = encode_file('deploy/production-operations.cjs')
-                  retention_script = encode_file('deploy/systemd/vendure-production-release-retention.cjs')
-                  key_backup_script = encode_file('deploy/two-factor-key-backup.py')
-                  security_script = encode_file('deploy/verify-runtime-security-dependencies.cjs')
-                  storefront_guard = encode_file('deploy/storefront-configuration-guard.mjs')
-                  migration_guard = encode_file('deploy/usdt-migration-guard.cjs')
-                  migration_index = encode_file('packages/dev-server/migrations/index.ts')
-                  store_audit = encode_file('packages/dev-server/scripts/store-autonomy-data-audit.mjs')
-                  store_preflight = encode_file('packages/dev-server/scripts/store-isolation-data-preflight.mjs')
-                  store_ownership = encode_file('packages/dev-server/scripts/store-isolation-ownership-evidence.mjs')
-                  store_customer_dependencies = encode_file('packages/dev-server/scripts/store-isolation-customer-dependencies.mjs')
-                  order_sales_ownership = encode_file('packages/dev-server/scripts/order-sales-ownership-backfill.mjs')
-                  command = "/bin/bash <<'VENDURE_OPERATIONS_SCRIPT'\n" + '\n'.join([
+                  lines = [
                       'set -Eeuo pipefail',
                       'umask 077',
                       'operations_dir="$(mktemp -d /tmp/vendure-production-operations.XXXXXX)"',
                       "trap 'rm -rf -- \"$operations_dir\"' EXIT",
                       'mkdir -p "$operations_dir/systemd" "$operations_dir/repository/packages/dev-server/migrations" "$operations_dir/repository/packages/dev-server/scripts"',
-                      f"printf '%s' '{operations_script}' | base64 -d | gzip -d > \"$operations_dir/production-operations.cjs\"",
-                      f"printf '%s' '{retention_script}' | base64 -d | gzip -d > \"$operations_dir/systemd/vendure-production-release-retention.cjs\"",
-                      f"printf '%s' '{key_backup_script}' | base64 -d | gzip -d > \"$operations_dir/two-factor-key-backup.py\"",
-                      f"printf '%s' '{security_script}' | base64 -d | gzip -d > \"$operations_dir/verify-runtime-security-dependencies.cjs\"",
-                      f"printf '%s' '{storefront_guard}' | base64 -d | gzip -d > \"$operations_dir/storefront-configuration-guard.mjs\"",
-                      f"printf '%s' '{migration_guard}' | base64 -d | gzip -d > \"$operations_dir/usdt-migration-guard.cjs\"",
-                      f"printf '%s' '{migration_index}' | base64 -d | gzip -d > \"$operations_dir/repository/packages/dev-server/migrations/index.ts\"",
-                      f"printf '%s' '{store_audit}' | base64 -d | gzip -d > \"$operations_dir/repository/packages/dev-server/scripts/store-autonomy-data-audit.mjs\"",
-                      f"printf '%s' '{store_preflight}' | base64 -d | gzip -d > \"$operations_dir/repository/packages/dev-server/scripts/store-isolation-data-preflight.mjs\"",
-                      f"printf '%s' '{store_ownership}' | base64 -d | gzip -d > \"$operations_dir/repository/packages/dev-server/scripts/store-isolation-ownership-evidence.mjs\"",
-                      f"printf '%s' '{store_customer_dependencies}' | base64 -d | gzip -d > \"$operations_dir/repository/packages/dev-server/scripts/store-isolation-customer-dependencies.mjs\"",
-                      f"printf '%s' '{order_sales_ownership}' | base64 -d | gzip -d > \"$operations_dir/repository/packages/dev-server/scripts/order-sales-ownership-backfill.mjs\"",
-                      f'env OPS_OPERATION={operation} OPS_EXPECTED_PLAN_SHA256={expected_plan} OPS_SOURCE_SHA={source_sha} OPS_EXPECTED_CHANNEL_CODES={expected_channels} OPS_EXPECTED_RUNTIME_SHA={expected_runtime} /usr/bin/node "$operations_dir/production-operations.cjs"',
-                  ]) + '\nVENDURE_OPERATIONS_SCRIPT'
+                      transport('deploy/production-operations.cjs', 'production-operations.cjs'),
+                      transport('deploy/systemd/vendure-production-release-retention.cjs', 'systemd/vendure-production-release-retention.cjs'),
+                  ]
+                  if 'two-factor' in operation_name:
+                      lines.append(transport('deploy/two-factor-key-backup.py', 'two-factor-key-backup.py'))
+                  if operation_name == 'verify-security-dependencies':
+                      lines.append(transport('deploy/verify-runtime-security-dependencies.cjs', 'verify-runtime-security-dependencies.cjs'))
+                  if operation_name in {'preflight-release', 'postflight-release', 'inspect-storefront-config'}:
+                      lines.append(transport('deploy/storefront-configuration-guard.mjs', 'storefront-configuration-guard.mjs'))
+                  if operation_name == 'preflight-release':
+                      lines.extend([
+                          transport('deploy/usdt-migration-guard.cjs', 'usdt-migration-guard.cjs'),
+                          transport('packages/dev-server/migrations/index.ts', 'repository/packages/dev-server/migrations/index.ts'),
+                      ])
+                  if operation_name == 'audit-store-isolation-data':
+                      lines.extend([
+                          transport('deploy/usdt-migration-guard.cjs', 'usdt-migration-guard.cjs'),
+                          transport('packages/dev-server/migrations/index.ts', 'repository/packages/dev-server/migrations/index.ts'),
+                          transport('packages/dev-server/scripts/store-autonomy-data-audit.mjs', 'repository/packages/dev-server/scripts/store-autonomy-data-audit.mjs'),
+                          transport('packages/dev-server/scripts/store-isolation-data-preflight.mjs', 'repository/packages/dev-server/scripts/store-isolation-data-preflight.mjs'),
+                          transport('packages/dev-server/scripts/store-isolation-ownership-evidence.mjs', 'repository/packages/dev-server/scripts/store-isolation-ownership-evidence.mjs'),
+                          transport('packages/dev-server/scripts/store-isolation-customer-dependencies.mjs', 'repository/packages/dev-server/scripts/store-isolation-customer-dependencies.mjs'),
+                      ])
+                  if 'order-sales-ownership-backfill' in operation_name:
+                      lines.append(transport('packages/dev-server/scripts/order-sales-ownership-backfill.mjs', 'repository/packages/dev-server/scripts/order-sales-ownership-backfill.mjs'))
+                  if 'moyao-default-store-migration' in operation_name:
+                      lines.append(transport('packages/dev-server/scripts/moyao-default-store-migration.mjs', 'repository/packages/dev-server/scripts/moyao-default-store-migration.mjs'))
+                  lines.append(
+                      f'env OPS_OPERATION={operation} OPS_EXPECTED_PLAN_SHA256={expected_plan} OPS_SOURCE_SHA={source_sha} OPS_EXPECTED_CHANNEL_CODES={expected_channels} OPS_EXPECTED_RUNTIME_SHA={expected_runtime} /usr/bin/node "$operations_dir/production-operations.cjs"'
+                  )
+                  command = "/bin/bash <<'VENDURE_OPERATIONS_SCRIPT'\n" + '\n'.join(lines) + '\nVENDURE_OPERATIONS_SCRIPT'
                   payload = json.dumps({'commands': [command], 'executionTimeout': ['600']})
                   assert len(payload.encode('utf-8')) <= 80_000, 'Production operation SSM payload exceeds the safe request limit'
                   Path(os.environ['RUNNER_TEMP'], 'operations-ssm-parameters.json').write_text(
