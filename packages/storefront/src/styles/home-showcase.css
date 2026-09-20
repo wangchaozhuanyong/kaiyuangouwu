@@ -2628,8 +2628,8 @@ html[lang='en'] .primary-categories button {
 .primary-categories button.is-active .primary-category-image {
     border-color: var(--accent);
     background: var(--accent-soft);
-    box-shadow: 0 0 0 1px var(--accent);
-    transform: translateY(-2px);
+    box-shadow: inset 0 0 0 1px var(--accent);
+    transform: none;
 }
 
 .primary-categories button.is-active .primary-category-label {
