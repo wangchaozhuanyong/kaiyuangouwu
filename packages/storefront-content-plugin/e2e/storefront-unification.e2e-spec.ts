@@ -23,6 +23,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { StoreProfile } from '../../store-management-plugin/src/entities/store-profile.entity';
 import { StorefrontContentPlugin } from '../src/storefront-content.plugin';
+import { storefrontVisualPresets } from '../src/visual-presets';
 
 import { BrandingFixturePlugin } from './branding-fixture.plugin';
 
@@ -853,7 +854,9 @@ describe('unified storefront Admin API to Shop API', () => {
             for (const [index, store] of stores.entries()) {
                 await stale.getByRole('combobox', { name: '测试店铺' }).selectOption(store.token);
                 await browserExpect(stale.locator('input[type="radio"]:disabled')).toHaveCount(0);
-                await browserExpect(stale.locator('input[type="radio"]')).toHaveCount(2);
+                await browserExpect(stale.locator('input[type="radio"]')).toHaveCount(
+                    storefrontVisualPresets.length,
+                );
                 await stale.screenshot({
                     path: join(output, `admin-appearance-store-${index}.png`),
                     fullPage: true,
