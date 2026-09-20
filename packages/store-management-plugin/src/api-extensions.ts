@@ -1275,6 +1275,166 @@ export const adminApiExtensions = gql`
         note: String
     }
 
+    enum CustomerOperationsSegment {
+        NEW
+        LEAD
+        ACTIVE
+        LOYAL
+        VIP
+        AT_RISK
+        DORMANT
+    }
+
+    enum CustomerChurnRisk {
+        NONE
+        LOW
+        MEDIUM
+        HIGH
+    }
+
+    enum CustomerFollowUpStatus {
+        OPEN
+        COMPLETED
+        DISMISSED
+    }
+
+    enum CustomerFollowUpPriority {
+        P1
+        P2
+        P3
+    }
+
+    enum CustomerFollowUpOutcome {
+        CONTACTED
+        RESOLVED
+        NO_RESPONSE
+        DO_NOT_CONTACT
+        NOT_NEEDED
+    }
+
+    enum CustomerFollowUpAction {
+        RESCHEDULE
+        COMPLETE
+        DISMISS
+    }
+
+    type CustomerCurrencyMetric {
+        currencyCode: CurrencyCode!
+        orderCount: Int!
+        grossRevenue: Money!
+        refundTotal: Money!
+        netLifetimeValue: Money!
+        averageOrderValue: Money!
+    }
+
+    type CustomerOperationsProfile implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        customer: Customer!
+        segment: CustomerOperationsSegment!
+        churnRisk: CustomerChurnRisk!
+        recencyScore: Int!
+        frequencyScore: Int!
+        monetaryScore: Int!
+        recencyDays: Int
+        orderCount: Int!
+        currencyCode: CurrencyCode!
+        grossRevenue: Money!
+        refundTotal: Money!
+        netLifetimeValue: Money!
+        averageOrderValue: Money!
+        currencyMetrics: [CustomerCurrencyMetric!]!
+        serviceInteractionCount: Int!
+        afterSalesCount: Int!
+        openAfterSalesCount: Int!
+        lastOrderAt: DateTime
+        lastServiceAt: DateTime
+        nextFollowUpAt: DateTime
+        doNotContact: Boolean!
+        reasons: [String!]!
+        evaluationVersion: String!
+        lastEvaluatedAt: DateTime!
+    }
+
+    type CustomerOperationsProfileList implements PaginatedList {
+        items: [CustomerOperationsProfile!]!
+        totalItems: Int!
+    }
+
+    type CustomerFollowUpEvent implements Node {
+        id: ID!
+        createdAt: DateTime!
+        eventType: String!
+        actorType: String!
+        actorLabel: String!
+        note: String!
+        payloadJson: String
+    }
+
+    type CustomerFollowUp implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        customer: Customer!
+        profile: CustomerOperationsProfile!
+        status: CustomerFollowUpStatus!
+        source: String!
+        priority: CustomerFollowUpPriority!
+        reasonCode: String!
+        title: String!
+        note: String!
+        dueAt: DateTime!
+        ownerUserId: ID
+        outcomeCode: CustomerFollowUpOutcome
+        outcomeNote: String
+        completedAt: DateTime
+        completedByUserId: ID
+        overdue: Boolean!
+        events: [CustomerFollowUpEvent!]!
+    }
+
+    type CustomerFollowUpList implements PaginatedList {
+        items: [CustomerFollowUp!]!
+        totalItems: Int!
+    }
+
+    input CustomerOperationsProfileListOptions {
+        segment: CustomerOperationsSegment
+        churnRisk: CustomerChurnRisk
+        followUpDue: Boolean
+        search: String
+        skip: Int
+        take: Int
+    }
+
+    input CustomerFollowUpListOptions {
+        status: CustomerFollowUpStatus
+        overdue: Boolean
+        priority: CustomerFollowUpPriority
+        customerId: ID
+        skip: Int
+        take: Int
+    }
+
+    input CreateCustomerFollowUpInput {
+        customerId: ID!
+        priority: CustomerFollowUpPriority!
+        dueAt: DateTime!
+        title: String!
+        note: String!
+        idempotencyKey: String!
+    }
+
+    input UpdateCustomerFollowUpInput {
+        id: ID!
+        action: CustomerFollowUpAction!
+        dueAt: DateTime
+        outcomeCode: CustomerFollowUpOutcome
+        note: String!
+        idempotencyKey: String!
+    }
+
     extend type Query {
         storeProvisioningTemplates: [Channel!]!
         storeProfiles: [StoreProfile!]!
@@ -1320,6 +1480,11 @@ export const adminApiExtensions = gql`
         dataRetentionRecords: [DataRetentionRecord!]!
         dataSubjectRequests: [DataSubjectRequest!]!
         dataConsentRecords: [DataConsentRecord!]!
+        customerOperationsProfile(customerId: ID!): CustomerOperationsProfile!
+        customerOperationsProfiles(
+            options: CustomerOperationsProfileListOptions
+        ): CustomerOperationsProfileList!
+        customerFollowUps(options: CustomerFollowUpListOptions): CustomerFollowUpList!
     }
 
     extend type Mutation {
@@ -1385,6 +1550,9 @@ export const adminApiExtensions = gql`
         setDataRetentionLegalHold(id: ID!, enabled: Boolean!, reason: String): DataRetentionRecord!
         retryDataRetentionRecord(id: ID!): DataRetentionRecord!
         retryDataSubjectRequest(id: ID!): DataSubjectRequest!
+        refreshCustomerOperationsProfile(customerId: ID!): CustomerOperationsProfile!
+        createCustomerFollowUp(input: CreateCustomerFollowUpInput!): CustomerFollowUp!
+        updateCustomerFollowUp(input: UpdateCustomerFollowUpInput!): CustomerFollowUp!
     }
 
     extend type Order {

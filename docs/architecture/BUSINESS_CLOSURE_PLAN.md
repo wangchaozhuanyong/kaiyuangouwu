@@ -15,7 +15,7 @@ This plan tracks whether each business capability has a complete loop rather tha
 | P1       | Procurement                | Supplier, purchase order, receiving, variance, payable, return-to-supplier and performance score                          | Implemented and locally verified; production migration and browser exercise remain           |
 | P1       | Inventory                  | Reservation, receiving, adjustment, transfer, return disposition, low-stock alert and reconciliation                      | Implemented and locally verified; production migration and browser exercise remain           |
 | P1       | Fulfilment and after-sales | Shipment, carrier exception, delivery proof, cancellation, return, exchange, reship and refund                            | Implemented and locally verified; production migration and browser exercise remain           |
-| P1       | Customer operations        | Customer 360, service history, segmentation, RFM/LTV, churn signal and follow-up outcome                                  | Not started                                                                                  |
+| P1       | Customer operations        | Customer 360, service history, segmentation, RFM/LTV, churn signal and follow-up outcome                                  | Implemented and locally verified; production migration and browser exercise remain           |
 | P1       | Marketing analytics        | Acquisition attribution, search terms, funnel, campaign cost, revenue, refund-adjusted ROI                                | Traffic exists; cost/attribution closure not verified                                        |
 | P1       | Finance                    | Revenue, discount, tax, cost, gateway fee, refund, chargeback and profit reconciliation                                   | Existing reports require closure audit                                                       |
 | P2       | Governance                 | Unified immutable audit, four-eyes approval, content/config versioning, scheduled reports and anomaly alerts              | Partial and distributed                                                                      |
@@ -195,6 +195,31 @@ After-sales acceptance gates:
 - [ ] Scheduled carrier reconciliation and alert delivery observed in a production-like environment.
 - [ ] Release, running SHA and browser acceptance evidence.
 
+## Current P1 implementation: customer operations
+
+Every customer now has a channel-scoped operational profile calculated from settled orders rather than the previously visible but unaudited recent-order total. Recency and frequency use settled purchase history; gross revenue, settled refunds, net lifetime value and average order value remain separated by currency so amounts from different currencies are never added together. The monetary score is a percentile within the paying-customer cohort for that store and currency. Explainable rules classify new leads, active, loyal, VIP, at-risk and dormant customers and retain the exact reasons and evaluation version.
+
+The profile also records customer-history activity and after-sales totals, including currently unresolved cases. Medium- and high-risk paying customers automatically receive a follow-up task unless the customer has requested no further contact. Human-created and system-created tasks have an explicit source, priority, deadline and idempotency key; human-created tasks also retain their owner. Reschedule, result and dismissal transitions are server guarded and append an immutable event with actor, note and outcome. A no-response outcome schedules a seven-day retry, a contacted outcome schedules a 30-day review, and a do-not-contact outcome suppresses future automatic tasks.
+
+A six-hour scheduler refreshes every store's profiles, opens or resolves churn tasks and raises a durable P2 incident when follow-ups pass their deadline. The Next Admin customer drawer and the Vendure Dashboard customer page expose the same RFM/LTV evidence and workflow controls; both operations summaries expose overdue work. Personal-data export includes the profile and follow-up history. Account closure suppresses contact and removes free-text follow-up content while retaining non-identifying operational and financial evidence.
+
+Customer-operations acceptance gates:
+
+- [x] Settled-order recency and frequency are channel scoped and cancelled/unsettled orders do not inflate value.
+- [x] Gross revenue, refunds, net LTV and average value are calculated independently for every currency.
+- [x] Monetary scoring is relative to paying customers in the same store and currency.
+- [x] Segment, churn risk, reasons and calculation version are durable and refreshable.
+- [x] Customer history and after-sales state contribute to the 360-degree service summary.
+- [x] Medium/high churn risk creates an idempotent follow-up task with priority and deadline.
+- [x] Reschedule, completion, dismissal, no-response retry and do-not-contact suppression are server enforced.
+- [x] Every task transition records actor, note, outcome and append-only event evidence.
+- [x] Overdue tasks appear in both administrator surfaces and scheduled reconciliation raises or resolves a durable incident.
+- [x] Personal-data export and account closure cover the new profile and free-text follow-up records.
+- [x] Migration is idempotent and tested on MySQL, PostgreSQL and SQLite-shaped schemas.
+- [ ] Migration applied and customer workflow exercised in a production-like database.
+- [ ] Six-hour reconciliation, overdue incident delivery and browser workflow observed end to end.
+- [ ] Release, running SHA and monitoring evidence.
+
 Customer-avatar acceptance gates:
 
 - [x] Replacement is atomic: a failed upload leaves the current avatar active.
@@ -215,7 +240,7 @@ Customer-avatar acceptance gates:
 
 1. Apply and exercise the completed P0 controls in a production-like environment without publishing from this worktree.
 2. Apply and exercise outbound fulfilment delivery evidence, exception recovery and scheduled alerts.
-3. Add customer 360, attribution and refund-adjusted profitability on top of trustworthy operational data.
+3. Add acquisition attribution and refund-adjusted profitability on top of trustworthy operational and customer data.
 4. Consolidate audit, approvals, scheduled reports, alerts and fraud review across all domains.
 
 ## Definition of done for every domain

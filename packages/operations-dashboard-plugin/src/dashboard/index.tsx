@@ -3,6 +3,7 @@ import { defineDashboardExtension } from '@vendure/dashboard';
 
 import { afterSalesRoute } from './after-sales-page';
 import { autoCardRoute } from './auto-card-page';
+import { CustomerOperationsPageBlock } from './customer-operations-page-block';
 import { FulfillmentDeliveryPageBlock } from './fulfillment-delivery-page-block';
 import { incidentResponseRoute } from './incident-response-page';
 import { manualDigitalDeliveryRoute } from './manual-digital-delivery-page';
@@ -103,6 +104,18 @@ defineDashboardExtension({
             component: FulfillmentDeliveryPageBlock,
             shouldRender: context => Boolean(context.entity?.id),
             requiresPermission: ['UpdateOrder'],
+        },
+        {
+            id: 'customer-operations-profile',
+            title: undefined,
+            location: {
+                pageId: 'customer-detail',
+                column: 'main',
+                position: { blockId: 'main-form', order: 'after' },
+            },
+            component: CustomerOperationsPageBlock,
+            shouldRender: context => Boolean(context.entity?.id),
+            requiresPermission: ['ReadCustomer'],
         },
     ],
     widgets: [

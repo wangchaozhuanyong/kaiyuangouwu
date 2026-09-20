@@ -1,5 +1,18 @@
 export { storeProfilePermission } from './constants.js';
 export {
+    CustomerOperationsService,
+    deriveCustomerSegment,
+    scoreFrequency,
+    scoreRecency,
+} from './customer-operations.service.js';
+export type {
+    CreateCustomerFollowUpInput,
+    CustomerCurrencyMetric,
+    CustomerFollowUpListOptions,
+    CustomerOperationsProfileListOptions,
+    UpdateCustomerFollowUpInput,
+} from './customer-operations.types.js';
+export {
     DataConsentService,
     consentSubjectHash,
     type StorefrontRegistrationConsentInput,
@@ -11,6 +24,9 @@ export {
 } from './data-retention.service.js';
 export { BeforeAccountAnonymizationEvent } from './data-subject.events.js';
 export { ACCOUNT_CLOSURE_COOLING_OFF_DAYS, DataSubjectService } from './data-subject.service.js';
+export { CustomerFollowUpEvent } from './entities/customer-follow-up-event.entity.js';
+export { CustomerFollowUp } from './entities/customer-follow-up.entity.js';
+export { CustomerOperationsProfile } from './entities/customer-operations-profile.entity.js';
 export { DataConsentRecord } from './entities/data-consent-record.entity.js';
 export { DataRetentionRecord } from './entities/data-retention-record.entity.js';
 export { DataSubjectRequest } from './entities/data-subject-request.entity.js';

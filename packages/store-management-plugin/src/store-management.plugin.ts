@@ -23,6 +23,13 @@ import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 import { STOREFRONT_PROMOTION_OPTIONS, storeProfilePermission } from './constants';
 import { CustomerAvatarShopResolver } from './customer-avatar.resolver';
 import { CustomerAvatarService } from './customer-avatar.service';
+import {
+    CustomerFollowUpResolver,
+    CustomerOperationsAdminResolver,
+    CustomerOperationsProfileResolver,
+} from './customer-operations.resolver';
+import { CustomerOperationsService } from './customer-operations.service';
+import { reconcileCustomerOperationsTask } from './customer-operations.tasks';
 import { DataConsentAdminResolver, DataConsentShopResolver } from './data-consent.resolver';
 import { DATA_CONSENT_SERVICE_TOKEN, DataConsentService } from './data-consent.service';
 import { DataRetentionAdminResolver } from './data-retention.resolver';
@@ -34,6 +41,9 @@ import { processDueAccountClosuresTask } from './data-subject.tasks';
 import { CouponLedgerEntry } from './entities/coupon-ledger-entry.entity';
 import { CouponOrderAllocation } from './entities/coupon-order-allocation.entity';
 import { CustomerCoupon } from './entities/customer-coupon.entity';
+import { CustomerFollowUpEvent } from './entities/customer-follow-up-event.entity';
+import { CustomerFollowUp } from './entities/customer-follow-up.entity';
+import { CustomerOperationsProfile } from './entities/customer-operations-profile.entity';
 import { DataConsentRecord } from './entities/data-consent-record.entity';
 import { DataRetentionRecord } from './entities/data-retention-record.entity';
 import { DataSubjectRequest } from './entities/data-subject-request.entity';
@@ -197,6 +207,9 @@ import {
         DataSubjectRequest,
         DataRetentionRecord,
         DataConsentRecord,
+        CustomerOperationsProfile,
+        CustomerFollowUp,
+        CustomerFollowUpEvent,
     ],
     controllers: [StorefrontPromotionController, StorefrontRealtimeController],
     providers: [
@@ -237,6 +250,7 @@ import {
         { provide: DATA_CONSENT_SERVICE_TOKEN, useExisting: DataConsentService },
         DataSubjectService,
         DataRetentionService,
+        CustomerOperationsService,
         {
             provide: STOREFRONT_PROMOTION_OPTIONS,
             useFactory: () => StoreManagementPlugin.promotionOptions,
@@ -347,6 +361,7 @@ import {
         config.schedulerOptions.tasks.push(reconcileStorePaymentsDailyTask);
         config.schedulerOptions.tasks.push(purgeDueDataRetentionTask);
         config.schedulerOptions.tasks.push(processDueAccountClosuresTask);
+        config.schedulerOptions.tasks.push(reconcileCustomerOperationsTask);
         return config;
     },
     adminApiExtensions: {
@@ -367,6 +382,9 @@ import {
             DataRetentionAdminResolver,
             DataSubjectAdminResolver,
             DataConsentAdminResolver,
+            CustomerOperationsAdminResolver,
+            CustomerOperationsProfileResolver,
+            CustomerFollowUpResolver,
         ],
     },
     shopApiExtensions: {

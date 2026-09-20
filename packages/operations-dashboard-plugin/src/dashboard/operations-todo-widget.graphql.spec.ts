@@ -18,6 +18,7 @@ describe('operations todo query', () => {
 
         expect(query).toContain('pendingAfterSales: afterSalesRequests');
         expect(query).toContain('deliveryExceptions: fulfillmentDeliveryExceptions');
+        expect(query).toContain('overdueCustomerFollowUps: customerFollowUps');
         expect(query).toContain('pendingReviews: storefrontReviews');
         expect(query.match(/state: PENDING/g)).toHaveLength(2);
         expect(query).toContain('autoCardTodoSummary');

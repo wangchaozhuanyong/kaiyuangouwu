@@ -109,6 +109,7 @@ export class DataSubjectService {
                 afterSalesCount: payload.afterSales.length,
                 imageJobCount: payload.imageStudio.jobs.length,
                 consentRecordCount: payload.consentRecords.length,
+                customerFollowUpCount: payload.customerOperations.followUps.length,
             });
             request.completedAt = new Date();
             await repository.save(request, { reload: false });
@@ -302,6 +303,22 @@ export class DataSubjectService {
                 await this.anonymizeOptionalCustomerRows(txCtx, 'StorefrontReview', customer.id, {
                     customerName: 'Deleted user',
                 });
+                await this.anonymizeOptionalCustomerRows(txCtx, 'CustomerOperationsProfile', customer.id, {
+                    doNotContact: true,
+                    nextFollowUpAt: null,
+                });
+                await this.anonymizeOptionalCustomerRows(txCtx, 'CustomerFollowUp', customer.id, {
+                    status: 'DISMISSED',
+                    title: 'Account closed',
+                    note: '[removed by account closure]',
+                    outcomeCode: 'DO_NOT_CONTACT',
+                    outcomeNote: '[removed by account closure]',
+                    completedAt: now,
+                });
+                await this.anonymizeOptionalCustomerRows(txCtx, 'CustomerFollowUpEvent', customer.id, {
+                    note: '[removed by account closure]',
+                    payloadJson: null,
+                });
                 await this.clearOptionalCustomerReference(txCtx, 'StorefrontDailyVisitor', customer.id);
                 await this.connection.getRepository(txCtx, Address).delete({ customer: { id: customer.id } });
                 await this.customerService.softDelete(txCtx, customer.id);
@@ -472,6 +489,9 @@ export class DataSubjectService {
             couponAllocations,
             dailyVisits,
             consentRecords,
+            customerOperationsProfiles,
+            customerFollowUps,
+            customerFollowUpEvents,
         ] = await Promise.all([
             this.optionalCustomerRows(ctx, 'StorefrontReview', customerId, [
                 'id',
@@ -702,6 +722,63 @@ export class DataSubjectService {
                 'source',
                 'recordedAt',
             ]),
+            this.optionalCustomerRows(ctx, 'CustomerOperationsProfile', customerId, [
+                'id',
+                'createdAt',
+                'updatedAt',
+                'channelId',
+                'segment',
+                'churnRisk',
+                'recencyScore',
+                'frequencyScore',
+                'monetaryScore',
+                'recencyDays',
+                'orderCount',
+                'currencyCode',
+                'grossRevenue',
+                'refundTotal',
+                'netLifetimeValue',
+                'averageOrderValue',
+                'currencyMetricsJson',
+                'serviceInteractionCount',
+                'afterSalesCount',
+                'openAfterSalesCount',
+                'lastOrderAt',
+                'lastServiceAt',
+                'nextFollowUpAt',
+                'doNotContact',
+                'reasonsJson',
+                'evaluationVersion',
+                'lastEvaluatedAt',
+            ]),
+            this.optionalCustomerRows(ctx, 'CustomerFollowUp', customerId, [
+                'id',
+                'createdAt',
+                'updatedAt',
+                'channelId',
+                'profileId',
+                'status',
+                'source',
+                'priority',
+                'reasonCode',
+                'title',
+                'note',
+                'dueAt',
+                'outcomeCode',
+                'outcomeNote',
+                'completedAt',
+            ]),
+            this.optionalCustomerRows(ctx, 'CustomerFollowUpEvent', customerId, [
+                'id',
+                'createdAt',
+                'channelId',
+                'followUpId',
+                'eventType',
+                'actorType',
+                'actorLabel',
+                'note',
+                'payloadJson',
+            ]),
         ]);
         return {
             format: 'website-personal-data-export',
@@ -848,6 +925,11 @@ export class DataSubjectService {
                 usageQuotas,
             },
             analytics: { dailyVisits },
+            customerOperations: {
+                profiles: customerOperationsProfiles,
+                followUps: customerFollowUps,
+                events: customerFollowUpEvents,
+            },
             consentRecords,
             reviews,
             afterSales,
