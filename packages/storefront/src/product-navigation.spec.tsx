@@ -29,6 +29,10 @@ const market: MarketConfig = {
     label: 'Malaysia',
 };
 
+function stylesheetRule(stylesheet: string, selector: string): string {
+    return stylesheet.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+}
+
 const digitalProduct: Product = {
     id: 'product-1',
     createdAt: '2026-08-25T00:00:00.000Z',
@@ -199,6 +203,8 @@ describe('product image navigation layers', () => {
             expect(markup).toContain('/assets/preview/current-cover.png');
             expect(markup).not.toContain('/assets/preview/previous-cover.png');
         }
+        expect(page).toContain('responsive-picture safe-image-frame detail-description-media');
+        expect(page).toContain('sizes="(min-width: 1024px) 960px, 100vw"');
         expect(gallery).toContain('查看第2张商品图');
         expect(gallery).not.toContain('查看第3张商品图');
         expect(displayProductImage(product)).toBe(cover.preview);
@@ -442,6 +448,49 @@ describe('product image navigation layers', () => {
         expect(stylesheet).toMatch(
             /html\[data-storefront-preset='modern-oriental'\]\s+:is\(\s*\.topbar:not\(\.product-detail-header\)/,
         );
+    });
+
+    it('keeps the standalone desktop product heading readable instead of inheriting mobile overlay text', () => {
+        const stylesheet = readStorefrontStylesheet([
+            './styles/visual-presets.css',
+            './styles/desktop-commerce.css',
+            './styles/desktop-pages.css',
+        ]);
+        const headerSelector =
+            String.raw`\.desktop-store-layout\s+\.page\.subpage\.product-detail-page\s*>\s*` +
+            String.raw`\.subpage-header\.product-detail-header:not\(\.is-scrolled\)`;
+        const headerRule = stylesheetRule(stylesheet, headerSelector);
+        const headerTextRule = stylesheetRule(stylesheet, `${headerSelector}\\s*>\\s*strong`);
+
+        expect(headerRule).toMatch(/background:\s*transparent;/);
+        expect(headerRule).toMatch(/color:\s*var\(--text\);/);
+        expect(headerTextRule).toMatch(/color:\s*var\(--text\);/);
+        expect(headerTextRule).toMatch(/opacity:\s*1;/);
+        expect(headerTextRule).toMatch(/transform:\s*none;/);
+    });
+
+    it('keeps desktop description media proportional inside a bounded reading column', () => {
+        const stylesheet = readStorefrontStylesheet(['./styles/desktop-pages.css']);
+        const mediaSelector =
+            String.raw`\.desktop-store-layout\s+\.detail-description\s*>\s*` +
+            String.raw`\.detail-description-media`;
+        const mediaRule = stylesheetRule(stylesheet, mediaSelector);
+        const imageRule = stylesheetRule(stylesheet, `${mediaSelector}\\s*>\\s*img`);
+        const richTextImageRule = stylesheetRule(
+            stylesheet,
+            String.raw`\.desktop-store-layout\s+\.detail-rich-text\s+img`,
+        );
+
+        expect(mediaRule).toMatch(/width:\s*min\(100%,\s*960px\);/);
+        expect(mediaRule).toMatch(/height:\s*auto;/);
+        expect(mediaRule).toMatch(/margin:\s*24px auto 0;/);
+        for (const rule of [imageRule, richTextImageRule]) {
+            expect(rule).toMatch(/width:\s*auto;/);
+            expect(rule).toMatch(/max-width:\s*100%;/);
+            expect(rule).toMatch(/height:\s*auto;/);
+            expect(rule).toMatch(/max-height:\s*720px;/);
+            expect(rule).toMatch(/object-fit:\s*contain;/);
+        }
     });
 
     it('ensures product-card provides a unified card frame with background, border-radius and shadow', () => {

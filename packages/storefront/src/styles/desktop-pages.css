@@ -138,6 +138,26 @@
     .desktop-store-layout .product-detail-page > .subpage-header {
         margin-bottom: 0;
     }
+    /* Product headers overlay the gallery on phones, where white controls sit on
+       top of the product image. On desktop the header occupies its own page row,
+       so it must use the normal page foreground regardless of the active visual
+       preset. Keep this selector more specific than the preset's mobile rule. */
+    .desktop-store-layout
+        .page.subpage.product-detail-page
+        > .subpage-header.product-detail-header:not(.is-scrolled) {
+        background: transparent;
+        border-bottom-color: var(--line);
+        color: var(--text);
+    }
+    .desktop-store-layout
+        .page.subpage.product-detail-page
+        > .subpage-header.product-detail-header:not(.is-scrolled)
+        > strong {
+        color: var(--text);
+        opacity: 1;
+        transform: none;
+        pointer-events: auto;
+    }
     .desktop-product-purchase {
         display: grid;
         grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr);
@@ -226,7 +246,9 @@
         border-radius: var(--radius-sm, 6px);
         font-size: 14px;
         box-shadow: none;
-        transition: border-color 140ms ease, background-color 140ms ease;
+        transition:
+            border-color 140ms ease,
+            background-color 140ms ease;
     }
     .desktop-product-buying .detail-options button:hover {
         border-color: var(--accent);
@@ -266,7 +288,9 @@
         border: 1.5px solid color-mix(in srgb, var(--accent) 30%, var(--line));
         color: var(--accent-ink);
         font-weight: 700;
-        transition: transform 120ms ease, background 160ms ease;
+        transition:
+            transform 120ms ease,
+            background 160ms ease;
     }
     .desktop-product-buying .detail-action-bar > button:nth-child(3):hover:not(:disabled) {
         background: color-mix(in srgb, var(--accent) 18%, var(--paper));
@@ -277,7 +301,10 @@
         color: var(--accent-foreground, #fff);
         font-weight: 700;
         box-shadow: var(--accent-shadow);
-        transition: transform 120ms ease, background 160ms ease, box-shadow 160ms ease;
+        transition:
+            transform 120ms ease,
+            background 160ms ease,
+            box-shadow 160ms ease;
     }
     .desktop-product-buying .detail-action-bar > button:nth-child(4):hover:not(:disabled) {
         background: var(--accent-hover);
@@ -311,18 +338,38 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 0 40px;
     }
-    .desktop-store-layout .detail-description > :is(img, picture),
-    .desktop-store-layout .detail-rich-text img {
-        max-width: min(100%, 800px);
-        height: auto;
+    /* Description copy and media share one deliberate reading column. Detail
+       images keep their intrinsic aspect ratio instead of inheriting the mobile
+       100% x 420px cover treatment, which cropped square assets into banners. */
+    .desktop-store-layout .detail-description > :is(h2, p, .detail-rich-text) {
+        width: min(100%, 960px);
         margin-inline: auto;
     }
-    .desktop-store-layout .detail-description > picture {
+    .desktop-store-layout .detail-rich-text img {
         display: block;
-    }
-    .desktop-store-layout .detail-description > picture img {
-        width: 100%;
+        width: auto;
+        max-width: 100%;
         height: auto;
+        max-height: 720px;
+        margin: 24px auto;
+        object-fit: contain;
+    }
+    .desktop-store-layout .detail-description > .detail-description-media {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: min(100%, 960px);
+        height: auto;
+        margin: 24px auto 0;
+        overflow: hidden;
+        background: transparent;
+    }
+    .desktop-store-layout .detail-description > .detail-description-media > img {
+        width: auto;
+        max-width: 100%;
+        height: auto;
+        max-height: 720px;
+        margin: 0 auto;
         object-fit: contain;
     }
     .desktop-store-layout .detail-description h2 {

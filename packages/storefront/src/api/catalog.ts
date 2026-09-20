@@ -17,6 +17,40 @@ import {
 const NATIVE_CATALOG_BATCH_SIZE = 100;
 const STOREFRONT_CATALOG_MAX_TAKE = 48;
 
+function collectionIdentity(value: string): string {
+    return value.normalize('NFKC').trim().toLowerCase();
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Vendure appends a numeric suffix when an import accidentally creates a root
+ * collection with the same name and slug as an existing nested collection.
+ * Prefer the existing nested collection in storefront navigation while keeping
+ * unrelated same-name roots visible.
+ */
+export function storefrontNavigationCollections(items: CollectionSummary[]): CollectionSummary[] {
+    const nestedByName = new Map<string, CollectionSummary[]>();
+    for (const item of items) {
+        for (const child of item.children ?? []) {
+            const name = collectionIdentity(child.name);
+            nestedByName.set(name, [...(nestedByName.get(name) ?? []), child]);
+        }
+    }
+
+    return items.filter(item => {
+        if (item.children?.length) return true;
+        const nestedMatches = nestedByName.get(collectionIdentity(item.name)) ?? [];
+        const rootSlug = collectionIdentity(item.slug);
+        return !nestedMatches.some(child => {
+            const childSlug = collectionIdentity(child.slug);
+            return new RegExp(`^${escapeRegExp(childSlug)}-\\d+$`, 'u').test(rootSlug);
+        });
+    });
+}
+
 export class CatalogApi extends BaseDomainApi {
     private storefrontCatalogAvailable: boolean | null = null;
 
@@ -261,12 +295,16 @@ export class CatalogApi extends BaseDomainApi {
             signal,
         );
         const items = result.collections?.items ?? [];
-        return items
-            .slice()
-            .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-            .map(item => ({
-                ...item,
-                children: (item.children ?? []).slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
-            }));
+        return storefrontNavigationCollections(
+            items
+                .slice()
+                .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+                .map(item => ({
+                    ...item,
+                    children: (item.children ?? [])
+                        .slice()
+                        .sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
+                })),
+        );
     }
 }

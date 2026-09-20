@@ -522,6 +522,8 @@ export function ProductDetailPage() {
                         src={assets[0].preview}
                         alt={isZh ? `${product.name}细节展示` : `${product.name} details`}
                         imageKind="detail"
+                        frameClassName="detail-description-media"
+                        sizes="(min-width: 1024px) 960px, 100vw"
                         loading="lazy"
                     />
                 )}
