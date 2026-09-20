@@ -1,11 +1,11 @@
 import { msg } from '@lingui/core/macro';
 import { defineDashboardExtension } from '@vendure/dashboard';
-import type { OperationsNavigationTitles } from './operations-navigation';
 
 import { afterSalesRoute } from './after-sales-page';
 import { autoCardRoute } from './auto-card-page';
+import { incidentResponseRoute } from './incident-response-page';
 import { manualDigitalDeliveryRoute } from './manual-digital-delivery-page';
-import { organizeOperationsNavigation } from './operations-navigation';
+import { organizeOperationsNavigation, type OperationsNavigationTitles } from './operations-navigation';
 import { OperationsTodoWidget } from './operations-todo-widget';
 import { ProductPackagingPageBlock } from './product-packaging-page-block';
 import { reviewModerationRoute } from './review-moderation-page';
@@ -62,7 +62,13 @@ const navigationTitles = {
 } satisfies OperationsNavigationTitles;
 
 defineDashboardExtension({
-    routes: [afterSalesRoute, autoCardRoute, manualDigitalDeliveryRoute, reviewModerationRoute],
+    routes: [
+        afterSalesRoute,
+        autoCardRoute,
+        incidentResponseRoute,
+        manualDigitalDeliveryRoute,
+        reviewModerationRoute,
+    ],
     pageBlocks: [
         {
             id: 'product-packaging',

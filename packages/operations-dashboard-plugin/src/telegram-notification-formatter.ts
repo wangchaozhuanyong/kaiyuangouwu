@@ -25,12 +25,20 @@ export function formatTelegramNotification(
     options: { timezone: string; adminBaseUrl: string | null; departmentMentions?: Record<string, string> },
 ): FormattedTelegramNotification {
     const resolved = delivery.eventState === 'RESOLVED';
-    const icon = resolved ? '✅' : severityIcon(delivery.severity);
-    const stateLabel = resolved ? '[已恢复]' : `[${delivery.severity}][${delivery.ownerDepartmentCode}]`;
+    const closed = delivery.incidentStatus === 'CLOSED';
+    const oneOffResolved = delivery.mode === 'ONE_OFF' && resolved;
+    const icon = closed || oneOffResolved ? '✅' : resolved ? '🧪' : severityIcon(delivery.severity);
+    const stateLabel = closed
+        ? '[已闭环]'
+        : oneOffResolved
+          ? '[已恢复]'
+          : resolved
+            ? '[待恢复验证]'
+            : `[${delivery.severity}][${delivery.ownerDepartmentCode}]`;
     const lines = [
         `<b>${icon} ${stateLabel} ${escapeHtml(delivery.title)}</b>`,
         '',
-        `状态：${resolved ? '已恢复' : delivery.mode === 'INCIDENT' ? '持续中' : '新事件'}`,
+        `状态：${incidentStatusLabel(delivery)}`,
         `责任部门：${departmentDisplay(delivery.ownerDepartmentCode, options.departmentMentions)}`,
     ];
     if (delivery.collaboratorDepartmentCodes.length) {
@@ -49,6 +57,15 @@ export function formatTelegramNotification(
     if (delivery.slaDueAt && !resolved) {
         lines.push(`建议时限：${formatDate(delivery.slaDueAt, options.timezone)}`);
     }
+    if (delivery.acknowledgedAt) {
+        lines.push(`负责人确认：${formatDate(delivery.acknowledgedAt, options.timezone)}`);
+    }
+    if (delivery.recoveryValidationDueAt && delivery.incidentStatus === 'RECOVERY_PENDING') {
+        lines.push(`恢复验证时限：${formatDate(delivery.recoveryValidationDueAt, options.timezone)}`);
+    }
+    if (delivery.reviewDueAt && delivery.incidentStatus === 'REVIEW_PENDING') {
+        lines.push(`复盘时限：${formatDate(delivery.reviewDueAt, options.timezone)}`);
+    }
     lines.push('');
     for (const [key, value] of Object.entries(delivery.payload)) {
         if (key === 'adminPath') continue;
@@ -60,7 +77,7 @@ export function formatTelegramNotification(
         lines.push(`首次发生：${formatDate(delivery.firstOccurredAt, options.timezone)}`);
     }
     lines.push(
-        `${resolved ? '恢复时间' : '发生时间'}：${formatDate(delivery.lastOccurredAt, options.timezone)}`,
+        `${resolved ? '系统恢复时间' : '发生时间'}：${formatDate(delivery.lastOccurredAt, options.timezone)}`,
     );
     const text = truncateTelegramText(lines.join('\n'));
     const adminUrl = adminLink(options.adminBaseUrl, delivery.payload.adminPath);
@@ -68,6 +85,19 @@ export function formatTelegramNotification(
         text,
         ...(adminUrl ? { button: { label: '打开管理后台', url: adminUrl } } : {}),
     };
+}
+
+function incidentStatusLabel(delivery: AdminNotificationDelivery): string {
+    if (delivery.mode !== 'INCIDENT') return delivery.eventState === 'RESOLVED' ? '已完成' : '新事件';
+    const labels: Record<string, string> = {
+        OPEN: '待负责人确认',
+        ACKNOWLEDGED: '已确认处理中',
+        RECOVERY_PENDING: '系统已恢复，待人工验证',
+        REVIEW_PENDING: '恢复已验证，待复盘',
+        ACTION_PENDING: '整改中',
+        CLOSED: '已闭环',
+    };
+    return labels[delivery.incidentStatus] ?? (delivery.eventState === 'RESOLVED' ? '已恢复' : '持续中');
 }
 
 export function escapeHtml(value: unknown): string {

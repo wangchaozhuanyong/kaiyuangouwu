@@ -8,6 +8,14 @@ export type NotificationDeliveryStatus = 'PENDING' | 'CLAIMED' | 'RETRY' | 'SENT
 export type NotificationEventState = 'INFO' | 'FIRING' | 'RESOLVED';
 export type NotificationMode = 'ONE_OFF' | 'INCIDENT';
 export type NotificationDeliveryAction = 'SEND' | 'EDIT';
+export type IncidentStatus =
+    | 'NOT_APPLICABLE'
+    | 'OPEN'
+    | 'ACKNOWLEDGED'
+    | 'RECOVERY_PENDING'
+    | 'REVIEW_PENDING'
+    | 'ACTION_PENDING'
+    | 'CLOSED';
 
 @Entity({ name: 'admin_notification_outbox' })
 @Index('IDX_admin_notification_dedup', ['dedupKey'], { unique: true })
@@ -17,6 +25,9 @@ export type NotificationDeliveryAction = 'SEND' | 'EDIT';
 @Index('IDX_admin_notification_source', ['sourceType', 'sourceId'])
 @Index('IDX_admin_notification_owner_status_created', ['ownerDepartmentCode', 'deliveryStatus', 'createdAt'])
 @Index('IDX_admin_notification_sla', ['actionRequired', 'slaDueAt'])
+@Index('IDX_admin_incident_status_severity', ['mode', 'incidentStatus', 'severity', 'createdAt'])
+@Index('IDX_admin_incident_recovery_due', ['incidentStatus', 'recoveryValidationDueAt'])
+@Index('IDX_admin_incident_review_due', ['incidentStatus', 'reviewDueAt'])
 export class AdminNotificationDelivery extends VendureEntity {
     constructor(input?: DeepPartial<AdminNotificationDelivery>) {
         super(input);
@@ -90,6 +101,57 @@ export class AdminNotificationDelivery extends VendureEntity {
 
     @Column({ type: Date, nullable: true })
     escalatedAt: Date | null;
+
+    @Column({ type: 'varchar', length: 24, default: 'NOT_APPLICABLE' })
+    incidentStatus: IncidentStatus;
+
+    @Column({ type: Date, nullable: true })
+    acknowledgedAt: Date | null;
+
+    @Column({ type: 'varchar', length: 128, nullable: true })
+    acknowledgedByUserId: string | null;
+
+    @Column({ type: 'varchar', length: 1000, nullable: true })
+    acknowledgementNote: string | null;
+
+    @Column({ type: Date, nullable: true })
+    recoveryObservedAt: Date | null;
+
+    @Column({ type: Date, nullable: true })
+    recoveryValidationDueAt: Date | null;
+
+    @Column({ type: Date, nullable: true })
+    recoveryValidatedAt: Date | null;
+
+    @Column({ type: 'varchar', length: 128, nullable: true })
+    recoveryValidatedByUserId: string | null;
+
+    @Column({ type: 'varchar', length: 1000, nullable: true })
+    recoveryValidationNote: string | null;
+
+    @Column({ type: Date, nullable: true })
+    recoveryEscalatedAt: Date | null;
+
+    @Column({ type: Date, nullable: true })
+    reviewDueAt: Date | null;
+
+    @Column({ type: Date, nullable: true })
+    reviewSubmittedAt: Date | null;
+
+    @Column({ type: 'varchar', length: 128, nullable: true })
+    reviewSubmittedByUserId: string | null;
+
+    @Column({ type: 'varchar', length: 2000, nullable: true })
+    rootCause: string | null;
+
+    @Column({ type: 'varchar', length: 2000, nullable: true })
+    impactSummary: string | null;
+
+    @Column({ type: Date, nullable: true })
+    reviewEscalatedAt: Date | null;
+
+    @Column({ type: Date, nullable: true })
+    closedAt: Date | null;
 
     @Column('int', { default: 50 })
     priority: number;

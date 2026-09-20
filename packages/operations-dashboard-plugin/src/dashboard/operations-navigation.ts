@@ -86,6 +86,7 @@ const settingsGroups = [
         icon: Wrench,
         order: 500,
         itemIds: [
+            'incident-response',
             'job-queue',
             'scheduled-tasks',
             'settings-store',

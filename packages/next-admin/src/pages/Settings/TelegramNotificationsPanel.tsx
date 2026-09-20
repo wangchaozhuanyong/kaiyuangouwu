@@ -8,16 +8,23 @@ import {
     RotateCcw,
     Save,
     Send,
+    ShieldAlert,
+    X,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 
 import {
+    ACKNOWLEDGE_ADMIN_INCIDENT,
+    COMPLETE_ADMIN_INCIDENT_ACTION,
     RETRY_TELEGRAM_NOTIFICATION,
     SEND_TELEGRAM_NOTIFICATION_TEST,
+    SUBMIT_ADMIN_INCIDENT_REVIEW,
     TELEGRAM_NOTIFICATIONS_QUERY,
     TEST_TELEGRAM_CONNECTION,
     UPDATE_TELEGRAM_NOTIFICATION_CONFIG,
+    VALIDATE_ADMIN_INCIDENT_RECOVERY,
     type TelegramDepartmentRouteOverrideRecord,
     type TelegramNotificationConfigRecord,
     type TelegramNotificationsResult,
@@ -56,11 +63,26 @@ const testKinds = [
     ['RESOLVED', '恢复测试'],
 ] as const;
 
+type IncidentDialogKind = 'ACKNOWLEDGE' | 'RECOVERY' | 'REVIEW' | 'ACTION';
+
+interface IncidentDialogDraft {
+    kind: IncidentDialogKind;
+    id: string;
+    label: string;
+    note: string;
+    rootCause: string;
+    impactSummary: string;
+    actionTitle: string;
+    ownerDepartmentCode: string;
+    dueAt: string;
+}
+
 export function TelegramNotificationsPanel() {
     const [statusFilter, setStatusFilter] = useState('');
     const [editedDraft, setDraft] = useState<Draft | null>(null);
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
+    const [incidentDialog, setIncidentDialog] = useState<IncidentDialogDraft | null>(null);
     const query = useQuery<TelegramNotificationsResult>(TELEGRAM_NOTIFICATIONS_QUERY, {
         variables: { skip: 0, take: 25, status: statusFilter || null },
         fetchPolicy: 'cache-and-network',
@@ -78,6 +100,10 @@ export function TelegramNotificationsPanel() {
     }>(TEST_TELEGRAM_CONNECTION);
     const [sendTest, sendState] = useMutation(SEND_TELEGRAM_NOTIFICATION_TEST);
     const [retryDelivery, retryState] = useMutation(RETRY_TELEGRAM_NOTIFICATION);
+    const [acknowledgeIncident, acknowledgeState] = useMutation(ACKNOWLEDGE_ADMIN_INCIDENT);
+    const [validateRecovery, recoveryState] = useMutation(VALIDATE_ADMIN_INCIDENT_RECOVERY);
+    const [submitReview, reviewState] = useMutation(SUBMIT_ADMIN_INCIDENT_REVIEW);
+    const [completeAction, actionState] = useMutation(COMPLETE_ADMIN_INCIDENT_ACTION);
     const config = query.data?.telegramNotificationConfig;
     const draft = editedDraft ?? (config ? draftFromConfig(config) : null);
 
@@ -127,6 +153,76 @@ export function TelegramNotificationsPanel() {
             fail(caught);
         }
     };
+    const openIncidentNoteAction = (
+        kind: 'ACKNOWLEDGE' | 'RECOVERY' | 'ACTION',
+        id: string,
+        label: string,
+    ) => {
+        setIncidentDialog({
+            kind,
+            id,
+            label,
+            note: '',
+            rootCause: '',
+            impactSummary: '',
+            actionTitle: '',
+            ownerDepartmentCode: '',
+            dueAt: '',
+        });
+    };
+    const openIncidentReview = (id: string, ownerDepartmentCode: string) => {
+        setIncidentDialog({
+            kind: 'REVIEW',
+            id,
+            label: '提交事故复盘',
+            note: '',
+            rootCause: '',
+            impactSummary: '',
+            actionTitle: '',
+            ownerDepartmentCode,
+            dueAt: new Date(Date.now() + 7 * 24 * 60 * 60_000).toISOString().slice(0, 16),
+        });
+    };
+    const submitIncidentDialog = async () => {
+        if (!incidentDialog || !incidentDialogValid(incidentDialog)) return;
+        try {
+            if (incidentDialog.kind === 'ACKNOWLEDGE') {
+                await acknowledgeIncident({
+                    variables: { id: incidentDialog.id, note: incidentDialog.note.trim() },
+                });
+            } else if (incidentDialog.kind === 'RECOVERY') {
+                await validateRecovery({
+                    variables: { id: incidentDialog.id, note: incidentDialog.note.trim() },
+                });
+            } else if (incidentDialog.kind === 'ACTION') {
+                await completeAction({
+                    variables: { actionId: incidentDialog.id, note: incidentDialog.note.trim() },
+                });
+            } else {
+                await submitReview({
+                    variables: {
+                        id: incidentDialog.id,
+                        input: {
+                            rootCause: incidentDialog.rootCause.trim(),
+                            impactSummary: incidentDialog.impactSummary.trim(),
+                            correctiveActions: [
+                                {
+                                    title: incidentDialog.actionTitle.trim(),
+                                    ownerDepartmentCode: incidentDialog.ownerDepartmentCode,
+                                    dueAt: new Date(incidentDialog.dueAt).toISOString(),
+                                },
+                            ],
+                        },
+                    },
+                });
+            }
+            const completedLabel = incidentDialog.label;
+            setIncidentDialog(null);
+            await complete(completedLabel + '已记录');
+        } catch (caught) {
+            fail(caught);
+        }
+    };
     const updateRouteOverride = (
         eventType: string,
         patch: Partial<TelegramDepartmentRouteOverrideRecord>,
@@ -165,8 +261,17 @@ export function TelegramNotificationsPanel() {
     const runtime = query.data.telegramNotificationStatus;
     const audits = query.data.telegramNotificationConfigAudits;
     const deliveries = query.data.telegramNotificationDeliveries;
+    const incidents = query.data.adminIncidents;
     const routing = query.data.telegramDepartmentRouting;
-    const busy = saveState.loading || connectionState.loading || sendState.loading || retryState.loading;
+    const busy =
+        saveState.loading ||
+        connectionState.loading ||
+        sendState.loading ||
+        retryState.loading ||
+        acknowledgeState.loading ||
+        recoveryState.loading ||
+        reviewState.loading ||
+        actionState.loading;
 
     return (
         <div className="space-y-4">
@@ -618,6 +723,140 @@ export function TelegramNotificationsPanel() {
 
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
+                        <span className="rounded-lg bg-rose-50 p-2 text-rose-700">
+                            <ShieldAlert className="h-5 w-5" />
+                        </span>
+                        <div>
+                            <h2 className="text-sm font-bold text-slate-900">事故响应与闭环</h2>
+                            <p className="mt-1 text-xs text-slate-500">
+                                即使 Telegram 停用，事故仍会留存。P0/P1
+                                需经负责人确认、恢复验证、复盘和整改后才能闭环。
+                            </p>
+                        </div>
+                    </div>
+                    <span className={badgeBlue}>共 {incidents.totalItems} 起</span>
+                </div>
+                <div className="divide-y divide-slate-100">
+                    {incidents.items.map(incident => (
+                        <article key={incident.id} className="p-5">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className={severityBadge(incident.severity)}>
+                                            {incident.severity}
+                                        </span>
+                                        <span className={incidentStatusBadge(incident.incidentStatus)}>
+                                            {incidentStatusLabel(incident.incidentStatus)}
+                                        </span>
+                                        <span className="text-[10px] font-bold text-slate-500">
+                                            {incident.ownerDepartmentCode}
+                                        </span>
+                                    </div>
+                                    <h3 className="mt-2 text-sm font-bold text-slate-900">
+                                        {incident.title}
+                                    </h3>
+                                    <p className="mt-1 font-mono text-[10px] text-slate-400">
+                                        {incident.eventType} · 发生 {incident.occurrenceCount} 次 · 最近{' '}
+                                        {formatDateTime(incident.lastOccurredAt)}
+                                    </p>
+                                    {incident.rootCause && (
+                                        <p className="mt-2 text-xs text-slate-600">
+                                            根因：{incident.rootCause}
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {incident.incidentStatus === 'OPEN' && (
+                                        <button
+                                            type="button"
+                                            className={primaryButton}
+                                            disabled={busy}
+                                            onClick={() =>
+                                                openIncidentNoteAction(
+                                                    'ACKNOWLEDGE',
+                                                    incident.id,
+                                                    '负责人确认事故',
+                                                )
+                                            }
+                                        >
+                                            确认接手
+                                        </button>
+                                    )}
+                                    {incident.incidentStatus === 'RECOVERY_PENDING' && (
+                                        <button
+                                            type="button"
+                                            className={primaryButton}
+                                            disabled={busy}
+                                            onClick={() =>
+                                                openIncidentNoteAction(
+                                                    'RECOVERY',
+                                                    incident.id,
+                                                    '确认恢复验证',
+                                                )
+                                            }
+                                        >
+                                            验证恢复
+                                        </button>
+                                    )}
+                                    {incident.incidentStatus === 'REVIEW_PENDING' && (
+                                        <button
+                                            type="button"
+                                            className={primaryButton}
+                                            disabled={busy}
+                                            onClick={() =>
+                                                openIncidentReview(incident.id, incident.ownerDepartmentCode)
+                                            }
+                                        >
+                                            提交复盘
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            {incident.actions.length > 0 && (
+                                <div className="mt-4 grid gap-2 lg:grid-cols-2">
+                                    {incident.actions.map(action => (
+                                        <div
+                                            key={action.id}
+                                            className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs"
+                                        >
+                                            <div>
+                                                <strong className="text-slate-800">{action.title}</strong>
+                                                <p className="mt-1 text-[10px] text-slate-500">
+                                                    {action.ownerDepartmentCode} · 截止{' '}
+                                                    {formatDateTime(action.dueAt)} · {action.status}
+                                                </p>
+                                            </div>
+                                            {action.status === 'OPEN' && (
+                                                <button
+                                                    type="button"
+                                                    className={secondaryButton}
+                                                    disabled={busy}
+                                                    onClick={() =>
+                                                        openIncidentNoteAction(
+                                                            'ACTION',
+                                                            action.id,
+                                                            '完成整改任务',
+                                                        )
+                                                    }
+                                                >
+                                                    完成整改
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </article>
+                    ))}
+                    {!incidents.items.length && (
+                        <p className="p-8 text-center text-xs text-slate-400">暂无事故记录</p>
+                    )}
+                </div>
+            </section>
+
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             最近发送记录
@@ -716,6 +955,156 @@ export function TelegramNotificationsPanel() {
                     </table>
                 </div>
             </section>
+
+            {incidentDialog && (
+                <div
+                    className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs"
+                    onClick={() => !busy && setIncidentDialog(null)}
+                >
+                    <AccessibleDialogSurface
+                        accessibleName={incidentDialog.label}
+                        onRequestClose={() => !busy && setIncidentDialog(null)}
+                        className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+                        onClick={event => event.stopPropagation()}
+                    >
+                        <form
+                            onSubmit={event => {
+                                event.preventDefault();
+                                void submitIncidentDialog();
+                            }}
+                        >
+                            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
+                                <div>
+                                    <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
+                                        <ShieldAlert className="h-5 w-5 text-rose-600" />
+                                        {incidentDialog.label}
+                                    </h2>
+                                    <p className="mt-1 text-xs text-slate-500">
+                                        提交后将写入不可编辑的事故证据链，请使用可核验的业务事实。
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIncidentDialog(null)}
+                                    disabled={busy}
+                                    aria-label="关闭事故操作窗口"
+                                    className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+                            <div className="space-y-4 p-5">
+                                {incidentDialog.kind === 'REVIEW' ? (
+                                    <>
+                                        <Field label="根因说明" hint="20–2000 字">
+                                            <textarea
+                                                value={incidentDialog.rootCause}
+                                                onChange={event =>
+                                                    setIncidentDialog({
+                                                        ...incidentDialog,
+                                                        rootCause: event.target.value,
+                                                    })
+                                                }
+                                                rows={4}
+                                                className={inputClass}
+                                            />
+                                        </Field>
+                                        <Field label="影响范围与结果" hint="20–2000 字">
+                                            <textarea
+                                                value={incidentDialog.impactSummary}
+                                                onChange={event =>
+                                                    setIncidentDialog({
+                                                        ...incidentDialog,
+                                                        impactSummary: event.target.value,
+                                                    })
+                                                }
+                                                rows={4}
+                                                className={inputClass}
+                                            />
+                                        </Field>
+                                        <Field label="首项整改任务" hint="5–500 字">
+                                            <input
+                                                value={incidentDialog.actionTitle}
+                                                onChange={event =>
+                                                    setIncidentDialog({
+                                                        ...incidentDialog,
+                                                        actionTitle: event.target.value,
+                                                    })
+                                                }
+                                                className={inputClass}
+                                            />
+                                        </Field>
+                                        <div className="grid gap-4 sm:grid-cols-2">
+                                            <Field label="责任部门">
+                                                <select
+                                                    value={incidentDialog.ownerDepartmentCode}
+                                                    onChange={event =>
+                                                        setIncidentDialog({
+                                                            ...incidentDialog,
+                                                            ownerDepartmentCode: event.target.value,
+                                                        })
+                                                    }
+                                                    className={inputClass}
+                                                >
+                                                    {routing.departments.map(department => (
+                                                        <option key={department.code} value={department.code}>
+                                                            {department.code} · {department.nameZh}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </Field>
+                                            <Field label="整改截止时间">
+                                                <input
+                                                    type="datetime-local"
+                                                    value={incidentDialog.dueAt}
+                                                    onChange={event =>
+                                                        setIncidentDialog({
+                                                            ...incidentDialog,
+                                                            dueAt: event.target.value,
+                                                        })
+                                                    }
+                                                    className={inputClass}
+                                                />
+                                            </Field>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <Field label="处理说明" hint="至少 10 字">
+                                        <textarea
+                                            value={incidentDialog.note}
+                                            onChange={event =>
+                                                setIncidentDialog({
+                                                    ...incidentDialog,
+                                                    note: event.target.value,
+                                                })
+                                            }
+                                            rows={5}
+                                            className={inputClass}
+                                        />
+                                    </Field>
+                                )}
+                            </div>
+                            <div className="flex justify-end gap-2 border-t border-slate-100 p-5">
+                                <button
+                                    type="button"
+                                    onClick={() => setIncidentDialog(null)}
+                                    disabled={busy}
+                                    className={secondaryButton}
+                                >
+                                    取消
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={busy || !incidentDialogValid(incidentDialog)}
+                                    className={primaryButton}
+                                >
+                                    {busy ? '正在保存…' : '确认并留存证据'}
+                                </button>
+                            </div>
+                        </form>
+                    </AccessibleDialogSurface>
+                </div>
+            )}
         </div>
     );
 }
@@ -745,6 +1134,39 @@ function draftFromConfig(config: TelegramNotificationConfigRecord): Draft {
             ...(item.collaborators ? { collaborators: [...item.collaborators] } : {}),
         })),
     };
+}
+
+function incidentStatusLabel(status: string): string {
+    return (
+        {
+            OPEN: '待确认',
+            ACKNOWLEDGED: '处理中',
+            RECOVERY_PENDING: '待恢复验证',
+            REVIEW_PENDING: '待复盘',
+            ACTION_PENDING: '整改中',
+            CLOSED: '已闭环',
+        }[status] ?? status
+    );
+}
+
+function incidentStatusBadge(status: string): string {
+    if (status === 'CLOSED') return badgeGreen;
+    if (status === 'OPEN' || status === 'RECOVERY_PENDING') return badgeRose;
+    if (status === 'REVIEW_PENDING' || status === 'ACTION_PENDING') return badgeAmber;
+    return badgeBlue;
+}
+
+function incidentDialogValid(draft: IncidentDialogDraft): boolean {
+    if (draft.kind !== 'REVIEW') return draft.note.trim().length >= 10;
+    const dueAt = new Date(draft.dueAt).getTime();
+    return (
+        draft.rootCause.trim().length >= 20 &&
+        draft.impactSummary.trim().length >= 20 &&
+        draft.actionTitle.trim().length >= 5 &&
+        Boolean(draft.ownerDepartmentCode) &&
+        Number.isFinite(dueAt) &&
+        dueAt > Date.now() + 60 * 60_000
+    );
 }
 
 function Toggle({
@@ -910,3 +1332,4 @@ const tableHeadClass =
 const badgeGreen = 'rounded bg-emerald-100 px-2 py-1 text-[9px] font-bold text-emerald-700';
 const badgeRose = 'rounded bg-rose-100 px-2 py-1 text-[9px] font-bold text-rose-700';
 const badgeBlue = 'rounded bg-blue-100 px-2 py-1 text-[9px] font-bold text-blue-700';
+const badgeAmber = 'rounded bg-amber-100 px-2 py-1 text-[9px] font-bold text-amber-700';

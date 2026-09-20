@@ -7,10 +7,13 @@ import { AdminNotificationHealthController } from './admin-notification-health.c
 import { AdminNotificationResolver } from './admin-notification.resolver';
 import { AdminNotificationService } from './admin-notification.service';
 import { reconcileAdminNotificationsTask } from './admin-notification.tasks';
+import { AdminIncidentAction } from './entities/admin-incident-action.entity';
+import { AdminIncidentEvidence } from './entities/admin-incident-evidence.entity';
 import { AdminNotificationConfigAudit } from './entities/admin-notification-config-audit.entity';
 import { AdminNotificationConfig } from './entities/admin-notification-config.entity';
 import { AdminNotificationDelivery } from './entities/admin-notification-delivery.entity';
 import { AdminNotificationRuntime } from './entities/admin-notification-runtime.entity';
+import { IncidentResponseService } from './incident-response.service';
 import { SystemDependencyWatchdog } from './system-dependency-watchdog.service';
 import { TelegramClient } from './telegram-client';
 import { TelegramNotificationWorkerService } from './telegram-notification-worker.service';
@@ -22,6 +25,8 @@ import { TelegramNotificationWorkerService } from './telegram-notification-worke
         AdminNotificationConfigAudit,
         AdminNotificationDelivery,
         AdminNotificationRuntime,
+        AdminIncidentEvidence,
+        AdminIncidentAction,
     ],
     controllers: [AdminNotificationHealthController],
     providers: [
@@ -29,6 +34,7 @@ import { TelegramNotificationWorkerService } from './telegram-notification-worke
         AdminNotificationConfigService,
         TelegramNotificationWorkerService,
         AdminNotificationService,
+        IncidentResponseService,
         AdminNotificationEventSubscriber,
         SystemDependencyWatchdog,
     ],
@@ -40,6 +46,7 @@ import { TelegramNotificationWorkerService } from './telegram-notification-worke
         schema: adminNotificationApiExtensions,
         resolvers: [AdminNotificationResolver],
     },
+    dashboard: './dashboard/index.tsx',
     compatibility: '^3.7.0',
 })
 export class OperationsDashboardPlugin {}

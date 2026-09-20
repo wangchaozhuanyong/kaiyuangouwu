@@ -11,7 +11,7 @@ This plan tracks whether each business capability has a complete loop rather tha
 | P0       | Consent and privacy        | Versioned privacy terms, consent evidence, withdrawal, cookie/tracking controls, purpose inventory                        | In progress: registration and first-party analytics consent implemented and locally verified |
 | P0       | Payment reconciliation     | Gateway/chain callback idempotency, order-payment matching, exceptions, refund reconciliation, daily close                | Implemented and locally verified; production migration and scheduler observation remain      |
 | P0       | Backup and recovery        | Backup ownership, retention, encryption, restore drill, RPO/RTO evidence and alerting                                     | Implemented and locally verified; production policy and first drill remain                   |
-| P0       | Incident response          | Security-event severity, owner, evidence preservation, notification workflow and recovery review                          | Not started                                                                                  |
+| P0       | Incident response          | Security-event severity, owner, evidence preservation, notification workflow and recovery review                          | Implemented and locally verified; production migration and live alert exercise remain        |
 | P1       | Procurement                | Supplier, purchase order, receiving, variance, payable, return-to-supplier and performance score                          | Existing supplier area requires closure audit                                                |
 | P1       | Inventory                  | Reservation, receiving, adjustment, transfer, return disposition, low-stock alert and reconciliation                      | Existing pieces require closure audit                                                        |
 | P1       | Fulfilment and after-sales | Shipment, carrier exception, delivery proof, cancellation, return, exchange, reship and refund                            | Existing pieces require closure audit                                                        |
@@ -83,7 +83,31 @@ Backup acceptance gates:
 - [ ] Both offsite restore drills and alert delivery observed in a production-like environment.
 - [ ] Release, running SHA and monitoring evidence.
 
-Acceptance gates:
+## Current P0 implementation: incident response
+
+Operational incidents are durable records independent of Telegram. Disabling or misconfiguring the notification channel can suppress delivery, but it can no longer suppress the incident ledger. Every incident records ownership, severity, occurrence count and an append-only SHA-256 evidence chain. Sensitive evidence keys are discarded and nested operational evidence is bounded and masked before persistence.
+
+P0/P1 incidents do not close when an automated monitor first observes recovery. They enter a recovery-validation stage with explicit deadlines, then require an authenticated SuperAdmin to record the validation result, root cause, impact and one to ten corrective actions. The incident closes only after every action has a completion note. P2/P3 incidents may close automatically after observed recovery. Acknowledgement, recovery validation, review and corrective-action overdue states escalate to the executive operations owner.
+
+Both administrator surfaces expose the workflow. The Next Admin system-operations panel supports acknowledgement, recovery validation, review and action completion. The Vendure Dashboard incident route adds the same controls plus a chronological evidence view that verifies every stored evidence hash.
+
+Incident-response acceptance gates:
+
+- [x] Incidents persist even when Telegram delivery is disabled.
+- [x] P0 is immediately escalated and P1 acknowledgement respects its SLA.
+- [x] Repeated occurrences update the durable incident and add evidence.
+- [x] P0/P1 recovery requires human validation and cannot directly close the incident.
+- [x] Root cause, impact and one to ten corrective actions are mandatory before closure.
+- [x] Every corrective action requires a named department, due date and completion note.
+- [x] Recovery validation, review and corrective-action deadlines are automatically escalated.
+- [x] Evidence is bounded, secret-filtered, hash-protected and visible to SuperAdmins.
+- [x] Both administrator interfaces expose the workflow.
+- [x] Migration is idempotent and tested on MySQL, PostgreSQL and SQLite-shaped schemas.
+- [ ] Migration applied in a production-like database.
+- [ ] P0/P1 tabletop exercise, Telegram delivery and overdue escalation observed end to end.
+- [ ] Release, running SHA, browser acceptance and monitoring evidence.
+
+Customer-avatar acceptance gates:
 
 - [x] Replacement is atomic: a failed upload leaves the current avatar active.
 - [x] Active avatars do not expire automatically.
@@ -101,11 +125,10 @@ Acceptance gates:
 
 ## Execution order
 
-1. Finish P0 data governance: data-subject request workflow, consent evidence, policy registry and export/deletion exceptions.
-2. Close payment/refund reconciliation and operational recovery before expanding revenue-driving automation.
-3. Close procurement, inventory and after-sales state machines with reconciliation and exception queues.
-4. Add customer 360, attribution and refund-adjusted profitability on top of trustworthy operational data.
-5. Consolidate audit, approvals, scheduled reports, alerts and fraud review across all domains.
+1. Apply and exercise the completed P0 controls in a production-like environment without publishing from this worktree.
+2. Close procurement, inventory and after-sales state machines with reconciliation and exception queues.
+3. Add customer 360, attribution and refund-adjusted profitability on top of trustworthy operational data.
+4. Consolidate audit, approvals, scheduled reports, alerts and fraud review across all domains.
 
 ## Definition of done for every domain
 

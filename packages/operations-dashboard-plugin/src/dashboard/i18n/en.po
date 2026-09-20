@@ -1421,3 +1421,8 @@ msgstr "Retry"
 #: src/dashboard/operations-todo-widget.tsx
 msgid "operations.todo.title"
 msgstr "Order tasks"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.title"
+msgstr "Incident response"
