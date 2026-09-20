@@ -34,6 +34,7 @@ import {
 import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
 import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { ProductCard } from '../components/common/product-card';
+import { DesktopNeoMinimalistHome } from '../components/desktop/desktop-neo-minimalist-home';
 import { claimableCouponCampaigns } from '../coupon-center-state';
 import { useDesktopLayout } from '../desktop-layout';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
@@ -833,6 +834,25 @@ export function HomePage() {
     const colorfulTrustBar = isColorfulHomepageStyle(trustBlock?.settings?.visualStyle);
     const colorfulQuickLinks = isColorfulHomepageStyle(quickBlock?.settings?.visualStyle);
 
+    if (desktop) {
+        return (
+            <main
+                className="page home-page desktop-neo-home-page"
+                data-page-pending={loading ? 'query' : undefined}
+            >
+                <DesktopNeoMinimalistHome
+                    products={products}
+                    collections={collections}
+                    contentBlocks={contentBlocks}
+                    language={language}
+                    storefrontName={storefrontName}
+                    onProductSelect={id => navigateTo({ name: 'product', id })}
+                    onToast={onToast}
+                />
+            </main>
+        );
+    }
+
     return (
         <main className="page home-page" data-page-pending={loading ? 'query' : undefined}>
             <header className="topbar home-topbar">
@@ -1115,7 +1135,7 @@ export function HomePage() {
                                             onClick={item.onClick}
                                             disabled={item.disabled}
                                         >
-                                            {!desktop && <span>{item.icon}</span>}
+                                            <span>{item.icon}</span>
                                             <b>{item.label}</b>
                                             {desktop && <ChevronRight aria-hidden="true" />}
                                         </button>

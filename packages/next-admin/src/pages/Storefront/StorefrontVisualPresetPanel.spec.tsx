@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { storefrontVisualPresets } from '../../../../storefront-content-plugin/src/visual-presets';
 import { StorefrontVisualPresetPanel } from './StorefrontVisualPresetPanel';
 
 const mocks = vi.hoisted(() => ({ query: vi.fn(), save: vi.fn(), refetch: vi.fn() }));
@@ -61,7 +62,7 @@ describe('fixed desktop layout skin settings', () => {
     it.each(['classic', 'catalog'])('shows only skin options with legacy %s data', desktopLayout => {
         mocks.query.mockReturnValue(queryResult(desktopLayout));
         act(() => root.render(<StorefrontVisualPresetPanel />));
-        expect(host.querySelectorAll('input[type="radio"]')).toHaveLength(2);
+        expect(host.querySelectorAll('input[type="radio"]')).toHaveLength(storefrontVisualPresets.length);
         expect(host.querySelectorAll('input[name="desktopLayout"]')).toHaveLength(0);
         expect(host.textContent).toContain('电脑端使用统一布局');
         expect(saveButton().disabled).toBe(true);

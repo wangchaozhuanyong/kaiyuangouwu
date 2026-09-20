@@ -20,10 +20,10 @@ export function storefrontVisualPreviewDocument(
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
         <style>${baseStyles}\n${desktopStyles}\n${presetStyles}</style>
         <style>
-            body{padding:24px;min-height:100vh}.preview-shell{max-width:1060px;margin:auto;display:grid;gap:24px}
+            body{padding:24px;min-height:100vh;background:var(--bg, #fff);color:var(--text, #0f172a)}.preview-shell{max-width:1060px;margin:auto;display:grid;gap:24px}
             .preview-brand{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:16px}
             .preview-brand b{font-size:20px}.preview-brand small{color:var(--muted)}
-            .preview-hero{padding:36px 28px;background:#203346;border-radius:var(--radius-md);color:#fffdf8}
+            .preview-hero{padding:36px 28px;background:var(--account-hero-bg, #203346);border-radius:var(--radius-md);color:#fffdf8;border:1px solid var(--line, transparent)}
             .preview-hero .hero-rich-title{color:#fffdf8;margin:12px 0;font-size:clamp(28px,4vw,42px)}
             .preview-hero p{line-height:1.8;color:#ede5d6;max-width:34em}
             .preview-hero button{margin-top:18px;padding:12px 20px;border:0}
