@@ -43,6 +43,8 @@ import {
     UpdateCatalogVariantOperationsInput,
 } from './types';
 
+const CATALOG_EXPORT_PAGE_LIMIT = 50;
+
 export const DEFAULT_REPLENISHMENT_THRESHOLD = 5;
 
 type InventoryAlertStatus = 'NORMAL' | 'LOW_STOCK' | 'OUT_OF_STOCK';
@@ -515,7 +517,10 @@ export class CatalogOperationsService {
     }
 
     async exportRows(ctx: RequestContext, skip = 0, take = 500, strictChannelLocations = false) {
-        const safeTake = Math.min(Math.max(take, 1), 500);
+        // Export hydration spans several to-many relations. Keeping each page small and
+        // loading those relations in separate queries avoids a Cartesian join that can
+        // exhaust the API process for a large, deeply classified catalog.
+        const safeTake = Math.min(Math.max(take, 1), CATALOG_EXPORT_PAGE_LIMIT);
         const allowedLocations = await this.stockLocations(ctx, !strictChannelLocations);
         const allowedStockLocationIds = new Set(allowedLocations.map(location => String(location.id)));
         const locationNameById = new Map(
@@ -534,6 +539,7 @@ export class CatalogOperationsService {
         const [hydrated, costs, policies, lots, supplierBindings] = await Promise.all([
             this.connection.getRepository(ctx, ProductVariant).find({
                 where: { id: In(variantIds) },
+                relationLoadStrategy: 'query',
                 relations: [
                     'product',
                     'product.translations',

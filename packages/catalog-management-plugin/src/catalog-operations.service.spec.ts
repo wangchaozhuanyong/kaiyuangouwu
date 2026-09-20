@@ -707,6 +707,16 @@ describe('CatalogOperationsService', () => {
             channel: { code: 'default' },
             languageCode: 'zh_Hans',
         } as never);
+        expect(productVariantService.findAll).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ skip: 0, take: 50 }),
+        );
+        expect(mockRepo.find).toHaveBeenCalledWith(
+            expect.objectContaining({
+                relationLoadStrategy: 'query',
+                relations: expect.arrayContaining(['product', 'collections', 'stockLevels']),
+            }),
+        );
         expect(result.items).toHaveLength(1);
         expect(result.items[0].stockLevels).toEqual([
             {
