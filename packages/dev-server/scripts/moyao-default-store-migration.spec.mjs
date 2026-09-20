@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { migrationDigest, publicMigrationPlan } from './moyao-default-store-migration.mjs';
+import {
+    assertMoveTargetAvailable,
+    migrationDigest,
+    publicMigrationPlan,
+} from './moyao-default-store-migration.mjs';
 
 function fixture() {
     return {
@@ -56,4 +60,13 @@ void test('public migration plan exposes aggregates but no database identifiers'
     const output = JSON.stringify(plan);
     for (const privateId of ['10', '11', '21', '22', '31', '41', '51'])
         assert.equal(output.includes(`\"${privateId}\"`), false);
+});
+
+void test('target-only state does not block unrelated migration rows', () => {
+    assert.doesNotThrow(() => assertMoveTargetAvailable('safe_table', [], ['target-only']));
+    assert.doesNotThrow(() => assertMoveTargetAvailable('safe_table', ['source'], []));
+    assert.throws(
+        () => assertMoveTargetAvailable('conflicting_table', ['source'], ['target']),
+        /conflicting_table already contains target Channel data/u,
+    );
 });
