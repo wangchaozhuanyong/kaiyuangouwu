@@ -156,10 +156,10 @@ function CatalogExportSheet({
                         </div>
                     )}
                     {integrityQuery.isError && (
-                        <Alert variant="destructive">
+                        <Alert>
                             <AlertTriangle className="size-4" />
                             <AlertDescription className="space-y-2">
-                                <p>完整性检查失败，为避免生成遗漏数据的报表，当前已暂停导出。</p>
+                                <p>完整性检查暂不可用，但不影响导出；下载后请核对报表行数。</p>
                                 <Button
                                     type="button"
                                     size="sm"
@@ -193,13 +193,7 @@ function CatalogExportSheet({
                     )}
                     <div className="grid gap-3 sm:grid-cols-2">
                         <Button
-                            disabled={
-                                mutation.isPending ||
-                                integrityQuery.isLoading ||
-                                integrityQuery.isError ||
-                                locationsQuery.isLoading ||
-                                !stockLocationId
-                            }
+                            disabled={mutation.isPending || locationsQuery.isLoading || !stockLocationId}
                             onClick={() => mutation.mutate('xlsx')}
                         >
                             {mutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
@@ -207,13 +201,7 @@ function CatalogExportSheet({
                         </Button>
                         <Button
                             variant="outline"
-                            disabled={
-                                mutation.isPending ||
-                                integrityQuery.isLoading ||
-                                integrityQuery.isError ||
-                                locationsQuery.isLoading ||
-                                !stockLocationId
-                            }
+                            disabled={mutation.isPending || locationsQuery.isLoading || !stockLocationId}
                             onClick={() => mutation.mutate('csv')}
                         >
                             导出可回导 CSV

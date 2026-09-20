@@ -35,25 +35,41 @@ export function CatalogExportAction() {
     const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
     const [stockLocationId, setStockLocationId] = useState('');
     const [error, setError] = useState('');
+    const [integrityPending, setIntegrityPending] = useState(false);
+    const [integrityWarning, setIntegrityWarning] = useState('');
 
     const inspect = async () => {
         setOpen(true);
         setError('');
+        setSummary(null);
+        setIntegrityWarning('');
+        setIntegrityPending(true);
+        void client
+            .query<{ catalogIntegritySummary: IntegritySummary }>({
+                query: CATALOG_INTEGRITY_SUMMARY_QUERY,
+                fetchPolicy: 'network-only',
+            })
+            .then(result => {
+                if (result.data?.catalogIntegritySummary) {
+                    setSummary(result.data.catalogIntegritySummary);
+                }
+            })
+            .catch(() => {
+                setIntegrityWarning('商品完整性检查暂不可用，但不影响导出；下载后请核对报表行数。');
+            })
+            .finally(() => setIntegrityPending(false));
         try {
-            const [summaryResult, contextResult] = await Promise.allSettled([
-                client.query<{ catalogIntegritySummary: IntegritySummary }>({
-                    query: CATALOG_INTEGRITY_SUMMARY_QUERY,
-                    fetchPolicy: 'network-only',
-                }),
-                client.query<{ stockLocations: { items: Array<{ id: string; name: string }> } }>({
+            let nextLocations: Array<{ id: string; name: string }> = [];
+            try {
+                const contextResult = await client.query<{
+                    stockLocations: { items: Array<{ id: string; name: string }> };
+                }>({
                     query: CATALOG_EXPORT_CONTEXT_QUERY,
                     fetchPolicy: 'network-only',
-                }),
-            ]);
-
-            let nextLocations: Array<{ id: string; name: string }> = [];
-            if (contextResult.status === 'fulfilled' && contextResult.value.data?.stockLocations?.items) {
-                nextLocations = contextResult.value.data.stockLocations.items;
+                });
+                nextLocations = contextResult.data?.stockLocations?.items ?? [];
+            } catch {
+                // The creation-context fallback below supports older or temporarily degraded backends.
             }
 
             if (nextLocations.length === 0) {
@@ -82,10 +98,6 @@ export function CatalogExportAction() {
                     ? current
                     : (nextLocations[0]?.id ?? ''),
             );
-
-            if (summaryResult.status === 'fulfilled' && summaryResult.value.data?.catalogIntegritySummary) {
-                setSummary(summaryResult.value.data.catalogIntegritySummary);
-            }
 
             if (nextLocations.length === 0) {
                 setError('未检测到可用仓库，请先在系统设置中配置仓库后再导出商品。');
@@ -198,10 +210,16 @@ export function CatalogExportAction() {
                                     主表的库存量和上下限来自该仓库；库存是绝对值。
                                 </span>
                             </label>
-                            {!summary && !error && !loading && (
+                            {integrityPending && !summary && (
                                 <p className="py-6 text-center text-sm text-slate-500" role="status">
                                     正在检查商品完整性…
                                 </p>
+                            )}
+                            {integrityWarning && (
+                                <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
+                                    <AlertTriangle className="h-5 w-5 shrink-0" />
+                                    <p>{integrityWarning}</p>
+                                </div>
                             )}
                             {summary && (
                                 <div className="grid gap-3 sm:grid-cols-4">

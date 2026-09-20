@@ -269,6 +269,7 @@ export class CatalogImportRollback {
                 product.id,
                 stringValue(applied.importCategory),
                 stringValue(before.productImportCategory),
+                { allowCreate: true, bypassHierarchyGuard: true },
             );
         }
         if (applied.lotId) {

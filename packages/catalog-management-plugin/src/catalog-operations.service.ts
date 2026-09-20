@@ -26,6 +26,7 @@ import {
 } from '@vendure/core';
 import { In } from 'typeorm';
 
+import { catalogCollectionPath, preferredCatalogCategoryPath } from './catalog-import-classification';
 import { CatalogSupplierService } from './catalog-supplier.service';
 import { manageCatalogImportPermission, manageCatalogOperationsPermission } from './constants';
 import { InventoryLot } from './entities/inventory-lot.entity';
@@ -541,6 +542,8 @@ export class CatalogOperationsService {
                     'product.facetValues.translations',
                     'collections',
                     'collections.translations',
+                    'collections.parent',
+                    'collections.parent.translations',
                     'stockLevels',
                     'stockLevels.stockLocation',
                 ],
@@ -582,6 +585,14 @@ export class CatalogOperationsService {
                 const productFields = (product.customFields ?? {}) as unknown as Record<string, unknown>;
                 const cost = latestCost.get(`${String(variant.id)}:${variant.currencyCode}`);
                 const costMicrounits = cost ? Number(cost.costMicrounits) : null;
+                const importCategoryMarker =
+                    facetValueNames(product, 'catalog-import-category', ctx.languageCode)[0] ?? null;
+                const collectionPaths = uniqueNames(
+                    (data.collections ?? []).map(collection =>
+                        catalogCollectionPath(collection, String(ctx.languageCode)),
+                    ),
+                );
+                const importCategory = preferredCatalogCategoryPath(importCategoryMarker, collectionPaths);
                 return [
                     {
                         productId: String(product.id),
@@ -592,19 +603,10 @@ export class CatalogOperationsService {
                         description: translation?.description ?? product.description ?? '',
                         fulfillmentType:
                             productFields.fulfillmentType === 'physical' ? 'physical' : 'digital',
-                        importCategory:
-                            facetValueNames(product, 'catalog-import-category', ctx.languageCode)[0] ?? null,
+                        importCategory: importCategory || null,
                         categories: uniqueNames([
+                            ...collectionPaths,
                             ...facetValueNames(product, 'catalog-import-category', ctx.languageCode),
-                            ...(data.collections ?? []).map(
-                                collection =>
-                                    (collection.translations ?? []).find(
-                                        item => item.languageCode === ctx.languageCode,
-                                    )?.name ??
-                                    collection.translations?.[0]?.name ??
-                                    collection.name ??
-                                    '',
-                            ),
                         ]),
                         brand: facetValueNames(product, 'catalog-brand', ctx.languageCode)[0] ?? null,
                         tags: facetValueNames(product, 'catalog-tag', ctx.languageCode),

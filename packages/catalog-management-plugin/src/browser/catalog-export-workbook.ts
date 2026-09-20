@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 
-import { splitCatalogCategoryPath } from '../catalog-import-classification';
+import { preferredCatalogCategoryPath, splitCatalogCategoryPath } from '../catalog-import-classification';
 
 import { type CatalogExportFormat } from './catalog-export-file';
 import { type CatalogExportRowRecord } from './catalog-export-types';
@@ -72,9 +72,10 @@ function productSheet(rows: CatalogExportRowRecord[], stockLocationId?: string):
         ],
         ...rows.map(row => {
             const stock = selectedStock(row, stockLocationId);
+            const categoryPath = preferredCatalogCategoryPath(row.importCategory, row.categories);
             return [
                 row.productName,
-                splitCatalogCategoryPath(row.importCategory ?? row.categories[0] ?? '').category,
+                splitCatalogCategoryPath(categoryPath).category,
                 safeText(row.sku),
                 stock?.stockLocationName ?? '',
                 stock?.stockOnHand ?? null,
@@ -99,7 +100,7 @@ function productSheet(rows: CatalogExportRowRecord[], stockLocationId?: string):
                 dateCell(row.systemCreatedAt),
                 safeText(row.supplierName ?? ''),
                 row.fulfillmentType === 'physical' ? '实物' : '虚拟货品',
-                splitCatalogCategoryPath(row.importCategory ?? row.categories[0] ?? '').secondaryCategory,
+                splitCatalogCategoryPath(categoryPath).secondaryCategory,
                 safeText(row.channelCode),
             ];
         }),

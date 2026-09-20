@@ -654,7 +654,7 @@ describe('CatalogOperationsService', () => {
     it('safely handles unpopulated stockLocation, missing collections and missing translations in exportRows', async () => {
         const { service, productVariantService, connection } = createService();
         vi.spyOn(service, 'stockLocations').mockResolvedValue([{ id: 'stock-1', name: '主仓库' }]);
-        productVariantService.findAll = vi.fn().mockResolvedValue({
+        (productVariantService as any).findAll = vi.fn().mockResolvedValue({
             items: [
                 {
                     id: 'variant-1',
@@ -699,7 +699,7 @@ describe('CatalogOperationsService', () => {
                 return Promise.resolve([]);
             }),
         };
-        connection.getRepository = vi.fn(() => mockRepo);
+        (connection as any).getRepository = vi.fn(() => mockRepo);
         const suppliersAssociations = vi.fn().mockResolvedValue([]);
         (service as any).suppliers = { associations: suppliersAssociations };
 
@@ -722,10 +722,79 @@ describe('CatalogOperationsService', () => {
         expect(result.items[0].categories).toEqual([]);
     });
 
+    it('exports the real parent-child collection path when a legacy marker is flattened', async () => {
+        const { service, productVariantService, connection } = createService();
+        vi.spyOn(service, 'stockLocations').mockResolvedValue([]);
+        (productVariantService as any).findAll = vi.fn().mockResolvedValue({
+            items: [
+                {
+                    id: 'variant-tobacco',
+                    sku: 'TOBACCO-1',
+                    price: 200,
+                    currencyCode: CurrencyCode.CNY,
+                    enabled: true,
+                },
+            ],
+            totalItems: 1,
+        });
+        const child = {
+            name: '泰山',
+            translations: [{ languageCode: 'zh_Hans', name: '泰山' }],
+            parent: {
+                isRoot: false,
+                translations: [{ languageCode: 'zh_Hans', name: '正品烟草' }],
+            },
+        };
+        const mockRepo = {
+            find: vi.fn((query: any) => {
+                if (query?.relations?.includes('product')) {
+                    expect(query.relations).toEqual(
+                        expect.arrayContaining(['collections.parent', 'collections.parent.translations']),
+                    );
+                    return Promise.resolve([
+                        {
+                            id: 'variant-tobacco',
+                            sku: 'TOBACCO-1',
+                            price: 200,
+                            currencyCode: CurrencyCode.CNY,
+                            enabled: true,
+                            customFields: {},
+                            product: {
+                                id: 'product-tobacco',
+                                enabled: true,
+                                createdAt: new Date(),
+                                translations: [{ languageCode: 'zh_Hans', name: '泰山商品' }],
+                                facetValues: [
+                                    {
+                                        facet: { code: 'catalog-import-category' },
+                                        translations: [{ languageCode: 'zh_Hans', name: '泰山' }],
+                                    },
+                                ],
+                            },
+                            collections: [child],
+                            stockLevels: [],
+                        },
+                    ]);
+                }
+                return Promise.resolve([]);
+            }),
+        };
+        (connection as any).getRepository = vi.fn(() => mockRepo);
+        (service as any).suppliers = { associations: vi.fn().mockResolvedValue([]) };
+
+        const result = await service.exportRows({
+            channel: { code: 'meiyijia' },
+            languageCode: 'zh_Hans',
+        } as never);
+
+        expect(result.items[0].importCategory).toBe('正品烟草 > 泰山');
+        expect(result.items[0].categories).toEqual(expect.arrayContaining(['正品烟草 > 泰山', '泰山']));
+    });
+
     it('falls back to basic counts in integritySummary if an exception occurs during exportRows scan', async () => {
         const { service, productService, productVariantService } = createService();
         productService.findAll = vi.fn().mockResolvedValue({ totalItems: 10 });
-        productVariantService.findAll = vi.fn().mockResolvedValue({ totalItems: 25 });
+        (productVariantService as any).findAll = vi.fn().mockResolvedValue({ totalItems: 25 });
         vi.spyOn(service, 'exportRows').mockRejectedValue(new Error('Database disk error'));
 
         const summary = await service.integritySummary({} as never);

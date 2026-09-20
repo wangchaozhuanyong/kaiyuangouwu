@@ -95,6 +95,9 @@ export class CatalogFileParserService {
         if (missing.length > 0) {
             throw new UserInputError(`缺少必填列：${missing.map(displayField).join('、')}`);
         }
+        if (!(['name', 'sku', 'barcode'] as const).some(field => columnFields.includes(field))) {
+            throw new UserInputError('缺少必填列：名称、SKU 或条码至少需要一列');
+        }
         const duplicateHeaders = headers.filter(
             (header, index) => header && headers.indexOf(header) !== index,
         );
@@ -205,7 +208,9 @@ function normalizeRow(
     const name = textValue(values.get('name'));
     const category = textValue(values.get('category'));
     const secondaryCategory = textValue(values.get('secondaryCategory'));
-    const fulfillmentType = parseCatalogFulfillmentType(values.get('fulfillmentType'), rowNumber);
+    const fulfillmentType = textValue(values.get('fulfillmentType'))
+        ? parseCatalogFulfillmentType(values.get('fulfillmentType'), rowNumber)
+        : undefined;
     validateCatalogCategories(category, secondaryCategory, rowNumber);
     const sku = importSafeTextValue(values.get('sku'));
     const barcode = importSafeTextValue(values.get('barcode'));
