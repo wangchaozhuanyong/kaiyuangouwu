@@ -1,5 +1,6 @@
 import { gql } from 'graphql-tag';
 
+import { administratorAccessSchema } from './administrator-access.schema';
 import { storeCustomerCouponSchema } from './promotion/store-coupon-api.schema';
 import { storeProfileInputSchema } from './store-profile-input.schema';
 import { storefrontBrandingSchema, storefrontPreviewBrandingSchema } from './storefront-branding.schema';
@@ -389,6 +390,7 @@ const commonTypes = gql`
 `;
 
 export const adminApiExtensions = gql`
+    ${administratorAccessSchema}
     ${storefrontPreviewBrandingSchema}
     ${trafficAdminSchema}
     ${commonTypes}
@@ -543,6 +545,13 @@ export const adminApiExtensions = gql`
         estimateMinDays: Int!
         estimateMaxDays: Int!
         blockedPostalPrefixes: String!
+    }
+
+    type StorePaymentOption {
+        id: ID!
+        name: String!
+        code: String!
+        enabled: Boolean!
     }
 
     input UpdateStoreCurrencyConfigurationInput {
@@ -1124,6 +1133,7 @@ export const adminApiExtensions = gql`
         storeDeprovisionImpact(profileId: ID!): StoreDeprovisionImpact!
         myStoreProfile: StoreProfile!
         myStoreCommerceConfiguration: StoreCommerceConfiguration!
+        myStorePaymentOptions: [StorePaymentOption!]!
         myStoreCurrencyConfiguration: StoreCurrencyConfiguration!
         myStoreUsdtWallet: StoreUsdtWallet!
         myStoreUsdtPaymentIntents: [StoreUsdtPaymentIntent!]!
@@ -1170,6 +1180,7 @@ export const adminApiExtensions = gql`
         updateMyStoreCommerceConfiguration(
             input: UpdateMyStoreCommerceConfigurationInput!
         ): StoreCommerceConfiguration!
+        setMyStorePaymentOptionEnabled(id: ID!, enabled: Boolean!): StorePaymentOption!
         updateMyStoreCurrencyConfiguration(
             input: UpdateStoreCurrencyConfigurationInput!
         ): StoreCurrencyConfiguration!

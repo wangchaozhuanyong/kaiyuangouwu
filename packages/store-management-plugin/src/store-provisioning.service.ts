@@ -38,14 +38,11 @@ import { storefrontContentPermission } from '@vendure/storefront-content-plugin'
 import { randomBytes } from 'node:crypto';
 import { IsNull } from 'typeorm';
 
-import { storeProfilePermission } from './constants';
+import { AdministratorAccessService } from './administrator-access.service';
+import { manageStoreTeamPermission, storeProfilePermission } from './constants';
 import { StoreProfile } from './entities/store-profile.entity';
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
-import {
-    adjustReferralBalancePermission,
-    manageReferralWithdrawalPermission,
-    referralPermission,
-} from './referral/referral.constants';
+import { referralPermission } from './referral/referral.constants';
 import { StoreProfileService } from './store-profile.service';
 import { ProvisionStoreInput, ProvisionStoreResult } from './types';
 import { USDT_TRC20_PAYMENT_METHOD_CODE } from './usdt/usdt-payment.constants';
@@ -96,6 +93,10 @@ export function cloneTemplateCollectionFilters(
 }
 
 export const storeAdministratorPermissions: Permission[] = [
+    Permission.CreateAdministrator,
+    Permission.ReadAdministrator,
+    Permission.UpdateAdministrator,
+    Permission.DeleteAdministrator,
     Permission.ReadChannel,
     Permission.ReadCatalog,
     Permission.CreateProduct,
@@ -117,6 +118,7 @@ export const storeAdministratorPermissions: Permission[] = [
     Permission.ReadOrder,
     Permission.UpdateOrder,
     Permission.ReadCustomer,
+    Permission.UpdateCustomer,
     Permission.ReadStockLocation,
     Permission.ReadShippingMethod,
     Permission.ReadPaymentMethod,
@@ -144,12 +146,11 @@ export const storeAdministratorPermissions: Permission[] = [
     storeDomainPermission.Delete,
     storeProfilePermission.Read,
     storeProfilePermission.Update,
+    manageStoreTeamPermission.Permission,
     referralPermission.Create,
     referralPermission.Read,
     referralPermission.Update,
     referralPermission.Delete,
-    manageReferralWithdrawalPermission.Permission,
-    adjustReferralBalancePermission.Permission,
 ];
 
 @Injectable()
@@ -165,6 +166,7 @@ export class StoreProvisioningService {
         private readonly paymentMethodService: PaymentMethodService,
         private readonly storeProfileService: StoreProfileService,
         private readonly merchantInitialPasswordService: MerchantInitialPasswordService,
+        private readonly administratorAccessService: AdministratorAccessService,
         private readonly contentTranslations: ContentTranslationService,
         private readonly facetService: FacetService,
         private readonly facetValueService: FacetValueService,
@@ -252,7 +254,8 @@ export class StoreProvisioningService {
         ]);
         await this.roleService.assignRoleToChannel(ctx, superAdminRole.id, channel.id);
         await this.roleService.assignRoleToChannel(ctx, customerRole.id, channel.id);
-        this.extendSuperAdminContext(ctx, channel, superAdminRole.permissions);
+        await this.administratorAccessService.extendPlatformRolesToChannel(ctx, channel);
+        this.extendAdministratorContext(ctx, channel);
 
         const role = await this.roleService.create(ctx, {
             code: `${normalized.code}-store-admin`,
@@ -267,6 +270,7 @@ export class StoreProvisioningService {
             roleIds: [role.id],
         });
         await this.merchantInitialPasswordService.requirePasswordChange(ctx, administrator);
+        await this.administratorAccessService.registerStorePrimary(ctx, administrator, channel);
         const channelCtx = this.contextForChannel(ctx, channel);
         const stockLocations: StockLocation[] = [];
         for (const stockLocation of templateStockLocations) {
@@ -588,13 +592,19 @@ export class StoreProvisioningService {
         }
     }
 
-    private extendSuperAdminContext(ctx: RequestContext, channel: Channel, permissions: Permission[]): void {
+    private extendAdministratorContext(ctx: RequestContext, channel: Channel): void {
         const user = ctx.session?.user;
         if (!user) {
             throw new InternalServerError('无法读取当前平台管理员会话');
         }
         if (user.channelPermissions.some(item => String(item.id) === String(channel.id))) {
             return;
+        }
+        const permissions = [
+            ...new Set(user.channelPermissions.flatMap(channelPermission => channelPermission.permissions)),
+        ];
+        if (permissions.length === 0) {
+            throw new InternalServerError('当前平台管理员会话没有可继承的权限');
         }
         user.channelPermissions.push({
             id: channel.id,

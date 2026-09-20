@@ -9,13 +9,17 @@ import {
     FacetValue,
     ForbiddenError,
     Fulfillment,
+    I18nError,
     idsAreEqual,
+    LogLevel,
     Order,
     OrderLine,
+    Payment,
     Product,
     ProductOption,
     ProductOptionGroup,
     ProductVariant,
+    Refund,
     RequestContext,
     StockLocation,
     TransactionalConnection,
@@ -25,6 +29,8 @@ import {
 } from '@vendure/core';
 import { In } from 'typeorm';
 
+import { sensitiveStoreFinancePermission } from './constants';
+import { AdministratorAccessProfile } from './entities/administrator-access-profile.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { StoreCouponCampaignConfig } from './entities/store-coupon-campaign-config.entity';
 
@@ -67,20 +73,47 @@ const merchantManagedStockLocationMutations = new Set([
 ]);
 
 const platformOrderMutations = new Set([
-    'cancelOrder',
     'modifyOrder',
     'setOrderCustomFields',
     'setOrderCustomer',
-    'transitionOrderToState',
     'updateOrderNote',
     'deleteOrderNote',
 ]);
+
+const sensitiveStoreOrderMutations = new Set([
+    'addManualPaymentToOrder',
+    'cancelPayment',
+    'refundOrder',
+    'settlePayment',
+    'settleRefund',
+    'transitionPaymentToState',
+]);
+
+export const PRODUCT_BELONGS_TO_ANOTHER_STORE = 'PRODUCT_BELONGS_TO_ANOTHER_STORE';
+export const HISTORICAL_SHARED_PRODUCT_REQUIRES_MIGRATION = 'HISTORICAL_SHARED_PRODUCT_REQUIRES_MIGRATION';
+
+class StoreScopeError extends I18nError {
+    constructor(message: string, code: string) {
+        super(message, {}, code, LogLevel.Debug);
+    }
+}
 
 const managedPromotionMutations = new Set([
     'createPromotion',
     'updatePromotion',
     'deletePromotion',
     'deletePromotions',
+]);
+
+const legacyTeamMutations = new Set([
+    'createAdministrator',
+    'updateAdministrator',
+    'assignRoleToAdministrator',
+    'deleteAdministrator',
+    'deleteAdministrators',
+    'createRole',
+    'updateRole',
+    'deleteRole',
 ]);
 
 interface CatalogMutationInput {
@@ -91,6 +124,8 @@ interface CatalogMutationInput {
     id?: ID;
     parentId?: ID;
     lines?: Array<{ orderLineId: ID }> | null;
+    orderId?: ID;
+    paymentId?: ID;
     productId?: ID;
     productOptionGroupId?: ID;
     stockLevels?: Array<{ stockLocationId: ID }> | null;
@@ -135,11 +170,20 @@ export class MerchantCatalogAccessService {
         if (parentType !== 'Mutation') {
             return;
         }
+        if (legacyTeamMutations.has(fieldName)) {
+            throw new UserInputError('店铺团队请使用受限的员工与岗位权限接口');
+        }
         if (merchantManagedStockLocationMutations.has(fieldName)) {
             throw new ForbiddenError();
         }
         if (managedPromotionMutations.has(fieldName)) {
             throw new ForbiddenError();
+        }
+        if (sensitiveStoreOrderMutations.has(fieldName)) {
+            if (!ctx.userHasPermissions([sensitiveStoreFinancePermission.Permission])) {
+                throw new UserInputError('当前岗位未获得敏感店铺财务权限');
+            }
+            await this.assertSensitiveStoreOrderOperation(ctx, fieldName, args);
         }
         if (this.isPlatformOrderMutation(fieldName)) {
             throw new ForbiddenError();
@@ -168,11 +212,7 @@ export class MerchantCatalogAccessService {
     }
 
     private isPlatformOrderMutation(fieldName: string): boolean {
-        return (
-            platformOrderMutations.has(fieldName) ||
-            fieldName.includes('DraftOrder') ||
-            /payment|refund/i.test(fieldName)
-        );
+        return platformOrderMutations.has(fieldName) || fieldName.includes('DraftOrder');
     }
 
     private async assertMerchantOrderOperation(
@@ -182,6 +222,14 @@ export class MerchantCatalogAccessService {
         inputs: CatalogMutationInput[],
     ): Promise<void> {
         switch (fieldName) {
+            case 'cancelOrder':
+                return this.assertEntitiesBelongToActiveChannel(
+                    ctx,
+                    Order,
+                    inputs.flatMap(input => (input.orderId == null ? [] : [input.orderId])),
+                );
+            case 'transitionOrderToState':
+                return this.assertEntitiesBelongToActiveChannel(ctx, Order, this.namedIds(args, 'id'));
             case 'addFulfillmentToOrder':
                 return this.assertOrderLinesBelongToActiveChannel(
                     ctx,
@@ -195,6 +243,61 @@ export class MerchantCatalogAccessService {
                     Order,
                     inputs.flatMap(input => (input.id == null ? [] : [input.id])),
                 );
+        }
+    }
+
+    private async assertSensitiveStoreOrderOperation(
+        ctx: RequestContext,
+        fieldName: string,
+        args: Record<string, unknown>,
+    ): Promise<void> {
+        const input = this.getInputs(args)[0];
+        if (fieldName === 'addManualPaymentToOrder') {
+            return this.assertEntitiesBelongToActiveChannel(
+                ctx,
+                Order,
+                input?.orderId == null ? [] : [input.orderId],
+            );
+        }
+        if (fieldName === 'refundOrder') {
+            return this.assertPaymentsBelongToActiveChannel(
+                ctx,
+                input?.paymentId == null ? [] : [input.paymentId],
+            );
+        }
+        if (fieldName === 'settleRefund') {
+            return this.assertRefundsBelongToActiveChannel(ctx, input?.id == null ? [] : [input.id]);
+        }
+        return this.assertPaymentsBelongToActiveChannel(ctx, this.namedIds(args, 'id'));
+    }
+
+    private async assertPaymentsBelongToActiveChannel(ctx: RequestContext, ids: ID[]): Promise<void> {
+        const uniqueIds = this.uniqueIds(ids);
+        if (uniqueIds.length === 0) throw new ForbiddenError();
+        const payments = await this.connection.getRepository(ctx, Payment).find({
+            where: uniqueIds.map(id => ({ id })),
+            relations: ['order'],
+        });
+        if (
+            payments.length !== uniqueIds.length ||
+            payments.some(payment => !idsAreEqual(payment.order.salesChannelId, ctx.channelId))
+        ) {
+            throw new ForbiddenError();
+        }
+    }
+
+    private async assertRefundsBelongToActiveChannel(ctx: RequestContext, ids: ID[]): Promise<void> {
+        const uniqueIds = this.uniqueIds(ids);
+        if (uniqueIds.length === 0) throw new ForbiddenError();
+        const refunds = await this.connection.getRepository(ctx, Refund).find({
+            where: uniqueIds.map(id => ({ id })),
+            relations: ['payment', 'payment.order'],
+        });
+        if (
+            refunds.length !== uniqueIds.length ||
+            refunds.some(refund => !idsAreEqual(refund.payment.order.salesChannelId, ctx.channelId))
+        ) {
+            throw new ForbiddenError();
         }
     }
 
@@ -244,6 +347,11 @@ export class MerchantCatalogAccessService {
     }
 
     private async getMerchantChannelIds(ctx: RequestContext): Promise<ID[] | null> {
+        const profile = await this.connection
+            .getRepository(ctx, AdministratorAccessProfile)
+            .findOne({ where: { userId: ctx.activeUserId } });
+        if (profile?.scope === 'STORE') return profile.channelId != null ? [profile.channelId] : [];
+        if (profile?.scope === 'PLATFORM') return null;
         const access = await this.connection
             .getRepository(ctx, StoreAdministratorAccess)
             .findOne({ where: { userId: ctx.activeUserId } });
@@ -435,7 +543,24 @@ export class MerchantCatalogAccessService {
                     channel => !allowedChannelIds.some(allowedId => idsAreEqual(channel.id, allowedId)),
                 ),
         );
-        if (entities.length !== uniqueIds.length || containsForeignOrSharedEntity) {
+        const isProductEntity =
+            (entity as Type<VendureEntity>) === Product || (entity as Type<VendureEntity>) === ProductVariant;
+        if (entities.length !== uniqueIds.length) {
+            if (isProductEntity) {
+                throw new StoreScopeError(
+                    '该商品属于其他店铺，当前账号不能修改',
+                    PRODUCT_BELONGS_TO_ANOTHER_STORE,
+                );
+            }
+            throw new ForbiddenError();
+        }
+        if (containsForeignOrSharedEntity) {
+            if (isProductEntity) {
+                throw new StoreScopeError(
+                    '该历史共享商品需先完成店铺归属迁移',
+                    HISTORICAL_SHARED_PRODUCT_REQUIRES_MIGRATION,
+                );
+            }
             throw new ForbiddenError();
         }
     }

@@ -45,6 +45,7 @@ import {
 import { patchEntity } from '../helpers/utils/patch-entity';
 
 import { ChannelService } from './channel.service';
+import { SessionService } from './session.service';
 
 /**
  * @description
@@ -71,6 +72,7 @@ export class RoleService {
         private eventBus: EventBus,
         private requestContextCache: RequestContextCacheService,
         private cacheService: CacheService,
+        private sessionService: SessionService,
     ) {
         // When a Role is created, updated or deleted, we need to invalidate the roles cache
         this.eventBus.ofType(RoleEvent).subscribe(event => {
@@ -313,6 +315,7 @@ export class RoleService {
         await this.connection.getRepository(ctx, Role).save(role, { reload: false });
         const updatedRole = await assertFound(this.findOne(ctx, role.id));
         await this.eventBus.publish(new RoleEvent(ctx, updatedRole, 'updated', input));
+        await this.revokeSessionsForRole(ctx, role.id);
         return updatedRole;
     }
 
@@ -324,9 +327,11 @@ export class RoleService {
         if (role.code === SUPER_ADMIN_ROLE_CODE || role.code === CUSTOMER_ROLE_CODE) {
             throw new InternalServerError('error.cannot-delete-role', { roleCode: role.code });
         }
+        const affectedUsers = await this.findUsersForRole(ctx, role.id);
         const deletedRole = new Role(role);
         await this.connection.getRepository(ctx, Role).remove(role);
         await this.eventBus.publish(new RoleEvent(ctx, deletedRole, 'deleted', id));
+        await Promise.all(affectedUsers.map(user => this.sessionService.deleteSessionsByUser(ctx, user)));
         return {
             result: DeletionResult.DELETED,
         };
@@ -334,6 +339,7 @@ export class RoleService {
 
     async assignRoleToChannel(ctx: RequestContext, roleId: ID, channelId: ID) {
         await this.channelService.assignToChannels(ctx, Role, roleId, [channelId]);
+        await this.revokeSessionsForRole(ctx, roleId);
     }
 
     private async getPermittedChannels(ctx: RequestContext, channelIds: ID[]): Promise<Channel[]> {
@@ -402,6 +408,17 @@ export class RoleService {
         return repository.findOne({
             where: { code },
         });
+    }
+
+    private findUsersForRole(ctx: RequestContext, roleId: ID): Promise<User[]> {
+        return this.connection.getRepository(ctx, User).find({
+            where: { roles: { id: roleId } },
+        });
+    }
+
+    private async revokeSessionsForRole(ctx: RequestContext, roleId: ID): Promise<void> {
+        const users = await this.findUsersForRole(ctx, roleId);
+        await Promise.all(users.map(user => this.sessionService.deleteSessionsByUser(ctx, user)));
     }
 
     /**

@@ -13,7 +13,7 @@ import {
     Users,
     X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -22,17 +22,17 @@ import {
     CREATE_ADMINISTRATOR_MUTATION,
     CREATE_ROLE_MUTATION,
     DELETE_ADMINISTRATOR_MUTATION,
-    DELETE_ROLE_MUTATION,
     TEAM_MANAGEMENT_QUERY,
     UPDATE_ADMINISTRATOR_MUTATION,
     UPDATE_ROLE_MUTATION,
+    type AdministratorAccessRecord,
     type AdministratorRecord,
+    type PermissionPolicyRecord,
     type RoleRecord,
     type TeamManagementResult,
 } from '../../graphql/management.graphql';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName } from '../../utils/channel-display';
-import { getPermissionDisplay } from '../../utils/permission-display';
 import { getRoleCodeLabel, getRoleLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
@@ -46,81 +46,25 @@ export function RolesModule() {
     const [search, setSearch] = useState('');
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
-    const [initialSupplementSettled, setInitialSupplementSettled] = useState(false);
     const [roleEditor, setRoleEditor] = useState<RoleRecord | 'NEW' | null>(null);
     const [memberEditor, setMemberEditor] = useState<AdministratorRecord | 'NEW' | null>(null);
-    const loadingAllRecordsRef = useRef(false);
     const query = useQuery<TeamManagementResult>(TEAM_MANAGEMENT_QUERY, {
-        variables: {
-            administratorOptions: { skip: 0, take: 100, sort: { createdAt: 'DESC', id: 'DESC' } },
-            roleOptions: { skip: 0, take: 100, sort: { createdAt: 'ASC', id: 'ASC' } },
-            channelOptions: { skip: 0, take: 100, sort: { code: 'ASC', id: 'ASC' } },
-        },
         fetchPolicy: 'cache-and-network',
     });
-    const { data: teamData, error: teamError, fetchMore: fetchMoreTeamData, loading: teamLoading } = query;
-    const needsSupplementaryTeamData = Boolean(
-        teamData &&
-        (teamData.administrators.items.length < teamData.administrators.totalItems ||
-            teamData.roles.items.length < teamData.roles.totalItems ||
-            teamData.channels.items.length < teamData.channels.totalItems),
-    );
-    const isTeamInitializing =
-        !teamError && (!teamData || (needsSupplementaryTeamData && !initialSupplementSettled));
+    const isTeamInitializing = !query.error && !query.data;
 
-    useEffect(() => {
-        const data = teamData;
-        if (!data || teamLoading || teamError || loadingAllRecordsRef.current) return;
-        const administratorCount = data.administrators.items.length;
-        const roleCount = data.roles.items.length;
-        const channelCount = data.channels.items.length;
-        if (
-            administratorCount >= data.administrators.totalItems &&
-            roleCount >= data.roles.totalItems &&
-            channelCount >= data.channels.totalItems
-        )
-            return;
-        loadingAllRecordsRef.current = true;
-        const mergeById = <T extends { id: string }>(current: T[], next: T[]) => [
-            ...new Map([...current, ...next].map(item => [item.id, item])).values(),
-        ];
-        void fetchMoreTeamData({
-            variables: {
-                administratorOptions: {
-                    skip: administratorCount,
-                    take: 100,
-                    sort: { createdAt: 'DESC', id: 'DESC' },
-                },
-                roleOptions: { skip: roleCount, take: 100, sort: { createdAt: 'ASC', id: 'ASC' } },
-                channelOptions: { skip: channelCount, take: 100, sort: { code: 'ASC', id: 'ASC' } },
+    const roles = query.data?.manageableRoles ?? [];
+    const members =
+        query.data?.manageableAdministrators.map(access => ({
+            ...access.administrator,
+            access: {
+                id: access.id,
+                scope: access.scope,
+                authority: access.authority,
+                status: access.status,
+                channel: access.channel,
             },
-            updateQuery: (previous, { fetchMoreResult }) => ({
-                ...previous,
-                administrators: {
-                    ...fetchMoreResult.administrators,
-                    items: mergeById(previous.administrators.items, fetchMoreResult.administrators.items),
-                },
-                roles: {
-                    ...fetchMoreResult.roles,
-                    items: mergeById(previous.roles.items, fetchMoreResult.roles.items),
-                },
-                channels: {
-                    ...fetchMoreResult.channels,
-                    items: mergeById(previous.channels.items, fetchMoreResult.channels.items),
-                },
-            }),
-        })
-            .catch(fetchError => {
-                setActionError(toUserFacingError(fetchError, '员工、角色或渠道数据未能全部加载'));
-            })
-            .finally(() => {
-                loadingAllRecordsRef.current = false;
-                setInitialSupplementSettled(true);
-            });
-    }, [fetchMoreTeamData, teamData, teamError, teamLoading]);
-
-    const roles = query.data?.roles.items ?? [];
-    const members = query.data?.administrators.items ?? [];
+        })) ?? [];
     const filteredMembers = members.filter(item =>
         includesSearch(
             `${item.firstName} ${item.lastName} ${item.emailAddress} ${item.user.identifier} ${item.user.roles.map(role => `${role.code} ${role.description} ${getRoleLabel(role)}`).join(' ')}`,
@@ -240,8 +184,6 @@ export function RolesModule() {
                                 .length
                         }
                         onEdit={setRoleEditor}
-                        onChanged={completed}
-                        onError={setActionError}
                     />
                 )}
             </main>
@@ -249,6 +191,8 @@ export function RolesModule() {
                 <MemberEditor
                     value={memberEditor}
                     roles={roles}
+                    access={query.data?.myAdministratorAccess ?? null}
+                    channels={query.data?.manageableChannels ?? []}
                     onClose={() => setMemberEditor(null)}
                     onCompleted={completed}
                     onError={setActionError}
@@ -258,8 +202,10 @@ export function RolesModule() {
                 <RoleEditor
                     value={roleEditor}
                     roles={roles}
-                    channels={query.data.channels.items}
-                    permissionDefinitions={query.data.globalSettings.serverConfig.permissions}
+                    access={query.data.myAdministratorAccess}
+                    channels={query.data.manageableChannels}
+                    permissionDefinitions={query.data.permissionPolicyCatalog.permissions}
+                    templates={query.data.permissionPolicyCatalog.templates}
                     onClose={() => setRoleEditor(null)}
                     onCompleted={completed}
                     onError={setActionError}
@@ -283,27 +229,27 @@ function MembersTable({
     onError: (message: string) => void;
 }) {
     const requestConfirmation = useConfirmDialog();
-    const [remove, state] = useMutation<{ deleteAdministrator: { result: string; message: string | null } }>(
-        DELETE_ADMINISTRATOR_MUTATION,
-    );
+    const [remove, state] = useMutation<{
+        suspendManagedAdministrator: { id: string; status: string };
+    }>(DELETE_ADMINISTRATOR_MUTATION);
     const destroy = async (member: AdministratorRecord) => {
         if (member.id === activeId) return;
         const confirmation = await requestConfirmation({
-            title: `删除员工账号“${member.firstName}${member.lastName}”？`,
-            description: `${member.emailAddress}\n删除后该账号将立即无法登录管理后台。`,
-            confirmLabel: '确认删除',
+            title: `停用员工账号“${member.firstName}${member.lastName}”？`,
+            description: `${member.emailAddress}\n停用后会立即撤销该账号的全部登录会话。`,
+            confirmLabel: '确认停用',
             tone: 'danger',
             requireCurrentPassword: true,
         });
         if (!confirmation) return;
         try {
             const response = await remove({
-                variables: { id: member.id },
+                variables: { administratorId: member.id },
                 context: sensitiveActionContext(confirmation.currentPassword ?? ''),
             });
-            const result = response.data?.deleteAdministrator;
-            if (!result || result.result !== 'DELETED') throw new Error(result?.message || '删除失败');
-            await onChanged('员工账号已删除');
+            const result = response.data?.suspendManagedAdministrator;
+            if (!result || result.status !== 'SUSPENDED') throw new Error('停用失败');
+            await onChanged('员工账号已停用并撤销全部会话');
         } catch (error) {
             onError(errorText(error));
         }
@@ -390,6 +336,11 @@ function MembersTable({
                                                 +{member.user.roles.length - 1}
                                             </span>
                                         )}
+                                        <span className="shrink-0 rounded bg-blue-50 px-1.5 py-1 text-[9px] font-bold text-blue-700">
+                                            {member.access.scope === 'PLATFORM'
+                                                ? '跨店'
+                                                : getChannelDisplayName(member.access.channel?.code ?? '')}
+                                        </span>
                                     </div>
                                 </td>
                                 <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
@@ -405,7 +356,13 @@ function MembersTable({
                                         <button
                                             type="button"
                                             onClick={() => onEdit(member)}
-                                            className={iconButton}
+                                            disabled={
+                                                member.id === activeId ||
+                                                member.access.authority === 'OWNER' ||
+                                                (member.access.scope === 'STORE' &&
+                                                    member.access.authority === 'ADMIN')
+                                            }
+                                            className={`${iconButton} disabled:opacity-30`}
                                             aria-label="编辑"
                                         >
                                             <Pencil className="h-3.5 w-3.5" />
@@ -413,9 +370,15 @@ function MembersTable({
                                         <button
                                             type="button"
                                             onClick={() => void destroy(member)}
-                                            disabled={member.id === activeId || state.loading}
+                                            disabled={
+                                                member.id === activeId ||
+                                                member.access.authority === 'OWNER' ||
+                                                (member.access.scope === 'STORE' &&
+                                                    member.access.authority === 'ADMIN') ||
+                                                state.loading
+                                            }
                                             className={`${iconButton} text-rose-600 disabled:opacity-30`}
-                                            aria-label="删除"
+                                            aria-label="停用"
                                         >
                                             <Trash2 className="h-3.5 w-3.5" />
                                         </button>
@@ -435,45 +398,11 @@ function RolesTable({
     roles,
     memberCount,
     onEdit,
-    onChanged,
-    onError,
 }: {
     roles: RoleRecord[];
     memberCount: (id: string) => number;
     onEdit: (role: RoleRecord) => void;
-    onChanged: (message: string) => Promise<void>;
-    onError: (message: string) => void;
 }) {
-    const requestConfirmation = useConfirmDialog();
-    const [remove, state] = useMutation<{
-        deleteRole: { result: string; message?: string | null };
-    }>(DELETE_ROLE_MUTATION);
-    const destroy = async (role: RoleRecord) => {
-        if (isSystemRole(role)) return;
-        const count = memberCount(role.id);
-        const confirmation = await requestConfirmation({
-            title: `删除角色“${getRoleLabel(role)}”？`,
-            description:
-                count > 0
-                    ? `当前仍有 ${count} 名员工关联此角色。后端会校验是否允许删除，请先确认员工仍有其它有效角色。`
-                    : '删除后无法恢复，请输入当前管理员密码确认。',
-            confirmLabel: '验证并删除',
-            tone: 'danger',
-            requireCurrentPassword: true,
-        });
-        if (!confirmation) return;
-        try {
-            const response = await remove({
-                variables: { id: role.id },
-                context: sensitiveActionContext(confirmation.currentPassword ?? ''),
-            });
-            const result = response.data?.deleteRole;
-            if (result?.result !== 'DELETED') throw new Error(result?.message || '角色删除失败');
-            await onChanged('角色已删除');
-        } catch (error) {
-            onError(errorText(error));
-        }
-    };
     return (
         <section className="min-h-[620px] overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
@@ -488,9 +417,6 @@ function RolesTable({
                             </th>
                             <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
                                 类型
-                            </th>
-                            <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
-                                代码
                             </th>
                             <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
                                 渠道范围
@@ -524,11 +450,6 @@ function RolesTable({
                                     </td>
                                     <td className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] font-bold text-slate-600">
                                         {system ? '系统保留' : '自定义'}
-                                    </td>
-                                    <td className="h-[52px] max-w-44 px-3 py-0 font-mono text-[10px] text-slate-500">
-                                        <span className="block truncate" title={role.code}>
-                                            {role.code}
-                                        </span>
                                     </td>
                                     <td className="h-[52px] max-w-56 px-3 py-0 text-slate-600">
                                         <span
@@ -567,23 +488,12 @@ function RolesTable({
                                             >
                                                 {system ? '查看权限' : '配置权限'}
                                             </button>
-                                            {!system && (
-                                                <button
-                                                    type="button"
-                                                    disabled={state.loading}
-                                                    onClick={() => void destroy(role)}
-                                                    className={`${iconButton} text-rose-600 disabled:opacity-30`}
-                                                    aria-label={`删除角色${getRoleLabel(role)}`}
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
-                                            )}
                                         </div>
                                     </td>
                                 </tr>
                             );
                         })}
-                        {!roles.length && <EmptyRow colSpan={7} text="没有符合条件的角色" />}
+                        {!roles.length && <EmptyRow colSpan={6} text="没有符合条件的角色" />}
                     </tbody>
                 </table>
             </div>
@@ -594,12 +504,20 @@ function RolesTable({
 function MemberEditor({
     value,
     roles,
+    access,
+    channels,
     onClose,
     onCompleted,
     onError,
 }: {
     value: AdministratorRecord | 'NEW';
     roles: RoleRecord[];
+    access: AdministratorAccessRecord | null;
+    channels: Array<{
+        id: string;
+        code: string;
+        customFields?: { storefrontNameZh?: string | null } | null;
+    }>;
     onClose: () => void;
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
@@ -610,12 +528,30 @@ function MemberEditor({
     const [emailAddress, setEmailAddress] = useState(existing?.emailAddress ?? '');
     const [password, setPassword] = useState('');
     const [roleIds, setRoleIds] = useState(existing?.user.roles.map(role => role.id) ?? []);
+    const [scope, setScope] = useState<'PLATFORM' | 'STORE'>(
+        existing?.access.scope ?? (access?.scope === 'STORE' ? 'STORE' : 'PLATFORM'),
+    );
+    const [authority, setAuthority] = useState<'ADMIN' | 'MANAGER' | 'STAFF'>(
+        existing?.access.authority === 'OWNER' ? 'ADMIN' : (existing?.access.authority ?? 'STAFF'),
+    );
+    const [channelId, setChannelId] = useState(
+        existing?.access.channel?.id ??
+            access?.channel?.id ??
+            channels.find(channel => channel.code !== '__default_channel__')?.id ??
+            '',
+    );
+    const selectableRoles = roles.filter(role =>
+        scope === 'STORE'
+            ? role.channels.length === 1 && role.channels.some(channel => channel.id === channelId)
+            : role.channels.length > 1 || role.channels.length === channels.length,
+    );
     const [create, createState] = useMutation(CREATE_ADMINISTRATOR_MUTATION);
     const [update, updateState] = useMutation(UPDATE_ADMINISTRATOR_MUTATION);
     const saving = createState.loading || updateState.loading;
     const save = async () => {
         if (![firstName, lastName, emailAddress].every(item => item.trim()) || roleIds.length === 0)
             return onError('请填写姓名、邮箱并至少选择一个角色');
+        if (scope === 'STORE' && !channelId) return onError('请选择员工所属店铺');
         if (!existing && password.length < 8) return onError('新员工初始密码至少需要 8 位');
         try {
             if (existing)
@@ -627,6 +563,7 @@ function MemberEditor({
                             lastName: lastName.trim(),
                             emailAddress: emailAddress.trim(),
                             roleIds,
+                            authority,
                             ...(password ? { password } : {}),
                         },
                     },
@@ -640,6 +577,9 @@ function MemberEditor({
                             emailAddress: emailAddress.trim(),
                             password,
                             roleIds,
+                            scope,
+                            authority,
+                            channelId: scope === 'STORE' ? channelId : null,
                         },
                     },
                 });
@@ -689,10 +629,78 @@ function MemberEditor({
                     />
                 </Field>
             </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <Field label="账号层级 *">
+                    <select
+                        value={authority}
+                        onChange={event => setAuthority(event.target.value as 'ADMIN' | 'MANAGER' | 'STAFF')}
+                        className={inputClass}
+                    >
+                        {access?.authority === 'OWNER' && scope === 'PLATFORM' && (
+                            <option value="ADMIN">平台管理员</option>
+                        )}
+                        <option value="MANAGER">
+                            {scope === 'STORE' ? '店铺普通管理员' : '公司业务管理员'}
+                        </option>
+                        <option value="STAFF">{scope === 'STORE' ? '店铺员工' : '公司员工'}</option>
+                    </select>
+                </Field>
+                {access?.scope === 'PLATFORM' && !existing ? (
+                    <Field label="数据范围 *">
+                        <select
+                            value={scope}
+                            onChange={event => {
+                                const nextScope = event.target.value as 'PLATFORM' | 'STORE';
+                                setScope(nextScope);
+                                setRoleIds([]);
+                                if (nextScope === 'STORE' && authority === 'ADMIN') setAuthority('STAFF');
+                            }}
+                            className={inputClass}
+                        >
+                            <option value="PLATFORM">公司跨店</option>
+                            <option value="STORE">固定店铺</option>
+                        </select>
+                    </Field>
+                ) : (
+                    <Field label="数据范围">
+                        <input
+                            value={
+                                scope === 'PLATFORM'
+                                    ? '公司跨店'
+                                    : getChannelDisplayName(existing?.access.channel ?? access?.channel ?? '')
+                            }
+                            disabled
+                            className={inputClass}
+                        />
+                    </Field>
+                )}
+            </div>
+            {scope === 'STORE' && access?.scope === 'PLATFORM' && !existing && (
+                <div className="mt-4">
+                    <Field label="所属店铺 *">
+                        <select
+                            value={channelId}
+                            onChange={event => {
+                                setChannelId(event.target.value);
+                                setRoleIds([]);
+                            }}
+                            className={inputClass}
+                        >
+                            {channels
+                                .filter(channel => channel.code !== '__default_channel__')
+                                .map(channel => (
+                                    <option key={channel.id} value={channel.id}>
+                                        {getChannelDisplayName(channel)}
+                                    </option>
+                                ))}
+                        </select>
+                    </Field>
+                </div>
+            )}
             <div className="mt-5">
                 <div className="mb-2 text-xs font-bold text-slate-700">分配角色 *</div>
                 <div className="grid gap-2 sm:grid-cols-2">
-                    {roles.map(role => (
+                    {selectableRoles.map(role => (
                         <label
                             key={role.id}
                             className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-3 text-xs"
@@ -732,20 +740,24 @@ function MemberEditor({
 function RoleEditor({
     value,
     roles,
+    access,
     channels,
     permissionDefinitions,
+    templates,
     onClose,
     onCompleted,
     onError,
 }: {
     value: RoleRecord | 'NEW';
     roles: RoleRecord[];
+    access: AdministratorAccessRecord;
     channels: Array<{
         id: string;
         code: string;
         customFields?: { storefrontNameZh?: string | null } | null;
     }>;
-    permissionDefinitions: Array<{ name: string; description: string; assignable: boolean }>;
+    permissionDefinitions: PermissionPolicyRecord[];
+    templates: Array<{ code: string; name: string; description: string; permissions: string[] }>;
     onClose: () => void;
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
@@ -756,14 +768,35 @@ function RoleEditor({
     const [code, setCode] = useState(existing?.code ?? '');
     const initialDescription = existing ? getRoleLabel(existing) : '';
     const [description, setDescription] = useState(initialDescription);
-    const [channelIds, setChannelIds] = useState(existing?.channels.map(channel => channel.id) ?? []);
-    const [permissions, setPermissions] = useState(existing?.permissions ?? []);
+    const existingLooksPlatform = Boolean(
+        existing && existing.channels.length > 1 && existing.channels.length === channels.length,
+    );
+    const [scope, setScope] = useState<'PLATFORM' | 'STORE'>(
+        access.scope === 'STORE' ? 'STORE' : existingLooksPlatform ? 'PLATFORM' : 'STORE',
+    );
+    const [channelId, setChannelId] = useState(
+        existing?.channels[0]?.id ??
+            access.channel?.id ??
+            channels.find(channel => channel.code !== '__default_channel__')?.id ??
+            '',
+    );
+    const [templateCode, setTemplateCode] = useState('');
+    const [permissions, setPermissions] = useState(
+        existing?.permissions.filter(permission => permission !== 'Authenticated') ?? [],
+    );
     const [create, createState] = useMutation(CREATE_ROLE_MUTATION);
     const [update, updateState] = useMutation(UPDATE_ROLE_MUTATION);
     const saving = createState.loading || updateState.loading;
     const groups = useMemo(
-        () => groupPermissions(permissionDefinitions.filter(item => item.assignable)),
-        [permissionDefinitions],
+        () =>
+            groupPermissions(
+                permissionDefinitions.filter(
+                    item =>
+                        item.delegable &&
+                        (scope === 'STORE' ? item.scope === 'STORE' : item.scope !== 'OWNER_ONLY'),
+                ),
+            ),
+        [permissionDefinitions, scope],
     );
     const save = async () => {
         if (system) return onClose();
@@ -775,11 +808,18 @@ function RoleEditor({
                 existing && description.trim() === initialDescription
                     ? existing.description
                     : description.trim();
-            const input = { code: code.trim(), description: persistedDescription, channelIds, permissions };
+            const input = {
+                code: code.trim(),
+                description: persistedDescription,
+                scope,
+                channelId: scope === 'STORE' ? channelId : null,
+                permissions,
+                templateCode: templateCode || null,
+            };
             if (existing) {
                 const confirmation = await requestConfirmation({
                     title: `保存角色“${getRoleLabel(existing)}”的权限变更？`,
-                    description: '角色权限保存后会立即影响所有关联员工，请输入当前管理员密码。',
+                    description: '保存后会立即撤销所有关联账号的旧会话，员工需重新登录。',
                     confirmLabel: '验证并保存',
                     tone: 'warning',
                     requireCurrentPassword: true,
@@ -792,7 +832,7 @@ function RoleEditor({
             } else {
                 await create({ variables: { input } });
             }
-            await onCompleted(existing ? '角色权限已更新' : '角色已创建');
+            await onCompleted(existing ? '角色权限已更新，关联账号需要重新登录' : '角色已创建');
         } catch (error) {
             onError(errorText(error));
         }
@@ -813,7 +853,32 @@ function RoleEditor({
                     超级管理员为系统保留角色，拥有全部权限，不能在这里修改。
                 </div>
             )}
-            <div className="grid gap-4 sm:grid-cols-2">
+            {!existing && (
+                <div className="mb-4">
+                    <Field label="岗位模板">
+                        <select
+                            value={templateCode}
+                            onChange={event => {
+                                const next = templates.find(item => item.code === event.target.value);
+                                setTemplateCode(event.target.value);
+                                if (!next) return;
+                                setDescription(next.name);
+                                setCode(`${next.code.toLowerCase()}-${scope.toLowerCase()}`);
+                                setPermissions(next.permissions);
+                            }}
+                            className={inputClass}
+                        >
+                            <option value="">自定义岗位</option>
+                            {templates.map(template => (
+                                <option key={template.code} value={template.code}>
+                                    {template.name}
+                                </option>
+                            ))}
+                        </select>
+                    </Field>
+                </div>
+            )}
+            <div className="space-y-4">
                 <Field label="角色名称 *">
                     <input
                         value={description}
@@ -823,52 +888,67 @@ function RoleEditor({
                         placeholder="例如：订单客服"
                     />
                 </Field>
-                <Field label="系统代码 *">
-                    <input
-                        value={code}
-                        onChange={event => setCode(event.target.value)}
-                        disabled={Boolean(existing)}
-                        className={`${inputClass} font-mono`}
-                        placeholder="order-support"
-                    />
-                </Field>
-            </div>
-            <div className="mt-5">
-                <div className="mb-2 flex items-end justify-between">
-                    <div>
-                        <div className="text-xs font-bold text-slate-700">生效渠道</div>
-                        <p className="mt-1 text-[10px] text-slate-400">不选择表示角色不限定具体渠道</p>
-                    </div>
-                    <span className="text-[10px] text-slate-400">已选 {channelIds.length}</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    {channels.map(channel => (
-                        <label
-                            key={channel.id}
-                            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${channelIds.includes(channel.id) ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-600'}`}
-                        >
+                <details className="rounded-lg border border-slate-200 p-3">
+                    <summary className="cursor-pointer text-xs font-bold text-slate-600">高级详情</summary>
+                    <div className="mt-3">
+                        <Field label="内部角色代码 *">
                             <input
-                                type="checkbox"
-                                checked={channelIds.includes(channel.id)}
-                                onChange={() =>
-                                    setChannelIds(current =>
-                                        current.includes(channel.id)
-                                            ? current.filter(id => id !== channel.id)
-                                            : [...current, channel.id],
-                                    )
-                                }
-                                disabled={system}
+                                value={code}
+                                onChange={event => setCode(event.target.value)}
+                                disabled={Boolean(existing)}
+                                className={`${inputClass} font-mono`}
+                                placeholder="order-support"
                             />
-                            {getChannelDisplayName(channel)}
-                        </label>
-                    ))}
-                </div>
+                        </Field>
+                    </div>
+                </details>
+            </div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <Field label="角色数据范围 *">
+                    <select
+                        value={scope}
+                        disabled={system || access.scope === 'STORE' || Boolean(existing)}
+                        onChange={event => {
+                            setScope(event.target.value as 'PLATFORM' | 'STORE');
+                            setPermissions([]);
+                            setTemplateCode('');
+                        }}
+                        className={inputClass}
+                    >
+                        {access.scope === 'PLATFORM' && <option value="PLATFORM">公司跨店角色</option>}
+                        <option value="STORE">单店角色</option>
+                    </select>
+                </Field>
+                {scope === 'STORE' ? (
+                    <Field label="所属店铺 *">
+                        <select
+                            value={channelId}
+                            disabled={system || access.scope === 'STORE' || Boolean(existing)}
+                            onChange={event => setChannelId(event.target.value)}
+                            className={inputClass}
+                        >
+                            {channels
+                                .filter(channel => channel.code !== '__default_channel__')
+                                .map(channel => (
+                                    <option key={channel.id} value={channel.id}>
+                                        {getChannelDisplayName(channel)}
+                                    </option>
+                                ))}
+                        </select>
+                    </Field>
+                ) : (
+                    <Field label="未来新店">
+                        <input value="自动覆盖所有现有及未来经营店铺" disabled className={inputClass} />
+                    </Field>
+                )}
             </div>
             <div className="mt-6 border-t border-slate-100 pt-5">
                 <div className="mb-3 flex items-center justify-between">
                     <div>
                         <div className="text-xs font-bold text-slate-700">操作权限</div>
-                        <p className="mt-1 text-[10px] text-slate-400">按业务对象分组，勾选后保存立即生效</p>
+                        <p className="mt-1 text-[10px] text-slate-400">
+                            只显示当前层级可下放的权限；保存后关联账号需重新登录
+                        </p>
                     </div>
                     <span className="font-mono text-xs font-bold text-blue-700">{permissions.length} 项</span>
                 </div>
@@ -938,8 +1018,17 @@ function RoleEditor({
     );
 }
 
-function groupPermissions(items: Array<{ name: string; description: string; assignable: boolean }>) {
-    const localizedItems = items.map(item => ({ ...item, display: getPermissionDisplay(item.name) }));
+function groupPermissions(items: PermissionPolicyRecord[]) {
+    const localizedItems = items.map((item, index) => ({
+        name: item.code,
+        display: {
+            label: item.name,
+            description: item.description,
+            group: item.group,
+            groupLabel: item.group,
+            order: item.sensitive ? 1000 + index : index,
+        },
+    }));
     const groups = new Map<string, typeof localizedItems>();
     localizedItems.forEach(item => {
         const key = item.display.group;

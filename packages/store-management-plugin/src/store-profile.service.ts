@@ -229,7 +229,7 @@ export class StoreProfileService {
             '英文品牌口号',
         );
         this.updateBrandColors(profile, input);
-        this.updateLegalIdentity(profile, input);
+        this.updateContactEmails(profile, input);
         if (input.logoAssetId !== undefined) {
             const asset = input.logoAssetId == null ? null : await this.findAsset(ctx, input.logoAssetId);
             profile.logoAsset = asset;
@@ -539,10 +539,7 @@ export class StoreProfileService {
         return normalized;
     }
 
-    private updateLegalIdentity(
-        profile: StoreProfile,
-        input: UpdateStoreProfileInput | UpdateMyStoreProfileInput,
-    ): void {
+    private updateLegalIdentity(profile: StoreProfile, input: UpdateStoreProfileInput): void {
         profile.legalEntityName = this.normalizeLegalText(
             input.legalEntityName,
             profile.legalEntityName,
@@ -555,6 +552,13 @@ export class StoreProfileService {
             '注册国家或地区',
             100,
         );
+        this.updateContactEmails(profile, input);
+    }
+
+    private updateContactEmails(
+        profile: StoreProfile,
+        input: UpdateStoreProfileInput | UpdateMyStoreProfileInput,
+    ): void {
         profile.supportEmail = this.normalizeContactEmail(
             input.supportEmail,
             profile.supportEmail,

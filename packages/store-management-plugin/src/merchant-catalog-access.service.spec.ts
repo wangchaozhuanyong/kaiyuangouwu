@@ -7,13 +7,16 @@ import {
     Fulfillment,
     Order,
     OrderLine,
+    Payment,
     Product,
     ProductVariant,
+    Refund,
     StockLocation,
     User,
 } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { AdministratorAccessProfile } from './entities/administrator-access-profile.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { StoreCouponCampaignConfig } from './entities/store-coupon-campaign-config.entity';
 import { MerchantCatalogAccessService } from './merchant-catalog-access.service';
@@ -29,6 +32,8 @@ function createService(options?: {
         id: string;
         orders: Array<{ salesChannelId: string; channels?: Array<{ id: string }> }>;
     }>;
+    payments?: Array<{ id: string; order: { salesChannelId: string } }>;
+    refunds?: Array<{ id: string; payment: { order: { salesChannelId: string } } }>;
 }) {
     const channelIds = options?.channelIds ?? ['store-a'];
     const accessRepository = {
@@ -44,15 +49,29 @@ function createService(options?: {
     const sharedEntityIds = new Set(options?.sharedEntityIds ?? []);
     const orderLineRepository = { find: vi.fn().mockResolvedValue(options?.orderLines ?? []) };
     const fulfillmentRepository = { find: vi.fn().mockResolvedValue(options?.fulfillments ?? []) };
+    const paymentRepository = { find: vi.fn().mockResolvedValue(options?.payments ?? []) };
+    const refundRepository = { find: vi.fn().mockResolvedValue(options?.refunds ?? []) };
     const connection = {
         getRepository: vi.fn((_ctx, entity) => {
             if (entity === StoreCouponCampaignConfig)
                 return { find: vi.fn().mockResolvedValue(options?.couponConfigs ?? []) };
             if (entity === StoreAdministratorAccess) return accessRepository;
+            if (entity === AdministratorAccessProfile)
+                return {
+                    findOne: vi
+                        .fn()
+                        .mockResolvedValue(
+                            options?.merchant === false || channelIds.length !== 1
+                                ? null
+                                : { userId: 'user-a', scope: 'STORE', channelId: channelIds[0] },
+                        ),
+                };
             if (entity === User) return userRepository;
             if (entity === Order) return { count: vi.fn().mockResolvedValue(visibleEntityIds.length) };
             if (entity === OrderLine) return orderLineRepository;
             if (entity === Fulfillment) return fulfillmentRepository;
+            if (entity === Payment) return paymentRepository;
+            if (entity === Refund) return refundRepository;
             throw new Error(`Unexpected repository: ${String(entity)}`);
         }),
         findByIdsInChannel: vi.fn((_ctx, entity, ids: string[]) =>
@@ -84,6 +103,7 @@ const merchantContext = {
     apiType: 'admin',
     activeUserId: 'user-a',
     channelId: 'store-a',
+    userHasPermissions: vi.fn().mockReturnValue(false),
 } as any;
 
 describe('MerchantCatalogAccessService', () => {
@@ -174,15 +194,19 @@ describe('MerchantCatalogAccessService', () => {
         }
     });
 
-    it('reserves payments, refunds, cancellation and order administration for the platform', async () => {
+    it('reserves advanced order administration and sensitive finance without explicit permission', async () => {
         const { service } = createService();
 
+        for (const fieldName of ['settlePayment', 'refundOrder']) {
+            await expect(
+                service.assertRootFieldAccess(merchantContext, 'Mutation', fieldName, {
+                    id: 'foreign-id',
+                    input: { id: 'foreign-id', orderId: 'foreign-id' },
+                }),
+            ).rejects.toThrow('敏感店铺财务权限');
+        }
         for (const fieldName of [
-            'settlePayment',
-            'refundOrder',
-            'cancelOrder',
             'modifyOrder',
-            'transitionOrderToState',
             'adjustDraftOrderLine',
             'updateOrderNote',
             'deleteOrderNote',
@@ -194,6 +218,50 @@ describe('MerchantCatalogAccessService', () => {
                 }),
             ).rejects.toBeInstanceOf(ForbiddenError);
         }
+    });
+
+    it('allows scoped cancellation and state changes for the active store', async () => {
+        const own = createService({ visibleEntityIds: ['order-a'] });
+        await expect(
+            own.service.assertRootFieldAccess(merchantContext, 'Mutation', 'cancelOrder', {
+                input: { orderId: 'order-a' },
+            }),
+        ).resolves.toBeUndefined();
+        await expect(
+            own.service.assertRootFieldAccess(merchantContext, 'Mutation', 'transitionOrderToState', {
+                id: 'order-a',
+                state: 'Shipped',
+            }),
+        ).resolves.toBeUndefined();
+
+        const foreign = createService({ visibleEntityIds: [] });
+        await expect(
+            foreign.service.assertRootFieldAccess(merchantContext, 'Mutation', 'cancelOrder', {
+                input: { orderId: 'order-b' },
+            }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+
+    it('allows explicitly authorized sensitive finance only for this store', async () => {
+        const sensitiveContext = {
+            ...merchantContext,
+            userHasPermissions: vi.fn().mockReturnValue(true),
+        };
+        const own = createService({ payments: [{ id: 'payment-a', order: { salesChannelId: 'store-a' } }] });
+        await expect(
+            own.service.assertRootFieldAccess(sensitiveContext, 'Mutation', 'settlePayment', {
+                id: 'payment-a',
+            }),
+        ).resolves.toBeUndefined();
+
+        const foreign = createService({
+            payments: [{ id: 'payment-b', order: { salesChannelId: 'store-b' } }],
+        });
+        await expect(
+            foreign.service.assertRootFieldAccess(sensitiveContext, 'Mutation', 'settlePayment', {
+                id: 'payment-b',
+            }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
     it('allows fulfillment and note operations only for the active Channel', async () => {
@@ -293,7 +361,7 @@ describe('MerchantCatalogAccessService', () => {
             foreign.service.assertRootFieldAccess(merchantContext, 'Mutation', 'createProductVariants', {
                 input: [{ productId: 'product-b', stockLevels: [{ stockLocationId: 'stock-a' }] }],
             }),
-        ).rejects.toBeInstanceOf(ForbiddenError);
+        ).rejects.toThrow('属于其他店铺');
     });
 
     it('treats a default-store assignment as sharing when checking merchant edit access', async () => {
@@ -324,7 +392,7 @@ describe('MerchantCatalogAccessService', () => {
             service.assertRootFieldAccess(merchantContext, 'Mutation', 'updateProduct', {
                 input: { id: 'product-a', translations: [] },
             }),
-        ).rejects.toBeInstanceOf(ForbiddenError);
+        ).rejects.toThrow('历史共享商品需先完成店铺归属迁移');
     });
 
     it('rejects foreign stock locations and shared catalog entities', async () => {

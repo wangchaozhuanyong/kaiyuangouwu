@@ -1,0 +1,404 @@
+import { MigrationInterface, QueryRunner, Table, TableColumnOptions } from 'typeorm';
+
+export class AddAdministratorAccessGovernance1789408800000 implements MigrationInterface {
+    async up(queryRunner: QueryRunner): Promise<void> {
+        const databaseType = queryRunner.connection.options.type;
+        const mysql = databaseType === 'mysql' || databaseType === 'mariadb';
+        const sqlite = ['sqlite', 'better-sqlite3', 'sqljs'].includes(databaseType);
+        const idType = databaseType === 'postgres' || sqlite ? 'integer' : 'int';
+        const dateType: TableColumnOptions['type'] =
+            databaseType === 'postgres' ? 'timestamp without time zone' : 'datetime';
+        const now = mysql ? 'CURRENT_TIMESTAMP(6)' : sqlite ? "datetime('now')" : 'CURRENT_TIMESTAMP';
+        const booleanType: TableColumnOptions['type'] = mysql ? 'tinyint' : 'boolean';
+        const timestamp = (name: 'createdAt' | 'updatedAt'): TableColumnOptions => ({
+            name,
+            type: dateType,
+            ...(mysql ? { precision: 6 } : {}),
+            default: now,
+            ...(mysql && name === 'updatedAt' ? { onUpdate: 'CURRENT_TIMESTAMP(6)' } : {}),
+        });
+        const id = (): TableColumnOptions => ({
+            name: 'id',
+            type: idType,
+            isPrimary: true,
+            isGenerated: true,
+            generationStrategy: 'increment',
+        });
+
+        if (!(await queryRunner.hasTable('administrator_access_profile'))) {
+            await queryRunner.createTable(
+                new Table({
+                    name: 'administrator_access_profile',
+                    columns: [
+                        id(),
+                        timestamp('createdAt'),
+                        timestamp('updatedAt'),
+                        { name: 'administratorId', type: idType },
+                        { name: 'userId', type: idType },
+                        { name: 'scope', type: 'varchar', length: '16' },
+                        { name: 'authority', type: 'varchar', length: '16' },
+                        { name: 'status', type: 'varchar', length: '16', default: "'ACTIVE'" },
+                        { name: 'channelId', type: idType, isNullable: true },
+                        { name: 'createdByAdministratorId', type: idType, isNullable: true },
+                        {
+                            name: 'mustChangePassword',
+                            type: booleanType,
+                            default: databaseType === 'postgres' ? true : 1,
+                        },
+                        { name: 'platformOwnerSlot', type: 'varchar', length: '32', isNullable: true },
+                        { name: 'storePrimarySlot', type: 'varchar', length: '128', isNullable: true },
+                    ],
+                    indices: [
+                        {
+                            name: 'IDX_administrator_access_profile_administrator',
+                            columnNames: ['administratorId'],
+                            isUnique: true,
+                        },
+                        {
+                            name: 'IDX_administrator_access_profile_user',
+                            columnNames: ['userId'],
+                            isUnique: true,
+                        },
+                        { name: 'IDX_administrator_access_profile_channel', columnNames: ['channelId'] },
+                        {
+                            name: 'IDX_administrator_access_profile_owner_slot',
+                            columnNames: ['platformOwnerSlot'],
+                            isUnique: true,
+                        },
+                        {
+                            name: 'IDX_administrator_access_profile_store_primary_slot',
+                            columnNames: ['storePrimarySlot'],
+                            isUnique: true,
+                        },
+                    ],
+                    foreignKeys: [
+                        {
+                            name: 'FK_administrator_access_profile_administrator',
+                            columnNames: ['administratorId'],
+                            referencedTableName: 'administrator',
+                            referencedColumnNames: ['id'],
+                            onDelete: 'CASCADE',
+                        },
+                        {
+                            name: 'FK_administrator_access_profile_channel',
+                            columnNames: ['channelId'],
+                            referencedTableName: 'channel',
+                            referencedColumnNames: ['id'],
+                            onDelete: 'RESTRICT',
+                        },
+                    ],
+                }),
+                true,
+            );
+        }
+
+        if (!(await queryRunner.hasTable('administrator_permission_audit'))) {
+            await queryRunner.createTable(
+                new Table({
+                    name: 'administrator_permission_audit',
+                    columns: [
+                        id(),
+                        timestamp('createdAt'),
+                        timestamp('updatedAt'),
+                        { name: 'actorAdministratorId', type: idType, isNullable: true },
+                        { name: 'targetAdministratorId', type: idType, isNullable: true },
+                        { name: 'targetRoleId', type: idType, isNullable: true },
+                        { name: 'channelId', type: idType, isNullable: true },
+                        { name: 'action', type: 'varchar', length: '64' },
+                        { name: 'result', type: 'varchar', length: '16' },
+                        { name: 'beforeSummary', type: 'text', isNullable: true },
+                        { name: 'afterSummary', type: 'text', isNullable: true },
+                        { name: 'failureReason', type: 'varchar', length: '500', isNullable: true },
+                    ],
+                    indices: [
+                        { name: 'IDX_administrator_permission_audit_created', columnNames: ['createdAt'] },
+                        {
+                            name: 'IDX_administrator_permission_audit_channel',
+                            columnNames: ['channelId', 'createdAt'],
+                        },
+                    ],
+                }),
+                true,
+            );
+        }
+
+        if (!(await queryRunner.hasTable('store_governance_change_request'))) {
+            await queryRunner.createTable(
+                new Table({
+                    name: 'store_governance_change_request',
+                    columns: [
+                        id(),
+                        timestamp('createdAt'),
+                        timestamp('updatedAt'),
+                        { name: 'channelId', type: idType },
+                        { name: 'requestType', type: 'varchar', length: '32' },
+                        { name: 'version', type: 'int' },
+                        { name: 'status', type: 'varchar', length: '16', default: "'PENDING'" },
+                        { name: 'submittedByUserId', type: idType },
+                        { name: 'reviewedByUserId', type: idType, isNullable: true },
+                        { name: 'encryptedPayload', type: 'text' },
+                        { name: 'maskedSummary', type: 'text' },
+                        { name: 'reviewReason', type: 'varchar', length: '500', isNullable: true },
+                        { name: 'submittedAt', type: dateType },
+                        { name: 'reviewedAt', type: dateType, isNullable: true },
+                    ],
+                    indices: [
+                        {
+                            name: 'IDX_store_governance_request_version',
+                            columnNames: ['channelId', 'requestType', 'version'],
+                            isUnique: true,
+                        },
+                        { name: 'IDX_store_governance_request_status', columnNames: ['status', 'createdAt'] },
+                    ],
+                    foreignKeys: [
+                        {
+                            name: 'FK_store_governance_request_channel',
+                            columnNames: ['channelId'],
+                            referencedTableName: 'channel',
+                            referencedColumnNames: ['id'],
+                            onDelete: 'CASCADE',
+                        },
+                    ],
+                }),
+                true,
+            );
+        }
+
+        await this.backfillKnownAccessProfiles(queryRunner);
+    }
+
+    async down(): Promise<void> {
+        // Access, approval, and audit records are intentionally retained on code rollback.
+    }
+
+    private async backfillKnownAccessProfiles(queryRunner: QueryRunner): Promise<void> {
+        const escape = (name: string) => queryRunner.connection.driver.escape(name);
+        const profiles = escape('administrator_access_profile');
+        const administrators = escape('administrator');
+        const roles = escape('role');
+        const userRoles = escape('user_roles_role');
+        const roleChannels = escape('role_channels_channel');
+        const legacy = escape('store_administrator_access');
+        const profileColumns = [
+            'createdAt',
+            'updatedAt',
+            'administratorId',
+            'userId',
+            'scope',
+            'authority',
+            'status',
+            'channelId',
+            'createdByAdministratorId',
+            'mustChangePassword',
+            'platformOwnerSlot',
+            'storePrimarySlot',
+        ]
+            .map(escape)
+            .join(', ');
+        const profileInsert = `INSERT INTO ${profiles} (${profileColumns})`;
+        const auditColumns = [
+            'createdAt',
+            'updatedAt',
+            'actorAdministratorId',
+            'targetAdministratorId',
+            'targetRoleId',
+            'channelId',
+            'action',
+            'result',
+            'beforeSummary',
+            'afterSummary',
+            'failureReason',
+        ]
+            .map(escape)
+            .join(', ');
+        const parameter = (index: number) =>
+            queryRunner.connection.options.type === 'postgres' ? `$${index}` : '?';
+        const existingRows = (await queryRunner.query(`SELECT COUNT(*) AS count FROM ${profiles}`)) as Array<{
+            count: number | string;
+        }>;
+        if (Number(existingRows[0]?.count ?? 0) > 0) return;
+
+        const owners = (await queryRunner.query(
+            `SELECT a.${escape('id')} AS administratorId, a.${escape('userId')} AS userId
+             FROM ${administrators} a
+             INNER JOIN ${userRoles} ur ON ur.${escape('userId')} = a.${escape('userId')}
+             INNER JOIN ${roles} r ON r.${escape('id')} = ur.${escape('roleId')}
+             WHERE a.${escape('deletedAt')} IS NULL AND r.${escape('code')} = ${parameter(1)}`,
+            ['__super_admin_role__'],
+        )) as Array<{ administratorId: number | string; userId: number | string }>;
+        if (owners.length !== 1) {
+            throw new Error(
+                `Administrator access migration requires exactly one active SuperAdmin; found ${owners.length}`,
+            );
+        }
+        await queryRunner.query(
+            [
+                profileInsert,
+                `VALUES (CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ${parameter(1)}, ${parameter(2)},`,
+                `'PLATFORM', 'OWNER', 'ACTIVE', NULL, ${parameter(3)}, ${parameter(4)},`,
+                `'PLATFORM_OWNER', NULL)`,
+            ].join(' '),
+            [owners[0].administratorId, owners[0].userId, owners[0].administratorId, false],
+        );
+
+        if (!(await queryRunner.hasTable('store_administrator_access'))) return;
+        const storeAccounts = (await queryRunner.query(
+            `SELECT a.${escape('id')} AS administratorId, a.${escape('userId')} AS userId, s.${escape('mustChangePassword')} AS mustChangePassword
+             FROM ${legacy} s
+             INNER JOIN ${administrators} a ON a.${escape('id')} = s.${escape('administratorId')}
+             WHERE a.${escape('deletedAt')} IS NULL`,
+        )) as Array<{
+            administratorId: number | string;
+            userId: number | string;
+            mustChangePassword: boolean | number;
+        }>;
+        const occupiedChannels = new Set<string>();
+        for (const account of storeAccounts) {
+            const channels = (await queryRunner.query(
+                `SELECT DISTINCT rc.${escape('channelId')} AS channelId
+                 FROM ${userRoles} ur
+                 INNER JOIN ${roleChannels} rc ON rc.${escape('roleId')} = ur.${escape('roleId')}
+                 WHERE ur.${escape('userId')} = ${parameter(1)}`,
+                [account.userId],
+            )) as Array<{ channelId: number | string }>;
+            if (channels.length !== 1) {
+                throw new Error(
+                    `Store administrator ${String(account.administratorId)} must resolve to exactly one Channel; found ${channels.length}`,
+                );
+            }
+            const channelId = String(channels[0].channelId);
+            if (occupiedChannels.has(channelId)) {
+                throw new Error(`Channel ${channelId} has more than one legacy primary store administrator`);
+            }
+            occupiedChannels.add(channelId);
+            await queryRunner.query(
+                [
+                    profileInsert,
+                    `VALUES (CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ${parameter(1)}, ${parameter(2)},`,
+                    `'STORE', 'ADMIN', 'ACTIVE', ${parameter(3)}, NULL, ${parameter(4)}, NULL,`,
+                    `${parameter(5)})`,
+                ].join(' '),
+                [
+                    account.administratorId,
+                    account.userId,
+                    channels[0].channelId,
+                    account.mustChangePassword,
+                    channelId,
+                ],
+            );
+        }
+
+        const unmappedRows = (await queryRunner.query(
+            `SELECT a.${escape('id')} AS administratorId,
+                    a.${escape('userId')} AS userId,
+                    r.${escape('code')} AS roleCode,
+                    r.${escape('permissions')} AS permissions,
+                    rc.${escape('channelId')} AS channelId
+             FROM ${administrators} a
+             LEFT JOIN ${userRoles} ur ON ur.${escape('userId')} = a.${escape('userId')}
+             LEFT JOIN ${roles} r ON r.${escape('id')} = ur.${escape('roleId')}
+             LEFT JOIN ${roleChannels} rc ON rc.${escape('roleId')} = r.${escape('id')}
+             WHERE a.${escape('deletedAt')} IS NULL
+               AND NOT EXISTS (SELECT 1 FROM ${profiles} p WHERE p.${escape('administratorId')} = a.${escape('id')})`,
+        )) as Array<{
+            administratorId: number | string;
+            userId: number | string;
+            roleCode: string | null;
+            permissions: string | string[] | null;
+            channelId: number | string | null;
+        }>;
+        const unmapped = new Map<
+            string,
+            {
+                administratorId: number | string;
+                userId: number | string;
+                channels: Set<string>;
+                permissions: Set<string>;
+            }
+        >();
+        for (const row of unmappedRows) {
+            const key = String(row.administratorId);
+            const candidate = unmapped.get(key) ?? {
+                administratorId: row.administratorId,
+                userId: row.userId,
+                channels: new Set<string>(),
+                permissions: new Set<string>(),
+            };
+            if (row.channelId != null) candidate.channels.add(String(row.channelId));
+            for (const permission of parsePermissions(row.permissions)) candidate.permissions.add(permission);
+            unmapped.set(key, candidate);
+        }
+        for (const account of unmapped.values()) {
+            if (account.channels.size === 0) {
+                throw new Error(
+                    `Administrator ${String(account.administratorId)} has no Channel-bound role and requires explicit mapping`,
+                );
+            }
+            const scope = account.channels.size === 1 ? 'STORE' : 'PLATFORM';
+            const channelId = scope === 'STORE' ? [...account.channels][0] : null;
+            if (scope === 'STORE') {
+                const invalid = [...account.permissions].find(isPlatformOnlyPermission);
+                if (invalid) {
+                    throw new Error(
+                        `Administrator ${String(account.administratorId)} has platform-only permission ${invalid} in a store role`,
+                    );
+                }
+            }
+            await queryRunner.query(
+                [
+                    profileInsert,
+                    `VALUES (CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ${parameter(1)}, ${parameter(2)},`,
+                    `${parameter(3)}, 'STAFF', 'SUSPENDED', ${parameter(4)}, ${parameter(5)},`,
+                    `${parameter(6)}, NULL, NULL)`,
+                ].join(' '),
+                [account.administratorId, account.userId, scope, channelId, owners[0].administratorId, true],
+            );
+            await queryRunner.query(
+                [
+                    `INSERT INTO ${escape('administrator_permission_audit')} (${auditColumns})`,
+                    `VALUES (CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ${parameter(1)}, ${parameter(2)},`,
+                    `NULL, ${parameter(3)}, 'MIGRATION_MAPPING_REVIEW_REQUIRED', 'SUCCESS',`,
+                    `NULL, ${parameter(4)}, NULL)`,
+                ].join(' '),
+                [
+                    owners[0].administratorId,
+                    account.administratorId,
+                    channelId,
+                    JSON.stringify({
+                        scope,
+                        authority: 'STAFF',
+                        status: 'SUSPENDED',
+                        channelIds: [...account.channels],
+                    }),
+                ],
+            );
+        }
+    }
+}
+
+function parsePermissions(value: string | string[] | null): string[] {
+    if (Array.isArray(value)) return value;
+    if (!value) return [];
+    try {
+        const parsed = JSON.parse(value) as unknown;
+        if (Array.isArray(parsed)) return parsed.map(String);
+    } catch {
+        // Some legacy drivers return simple-array values instead of simple-json.
+    }
+    return value
+        .split(',')
+        .map(item => item.trim())
+        .filter(Boolean);
+}
+
+function isPlatformOnlyPermission(permission: string): boolean {
+    return (
+        permission === 'SuperAdmin' ||
+        permission === 'ManagePlatformTeam' ||
+        permission === 'ReviewStoreGovernance' ||
+        /(?:ApiKey|System|GlobalSettings|Administrator|Seller|Settings|TaxCategory|TaxRate)$/u.test(
+            permission,
+        ) ||
+        /^(?:Create|Update|Delete)(?:Channel|PaymentMethod)$/u.test(permission)
+    );
+}

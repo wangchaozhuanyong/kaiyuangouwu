@@ -415,11 +415,13 @@ function isValidEmail(value: string): boolean {
 
 export function StoreDeprovisionDialog({
     profile,
+    allowPermanentDeprovision,
     onClose,
     onCompleted,
     onError,
 }: {
     profile: StoreProfileRecord;
+    allowPermanentDeprovision: boolean;
     onClose: () => void;
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
@@ -517,8 +519,12 @@ export function StoreDeprovisionDialog({
 
     return (
         <Modal
-            title="店铺安全清退"
-            description={`${storeName(profile)} · ${profile.channel.code} · 先看影响、再暂停，只有没有业务数据的店铺才允许彻底删除`}
+            title={allowPermanentDeprovision ? '暂停或安全清退店铺' : '暂停店铺营业'}
+            description={
+                allowPermanentDeprovision
+                    ? `${storeName(profile)} · ${profile.channel.code} · 先看影响、再暂停，只有没有业务数据的店铺才允许彻底删除`
+                    : `${storeName(profile)} · ${profile.channel.code} · 平台管理员可以暂停营业，彻底清退仅平台所有者可执行`
+            }
             onClose={onClose}
         >
             {impactQuery.loading && !impact ? (
@@ -594,19 +600,23 @@ export function StoreDeprovisionDialog({
                                 className={inputClass}
                             />
                         </Field>
-                        <Field label={`彻底清退时输入店铺编码：${impact.channelCode}`}>
-                            <input
-                                value={confirmCode}
-                                onChange={event => setConfirmCode(event.target.value)}
-                                placeholder={impact.channelCode}
-                                disabled={!impact.canDeprovision}
-                                className={inputClass}
-                            />
-                        </Field>
+                        {allowPermanentDeprovision && (
+                            <Field label={`彻底清退时输入店铺编码：${impact.channelCode}`}>
+                                <input
+                                    value={confirmCode}
+                                    onChange={event => setConfirmCode(event.target.value)}
+                                    placeholder={impact.channelCode}
+                                    disabled={!impact.canDeprovision}
+                                    className={inputClass}
+                                />
+                            </Field>
+                        )}
                     </div>
-                    <p className="mt-3 text-[11px] leading-5 text-rose-700">
-                        输入当前管理员密码和完整店铺编码后，点击下方按钮将立即执行不可撤销的安全清退，不会再出现第二个确认弹窗。
-                    </p>
+                    {allowPermanentDeprovision && (
+                        <p className="mt-3 text-[11px] leading-5 text-rose-700">
+                            输入当前管理员密码和完整店铺编码后，点击下方按钮将立即执行不可撤销的安全清退，不会再出现第二个确认弹窗。
+                        </p>
+                    )}
                     <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
                         <button type="button" onClick={onClose} disabled={busy} className={secondaryButton}>
                             关闭
@@ -629,24 +639,26 @@ export function StoreDeprovisionDialog({
                                 先暂停营业
                             </button>
                         )}
-                        <button
-                            type="button"
-                            onClick={() => void deprovision()}
-                            disabled={
-                                !impact.canDeprovision ||
-                                busy ||
-                                !currentPassword ||
-                                confirmCode.trim() !== impact.channelCode
-                            }
-                            className="flex items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            {deprovisionState.loading ? (
-                                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                                <Trash2 className="h-3.5 w-3.5" />
-                            )}
-                            验证并彻底清退空店铺
-                        </button>
+                        {allowPermanentDeprovision && (
+                            <button
+                                type="button"
+                                onClick={() => void deprovision()}
+                                disabled={
+                                    !impact.canDeprovision ||
+                                    busy ||
+                                    !currentPassword ||
+                                    confirmCode.trim() !== impact.channelCode
+                                }
+                                className="flex items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {deprovisionState.loading ? (
+                                    <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                )}
+                                验证并彻底清退空店铺
+                            </button>
+                        )}
                     </div>
                 </>
             )}

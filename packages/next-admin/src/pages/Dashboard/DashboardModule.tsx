@@ -252,7 +252,10 @@ export function DashboardModule() {
             <div className="flex h-full flex-col bg-slate-50">
                 <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-5 sm:px-8">
                     <div className="mx-auto w-full max-w-5xl">
-                        <h1 className="text-xl font-bold text-slate-900">平台管理中心</h1>
+                        <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+                            平台管理中心
+                            <FeatureHelpButton topic="plugins.platform" title="平台管理中心" />
+                        </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             默认 Channel 只用于平台管理，不承载商品、订单、库存、分类或素材等经营数据。
                         </p>
@@ -261,14 +264,20 @@ export function DashboardModule() {
                 <main className="flex-1 overflow-y-auto px-5 py-8 sm:px-8">
                     <div className="mx-auto grid w-full max-w-5xl gap-4 md:grid-cols-2">
                         <section className="rounded-2xl border border-blue-100 bg-blue-50 p-6">
-                            <h2 className="text-sm font-bold text-blue-950">管理某个店铺</h2>
+                            <h2 className="flex items-center gap-2 text-sm font-bold text-blue-950">
+                                管理某个店铺
+                                <FeatureHelpButton topic="dashboard.overview" title="管理某个店铺" />
+                            </h2>
                             <p className="mt-2 text-xs leading-5 text-blue-800">
                                 请使用右上角“当前店铺”切换到 MOYAO
                                 AI｜模钥或美宜佳。切换后才会显示该店自己的经营数据。
                             </p>
                         </section>
                         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                            <h2 className="text-sm font-bold text-slate-900">平台级管理</h2>
+                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                平台级管理
+                                <FeatureHelpButton topic="settings.team" title="平台级管理" />
+                            </h2>
                             <p className="mt-2 text-xs leading-5 text-slate-600">
                                 在这里管理员工、角色、权限与系统运维，不会将业务数据写入平台 Channel。
                             </p>

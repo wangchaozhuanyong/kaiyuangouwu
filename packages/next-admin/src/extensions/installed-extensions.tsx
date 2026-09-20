@@ -115,7 +115,7 @@ defineNextAdminExtension({
             legacyPaths: ['/image-generation-access'],
             title: 'AI 服务商接入',
             component: AiImageAccessModule,
-            permissions: ['SuperAdmin'],
+            permissions: ['ReviewStoreGovernance', 'SuperAdmin'],
             navItem: {
                 label: 'AI 服务商接入',
                 sectionId: 'plugins',
@@ -434,6 +434,8 @@ defineNextAdminExtension({
                 'ReadSeller',
                 'ReadPaymentMethod',
                 'ReadShippingMethod',
+                'ManageStoreLifecycle',
+                'ReviewStoreGovernance',
             ],
             preload: routeModuleLoaders.storeSettings,
         },

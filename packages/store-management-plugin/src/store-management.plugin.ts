@@ -19,10 +19,24 @@ import {
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { Like } from 'typeorm';
 
+import { AdministratorAccessInterceptor } from './administrator-access.interceptor';
+import { AdministratorAccessResolver } from './administrator-access.resolver';
+import { AdministratorAccessService } from './administrator-access.service';
+import { AdministratorPermissionAuditService } from './administrator-permission-audit.service';
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
-import { STOREFRONT_PROMOTION_OPTIONS, storeProfilePermission } from './constants';
+import {
+    managePlatformTeamPermission,
+    manageStoreLifecyclePermission,
+    manageStoreTeamPermission,
+    reviewStoreGovernancePermission,
+    sensitiveStoreFinancePermission,
+    STOREFRONT_PROMOTION_OPTIONS,
+    storeProfilePermission,
+} from './constants';
 import { CustomerAvatarShopResolver } from './customer-avatar.resolver';
 import { CustomerAvatarService } from './customer-avatar.service';
+import { AdministratorAccessProfile } from './entities/administrator-access-profile.entity';
+import { AdministratorPermissionAudit } from './entities/administrator-permission-audit.entity';
 import { CouponLedgerEntry } from './entities/coupon-ledger-entry.entity';
 import { CouponOrderAllocation } from './entities/coupon-order-allocation.entity';
 import { CustomerCoupon } from './entities/customer-coupon.entity';
@@ -38,6 +52,7 @@ import { ReferralWallet } from './entities/referral-wallet.entity';
 import { ReferralWithdrawal } from './entities/referral-withdrawal.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { StoreCouponCampaignConfig } from './entities/store-coupon-campaign-config.entity';
+import { StoreGovernanceChangeRequest } from './entities/store-governance-change-request.entity';
 import { StoreProfile } from './entities/store-profile.entity';
 import { StoreUsdtManualRefund } from './entities/store-usdt-manual-refund.entity';
 import { StoreUsdtWalletAudit } from './entities/store-usdt-wallet-audit.entity';
@@ -54,6 +69,7 @@ import { MerchantInitialPasswordInterceptor } from './merchant-initial-password.
 import { MerchantInitialPasswordResolver } from './merchant-initial-password.resolver';
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
 import { isStorefrontPaymentCurrencyCode, STOREFRONT_PAYMENT_CURRENCY_CODES } from './payment-currency';
+import { PermissionPolicyRegistry } from './permission-policy';
 import { CartCouponCommandAdapter } from './promotion/cart-coupon-command.adapter';
 import {
     collectionPercentageDiscount,
@@ -107,6 +123,8 @@ import {
     syncAutomaticStoreCurrencyPricesTask,
 } from './store-currency-tasks';
 import { StoreDeprovisionService } from './store-deprovision.service';
+import { StoreGovernanceResolver } from './store-governance.resolver';
+import { StoreGovernanceService } from './store-governance.service';
 import { StorePaymentReportingService } from './store-payment-reporting.service';
 import { StoreProfileAdminResolver } from './store-profile.resolver';
 import { StoreProfileService } from './store-profile.service';
@@ -154,7 +172,10 @@ import {
 @VendurePlugin({
     imports: [PluginCommonModule, ContentTranslationPlugin, StorefrontCartPlugin],
     entities: [
+        AdministratorAccessProfile,
+        AdministratorPermissionAudit,
         StoreAdministratorAccess,
+        StoreGovernanceChangeRequest,
         StoreProfile,
         StorefrontPromotionPage,
         SystemAnnouncement,
@@ -182,6 +203,10 @@ import {
     ],
     controllers: [StorefrontPromotionController, StorefrontRealtimeController],
     providers: [
+        AdministratorAccessService,
+        AdministratorPermissionAuditService,
+        PermissionPolicyRegistry,
+        StoreGovernanceService,
         SystemWorkerHealthService,
         CartCouponCommandAdapter,
         MerchantCatalogAccessService,
@@ -217,6 +242,10 @@ import {
         {
             provide: STOREFRONT_PROMOTION_OPTIONS,
             useFactory: () => StoreManagementPlugin.promotionOptions,
+        },
+        {
+            provide: APP_INTERCEPTOR,
+            useClass: AdministratorAccessInterceptor,
         },
         {
             provide: APP_INTERCEPTOR,
@@ -279,6 +308,11 @@ import {
         ];
         config.authOptions.customPermissions.push(
             storeProfilePermission,
+            manageStoreTeamPermission,
+            managePlatformTeamPermission,
+            manageStoreLifecyclePermission,
+            reviewStoreGovernancePermission,
+            sensitiveStoreFinancePermission,
             referralPermission,
             manageReferralWithdrawalPermission,
             adjustReferralBalancePermission,
@@ -326,6 +360,8 @@ import {
     adminApiExtensions: {
         schema: adminApiExtensions,
         resolvers: [
+            AdministratorAccessResolver,
+            StoreGovernanceResolver,
             StorefrontBrandingAdminResolver,
             MerchantInitialPasswordResolver,
             StoreProvisioningResolver,

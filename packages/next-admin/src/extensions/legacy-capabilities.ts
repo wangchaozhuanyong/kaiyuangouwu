@@ -173,7 +173,7 @@ export const LEGACY_ROUTE_CAPABILITIES: LegacyRouteCapability[] = [
 ];
 
 export const LEGACY_EXTENSION_SURFACES = {
-    actions: ['catalog-safe-import', 'catalog-standard-export', 'catalog-bulk-channels'],
+    actions: ['catalog-safe-import', 'catalog-standard-export'],
     pageBlocks: [
         'catalog-product-operations',
         'product-variant-multi-currency-prices',

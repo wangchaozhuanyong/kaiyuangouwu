@@ -11,6 +11,7 @@ import {
 } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { manageStoreTeamPermission } from './constants';
 import {
     adjustReferralBalancePermission,
     manageReferralWithdrawalPermission,
@@ -137,6 +138,10 @@ function createService() {
         createDraft: vi.fn().mockResolvedValue({ id: 'profile-1', channelId: 'store-1' }),
     };
     const merchantInitialPasswordService = { requirePasswordChange: vi.fn().mockResolvedValue(undefined) };
+    const administratorAccessService = {
+        extendPlatformRolesToChannel: vi.fn().mockResolvedValue(undefined),
+        registerStorePrimary: vi.fn().mockResolvedValue(undefined),
+    };
     const contentTranslations = {
         prepareLocalizedFields: vi.fn((fields: any[]) =>
             Promise.resolve(
@@ -168,6 +173,7 @@ function createService() {
         paymentMethodService as any,
         storeProfileService as any,
         merchantInitialPasswordService as any,
+        administratorAccessService as any,
         contentTranslations as any,
         facetService as any,
         facetValueService as any,
@@ -285,7 +291,18 @@ describe('StoreProvisioningService', () => {
         } = createService();
         const ctx = {
             channelId: 'template-1',
-            session: { user: { channelPermissions: [] } },
+            session: {
+                user: {
+                    channelPermissions: [
+                        {
+                            id: 'default-channel',
+                            token: 'default-token',
+                            code: '__default_channel__',
+                            permissions: [Permission.ReadChannel, Permission.CreateProduct],
+                        },
+                    ],
+                },
+            },
             copy: vi.fn().mockReturnValue({}),
         } as any;
 
@@ -400,10 +417,16 @@ describe('StoreProvisioningService', () => {
         );
         expect(ctx.session.user.channelPermissions).toEqual([
             {
+                id: 'default-channel',
+                token: 'default-token',
+                code: '__default_channel__',
+                permissions: [Permission.ReadChannel, Permission.CreateProduct],
+            },
+            {
                 id: 'store-1',
                 token: 'server-generated-token',
                 code: 'alpha-store',
-                permissions: [Permission.SuperAdmin],
+                permissions: [Permission.ReadChannel, Permission.CreateProduct],
             },
         ]);
         expect(result).toMatchObject({
@@ -515,7 +538,18 @@ describe('StoreProvisioningService', () => {
             .mockResolvedValueOnce({ id: 'target-collection-child' });
         const ctx = {
             channelId: 'template-1',
-            session: { user: { channelPermissions: [] } },
+            session: {
+                user: {
+                    channelPermissions: [
+                        {
+                            id: 'default-channel',
+                            token: 'default-token',
+                            code: '__default_channel__',
+                            permissions: [Permission.SuperAdmin],
+                        },
+                    ],
+                },
+            },
             copy: vi.fn().mockReturnValue({ channelId: 'store-1' }),
         } as any;
 
@@ -628,14 +662,22 @@ describe('StoreProvisioningService', () => {
                 referralPermission.Read,
                 referralPermission.Update,
                 referralPermission.Delete,
-                manageReferralWithdrawalPermission.Permission,
-                adjustReferralBalancePermission.Permission,
             ]),
         );
+        expect(storeAdministratorPermissions).toEqual(
+            expect.arrayContaining([
+                Permission.CreateAdministrator,
+                Permission.ReadAdministrator,
+                Permission.UpdateAdministrator,
+                Permission.DeleteAdministrator,
+                manageStoreTeamPermission.Permission,
+            ]),
+        );
+        expect(storeAdministratorPermissions).not.toContain(manageReferralWithdrawalPermission.Permission);
+        expect(storeAdministratorPermissions).not.toContain(adjustReferralBalancePermission.Permission);
         expect(storeAdministratorPermissions).not.toContain(Permission.CreateChannel);
         expect(storeAdministratorPermissions).not.toContain(Permission.DeleteChannel);
         expect(storeAdministratorPermissions).not.toContain(Permission.CreateSeller);
-        expect(storeAdministratorPermissions).not.toContain(Permission.CreateAdministrator);
         expect(storeAdministratorPermissions).not.toContain(Permission.CreateOrder);
         expect(storeAdministratorPermissions).not.toContain(Permission.DeleteOrder);
         expect(storeAdministratorPermissions).not.toContain(Permission.CreateCatalog);
