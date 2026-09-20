@@ -844,9 +844,15 @@ export function HomePage() {
                     products={products}
                     collections={collections}
                     contentBlocks={contentBlocks}
+                    managedHeroes={managedHeroes}
+                    quickLinks={quickLinks}
+                    coreCategoriesBlock={coreCategoriesBlock}
                     language={language}
                     storefrontName={storefrontName}
+                    displayCurrencyCode={displayCurrencyCode}
                     onProductSelect={id => navigateTo({ name: 'product', id })}
+                    onOpenHero={openActiveHero}
+                    onContentTarget={onContentTarget}
                     onToast={onToast}
                 />
             </main>
