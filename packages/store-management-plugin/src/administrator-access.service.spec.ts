@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 
 import { Permission } from '@vendure/common/lib/generated-types';
-import { Role, User } from '@vendure/core';
+import { Channel, Role, User } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AdministratorAccessService } from './administrator-access.service';
