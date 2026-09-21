@@ -124,13 +124,15 @@ export function DesktopUnifiedHome({
                         )}
                     </article>
 
-                    <aside className="proto-hero-tools" aria-label={isZh ? '快捷入口' : 'Shortcuts'}>
-                        <div className="proto-tools-header">
-                            <span className="proto-tools-title">{isZh ? '快捷入口' : 'Quick access'}</span>
-                        </div>
-                        <div className="proto-tools-list">
-                            {tools.length > 0 ? (
-                                tools.map(item => (
+                    {tools.length > 0 && (
+                        <aside className="proto-hero-tools" aria-label={isZh ? '快捷入口' : 'Shortcuts'}>
+                            <div className="proto-tools-header">
+                                <span className="proto-tools-title">
+                                    {isZh ? '快捷入口' : 'Quick access'}
+                                </span>
+                            </div>
+                            <div className="proto-tools-list">
+                                {tools.map(item => (
                                     <button
                                         key={item.id}
                                         type="button"
@@ -156,16 +158,10 @@ export function DesktopUnifiedHome({
                                         </span>
                                         <ArrowRight className="proto-tool-arrow" aria-hidden="true" />
                                     </button>
-                                ))
-                            ) : (
-                                <p className="proto-tools-empty">
-                                    {isZh
-                                        ? '快捷入口将从后台装修内容中读取。'
-                                        : 'Shortcuts use your managed storefront content.'}
-                                </p>
-                            )}
-                        </div>
-                    </aside>
+                                ))}
+                            </div>
+                        </aside>
+                    )}
                 </div>
             </div>
 
