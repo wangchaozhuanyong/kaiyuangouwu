@@ -116,7 +116,7 @@ export class TagService {
     }
 
     private channelScopeSubquery(ctx: RequestContext) {
-        const subquery = this.connection
+        const currentChannelSubquery = this.connection
             .getRepository(ctx, Asset)
             .createQueryBuilder('tagAsset')
             .select('tagRelation.id')
@@ -124,7 +124,17 @@ export class TagService {
             .innerJoin('tagAsset.channels', 'tagChannel')
             .where('tagChannel.id = :tagChannelId')
             .getQuery();
-        return { sql: `tag.id IN (${subquery})`, parameters: { tagChannelId: ctx.channelId } };
+        const anyAssetSubquery = this.connection
+            .getRepository(ctx, Asset)
+            .createQueryBuilder('linkedAsset')
+            .select('1')
+            .innerJoin('linkedAsset.tags', 'linkedTag')
+            .where('linkedTag.id = tag.id')
+            .getQuery();
+        return {
+            sql: `(tag.id IN (${currentChannelSubquery}) OR NOT EXISTS (${anyAssetSubquery}))`,
+            parameters: { tagChannelId: ctx.channelId },
+        };
     }
 
     private async getScopedTagOrThrow(ctx: RequestContext, id: ID): Promise<Tag> {

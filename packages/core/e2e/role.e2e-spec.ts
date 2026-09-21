@@ -491,7 +491,7 @@ describe('Role resolver', () => {
                         password: 'test',
                     },
                 });
-            }, 'The permission "SuperAdmin" may not be assigned'),
+            }, 'Active user does not have sufficient permissions'),
         );
 
         it(
