@@ -348,6 +348,8 @@ export class AddAdministratorAccessGovernance1789408800000 implements MigrationI
                 userId: number | string;
                 channels: Set<string>;
                 permissions: Set<string>;
+                roleCodes: Set<string>;
+                platformRoleChannels: Set<string>;
             }
         >();
         for (const row of unmappedRows) {
@@ -357,12 +359,44 @@ export class AddAdministratorAccessGovernance1789408800000 implements MigrationI
                 userId: row.userId,
                 channels: new Set<string>(),
                 permissions: new Set<string>(),
+                roleCodes: new Set<string>(),
+                platformRoleChannels: new Set<string>(),
             };
             if (row.channelId != null) candidate.channels.add(String(row.channelId));
+            if (row.roleCode != null) candidate.roleCodes.add(row.roleCode);
+            if (row.roleCode === 'platform-administrator' && row.channelId != null) {
+                candidate.platformRoleChannels.add(String(row.channelId));
+            }
             for (const permission of parsePermissions(row.permissions)) candidate.permissions.add(permission);
             unmapped.set(key, candidate);
         }
         for (const account of unmapped.values()) {
+            if (account.roleCodes.has('platform-administrator')) {
+                if (
+                    [...account.roleCodes].some(
+                        code => code !== 'platform-administrator' && code !== '__customer_role__',
+                    ) ||
+                    [...account.permissions].some(isOwnerOnlyPermission)
+                ) {
+                    throw new Error(
+                        `Platform administrator ${String(account.administratorId)} has an incompatible role or owner-only permission`,
+                    );
+                }
+                const channels = (await queryRunner.query(
+                    `SELECT ${escape('id')} AS id FROM ${escape('channel')}`,
+                )) as Array<{ id: number | string }>;
+                if (
+                    channels.length === 0 ||
+                    channels.some(channel => !account.platformRoleChannels.has(String(channel.id)))
+                ) {
+                    throw new Error(
+                        `Platform administrator ${String(account.administratorId)} role does not cover all Channels`,
+                    );
+                }
+                // The service validates the complete fixed-role policy when this account first accesses Admin.
+                // Do not persist a suspended profile that would bypass that validation and lock the account out.
+                continue;
+            }
             if (account.channels.size === 0) {
                 throw new Error(
                     `Administrator ${String(account.administratorId)} has no Channel-bound role and requires explicit mapping`,
@@ -434,6 +468,16 @@ function isPlatformOnlyPermission(permission: string): boolean {
             permission,
         ) ||
         /^(?:Create|Update|Delete)(?:Channel|PaymentMethod)$/u.test(permission)
+    );
+}
+
+function isOwnerOnlyPermission(permission: string): boolean {
+    return (
+        permission === 'SuperAdmin' ||
+        permission === 'Owner' ||
+        permission === 'Public' ||
+        permission === 'UpdateGlobalSettings' ||
+        /(?:ApiKey|IcloudRelay|ImageGeneration|Settings|System)$/u.test(permission)
     );
 }
 

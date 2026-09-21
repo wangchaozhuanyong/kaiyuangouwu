@@ -20,6 +20,9 @@ function runner(
             return [{ channelId: 1 }];
         }
         if (sql.includes('FROM "channel" WHERE')) return [{ code: channelCode }];
+        if (sql.includes('SELECT "id" AS id FROM "channel"')) {
+            return [{ id: 1 }, { id: 2 }, { id: 3 }];
+        }
         if (sql.includes('FROM "store_administrator_access" s')) return storeAccounts;
         if (sql.includes('AS roleCode') && sql.includes('FROM "user_roles_role" ur')) {
             return storeRoleRows;
@@ -90,6 +93,59 @@ describe('administrator access and governance migration', () => {
         await expect(new AddAdministratorAccessGovernance1789408800000().up(queryRunner)).rejects.toThrow(
             'no Channel-bound role',
         );
+    });
+
+    it('leaves a reviewed fixed platform administrator for strict runtime role validation', async () => {
+        const { queryRunner, query } = runner('mysql', 1, [
+            ...[1, 2, 3].map(channelId => ({
+                administratorId: 8,
+                userId: 18,
+                roleCode: 'platform-administrator',
+                permissions: '["ReadProduct","CreateAdministrator"]',
+                channelId,
+            })),
+            {
+                administratorId: 8,
+                userId: 18,
+                roleCode: '__customer_role__',
+                permissions: '["Authenticated"]',
+                channelId: 1,
+            },
+        ]);
+        await new AddAdministratorAccessGovernance1789408800000().up(queryRunner);
+        expect(
+            query.mock.calls.filter(([sql]) =>
+                String(sql).includes('INSERT INTO "administrator_access_profile"'),
+            ),
+        ).toHaveLength(1);
+    });
+
+    it('rejects a staged platform administrator with owner-only permission or missing Channel', async () => {
+        const ownerPermission = runner('mysql', 1, [
+            {
+                administratorId: 8,
+                userId: 18,
+                roleCode: 'platform-administrator',
+                permissions: '["SuperAdmin"]',
+                channelId: 1,
+            },
+        ]);
+        await expect(
+            new AddAdministratorAccessGovernance1789408800000().up(ownerPermission.queryRunner),
+        ).rejects.toThrow('owner-only permission');
+
+        const missingChannel = runner('mysql', 1, [
+            {
+                administratorId: 8,
+                userId: 18,
+                roleCode: 'platform-administrator',
+                permissions: '["ReadProduct"]',
+                channelId: 1,
+            },
+        ]);
+        await expect(
+            new AddAdministratorAccessGovernance1789408800000().up(missingChannel.queryRunner),
+        ).rejects.toThrow('does not cover all Channels');
     });
 
     it('stops when a single-store role contains a platform-only permission', async () => {

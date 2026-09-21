@@ -766,6 +766,31 @@ export class AdministratorAccessService {
                 storePrimarySlot: null,
             });
         }
+        const platformRole = administrator.user.roles.find(role => role.code === 'platform-administrator');
+        if (platformRole) {
+            if (
+                administrator.user.roles.some(
+                    role => role.code !== 'platform-administrator' && role.code !== '__customer_role__',
+                )
+            ) {
+                throw new UserInputError('平台管理员账号包含其他管理角色，必须先完成人工归属核查');
+            }
+            const fixedRole = await this.ensurePlatformAdministratorRole(ctx);
+            if (!idsAreEqual(platformRole.id, fixedRole.id)) {
+                throw new UserInputError('平台管理员固定角色不匹配');
+            }
+            return this.saveProfile(ctx, administrator, {
+                scope: 'PLATFORM',
+                authority: 'ADMIN',
+                channel: null,
+                channelId: null,
+                createdByAdministratorId: null,
+                mustChangePassword: false,
+                platformOwnerSlot: null,
+                storePrimarySlot: null,
+                status: 'ACTIVE',
+            });
+        }
         const legacy = await this.connection.getRepository(ctx, StoreAdministratorAccess).findOne({
             where: { userId },
         });

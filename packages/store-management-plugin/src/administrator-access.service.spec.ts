@@ -447,6 +447,79 @@ describe('AdministratorAccessService hierarchy policy', () => {
         });
     });
 
+    it('restores only a validated fixed platform administrator without a SuperAdmin role', async () => {
+        const access = service();
+        access.administratorService = {
+            findOneByUserId: vi.fn().mockResolvedValue({
+                id: 'platform-admin',
+                user: {
+                    id: 'platform-user',
+                    roles: [
+                        { id: 'fixed-role', code: 'platform-administrator', channels: [] },
+                        { id: 'customer-role', code: '__customer_role__', channels: [] },
+                    ],
+                },
+            }),
+        };
+        access.ensurePlatformAdministratorRole = vi.fn().mockResolvedValue({ id: 'fixed-role' });
+        access.saveProfile = vi
+            .fn()
+            .mockImplementation((_ctx: unknown, _administrator: unknown, input: unknown) => input);
+
+        await expect(access.inferAndPersistLegacy({} as any, 'platform-user')).resolves.toMatchObject({
+            scope: 'PLATFORM',
+            authority: 'ADMIN',
+            status: 'ACTIVE',
+            platformOwnerSlot: null,
+        });
+        expect(access.ensurePlatformAdministratorRole).toHaveBeenCalledOnce();
+    });
+
+    it('rejects an unvalidated platform administrator role instead of granting access', async () => {
+        const access = service();
+        access.administratorService = {
+            findOneByUserId: vi.fn().mockResolvedValue({
+                id: 'platform-admin',
+                user: {
+                    id: 'platform-user',
+                    roles: [{ id: 'wrong-role', code: 'platform-administrator', channels: [] }],
+                },
+            }),
+        };
+        access.ensurePlatformAdministratorRole = vi.fn().mockResolvedValue({ id: 'fixed-role' });
+        access.saveProfile = vi.fn();
+
+        await expect(access.inferAndPersistLegacy({} as any, 'platform-user')).rejects.toThrow(
+            '固定角色不匹配',
+        );
+        expect(access.saveProfile).not.toHaveBeenCalled();
+    });
+
+    it('refuses a fixed platform role that retains owner-only permissions', async () => {
+        const access = service();
+        access.connection = {
+            getRepository: (_ctx: unknown, entity: unknown) => {
+                if (entity === Role) {
+                    return {
+                        findOne: vi.fn().mockResolvedValue({
+                            permissions: [Permission.SuperAdmin],
+                            channels: [{ id: 'default' }],
+                        }),
+                    };
+                }
+                if (entity === Channel) return { find: vi.fn().mockResolvedValue([{ id: 'default' }]) };
+                throw new Error('Unexpected repository');
+            },
+        };
+        access.policies = {
+            catalog: vi
+                .fn()
+                .mockReturnValue([{ code: Permission.ReadProduct, scope: 'STORE', delegable: true }]),
+        };
+
+        await expect(access.ensurePlatformAdministratorRole({} as any)).rejects.toThrow('固定角色配置异常');
+    });
+
     it('blocks a legacy store primary role carrying platform-only permissions at runtime', async () => {
         const access = service();
         access.administratorService = {
