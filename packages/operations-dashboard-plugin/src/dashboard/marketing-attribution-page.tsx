@@ -1,4 +1,5 @@
 import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import {
     Button,
     DashboardRouteDefinition,
@@ -34,6 +35,60 @@ import {
 } from './marketing-attribution.graphql';
 
 const title = msg({ id: 'operations.marketingAttribution.title', message: 'Marketing attribution' });
+const messages = {
+    from: msg({ id: 'operations.marketingAttribution.from', message: 'From' }),
+    to: msg({ id: 'operations.marketingAttribution.to', message: 'To' }),
+    refresh: msg({ id: 'operations.marketingAttribution.refresh', message: 'Refresh' }),
+    recordCost: msg({ id: 'operations.marketingAttribution.recordCost', message: 'Record campaign cost' }),
+    description: msg({
+        id: 'operations.marketingAttribution.description',
+        message:
+            'Last non-direct touch within 30 days. Order attribution is frozen after payment settles; revenue and return metrics deduct settled refunds.',
+    }),
+    visitors: msg({ id: 'operations.marketingAttribution.visitors', message: 'Visitors' }),
+    productViews: msg({ id: 'operations.marketingAttribution.productViews', message: 'Product views' }),
+    checkoutViews: msg({ id: 'operations.marketingAttribution.checkoutViews', message: 'Checkout views' }),
+    orders: msg({ id: 'operations.marketingAttribution.orders', message: 'Orders' }),
+    netRevenue: msg({ id: 'operations.marketingAttribution.netRevenue', message: 'Net revenue' }),
+    campaignCost: msg({ id: 'operations.marketingAttribution.campaignCost', message: 'Campaign cost' }),
+    refundAdjustedRoas: msg({
+        id: 'operations.marketingAttribution.refundAdjustedRoas',
+        message: 'Refund-adjusted ROAS',
+    }),
+    refundAdjustedRoi: msg({
+        id: 'operations.marketingAttribution.refundAdjustedRoi',
+        message: 'Refund-adjusted ROI',
+    }),
+    sourceMedium: msg({ id: 'operations.marketingAttribution.sourceMedium', message: 'Source / medium' }),
+    campaign: msg({ id: 'operations.marketingAttribution.campaign', message: 'Campaign' }),
+    searchTerms: msg({ id: 'operations.marketingAttribution.searchTerms', message: 'Search terms' }),
+    productCheckout: msg({
+        id: 'operations.marketingAttribution.productCheckout',
+        message: 'Product / checkout',
+    }),
+    conversion: msg({ id: 'operations.marketingAttribution.conversion', message: 'Conversion' }),
+    cost: msg({ id: 'operations.marketingAttribution.cost', message: 'Cost' }),
+    ledgerHint: msg({
+        id: 'operations.marketingAttribution.ledgerHint',
+        message: 'Append-only ledger. Record a negative amount to correct a prior entry.',
+    }),
+    businessDate: msg({ id: 'operations.marketingAttribution.businessDate', message: 'Business date' }),
+    amount: msg({ id: 'operations.marketingAttribution.amount', message: 'Amount' }),
+    source: msg({ id: 'operations.marketingAttribution.source', message: 'Source' }),
+    medium: msg({ id: 'operations.marketingAttribution.medium', message: 'Medium' }),
+    reasonInvoice: msg({ id: 'operations.marketingAttribution.reasonInvoice', message: 'Reason / invoice' }),
+    cancel: msg({ id: 'operations.marketingAttribution.cancel', message: 'Cancel' }),
+    appendCost: msg({ id: 'operations.marketingAttribution.appendCost', message: 'Append cost' }),
+    costAppended: msg({
+        id: 'operations.marketingAttribution.costAppended',
+        message: 'Campaign cost appended',
+    }),
+    invalidAmount: msg({
+        id: 'operations.marketingAttribution.invalidAmount',
+        message: 'Amount must be non-zero with at most three decimals',
+    }),
+    amountError: msg({ id: 'operations.marketingAttribution.amountError', message: 'Amount is invalid' }),
+};
 
 export const marketingAttributionRoute: DashboardRouteDefinition = {
     navMenuItem: {
@@ -50,6 +105,7 @@ export const marketingAttributionRoute: DashboardRouteDefinition = {
 };
 
 function MarketingAttributionPage() {
+    const { t } = useLingui();
     const initial = useMemo(() => defaultRange(), []);
     const [from, setFrom] = useState(initial.from);
     const [to, setTo] = useState(initial.to);
@@ -76,19 +132,19 @@ function MarketingAttributionPage() {
             <PageActionBar>
                 <PageActionBarRight>
                     <div className="flex items-end gap-2">
-                        <DateField label="From" value={from} onChange={setFrom} />
-                        <DateField label="To" value={to} onChange={setTo} />
+                        <DateField label={t(messages.from)} value={from} onChange={setFrom} />
+                        <DateField label={t(messages.to)} value={to} onChange={setTo} />
                         <Button
                             variant="outline"
                             onClick={() => void report.refetch()}
                             disabled={report.isFetching}
                         >
                             <RefreshCw className={report.isFetching ? 'animate-spin' : ''} />
-                            Refresh
+                            {t(messages.refresh)}
                         </Button>
                         {canUpdate && (
                             <Button onClick={() => setCostOpen(true)}>
-                                <Plus /> Record campaign cost
+                                <Plus /> {t(messages.recordCost)}
                             </Button>
                         )}
                     </div>
@@ -96,31 +152,40 @@ function MarketingAttributionPage() {
             </PageActionBar>
             <PageLayout>
                 <PageBlock column="main" blockId="marketing-attribution-summary">
-                    <p className="mb-4 text-sm text-muted-foreground">
-                        Last non-direct touch within 30 days. Order attribution is frozen after payment
-                        settles; revenue and return metrics deduct settled refunds.
-                    </p>
+                    <p className="mb-4 text-sm text-muted-foreground">{t(messages.description)}</p>
                     <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-8">
-                        <Metric label="Visitors" value={summary ? String(summary.visitorCount) : '—'} />
                         <Metric
-                            label="Product views"
+                            label={t(messages.visitors)}
+                            value={summary ? String(summary.visitorCount) : '—'}
+                        />
+                        <Metric
+                            label={t(messages.productViews)}
                             value={summary ? String(summary.productViewCount) : '—'}
                         />
                         <Metric
-                            label="Checkout views"
+                            label={t(messages.checkoutViews)}
                             value={summary ? String(summary.checkoutViewCount) : '—'}
                         />
-                        <Metric label="Orders" value={summary ? String(summary.orderCount) : '—'} />
                         <Metric
-                            label="Net revenue"
+                            label={t(messages.orders)}
+                            value={summary ? String(summary.orderCount) : '—'}
+                        />
+                        <Metric
+                            label={t(messages.netRevenue)}
                             value={summary ? money(summary.netRevenueMicrounits, currencyCode) : '—'}
                         />
                         <Metric
-                            label="Campaign cost"
+                            label={t(messages.campaignCost)}
                             value={summary ? money(summary.campaignCostMicrounits, currencyCode) : '—'}
                         />
-                        <Metric label="Refund-adjusted ROAS" value={ratio(summary?.refundAdjustedRoas)} />
-                        <Metric label="Refund-adjusted ROI" value={percent(summary?.refundAdjustedRoi)} />
+                        <Metric
+                            label={t(messages.refundAdjustedRoas)}
+                            value={ratio(summary?.refundAdjustedRoas)}
+                        />
+                        <Metric
+                            label={t(messages.refundAdjustedRoi)}
+                            value={percent(summary?.refundAdjustedRoi)}
+                        />
                     </div>
                 </PageBlock>
                 <PageBlock column="main" blockId="marketing-attribution-table">
@@ -134,15 +199,15 @@ function MarketingAttributionPage() {
                                 <thead className="border-b text-xs text-muted-foreground">
                                     <tr>
                                         {[
-                                            'Source / medium',
-                                            'Campaign',
-                                            'Search terms',
-                                            'Visitors',
-                                            'Product / checkout',
-                                            'Orders',
-                                            'Conversion',
-                                            'Net revenue',
-                                            'Cost',
+                                            t(messages.sourceMedium),
+                                            t(messages.campaign),
+                                            t(messages.searchTerms),
+                                            t(messages.visitors),
+                                            t(messages.productCheckout),
+                                            t(messages.orders),
+                                            t(messages.conversion),
+                                            t(messages.netRevenue),
+                                            t(messages.cost),
                                             'ROAS',
                                             'ROI',
                                         ].map(label => (
@@ -211,6 +276,7 @@ function CostDialog({
     currencyCode: string;
     onSaved: () => Promise<unknown>;
 }) {
+    const { t } = useLingui();
     const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
     const [source, setSource] = useState('google');
     const [medium, setMedium] = useState('cpc');
@@ -226,13 +292,17 @@ function CostDialog({
                     source,
                     medium,
                     campaign,
-                    amountMicrounits: signedMicrounits(amount),
+                    amountMicrounits: signedMicrounits(
+                        amount,
+                        t(messages.invalidAmount),
+                        t(messages.amountError),
+                    ),
                     idempotencyKey: `dashboard:${crypto.randomUUID()}`,
                     reason,
                 },
             }),
         onSuccess: async () => {
-            toast.success('Campaign cost appended');
+            toast.success(t(messages.costAppended));
             onOpenChange(false);
             await onSaved();
         },
@@ -242,25 +312,27 @@ function CostDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Record campaign cost</DialogTitle>
-                    <DialogDescription>
-                        Append-only ledger. Record a negative amount to correct a prior entry.
-                    </DialogDescription>
+                    <DialogTitle>{t(messages.recordCost)}</DialogTitle>
+                    <DialogDescription>{t(messages.ledgerHint)}</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label="Business date" value={date} onChange={setDate} type="date" />
-                    <Field label={`Amount (${currencyCode})`} value={amount} onChange={setAmount} />
-                    <Field label="Source" value={source} onChange={setSource} />
-                    <Field label="Medium" value={medium} onChange={setMedium} />
-                    <Field label="Campaign" value={campaign} onChange={setCampaign} />
-                    <Field label="Reason / invoice" value={reason} onChange={setReason} />
+                    <Field label={t(messages.businessDate)} value={date} onChange={setDate} type="date" />
+                    <Field
+                        label={`${t(messages.amount)} (${currencyCode})`}
+                        value={amount}
+                        onChange={setAmount}
+                    />
+                    <Field label={t(messages.source)} value={source} onChange={setSource} />
+                    <Field label={t(messages.medium)} value={medium} onChange={setMedium} />
+                    <Field label={t(messages.campaign)} value={campaign} onChange={setCampaign} />
+                    <Field label={t(messages.reasonInvoice)} value={reason} onChange={setReason} />
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancel
+                        {t(messages.cancel)}
                     </Button>
                     <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-                        Append cost
+                        {t(messages.appendCost)}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -308,12 +380,11 @@ function defaultRange() {
 function isoRange(from: string, to: string) {
     return !from || !to || from > to ? null : { from: `${from}T00:00:00.000Z`, to: `${to}T23:59:59.999Z` };
 }
-function signedMicrounits(value: string) {
+function signedMicrounits(value: string, invalidAmount: string, amountError: string) {
     const normalized = value.trim().replace(/,/gu, '');
-    if (!/^-?\d+(?:\.\d{1,3})?$/u.test(normalized))
-        throw new Error('Amount must be non-zero with at most three decimals');
+    if (!/^-?\d+(?:\.\d{1,3})?$/u.test(normalized)) throw new Error(invalidAmount);
     const result = Math.round(Number(normalized) * 1_000);
-    if (!Number.isSafeInteger(result) || result === 0) throw new Error('Amount is invalid');
+    if (!Number.isSafeInteger(result) || result === 0) throw new Error(amountError);
     return result;
 }
 function money(value: number, currency: string) {

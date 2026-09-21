@@ -232,9 +232,8 @@ export class AccountApi extends BaseDomainApi {
             `
                 query MyFraudRiskCases {
                     myFraudRiskCases {
-                        id createdAt caseCode orderId status severity riskScore
-                        recommendedAction dueAt decisionReason decidedAt
-                        appeals { id createdAt status reason response reviewedAt }
+                        id createdAt caseCode orderId status severity dueAt decidedAt
+                        appeals { id createdAt status reason reviewedAt }
                     }
                 }
             `,
@@ -249,7 +248,7 @@ export class AccountApi extends BaseDomainApi {
             `
                 mutation AppealMyFraudRiskCase($input: AppealFraudRiskCaseInput!) {
                     appealMyFraudRiskCase(input: $input) {
-                        id createdAt status reason response reviewedAt
+                        id createdAt status reason reviewedAt
                     }
                 }
             `,

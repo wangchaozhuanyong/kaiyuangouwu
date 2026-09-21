@@ -689,7 +689,6 @@ export interface FraudRiskAppeal {
     createdAt: string;
     status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
     reason: string;
-    response: string | null;
     reviewedAt: string | null;
 }
 
@@ -700,10 +699,7 @@ export interface FraudRiskCase {
     orderId: string | null;
     status: 'OPEN' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED' | 'APPEALED' | 'CLOSED';
     severity: 'P1' | 'P2' | 'P3';
-    riskScore: number;
-    recommendedAction: string;
     dueAt: string;
-    decisionReason: string | null;
     decidedAt: string | null;
     appeals: FraudRiskAppeal[];
 }

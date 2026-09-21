@@ -1,4 +1,5 @@
 import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import {
     Alert,
     AlertDescription,
@@ -53,6 +54,62 @@ import {
 } from './incident-response.graphql';
 
 const title = msg({ id: 'operations.incidents.title', message: 'Incident response' });
+const messages = {
+    updated: msg({ id: 'operations.incidents.updated', message: 'Incident workflow updated' }),
+    refresh: msg({ id: 'operations.incidents.refresh', message: 'Refresh' }),
+    heading: msg({ id: 'operations.incidents.heading', message: 'Incident handling and evidence closure' }),
+    description: msg({
+        id: 'operations.incidents.description',
+        message:
+            'P0/P1 incidents require acknowledgement, recovery validation, review, and corrective action. Telegram is only a notification channel.',
+    }),
+    workflowStatus: msg({ id: 'operations.incidents.workflowStatus', message: 'Workflow status' }),
+    active: msg({ id: 'operations.incidents.active', message: 'Open incidents' }),
+    all: msg({ id: 'operations.incidents.all', message: 'All' }),
+    severity: msg({ id: 'operations.incidents.severity', message: 'Severity' }),
+    allSeverities: msg({ id: 'operations.incidents.allSeverities', message: 'All severities' }),
+    empty: msg({ id: 'operations.incidents.empty', message: 'No incidents match this filter.' }),
+    occurrences: msg({ id: 'operations.incidents.occurrences', message: 'occurrences' }),
+    evidence: msg({ id: 'operations.incidents.evidence', message: 'Evidence' }),
+    acknowledge: msg({ id: 'operations.incidents.acknowledge', message: 'Acknowledge' }),
+    validateRecovery: msg({ id: 'operations.incidents.validateRecovery', message: 'Validate recovery' }),
+    submitReview: msg({ id: 'operations.incidents.submitReview', message: 'Submit review' }),
+    complete: msg({ id: 'operations.incidents.complete', message: 'Complete' }),
+    evidenceChain: msg({ id: 'operations.incidents.evidenceChain', message: 'Incident evidence chain' }),
+    evidenceDescription: msg({
+        id: 'operations.incidents.evidenceDescription',
+        message: 'Evidence hashes are verified in real time. Any mismatch is shown as an integrity failure.',
+    }),
+    valid: msg({ id: 'operations.incidents.valid', message: 'Valid' }),
+    hashMismatch: msg({ id: 'operations.incidents.hashMismatch', message: 'Hash mismatch' }),
+    immutableNote: msg({
+        id: 'operations.incidents.immutableNote',
+        message: 'This action is recorded in the immutable incident evidence chain.',
+    }),
+    rootCause: msg({ id: 'operations.incidents.rootCause', message: 'Root cause' }),
+    impact: msg({ id: 'operations.incidents.impact', message: 'Impact summary' }),
+    correctiveAction: msg({ id: 'operations.incidents.correctiveAction', message: 'Corrective action' }),
+    ownerDepartment: msg({ id: 'operations.incidents.ownerDepartment', message: 'Owner department' }),
+    dueAt: msg({ id: 'operations.incidents.dueAt', message: 'Due date' }),
+    actionNote: msg({ id: 'operations.incidents.actionNote', message: 'Action note' }),
+    cancel: msg({ id: 'operations.incidents.cancel', message: 'Cancel' }),
+    saving: msg({ id: 'operations.incidents.saving', message: 'Saving…' }),
+    confirm: msg({ id: 'operations.incidents.confirm', message: 'Confirm and retain evidence' }),
+    acknowledgeTitle: msg({ id: 'operations.incidents.acknowledgeTitle', message: 'Acknowledge incident' }),
+    recoveryTitle: msg({ id: 'operations.incidents.recoveryTitle', message: 'Validate business recovery' }),
+    reviewTitle: msg({ id: 'operations.incidents.reviewTitle', message: 'Submit incident review' }),
+    actionTitle: msg({ id: 'operations.incidents.actionTitle', message: 'Complete corrective action' }),
+    statusOpen: msg({ id: 'operations.incidents.statusOpen', message: 'Awaiting acknowledgement' }),
+    statusAcknowledged: msg({ id: 'operations.incidents.statusAcknowledged', message: 'In progress' }),
+    statusRecovery: msg({
+        id: 'operations.incidents.statusRecovery',
+        message: 'Awaiting recovery validation',
+    }),
+    statusReview: msg({ id: 'operations.incidents.statusReview', message: 'Awaiting review' }),
+    statusAction: msg({ id: 'operations.incidents.statusAction', message: 'Corrective action in progress' }),
+    statusClosed: msg({ id: 'operations.incidents.statusClosed', message: 'Closed' }),
+    unknownError: msg({ id: 'operations.incidents.unknownError', message: 'Unknown error' }),
+};
 
 export const incidentResponseRoute: DashboardRouteDefinition = {
     navMenuItem: {
@@ -83,6 +140,15 @@ interface OperationDraft {
 }
 
 function IncidentResponsePage() {
+    const { t } = useLingui();
+    const statusLabels: Record<string, string> = {
+        OPEN: t(messages.statusOpen),
+        ACKNOWLEDGED: t(messages.statusAcknowledged),
+        RECOVERY_PENDING: t(messages.statusRecovery),
+        REVIEW_PENDING: t(messages.statusReview),
+        ACTION_PENDING: t(messages.statusAction),
+        CLOSED: t(messages.statusClosed),
+    };
     const [status, setStatus] = useState('ACTIVE');
     const [severity, setSeverity] = useState('ALL');
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -138,12 +204,12 @@ function IncidentResponsePage() {
             });
         },
         onSuccess: async () => {
-            toast.success('事故流程已更新');
+            toast.success(t(messages.updated));
             setDraft(null);
             await list.refetch();
             if (selectedId) await detail.refetch();
         },
-        onError: error => toast.error(errorMessage(error)),
+        onError: error => toast.error(errorMessage(error, t(messages.unknownError))),
     });
 
     const openOperation = (operation: Operation, incident: IncidentRecord, action?: IncidentActionRecord) => {
@@ -163,12 +229,12 @@ function IncidentResponsePage() {
 
     return (
         <Page pageId="incident-response">
-            <PageTitle>事故响应</PageTitle>
+            <PageTitle>{title.id}</PageTitle>
             <PageActionBar>
                 <PageActionBarRight>
                     <Button variant="outline" onClick={() => void list.refetch()} disabled={list.isFetching}>
                         <RefreshCw className={list.isFetching ? 'animate-spin' : ''} />
-                        刷新
+                        {t(messages.refresh)}
                     </Button>
                 </PageActionBarRight>
             </PageActionBar>
@@ -176,18 +242,16 @@ function IncidentResponsePage() {
                 <PageBlock column="main" blockId="incident-response-list">
                     <div className="mb-4 grid gap-3 md:grid-cols-[1fr_180px_140px] md:items-end">
                         <div>
-                            <h2 className="text-lg font-semibold">事故处理与证据闭环</h2>
-                            <p className="text-sm text-muted-foreground">
-                                P0/P1 必须完成确认、恢复验证、复盘与整改；Telegram 仅是通知渠道。
-                            </p>
+                            <h2 className="text-lg font-semibold">{t(messages.heading)}</h2>
+                            <p className="text-sm text-muted-foreground">{t(messages.description)}</p>
                         </div>
-                        <Select value={status} onValueChange={setStatus}>
+                        <Select value={status} onValueChange={value => value && setStatus(value)}>
                             <SelectTrigger>
-                                <SelectValue placeholder="流程状态" />
+                                <SelectValue placeholder={t(messages.workflowStatus)} />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="ACTIVE">未闭环</SelectItem>
-                                <SelectItem value="ALL">全部</SelectItem>
+                                <SelectItem value="ACTIVE">{t(messages.active)}</SelectItem>
+                                <SelectItem value="ALL">{t(messages.all)}</SelectItem>
                                 {[
                                     'OPEN',
                                     'ACKNOWLEDGED',
@@ -197,17 +261,17 @@ function IncidentResponsePage() {
                                     'CLOSED',
                                 ].map(value => (
                                     <SelectItem key={value} value={value}>
-                                        {statusLabel(value)}
+                                        {statusLabels[value] ?? value}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-                        <Select value={severity} onValueChange={setSeverity}>
+                        <Select value={severity} onValueChange={value => value && setSeverity(value)}>
                             <SelectTrigger>
-                                <SelectValue placeholder="严重等级" />
+                                <SelectValue placeholder={t(messages.severity)} />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="ALL">全部等级</SelectItem>
+                                <SelectItem value="ALL">{t(messages.allSeverities)}</SelectItem>
                                 {['P0', 'P1', 'P2', 'P3'].map(value => (
                                     <SelectItem key={value} value={value}>
                                         {value}
@@ -227,13 +291,15 @@ function IncidentResponsePage() {
                     {list.error && (
                         <Alert variant="destructive">
                             <TriangleAlert />
-                            <AlertDescription>{errorMessage(list.error)}</AlertDescription>
+                            <AlertDescription>
+                                {errorMessage(list.error, t(messages.unknownError))}
+                            </AlertDescription>
                         </Alert>
                     )}
                     {!list.isLoading && !incidents.length && (
                         <Alert>
                             <CheckCircle2 />
-                            <AlertDescription>当前筛选下没有事故。</AlertDescription>
+                            <AlertDescription>{t(messages.empty)}</AlertDescription>
                         </Alert>
                     )}
                     <div className="space-y-3">
@@ -250,7 +316,8 @@ function IncidentResponsePage() {
                                                 {incident.severity}
                                             </Badge>
                                             <Badge variant="secondary">
-                                                {statusLabel(incident.incidentStatus)}
+                                                {statusLabels[incident.incidentStatus] ??
+                                                    incident.incidentStatus}
                                             </Badge>
                                             <span className="text-xs font-medium text-muted-foreground">
                                                 {incident.ownerDepartmentCode}
@@ -258,8 +325,8 @@ function IncidentResponsePage() {
                                         </div>
                                         <h3 className="mt-2 font-semibold">{incident.title}</h3>
                                         <p className="mt-1 text-xs text-muted-foreground">
-                                            {incident.eventType} · {incident.occurrenceCount} 次 ·{' '}
-                                            {formatDate(incident.lastOccurredAt)}
+                                            {incident.eventType} · {incident.occurrenceCount}{' '}
+                                            {t(messages.occurrences)} · {formatDate(incident.lastOccurredAt)}
                                         </p>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
@@ -269,14 +336,14 @@ function IncidentResponsePage() {
                                             onClick={() => setSelectedId(incident.id)}
                                         >
                                             <Eye />
-                                            证据
+                                            {t(messages.evidence)}
                                         </Button>
                                         {incident.incidentStatus === 'OPEN' && (
                                             <Button
                                                 size="sm"
                                                 onClick={() => openOperation('ACKNOWLEDGE', incident)}
                                             >
-                                                确认接手
+                                                {t(messages.acknowledge)}
                                             </Button>
                                         )}
                                         {incident.incidentStatus === 'RECOVERY_PENDING' && (
@@ -284,7 +351,7 @@ function IncidentResponsePage() {
                                                 size="sm"
                                                 onClick={() => openOperation('RECOVERY', incident)}
                                             >
-                                                验证恢复
+                                                {t(messages.validateRecovery)}
                                             </Button>
                                         )}
                                         {incident.incidentStatus === 'REVIEW_PENDING' && (
@@ -292,7 +359,7 @@ function IncidentResponsePage() {
                                                 size="sm"
                                                 onClick={() => openOperation('REVIEW', incident)}
                                             >
-                                                提交复盘
+                                                {t(messages.submitReview)}
                                             </Button>
                                         )}
                                     </div>
@@ -319,7 +386,7 @@ function IncidentResponsePage() {
                                                             openOperation('ACTION', incident, action)
                                                         }
                                                     >
-                                                        完成
+                                                        {t(messages.complete)}
                                                     </Button>
                                                 )}
                                             </div>
@@ -335,8 +402,8 @@ function IncidentResponsePage() {
             <Sheet open={Boolean(selectedId)} onOpenChange={open => !open && setSelectedId(null)}>
                 <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
                     <SheetHeader>
-                        <SheetTitle>事故证据链</SheetTitle>
-                        <SheetDescription>证据哈希实时验证，任何异常均会显示为完整性失败。</SheetDescription>
+                        <SheetTitle>{t(messages.evidenceChain)}</SheetTitle>
+                        <SheetDescription>{t(messages.evidenceDescription)}</SheetDescription>
                     </SheetHeader>
                     {detail.isLoading && <Skeleton className="mt-6 h-40" />}
                     <div className="mt-6 space-y-3">
@@ -347,11 +414,11 @@ function IncidentResponsePage() {
                                     {item.integrityValid ? (
                                         <span className="flex items-center gap-1 text-xs text-emerald-700">
                                             <ShieldCheck className="size-4" />
-                                            完整
+                                            {t(messages.valid)}
                                         </span>
                                     ) : (
                                         <span className="text-xs font-semibold text-destructive">
-                                            哈希失配
+                                            {t(messages.hashMismatch)}
                                         </span>
                                     )}
                                 </div>
@@ -390,19 +457,26 @@ function OperationDialog({
     submit: () => void;
     pending: boolean;
 }) {
+    const { t } = useLingui();
+    const operationTitles: Record<Operation, string> = {
+        ACKNOWLEDGE: t(messages.acknowledgeTitle),
+        RECOVERY: t(messages.recoveryTitle),
+        REVIEW: t(messages.reviewTitle),
+        ACTION: t(messages.actionTitle),
+    };
     const isReview = draft?.operation === 'REVIEW';
     return (
         <Dialog open={Boolean(draft)} onOpenChange={open => !open && setDraft(null)}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>{draft ? operationTitle(draft.operation) : ''}</DialogTitle>
-                    <DialogDescription>该操作会记入不可编辑的事故证据链。</DialogDescription>
+                    <DialogTitle>{draft ? operationTitles[draft.operation] : ''}</DialogTitle>
+                    <DialogDescription>{t(messages.immutableNote)}</DialogDescription>
                 </DialogHeader>
                 {draft && (
                     <div className="space-y-4">
                         {isReview ? (
                             <>
-                                <Field label="根因">
+                                <Field label={t(messages.rootCause)}>
                                     <Textarea
                                         value={draft.rootCause}
                                         onChange={event =>
@@ -411,7 +485,7 @@ function OperationDialog({
                                         minLength={20}
                                     />
                                 </Field>
-                                <Field label="影响说明">
+                                <Field label={t(messages.impact)}>
                                     <Textarea
                                         value={draft.impactSummary}
                                         onChange={event =>
@@ -420,7 +494,7 @@ function OperationDialog({
                                         minLength={20}
                                     />
                                 </Field>
-                                <Field label="整改任务">
+                                <Field label={t(messages.correctiveAction)}>
                                     <Input
                                         value={draft.actionTitle}
                                         onChange={event =>
@@ -429,7 +503,7 @@ function OperationDialog({
                                     />
                                 </Field>
                                 <div className="grid grid-cols-2 gap-3">
-                                    <Field label="责任部门">
+                                    <Field label={t(messages.ownerDepartment)}>
                                         <Input
                                             value={draft.ownerDepartmentCode}
                                             onChange={event =>
@@ -440,7 +514,7 @@ function OperationDialog({
                                             }
                                         />
                                     </Field>
-                                    <Field label="截止时间">
+                                    <Field label={t(messages.dueAt)}>
                                         <Input
                                             type="datetime-local"
                                             value={draft.dueAt}
@@ -452,7 +526,7 @@ function OperationDialog({
                                 </div>
                             </>
                         ) : (
-                            <Field label="处理说明">
+                            <Field label={t(messages.actionNote)}>
                                 <Textarea
                                     value={draft.note}
                                     onChange={event => setDraft({ ...draft, note: event.target.value })}
@@ -464,10 +538,10 @@ function OperationDialog({
                 )}
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setDraft(null)}>
-                        取消
+                        {t(messages.cancel)}
                     </Button>
                     <Button onClick={submit} disabled={pending || !validDraft(draft)}>
-                        {pending ? '正在保存…' : '确认并留存证据'}
+                        {pending ? t(messages.saving) : t(messages.confirm)}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -494,31 +568,11 @@ function validDraft(draft: OperationDraft | null) {
         Boolean(draft.dueAt)
     );
 }
-function operationTitle(operation: Operation) {
-    return {
-        ACKNOWLEDGE: '确认接手事故',
-        RECOVERY: '验证业务恢复',
-        REVIEW: '提交事故复盘',
-        ACTION: '完成整改任务',
-    }[operation];
-}
-function statusLabel(status: string) {
-    return (
-        {
-            OPEN: '待确认',
-            ACKNOWLEDGED: '处理中',
-            RECOVERY_PENDING: '待恢复验证',
-            REVIEW_PENDING: '待复盘',
-            ACTION_PENDING: '整改中',
-            CLOSED: '已闭环',
-        }[status] ?? status
-    );
-}
 function formatDate(value: string) {
-    return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(
+    return new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(
         new Date(value),
     );
 }
-function errorMessage(error: unknown) {
-    return error instanceof Error ? error.message : '未知错误';
+function errorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback;
 }

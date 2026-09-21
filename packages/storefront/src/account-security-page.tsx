@@ -569,12 +569,6 @@ export function AccountSecurityPage({
                                                             ? `订单 ${riskCase.orderId ?? '—'} 暂需人工复核；批准后可继续支付`
                                                             : `Order ${riskCase.orderId ?? '—'} is under manual review; checkout resumes after release.`}
                                                     </span>
-                                                    {riskCase.decisionReason && (
-                                                        <span className="security-item-subtitle">
-                                                            {isZh ? '复核说明：' : 'Decision: '}
-                                                            {riskCase.decisionReason}
-                                                        </span>
-                                                    )}
                                                 </div>
                                             </div>
                                             {pendingAppeal && (

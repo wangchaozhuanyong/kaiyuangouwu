@@ -1,3 +1,5 @@
+import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import {
     Alert,
     AlertDescription,
@@ -35,7 +37,45 @@ interface ActionDraft {
     note: string;
 }
 
+const messages = {
+    enterNote: msg({ id: 'operations.delivery.enterNote', message: 'Enter an action note' }),
+    reshipDetails: msg({
+        id: 'operations.delivery.reshipDetails',
+        message: 'Carrier and tracking code are required to reship',
+    }),
+    proofRequired: msg({
+        id: 'operations.delivery.proofRequired',
+        message: 'Traceable proof is required to confirm delivery',
+    }),
+    updated: msg({ id: 'operations.delivery.updated', message: 'Delivery evidence updated' }),
+    updateFailed: msg({
+        id: 'operations.delivery.updateFailed',
+        message: 'Could not update delivery evidence',
+    }),
+    loadFailed: msg({ id: 'operations.delivery.loadFailed', message: 'Could not load delivery evidence' }),
+    retry: msg({ id: 'operations.delivery.retry', message: 'Retry' }),
+    heading: msg({ id: 'operations.delivery.heading', message: 'Delivery evidence and exceptions' }),
+    description: msg({
+        id: 'operations.delivery.description',
+        message:
+            'Delivery requires proof. Exceptions, reshipments, and customer confirmations are retained as events.',
+    }),
+    fulfillment: msg({ id: 'operations.delivery.fulfillment', message: 'Fulfillment #' }),
+    overdue: msg({ id: 'operations.delivery.overdue', message: 'Overdue' }),
+    noTracking: msg({ id: 'operations.delivery.noTracking', message: 'No tracking code' }),
+    recordException: msg({ id: 'operations.delivery.recordException', message: 'Record exception' }),
+    reship: msg({ id: 'operations.delivery.reship', message: 'Reship' }),
+    confirmDelivered: msg({ id: 'operations.delivery.confirmDelivered', message: 'Confirm delivery' }),
+    carrier: msg({ id: 'operations.delivery.carrier', message: 'Carrier' }),
+    newTracking: msg({ id: 'operations.delivery.newTracking', message: 'New tracking code' }),
+    proof: msg({ id: 'operations.delivery.proof', message: 'Proof of delivery' }),
+    actionNote: msg({ id: 'operations.delivery.actionNote', message: 'Action note' }),
+    cancel: msg({ id: 'operations.delivery.cancel', message: 'Cancel' }),
+    save: msg({ id: 'operations.delivery.save', message: 'Save delivery event' }),
+};
+
 export function FulfillmentDeliveryPageBlock({ context }: Readonly<Props>) {
+    const { t } = useLingui();
     const orderId = context.entity?.id;
     const queryClient = useQueryClient();
     const queryKey = ['fulfillment-delivery-order', orderId];
@@ -48,12 +88,12 @@ export function FulfillmentDeliveryPageBlock({ context }: Readonly<Props>) {
     });
     const mutation = useMutation({
         mutationFn: async () => {
-            if (!draft?.note.trim()) throw new Error('请填写操作说明');
+            if (!draft?.note.trim()) throw new Error(t(messages.enterNote));
             if (draft.status === 'IN_TRANSIT' && (!draft.carrier.trim() || !draft.trackingCode.trim())) {
-                throw new Error('重新发运必须填写物流公司和运单号');
+                throw new Error(t(messages.reshipDetails));
             }
             if (draft.status === 'DELIVERED' && !draft.proofReference.trim()) {
-                throw new Error('确认送达必须填写可追溯凭证');
+                throw new Error(t(messages.proofRequired));
             }
             return api.mutate(updateFulfillmentDeliveryMutation, {
                 input: {
@@ -68,11 +108,11 @@ export function FulfillmentDeliveryPageBlock({ context }: Readonly<Props>) {
             });
         },
         onSuccess: async () => {
-            toast.success('配送证据已更新');
+            toast.success(t(messages.updated));
             setDraft(null);
             await queryClient.invalidateQueries({ queryKey });
         },
-        onError: error => toast.error(error instanceof Error ? error.message : '配送证据更新失败'),
+        onError: error => toast.error(error instanceof Error ? error.message : t(messages.updateFailed)),
     });
 
     if (!orderId) return null;
@@ -81,9 +121,9 @@ export function FulfillmentDeliveryPageBlock({ context }: Readonly<Props>) {
         return (
             <Alert variant="destructive">
                 <AlertDescription className="flex items-center justify-between gap-3">
-                    <span>配送证据加载失败</span>
+                    <span>{t(messages.loadFailed)}</span>
                     <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
-                        <RefreshCw className="size-4" /> 重试
+                        <RefreshCw className="size-4" /> {t(messages.retry)}
                     </Button>
                 </AlertDescription>
             </Alert>
@@ -96,11 +136,9 @@ export function FulfillmentDeliveryPageBlock({ context }: Readonly<Props>) {
         <div className="space-y-4">
             <div>
                 <h3 className="flex items-center gap-2 text-base font-semibold">
-                    <Truck className="size-4" /> 配送证据与异常处理
+                    <Truck className="size-4" /> {t(messages.heading)}
                 </h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    送达必须带凭证；配送异常、重新发运和客户确认都会保留事件记录。
-                </p>
+                <p className="mt-1 text-sm text-muted-foreground">{t(messages.description)}</p>
             </div>
             {fulfillments.map(fulfillment => {
                 const evidence = fulfillment.deliveryEvidence;
@@ -109,7 +147,8 @@ export function FulfillmentDeliveryPageBlock({ context }: Readonly<Props>) {
                         <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
                                 <div className="flex items-center gap-2 font-medium">
-                                    履约 #{fulfillment.id}
+                                    {t(messages.fulfillment)}
+                                    {fulfillment.id}
                                     <Badge
                                         variant={
                                             evidence?.status === 'EXCEPTION' ? 'destructive' : 'secondary'
@@ -117,11 +156,15 @@ export function FulfillmentDeliveryPageBlock({ context }: Readonly<Props>) {
                                     >
                                         {evidence?.status ?? fulfillment.state}
                                     </Badge>
-                                    {evidence?.overdue && <Badge variant="outline">已逾期</Badge>}
+                                    {evidence?.overdue && (
+                                        <Badge variant="outline">{t(messages.overdue)}</Badge>
+                                    )}
                                 </div>
                                 <p className="mt-1 text-sm text-muted-foreground">
                                     {evidence?.carrier ?? fulfillment.method} ·{' '}
-                                    {evidence?.trackingCode ?? fulfillment.trackingCode ?? '无运单号'}
+                                    {evidence?.trackingCode ??
+                                        fulfillment.trackingCode ??
+                                        t(messages.noTracking)}
                                 </p>
                                 {evidence?.exceptionReason && (
                                     <p className="mt-2 flex items-center gap-1 text-sm text-destructive">
@@ -146,7 +189,7 @@ export function FulfillmentDeliveryPageBlock({ context }: Readonly<Props>) {
                                             size="sm"
                                             onClick={() => setDraft(makeDraft(fulfillment, 'EXCEPTION'))}
                                         >
-                                            登记异常
+                                            {t(messages.recordException)}
                                         </Button>
                                     )}
                                     {evidence?.status === 'EXCEPTION' && (
@@ -155,14 +198,14 @@ export function FulfillmentDeliveryPageBlock({ context }: Readonly<Props>) {
                                             size="sm"
                                             onClick={() => setDraft(makeDraft(fulfillment, 'IN_TRANSIT'))}
                                         >
-                                            重新发运
+                                            {t(messages.reship)}
                                         </Button>
                                     )}
                                     <Button
                                         size="sm"
                                         onClick={() => setDraft(makeDraft(fulfillment, 'DELIVERED'))}
                                     >
-                                        <PackageCheck className="size-4" /> 确认送达
+                                        <PackageCheck className="size-4" /> {t(messages.confirmDelivered)}
                                     </Button>
                                 </div>
                             )}
@@ -171,7 +214,7 @@ export function FulfillmentDeliveryPageBlock({ context }: Readonly<Props>) {
                             <div className="grid gap-3 border-t pt-3 sm:grid-cols-2">
                                 {draft.status === 'IN_TRANSIT' && (
                                     <>
-                                        <Field label="物流公司">
+                                        <Field label={t(messages.carrier)}>
                                             <Input
                                                 value={draft.carrier}
                                                 onChange={event =>
@@ -179,7 +222,7 @@ export function FulfillmentDeliveryPageBlock({ context }: Readonly<Props>) {
                                                 }
                                             />
                                         </Field>
-                                        <Field label="新运单号">
+                                        <Field label={t(messages.newTracking)}>
                                             <Input
                                                 value={draft.trackingCode}
                                                 onChange={event =>
@@ -190,7 +233,7 @@ export function FulfillmentDeliveryPageBlock({ context }: Readonly<Props>) {
                                     </>
                                 )}
                                 {draft.status === 'DELIVERED' && (
-                                    <Field label="送达凭证">
+                                    <Field label={t(messages.proof)}>
                                         <Input
                                             value={draft.proofReference}
                                             onChange={event =>
@@ -199,7 +242,7 @@ export function FulfillmentDeliveryPageBlock({ context }: Readonly<Props>) {
                                         />
                                     </Field>
                                 )}
-                                <Field label="操作说明" wide>
+                                <Field label={t(messages.actionNote)} wide>
                                     <Input
                                         value={draft.note}
                                         onChange={event => setDraft({ ...draft, note: event.target.value })}
@@ -207,10 +250,10 @@ export function FulfillmentDeliveryPageBlock({ context }: Readonly<Props>) {
                                 </Field>
                                 <div className="flex justify-end gap-2 sm:col-span-2">
                                     <Button variant="outline" onClick={() => setDraft(null)}>
-                                        取消
+                                        {t(messages.cancel)}
                                     </Button>
                                     <Button disabled={mutation.isPending} onClick={() => mutation.mutate()}>
-                                        保存配送事件
+                                        {t(messages.save)}
                                     </Button>
                                 </div>
                             </div>

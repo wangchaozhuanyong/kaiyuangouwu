@@ -1,6 +1,9 @@
 import { gql } from 'graphql-tag';
 
+import { businessClosureCommonSchema } from './business-closure-common.schema';
+import { customerGovernanceApiSchema } from './customer-governance-api.schema';
 import { storeCustomerCouponSchema } from './promotion/store-coupon-api.schema';
+import { storePaymentApiSchema } from './store-payment-api.schema';
 import { storeProfileInputSchema } from './store-profile-input.schema';
 import { storefrontBrandingSchema, storefrontPreviewBrandingSchema } from './storefront-branding.schema';
 import { trafficAdminSchema, trafficShopSchema } from './traffic/traffic-api.schema';
@@ -63,124 +66,7 @@ const referralPosterFields = `
 `;
 
 const commonTypes = gql`
-    enum DataSubjectRequestType {
-        EXPORT
-        ACCOUNT_CLOSURE
-    }
-
-    enum DataSubjectRequestStatus {
-        PENDING
-        PROCESSING
-        BLOCKED
-        FAILED
-        FULFILLED
-        CANCELLED
-    }
-
-    type DataSubjectRequest implements Node {
-        id: ID!
-        createdAt: DateTime!
-        updatedAt: DateTime!
-        channelId: ID!
-        requestType: DataSubjectRequestType!
-        status: DataSubjectRequestStatus!
-        requestedAt: DateTime!
-        dueAt: DateTime
-        nextAttemptAt: DateTime
-        lastAttemptAt: DateTime
-        attemptCount: Int!
-        blockersJson: String
-        lastError: String
-        resultDigest: String
-        resultSummaryJson: String
-        completedAt: DateTime
-        cancelledAt: DateTime
-    }
-
-    type DataSubjectExportPayload {
-        request: DataSubjectRequest!
-        fileName: String!
-        mimeType: String!
-        content: String!
-        sha256: String!
-    }
-
-    enum DataConsentPurpose {
-        TERMS
-        PRIVACY
-        ANALYTICS
-    }
-
-    enum DataConsentAction {
-        GRANTED
-        WITHDRAWN
-    }
-
-    type DataConsentRecord implements Node {
-        id: ID!
-        createdAt: DateTime!
-        updatedAt: DateTime!
-        channelId: ID!
-        purpose: DataConsentPurpose!
-        action: DataConsentAction!
-        policyVersion: String!
-        policyDigest: String!
-        locale: String!
-        source: String!
-        recordedAt: DateTime!
-    }
-
-    input StorefrontRegistrationConsentInput {
-        termsAccepted: Boolean!
-        privacyAcknowledged: Boolean!
-        locale: String!
-    }
-
-    input StorefrontAnalyticsConsentInput {
-        consentId: String!
-        granted: Boolean!
-        locale: String!
-    }
-
-    enum DataRetentionStatus {
-        PENDING
-        BLOCKED_REFERENCE
-        FAILED
-        RESTORED
-        PURGED
-    }
-
-    type DataRetentionRecord implements Node {
-        id: ID!
-        createdAt: DateTime!
-        updatedAt: DateTime!
-        channelId: ID!
-        resourceType: String!
-        resourceKey: String!
-        policyCode: String!
-        reason: String!
-        status: DataRetentionStatus!
-        quarantinedAt: DateTime!
-        purgeAfter: DateTime!
-        nextAttemptAt: DateTime
-        legalHold: Boolean!
-        legalHoldReason: String
-        legalHoldChangedByUserId: ID
-        legalHoldChangedAt: DateTime
-        attemptCount: Int!
-        lastAttemptAt: DateTime
-        lastError: String
-        completedAt: DateTime
-    }
-
-    type CustomerAvatarHistoryEntry {
-        id: ID!
-        status: DataRetentionStatus!
-        quarantinedAt: DateTime!
-        purgeAfter: DateTime!
-        legalHold: Boolean!
-        asset: Asset
-    }
+    ${businessClosureCommonSchema}
 
     enum StoreProfileStatus {
         DRAFT
@@ -283,183 +169,7 @@ const commonTypes = gql`
         expiresAt: DateTime!
     }
 
-    type StoreUsdtPaymentIntent {
-        id: ID!
-        channelId: ID!
-        channelCode: String!
-        orderId: ID!
-        orderCode: String!
-        network: String!
-        fiatCurrencyCode: String!
-        fiatAmount: Money!
-        fiatPerUsdtRate: Float!
-        markupPercent: Float!
-        rateSource: String!
-        receivingAddressMasked: String!
-        receivingAddressFingerprint: String!
-        baseUsdtAmount: Float!
-        expectedUsdtAmount: Float!
-        receivedUsdtAmount: Float
-        senderAddressMasked: String
-        status: String!
-        transactionId: String
-        failureReason: String
-        createdAt: DateTime!
-        expiresAt: DateTime!
-        settledAt: DateTime
-        blockNumber: Int
-        blockTimestamp: DateTime
-        lastCheckedAt: DateTime
-        manualReviewCode: String
-        resolvedAt: DateTime
-        resolvedByUserId: ID
-        resolutionActionId: ID
-    }
-
-    type StoreUsdtWallet {
-        channelId: ID!
-        channelCode: String!
-        reviewStatus: String!
-        configured: Boolean!
-        network: String!
-        activeReceivingAddressMasked: String
-        activeReceivingAddressFingerprint: String
-        pendingReceivingAddress: String
-        pendingReceivingAddressFingerprint: String
-        canReview: Boolean!
-        submittedAt: DateTime
-        reviewedAt: DateTime
-        rejectionReason: String
-    }
-
-    type StoreUsdtFiatTotal {
-        currencyCode: String!
-        amount: Money!
-    }
-
-    type StoreUsdtChannelPaymentStats {
-        channelId: ID!
-        channelCode: String!
-        totalCount: Int!
-        pendingCount: Int!
-        settledCount: Int!
-        manualReviewCount: Int!
-        expiredCount: Int!
-        resolvedCount: Int!
-        expectedUsdtTotal: Float!
-        receivedUsdtTotal: Float!
-        fiatTotals: [StoreUsdtFiatTotal!]!
-    }
-
-    type StorePaymentMethodStats {
-        channelId: ID!
-        channelCode: String!
-        paymentMethodCode: String!
-        currencyCode: CurrencyCode!
-        settledCount: Int!
-        refundCount: Int!
-        grossAmount: Money!
-        refundedAmount: Money!
-        netAmount: Money!
-    }
-
-    type StorePaymentDetail {
-        id: ID!
-        channelId: ID!
-        channelCode: String!
-        orderId: ID!
-        orderCode: String!
-        paymentMethodCode: String!
-        paymentState: String!
-        currencyCode: CurrencyCode!
-        amount: Money!
-        refundedAmount: Money!
-        netAmount: Money!
-        transactionId: String
-        createdAt: DateTime!
-    }
-
-    input StorePaymentReportOptionsInput {
-        from: DateTime
-        to: DateTime
-        skip: Int
-        take: Int
-    }
-
-    type StorePaymentDetailList {
-        items: [StorePaymentDetail!]!
-        totalItems: Int!
-    }
-
-    input StoreUsdtManualRefundInput {
-        paymentId: ID!
-        amount: Money!
-        usdtAmount: String!
-        recipientAddress: String!
-        transactionId: String!
-        reason: String!
-    }
-
-    type StoreUsdtManualRefund {
-        id: ID!
-        refundId: ID!
-        channelId: ID!
-        channelCode: String!
-        paymentId: ID!
-        orderId: ID!
-        orderCode: String!
-        currencyCode: CurrencyCode!
-        amount: Money!
-        usdtAmount: String!
-        network: String!
-        transactionId: String!
-        fromAddress: String!
-        toAddress: String!
-        blockNumber: Int!
-        blockTimestamp: DateTime!
-        reason: String!
-        operatorUserId: ID!
-        state: String!
-        createdAt: DateTime!
-    }
-
-    type StoreUsdtManualRefundList {
-        items: [StoreUsdtManualRefund!]!
-        totalItems: Int!
-    }
-
-    enum StoreUsdtReconciliationActionType {
-        RETRY_SETTLEMENT
-        CONFIRM_EXTERNAL_REFUND
-    }
-
-    input ResolveStoreUsdtPaymentIntentInput {
-        id: ID!
-        action: StoreUsdtReconciliationActionType!
-        reason: String!
-        transactionId: String
-        usdtAmount: String
-        recipientAddress: String
-    }
-
-    type StoreUsdtReconciliationAction {
-        id: ID!
-        channelId: ID!
-        intentId: ID!
-        orderId: ID!
-        action: StoreUsdtReconciliationActionType!
-        outcome: String!
-        operatorUserId: ID!
-        reason: String!
-        network: String
-        transactionId: String
-        usdtAmount: String
-        fromAddress: String
-        toAddress: String
-        blockNumber: Int
-        blockTimestamp: DateTime
-        createdAt: DateTime!
-    }
+    ${storePaymentApiSchema}
 
     input ReviewStoreUsdtWalletInput {
         channelId: ID!
@@ -1275,377 +985,7 @@ export const adminApiExtensions = gql`
         note: String
     }
 
-    enum CustomerOperationsSegment {
-        NEW
-        LEAD
-        ACTIVE
-        LOYAL
-        VIP
-        AT_RISK
-        DORMANT
-    }
-
-    enum CustomerChurnRisk {
-        NONE
-        LOW
-        MEDIUM
-        HIGH
-    }
-
-    enum CustomerFollowUpStatus {
-        OPEN
-        COMPLETED
-        DISMISSED
-    }
-
-    enum CustomerFollowUpPriority {
-        P1
-        P2
-        P3
-    }
-
-    enum CustomerFollowUpOutcome {
-        CONTACTED
-        RESOLVED
-        NO_RESPONSE
-        DO_NOT_CONTACT
-        NOT_NEEDED
-    }
-
-    enum CustomerFollowUpAction {
-        RESCHEDULE
-        COMPLETE
-        DISMISS
-    }
-
-    type CustomerCurrencyMetric {
-        currencyCode: CurrencyCode!
-        orderCount: Int!
-        grossRevenue: Money!
-        refundTotal: Money!
-        netLifetimeValue: Money!
-        averageOrderValue: Money!
-    }
-
-    type CustomerOperationsProfile implements Node {
-        id: ID!
-        createdAt: DateTime!
-        updatedAt: DateTime!
-        customer: Customer!
-        segment: CustomerOperationsSegment!
-        churnRisk: CustomerChurnRisk!
-        recencyScore: Int!
-        frequencyScore: Int!
-        monetaryScore: Int!
-        recencyDays: Int
-        orderCount: Int!
-        currencyCode: CurrencyCode!
-        grossRevenue: Money!
-        refundTotal: Money!
-        netLifetimeValue: Money!
-        averageOrderValue: Money!
-        currencyMetrics: [CustomerCurrencyMetric!]!
-        serviceInteractionCount: Int!
-        afterSalesCount: Int!
-        openAfterSalesCount: Int!
-        lastOrderAt: DateTime
-        lastServiceAt: DateTime
-        nextFollowUpAt: DateTime
-        doNotContact: Boolean!
-        reasons: [String!]!
-        evaluationVersion: String!
-        lastEvaluatedAt: DateTime!
-    }
-
-    type CustomerOperationsProfileList implements PaginatedList {
-        items: [CustomerOperationsProfile!]!
-        totalItems: Int!
-    }
-
-    type CustomerFollowUpEvent implements Node {
-        id: ID!
-        createdAt: DateTime!
-        eventType: String!
-        actorType: String!
-        actorLabel: String!
-        note: String!
-        payloadJson: String
-    }
-
-    type CustomerFollowUp implements Node {
-        id: ID!
-        createdAt: DateTime!
-        updatedAt: DateTime!
-        customer: Customer!
-        profile: CustomerOperationsProfile!
-        status: CustomerFollowUpStatus!
-        source: String!
-        priority: CustomerFollowUpPriority!
-        reasonCode: String!
-        title: String!
-        note: String!
-        dueAt: DateTime!
-        ownerUserId: ID
-        outcomeCode: CustomerFollowUpOutcome
-        outcomeNote: String
-        completedAt: DateTime
-        completedByUserId: ID
-        overdue: Boolean!
-        events: [CustomerFollowUpEvent!]!
-    }
-
-    type CustomerFollowUpList implements PaginatedList {
-        items: [CustomerFollowUp!]!
-        totalItems: Int!
-    }
-
-    input CustomerOperationsProfileListOptions {
-        segment: CustomerOperationsSegment
-        churnRisk: CustomerChurnRisk
-        followUpDue: Boolean
-        search: String
-        skip: Int
-        take: Int
-    }
-
-    input CustomerFollowUpListOptions {
-        status: CustomerFollowUpStatus
-        overdue: Boolean
-        priority: CustomerFollowUpPriority
-        customerId: ID
-        skip: Int
-        take: Int
-    }
-
-    input CreateCustomerFollowUpInput {
-        customerId: ID!
-        priority: CustomerFollowUpPriority!
-        dueAt: DateTime!
-        title: String!
-        note: String!
-        idempotencyKey: String!
-    }
-
-    input UpdateCustomerFollowUpInput {
-        id: ID!
-        action: CustomerFollowUpAction!
-        dueAt: DateTime
-        outcomeCode: CustomerFollowUpOutcome
-        note: String!
-        idempotencyKey: String!
-    }
-
-    enum GovernedConfigNamespace {
-        FRAUD_RULES
-        REPORT_SCHEDULE
-    }
-
-    enum GovernedConfigStatus {
-        DRAFT
-        ACTIVE
-        RETIRED
-        REJECTED
-    }
-
-    enum GovernanceApprovalStatus {
-        PENDING
-        APPROVED
-        REJECTED
-        CANCELLED
-        EXPIRED
-    }
-
-    type GovernedConfigVersion implements Node {
-        id: ID!
-        createdAt: DateTime!
-        updatedAt: DateTime!
-        channelId: ID!
-        namespace: GovernedConfigNamespace!
-        version: Int!
-        status: GovernedConfigStatus!
-        payloadJson: String!
-        payloadHash: String!
-        createdByUserId: ID!
-        activatedAt: DateTime
-        retiredAt: DateTime
-    }
-
-    type GovernanceApprovalRequest implements Node {
-        id: ID!
-        createdAt: DateTime!
-        updatedAt: DateTime!
-        channelId: ID!
-        configVersion: GovernedConfigVersion!
-        status: GovernanceApprovalStatus!
-        requestedByUserId: ID!
-        requestReason: String!
-        expiresAt: DateTime!
-        reviewedByUserId: ID
-        reviewReason: String
-        reviewedAt: DateTime
-        idempotencyKey: String!
-    }
-
-    type GovernanceAuditEntry implements Node {
-        id: ID!
-        createdAt: DateTime!
-        updatedAt: DateTime!
-        channelId: ID!
-        sequence: Int!
-        eventType: String!
-        resourceType: String!
-        resourceId: String!
-        actorType: String!
-        actorUserId: ID
-        actorLabel: String!
-        reason: String!
-        payloadJson: String!
-        payloadHash: String!
-        previousHash: String
-        entryHash: String!
-        idempotencyKey: String!
-    }
-
-    type GovernanceAuditEntryList implements PaginatedList {
-        items: [GovernanceAuditEntry!]!
-        totalItems: Int!
-    }
-
-    type GovernanceAuditIntegrity {
-        valid: Boolean!
-        checkedEntries: Int!
-        brokenAt: Int
-    }
-
-    type GovernanceReportSnapshot implements Node {
-        id: ID!
-        createdAt: DateTime!
-        updatedAt: DateTime!
-        channelId: ID!
-        businessDate: String!
-        windowStartedAt: DateTime!
-        windowEndedAt: DateTime!
-        metricsJson: String!
-        digest: String!
-        auditIntegrityValid: Boolean!
-        anomalyCount: Int!
-    }
-
-    input SubmitGovernedConfigInput {
-        namespace: GovernedConfigNamespace!
-        payloadJson: String!
-        reason: String!
-        idempotencyKey: String!
-    }
-
-    enum GovernanceApprovalDecision {
-        APPROVE
-        REJECT
-    }
-
-    input ReviewGovernanceApprovalInput {
-        id: ID!
-        decision: GovernanceApprovalDecision!
-        reason: String!
-        idempotencyKey: String!
-    }
-
-    enum FraudRiskCaseStatus {
-        OPEN
-        IN_REVIEW
-        APPROVED
-        REJECTED
-        APPEALED
-        CLOSED
-    }
-
-    enum FraudRiskSeverity {
-        P1
-        P2
-        P3
-    }
-
-    type FraudRiskCaseEvent implements Node {
-        id: ID!
-        createdAt: DateTime!
-        updatedAt: DateTime!
-        eventType: String!
-        actorType: String!
-        actorUserId: ID
-        note: String!
-        payloadJson: String
-        idempotencyKey: String!
-    }
-
-    type FraudRiskAppeal implements Node {
-        id: ID!
-        createdAt: DateTime!
-        updatedAt: DateTime!
-        status: String!
-        reason: String!
-        response: String
-        reviewedByUserId: ID
-        reviewedAt: DateTime
-    }
-
-    type FraudRiskCase implements Node {
-        id: ID!
-        createdAt: DateTime!
-        updatedAt: DateTime!
-        channelId: ID!
-        caseCode: String!
-        subjectType: String!
-        subjectId: String!
-        orderId: ID
-        customerId: ID
-        status: FraudRiskCaseStatus!
-        severity: FraudRiskSeverity!
-        riskScore: Int!
-        ruleVersion: String!
-        subjectDigest: String!
-        signalsJson: String!
-        recommendedAction: String!
-        dueAt: DateTime!
-        ownerUserId: ID
-        decisionCode: String
-        decisionReason: String
-        decidedByUserId: ID
-        decidedAt: DateTime
-        events: [FraudRiskCaseEvent!]!
-        appeals: [FraudRiskAppeal!]!
-    }
-
-    type FraudRiskCaseList implements PaginatedList {
-        items: [FraudRiskCase!]!
-        totalItems: Int!
-    }
-
-    input FraudRiskCaseListOptions {
-        status: FraudRiskCaseStatus
-        severity: FraudRiskSeverity
-        overdue: Boolean
-        skip: Int
-        take: Int
-    }
-
-    enum FraudRiskReviewAction {
-        CLAIM
-        RELEASE
-        BLOCK
-    }
-
-    input ReviewFraudRiskCaseInput {
-        id: ID!
-        action: FraudRiskReviewAction!
-        reason: String!
-        idempotencyKey: String!
-    }
-
-    input AppealFraudRiskCaseInput {
-        id: ID!
-        reason: String!
-        idempotencyKey: String!
-    }
+    ${customerGovernanceApiSchema}
 
     extend type Query {
         storeProvisioningTemplates: [Channel!]!
@@ -1876,6 +1216,32 @@ export const shopApiExtensions = gql`
         recorded: Boolean!
     }
 
+    type CustomerFraudRiskAppeal {
+        id: ID!
+        createdAt: DateTime!
+        status: String!
+        reason: String!
+        reviewedAt: DateTime
+    }
+
+    type CustomerFraudRiskCase {
+        id: ID!
+        createdAt: DateTime!
+        caseCode: String!
+        orderId: ID
+        status: String!
+        severity: String!
+        dueAt: DateTime!
+        decidedAt: DateTime
+        appeals: [CustomerFraudRiskAppeal!]!
+    }
+
+    input AppealFraudRiskCaseInput {
+        id: ID!
+        reason: String!
+        idempotencyKey: String!
+    }
+
     extend type Query {
         storefrontBranding: StorefrontBranding!
         availableStorefrontProvinces: [StorefrontProvinceOption!]!
@@ -1894,7 +1260,7 @@ export const shopApiExtensions = gql`
         referralProgram: ReferralProgram!
         validateReferralInviteCode(code: String!): Boolean!
         myReferralOverview: MyReferralOverview!
-        myFraudRiskCases: [FraudRiskCase!]!
+        myFraudRiskCases: [CustomerFraudRiskCase!]!
     }
 
     enum StorefrontCartCouponAction {
@@ -1935,6 +1301,6 @@ export const shopApiExtensions = gql`
         useMyReferralBalance(amount: Money!): ReferralBalancePaymentResult!
         recordStorefrontVisit(visitorId: String): StorefrontVisitResult!
         recordStorefrontPageView(input: StorefrontPageViewInput!): StorefrontVisitResult!
-        appealMyFraudRiskCase(input: AppealFraudRiskCaseInput!): FraudRiskAppeal!
+        appealMyFraudRiskCase(input: AppealFraudRiskCaseInput!): CustomerFraudRiskAppeal!
     }
 `;
