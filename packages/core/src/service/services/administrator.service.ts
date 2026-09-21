@@ -239,15 +239,24 @@ export class AdministratorService {
         if (input.roleIds) {
             await this.checkActiveUserCanGrantRoles(ctx, input.roleIds, input.id);
         }
+        const passwordChanged = !!input.password;
+        const rolesChanged =
+            input.roleIds != null &&
+            (input.roleIds.length !== administrator.user.roles.length ||
+                input.roleIds.some(
+                    roleId => !administrator.user.roles.some(role => idsAreEqual(role.id, roleId)),
+                ));
+        let identifierChanged = false;
         if (input.emailAddress) {
             const normalizedEmail = normalizeEmailAddress(input.emailAddress);
             await this.checkForDuplicateEmailAddress(ctx, normalizedEmail, input.id);
+            identifierChanged = normalizedEmail !== normalizeEmailAddress(administrator.emailAddress);
             input.emailAddress = normalizedEmail;
         }
         let updatedAdministrator = patchEntity(administrator, input);
         await this.connection.getRepository(ctx, Administrator).save(administrator, { reload: false });
 
-        if (input.emailAddress) {
+        if (identifierChanged && input.emailAddress) {
             updatedAdministrator.user.identifier = input.emailAddress;
             await this.connection.getRepository(ctx, User).save(updatedAdministrator.user);
         }
@@ -259,7 +268,7 @@ export class AdministratorService {
                 await this.connection.getRepository(ctx, NativeAuthenticationMethod).save(nativeAuthMethod);
             }
         }
-        if (input.roleIds) {
+        if (rolesChanged && input.roleIds) {
             const isSoleSuperAdmin = await this.isSoleSuperadmin(ctx, input.id);
             if (isSoleSuperAdmin) {
                 const superAdminRole = await this.roleService.getSuperAdminRole(ctx);
@@ -290,7 +299,7 @@ export class AdministratorService {
             updatedAdministrator,
         );
         await this.eventBus.publish(new AdministratorEvent(ctx, updatedAdministrator, 'updated', input));
-        if (input.emailAddress || input.password || input.roleIds) {
+        if (identifierChanged || passwordChanged || rolesChanged) {
             await this.deleteSessionsByUser(ctx, updatedAdministrator.user);
         }
         return updatedAdministrator;

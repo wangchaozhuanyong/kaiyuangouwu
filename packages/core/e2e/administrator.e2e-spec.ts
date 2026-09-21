@@ -256,6 +256,31 @@ describe('Administrator resolver', () => {
     });
 
     it('updateActiveAdministrator', async () => {
+        const { activeAdministrator: currentAdministrator } = await adminClient.query(
+            getActiveAdministratorDocument,
+        );
+        const unchangedEmailAddress = currentAdministrator?.emailAddress;
+        if (!unchangedEmailAddress) {
+            throw new Error('Expected an active administrator email address');
+        }
+
+        const { updateActiveAdministrator: unchangedIdentityUpdate } = await adminClient.query(
+            updateActiveAdministratorDocument,
+            {
+                input: {
+                    firstName: 'Thomas',
+                    lastName: 'Anderson',
+                    emailAddress: unchangedEmailAddress,
+                },
+            },
+        );
+
+        expect(unchangedIdentityUpdate.firstName).toBe('Thomas');
+        const { activeAdministrator: administratorAfterProfileUpdate } = await adminClient.query(
+            getActiveAdministratorDocument,
+        );
+        expect(administratorAfterProfileUpdate?.emailAddress).toBe(unchangedEmailAddress);
+
         const { updateActiveAdministrator } = await adminClient.query(updateActiveAdministratorDocument, {
             input: {
                 firstName: 'Thomas',
