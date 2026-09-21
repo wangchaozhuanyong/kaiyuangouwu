@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import {
     CreateAdministratorInput,
     DeletionResult,
@@ -37,7 +38,6 @@ import {
 import { patchEntity } from '../helpers/utils/patch-entity';
 
 import { RoleService } from './role.service';
-import { SessionService } from './session.service';
 import { UserService } from './user.service';
 
 /**
@@ -59,7 +59,7 @@ export class AdministratorService {
         private customFieldRelationService: CustomFieldRelationService,
         private eventBus: EventBus,
         private requestContextService: RequestContextService,
-        private sessionService: SessionService,
+        private moduleRef: ModuleRef,
     ) {}
 
     /** @internal */
@@ -291,7 +291,7 @@ export class AdministratorService {
         );
         await this.eventBus.publish(new AdministratorEvent(ctx, updatedAdministrator, 'updated', input));
         if (input.emailAddress || input.password || input.roleIds) {
-            await this.sessionService.deleteSessionsByUser(ctx, updatedAdministrator.user);
+            await this.deleteSessionsByUser(ctx, updatedAdministrator.user);
         }
         return updatedAdministrator;
     }
@@ -409,7 +409,7 @@ export class AdministratorService {
         }
         administrator.user.roles.push(role);
         await this.connection.getRepository(ctx, User).save(administrator.user, { reload: false });
-        await this.sessionService.deleteSessionsByUser(ctx, administrator.user);
+        await this.deleteSessionsByUser(ctx, administrator.user);
         return administrator;
     }
 
@@ -472,6 +472,13 @@ export class AdministratorService {
         return allAdmins.filter(admin =>
             admin.user.roles.some(role => idsAreEqual(role.id, superAdminRole.id)),
         );
+    }
+
+    private async deleteSessionsByUser(ctx: RequestContext, user: User): Promise<void> {
+        // Avoid the Administrator -> Session -> Order/History -> Administrator import cycle.
+        await this.moduleRef
+            .get((await import('./session.service.js')).SessionService)
+            .deleteSessionsByUser(ctx, user);
     }
 
     /**

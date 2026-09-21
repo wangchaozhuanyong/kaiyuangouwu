@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import {
     CreateRoleInput,
     DeletionResponse,
@@ -45,7 +46,6 @@ import {
 import { patchEntity } from '../helpers/utils/patch-entity';
 
 import { ChannelService } from './channel.service';
-import { SessionService } from './session.service';
 
 /**
  * @description
@@ -72,7 +72,7 @@ export class RoleService {
         private eventBus: EventBus,
         private requestContextCache: RequestContextCacheService,
         private cacheService: CacheService,
-        private sessionService: SessionService,
+        private moduleRef: ModuleRef,
     ) {
         // When a Role is created, updated or deleted, we need to invalidate the roles cache
         this.eventBus.ofType(RoleEvent).subscribe(event => {
@@ -331,7 +331,7 @@ export class RoleService {
         const deletedRole = new Role(role);
         await this.connection.getRepository(ctx, Role).remove(role);
         await this.eventBus.publish(new RoleEvent(ctx, deletedRole, 'deleted', id));
-        await Promise.all(affectedUsers.map(user => this.sessionService.deleteSessionsByUser(ctx, user)));
+        await Promise.all(affectedUsers.map(user => this.deleteSessionsByUser(ctx, user)));
         return {
             result: DeletionResult.DELETED,
         };
@@ -418,7 +418,7 @@ export class RoleService {
 
     private async revokeSessionsForRole(ctx: RequestContext, roleId: ID): Promise<void> {
         const users = await this.findUsersForRole(ctx, roleId);
-        await Promise.all(users.map(user => this.sessionService.deleteSessionsByUser(ctx, user)));
+        await Promise.all(users.map(user => this.deleteSessionsByUser(ctx, user)));
     }
 
     /**
@@ -490,6 +490,13 @@ export class RoleService {
         });
         role.channels = channels;
         return this.connection.getRepository(ctx, Role).save(role);
+    }
+
+    private async deleteSessionsByUser(ctx: RequestContext, user: User): Promise<void> {
+        // Resolve lazily to avoid the Role -> Session -> Order/History service import cycle.
+        await this.moduleRef
+            .get((await import('./session.service.js')).SessionService)
+            .deleteSessionsByUser(ctx, user);
     }
 
     private getAllAssignablePermissions(): Permission[] {

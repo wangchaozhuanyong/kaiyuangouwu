@@ -344,6 +344,9 @@ describe('Role resolver', () => {
             channelGuard.assertSuccess(createChannel);
 
             secondChannel = createChannel;
+            // The new Channel extends the owner role and invalidates the previous session.
+            adminClient.setAuthToken('');
+            await adminClient.asSuperAdmin();
         });
 
         it('createRole with specified channel', async () => {
@@ -491,7 +494,7 @@ describe('Role resolver', () => {
                         password: 'test',
                     },
                 });
-            }, 'Active user does not have sufficient permissions'),
+            }, 'The permission "SuperAdmin" may not be assigned'),
         );
 
         it(
@@ -592,24 +595,21 @@ describe('Role resolver', () => {
     });
 
     describe('roles query', () => {
-        let limitedChannelAdmin: FragmentOf<typeof administratorFragment>
+        let limitedChannelAdmin: FragmentOf<typeof administratorFragment>;
 
         beforeAll(async () => {
             adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
             await adminClient.asSuperAdmin();
 
             // Create roles that will be hidden from limited admin
-            await adminClient.query(
-                createRoleDocument,
-                {
-                    input: {
-                        code: 'hidden-role',
-                        description: 'Hidden role',
-                        // Some permission the limited admin user doesn't have, so the role is hidden
-                        permissions: [Permission.ReadOrder],
-                    },
+            await adminClient.query(createRoleDocument, {
+                input: {
+                    code: 'hidden-role',
+                    description: 'Hidden role',
+                    // Some permission the limited admin user doesn't have, so the role is hidden
+                    permissions: [Permission.ReadOrder],
                 },
-            );
+            });
 
             // Create a role to assign to the limited admin user
             const visibleRole = await adminClient.query(createRoleDocument, {
@@ -637,14 +637,11 @@ describe('Role resolver', () => {
             await adminClient.asUserWithCredentials(limitedChannelAdmin.emailAddress, 'test');
 
             // Query first page with pagination, sorted by createdAt ASC
-            const result = await adminClient.query(
-                getRolesDocument,
-                {
-                    options: {
-                        take: 2,
-                    },
+            const result = await adminClient.query(getRolesDocument, {
+                options: {
+                    take: 2,
                 },
-            );
+            });
 
             // Should have at least visible role and test role created earlier
             expect(result.roles.items).toHaveLength(2);

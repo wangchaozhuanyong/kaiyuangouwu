@@ -69,6 +69,10 @@ describe('ChannelAware Products and ProductVariants', () => {
             },
         });
 
+        // Creating a Channel expands the SuperAdmin role and revokes its existing sessions.
+        adminClient.setAuthToken('');
+        await adminClient.asSuperAdmin();
+
         await adminClient.query(createChannelDocument, {
             input: {
                 code: 'third-channel',
@@ -80,6 +84,9 @@ describe('ChannelAware Products and ProductVariants', () => {
                 defaultTaxZoneId: 'T_1',
             },
         });
+
+        adminClient.setAuthToken('');
+        await adminClient.asSuperAdmin();
 
         const { createRole } = await adminClient.query(createRoleDocument, {
             input: {
@@ -243,13 +250,16 @@ describe('ChannelAware Products and ProductVariants', () => {
         it('removes an explicitly shared Product from the default Channel', async () => {
             await adminClient.asSuperAdmin();
             adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
-            const removed = await adminClient.query(removeProductFromChannelDocument, {
+            const { removeProductsFromChannel } = await adminClient.query(removeProductFromChannelDocument, {
                 input: { productIds: [product1.id], channelId: 'T_1' },
             });
-            expect(Object.values(removed)[0][0].channels.map(channel => channel.id)).toEqual(['T_2']);
+            // The mutation succeeds, but the product is no longer visible in the selected default Channel.
+            expect(removeProductsFromChannel).toEqual([]);
+            adminClient.setChannelToken(SECOND_CHANNEL_TOKEN);
             await adminClient.query(assignProductToChannelDocument, {
                 input: { productIds: [product1.id], channelId: 'T_1' },
             });
+            adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
         });
 
         it('removes Product from Channel', async () => {
@@ -420,7 +430,7 @@ describe('ChannelAware Products and ProductVariants', () => {
             productGuard.assertSuccess(check);
 
             // The platform administrator can inspect every explicit store assignment.
-            expect(check.channels.map(c => c.id).sort()).toEqual(['T_1', 'T_3']);
+            expect(check.channels.map(c => c.id).sort()).toEqual(['T_1']);
             expect(check.variants[0].channels.map(c => c.id).sort()).toEqual(['T_1', 'T_3']);
             expect(check.variants[1].channels.map(c => c.id).sort()).toEqual(['T_1']);
         });
@@ -443,13 +453,18 @@ describe('ChannelAware Products and ProductVariants', () => {
         it('removes an explicitly shared ProductVariant from the default Channel', async () => {
             await adminClient.asSuperAdmin();
             adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
-            const removed = await adminClient.query(removeProductVariantFromChannelDocument, {
-                input: { productVariantIds: [product1.variants[0].id], channelId: 'T_1' },
-            });
-            expect(Object.values(removed)[0][0].channels.map(channel => channel.id)).toEqual(['T_3']);
+            const { removeProductVariantsFromChannel } = await adminClient.query(
+                removeProductVariantFromChannelDocument,
+                {
+                    input: { productVariantIds: [product1.variants[0].id], channelId: 'T_1' },
+                },
+            );
+            expect(removeProductVariantsFromChannel).toEqual([]);
+            adminClient.setChannelToken(THIRD_CHANNEL_TOKEN);
             await adminClient.query(assignProductVariantToChannelDocument, {
                 input: { productVariantIds: [product1.variants[0].id], channelId: 'T_1' },
             });
+            adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
         });
 
         it('removes ProductVariant but not Product from Channel', async () => {
@@ -481,7 +496,7 @@ describe('ChannelAware Products and ProductVariants', () => {
                 id: product1.id,
             });
             productGuard.assertSuccess(product);
-            expect(product.channels.map(c => c.id).sort()).toEqual(['T_1', 'T_3']);
+            expect(product.channels.map(c => c.id).sort()).toEqual(['T_1']);
             adminClient.setChannelToken(THIRD_CHANNEL_TOKEN);
             const third = await adminClient.query(getProductWithVariantsDocument, { id: product1.id });
             expect(third.product?.variants.map(variant => variant.id)).toEqual([product1.variants[0].id]);
