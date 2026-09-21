@@ -78,7 +78,7 @@ export type ApplyCollectionFiltersJobData = {
 @Injectable()
 @Instrument()
 export class CollectionService implements OnModuleInit {
-    private readonly rootCollectionsByChannel = new Map<string, Translated<Collection>>();
+    private rootCollection: Translated<Collection> | undefined;
     private applyFiltersQueue: JobQueue<ApplyCollectionFiltersJobData>;
     private applyAllFiltersOnProductUpdates = true;
 
@@ -923,8 +923,7 @@ export class CollectionService implements OnModuleInit {
     }
 
     private async getRootCollection(ctx: RequestContext): Promise<Collection> {
-        const cacheKey = String(ctx.channelId);
-        const cachedRoot = this.rootCollectionsByChannel.get(cacheKey);
+        const cachedRoot = this.rootCollection;
 
         if (cachedRoot) {
             return cachedRoot;
@@ -940,9 +939,8 @@ export class CollectionService implements OnModuleInit {
             .getOne();
 
         if (existingRoot) {
-            const existingRootTranslation = this.translator.translate(existingRoot, ctx);
-            this.rootCollectionsByChannel.set(cacheKey, existingRootTranslation);
-            return existingRootTranslation;
+            this.rootCollection = this.translator.translate(existingRoot, ctx);
+            return this.rootCollection;
         }
 
         // We purposefully do not use the ctx in saving the new root Collection
@@ -966,9 +964,8 @@ export class CollectionService implements OnModuleInit {
                 filters: [],
             }),
         );
-        const newRootTranslation = this.translator.translate(newRoot, ctx);
-        this.rootCollectionsByChannel.set(cacheKey, newRootTranslation);
-        return newRootTranslation;
+        this.rootCollection = this.translator.translate(newRoot, ctx);
+        return this.rootCollection;
     }
 
     /**
