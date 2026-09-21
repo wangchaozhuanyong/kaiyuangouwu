@@ -1,14 +1,21 @@
 import { useNavigate } from '@tanstack/react-router';
 import { ReactNode, useMemo, useState } from 'react';
+import type { HomeNoticeItem } from '../../pages/home-page';
 
 import { productAvailability } from '../../product-availability';
+import { StorefrontCouponCard } from '../../storefront-coupons';
 import { routeNavigateOptions, type RouteState } from '../../storefront-router';
+import { FlashSaleSection, HomepageCouponHub } from '../../storefront-ui/content-ui';
+import { LegalFooter } from '../../storefront-ui/page-shell';
 import { sanitizeProductSubtitle } from '../../storefront-ui/product-display';
 import {
     CollectionSummary,
     Product,
     StorefrontContentBlock,
     StorefrontContentTargetType,
+    StorefrontFlashSale,
+    StorefrontFlashSaleItem,
+    StorefrontFlashSaleProduct,
     StorefrontLanguage,
 } from '../../types';
 
@@ -25,7 +32,18 @@ export interface DesktopNeoMinimalistHomeProps {
         onClick: () => void;
     }>;
     coreCategoriesBlock?: StorefrontContentBlock;
+    activeNoticeItem?: HomeNoticeItem;
+    onOpenNotice?: () => void;
+    coupons?: StorefrontCouponCard[];
+    onClaimCoupon?: (campaignId: string) => Promise<string | null>;
+    flashSales?: StorefrontFlashSale[];
+    flashSaleItems?: Array<StorefrontFlashSaleItem | StorefrontFlashSaleProduct>;
+    flashSaleBlock?: StorefrontContentBlock;
+    legalBlock?: StorefrontContentBlock;
+    favoriteProductIds?: string[];
+    onToggleFavorite?: (productId: string) => void;
     language: StorefrontLanguage;
+    locale?: string;
     storefrontName: string;
     displayCurrencyCode?: string;
     onProductSelect?: (productId: string) => void;
@@ -70,12 +88,24 @@ export function DesktopNeoMinimalistHome({
     managedHeroes = [],
     quickLinks = [],
     coreCategoriesBlock,
+    activeNoticeItem,
+    onOpenNotice,
+    coupons = [],
+    onClaimCoupon,
+    flashSales = [],
+    flashSaleItems = [],
+    flashSaleBlock,
+    legalBlock,
+    favoriteProductIds = [],
+    onToggleFavorite,
     language,
+    locale,
     storefrontName,
     displayCurrencyCode = 'CNY',
     onProductSelect,
     onOpenHero,
     onContentTarget,
+    onToast,
 }: DesktopNeoMinimalistHomeProps) {
     const navigate = useNavigate();
     const isZh = language === 'zh';
@@ -198,24 +228,45 @@ export function DesktopNeoMinimalistHome({
 
     return (
         <section className="proto-home-container">
+            {/* 0. NOTICE STRIP (PARITY WITH MOBILE) */}
+            {activeNoticeItem && (
+                <div
+                    className="proto-notice-strip"
+                    role="button"
+                    tabIndex={0}
+                    onClick={onOpenNotice}
+                    onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            onOpenNotice?.();
+                        }
+                    }}
+                >
+                    <span className="proto-notice-icon">📢</span>
+                    <span className="proto-notice-tag">{isZh ? '系统公告' : 'Notice'}</span>
+                    <span className="proto-notice-text">
+                        {activeNoticeItem.summary || activeNoticeItem.title}
+                    </span>
+                    <span className="proto-notice-arrow">→</span>
+                </div>
+            )}
+
             {/* 1. HERO BENTO GRID */}
             <div className="proto-hero-section">
                 <div className="proto-hero-grid">
-                    {/* LEFT LARGE CARD (~65% WIDTH) */}
+                    {/* LEFT LARGE CARD (~65% WIDTH) - PURE NATURAL IMAGE WITHOUT DARK OVERLAY */}
                     <div
                         className={`proto-hero-featured ${activeHero?.imageUrl ? 'has-hero-bg' : ''}`}
                         style={
                             activeHero?.imageUrl
                                 ? {
-                                      backgroundImage:
-                                          'linear-gradient(90deg, rgba(12, 16, 28, 0.92) 0%, ' +
-                                          'rgba(15, 23, 42, 0.78) 50%, rgba(15, 23, 42, 0.55) 100%), ' +
-                                          `url(${activeHero.imageUrl})`,
+                                      backgroundImage: `url(${activeHero.imageUrl})`,
                                       backgroundSize: 'cover',
                                       backgroundPosition: 'center',
                                   }
                                 : undefined
                         }
+                        onClick={handleHeroAction}
                     >
                         <div className="proto-featured-content">
                             <span className="proto-flagship-badge">
@@ -225,13 +276,23 @@ export function DesktopNeoMinimalistHome({
                             <p className="proto-flagship-desc">{heroDesc}</p>
                         </div>
                         <div className="proto-flagship-actions">
-                            <button type="button" className="proto-btn-upgrade" onClick={handleHeroAction}>
+                            <button
+                                type="button"
+                                className="proto-btn-upgrade"
+                                onClick={e => {
+                                    e.stopPropagation();
+                                    handleHeroAction();
+                                }}
+                            >
                                 {heroCtaText}
                             </button>
                             <button
                                 type="button"
                                 className="proto-btn-benchmarks"
-                                onClick={() => navigateTo({ name: 'category' })}
+                                onClick={e => {
+                                    e.stopPropagation();
+                                    navigateTo({ name: 'category' });
+                                }}
                             >
                                 {isZh ? '全品类目录' : 'All Categories'}
                             </button>
@@ -375,6 +436,37 @@ export function DesktopNeoMinimalistHome({
                 </div>
             )}
 
+            {/* 1.6 COUPONS SECTION (PARITY WITH MOBILE) */}
+            {coupons && coupons.length > 0 && onClaimCoupon && (
+                <div className="proto-marketing-row proto-coupon-hub-row">
+                    <HomepageCouponHub
+                        coupons={coupons}
+                        language={language}
+                        loading={false}
+                        onClaim={onClaimCoupon}
+                        onToast={onToast}
+                    />
+                </div>
+            )}
+
+            {/* 1.7 FLASH SALES SECTION (PARITY WITH MOBILE) */}
+            {flashSaleItems && flashSaleItems.length > 0 && (
+                <div className="proto-marketing-row proto-flash-sale-row">
+                    <FlashSaleSection
+                        title={flashSaleBlock?.title || (isZh ? '限时秒杀' : 'Flash Sale')}
+                        subtitle={flashSaleBlock?.subtitle || undefined}
+                        items={flashSaleItems}
+                        locale={locale || (isZh ? 'zh-CN' : 'en-US')}
+                        language={language}
+                        endsAt={flashSales?.[0]?.endsAt ?? null}
+                        onMore={() => navigateTo({ name: 'flash-sale' })}
+                        onProduct={(productId, variantId) =>
+                            navigateTo({ name: 'product', id: productId, variantId })
+                        }
+                    />
+                </div>
+            )}
+
             {/* 2. CATEGORY & SORT FILTER BAR */}
             <div className="proto-filter-bar">
                 {/* Dynamic Category Pills */}
@@ -444,6 +536,7 @@ export function DesktopNeoMinimalistHome({
                                   : 'Official';
                             const priceWithTax = variant?.priceWithTax ?? 0;
                             const priceVal = (priceWithTax / 100).toFixed(priceWithTax % 100 === 0 ? 0 : 2);
+                            const isFavorite = favoriteProductIds.includes(p.id);
 
                             return (
                                 <div
@@ -451,31 +544,55 @@ export function DesktopNeoMinimalistHome({
                                     className="proto-product-card"
                                     onClick={() => handleProductCardClick(p.id)}
                                 >
-                                    <div>
-                                        {/* Top Row: Icon / Thumbnail & Tag Badge */}
-                                        <div className="proto-card-top-row">
-                                            <span className="proto-card-icon-box">
-                                                {p.featuredAsset?.preview ? (
-                                                    <img
-                                                        src={p.featuredAsset.preview}
-                                                        alt={p.name}
-                                                        loading="lazy"
-                                                        className="proto-card-thumb-img"
-                                                    />
-                                                ) : (
-                                                    <span className="proto-card-fallback-emoji">
-                                                        {getProductEmoji(p.name)}
-                                                    </span>
-                                                )}
+                                    {/* Top Dedicated Large Cover Banner (~156px) */}
+                                    <div className="proto-card-media-banner">
+                                        {p.featuredAsset?.preview ? (
+                                            <img
+                                                src={p.featuredAsset.preview}
+                                                alt={p.name}
+                                                loading="lazy"
+                                                className="proto-card-cover-img"
+                                            />
+                                        ) : (
+                                            <span className="proto-card-fallback-emoji">
+                                                {getProductEmoji(p.name)}
                                             </span>
-                                            <span className="proto-card-badge is-purple">{badge}</span>
-                                        </div>
+                                        )}
+                                        <span className="proto-card-badge is-purple">{badge}</span>
+                                        <button
+                                            type="button"
+                                            className={`proto-card-fav-btn ${isFavorite ? 'is-favorited' : ''}`}
+                                            aria-label={
+                                                isFavorite
+                                                    ? isZh
+                                                        ? '取消收藏'
+                                                        : 'Remove favorite'
+                                                    : isZh
+                                                      ? '收藏商品'
+                                                      : 'Add to favorite'
+                                            }
+                                            onClick={e => {
+                                                e.stopPropagation();
+                                                onToggleFavorite?.(p.id);
+                                            }}
+                                        >
+                                            <svg
+                                                className="proto-fav-heart-icon"
+                                                viewBox="0 0 24 24"
+                                                width="15"
+                                                height="15"
+                                                fill={isFavorite ? '#ef4444' : 'none'}
+                                                stroke={isFavorite ? '#ef4444' : 'currentColor'}
+                                                strokeWidth="2"
+                                            >
+                                                {/* eslint-disable-next-line max-len */}
+                                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                                            </svg>
+                                        </button>
+                                    </div>
 
-                                        {/* Real Product Name */}
-                                        <h4 className="proto-card-name" title={p.name}>
-                                            {p.name}
-                                        </h4>
-
+                                    {/* Card Body Info */}
+                                    <div className="proto-card-body">
                                         {/* Status Dot & Collection Name */}
                                         <div className="proto-card-status">
                                             <span
@@ -489,6 +606,11 @@ export function DesktopNeoMinimalistHome({
                                                       : 'Out of Stock'}
                                             </span>
                                         </div>
+
+                                        {/* Real Product Name */}
+                                        <h4 className="proto-card-name" title={p.name}>
+                                            {p.name}
+                                        </h4>
 
                                         {/* Real Product Specs / Subtitle */}
                                         <div className="proto-card-specs">
@@ -527,7 +649,7 @@ export function DesktopNeoMinimalistHome({
                 )}
             </div>
 
-            {/* Backward-compatible custom shortcuts for tests */}
+            {/* Backward-compatible custom shortcuts with robust onContentTarget routing */}
             {desktopFilteredShortcuts.length > 0 && (
                 <div className="desktop-custom-shortcuts-bar" aria-label="Custom shortcuts">
                     {desktopFilteredShortcuts.map(item => (
@@ -536,7 +658,9 @@ export function DesktopNeoMinimalistHome({
                             type="button"
                             className="custom-shortcut-pill"
                             onClick={() => {
-                                if (item.targetType === 'COLLECTION' && item.targetValue) {
+                                if (onContentTarget) {
+                                    onContentTarget(item.targetType, item.targetValue);
+                                } else if (item.targetType === 'COLLECTION' && item.targetValue) {
                                     navigateTo({
                                         name: 'category',
                                         collectionId: item.targetValue,
@@ -552,6 +676,23 @@ export function DesktopNeoMinimalistHome({
                             <b>{item.label}</b>
                         </button>
                     ))}
+                </div>
+            )}
+
+            {/* 4. LEGAL FOOTER (PARITY WITH MOBILE) */}
+            {legalBlock && (
+                <div className="proto-footer-wrapper">
+                    <LegalFooter
+                        storefrontName={storefrontName}
+                        language={language}
+                        content={legalBlock}
+                        onContentTarget={
+                            onContentTarget ||
+                            (() => {
+                                /* noop */
+                            })
+                        }
+                    />
                 </div>
             )}
         </section>

@@ -74,6 +74,8 @@ export function HomeRoutePage() {
                 onContentTarget: runtime.openContentTarget,
                 onContentRetry: () => void runtime.contentQuery?.refetch?.(),
                 onRetry: () => void runtime.refetchStorefront(),
+                favoriteProductIds: runtime.favoriteProductIds,
+                onToggleFavorite: runtime.toggleFavoriteProduct,
             }}
         >
             <HomePage />

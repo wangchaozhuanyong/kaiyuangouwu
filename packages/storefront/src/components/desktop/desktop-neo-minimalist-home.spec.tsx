@@ -157,7 +157,9 @@ describe('DesktopNeoMinimalistHome dynamic data rendering', () => {
         // Real hero content must be rendered
         expect(markup).toContain('中转站 Token 充值活动');
         expect(markup).toContain('1 / 5 / 10 美元档位，从小额体验到持续调用');
-        expect(markup).toContain('查看充值档位');
+        // Real product card must feature dedicated large cover container and favorite heart
+        expect(markup).toContain('proto-card-media-banner');
+        expect(markup).toContain('proto-card-fav-btn');
 
         // Real quick links must be rendered
         expect(markup).toContain('中转站');
@@ -183,5 +185,62 @@ describe('DesktopNeoMinimalistHome dynamic data rendering', () => {
         // Uses the first product as featured
         expect(markup).toContain('Codex-Plu成品号');
         expect(markup).toContain('立即选购 ¥168');
+    });
+
+    it('renders notice strip, favorite state and legal footer when provided', () => {
+        const mockNotice = {
+            id: 'n-1',
+            summary: '全场中转额度现已支持并发直连',
+            title: '公告标题',
+            content: '公告详细内容',
+            ctaLabel: '查看详情',
+            targetType: 'NONE' as const,
+            targetValue: null,
+            linkUrl: null,
+        };
+
+        const mockLegalBlock: StorefrontContentBlock = {
+            id: 'legal-1',
+            code: 'LEGAL',
+            type: 'LEGAL',
+            enabled: true,
+            position: 10,
+            title: '合规与服务条款',
+            subtitle: '粤ICP备12345678号',
+            body: '',
+            imageUrl: null,
+            targetType: 'NONE',
+            targetValue: null,
+            ctaLabel: '',
+            backgroundColor: null,
+            textColor: null,
+            startsAt: null,
+            endsAt: null,
+            items: [],
+        };
+
+        const markup = renderToStaticMarkup(
+            <DesktopNeoMinimalistHome
+                products={mockProducts}
+                collections={mockCollections}
+                managedHeroes={mockManagedHeroes}
+                activeNoticeItem={mockNotice}
+                favoriteProductIds={['1']}
+                legalBlock={mockLegalBlock}
+                language="zh"
+                storefrontName="MOYAO AI"
+            />,
+        );
+
+        // Notice strip
+        expect(markup).toContain('proto-notice-strip');
+        expect(markup).toContain('全场中转额度现已支持并发直连');
+
+        // Favorite heart button active state
+        expect(markup).toContain('is-favorited');
+
+        // Legal footer
+        expect(markup).toContain('proto-footer-wrapper');
+        expect(markup).toContain('服务与政策');
     });
 });

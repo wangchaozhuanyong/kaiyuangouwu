@@ -474,6 +474,8 @@ export interface HomePageProps {
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
     onContentRetry: () => void;
     onRetry: () => void;
+    favoriteProductIds?: string[];
+    onToggleFavorite?: (productId: string) => void;
 }
 
 export function HomePage() {
@@ -505,6 +507,7 @@ export function HomePage() {
         storefrontTagline,
         logoUrl,
         couponLoading,
+        onCategorySelect,
         onToggleLanguage,
         availableCurrencyCodes,
         currencySelectorEnabled,
@@ -518,6 +521,8 @@ export function HomePage() {
         onContentTarget,
         onContentRetry,
         onRetry,
+        favoriteProductIds = [],
+        onToggleFavorite,
     } = HomePageContext.useValue();
     const isZh = language === 'zh';
     const noticeBlock = contentBlocks.find(block => block.type === 'NOTICE');
@@ -813,21 +818,13 @@ export function HomePage() {
         icon: ReactNode;
         disabled?: boolean;
         onClick: () => void;
-    }> = (quickBlock?.items ?? [])
-        // Desktop collections already have a persistent entry in DesktopHeader.
-        .filter(
-            item =>
-                !desktop ||
-                item.targetType !== 'COLLECTION' ||
-                !collections.some(collection => collection.id === item.targetValue),
-        )
-        .map((item, index) => ({
-            id: item.id,
-            label: item.label,
-            icon: renderColorfulQuickIcon(item.label, index, item.imageUrl),
-            disabled: item.targetType === 'NONE' || !item.targetValue,
-            onClick: () => onContentTarget(item.targetType, item.targetValue),
-        }));
+    }> = (quickBlock?.items ?? []).map((item, index) => ({
+        id: item.id,
+        label: item.label,
+        icon: renderColorfulQuickIcon(item.label, index, item.imageUrl),
+        disabled: item.targetType === 'NONE' || !item.targetValue,
+        onClick: () => onContentTarget(item.targetType, item.targetValue),
+    }));
     const trustIcons = [ShieldCheck, Zap, Lock, Headphones];
     const trustItems = (trustBlock?.items ?? []).map(item => item.label);
     const trustBarHasLongCopy = trustItems.some(label => Array.from(label.trim()).length > (isZh ? 4 : 10));
@@ -847,7 +844,18 @@ export function HomePage() {
                     managedHeroes={managedHeroes}
                     quickLinks={quickLinks}
                     coreCategoriesBlock={coreCategoriesBlock}
+                    activeNoticeItem={activeNoticeItem}
+                    onOpenNotice={activeNoticeItem ? () => setOpenNoticeId(activeNoticeItem.id) : undefined}
+                    coupons={couponCards}
+                    onClaimCoupon={onClaimCoupon}
+                    flashSales={flashSales}
+                    flashSaleItems={flashSaleItems}
+                    flashSaleBlock={flashSaleBlock}
+                    legalBlock={legalBlock}
+                    favoriteProductIds={favoriteProductIds}
+                    onToggleFavorite={onToggleFavorite}
                     language={language}
+                    locale={locale}
                     storefrontName={storefrontName}
                     displayCurrencyCode={displayCurrencyCode}
                     onProductSelect={id => navigateTo({ name: 'product', id })}
@@ -855,6 +863,17 @@ export function HomePage() {
                     onContentTarget={onContentTarget}
                     onToast={onToast}
                 />
+                {openNoticeItem ? (
+                    <NoticeDetailSheet
+                        item={openNoticeItem}
+                        language={language}
+                        onClose={() => setOpenNoticeId(null)}
+                        onFollowTarget={() => {
+                            if (openNoticeItem.linkUrl) window.location.assign(openNoticeItem.linkUrl);
+                            else onContentTarget(openNoticeItem.targetType, openNoticeItem.targetValue);
+                        }}
+                    />
+                ) : null}
             </main>
         );
     }

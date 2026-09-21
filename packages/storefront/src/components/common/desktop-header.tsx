@@ -2,8 +2,11 @@ import { Link } from '@tanstack/react-router';
 import { Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { BrandLogo } from '../../storefront-ui/content-ui';
 import { useStorefront } from '../../StorefrontContext';
 import { StorefrontContentBlock } from '../../types';
+
+import { resolveBottomNavigationItems } from './bottom-navigation';
 
 export function DesktopHeader({
     navigationBlock,
@@ -18,8 +21,7 @@ export function DesktopHeader({
     useEffect(() => setQuery(context.route.term ?? ''), [context.route.term]);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
-    const displayName =
-        context.storefrontName && context.storefrontName !== '店铺' ? context.storefrontName : 'MOYAO AI';
+    const displayName = context.storefrontName || 'MOYAO AI';
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -33,43 +35,59 @@ export function DesktopHeader({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    const isHome = context.route.name === 'home';
-    const isCategory = context.route.name === 'category';
-    const isServices = ['services', 'image-studio', 'two-factor'].includes(context.route.name);
-    const isOrders = ['orders', 'order-detail'].includes(context.route.name);
+    const navItems = resolveBottomNavigationItems(navigationBlock, context.language);
+    const storeItems = navItems.filter(item => ['home', 'category', 'services'].includes(item.routeName));
+    const utilityItems = navItems.filter(
+        item => !['home', 'category', 'services', 'search', 'cart'].includes(item.routeName),
+    );
 
     return (
         <header className="proto-desktop-header">
             <div className="proto-header-inner">
-                {/* 1. LEFT BRAND & NAVIGATION (EXACTLY AS IN MEDIA_1789880297490.PNG) */}
+                {/* 1. LEFT BRAND & DYNAMIC PRIMARY NAVIGATION */}
                 <div className="proto-header-left">
                     <Link className="proto-brand" to="/" aria-label={displayName}>
-                        <div className="proto-brand-badge" aria-hidden="true">
-                            M
-                        </div>
+                        <BrandLogo
+                            url={context.logoUrl || context.logoOnLightUrl}
+                            name={displayName}
+                            className="proto-brand-logo-img"
+                        />
                         <span className="proto-brand-text">{displayName}</span>
                     </Link>
 
-                    <nav className="proto-nav-links" aria-label="Main Navigation">
-                        <Link to="/" className={`proto-nav-link ${isHome || isCategory ? 'is-active' : ''}`}>
-                            {isZh ? '模型广场' : 'Model Plaza'}
-                        </Link>
-                        <Link to="/category" className="proto-nav-link">
-                            {isZh ? 'API 聚合中转' : 'API Hub'}
-                        </Link>
-                        <Link to="/services" className={`proto-nav-link ${isServices ? 'is-active' : ''}`}>
-                            {isZh ? 'AI 智能工具箱' : 'AI Tools'}
-                        </Link>
-                        <Link to="/orders" className={`proto-nav-link ${isOrders ? 'is-active' : ''}`}>
-                            {isZh ? '实时履约中心' : 'Fulfillment'}
-                        </Link>
-                        <Link to="/support" className="proto-nav-link">
-                            {isZh ? '企业定制' : 'Enterprise'}
-                        </Link>
+                    <nav className="proto-nav-links" aria-label={isZh ? '主导航' : 'Main Navigation'}>
+                        {storeItems.map(item => {
+                            const isActive =
+                                item.routeName === 'category'
+                                    ? ['category', 'search', 'product'].includes(context.route.name)
+                                    : item.routeName === 'services'
+                                      ? ['services', 'image-studio', 'two-factor'].includes(
+                                            context.route.name,
+                                        )
+                                      : context.route.name === item.routeName;
+                            return (
+                                <Link
+                                    key={item.key}
+                                    to={item.target}
+                                    className={`proto-nav-link ${isActive ? 'is-active' : ''}`}
+                                >
+                                    {item.label}
+                                </Link>
+                            );
+                        })}
+                        {utilityItems.map(item => (
+                            <Link
+                                key={item.key}
+                                to={item.target}
+                                className={`proto-nav-link ${context.route.name === item.routeName ? 'is-active' : ''}`}
+                            >
+                                {item.label}
+                            </Link>
+                        ))}
                     </nav>
                 </div>
 
-                {/* 2. CENTER SEARCH BAR (EXACTLY AS IN MEDIA_1789880297490.PNG) */}
+                {/* 2. CENTER SEARCH BAR */}
                 <div className="proto-header-search">
                     <form
                         className="proto-search-form"
@@ -86,13 +104,9 @@ export function DesktopHeader({
                         <input
                             ref={searchInputRef}
                             className="proto-search-input"
-                            aria-label={
-                                isZh ? '搜索模型、订阅或服务' : 'Search models, subscriptions or services'
-                            }
+                            aria-label={isZh ? '搜索商品或服务' : 'Search products or services'}
                             placeholder={
-                                isZh
-                                    ? '搜索模型、订阅或服务 (例如: Claude 3.5, GPT-4o)...'
-                                    : 'Search models, subscriptions or services (e.g. Claude 3.5)...'
+                                isZh ? '搜索商品、品牌或服务 (Cmd+K)...' : 'Search products or services...'
                             }
                             name="term"
                             type="search"
@@ -105,35 +119,94 @@ export function DesktopHeader({
                     </form>
                 </div>
 
-                {/* 3. RIGHT ACTIONS (CURRENCY, CART, LOGIN) */}
+                {/* 3. RIGHT ACTIONS (CURRENCY SELECTOR, LANGUAGE TOGGLE, CART, LOGIN) */}
                 <div className="proto-header-right">
+                    {/* Currency Selector */}
+                    {context.currencySelectorEnabled && context.availableCurrencyCodes.length > 1 && (
+                        <div className="proto-currency-wrap">
+                            <select
+                                aria-label={isZh ? '选择付款币种' : 'Choose payment currency'}
+                                value={context.displayCurrencyCode}
+                                disabled={context.cartLoading}
+                                className="proto-currency-select"
+                                onChange={event => void context.switchCurrency(event.target.value)}
+                            >
+                                {context.availableCurrencyCodes.map(code => (
+                                    <option key={code} value={code}>
+                                        {code}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    {/* Language Switcher */}
                     <button
                         type="button"
-                        className="proto-currency-btn"
+                        className="proto-lang-btn"
                         onClick={context.toggleLanguage}
-                        title={isZh ? '切换语言 / Switch Language' : 'Switch Language'}
+                        aria-label={isZh ? '切换为英文' : 'Switch to Chinese'}
+                        title={isZh ? '切换为英文' : 'Switch to Chinese'}
                     >
-                        <span className="proto-currency-icon">🌐</span>
-                        <span className="proto-currency-label">{context.displayCurrencyCode || 'CNY'} ¥</span>
+                        {isZh ? '中' : 'EN'}
                     </button>
 
-                    <Link
-                        to="/cart"
-                        className="proto-cart-link"
-                        aria-label={isZh ? '购物袋' : 'Shopping Bag'}
-                    >
+                    {/* Shopping Cart Link */}
+                    <Link to="/cart" className="proto-cart-link" aria-label={isZh ? '购物车' : 'Cart'}>
                         <span className="proto-cart-icon">🛒</span>
-                        <span className="proto-cart-text">{isZh ? '购物袋' : 'Bag'}</span>
-                        <span className="proto-cart-badge">
-                            {cartQuantity > 0 ? (cartQuantity > 99 ? '99+' : cartQuantity) : '2'}
-                        </span>
+                        <span className="proto-cart-text">{isZh ? '购物车' : 'Cart'}</span>
+                        {cartQuantity > 0 && (
+                            <span className="proto-cart-badge">
+                                {cartQuantity > 99 ? '99+' : cartQuantity}
+                            </span>
+                        )}
                     </Link>
 
                     <Link to="/orders" className="proto-login-btn">
-                        {isZh ? '登录控制台' : 'Console Login'}
+                        {isZh ? '我的控制台' : 'Console'}
                     </Link>
                 </div>
             </div>
+
+            {/* 4. SECOND-LEVEL CATEGORY NAVIGATION BAR */}
+            {context.collections.length > 0 && (
+                <nav className="proto-sub-nav" aria-label={isZh ? '二级分类导航' : 'Collections'}>
+                    <div className="proto-sub-nav-inner">
+                        <button
+                            type="button"
+                            className={`proto-sub-nav-pill ${
+                                context.route.name === 'home' &&
+                                (!context.route.collectionId || context.route.collectionId === 'all')
+                                    ? 'is-active'
+                                    : ''
+                            }`}
+                            onClick={() => context.navigate({ name: 'home' })}
+                        >
+                            {isZh ? '全部商品' : 'All Products'}
+                        </button>
+                        {context.collections.map(col => {
+                            const isActive =
+                                context.route.name === 'category' && context.route.collectionId === col.id;
+                            return (
+                                <button
+                                    key={col.id}
+                                    type="button"
+                                    className={`proto-sub-nav-pill ${isActive ? 'is-active' : ''}`}
+                                    onClick={() =>
+                                        context.navigate({
+                                            name: 'category',
+                                            collectionId: col.id,
+                                            childId: 'all',
+                                        })
+                                    }
+                                >
+                                    {col.name}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </nav>
+            )}
         </header>
     );
 }
