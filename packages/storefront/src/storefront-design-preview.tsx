@@ -116,7 +116,7 @@ export function StorefrontDesignPreview() {
         () => previewRouteUrl(route, preset, scenario, auth, language, productPreview.id),
         [auth, language, preset, productPreview.id, route, scenario],
     );
-    const canvasColor = branding ? resolveStorefrontSemanticPalette(preset, branding).page : '#111827';
+    const canvasColor = resolveStorefrontSemanticPalette(preset, branding).page;
 
     useEffect(() => {
         document.title = '电脑端模板真实组件预览';
@@ -135,7 +135,8 @@ export function StorefrontDesignPreview() {
                 <div>
                     <strong>三套皮肤·统一模板预览</strong>
                     <span>
-                        {desktopPageFamilyByRoute[route]} · {route} · 状态与会话为只读模拟
+                        {desktopPageFamilyByRoute[route]} · {route} ·
+                        仅内嵌店铺页面会上线，预览控件与模拟状态不会上线
                     </span>
                 </div>
                 <label>
@@ -201,7 +202,11 @@ export function StorefrontDesignPreview() {
                     {language === 'zh' ? 'EN' : '中文'}
                 </button>
             </header>
-            <section className="storefront-preview-stage" aria-label="真实客户端页面">
+            <section
+                className="storefront-preview-stage"
+                aria-label="真实客户端页面"
+                style={{ backgroundColor: canvasColor }}
+            >
                 {route === 'product' && productPreview.status !== 'ready' ? (
                     <p className="storefront-preview-feedback" role="status">
                         {productPreview.status === 'loading'

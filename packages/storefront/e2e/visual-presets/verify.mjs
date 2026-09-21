@@ -13,6 +13,11 @@ const requestedPreset = process.env.STOREFRONT_VISUAL_PRESET;
 const requestedRoute = process.env.STOREFRONT_VISUAL_ROUTE;
 const requestedWidth = Number(process.env.STOREFRONT_VISUAL_WIDTH || 0);
 const presets = requestedPreset ? [requestedPreset] : ['classic', 'modern-oriental', 'neo-minimalist'];
+const expectedPaletteSignature = {
+    classic: { page: '#f1f5f9', surface: '#ffffff', text: '#0f172a', brand: '#3558aa' },
+    'modern-oriental': { page: '#f6f2ea', surface: '#fffdf8', text: '#17283a', brand: '#a63d32' },
+    'neo-minimalist': { page: '#070b14', surface: '#0e1421', text: '#f4f7fb', brand: '#8b5cf6' },
+};
 const routes = [
     ['home', '/'],
     ['category', '/category'],
@@ -111,6 +116,18 @@ try {
                     'data-page-readiness',
                     /ready|degraded/,
                     { timeout: 15000 },
+                );
+                const paletteSignature = await page.evaluate(() => {
+                    const style = getComputedStyle(document.documentElement);
+                    return {
+                        page: style.getPropertyValue('--bg').trim(),
+                        surface: style.getPropertyValue('--paper').trim(),
+                        text: style.getPropertyValue('--text').trim(),
+                        brand: style.getPropertyValue('--brand-primary').trim(),
+                    };
+                });
+                expect(paletteSignature, `${preset}/${width}/${name} skin identity`).toEqual(
+                    expectedPaletteSignature[preset],
                 );
                 await page.addStyleTag({
                     content: `

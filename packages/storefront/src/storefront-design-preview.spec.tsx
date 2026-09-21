@@ -94,7 +94,7 @@ describe('storefront design preview', () => {
         host.remove();
     });
 
-    it('matches the store background around the classic preview frame', async () => {
+    it('keeps the classic preview frame light even when the store background is dark', async () => {
         mocks.storefrontConfig.mockResolvedValue({ brandBackgroundColor: '#070b14' });
         const host = document.createElement('div');
         document.body.append(host);
@@ -110,7 +110,10 @@ describe('storefront design preview', () => {
             skinSelect.dispatchEvent(new Event('change', { bubbles: true }));
             await Promise.resolve();
         });
-        expect(host.querySelector('iframe')?.style.backgroundColor).toBe('rgb(7, 11, 20)');
+        expect(host.querySelector('iframe')?.style.backgroundColor).toBe('rgb(241, 245, 249)');
+        expect(host.querySelector<HTMLElement>('.storefront-preview-stage')?.style.backgroundColor).toBe(
+            'rgb(241, 245, 249)',
+        );
         await act(async () => {
             root.unmount();
             await Promise.resolve();

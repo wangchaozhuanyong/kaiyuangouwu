@@ -171,7 +171,14 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true) {
             customFields: { storefrontNameZh: '店铺皮肤验收', storefrontNameEn: 'Visual preset QA' },
         },
         availableCountries: [{ code: 'MY', name: 'Malaysia' }],
-        storefrontBranding: { logoUrl: null, description: '本地测试数据' },
+        storefrontBranding: {
+            logoUrl: null,
+            description: '本地测试数据',
+            backgroundColor: '#070b14',
+            primaryColor: '#3558aa',
+            accentColor: '#22d3ee',
+            highlightColor: '#8b5cf6',
+        },
         storefrontCurrencyConfiguration: {
             defaultCurrencyCode: 'MYR',
             availableCurrencyCodes: ['MYR'],

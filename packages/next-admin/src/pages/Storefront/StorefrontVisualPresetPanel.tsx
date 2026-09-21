@@ -166,7 +166,7 @@ export function StorefrontVisualPresetPanel() {
                 </button>
             </div>
             <p className="mt-2 text-xs text-slate-500">
-                选择仅保存到当前店铺。经典皮肤保留品牌身份色，界面会自动使用可读的派生色。
+                选择仅保存到当前店铺。经典皮肤保持浅色界面，保留品牌身份色作为可读的强调色。
             </p>
             {query.loading && (
                 <p role="status" className="mt-3 text-sm">

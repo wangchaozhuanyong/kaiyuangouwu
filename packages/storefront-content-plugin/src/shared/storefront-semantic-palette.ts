@@ -144,55 +144,48 @@ function makeAccessibleAgainstAll(
 }
 
 function resolveClassicPalette(brand: StorefrontBrandPaletteInput): StorefrontSemanticPalette {
-    const page = normalizeStorefrontColor(brand.backgroundColor) ?? '#f1f5f9';
-    const text = readableStorefrontForeground(page);
-    const surfaceTarget = text === '#ffffff' ? '#ffffff' : '#ffffff';
-    const surface = text === '#ffffff' ? mixColors(page, surfaceTarget, 0.08) : '#ffffff';
-    const surfaceText = readableStorefrontForeground(surface);
-    const brandColor = normalizeStorefrontColor(brand.primaryColor) ?? '#d33c30';
+    // Classic keeps a light interface even when the merchant's saved brand background is dark.
+    // The original brand colors remain untouched and can still provide the identity accent.
+    const page = '#f1f5f9';
+    const surface = '#ffffff';
+    const surfaceText = '#0f172a';
+    const brandColor =
+        normalizeStorefrontColor(brand.primaryColor) ??
+        normalizeStorefrontColor(brand.backgroundColor) ??
+        '#d33c30';
     const accentSource = normalizeStorefrontColor(brand.accentColor) ?? brandColor;
-    const onAccent = readableStorefrontForeground(accentSource);
-    const accent = makeAccessibleAgainst(accentSource, onAccent, 4.5);
-    const accentForeground = readableStorefrontForeground(accent);
+    // Legacy primary controls use white labels, so the derived UI accent must always support them.
+    const accentForeground = '#ffffff';
+    const accent = makeAccessibleAgainst(accentSource, accentForeground, 4.5, 'dark');
 
-    const contrastDirection = surfaceText === '#ffffff' ? 'light' : 'dark';
-    const accentSoft = mixColors(surface, accent, surfaceText === '#ffffff' ? 0.14 : 0.08);
-    const accentInk = makeAccessibleAgainstAll(accent, [page, surface, accentSoft], 4.5, contrastDirection);
+    const accentSoft = mixColors(surface, accent, 0.08);
+    const accentInk = makeAccessibleAgainstAll(accent, [page, surface, accentSoft], 4.5, 'dark');
     return {
         page,
         surface,
-        elevated: text === '#ffffff' ? mixColors(page, '#ffffff', 0.13) : '#ffffff',
-        subtle: mixColors(surface, surfaceText, surfaceText === '#ffffff' ? 0.07 : 0.055),
+        elevated: '#ffffff',
+        subtle: mixColors(surface, surfaceText, 0.055),
         text: surfaceText,
-        muted: makeAccessibleAgainstAll(
-            mixColors(surfaceText, surface, 0.42),
-            [page, surface],
-            4.5,
-            contrastDirection,
-        ),
+        muted: makeAccessibleAgainstAll(mixColors(surfaceText, surface, 0.42), [page, surface], 4.5, 'dark'),
         brand: brandColor,
         accent,
         accentHover: makeAccessibleAgainst(
             normalizeStorefrontColor(brand.highlightColor) ?? mixColors(accent, '#000000', 0.14),
             accentForeground,
             4.5,
+            'dark',
         ),
         accentSoft,
         accentInk,
         onAccent: accentForeground,
-        border: makeAccessibleAgainstAll(
-            mixColors(surfaceText, surface, 0.58),
-            [page, surface],
-            3,
-            contrastDirection,
-        ),
+        border: makeAccessibleAgainstAll(mixColors(surfaceText, surface, 0.58), [page, surface], 3, 'dark'),
         borderStrong: makeAccessibleAgainstAll(
             mixColors(surfaceText, surface, 0.42),
             [page, surface],
             3,
-            contrastDirection,
+            'dark',
         ),
-        focus: makeAccessibleAgainstAll(accent, [page, surface], 3, contrastDirection),
+        focus: makeAccessibleAgainstAll(accent, [page, surface], 3, 'dark'),
         success: makeAccessibleAgainst('#047857', surface, 4.5),
         warning: makeAccessibleAgainst('#92400e', surface, 4.5),
         danger: makeAccessibleAgainst('#b91c1c', surface, 4.5),

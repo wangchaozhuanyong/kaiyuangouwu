@@ -5,7 +5,7 @@ export const storefrontVisualPresets = [
     {
         id: 'classic',
         name: '经典',
-        description: '使用店铺品牌色，并自动派生满足可读性要求的界面色。',
+        description: '浅色经典界面，保留店铺品牌色作为可读的强调色。',
         colors: ['#f1f5f9', '#ffffff', '#d33c30', '#0f172a'],
     },
     {

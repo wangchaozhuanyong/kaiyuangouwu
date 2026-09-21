@@ -19,12 +19,14 @@ function Fixture({
     logo,
     product,
     background,
+    primary,
     presetId = 'classic',
     route,
 }: {
     logo: string | null;
     product?: Product;
     background?: string;
+    primary?: string;
     presetId?: StorefrontVisualPresetId;
     route?: RouteState;
 }) {
@@ -33,7 +35,7 @@ function Fixture({
         background
             ? ({
                   brandBackgroundColor: background,
-                  brandPrimaryColor: '#234567',
+                  brandPrimaryColor: primary ?? '#234567',
                   brandHighlightColor: '#F28C28',
               } as StorefrontConfig)
             : undefined,
@@ -62,7 +64,7 @@ describe('runtime channel branding', () => {
         const color = (property: string) => getComputedStyle(html).getPropertyValue(property).trim();
         try {
             act(() => root.render(<Fixture logo={null} background="#F5F7FB" />));
-            expect(color('--bg')).toBe('#f5f7fb');
+            expect(color('--bg')).toBe('#f1f5f9');
             expect(color('--accent')).toBe('#234567');
 
             act(() => root.render(<Fixture logo={null} background="#F5F7FB" presetId="modern-oriental" />));
@@ -88,11 +90,11 @@ describe('runtime channel branding', () => {
             expect(color('--brand-background')).toBe('#f6f2ea');
 
             act(() => root.render(<Fixture logo={null} background="#070B14" />));
-            expect(color('--bg')).toBe('#070b14');
+            expect(color('--bg')).toBe('#f1f5f9');
             expect(color('--accent')).toBe('#234567');
             expect(color('--accent-hover')).toBe('#a9621c');
             expect(color('--store-primary')).toBe('#234567');
-            expect(color('--auth-store-background')).toBe('#070b14');
+            expect(color('--auth-store-background')).toBe('#f1f5f9');
 
             act(() => root.render(<Fixture logo={null} />));
             expect(html.style.getPropertyValue('--bg')).toBe('#f1f5f9');
@@ -113,9 +115,11 @@ describe('runtime channel branding', () => {
             '<link rel="apple-touch-icon" href="/moyao.jpg">',
         ].join('');
         const root = createRoot(host);
-        act(() => root.render(<Fixture logo="/store-a.png" background="#abcdef" />));
-        expect(document.documentElement.style.getPropertyValue('--store-background')).toBe('#abcdef');
-        act(() => root.render(<Fixture logo="/store-b.png" background="#fedcba" />));
+        act(() => root.render(<Fixture logo="/store-a.png" background="#abcdef" primary="#123456" />));
+        expect(document.documentElement.style.getPropertyValue('--store-background')).toBe('#f1f5f9');
+        expect(document.documentElement.style.getPropertyValue('--brand-primary')).toBe('#123456');
+        act(() => root.render(<Fixture logo="/store-b.png" background="#fedcba" primary="#654321" />));
+        expect(document.documentElement.style.getPropertyValue('--brand-primary')).toBe('#654321');
         expect(document.querySelector('meta[property="og:image"]')?.getAttribute('content')).toContain(
             '/store-b.png',
         );

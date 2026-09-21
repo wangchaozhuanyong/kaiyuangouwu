@@ -91,7 +91,7 @@ describe('fixed desktop layout skin settings', () => {
         const iframe = host.querySelector('iframe');
         expect(iframe?.src).toContain('storefrontPreviewPreset=classic');
         expect(iframe?.src).toContain('storefrontPreviewEmbedded=1');
-        expect(iframe?.style.backgroundColor).toBe('rgb(7, 11, 20)');
+        expect(iframe?.style.backgroundColor).toBe('rgb(241, 245, 249)');
         expect(iframe?.srcdoc).toBe('');
         expect(mocks.save).not.toHaveBeenCalled();
     });

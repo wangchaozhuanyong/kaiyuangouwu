@@ -18,17 +18,31 @@ describe('storefront semantic palette', () => {
         },
     );
 
-    it.each(['#000000', '#ffffff', '#777777', '#8b5cf6'])('derives safe classic UI from %s', color => {
-        const palette = resolveStorefrontSemanticPalette('classic', {
-            backgroundColor: color,
-            primaryColor: color,
-            accentColor: color,
-            highlightColor: color,
-        });
-        expect(palette.brand).toBe(color);
-        expect(storefrontContrastRatio(palette.text, palette.surface)).toBeGreaterThanOrEqual(4.5);
-        expect(storefrontContrastRatio(palette.onAccent, palette.accent)).toBeGreaterThanOrEqual(4.5);
-        expect(auditStorefrontSemanticPalette(palette).passes).toBe(true);
+    it.each(['#000000', '#ffffff', '#777777', '#8b5cf6', '#070b14'])(
+        'keeps classic light and derives safe brand accents from %s',
+        color => {
+            const palette = resolveStorefrontSemanticPalette('classic', {
+                backgroundColor: color,
+                primaryColor: color,
+                accentColor: color,
+                highlightColor: color,
+            });
+            expect(palette.page).toBe('#f1f5f9');
+            expect(palette.surface).toBe('#ffffff');
+            expect(palette.text).toBe('#0f172a');
+            expect(palette.brand).toBe(color);
+            expect(palette.onAccent).toBe('#ffffff');
+            expect(storefrontContrastRatio(palette.text, palette.surface)).toBeGreaterThanOrEqual(4.5);
+            expect(storefrontContrastRatio(palette.onAccent, palette.accent)).toBeGreaterThanOrEqual(4.5);
+            expect(storefrontContrastRatio('#ffffff', palette.accentHover)).toBeGreaterThanOrEqual(4.5);
+            expect(auditStorefrontSemanticPalette(palette).passes).toBe(true);
+        },
+    );
+
+    it('uses a saved background only as identity when no primary color exists', () => {
+        const palette = resolveStorefrontSemanticPalette('classic', { backgroundColor: '#070b14' });
+        expect(palette.brand).toBe('#070b14');
+        expect(palette.page).toBe('#f1f5f9');
     });
 
     it('falls back for empty and invalid brand colors', () => {
