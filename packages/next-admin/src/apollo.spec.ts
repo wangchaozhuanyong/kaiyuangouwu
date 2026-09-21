@@ -239,7 +239,7 @@ describe('admin channel request routing', () => {
     });
 
     it('commits a store switch only after the selected Channel reload succeeds', async () => {
-        const resetStore = vi.spyOn(client, 'resetStore').mockResolvedValueOnce(undefined);
+        const resetStore = vi.spyOn(client, 'resetStore').mockResolvedValueOnce([]);
 
         await switchActiveChannel('store-b');
 
@@ -252,7 +252,7 @@ describe('admin channel request routing', () => {
         const resetStore = vi
             .spyOn(client, 'resetStore')
             .mockRejectedValueOnce(new Error('forbidden target Channel'))
-            .mockResolvedValueOnce(undefined);
+            .mockResolvedValueOnce([]);
 
         await expect(switchActiveChannel('store-b')).rejects.toThrow('forbidden target Channel');
 

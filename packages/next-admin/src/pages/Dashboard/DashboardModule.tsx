@@ -160,7 +160,7 @@ export function DashboardModule() {
     const channelContext = useQuery<{
         activeChannel: { code: string; defaultCurrencyCode: string };
     }>(GET_ACTIVE_CHANNEL, { fetchPolicy: 'cache-first' });
-    const isPlatformContext = isDefaultChannelCode(channelContext.data?.activeChannel.code);
+    const isPlatformContext = isDefaultChannelCode(channelContext.data?.activeChannel.code ?? '');
     const businessQueryPaused = !channelContext.data || isPlatformContext;
 
     const dashboard = useQuery<DashboardBootstrapData>(DASHBOARD_BOOTSTRAP_QUERY, {
