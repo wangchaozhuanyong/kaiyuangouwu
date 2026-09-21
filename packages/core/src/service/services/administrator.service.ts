@@ -237,7 +237,7 @@ export class AdministratorService {
         }
         await this.checkActiveUserCanManageAdministrator(ctx, administrator);
         if (input.roleIds) {
-            await this.checkActiveUserCanGrantRoles(ctx, input.roleIds, input.id);
+            await this.checkActiveUserCanGrantRoles(ctx, input.roleIds);
         }
         const passwordChanged = !!input.password;
         const rolesChanged =
@@ -310,11 +310,7 @@ export class AdministratorService {
      * Checks that the active user is allowed to grant the specified Roles when creating or
      * updating an Administrator.
      */
-    private async checkActiveUserCanGrantRoles(
-        ctx: RequestContext,
-        roleIds: ID[],
-        targetAdministratorId?: ID,
-    ) {
+    private async checkActiveUserCanGrantRoles(ctx: RequestContext, roleIds: ID[]) {
         const roles = await this.connection.getRepository(ctx, Role).find({
             where: { id: In(roleIds) },
             relations: { channels: true },
@@ -322,21 +318,6 @@ export class AdministratorService {
         if (roles.length !== new Set(roleIds.map(String)).size) {
             const missingRoleId = roleIds.find(id => !roles.some(role => idsAreEqual(role.id, id)));
             throw new EntityNotFoundError('Role', missingRoleId ?? roleIds[0]);
-        }
-        const superAdminRole = roles.find(role => role.code === '__super_admin_role__');
-        if (superAdminRole) {
-            const existingOwners = await this.findSuperAdministrators(ctx);
-            if (
-                existingOwners.some(
-                    administrator =>
-                        targetAdministratorId == null ||
-                        !idsAreEqual(administrator.id, targetAdministratorId),
-                )
-            ) {
-                throw new UserInputError('error.permission-invalid', {
-                    permission: Permission.SuperAdmin,
-                });
-            }
         }
         const permissionsRequired = getChannelPermissions(roles);
         for (const channelPermissions of permissionsRequired) {
@@ -359,7 +340,7 @@ export class AdministratorService {
     private async checkActiveUserCanManageAdministrator(ctx: RequestContext, administrator: Administrator) {
         const targetRoleIds = administrator.user.roles.map(role => role.id);
         if (targetRoleIds.length) {
-            await this.checkActiveUserCanGrantRoles(ctx, targetRoleIds, administrator.id);
+            await this.checkActiveUserCanGrantRoles(ctx, targetRoleIds);
         }
     }
 
@@ -411,7 +392,7 @@ export class AdministratorService {
             throw new EntityNotFoundError('Administrator', administratorId);
         }
         await this.checkActiveUserCanManageAdministrator(ctx, administrator);
-        await this.checkActiveUserCanGrantRoles(ctx, [roleId], administratorId);
+        await this.checkActiveUserCanGrantRoles(ctx, [roleId]);
         const role = await this.roleService.findOne(ctx, roleId);
         if (!role) {
             throw new EntityNotFoundError('Role', roleId);

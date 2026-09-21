@@ -20,6 +20,12 @@ function runner(
             return [{ channelId: 1 }];
         }
         if (sql.includes('FROM "channel" WHERE')) return [{ code: channelCode }];
+        if (
+            sql.includes('SELECT "id" AS id, "permissions" AS permissions') &&
+            sql.includes('FROM "role" WHERE')
+        ) {
+            return [{ id: 4, permissions: '["ReadProduct","CreateAdministrator"]' }];
+        }
         if (sql.includes('SELECT "id" AS id FROM "channel"')) {
             return [{ id: 1 }, { id: 2 }, { id: 3 }];
         }
@@ -118,6 +124,17 @@ describe('administrator access and governance migration', () => {
                 String(sql).includes('INSERT INTO "administrator_access_profile"'),
             ),
         ).toHaveLength(1);
+        expect(query).toHaveBeenCalledWith(expect.stringContaining('UPDATE "role" SET "permissions"'), [
+            JSON.stringify([
+                'ReadProduct',
+                'CreateAdministrator',
+                'ManagePlatformTeam',
+                'ManageStoreLifecycle',
+                'ReviewStoreGovernance',
+                'SensitiveStoreFinance',
+            ]),
+            4,
+        ]);
     });
 
     it('rejects a staged platform administrator with owner-only permission or missing Channel', async () => {

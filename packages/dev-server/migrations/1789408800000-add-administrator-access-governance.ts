@@ -393,6 +393,29 @@ export class AddAdministratorAccessGovernance1789408800000 implements MigrationI
                         `Platform administrator ${String(account.administratorId)} role does not cover all Channels`,
                     );
                 }
+                const platformRoleRows = (await queryRunner.query(
+                    `SELECT ${escape('id')} AS id, ${escape('permissions')} AS permissions
+                     FROM ${roles} WHERE ${escape('code')} = ${parameter(1)}`,
+                    ['platform-administrator'],
+                )) as Array<{
+                    id: number | string;
+                    permissions: string | string[] | null;
+                }>;
+                if (platformRoleRows.length !== 1) {
+                    throw new Error(
+                        `Platform administrator ${String(account.administratorId)} must resolve to exactly one fixed role`,
+                    );
+                }
+                const stagedPermissions = parsePermissions(platformRoleRows[0].permissions);
+                const completedPermissions = [
+                    ...new Set([...stagedPermissions, ...PLATFORM_ADMINISTRATOR_BOOTSTRAP_PERMISSIONS]),
+                ];
+                if (completedPermissions.length !== stagedPermissions.length) {
+                    await queryRunner.query(
+                        `UPDATE ${roles} SET ${escape('permissions')} = ${parameter(1)} WHERE ${escape('id')} = ${parameter(2)}`,
+                        [JSON.stringify(completedPermissions), platformRoleRows[0].id],
+                    );
+                }
                 // The service validates the complete fixed-role policy when this account first accesses Admin.
                 // Do not persist a suspended profile that would bypass that validation and lock the account out.
                 continue;
@@ -443,6 +466,13 @@ export class AddAdministratorAccessGovernance1789408800000 implements MigrationI
         }
     }
 }
+
+const PLATFORM_ADMINISTRATOR_BOOTSTRAP_PERMISSIONS = [
+    'ManagePlatformTeam',
+    'ManageStoreLifecycle',
+    'ReviewStoreGovernance',
+    'SensitiveStoreFinance',
+] as const;
 
 function parsePermissions(value: string | string[] | null): string[] {
     if (Array.isArray(value)) return value;
