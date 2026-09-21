@@ -327,6 +327,12 @@ Customer-avatar acceptance gates:
 
 ## Execution order
 
+### Local release-readiness checkpoint (2026-09-21)
+
+- The isolated business-closure branch was checked against `main` at `b8a6f01bcce55b3bb3dcc0f4846aef46299b28a5`. Its implementation candidate was `5d6df3f551afad211000fb14bd9e968c7fdefc9f`; no PR, CI run, merge or production release was started for this candidate.
+- All 13 migrations introduced by this branch ran in order against an isolated MySQL 8.0 container with a synthetic prerequisite schema. A second pass also succeeded, confirming their SQL executes and their `up` paths are repeatable in that environment. The disposable container was removed afterward. This does **not** validate migration against a copy of production data, application startup, worker jobs, administrator/customer workflows or production object storage; the unchecked gates above remain unchecked.
+- The repository impact classifier selects a runtime release, `full=false`, MySQL coverage, 30 backend packages and both frontends because the change includes a package manifest and lockfile. This is broader than the requested non-global CI scope. No PR or CI was started solely to probe it, and the classifier was not weakened to evade a mandatory release gate. Release still needs a separately agreed validation scope that preserves coverage of the changed payment, security and migration paths.
+
 1. Review and apply the accumulated migrations in a production-like database without publishing from this worktree.
 2. Exercise the critical user/admin workflows, including avatar recovery, closure, payments, fulfilment, after-sales, governed approval and fraud appeal.
 3. Observe all scheduled reconciliation, retention, backup, incident, analytics, customer-operations and governance jobs for at least one complete cycle.
