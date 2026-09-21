@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ProductOptionGroup } from '../../entity/product-option-group/product-option-group.entity';
 import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
+// eslint-disable-next-line import/order -- organize-imports and import/order disagree on these sibling paths.
 import { Product } from '../../entity/product/product.entity';
 
 import { ProductService } from './product.service';
