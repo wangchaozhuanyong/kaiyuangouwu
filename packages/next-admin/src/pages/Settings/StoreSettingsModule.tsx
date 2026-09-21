@@ -115,7 +115,7 @@ function PlatformGovernanceReviewCenter() {
                     },
                 },
             });
-            setNotice(decision === 'APPROVED' ? '申请已通过并应用' : '申请已驳回');
+            setNotice(decision === 'APPROVED' ? '申请已通过，批准记录已更新' : '申请已驳回');
             setActionError('');
             await query.refetch();
         } catch (error) {
@@ -239,6 +239,9 @@ function MyStoreSettingsModule() {
     const payoutRequest = query.data.myStoreGovernanceChanges.find(
         item => item.requestType === 'PAYOUT_ACCOUNT',
     );
+    const approvedPayout = query.data.myStoreGovernanceChanges.find(
+        item => item.requestType === 'PAYOUT_ACCOUNT' && item.status === 'APPROVED',
+    );
     const completed = async (message: string) => {
         setNotice(message);
         setActionError('');
@@ -310,6 +313,10 @@ function MyStoreSettingsModule() {
                             ['USDT 展示', currency.usdtDisplayEnabled ? '已开启' : '已关闭'],
                             ['USDT 钱包审核', currency.usdtWalletReviewStatus],
                             ['收款账户审核', governanceStatusLabel(payoutRequest)],
+                            [
+                                '已批准收款账号',
+                                String(approvedPayout?.maskedSummary.accountIdentifier ?? '尚未批准'),
+                            ],
                         ]}
                     />
                 </section>
@@ -337,6 +344,7 @@ function MyStoreSettingsModule() {
                 />
                 <MyStorePayoutAccount
                     latestRequest={payoutRequest}
+                    approvedRequest={approvedPayout}
                     onCompleted={completed}
                     onError={setActionError}
                 />
@@ -358,10 +366,12 @@ function MyStoreSettingsModule() {
 
 function MyStorePayoutAccount({
     latestRequest,
+    approvedRequest,
     onCompleted,
     onError,
 }: {
     latestRequest: MyStoreSettingsResult['myStoreGovernanceChanges'][number] | undefined;
+    approvedRequest: MyStoreSettingsResult['myStoreGovernanceChanges'][number] | undefined;
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
@@ -418,6 +428,13 @@ function MyStorePayoutAccount({
                     提交审核
                 </button>
             </div>
+            {approvedRequest && (
+                <p className="mt-2 text-xs text-slate-600">
+                    已批准资料：{String(approvedRequest.maskedSummary.provider ?? '收款机构未显示')} ·{' '}
+                    {String(approvedRequest.maskedSummary.accountIdentifier ?? '账号未显示')}
+                    {latestRequest?.status === 'PENDING' && '（新申请待审，已批准资料保持不变）'}
+                </p>
+            )}
         </section>
     );
 }
@@ -1109,7 +1126,7 @@ function PlatformGovernanceCenter({ allowPermanentDeprovision }: { allowPermanen
                     },
                 },
             });
-            await completed(decision === 'APPROVED' ? '申请已通过并应用' : '申请已驳回');
+            await completed(decision === 'APPROVED' ? '申请已通过，批准记录已更新' : '申请已驳回');
         } catch (error) {
             setActionError(toUserFacingError(error, '审核店铺治理变更失败'));
         }

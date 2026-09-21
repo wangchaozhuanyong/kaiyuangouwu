@@ -254,6 +254,9 @@ export class AddAdministratorAccessGovernance1789408800000 implements MigrationI
         }>;
         const occupiedChannels = new Set<string>();
         for (const account of storeAccounts) {
+            if (String(account.administratorId) === String(owners[0].administratorId)) {
+                throw new Error('Platform owner cannot also be backfilled as a store administrator');
+            }
             const channels = (await queryRunner.query(
                 `SELECT DISTINCT rc.${escape('channelId')} AS channelId
                  FROM ${userRoles} ur
@@ -267,6 +270,37 @@ export class AddAdministratorAccessGovernance1789408800000 implements MigrationI
                 );
             }
             const channelId = String(channels[0].channelId);
+            const channelRows = (await queryRunner.query(
+                `SELECT ${escape('code')} AS code FROM ${escape('channel')} WHERE ${escape('id')} = ${parameter(1)}`,
+                [channels[0].channelId],
+            )) as Array<{ code: string }>;
+            if (channelRows.length !== 1 || channelRows[0].code === '__default_channel__') {
+                throw new Error(
+                    `Store administrator ${String(account.administratorId)} must belong to an operating store Channel`,
+                );
+            }
+            const accountRoles = (await queryRunner.query(
+                `SELECT r.${escape('code')} AS roleCode, r.${escape('permissions')} AS permissions
+                 FROM ${userRoles} ur
+                 INNER JOIN ${roles} r ON r.${escape('id')} = ur.${escape('roleId')}
+                 WHERE ur.${escape('userId')} = ${parameter(1)}`,
+                [account.userId],
+            )) as Array<{ roleCode: string; permissions: string | string[] | null }>;
+            for (const role of accountRoles) {
+                for (const permission of parsePermissions(role.permissions)) {
+                    if (
+                        isPlatformOnlyPermission(permission) &&
+                        !(
+                            role.roleCode === `${channelRows[0].code}-store-admin` &&
+                            isFixedStoreTeamPermission(permission)
+                        )
+                    ) {
+                        throw new Error(
+                            `Store administrator ${String(account.administratorId)} has platform-only permission ${permission}`,
+                        );
+                    }
+                }
+            }
             if (occupiedChannels.has(channelId)) {
                 throw new Error(`Channel ${channelId} has more than one legacy primary store administrator`);
             }
@@ -396,9 +430,13 @@ function isPlatformOnlyPermission(permission: string): boolean {
         permission === 'SuperAdmin' ||
         permission === 'ManagePlatformTeam' ||
         permission === 'ReviewStoreGovernance' ||
-        /(?:ApiKey|System|GlobalSettings|Administrator|Seller|Settings|TaxCategory|TaxRate)$/u.test(
+        /(?:ApiKey|System|GlobalSettings|Administrator|Role|Seller|Settings|TaxCategory|TaxRate)$/u.test(
             permission,
         ) ||
         /^(?:Create|Update|Delete)(?:Channel|PaymentMethod)$/u.test(permission)
     );
+}
+
+function isFixedStoreTeamPermission(permission: string): boolean {
+    return /^(?:Create|Read|Update|Delete)Administrator$/u.test(permission);
 }

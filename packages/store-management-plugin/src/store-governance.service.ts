@@ -89,7 +89,7 @@ export class StoreGovernanceService {
         ) {
             throw new UserInputError('不支持的店铺治理申请类型');
         }
-        this.validatePayload(input.requestType, input.payload);
+        const payload = this.validatePayload(input.requestType, input.payload);
         const repository = this.connection.getRepository(ctx, StoreGovernanceChangeRequest);
         const latest = await repository.findOne({
             where: { channelId: actor.channelId, requestType: input.requestType },
@@ -105,12 +105,12 @@ export class StoreGovernanceService {
             status: 'PENDING',
             submittedByUserId: actor.userId,
             reviewedByUserId: null,
-            encryptedPayload: this.encrypt(input.payload),
+            encryptedPayload: this.encrypt(payload),
             reviewReason: null,
             submittedAt: new Date(),
             reviewedAt: null,
         });
-        pending.maskedSummary = maskPayload(input.payload);
+        pending.maskedSummary = maskPayload(payload);
         const request = await repository.save(pending);
         await this.audit.record(ctx, {
             action: 'SUBMIT_STORE_GOVERNANCE_CHANGE',
@@ -141,6 +141,9 @@ export class StoreGovernanceService {
         }
         if (input.decision === 'REJECTED' && !input.reason?.trim()) {
             throw new UserInputError('驳回时必须填写原因');
+        }
+        if (input.reason && input.reason.trim().length > 500) {
+            throw new UserInputError('审核原因不能超过 500 个字符');
         }
         if (input.decision === 'APPROVED') {
             await this.applyApprovedChange(ctx, request);
@@ -188,20 +191,31 @@ export class StoreGovernanceService {
         }
     }
 
-    private validatePayload(type: StoreGovernanceChangeType, payload: Record<string, unknown>): void {
+    private validatePayload(
+        type: StoreGovernanceChangeType,
+        payload: Record<string, unknown>,
+    ): Record<string, string> {
         if (!payload || Array.isArray(payload) || typeof payload !== 'object') {
             throw new UserInputError('申请内容格式不正确');
         }
         if (type === 'LEGAL_IDENTITY') {
-            requiredText(payload.legalEntityName, '主体名称');
-            requiredText(payload.legalRegistrationCountry, '主体注册国家或地区');
-            return;
+            assertOnlyFields(payload, ['legalEntityName', 'legalRegistrationCountry']);
+            return {
+                legalEntityName: requiredText(payload.legalEntityName, '主体名称', 200),
+                legalRegistrationCountry: requiredText(
+                    payload.legalRegistrationCountry,
+                    '主体注册国家或地区',
+                    100,
+                ),
+            };
         }
         if (type === 'PAYOUT_ACCOUNT') {
-            requiredText(payload.provider, '收款机构');
-            requiredText(payload.accountHolder, '账户持有人');
-            requiredText(payload.accountIdentifier, '收款账号');
-            return;
+            assertOnlyFields(payload, ['provider', 'accountHolder', 'accountIdentifier']);
+            return {
+                provider: requiredText(payload.provider, '收款机构', 120),
+                accountHolder: requiredText(payload.accountHolder, '账户持有人', 200),
+                accountIdentifier: requiredText(payload.accountIdentifier, '收款账号', 200),
+            };
         }
         if (type === 'PAYMENT_CONFIGURATION') {
             throw new UserInputError('支付方式请使用本店支付选项的专用启停流程');
@@ -209,6 +223,7 @@ export class StoreGovernanceService {
         if (type === 'USDT_WALLET') {
             throw new UserInputError('USDT 钱包请使用专用的钱包提交审核流程');
         }
+        throw new UserInputError('不支持的店铺治理申请类型');
     }
 
     private encrypt(payload: Record<string, unknown>): string {
@@ -247,7 +262,17 @@ function maskPayload(payload: Record<string, unknown>): Record<string, unknown> 
     );
 }
 
-function requiredText(value: unknown, label: string): string {
+function assertOnlyFields(payload: Record<string, unknown>, allowed: string[]): void {
+    if (Object.keys(payload).some(key => !allowed.includes(key))) {
+        throw new UserInputError('申请内容包含不支持的字段');
+    }
+}
+
+function requiredText(value: unknown, label: string, maxLength?: number): string {
     if (typeof value !== 'string' || !value.trim()) throw new UserInputError(`${label}不能为空`);
-    return value.trim();
+    const normalized = value.trim();
+    if (maxLength && normalized.length > maxLength) {
+        throw new UserInputError(`${label}不能超过 ${maxLength} 个字符`);
+    }
+    return normalized;
 }

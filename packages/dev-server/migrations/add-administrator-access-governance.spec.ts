@@ -8,11 +8,22 @@ function runner(
     databaseType: 'mysql' | 'postgres' | 'sqlite',
     ownerCount = 1,
     unmappedRows: Array<Record<string, unknown>> = [],
+    storeAccounts: Array<Record<string, unknown>> = [],
+    storeRoleRows: Array<Record<string, unknown>> = [],
+    channelCode = '__default_channel__',
 ) {
     const tables: Table[] = [];
     const query = vi.fn(async (sql: string) => {
         if (sql.includes('COUNT(*)')) return [{ count: 0 }];
         if (sql.includes('NOT EXISTS')) return unmappedRows;
+        if (sql.includes('SELECT DISTINCT') && sql.includes('role_channels_channel')) {
+            return [{ channelId: 1 }];
+        }
+        if (sql.includes('FROM "channel" WHERE')) return [{ code: channelCode }];
+        if (sql.includes('FROM "store_administrator_access" s')) return storeAccounts;
+        if (sql.includes('AS roleCode') && sql.includes('FROM "user_roles_role" ur')) {
+            return storeRoleRows;
+        }
         if (sql.includes('__super_admin_role__') || (sql.includes('INNER JOIN') && sql.includes('role'))) {
             return Array.from({ length: ownerCount }, (_, index) => ({
                 administratorId: index + 1,
@@ -94,5 +105,56 @@ describe('administrator access and governance migration', () => {
         await expect(new AddAdministratorAccessGovernance1789408800000().up(queryRunner)).rejects.toThrow(
             'platform-only permission CreateAdministrator',
         );
+    });
+
+    it('does not promote a legacy administrator on the technical default Channel to store primary', async () => {
+        const { queryRunner } = runner(
+            'mysql',
+            1,
+            [],
+            [{ administratorId: 7, userId: 17, mustChangePassword: true }],
+        );
+        await expect(new AddAdministratorAccessGovernance1789408800000().up(queryRunner)).rejects.toThrow(
+            'must belong to an operating store Channel',
+        );
+    });
+
+    it('does not map the platform owner into a store primary slot', async () => {
+        const { queryRunner } = runner(
+            'mysql',
+            1,
+            [],
+            [{ administratorId: 1, userId: 10, mustChangePassword: false }],
+        );
+        await expect(new AddAdministratorAccessGovernance1789408800000().up(queryRunner)).rejects.toThrow(
+            'Platform owner cannot also be backfilled',
+        );
+    });
+
+    it('allows only the fixed store primary role to retain core team-management permissions', async () => {
+        const account = [{ administratorId: 7, userId: 17, mustChangePassword: true }];
+        const accepted = runner(
+            'mysql',
+            1,
+            [],
+            account,
+            [{ roleCode: 'store-a-store-admin', permissions: 'CreateAdministrator,ReadProduct' }],
+            'store-a',
+        );
+        await expect(
+            new AddAdministratorAccessGovernance1789408800000().up(accepted.queryRunner),
+        ).resolves.toBeUndefined();
+
+        const rejected = runner(
+            'mysql',
+            1,
+            [],
+            account,
+            [{ roleCode: 'store-a-store-admin', permissions: 'CreateAdministrator,CreateApiKey' }],
+            'store-a',
+        );
+        await expect(
+            new AddAdministratorAccessGovernance1789408800000().up(rejected.queryRunner),
+        ).rejects.toThrow('platform-only permission CreateApiKey');
     });
 });

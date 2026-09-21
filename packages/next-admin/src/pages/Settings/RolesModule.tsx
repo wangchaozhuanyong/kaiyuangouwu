@@ -134,6 +134,45 @@ export function RolesModule() {
                         {actionError}
                     </Message>
                 )}
+                {query.data?.myAdministratorAccess.authority === 'OWNER' && (
+                    <details className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950">
+                        <summary className="cursor-pointer font-bold">平台所有者专属权限（不可下放）</summary>
+                        <p className="mt-2 leading-5">
+                            全平台仅一名所有者；所有权转移、创建同级平台管理员与店铺清退使用专用流程。
+                        </p>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                            {query.data.permissionPolicyCatalog.permissions
+                                .filter(permission => permission.scope === 'OWNER_ONLY')
+                                .map(permission => (
+                                    <div key={permission.code} className="rounded-lg bg-white/70 p-2">
+                                        <strong className="block">{permission.name}</strong>
+                                        <span className="mt-1 block text-amber-900/75">
+                                            {permission.description}
+                                        </span>
+                                    </div>
+                                ))}
+                        </div>
+                    </details>
+                )}
+                {query.data?.myAdministratorAccess.scope === 'PLATFORM' && (
+                    <details className="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-800">
+                        <summary className="cursor-pointer font-bold">
+                            公司跨店权限（只可授予平台岗位，不可授予店铺岗位）
+                        </summary>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                            {query.data.permissionPolicyCatalog.permissions
+                                .filter(permission => permission.scope === 'PLATFORM' && permission.delegable)
+                                .map(permission => (
+                                    <div key={permission.code} className="rounded-lg bg-slate-50 p-2">
+                                        <strong className="block">{permission.name}</strong>
+                                        <span className="mt-1 block text-slate-500">
+                                            {permission.description}
+                                        </span>
+                                    </div>
+                                ))}
+                        </div>
+                    </details>
+                )}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="inline-flex w-max rounded-lg border border-slate-200 bg-white p-1">
                         <TabButton
@@ -543,14 +582,16 @@ function MemberEditor({
     const selectableRoles = roles.filter(role =>
         scope === 'STORE'
             ? role.channels.length === 1 && role.channels.some(channel => channel.id === channelId)
-            : role.channels.length > 1 || role.channels.length === channels.length,
+            : role.channels.some(channel => channel.code === '__default_channel__'),
     );
+    const usesFixedPlatformRole = scope === 'PLATFORM' && authority === 'ADMIN';
     const [create, createState] = useMutation(CREATE_ADMINISTRATOR_MUTATION);
     const [update, updateState] = useMutation(UPDATE_ADMINISTRATOR_MUTATION);
     const saving = createState.loading || updateState.loading;
     const save = async () => {
-        if (![firstName, lastName, emailAddress].every(item => item.trim()) || roleIds.length === 0)
-            return onError('请填写姓名、邮箱并至少选择一个角色');
+        if (![firstName, lastName, emailAddress].every(item => item.trim()))
+            return onError('请填写姓名和邮箱');
+        if (!usesFixedPlatformRole && roleIds.length === 0) return onError('请至少选择一个岗位角色');
         if (scope === 'STORE' && !channelId) return onError('请选择员工所属店铺');
         if (!existing && password.length < 8) return onError('新员工初始密码至少需要 8 位');
         try {
@@ -562,7 +603,7 @@ function MemberEditor({
                             firstName: firstName.trim(),
                             lastName: lastName.trim(),
                             emailAddress: emailAddress.trim(),
-                            roleIds,
+                            roleIds: usesFixedPlatformRole ? [] : roleIds,
                             authority,
                             ...(password ? { password } : {}),
                         },
@@ -576,7 +617,7 @@ function MemberEditor({
                             lastName: lastName.trim(),
                             emailAddress: emailAddress.trim(),
                             password,
-                            roleIds,
+                            roleIds: usesFixedPlatformRole ? [] : roleIds,
                             scope,
                             authority,
                             channelId: scope === 'STORE' ? channelId : null,
@@ -633,7 +674,10 @@ function MemberEditor({
                 <Field label="账号层级 *">
                     <select
                         value={authority}
-                        onChange={event => setAuthority(event.target.value as 'ADMIN' | 'MANAGER' | 'STAFF')}
+                        onChange={event => {
+                            setAuthority(event.target.value as 'ADMIN' | 'MANAGER' | 'STAFF');
+                            setRoleIds([]);
+                        }}
                         className={inputClass}
                     >
                         {access?.authority === 'OWNER' && scope === 'PLATFORM' && (
@@ -697,36 +741,42 @@ function MemberEditor({
                     </Field>
                 </div>
             )}
-            <div className="mt-5">
-                <div className="mb-2 text-xs font-bold text-slate-700">分配角色 *</div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                    {selectableRoles.map(role => (
-                        <label
-                            key={role.id}
-                            className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-3 text-xs"
-                        >
-                            <input
-                                type="checkbox"
-                                checked={roleIds.includes(role.id)}
-                                onChange={() =>
-                                    setRoleIds(current =>
-                                        current.includes(role.id)
-                                            ? current.filter(id => id !== role.id)
-                                            : [...current, role.id],
-                                    )
-                                }
-                                className="mt-0.5"
-                            />
-                            <span>
-                                <strong className="block text-slate-800">{getRoleLabel(role)}</strong>
-                                <span className="mt-1 block font-mono text-[9px] text-slate-400">
-                                    {getRoleCodeLabel(role.code)}
-                                </span>
-                            </span>
-                        </label>
-                    ))}
+            {usesFixedPlatformRole ? (
+                <div className="mt-5 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+                    平台管理员自动使用系统固定岗位，可协助管理全部店铺；平台所有者专属权限不会下放。
                 </div>
-            </div>
+            ) : (
+                <div className="mt-5">
+                    <div className="mb-2 text-xs font-bold text-slate-700">分配角色 *</div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                        {selectableRoles.map(role => (
+                            <label
+                                key={role.id}
+                                className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-3 text-xs"
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={roleIds.includes(role.id)}
+                                    onChange={() =>
+                                        setRoleIds(current =>
+                                            current.includes(role.id)
+                                                ? current.filter(id => id !== role.id)
+                                                : [...current, role.id],
+                                        )
+                                    }
+                                    className="mt-0.5"
+                                />
+                                <span>
+                                    <strong className="block text-slate-800">{getRoleLabel(role)}</strong>
+                                    <span className="mt-1 block font-mono text-[9px] text-slate-400">
+                                        {getRoleCodeLabel(role.code)}
+                                    </span>
+                                </span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+            )}
             <ModalActions
                 onClose={onClose}
                 onSave={() => void save()}
@@ -769,7 +819,7 @@ function RoleEditor({
     const initialDescription = existing ? getRoleLabel(existing) : '';
     const [description, setDescription] = useState(initialDescription);
     const existingLooksPlatform = Boolean(
-        existing && existing.channels.length > 1 && existing.channels.length === channels.length,
+        existing?.channels.some(channel => channel.code === '__default_channel__'),
     );
     const [scope, setScope] = useState<'PLATFORM' | 'STORE'>(
         access.scope === 'STORE' ? 'STORE' : existingLooksPlatform ? 'PLATFORM' : 'STORE',

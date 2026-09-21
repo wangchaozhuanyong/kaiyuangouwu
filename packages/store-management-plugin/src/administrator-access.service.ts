@@ -23,6 +23,7 @@ import {
     AdministratorAccessProfile,
     AdministratorAccessScope,
 } from './entities/administrator-access-profile.entity';
+import { AdministratorPermissionAudit } from './entities/administrator-permission-audit.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
 import { PermissionPolicyRegistry } from './permission-policy';
@@ -116,7 +117,23 @@ export class AdministratorAccessService {
 
     async manageableAdministrators(ctx: RequestContext): Promise<AdministratorAccessProfile[]> {
         const actor = await this.current(ctx);
+        if (actor.authority !== 'OWNER' && actor.authority !== 'ADMIN') return [];
+        if (actor.scope === 'STORE' && !actor.channelId) return [];
+        const where =
+            actor.authority === 'OWNER'
+                ? {}
+                : actor.scope === 'PLATFORM'
+                  ? [
+                        { scope: 'PLATFORM' as const, authority: In(['MANAGER', 'STAFF']) },
+                        { scope: 'STORE' as const, authority: In(['ADMIN', 'MANAGER', 'STAFF']) },
+                    ]
+                  : {
+                        scope: 'STORE' as const,
+                        channelId: actor.channelId as ID,
+                        authority: In(['MANAGER', 'STAFF']),
+                    };
         const profiles = await this.connection.getRepository(ctx, AdministratorAccessProfile).find({
+            where,
             relations: {
                 channel: true,
                 administrator: { user: { roles: { channels: true } } },
@@ -128,32 +145,49 @@ export class AdministratorAccessService {
 
     async manageableRoles(ctx: RequestContext): Promise<Role[]> {
         const actor = await this.current(ctx);
+        if (actor.authority !== 'OWNER' && actor.authority !== 'ADMIN') return [];
+        if (actor.scope === 'STORE' && !actor.channelId) return [];
         const roles = await this.connection.getRepository(ctx, Role).find({
+            where: actor.scope === 'STORE' ? { channels: { id: actor.channelId as ID } } : undefined,
             relations: { channels: true },
             order: { createdAt: 'ASC' },
         });
-        return roles.filter(role => {
-            if (role.code === '__super_admin_role__' || role.code === '__customer_role__') return false;
+        const visible: Role[] = [];
+        for (const role of roles) {
+            if (
+                ['__super_admin_role__', '__customer_role__', 'platform-administrator'].includes(role.code) ||
+                role.code.endsWith('-store-admin')
+            )
+                continue;
             if (actor.scope === 'PLATFORM') {
-                return role.permissions.every(permission => {
-                    const permissionCode = String(permission);
-                    if (permissionCode === String(Permission.Authenticated)) return true;
-                    return this.policies
-                        .catalog()
-                        .some(policy => policy.code === permissionCode && policy.scope !== 'OWNER_ONLY');
-                });
+                if (
+                    role.permissions.every(permission => {
+                        const permissionCode = String(permission);
+                        if (permissionCode === String(Permission.Authenticated)) return true;
+                        return this.policies
+                            .catalog()
+                            .some(
+                                policy =>
+                                    policy.code === permissionCode &&
+                                    policy.scope !== 'OWNER_ONLY' &&
+                                    policy.delegable,
+                            );
+                    })
+                )
+                    visible.push(role);
+                continue;
             }
-            return (
-                role.channels.length === 1 &&
-                idsAreEqual(role.channels[0].id, actor.channelId) &&
-                role.permissions.every(permission => {
-                    const permissionCode = String(permission);
-                    if (permissionCode === String(Permission.Authenticated)) return true;
-                    const policy = this.policies.catalog().find(item => item.code === permissionCode);
-                    return policy?.scope === 'STORE';
-                })
-            );
-        });
+            try {
+                this.policies.assertStoreRolePermissions(
+                    role.permissions.filter(permission => permission !== Permission.Authenticated),
+                );
+                await this.assertStoreRoleOwnership(ctx, role, actor.channelId as ID);
+                visible.push(role);
+            } catch (error) {
+                if (!(error instanceof UserInputError)) throw error;
+            }
+        }
+        return visible;
     }
 
     async manageableChannels(ctx: RequestContext): Promise<Channel[]> {
@@ -161,7 +195,8 @@ export class AdministratorAccessService {
         if (actor.scope === 'STORE') {
             return actor.channel ? [actor.channel] : [];
         }
-        return this.connection.getRepository(ctx, Channel).find({ order: { code: 'ASC' } });
+        const channels = await this.connection.getRepository(ctx, Channel).find({ order: { code: 'ASC' } });
+        return channels.filter(channel => channel.code !== '__default_channel__');
     }
 
     async createManagedAdministrator(
@@ -170,7 +205,16 @@ export class AdministratorAccessService {
     ): Promise<AdministratorAccessProfile> {
         const actor = await this.current(ctx);
         this.assertCanCreate(actor, input.scope, input.authority, input.channelId);
-        const roles = await this.loadAndValidateRoles(ctx, input.roleIds, input.scope, input.channelId);
+        const platformAdministratorRole =
+            input.scope === 'PLATFORM' && input.authority === 'ADMIN'
+                ? await this.ensurePlatformAdministratorRole(ctx)
+                : null;
+        if (platformAdministratorRole && input.roleIds.length > 0) {
+            throw new UserInputError('平台管理员使用系统固定角色，无需另选岗位');
+        }
+        const roles = platformAdministratorRole
+            ? [platformAdministratorRole]
+            : await this.loadAndValidateRoles(ctx, input.roleIds, input.scope, input.channelId);
         if (roles.length === 0) throw new UserInputError('请至少选择一个岗位角色');
         const administrator = await this.administratorService.create(ctx, {
             firstName: input.firstName.trim(),
@@ -218,8 +262,21 @@ export class AdministratorAccessService {
         ) {
             throw new UserInputError('所有者或店铺主管理员层级只能通过专用转移功能变更');
         }
-        if (input.roleIds) {
-            await this.loadAndValidateRoles(ctx, input.roleIds, target.scope, target.channelId);
+        const nextAuthority = input.authority ?? target.authority;
+        let roleIds = input.roleIds;
+        if (target.scope === 'PLATFORM' && nextAuthority === 'ADMIN') {
+            const fixedRole = await this.ensurePlatformAdministratorRole(ctx);
+            if (roleIds?.some(id => !idsAreEqual(id, fixedRole.id))) {
+                throw new UserInputError('平台管理员只能使用系统固定角色');
+            }
+            roleIds = [fixedRole.id];
+        } else {
+            if (target.scope === 'PLATFORM' && target.authority === 'ADMIN' && !roleIds?.length) {
+                throw new UserInputError('降级平台管理员时必须选择新的公司岗位');
+            }
+            if (roleIds) {
+                await this.loadAndValidateRoles(ctx, roleIds, target.scope, target.channelId);
+            }
         }
         const before = this.profileSummary(target);
         await this.administratorService.update(ctx, {
@@ -228,9 +285,12 @@ export class AdministratorAccessService {
             lastName: input.lastName,
             emailAddress: input.emailAddress,
             password: input.password,
-            roleIds: input.roleIds,
+            roleIds,
         });
-        if (input.authority) target.authority = input.authority;
+        if (input.authority && input.authority !== target.authority) {
+            target.authority = input.authority;
+            await this.sessionService.deleteSessionsByUser(ctx, target.administrator.user);
+        }
         await this.connection.getRepository(ctx, AdministratorAccessProfile).save(target);
         await this.audit.record(ctx, {
             action: 'UPDATE_MANAGED_ADMINISTRATOR',
@@ -287,9 +347,7 @@ export class AdministratorAccessService {
         const current = await this.connection.getEntityOrThrow(ctx, Role, input.id, {
             relations: ['channels'],
         });
-        if (current.code.endsWith('-store-admin')) {
-            throw new UserInputError('店铺主管理员固定角色不允许修改');
-        }
+        await this.assertCanUpdateRole(ctx, actor, current, input);
         const { channelIds, permissions } = await this.validateManagedRoleInput(ctx, actor, input);
         const before = { code: current.code, permissions: current.permissions };
         const role = await this.roleService.update(ctx, {
@@ -316,7 +374,12 @@ export class AdministratorAccessService {
         const actor = await this.current(ctx);
         if (actor.scope !== 'PLATFORM' || actor.authority !== 'OWNER') throw new ForbiddenError();
         const target = await this.requireByAdministratorId(ctx, targetAdministratorId);
-        if (target.scope !== 'PLATFORM' || target.status !== 'ACTIVE') {
+        if (
+            idsAreEqual(target.id, actor.id) ||
+            target.scope !== 'PLATFORM' ||
+            target.authority === 'OWNER' ||
+            target.status !== 'ACTIVE'
+        ) {
             throw new UserInputError('平台所有权只能转移给正常的平台账号');
         }
         const superRole = await this.roleService.getSuperAdminRole(ctx);
@@ -362,7 +425,7 @@ export class AdministratorAccessService {
         });
         if (!currentPrimary) throw new UserInputError('当前店铺没有可转移的主管理员');
         if (
-            actor.authority !== 'OWNER' &&
+            !(actor.scope === 'PLATFORM' && actor.authority === 'OWNER') &&
             !(actor.scope === 'PLATFORM' && actor.authority === 'ADMIN') &&
             !idsAreEqual(actor.id, currentPrimary.id)
         ) {
@@ -370,8 +433,11 @@ export class AdministratorAccessService {
         }
         const target = await this.requireByAdministratorId(ctx, targetAdministratorId);
         if (
+            idsAreEqual(target.id, currentPrimary.id) ||
             target.scope !== 'STORE' ||
             !idsAreEqual(target.channelId, channelId) ||
+            !['MANAGER', 'STAFF'].includes(target.authority) ||
+            target.storePrimarySlot != null ||
             target.status !== 'ACTIVE'
         ) {
             throw new UserInputError('店铺主管理员只能转移给同店正常账号');
@@ -427,6 +493,7 @@ export class AdministratorAccessService {
             for (const role of profile.administrator.user.roles) roles.set(String(role.id), role);
         }
         for (const role of roles.values()) {
+            await this.assertPlatformRoleOwnership(ctx, role);
             if (!role.channels.some(existing => idsAreEqual(existing.id, channel.id))) {
                 await this.roleService.assignRoleToChannel(ctx, role.id, channel.id);
             }
@@ -446,9 +513,11 @@ export class AdministratorAccessService {
         ) as Permission[];
         if (permissions.length === 0) throw new UserInputError('请至少选择一项权限或岗位模板');
         if (input.scope === 'STORE') {
+            if (actor.scope === 'STORE' && actor.authority !== 'ADMIN') throw new ForbiddenError();
             if (actor.scope === 'STORE' && !idsAreEqual(actor.channelId, input.channelId))
                 throw new ForbiddenError();
             if (!input.channelId) throw new UserInputError('店铺角色必须绑定一个店铺');
+            await this.assertOperatingStoreChannel(ctx, input.channelId);
             this.policies.assertStoreRolePermissions(permissions);
             return { channelIds: [input.channelId], permissions };
         }
@@ -474,21 +543,96 @@ export class AdministratorAccessService {
         if (roles.some(role => role.code === '__super_admin_role__')) {
             throw new UserInputError('平台所有者身份只能通过专用转移功能变更');
         }
+        if (scope === 'STORE') {
+            if (!channelId) throw new UserInputError('店铺账号必须绑定一个店铺');
+            await this.assertOperatingStoreChannel(ctx, channelId);
+        }
+        const platformChannelIds =
+            scope === 'PLATFORM'
+                ? (await this.connection.getRepository(ctx, Channel).find()).map(channel => channel.id)
+                : [];
         for (const role of roles) {
             if (scope === 'STORE') {
-                if (role.channels.length !== 1 || !idsAreEqual(role.channels[0].id, channelId)) {
-                    throw new UserInputError('店铺账号只能使用所属店铺的角色');
-                }
+                await this.assertStoreRoleOwnership(ctx, role, channelId as ID);
                 this.policies.assertStoreRolePermissions(
                     role.permissions.filter(permission => permission !== Permission.Authenticated),
                 );
             } else {
+                if (
+                    platformChannelIds.some(
+                        platformChannelId =>
+                            !role.channels.some(channel => idsAreEqual(channel.id, platformChannelId)),
+                    )
+                ) {
+                    throw new UserInputError('平台账号只能使用覆盖全部店铺的跨店岗位');
+                }
+                await this.assertPlatformRoleOwnership(ctx, role);
                 this.policies.assertPlatformRolePermissions(
                     role.permissions.filter(permission => permission !== Permission.Authenticated),
                 );
             }
         }
         return roles;
+    }
+
+    private async assertOperatingStoreChannel(ctx: RequestContext, channelId: ID): Promise<void> {
+        const channel = await this.connection.getEntityOrThrow(ctx, Channel, channelId);
+        if (channel.code === '__default_channel__') {
+            throw new UserInputError('默认渠道仅用于平台技术上下文，不能创建店铺账号或岗位');
+        }
+    }
+
+    private async assertStoreRoleOwnership(ctx: RequestContext, role: Role, channelId: ID): Promise<void> {
+        if (role.channels.length !== 1 || !idsAreEqual(role.channels[0].id, channelId)) {
+            throw new UserInputError('店铺账号只能使用所属店铺的角色');
+        }
+        const assignedUsers = await this.connection.getRepository(ctx, User).find({
+            where: { roles: { id: role.id } },
+        });
+        const assignedProfiles = assignedUsers.length
+            ? await this.connection.getRepository(ctx, AdministratorAccessProfile).find({
+                  where: { userId: In(assignedUsers.map(user => user.id)) },
+              })
+            : [];
+        if (
+            assignedProfiles.length !== assignedUsers.length ||
+            assignedProfiles.some(
+                profile => profile.scope !== 'STORE' || !idsAreEqual(profile.channelId, channelId),
+            )
+        ) {
+            throw new UserInputError('角色包含其他范围或未完成迁移的账号，不能下放给店铺');
+        }
+        if (assignedProfiles.length === 0) {
+            const creationAudit = await this.connection
+                .getRepository(ctx, AdministratorPermissionAudit)
+                .findOne({
+                    where: {
+                        targetRoleId: role.id,
+                        channelId,
+                        action: 'CREATE_MANAGED_ROLE',
+                        result: 'SUCCESS',
+                    },
+                });
+            if (!creationAudit) {
+                throw new UserInputError('未能确认空岗位的店铺归属，请由平台核对后再使用');
+            }
+        }
+    }
+
+    private async assertPlatformRoleOwnership(ctx: RequestContext, role: Role): Promise<void> {
+        const assignedUsers = await this.connection.getRepository(ctx, User).find({
+            where: { roles: { id: role.id } },
+        });
+        if (assignedUsers.length === 0) return;
+        const assignedProfiles = await this.connection.getRepository(ctx, AdministratorAccessProfile).find({
+            where: { userId: In(assignedUsers.map(user => user.id)) },
+        });
+        if (
+            assignedProfiles.length !== assignedUsers.length ||
+            assignedProfiles.some(profile => profile.scope !== 'PLATFORM')
+        ) {
+            throw new UserInputError('角色同时关联店铺或未归属账号，不能作为跨店岗位扩展');
+        }
     }
 
     private assertCanCreate(
@@ -522,10 +666,46 @@ export class AdministratorAccessService {
         scope: AdministratorAccessScope,
         authority: AdministratorAccessAuthority,
     ): void {
-        if (authority === 'OWNER' || authorityRank[authority] >= authorityRank[actor.authority]) {
+        if (
+            authority === 'OWNER' ||
+            (scope === 'STORE' && authority === 'ADMIN') ||
+            authorityRank[authority] >= authorityRank[actor.authority]
+        ) {
             throw new ForbiddenError();
         }
         if (actor.scope === 'STORE' && scope !== 'STORE') throw new ForbiddenError();
+    }
+
+    private async assertCanUpdateRole(
+        ctx: RequestContext,
+        actor: AdministratorAccessProfile,
+        role: Role,
+        input: ManagedRoleInput,
+    ): Promise<void> {
+        if (
+            ['__super_admin_role__', '__customer_role__', 'platform-administrator'].includes(role.code) ||
+            role.code.endsWith('-store-admin')
+        ) {
+            throw new UserInputError('系统固定角色不允许通过岗位编辑修改');
+        }
+        if (input.scope === 'STORE') {
+            if (!input.channelId) throw new UserInputError('店铺岗位必须绑定一个店铺');
+            await this.assertStoreRoleOwnership(ctx, role, input.channelId);
+            this.policies.assertStoreRolePermissions(
+                role.permissions.filter(permission => permission !== Permission.Authenticated),
+            );
+            if (actor.scope === 'STORE' && !idsAreEqual(actor.channelId, input.channelId)) {
+                throw new ForbiddenError();
+            }
+            return;
+        }
+        if (actor.scope !== 'PLATFORM' || authorityRank[actor.authority] < authorityRank.ADMIN) {
+            throw new ForbiddenError();
+        }
+        await this.assertPlatformRoleOwnership(ctx, role);
+        this.policies.assertPlatformRolePermissions(
+            role.permissions.filter(permission => permission !== Permission.Authenticated),
+        );
     }
 
     private assertCanManage(actor: AdministratorAccessProfile, target: AdministratorAccessProfile): void {
@@ -596,19 +776,43 @@ export class AdministratorAccessService {
         ];
         if (legacy && channelIds.length === 1) {
             const channel = await this.connection.getEntityOrThrow(ctx, Channel, channelIds[0]);
-            const primary = await this.connection.getRepository(ctx, AdministratorAccessProfile).findOne({
-                where: { storePrimarySlot: channelIds[0] },
-            });
-            return this.saveProfile(ctx, administrator, {
-                scope: 'STORE',
-                authority: primary ? 'MANAGER' : 'ADMIN',
-                channel,
-                channelId: channel.id,
-                createdByAdministratorId: null,
-                mustChangePassword: legacy.mustChangePassword,
-                platformOwnerSlot: null,
-                storePrimarySlot: primary ? null : channelIds[0],
-            });
+            if (channel.code !== '__default_channel__') {
+                const policyByCode = new Map(this.policies.catalog().map(policy => [policy.code, policy]));
+                for (const role of administrator.user.roles) {
+                    for (const permission of role.permissions) {
+                        if (permission === Permission.Authenticated) continue;
+                        const policy = policyByCode.get(String(permission));
+                        if (
+                            !policy ||
+                            (policy.scope !== 'STORE' &&
+                                !(
+                                    role.code === `${channel.code}-store-admin` &&
+                                    [
+                                        Permission.CreateAdministrator,
+                                        Permission.ReadAdministrator,
+                                        Permission.UpdateAdministrator,
+                                        Permission.DeleteAdministrator,
+                                    ].includes(permission)
+                                ))
+                        ) {
+                            throw new UserInputError('旧店铺管理员角色包含平台权限，必须先完成人工归属核查');
+                        }
+                    }
+                }
+                const primary = await this.connection.getRepository(ctx, AdministratorAccessProfile).findOne({
+                    where: { storePrimarySlot: channelIds[0] },
+                });
+                return this.saveProfile(ctx, administrator, {
+                    scope: 'STORE',
+                    authority: primary ? 'MANAGER' : 'ADMIN',
+                    channel,
+                    channelId: channel.id,
+                    createdByAdministratorId: null,
+                    mustChangePassword: legacy.mustChangePassword,
+                    platformOwnerSlot: null,
+                    storePrimarySlot: primary ? null : channelIds[0],
+                });
+            }
         }
         return this.saveProfile(ctx, administrator, {
             scope: 'PLATFORM',
@@ -619,6 +823,7 @@ export class AdministratorAccessService {
             mustChangePassword: false,
             platformOwnerSlot: null,
             storePrimarySlot: null,
+            status: 'SUSPENDED',
         });
     }
 
@@ -664,7 +869,6 @@ export class AdministratorAccessService {
             where: { code: 'platform-administrator' },
             relations: { channels: true },
         });
-        if (existing) return existing;
         const permissions = [
             ...this.policies
                 .catalog()
@@ -677,6 +881,21 @@ export class AdministratorAccessService {
         ];
         const uniquePermissions = [...new Set(permissions)];
         const channels = await this.connection.getRepository(ctx, Channel).find();
+        if (existing) {
+            if (
+                uniquePermissions.some(permission => !existing.permissions.includes(permission)) ||
+                existing.permissions.some(
+                    permission =>
+                        permission !== Permission.Authenticated && !uniquePermissions.includes(permission),
+                ) ||
+                channels.some(
+                    channel => !existing.channels.some(assigned => idsAreEqual(assigned.id, channel.id)),
+                )
+            ) {
+                throw new UserInputError('平台管理员固定角色配置异常，请先完成岗位归属与权限校验');
+            }
+            return existing;
+        }
         return this.roleService.create(ctx, {
             code: 'platform-administrator',
             description: '平台管理员',
@@ -689,7 +908,15 @@ export class AdministratorAccessService {
         const code = `${channel.code}-store-manager`;
         const repository = this.connection.getRepository(ctx, Role);
         const existing = await repository.findOne({ where: { code }, relations: { channels: true } });
-        if (existing) return existing;
+        if (existing) {
+            if (existing.channels.length !== 1 || !idsAreEqual(existing.channels[0].id, channel.id)) {
+                throw new UserInputError('店铺普通管理员固定角色归属异常，请先核对角色数据');
+            }
+            this.policies.assertStoreRolePermissions(
+                existing.permissions.filter(permission => permission !== Permission.Authenticated),
+            );
+            return existing;
+        }
         const template = this.policies.templates().find(candidate => candidate.code === 'STORE_MANAGER');
         if (!template) throw new UserInputError('店铺普通管理员岗位模板缺失');
         return this.roleService.create(ctx, {

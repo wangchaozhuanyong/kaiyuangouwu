@@ -32,14 +32,14 @@ export class AdministratorAccessInterceptor implements NestInterceptor {
         if (requestContext.apiType !== 'admin' || !requestContext.activeUserId) return next.handle();
         const rootField = `${parsed.info.parentType.name}.${parsed.info.fieldName}`;
         if (allowedForSuspendedAccount.has(rootField)) return next.handle();
-        const profile = await this.accessService.findByUserId(requestContext, requestContext.activeUserId);
-        if (profile?.status === 'SUSPENDED') {
+        const profile = await this.accessService.current(requestContext);
+        if (profile.status === 'SUSPENDED') {
             throw new UserInputError('当前管理账号已被停用，请联系上级管理员');
         }
-        if (profile && legacyTeamMutations.has(rootField)) {
+        if (legacyTeamMutations.has(rootField)) {
             throw new UserInputError('管理员与岗位权限必须通过受限管理接口操作');
         }
-        if (profile?.scope === 'STORE' && unscopedStoreTeamQueries.has(rootField)) {
+        if (profile.scope === 'STORE' && unscopedStoreTeamQueries.has(rootField)) {
             throw new UserInputError('店铺账号请使用本店团队与岗位列表');
         }
         return next.handle();
