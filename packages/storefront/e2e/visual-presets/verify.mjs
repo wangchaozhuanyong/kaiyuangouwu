@@ -53,6 +53,7 @@ const routes = [
 ];
 const criticalRoutes = new Set([
     'home',
+    'category',
     'product',
     'cart',
     'checkout',
@@ -165,6 +166,10 @@ try {
                     const box = await media.boundingBox();
                     expect(Math.abs((box?.width ?? 0) - (box?.height ?? 0))).toBeLessThanOrEqual(1);
                     await expect(media.locator('img').first()).toHaveCSS('object-fit', 'contain');
+                }
+                if (name === 'category' && width >= 1024) {
+                    await expect(page.locator('.desktop-category-navigation')).toBeVisible();
+                    await expect(page.locator('.desktop-local-navigation')).toBeVisible();
                 }
                 await page.keyboard.press('Tab');
                 const keyboardFocus = await page.evaluate(() => {

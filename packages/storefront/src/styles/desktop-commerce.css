@@ -62,7 +62,10 @@
         background: color-mix(in srgb, var(--paper, #fff) 88%, transparent);
         border-bottom: 1px solid color-mix(in srgb, var(--line, #e2e8f0) 80%, transparent);
         box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.03);
-        transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        transition:
+            background-color 0.2s ease,
+            border-color 0.2s ease,
+            box-shadow 0.2s ease;
     }
     .desktop-header a {
         text-decoration: none;
@@ -219,7 +222,9 @@
     .desktop-search:focus-within {
         border-color: var(--accent);
         background: var(--surface, var(--paper));
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent), 0 4px 12px rgba(0, 0, 0, 0.04);
+        box-shadow:
+            0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent),
+            0 4px 12px rgba(0, 0, 0, 0.04);
     }
     .desktop-search button {
         align-self: center;
@@ -233,7 +238,9 @@
         font-weight: 500;
         padding: 0 16px;
         cursor: pointer;
-        transition: opacity 0.15s ease, transform 0.1s ease;
+        transition:
+            opacity 0.15s ease,
+            transform 0.1s ease;
     }
     .desktop-search button:hover {
         opacity: 0.92;
@@ -302,7 +309,9 @@
         font-weight: 500;
         color: var(--muted);
         text-decoration: none;
-        transition: color 0.15s ease, border-color 0.15s ease;
+        transition:
+            color 0.15s ease,
+            border-color 0.15s ease;
     }
     .desktop-store-nav :is(a, button):hover,
     .desktop-store-nav [aria-current='page'],
@@ -384,12 +393,17 @@
         box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.04);
         background: var(--paper, #fff);
         padding-bottom: 12px;
-        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+        transition:
+            transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+            box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+            border-color 0.2s ease;
     }
     .desktop-store-layout :is(.product-grid-card, .product-card):hover {
         transform: translateY(-4px);
         border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
-        box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.08), 0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent);
+        box-shadow:
+            0 12px 28px -6px rgba(0, 0, 0, 0.08),
+            0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent);
     }
     .desktop-store-layout .product-card .product-card-media {
         border-radius: 13px 13px 0 0;
@@ -783,30 +797,53 @@
         padding-block: 24px 48px;
     }
     .desktop-category-navigation {
-        padding: 6px 24px;
-        background: var(--paper, #fff);
+        border-bottom: 1px solid var(--line);
     }
-    .desktop-local-navigation,
-    .desktop-subcategories {
+    .desktop-category-row {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr);
+        align-items: center;
+        gap: 20px;
+        min-width: 0;
+    }
+    .desktop-category-row-children {
+        border-top: 1px solid var(--line-subtle);
+    }
+    .desktop-category-label {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .desktop-category-navigation :is(.desktop-local-navigation, .desktop-subcategories) {
         display: flex;
         align-items: center;
-        flex-wrap: wrap;
-        gap: 0 28px;
-    }
-    .desktop-subcategories {
-        border-top: 1px solid var(--line);
+        flex-wrap: nowrap;
+        gap: 24px;
+        min-width: 0;
+        overflow-x: auto;
+        scrollbar-width: thin;
     }
     .desktop-category-navigation button {
         border: 0;
-        background: none;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        background: transparent;
         color: var(--muted);
-        padding: 14px 0;
-        min-height: 46px;
+        padding: 0 2px;
+        min-height: 54px;
+        flex: none;
         cursor: pointer;
         font-size: 14px;
+        white-space: nowrap;
     }
     .desktop-category-navigation button[aria-pressed='true'] {
-        color: var(--accent);
+        color: var(--accent-ink);
+        border-bottom-color: var(--accent);
+        font-weight: 600;
+    }
+    .desktop-category-navigation button:hover {
+        color: var(--accent-ink);
     }
     .desktop-category-status {
         font-size: 13px;
@@ -1003,37 +1040,86 @@
     .desktop-catalog-extras {
         margin-top: 32px;
     }
+    .desktop-catalog-extras:empty {
+        display: none;
+    }
+    .desktop-catalog-endcap {
+        margin-top: 36px;
+        border-top: 1px solid var(--line);
+    }
     .desktop-services-link {
-        display: flex;
+        display: grid;
+        grid-template-columns: 40px minmax(0, 1fr) 20px;
         align-items: center;
-        gap: 16px;
+        gap: 14px;
         width: 100%;
         border: 0;
-        border-top: 1px solid var(--line);
         background: transparent;
-        padding: 24px 0;
+        padding: 22px 0;
+        color: var(--text);
         text-align: left;
         cursor: pointer;
     }
-    .desktop-services-link > svg {
-        width: 22px;
-        height: 22px;
-        color: var(--muted);
-    }
-    .desktop-services-link > svg:last-child {
-        margin-left: auto;
-    }
-    .desktop-services-link span {
+    .desktop-services-icon {
         display: grid;
-        gap: 6px;
+        place-items: center;
+        width: 40px;
+        height: 40px;
+        border-radius: var(--radius-sm);
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+    }
+    .desktop-services-icon svg {
+        width: 19px;
+        height: 19px;
+    }
+    .desktop-services-copy {
+        display: grid;
+        gap: 3px;
     }
     .desktop-services-link strong {
         font-size: 15px;
-        font-weight: 500;
+        font-weight: 600;
     }
     .desktop-services-link small {
         color: var(--muted);
+        font-size: 13px;
+    }
+    .desktop-services-arrow {
+        width: 18px;
+        height: 18px;
+        color: var(--muted);
+        transition: transform 0.15s ease;
+    }
+    .desktop-services-link:hover .desktop-services-arrow {
+        transform: translateX(3px);
+        color: var(--accent-ink);
+    }
+    .desktop-catalog-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        min-height: 58px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
         font-size: 12px;
+    }
+    .desktop-catalog-footer nav {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+    }
+    .desktop-catalog-footer button {
+        border: 0;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        padding: 8px 0;
+        font-size: inherit;
+    }
+    .desktop-catalog-footer button:hover {
+        color: var(--text);
     }
     .desktop-store-highlights {
         font-size: 13px;

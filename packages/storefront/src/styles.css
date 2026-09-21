@@ -1176,6 +1176,8 @@ img {
 
 .storefront-preview-stage iframe {
     display: block;
+    /* The selected width is the embedded page's viewport, excluding this preview border. */
+    box-sizing: content-box;
     height: calc(100dvh - 118px);
     min-height: 720px;
     margin-inline: auto;

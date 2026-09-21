@@ -1,8 +1,10 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CatalogApi } from './api/catalog';
 import { DesktopCategoryNavigation } from './components/common/desktop-category-navigation';
+import { DesktopCatalogPage } from './pages/desktop-catalog-page';
 import { RouteState } from './storefront-router';
 import { StorefrontContext, type StorefrontContextValue } from './StorefrontContext';
 import { CollectionSummary } from './types';
@@ -65,7 +67,37 @@ describe('desktop catalog category navigation', () => {
         expect(renderCategories({ name: 'home' }).match(/aria-pressed="true"/g)).toHaveLength(1);
         const category = renderCategories({ name: 'category', collectionId: 'parent', childId: 'child' });
         expect(category.match(/aria-pressed="true"/g)).toHaveLength(2);
+        expect(category).toContain('一级分类');
+        expect(category).toContain('二级分类');
         expect(category).toContain('后台子分类');
+    });
+
+    it('keeps the primary navigation visible in the actual desktop product listing', () => {
+        const markup = renderToStaticMarkup(
+            <QueryClientProvider client={new QueryClient()}>
+                <StorefrontContext.Provider
+                    value={
+                        {
+                            route: { name: 'category' },
+                            collections,
+                            language: 'zh',
+                            market: { code: 'MY', currencyCode: 'MYR', locale: 'zh-CN' },
+                            locale: 'zh-CN',
+                            contentBlocks: [],
+                            storefrontName: '店铺',
+                            storefrontTagline: '',
+                            api: { catalog: vi.fn() },
+                            navigate: vi.fn(),
+                        } as unknown as StorefrontContextValue
+                    }
+                >
+                    <DesktopCatalogPage />
+                </StorefrontContext.Provider>
+            </QueryClientProvider>,
+        );
+        expect(markup).toContain('一级分类');
+        expect(markup).toContain('后台商品分类');
+        expect(markup).toContain('aria-label="店铺政策"');
     });
 
     it('does not imply a category selection on a service page even when old filters remain', () => {
