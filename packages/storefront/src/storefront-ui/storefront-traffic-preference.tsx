@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+// organize-imports-ignore
 import type { ShopApi } from '../api';
 import type { StorefrontTrafficConsent } from '../storefront-traffic';
 import type { StorefrontLanguage } from '../types';
+import { useEffect, useState } from 'react';
 
 import {
     setStorefrontTrafficConsent,

@@ -1,3 +1,11 @@
+// organize-imports-ignore
+import type {
+    CreateCustomerFollowUpInput,
+    CustomerCurrencyMetric,
+    CustomerFollowUpListOptions,
+    CustomerOperationsProfileListOptions,
+    UpdateCustomerFollowUpInput,
+} from './customer-operations.types';
 import { Injectable } from '@nestjs/common';
 import type { CurrencyCode } from '@vendure/common/lib/generated-types';
 import type { ID } from '@vendure/common/lib/shared-types';
@@ -14,13 +22,6 @@ import {
 } from '@vendure/core';
 import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { LessThanOrEqual, Like } from 'typeorm';
-import type {
-    CreateCustomerFollowUpInput,
-    CustomerCurrencyMetric,
-    CustomerFollowUpListOptions,
-    CustomerOperationsProfileListOptions,
-    UpdateCustomerFollowUpInput,
-} from './customer-operations.types';
 
 import {
     CustomerFollowUpEvent,

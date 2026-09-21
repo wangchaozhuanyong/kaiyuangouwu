@@ -1,11 +1,12 @@
-import { Args, Mutation, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql';
-import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendure/core';
+// organize-imports-ignore
 import type {
     CreateCustomerFollowUpInput,
     CustomerFollowUpListOptions,
     CustomerOperationsProfileListOptions,
     UpdateCustomerFollowUpInput,
 } from './customer-operations.types';
+import { Args, Mutation, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql';
+import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendure/core';
 
 import { CustomerOperationsService } from './customer-operations.service';
 import { CustomerFollowUp } from './entities/customer-follow-up.entity';

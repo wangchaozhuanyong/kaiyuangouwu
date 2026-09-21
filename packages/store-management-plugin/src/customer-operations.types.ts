@@ -1,9 +1,10 @@
-import type { ID } from '@vendure/common/lib/shared-types';
+// organize-imports-ignore
 import type { CustomerFollowUpOutcome, CustomerFollowUpPriority } from './entities/customer-follow-up.entity';
 import type {
     CustomerChurnRisk,
     CustomerOperationsSegment,
 } from './entities/customer-operations-profile.entity';
+import type { ID } from '@vendure/common/lib/shared-types';
 
 export interface CustomerCurrencyMetric {
     currencyCode: string;
