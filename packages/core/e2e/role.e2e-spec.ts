@@ -344,9 +344,6 @@ describe('Role resolver', () => {
             channelGuard.assertSuccess(createChannel);
 
             secondChannel = createChannel;
-            // The new Channel extends the owner role and invalidates the previous session.
-            adminClient.setAuthToken('');
-            await adminClient.asSuperAdmin();
         });
 
         it('createRole with specified channel', async () => {

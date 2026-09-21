@@ -339,7 +339,6 @@ export class RoleService {
 
     async assignRoleToChannel(ctx: RequestContext, roleId: ID, channelId: ID) {
         await this.channelService.assignToChannels(ctx, Role, roleId, [channelId]);
-        await this.revokeSessionsForRole(ctx, roleId);
     }
 
     private async getPermittedChannels(ctx: RequestContext, channelIds: ID[]): Promise<Channel[]> {

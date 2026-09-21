@@ -3,6 +3,7 @@ import { type Page, expect, test } from '@playwright/test';
 import { BaseDetailPage } from '../../page-objects/detail-page.base.js';
 import { BaseListPage } from '../../page-objects/list-page.base.js';
 import { confirmSensitiveAction } from '../../utils/sensitive-action.js';
+import { VendureAdminClient } from '../../utils/vendure-admin-client.js';
 
 // Administrators have a password field and a multi-select role picker
 // that don't fit the standard CRUD factory, so we use custom tests.
@@ -46,6 +47,16 @@ test.describe('Administrators', () => {
     });
 
     test('should create a new administrator', async ({ page }) => {
+        const client = new VendureAdminClient(page);
+        await client.login();
+        await client.gql(`mutation ($input: CreateRoleInput!) { createRole(input: $input) { id } }`, {
+            input: {
+                code: 'e2e-administrator-role',
+                description: 'E2E Administrator Role',
+                permissions: ['ReadAdministrator'],
+            },
+        });
+
         const dp = detailPage(page);
         await dp.gotoNew();
         await dp.expectNewPageLoaded();
@@ -55,10 +66,9 @@ test.describe('Administrators', () => {
         await dp.fillInput('Email Address or identifier', 'test-admin@example.com');
         await dp.fillPassword('Password', 'test123456');
 
-        // Open the roles multi-select (combobox in the "Roles" PageBlock)
-        // and select the "SuperAdmin" role
+        // A second owner is intentionally forbidden; use an ordinary administrator role.
         const rolesCombobox = page.getByRole('combobox');
-        await dp.selectPopoverOption(rolesCombobox, 'SuperAdmin');
+        await dp.selectPopoverOption(rolesCombobox, 'E2E Administrator Role');
 
         await dp.clickCreate();
         await dp.expectSuccessToast(/Successfully created administrator/);
