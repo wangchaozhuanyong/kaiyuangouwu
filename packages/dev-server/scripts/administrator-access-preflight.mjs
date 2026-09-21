@@ -7,15 +7,47 @@ import { createStoreIsolationAdapter } from './store-isolation-data-preflight.mj
 
 const REQUIRED_TABLES = ['administrator', 'user_roles_role', 'role', 'role_channels_channel', 'channel'];
 
-export function summarizeAdministratorAccess(rows, legacyRows = [], profileRows = []) {
+function parsePermissions(value) {
+    if (Array.isArray(value)) return value.map(String);
+    if (!value) return [];
+    try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) return parsed.map(String);
+    } catch {
+        // Older databases can store a comma-separated simple-array value.
+    }
+    return String(value)
+        .split(',')
+        .map(item => item.trim())
+        .filter(Boolean);
+}
+
+function isOwnerOnlyPermission(permission) {
+    return (
+        ['SuperAdmin', 'Owner', 'Public', 'UpdateGlobalSettings'].includes(permission) ||
+        /(?:ApiKey|IcloudRelay|ImageGeneration|Settings|System)$/u.test(permission)
+    );
+}
+
+export function summarizeAdministratorAccess(rows, legacyRows = [], profileRows = [], channelRows = []) {
     const accounts = new Map();
     for (const row of rows) {
         const id = String(row.administratorId);
-        const account = accounts.get(id) ?? { administratorId: id, roles: new Set(), channels: new Map() };
+        const account = accounts.get(id) ?? {
+            administratorId: id,
+            roles: new Set(),
+            channels: new Map(),
+            platformRoleChannels: new Set(),
+            permissions: new Set(),
+        };
         if (row.roleCode != null) account.roles.add(String(row.roleCode));
         if (row.channelId != null) {
             account.channels.set(String(row.channelId), String(row.channelCode ?? ''));
+            if (row.roleCode === 'platform-administrator') {
+                account.platformRoleChannels.add(String(row.channelId));
+            }
         }
+        for (const permission of parsePermissions(row.permissions)) account.permissions.add(permission);
         accounts.set(id, account);
     }
     const profiles = new Map(profileRows.map(row => [String(row.administratorId), row]));
@@ -74,12 +106,45 @@ export function summarizeAdministratorAccess(rows, legacyRows = [], profileRows 
     });
 
     const knownPrimaryIds = new Set(legacyRows.map(row => String(row.administratorId)));
+    const allChannelIds = new Set(channelRows.map(row => String(row.id)));
+    const stagedPlatformAdministrators = [...accounts.values()]
+        .filter(
+            account =>
+                account.roles.has('platform-administrator') &&
+                !profiles.has(account.administratorId) &&
+                !knownPrimaryIds.has(account.administratorId),
+        )
+        .map(account => {
+            const valid =
+                !account.roles.has('__super_admin_role__') &&
+                [...account.roles].every(
+                    code => code === 'platform-administrator' || code === '__customer_role__',
+                ) &&
+                ![...account.permissions].some(isOwnerOnlyPermission) &&
+                allChannelIds.size > 0 &&
+                [...allChannelIds].every(id => account.platformRoleChannels.has(id));
+            if (!valid) {
+                blockers.push({
+                    code: 'STAGED_PLATFORM_ADMIN_INVALID',
+                    administratorId: account.administratorId,
+                });
+            }
+            return {
+                administratorId: account.administratorId,
+                channelIds: [...account.platformRoleChannels].sort(),
+                valid,
+                requiresRuntimeRoleValidation: true,
+            };
+        })
+        .sort((a, b) => a.administratorId.localeCompare(b.administratorId));
+    const stagedIds = new Set(stagedPlatformAdministrators.map(row => row.administratorId));
     const unmapped = [...accounts.values()]
         .filter(
             account =>
                 !profiles.has(account.administratorId) &&
                 !owners.some(owner => owner.administratorId === account.administratorId) &&
-                !knownPrimaryIds.has(account.administratorId),
+                !knownPrimaryIds.has(account.administratorId) &&
+                !stagedIds.has(account.administratorId),
         )
         .map(account => ({
             administratorId: account.administratorId,
@@ -98,6 +163,7 @@ export function summarizeAdministratorAccess(rows, legacyRows = [], profileRows 
         ownerAdministratorIds: owners.map(owner => owner.administratorId).sort(),
         existingProfileCount: profiles.size,
         legacyPrimaries,
+        stagedPlatformAdministrators,
         unmapped,
         blockers,
     };
@@ -108,7 +174,7 @@ export async function collectAdministratorAccessPreflight(adapter) {
         if (!(await adapter.tableExists(table))) throw new Error(`Missing required table: ${table}`);
     }
     const rows = await adapter.query(
-        `SELECT a.id AS administratorId, r.code AS roleCode,
+        `SELECT a.id AS administratorId, r.code AS roleCode, r.permissions AS permissions,
                 rc.channelId AS channelId, c.code AS channelCode
          FROM \`administrator\` a
          LEFT JOIN \`user_roles_role\` ur ON ur.userId = a.userId
@@ -126,7 +192,8 @@ export async function collectAdministratorAccessPreflight(adapter) {
               'SELECT administratorId, scope, authority, channelId, platformOwnerSlot, storePrimarySlot FROM administrator_access_profile',
           )
         : [];
-    return summarizeAdministratorAccess(rows, legacyRows, profileRows);
+    const channelRows = await adapter.query('SELECT id FROM `channel`');
+    return summarizeAdministratorAccess(rows, legacyRows, profileRows, channelRows);
 }
 
 async function main() {

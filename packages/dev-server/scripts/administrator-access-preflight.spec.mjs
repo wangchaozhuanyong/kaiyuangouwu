@@ -62,6 +62,64 @@ test('preflight fails closed on multiple owners, shared store primary, and unmap
     );
 });
 
+test('preflight accepts only a reviewed migration-compatible staged platform administrator', () => {
+    const channels = [{ id: 1 }, { id: 2 }];
+    const staged = [
+        {
+            administratorId: 3,
+            roleCode: 'platform-administrator',
+            permissions: '["ReadProduct","CreateAdministrator"]',
+            channelId: 1,
+            channelCode: '__default_channel__',
+        },
+        {
+            administratorId: 3,
+            roleCode: 'platform-administrator',
+            permissions: '["ReadProduct","CreateAdministrator"]',
+            channelId: 2,
+            channelCode: 'moyao-ai',
+        },
+        {
+            administratorId: 3,
+            roleCode: '__customer_role__',
+            permissions: '["Authenticated"]',
+            channelId: 1,
+            channelCode: '__default_channel__',
+        },
+    ];
+    const report = summarizeAdministratorAccess(
+        [owner, primary, ...staged],
+        [{ administratorId: 2 }],
+        [],
+        channels,
+    );
+    assert.equal(report.readyForStagedMigration, true);
+    assert.deepEqual(report.unmapped, []);
+    assert.deepEqual(report.stagedPlatformAdministrators, [
+        {
+            administratorId: '3',
+            channelIds: ['1', '2'],
+            valid: true,
+            requiresRuntimeRoleValidation: true,
+        },
+    ]);
+
+    for (const invalid of [
+        [{ ...staged[0], permissions: '["SuperAdmin"]' }, staged[1], staged[2]],
+        [staged[0], staged[2]],
+        [...staged, { ...staged[2], roleCode: 'unreviewed-admin' }],
+    ]) {
+        const blocked = summarizeAdministratorAccess(
+            [owner, primary, ...invalid],
+            [{ administratorId: 2 }],
+            [],
+            channels,
+        );
+        assert.equal(blocked.readyForStagedMigration, false);
+        assert.ok(blocked.blockers.some(item => item.code === 'STAGED_PLATFORM_ADMIN_INVALID'));
+    }
+});
+
 test('preflight detects inconsistent existing ownership slots', () => {
     const report = summarizeAdministratorAccess(
         [owner, primary],
@@ -99,6 +157,7 @@ test('collector uses only SELECT queries and refuses missing account schema', as
         tableExists: async table => table !== 'administrator_access_profile',
         query: async sql => {
             statements.push(sql);
+            if (sql === 'SELECT id FROM `channel`') return [{ id: 1 }, { id: 2 }];
             return sql.includes('store_administrator_access') ? [{ administratorId: 2 }] : [owner, primary];
         },
     };
@@ -118,13 +177,13 @@ test('collector reads the legacy account schema from an in-memory database', asy
     try {
         database.run(`
             CREATE TABLE administrator (id INTEGER, userId INTEGER, deletedAt TEXT);
-            CREATE TABLE role (id INTEGER, code TEXT);
+            CREATE TABLE role (id INTEGER, code TEXT, permissions TEXT);
             CREATE TABLE user_roles_role (userId INTEGER, roleId INTEGER);
             CREATE TABLE role_channels_channel (roleId INTEGER, channelId INTEGER);
             CREATE TABLE channel (id INTEGER, code TEXT);
             CREATE TABLE store_administrator_access (administratorId INTEGER);
             INSERT INTO administrator VALUES (1, 11, NULL), (2, 22, NULL);
-            INSERT INTO role VALUES (101, '__super_admin_role__'), (102, 'moyao-ai-store-admin');
+            INSERT INTO role VALUES (101, '__super_admin_role__', '["SuperAdmin"]'), (102, 'moyao-ai-store-admin', '["ReadProduct"]');
             INSERT INTO user_roles_role VALUES (11, 101), (22, 102);
             INSERT INTO role_channels_channel VALUES (101, 1), (102, 2);
             INSERT INTO channel VALUES (1, '__default_channel__'), (2, 'moyao-ai');
@@ -146,6 +205,19 @@ test('collector reads the legacy account schema from an in-memory database', asy
         const report = await collectAdministratorAccessPreflight(adapter);
         assert.equal(report.readyForStagedMigration, true);
         assert.deepEqual(report.ownerAdministratorIds, ['1']);
+
+        database.run(`
+            INSERT INTO administrator VALUES (3, 33, NULL);
+            INSERT INTO role VALUES (103, 'platform-administrator', '["ReadProduct","CreateAdministrator"]');
+            INSERT INTO user_roles_role VALUES (33, 103);
+            INSERT INTO role_channels_channel VALUES (103, 1), (103, 2);
+        `);
+        const stagedReport = await collectAdministratorAccessPreflight(adapter);
+        assert.equal(stagedReport.readyForStagedMigration, true);
+        assert.deepEqual(
+            stagedReport.stagedPlatformAdministrators.map(row => row.administratorId),
+            ['3'],
+        );
     } finally {
         database.close();
     }
