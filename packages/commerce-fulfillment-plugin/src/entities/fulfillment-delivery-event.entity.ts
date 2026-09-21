@@ -1,9 +1,11 @@
 import type { DeepPartial, ID } from '@vendure/common/lib/shared-types';
 import { EntityId, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
-import type { FulfillmentDeliveryStatus } from './fulfillment-delivery-record.entity';
 
-import { FulfillmentDeliveryRecord } from './fulfillment-delivery-record.entity';
+import {
+    FulfillmentDeliveryRecord,
+    type FulfillmentDeliveryStatus,
+} from './fulfillment-delivery-record.entity';
 
 @Entity({ name: 'fulfillment_delivery_event' })
 @Index('IDX_fulfillment_delivery_event_record_created', ['recordId', 'createdAt'])

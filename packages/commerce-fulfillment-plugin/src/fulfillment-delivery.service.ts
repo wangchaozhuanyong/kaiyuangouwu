@@ -14,10 +14,12 @@ import {
 } from '@vendure/core';
 import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { LessThanOrEqual } from 'typeorm';
-import type { FulfillmentDeliveryStatus } from './entities/fulfillment-delivery-record.entity';
 
 import { FulfillmentDeliveryEvent } from './entities/fulfillment-delivery-event.entity';
-import { FulfillmentDeliveryRecord } from './entities/fulfillment-delivery-record.entity';
+import {
+    FulfillmentDeliveryRecord,
+    type FulfillmentDeliveryStatus,
+} from './entities/fulfillment-delivery-record.entity';
 import {
     ConfirmFulfillmentDeliveryInput,
     FulfillmentDeliveryListOptions,
