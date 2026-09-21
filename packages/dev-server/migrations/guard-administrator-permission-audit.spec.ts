@@ -62,4 +62,67 @@ describe('append-only administrator permission audit migration', () => {
         );
         expect(query).not.toHaveBeenCalled();
     });
+
+    it.skipIf(process.env.VENDURE_AUDIT_MYSQL_SMOKE !== '1')(
+        'enforces append-only audit rows in an isolated local MySQL database',
+        async () => {
+            const { createConnection } = await import('mysql2/promise');
+            const databaseName = `codex_audit_guard_${process.pid}`;
+            const connection = await createConnection({
+                host: '127.0.0.1',
+                port: 3306,
+                user: process.env.VENDURE_TEST_MYSQL_USER,
+                password: process.env.VENDURE_TEST_MYSQL_PASSWORD,
+            });
+            let databaseCreated = false;
+            let source: DataSource | undefined;
+            try {
+                const [existing] = await connection.query(
+                    'SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?',
+                    [databaseName],
+                );
+                if ((existing as unknown[]).length > 0) {
+                    throw new Error(`Refusing to reuse existing database ${databaseName}`);
+                }
+                await connection.query(`CREATE DATABASE \`${databaseName}\``);
+                databaseCreated = true;
+                source = await new DataSource({
+                    type: 'mysql',
+                    host: '127.0.0.1',
+                    port: 3306,
+                    username: process.env.VENDURE_TEST_MYSQL_USER,
+                    password: process.env.VENDURE_TEST_MYSQL_PASSWORD,
+                    database: databaseName,
+                    entities: [],
+                    synchronize: false,
+                }).initialize();
+                const runner = source.createQueryRunner();
+                try {
+                    await runner.query(
+                        'CREATE TABLE administrator_permission_audit (id INT PRIMARY KEY, action VARCHAR(50))',
+                    );
+                    const migration = new GuardAdministratorPermissionAudit1789495200000();
+                    await migration.up(runner);
+                    await migration.up(runner);
+                    await runner.query(
+                        "INSERT INTO administrator_permission_audit (id, action) VALUES (1, 'CREATED')",
+                    );
+                    await expect(
+                        runner.query(
+                            "UPDATE administrator_permission_audit SET action = 'CHANGED' WHERE id = 1",
+                        ),
+                    ).rejects.toThrow('append-only');
+                    await expect(
+                        runner.query('DELETE FROM administrator_permission_audit WHERE id = 1'),
+                    ).rejects.toThrow('append-only');
+                } finally {
+                    await runner.release();
+                }
+            } finally {
+                await source?.destroy();
+                if (databaseCreated) await connection.query(`DROP DATABASE \`${databaseName}\``);
+                await connection.end();
+            }
+        },
+    );
 });
