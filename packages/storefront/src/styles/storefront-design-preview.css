@@ -1,0 +1,117 @@
+/* Read-only design acceptance entry. It renders actual storefront routes inside the selected viewport. */
+.storefront-design-preview {
+    min-height: 100dvh;
+    background: #111827;
+    color: #f8fafc;
+}
+
+.storefront-preview-toolbar {
+    position: sticky;
+    z-index: 100;
+    top: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 12px;
+    padding: 12px 18px;
+    border-bottom: 1px solid #334155;
+    background: rgb(15 23 42 / 96%);
+}
+
+.storefront-preview-toolbar > div {
+    display: grid;
+    min-width: 220px;
+    margin-right: auto;
+}
+
+.storefront-preview-toolbar > div span,
+.storefront-preview-toolbar label > span {
+    color: #cbd5e1;
+    font-size: 11px;
+}
+
+.storefront-preview-toolbar label {
+    display: grid;
+    gap: 3px;
+}
+
+.storefront-preview-toolbar select,
+.storefront-preview-toolbar button {
+    min-height: 36px;
+    padding: 6px 10px;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    background: #1e293b;
+    color: #fff;
+}
+
+.storefront-preview-stage {
+    min-height: calc(100dvh - 72px);
+    padding: 22px;
+    overflow: auto;
+}
+
+.storefront-preview-stage iframe {
+    display: block;
+    /* The selected width is the embedded page's viewport, excluding this preview border. */
+    box-sizing: content-box;
+    height: calc(100dvh - 118px);
+    min-height: 720px;
+    margin-inline: auto;
+    border: 1px solid #64748b;
+    box-shadow: 0 22px 60px rgb(0 0 0 / 35%);
+}
+
+.storefront-preview-feedback {
+    width: min(100%, 720px);
+    margin: 40px auto;
+    padding: 32px;
+    border: 1px solid #475569;
+    border-radius: 12px;
+    background: #1e293b;
+    color: #f8fafc;
+    text-align: center;
+}
+
+.storefront-app[data-preview-embedded='true'] #storefront-content {
+    position: relative;
+}
+
+.storefront-app[data-preview-embedded='true'] #storefront-content > :not(.storefront-preview-scenario) {
+    pointer-events: none;
+}
+
+.storefront-preview-scenario {
+    position: absolute;
+    z-index: 80;
+    inset: 0;
+    display: grid;
+    min-height: 70dvh;
+    place-items: center;
+    padding: 24px;
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    backdrop-filter: blur(6px);
+}
+
+.storefront-preview-state-card {
+    width: min(100%, 420px);
+    padding: 28px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface-elevated, var(--paper));
+    color: var(--text);
+    box-shadow: 0 24px 70px rgb(0 0 0 / 22%);
+}
+
+.storefront-preview-state-card p {
+    color: var(--muted);
+}
+
+.storefront-preview-state-card button {
+    min-height: 42px;
+    padding-inline: 18px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--accent);
+    color: var(--accent-foreground);
+}

@@ -245,6 +245,7 @@ describe('CheckoutPage digital delivery', () => {
         const submitStyle = checkoutPageStyles['submit-order-bar'];
         expect(submitStyle).toContain('[display:flex]');
         expect(submitStyle).toContain('[&>button]:[width:100%]');
+        expect(submitStyle).toContain('[&>button]:[color:var(--accent-foreground)]');
 
         const markup = renderCheckout(orderFor('DIGITAL'), null);
         expect(markup).toContain('确认并支付（1件）需支付');

@@ -1,7 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLayoutEffect } from 'react';
 
-import { normalizeStorefrontVisualPreset } from '../../storefront-content-plugin/src/visual-presets';
+import {
+    isStorefrontVisualPresetId,
+    normalizeStorefrontVisualPreset,
+    type StorefrontVisualPresetId,
+} from '../../storefront-content-plugin/src/visual-presets';
 
 import { type ShopApi } from './api';
 import { storefrontQueryKeys } from './query-client';
@@ -15,27 +19,37 @@ export function applyStorefrontVisualPreset(root: HTMLElement, value: unknown): 
     };
 }
 
+export function readStorefrontPreviewPreset(search: string): StorefrontVisualPresetId | null {
+    const parameters = new URLSearchParams(search);
+    if (parameters.get('storefrontPreviewEmbedded') !== '1') return null;
+    const candidate = parameters.get('storefrontPreviewPreset');
+    return isStorefrontVisualPresetId(candidate) ? candidate : null;
+}
+
 export function useStorefrontVisualPreset(
     api: Pick<ShopApi, 'storefrontVisualPreset'>,
     market: MarketConfig,
     languageCode: string,
     enabled = true,
 ) {
+    const previewPreset =
+        typeof window === 'undefined' ? null : readStorefrontPreviewPreset(window.location.search);
     const query = useQuery({
         queryKey: [
             ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), languageCode),
             'visual-preset',
         ],
         queryFn: ({ signal }) => api.storefrontVisualPreset(signal),
-        enabled,
+        enabled: enabled && !previewPreset,
         staleTime: 0,
         // Do not persist a style selection under an unverified store context.
     });
     // Theme loading stays independent of route rendering, so slow requests never unmount a form.
-    const presetId = normalizeStorefrontVisualPreset(enabled ? query.data?.presetId : undefined);
+    const presetId =
+        previewPreset ?? normalizeStorefrontVisualPreset(enabled ? query.data?.presetId : undefined);
     useLayoutEffect(() => {
         const cleanup = applyStorefrontVisualPreset(document.documentElement, presetId);
-        if (query.data?.presetId) {
+        if (!previewPreset && query.data?.presetId) {
             try {
                 sessionStorage.setItem('__storefront_preset__', presetId);
                 localStorage.setItem('__storefront_preset__', presetId);
@@ -44,6 +58,6 @@ export function useStorefrontVisualPreset(
             }
         }
         return cleanup;
-    }, [presetId, query.data?.presetId]);
+    }, [presetId, previewPreset, query.data?.presetId]);
     return { presetId };
 }

@@ -13,7 +13,7 @@ interface DesktopCategoryNavigationContext {
     navigate: (route: RouteState) => void;
 }
 
-export function DesktopCategoryNavigation({ showCollections = true }: { showCollections?: boolean }) {
+export function DesktopCategoryNavigation() {
     const runtime: DesktopCategoryNavigationContext = useStorefront();
     const { route, language, collections, navigate } = runtime;
     const isZh = language === 'zh';
@@ -33,7 +33,8 @@ export function DesktopCategoryNavigation({ showCollections = true }: { showColl
             className="desktop-category-navigation"
             aria-label={isZh ? '商品分类' : 'Product categories'}
         >
-            {showCollections && (
+            <div className="desktop-category-row">
+                <span className="desktop-category-label">{isZh ? '一级分类' : 'Categories'}</span>
                 <nav
                     className="desktop-local-navigation"
                     aria-label={isZh ? '选择商品分类' : 'Choose a category'}
@@ -49,49 +50,51 @@ export function DesktopCategoryNavigation({ showCollections = true }: { showColl
                         <span>{isZh ? '全部商品' : 'All products'}</span>
                     </button>
                     {collections.map(collection => (
-                        <div key={collection.id}>
-                            <button
-                                type="button"
-                                className={activeCollection?.id === collection.id ? 'is-active' : undefined}
-                                aria-pressed={activeCollection?.id === collection.id}
-                                onClick={() =>
-                                    update({
-                                        name: 'category',
-                                        collectionId: collection.id,
-                                        childId: 'all',
-                                        term: undefined,
-                                    })
-                                }
-                            >
-                                <span>{collection.name}</span>
-                            </button>
-                        </div>
-                    ))}
-                </nav>
-            )}
-            {activeCollection?.children?.length ? (
-                <nav
-                    className="desktop-subcategories"
-                    aria-label={isZh ? '选择子分类' : 'Choose a subcategory'}
-                >
-                    <button
-                        type="button"
-                        aria-pressed={!activeChild}
-                        onClick={() => update({ childId: 'all' })}
-                    >
-                        {isZh ? '全部' : 'All'}
-                    </button>
-                    {activeCollection.children.map(child => (
                         <button
-                            key={child.id}
+                            key={collection.id}
                             type="button"
-                            aria-pressed={activeChild?.id === child.id}
-                            onClick={() => update({ childId: child.id })}
+                            className={activeCollection?.id === collection.id ? 'is-active' : undefined}
+                            aria-pressed={activeCollection?.id === collection.id}
+                            onClick={() =>
+                                update({
+                                    name: 'category',
+                                    collectionId: collection.id,
+                                    childId: 'all',
+                                    term: undefined,
+                                })
+                            }
                         >
-                            {child.name}
+                            <span>{collection.name}</span>
                         </button>
                     ))}
                 </nav>
+            </div>
+            {activeCollection?.children?.length ? (
+                <div className="desktop-category-row desktop-category-row-children">
+                    <span className="desktop-category-label">{isZh ? '二级分类' : 'Subcategories'}</span>
+                    <nav
+                        className="desktop-subcategories"
+                        aria-label={isZh ? '选择子分类' : 'Choose a subcategory'}
+                    >
+                        <button
+                            type="button"
+                            aria-pressed={!activeChild}
+                            onClick={() => update({ childId: 'all' })}
+                        >
+                            {isZh ? '全部' : 'All'}
+                        </button>
+                        {activeCollection.children.map(child => (
+                            <button
+                                key={child.id}
+                                type="button"
+                                aria-pressed={activeChild?.id === child.id}
+                                onClick={() => update({ childId: child.id })}
+                            >
+                                {child.name}
+                            </button>
+                        ))}
+                    </nav>
+                </div>
             ) : null}
             {runtime.loading && !collections.length ? (
                 <p className="desktop-category-status" role="status">

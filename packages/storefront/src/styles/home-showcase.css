@@ -129,7 +129,7 @@
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 4px;
-    background: #ffffff;
+    background: var(--surface);
     border-radius: 14px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 }
@@ -171,7 +171,7 @@
 .quick-grid.is-color-marketplace {
     gap: 8px;
     border: 1px solid #e3e8ef;
-    background: #ffffff;
+    background: var(--surface);
     box-shadow: 0 10px 28px -24px rgba(16, 45, 74, 0.38);
 }
 
@@ -184,7 +184,7 @@
     border: 1px solid #e6ebf2;
     border-top-color: color-mix(in srgb, var(--quick-accent) 58%, #e6ebf2);
     border-radius: 10px;
-    background: #ffffff;
+    background: var(--surface);
     transition:
         transform 180ms ease,
         border-color 180ms ease,
@@ -1144,7 +1144,7 @@ html[lang='en'] .quick-grid b {
 .home-trust-strip {
     margin: 14px 10px 10px;
     padding: 12px;
-    background: #ffffff;
+    background: var(--surface);
     border-radius: 16px;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1277,7 +1277,7 @@ html[lang='en'] .quick-grid b {
     overflow: hidden;
     border: 1px solid var(--line);
     border-radius: 8px;
-    background: white;
+    background: var(--surface);
     color: var(--text);
     display: grid;
     grid-template-rows: auto minmax(62px, auto);
@@ -1986,8 +1986,8 @@ html[lang='en'] .quick-grid b {
     width: 22px;
     height: 22px;
     border-radius: 6px;
-    background: #eeefff;
-    color: #635bff;
+    background: var(--accent-soft);
+    color: var(--accent-ink);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2004,14 +2004,14 @@ html[lang='en'] .quick-grid b {
     margin: 0;
     font-size: 15px;
     font-weight: 800;
-    color: #0f172a;
+    color: var(--text);
     line-height: 1.2;
     letter-spacing: -0.01em;
 }
 
 .section-header p {
     margin: 3px 0 0;
-    color: #64748b;
+    color: var(--muted);
     font-size: 11.5px;
     line-height: 1.3;
 }
@@ -2040,7 +2040,7 @@ html[lang='en'] .quick-grid b {
     padding: 5px 4px;
     border: 0;
     background: transparent;
-    color: #64748b;
+    color: var(--muted);
     font-size: 12px;
     cursor: pointer;
     white-space: nowrap;
@@ -2049,7 +2049,7 @@ html[lang='en'] .quick-grid b {
 
 .section-header-action-btn:hover,
 .section-header > button:hover {
-    color: #0f172a;
+    color: var(--text);
 }
 
 .section-header-action-btn svg,
@@ -2463,7 +2463,7 @@ html[lang='en'] .quick-grid b {
     position: relative;
     z-index: 2;
     border-bottom: 1px solid var(--line);
-    background: white;
+    background: var(--surface);
 }
 
 .primary-category-switcher.is-expanded {
@@ -2723,7 +2723,7 @@ html[lang='en'] .primary-categories button {
     font-size: 11px;
     font-weight: 600;
     line-height: 18px;
-    color: #475569;
+    color: var(--muted);
     white-space: nowrap;
 }
 
@@ -2750,7 +2750,7 @@ html[lang='en'] .primary-categories button {
     overflow-x: hidden;
     overflow-y: auto;
     border-radius: 0 0 14px 14px;
-    background: white;
+    background: var(--surface);
     box-shadow: 0 14px 30px rgba(28, 34, 31, 0.16);
     overscroll-behavior-y: contain;
     scrollbar-width: none;
@@ -2899,14 +2899,14 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     height: 100dvh;
     max-height: 100dvh;
     overflow: hidden;
-    background: #ffffff;
+    background: var(--surface);
     display: flex;
     flex-direction: column;
 }
 
 .category-navigation-shell {
     flex-shrink: 0;
-    background: #ffffff;
+    background: var(--surface);
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     position: relative;
     z-index: 10;
@@ -2917,7 +2917,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     position: relative;
     z-index: 1;
     top: auto;
-    background: white;
+    background: var(--surface);
     backdrop-filter: none;
     border-bottom: 1px solid var(--line);
 }
@@ -2988,8 +2988,8 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 }
 
 .subcat-side-item.is-active {
-    background: #ffffff;
-    color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
     font-weight: 700;
     box-shadow: none;
 }
@@ -3014,12 +3014,12 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 
 .subcat-side-count {
     font-size: 10px;
-    color: #94a3b8;
+    color: var(--muted);
     font-weight: 600;
 }
 
 .subcat-side-item.is-active .subcat-side-count {
-    color: var(--accent);
+    color: var(--accent-ink);
 }
 
 .category-results {
@@ -3029,7 +3029,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     padding: 0 0 12px;
-    background: #ffffff;
+    background: var(--surface);
     display: flex;
     flex-direction: column;
 }
@@ -3038,8 +3038,8 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     position: sticky;
     top: 0;
     z-index: 6;
-    background: #ffffff;
-    border-bottom: 1px solid #f1f5f9;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
     height: 44px;
     flex-shrink: 0;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
@@ -3290,7 +3290,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 .business-services-empty {
     min-height: 190px;
     margin: 12px var(--page-section-inset, 12px);
-    border: 1px dashed #cbd5e1;
+    border: 1px dashed var(--line);
     border-radius: 16px;
     padding: 28px 20px;
     display: flex;
@@ -3298,8 +3298,8 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     align-items: center;
     justify-content: center;
     gap: 7px;
-    background: rgba(255, 255, 255, 0.72);
-    color: #64748b;
+    background: var(--surface);
+    color: var(--muted);
     text-align: center;
 }
 
@@ -3310,8 +3310,8 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     border-radius: 13px;
     display: grid;
     place-items: center;
-    background: #f1f5f9;
-    color: #635bff;
+    background: var(--accent-soft);
+    color: var(--accent-ink);
 }
 
 .business-services-empty svg {
@@ -3320,7 +3320,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 }
 
 .business-services-empty strong {
-    color: #334155;
+    color: var(--text);
     font-size: 14px;
 }
 

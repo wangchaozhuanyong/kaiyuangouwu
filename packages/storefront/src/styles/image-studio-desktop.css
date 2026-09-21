@@ -276,8 +276,8 @@
 
     .ai-studio-desktop-field input:checked + span {
         border-color: var(--accent);
-        background: color-mix(in srgb, var(--accent) 7%, var(--paper));
-        color: var(--accent);
+        background: var(--accent-soft);
+        color: var(--accent-ink);
     }
 
     .ai-studio-desktop-field input:checked + span strong {

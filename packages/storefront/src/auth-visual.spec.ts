@@ -162,5 +162,9 @@ describe('shared auth presentation', () => {
             '--auth-visual-background': 'var(--auth-store-background, var(--skin-background, #f1f5f9))',
             '--auth-accent': 'var(--accent, #635bff)',
         });
+        expect(authVisualStyle()).toMatchObject({
+            '--auth-visual-foreground': 'var(--auth-store-foreground, var(--store-foreground, #0f172a))',
+            '--auth-hero-secondary-text': 'var(--muted, #475569)',
+        });
     });
 });

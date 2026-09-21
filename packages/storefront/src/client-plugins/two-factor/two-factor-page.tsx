@@ -326,7 +326,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                         isZh={isZh}
                     />
                     <div className="flex items-start gap-3">
-                        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-600 text-white">
+                        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent)] text-[var(--accent-foreground)]">
                             <KeyRound className="size-5" aria-hidden="true" />
                         </span>
                         <div className="min-w-0 flex-1">
@@ -808,11 +808,11 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
 const inputClass =
     'min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100';
 const primaryButtonClass =
-    'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-extrabold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50';
+    'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-extrabold text-[var(--accent-foreground)] transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50';
 const secondaryButtonClass =
     'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-extrabold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
 const headerPrimaryButtonClass =
-    'inline-flex min-h-9 sm:min-h-10 items-center justify-center gap-1 sm:gap-1.5 rounded-xl bg-emerald-600 px-2.5 sm:px-3.5 max-[350px]:px-2 text-xs sm:text-sm max-[350px]:text-[11px] font-extrabold text-white transition hover:bg-emerald-700 shrink-0 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50';
+    'inline-flex min-h-9 sm:min-h-10 items-center justify-center gap-1 sm:gap-1.5 rounded-xl bg-[var(--accent)] px-2.5 sm:px-3.5 max-[350px]:px-2 text-xs sm:text-sm max-[350px]:text-[11px] font-extrabold text-[var(--accent-foreground)] transition hover:bg-[var(--accent-hover)] shrink-0 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50';
 const headerSecondaryButtonClass =
     'inline-flex min-h-9 sm:min-h-10 items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-slate-300 bg-white px-2.5 sm:px-3 max-[350px]:px-2 text-xs sm:text-sm max-[350px]:text-[11px] font-extrabold text-slate-700 transition hover:bg-slate-50 shrink-0 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50';
 const iconButtonClass =

@@ -1301,7 +1301,14 @@ function AuthLayout({
                             {(heroMessage.title || heroMessage.description) && (
                                 <div className="auth-hero-copy">
                                     {heroMessage.title && <h2>{heroMessage.title}</h2>}
-                                    {heroMessage.description && <p>{heroMessage.description}</p>}
+                                    {(heroMessage.description || !hasManagedHero) && (
+                                        <p>
+                                            {heroMessage.description ||
+                                                (language === 'zh'
+                                                    ? `在${storefrontName}安全地管理您的账户与订单。`
+                                                    : `Manage your account and orders securely with ${storefrontName}.`)}
+                                        </p>
+                                    )}
                                 </div>
                             )}
                             {hasManagedHero ? (
@@ -1353,6 +1360,7 @@ function AuthLayout({
                             ) : null}
                         </>
                     )}
+                    {!heroMessage && <h2 className="auth-hero-title-fallback">{title}</h2>}
                 </div>
             </section>
             <section className="login-content">

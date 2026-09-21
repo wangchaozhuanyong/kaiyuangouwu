@@ -897,7 +897,18 @@ describe('HomePage desktop intro layout', () => {
         items: [],
     };
 
-    it('consolidates only desktop shortcuts already available in the header, retaining custom destinations', () => {
+    it('expands the hero instead of showing an empty shortcut card', () => {
+        const desktopMarkup = renderHome({ contentBlocks: [quickLinksBlock] }, true);
+        const mobileMarkup = renderHome({ contentBlocks: [quickLinksBlock] });
+        const stylesheet = readStorefrontStylesheet(['./styles/desktop-home.css']);
+
+        expect(desktopMarkup).not.toContain('proto-hero-tools');
+        expect(desktopMarkup).not.toContain('快捷入口将从后台装修内容中读取');
+        expect(stylesheet).toMatch(/\.proto-hero-featured:only-child\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/);
+        expect(mobileMarkup).toBe(renderHome({ contentBlocks: [] }));
+    });
+
+    it('reuses every managed shortcut in the desktop Bento without changing mobile content', () => {
         const overrides: Partial<HomePageProps> = {
             collections: [
                 {
@@ -935,9 +946,9 @@ describe('HomePage desktop intro layout', () => {
         };
 
         const desktopMarkup = renderHome(overrides, true);
-        expect(desktopMarkup).not.toContain('<b>主分类快捷入口</b>');
-        expect(desktopMarkup).toContain('<b>子分类快捷入口</b>');
-        expect(desktopMarkup).toContain('<b>自定义服务入口</b>');
+        expect(desktopMarkup).toContain('主分类快捷入口');
+        expect(desktopMarkup).toContain('子分类快捷入口');
+        expect(desktopMarkup).toContain('自定义服务入口');
         const mobileMarkup = renderHome(overrides);
         expect(mobileMarkup).toContain('<b>主分类快捷入口</b>');
         expect(mobileMarkup).toContain('<b>子分类快捷入口</b>');

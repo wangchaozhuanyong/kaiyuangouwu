@@ -92,7 +92,7 @@ export function ProductCard({
                 </span>
             ) : null}
             <div className="mt-1 flex flex-wrap items-center gap-1.5 px-2.5 text-left text-[11px] leading-[1.35]">
-                <span className="inline-block text-[11px] font-medium text-[#0284c7]">
+                <span className="inline-block text-[11px] font-medium text-[var(--accent-ink)]">
                     {smartInfo.primary}
                 </span>
                 {smartInfo.secondary ? (

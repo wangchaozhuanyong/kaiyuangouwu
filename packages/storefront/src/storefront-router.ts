@@ -34,6 +34,44 @@ export type RouteName =
     | 'reset-password'
     | 'legal'
     | 'not-found';
+export const storefrontRouteNames = [
+    'home',
+    'category',
+    'services',
+    'cart',
+    'account',
+    'product',
+    'search',
+    'purchase',
+    'checkout',
+    'payment',
+    'order-confirmation',
+    'orders',
+    'logistics',
+    'order-detail',
+    'addresses',
+    'account-security',
+    'favorites',
+    'announcements',
+    'history',
+    'notifications',
+    'coupons',
+    'referral',
+    'flash-sale',
+    'recommendations',
+    'support',
+    'reviews',
+    'image-studio',
+    'two-factor',
+    'mail-query',
+    'login',
+    'register',
+    'verify-account',
+    'forgot-password',
+    'reset-password',
+    'legal',
+    'not-found',
+] as const satisfies readonly RouteName[];
 export type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'service';
 export type SortMode = ProductSearchSort;
 export type CheckoutRouteName = 'purchase' | 'checkout' | 'payment';

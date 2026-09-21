@@ -1,6 +1,9 @@
 import { useEffect, useLayoutEffect } from 'react';
 
-import { configuredColor, readableColor } from '../../../storefront-content-plugin/src/shared/auth-visual';
+import {
+    resolveStorefrontSemanticPalette,
+    semanticPaletteCssVariables,
+} from '../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import { type StorefrontVisualPresetId } from '../../../storefront-content-plugin/src/visual-presets';
 import { productDescriptionText } from '../rich-text';
 import { NEUTRAL_STOREFRONT_IMAGE, NEUTRAL_STOREFRONT_SOCIAL_IMAGE } from '../storefront-images';
@@ -15,30 +18,15 @@ export function useStorefrontBrandColors(
 ) {
     useLayoutEffect(() => {
         const root = document.documentElement;
-        // An explicit skin owns the UI palette. Keep raw brand tokens for branded details,
-        // and remove inline palette overrides so the skin CSS and block colors can inherit.
-        const palette = presetId === 'classic' ? config : undefined;
-        const background = configuredColor(palette?.brandBackgroundColor);
-        const primary = configuredColor(palette?.brandPrimaryColor);
-        const colors = {
-            '--store-background': palette?.brandBackgroundColor,
-            '--store-primary': palette?.brandPrimaryColor,
-            '--store-highlight': palette?.brandHighlightColor,
-            '--store-foreground': background ? readableColor(background) : undefined,
-            '--auth-store-background': palette?.brandBackgroundColor,
-            '--brand-background': config?.brandBackgroundColor,
-            '--brand-primary': config?.brandPrimaryColor,
-            '--auth-store-foreground': background ? readableColor(background) : undefined,
-            '--accent-foreground': primary ? readableColor(primary) : undefined,
-            '--brand-accent': config?.brandAccentColor,
-            '--brand-highlight': config?.brandHighlightColor,
-            '--accent': palette?.brandPrimaryColor,
-            '--accent-hover': palette?.brandHighlightColor,
-            '--accent-ink': palette?.brandPrimaryColor,
-        } as const;
+        const palette = resolveStorefrontSemanticPalette(presetId, {
+            backgroundColor: config?.brandBackgroundColor,
+            primaryColor: config?.brandPrimaryColor,
+            accentColor: config?.brandAccentColor,
+            highlightColor: config?.brandHighlightColor,
+        });
+        const colors = semanticPaletteCssVariables(palette);
         for (const [property, value] of Object.entries(colors)) {
-            if (value && /^#[0-9A-F]{6}$/iu.test(value)) root.style.setProperty(property, value);
-            else root.style.removeProperty(property);
+            root.style.setProperty(property, value);
         }
         return () => {
             for (const property of Object.keys(colors)) root.style.removeProperty(property);

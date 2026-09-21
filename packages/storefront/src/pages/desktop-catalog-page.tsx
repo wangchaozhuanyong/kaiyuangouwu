@@ -114,7 +114,7 @@ export function DesktopCatalogPage() {
     return (
         <main className="desktop-catalog-main">
             <h1 className="visually-hidden">{title}</h1>
-            <DesktopCategoryNavigation showCollections={false} />
+            <DesktopCategoryNavigation />
             <div className="desktop-catalog-toolbar">
                 <strong className="desktop-catalog-label">
                     {input.term
@@ -321,20 +321,6 @@ export function DesktopCatalogPage() {
                 ) : null}
             </section>
             <div className="desktop-catalog-extras">
-                <button
-                    className="desktop-services-link"
-                    type="button"
-                    onClick={() => navigate({ name: 'services' })}
-                >
-                    <Sparkles aria-hidden="true" />
-                    <span>
-                        <strong>{isZh ? '智能服务' : 'Intelligent services'}</strong>
-                        <small>
-                            {isZh ? '查看店铺提供的服务与工具' : 'Explore services and tools from this store'}
-                        </small>
-                    </span>
-                    <ArrowRight aria-hidden="true" />
-                </button>
                 {clientPluginPlacements
                     .filter(placement => placement !== 'BUSINESS_SERVICES_MAIN')
                     .map(placement => (
@@ -348,15 +334,35 @@ export function DesktopCatalogPage() {
                         />
                     ))}
             </div>
-            <footer className="desktop-catalog-footer">
-                <span>{runtime.storefrontName}</span>
-                <button type="button" onClick={() => navigate({ name: 'legal', id: 'privacy' })}>
-                    {isZh ? '隐私政策' : 'Privacy'}
+            <div className="desktop-catalog-endcap">
+                <button
+                    className="desktop-services-link"
+                    type="button"
+                    onClick={() => navigate({ name: 'services' })}
+                >
+                    <span className="desktop-services-icon">
+                        <Sparkles aria-hidden="true" />
+                    </span>
+                    <span className="desktop-services-copy">
+                        <strong>{isZh ? '智能服务' : 'Intelligent services'}</strong>
+                        <small>
+                            {isZh ? '查看店铺提供的服务与工具' : 'Explore services and tools from this store'}
+                        </small>
+                    </span>
+                    <ArrowRight className="desktop-services-arrow" aria-hidden="true" />
                 </button>
-                <button type="button" onClick={() => navigate({ name: 'legal', id: 'terms' })}>
-                    {isZh ? '使用条款' : 'Terms'}
-                </button>
-            </footer>
+                <footer className="desktop-catalog-footer">
+                    <span>{runtime.storefrontName}</span>
+                    <nav aria-label={isZh ? '店铺政策' : 'Store policies'}>
+                        <button type="button" onClick={() => navigate({ name: 'legal', id: 'privacy' })}>
+                            {isZh ? '隐私政策' : 'Privacy'}
+                        </button>
+                        <button type="button" onClick={() => navigate({ name: 'legal', id: 'terms' })}>
+                            {isZh ? '使用条款' : 'Terms'}
+                        </button>
+                    </nav>
+                </footer>
+            </div>
         </main>
     );
 }
