@@ -36,6 +36,26 @@ const product = {
         manualDeliverySlaMinutes: 0,
     },
 };
+const collectionChild = {
+    id: 'collection-cups',
+    name: '随行杯',
+    slug: 'cups',
+    description: '',
+    position: 0,
+    parentId: 'collection-daily',
+    featuredAsset: asset,
+    children: [],
+};
+const collection = {
+    id: 'collection-daily',
+    name: '日常用品',
+    slug: 'daily',
+    description: '',
+    position: 0,
+    parentId: 'root',
+    featuredAsset: asset,
+    children: [collectionChild],
+};
 const order = {
     id: 'order-1',
     code: 'QA0001',
@@ -168,7 +188,7 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true) {
         activeSystemAnnouncements: [],
         products: { items: [product], totalItems: 1 },
         product,
-        collections: { items: [], totalItems: 0 },
+        collections: { items: [collection], totalItems: 1 },
         storefrontCatalog: { items: [product], totalItems: 1 },
         storefrontProductSales: [],
         activeStoreCommerceMode: 'HYBRID',

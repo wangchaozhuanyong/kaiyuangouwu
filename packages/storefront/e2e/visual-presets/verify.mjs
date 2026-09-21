@@ -170,6 +170,14 @@ try {
                 if (name === 'category' && width >= 1024) {
                     await expect(page.locator('.desktop-category-navigation')).toBeVisible();
                     await expect(page.locator('.desktop-local-navigation')).toBeVisible();
+                    await page.getByRole('button', { name: '日常用品' }).click();
+                    await expect(page.locator('.desktop-subcategories')).toBeVisible();
+                    const childCategory = page.locator('.desktop-subcategories').getByRole('button', {
+                        name: '随行杯',
+                        exact: true,
+                    });
+                    await childCategory.click();
+                    await expect(childCategory).toHaveAttribute('aria-pressed', 'true');
                 }
                 await page.keyboard.press('Tab');
                 const keyboardFocus = await page.evaluate(() => {
