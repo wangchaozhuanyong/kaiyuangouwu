@@ -16,6 +16,7 @@ const legacyTeamMutations = new Set([
     'Mutation.createRole',
     'Mutation.updateRole',
     'Mutation.deleteRole',
+    'Mutation.deleteRoles',
 ]);
 const unscopedStoreTeamQueries = new Set([
     'Query.administrator',

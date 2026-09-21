@@ -19,8 +19,20 @@ vi.mock('@vendure/core', async importOriginal => ({
 
 import { AdministratorAccessInterceptor } from './administrator-access.interceptor';
 
-function invoke(field: string, args: Record<string, unknown>, value: Promise<unknown>) {
+function invoke(
+    field: string,
+    args: Record<string, unknown>,
+    value: Promise<unknown>,
+    profile: { status: string; scope: string; authority: string; channelId: string | null } = {
+        status: 'ACTIVE',
+        scope: 'STORE',
+        authority: 'ADMIN',
+        channelId: 'store-1',
+    },
+    parentType = 'Mutation',
+) {
     state.parsed.info.fieldName = field;
+    state.parsed.info.parentType.name = parentType;
     const context = {
         getArgs: () => [null, args, { req: state.parsed.req }, state.parsed.info],
         getClass: () => class Resolver {},
@@ -28,11 +40,7 @@ function invoke(field: string, args: Record<string, unknown>, value: Promise<unk
         getType: () => 'graphql',
     } as never;
     const access = {
-        current: vi.fn().mockResolvedValue({
-            status: 'ACTIVE',
-            scope: 'STORE',
-            channelId: 'store-1',
-        }),
+        current: vi.fn().mockResolvedValue(profile),
     };
     const audit = { record: vi.fn().mockResolvedValue(undefined) };
     const next = { handle: vi.fn(() => of(value)) };
@@ -84,5 +92,46 @@ describe('administrator access failure audit', () => {
                 failureReason: 'LEGACY_TEAM_ENDPOINT_DISABLED',
             }),
         );
+    });
+
+    it.each([
+        'createAdministrator',
+        'updateAdministrator',
+        'assignRoleToAdministrator',
+        'deleteAdministrator',
+        'deleteAdministrators',
+        'createRole',
+        'updateRole',
+        'deleteRole',
+        'deleteRoles',
+    ])('rejects legacy team mutation %s before it can change data', async field => {
+        const { run, audit, next } = invoke(field, { ids: ['store-role'] }, Promise.resolve('unused'));
+        await expect(run()).rejects.toThrow('受限管理接口');
+        expect(next.handle).not.toHaveBeenCalled();
+        expect(audit.record).toHaveBeenCalledWith(
+            state.requestContext,
+            expect.objectContaining({
+                action: 'REJECT_LEGACY_TEAM_MUTATION',
+                failureReason: 'LEGACY_TEAM_ENDPOINT_DISABLED',
+            }),
+        );
+    });
+
+    it('blocks store accounts from raw team queries without breaking platform dashboard queries', async () => {
+        const platformAdministrator = {
+            status: 'ACTIVE',
+            scope: 'PLATFORM',
+            authority: 'ADMIN',
+            channelId: null,
+        };
+        for (const field of ['administrator', 'administrators', 'role', 'roles']) {
+            const denied = invoke(field, {}, Promise.resolve('unused'), undefined, 'Query');
+            await expect(denied.run()).rejects.toThrow('本店团队与岗位列表');
+            expect(denied.next.handle).not.toHaveBeenCalled();
+
+            const platform = invoke(field, {}, Promise.resolve('visible'), platformAdministrator, 'Query');
+            await expect(platform.run()).resolves.toBeTruthy();
+            expect(platform.next.handle).toHaveBeenCalledOnce();
+        }
     });
 });
