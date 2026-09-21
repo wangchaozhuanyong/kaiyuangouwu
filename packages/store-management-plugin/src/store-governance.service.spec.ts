@@ -16,6 +16,71 @@ function createService(scope: 'PLATFORM' | 'STORE' = 'PLATFORM') {
 }
 
 describe('StoreGovernanceService', () => {
+    it('claims a pending request before applying approved values', async () => {
+        const request = {
+            id: 'request-1',
+            channelId: 'store-1',
+            requestType: 'LEGAL_IDENTITY',
+            status: 'PENDING',
+        };
+        const execute = vi.fn().mockResolvedValue({ affected: 1 });
+        const builder = {
+            update: vi.fn().mockReturnThis(),
+            set: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis(),
+            execute,
+        };
+        const repository = {
+            findOne: vi.fn().mockResolvedValue(request),
+            createQueryBuilder: vi.fn().mockReturnValue(builder),
+        };
+        const audit = { record: vi.fn().mockResolvedValue(undefined) };
+        const service = new StoreGovernanceService(
+            { getRepository: vi.fn().mockReturnValue(repository) } as any,
+            { current: vi.fn().mockResolvedValue({ scope: 'PLATFORM', userId: 'reviewer-1' }) } as any,
+            audit as any,
+            { signingSecret: 'governance-test-secret' } as any,
+        );
+        const apply = vi.spyOn(service as any, 'applyApprovedChange').mockResolvedValue(undefined);
+
+        await expect(
+            service.review({} as any, { id: 'request-1', decision: 'APPROVED' }),
+        ).resolves.toMatchObject({ status: 'APPROVED', reviewedByUserId: 'reviewer-1' });
+        expect(builder.where).toHaveBeenCalledWith('id = :id AND status = :status', {
+            id: 'request-1',
+            status: 'PENDING',
+        });
+        expect(execute).toHaveBeenCalledBefore(apply);
+        expect(audit.record).toHaveBeenCalledOnce();
+    });
+
+    it('rejects a concurrent review when the pending row was already claimed', async () => {
+        const builder = {
+            update: vi.fn().mockReturnThis(),
+            set: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis(),
+            execute: vi.fn().mockResolvedValue({ affected: 0 }),
+        };
+        const repository = {
+            findOne: vi.fn().mockResolvedValue({ id: 'request-1', status: 'PENDING' }),
+            createQueryBuilder: vi.fn().mockReturnValue(builder),
+        };
+        const audit = { record: vi.fn() };
+        const service = new StoreGovernanceService(
+            { getRepository: vi.fn().mockReturnValue(repository) } as any,
+            { current: vi.fn().mockResolvedValue({ scope: 'PLATFORM', userId: 'reviewer-1' }) } as any,
+            audit as any,
+            { signingSecret: 'governance-test-secret' } as any,
+        );
+        const apply = vi.spyOn(service as any, 'applyApprovedChange').mockResolvedValue(undefined);
+
+        await expect(service.review({} as any, { id: 'request-1', decision: 'APPROVED' })).rejects.toThrow(
+            '该申请已经完成审核',
+        );
+        expect(apply).not.toHaveBeenCalled();
+        expect(audit.record).not.toHaveBeenCalled();
+    });
+
     it('accepts legal identity and payout account payloads but routes payment and USDT to dedicated flows', () => {
         const { service } = createService();
         const validate = (service as any).validatePayload.bind(service);

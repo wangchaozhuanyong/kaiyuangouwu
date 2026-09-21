@@ -145,14 +145,29 @@ export class StoreGovernanceService {
         if (input.reason && input.reason.trim().length > 500) {
             throw new UserInputError('审核原因不能超过 500 个字符');
         }
+        const reviewedAt = new Date();
+        const reviewReason = input.reason?.trim() || null;
+        // The resolver runs in a transaction. Claim the pending row before applying approved values,
+        // so a concurrent reviewer cannot apply a second decision from a stale read.
+        const claimed = await repository
+            .createQueryBuilder()
+            .update(StoreGovernanceChangeRequest)
+            .set({
+                status: input.decision,
+                reviewedByUserId: actor.userId,
+                reviewedAt,
+                reviewReason,
+            })
+            .where('id = :id AND status = :status', { id: input.id, status: 'PENDING' })
+            .execute();
+        if (claimed.affected !== 1) throw new UserInputError('该申请已经完成审核');
         if (input.decision === 'APPROVED') {
             await this.applyApprovedChange(ctx, request);
         }
         request.status = input.decision;
         request.reviewedByUserId = actor.userId;
-        request.reviewedAt = new Date();
-        request.reviewReason = input.reason?.trim() || null;
-        const saved = await repository.save(request);
+        request.reviewedAt = reviewedAt;
+        request.reviewReason = reviewReason;
         await this.audit.record(ctx, {
             action: 'REVIEW_STORE_GOVERNANCE_CHANGE',
             channelId: request.channelId,
@@ -162,7 +177,7 @@ export class StoreGovernanceService {
                 decision: request.status,
             },
         });
-        return saved;
+        return request;
     }
 
     async assertRequestBelongsToActiveStore(ctx: RequestContext, requestId: ID): Promise<void> {

@@ -143,6 +143,35 @@ export const DELETE_ADMINISTRATOR_MUTATION = gql`
     }
 `;
 
+export const TRANSFER_PLATFORM_OWNERSHIP_MUTATION = gql`
+    mutation NextAdminTransferPlatformOwnership($targetAdministratorId: ID!, $currentPassword: String!) {
+        transferPlatformOwnership(
+            targetAdministratorId: $targetAdministratorId
+            currentPassword: $currentPassword
+        ) {
+            id
+            authority
+        }
+    }
+`;
+
+export const TRANSFER_STORE_ADMINISTRATION_MUTATION = gql`
+    mutation NextAdminTransferStoreAdministration(
+        $channelId: ID!
+        $targetAdministratorId: ID!
+        $currentPassword: String!
+    ) {
+        transferStoreAdministration(
+            channelId: $channelId
+            targetAdministratorId: $targetAdministratorId
+            currentPassword: $currentPassword
+        ) {
+            id
+            authority
+        }
+    }
+`;
+
 export const REVIEW_STORE_GOVERNANCE_CHANGE_MUTATION = gql`
     mutation NextAdminReviewStoreGovernanceChange($input: ReviewStoreGovernanceChangeInput!) {
         reviewStoreGovernanceChange(input: $input) {

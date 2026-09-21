@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
     AlertCircle,
+    ArrowRightLeft,
     CheckCircle2,
     KeyRound,
     LoaderCircle,
@@ -14,7 +15,8 @@ import {
     X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { sensitiveActionContext } from '../../apollo';
+import { useNavigate } from 'react-router-dom';
+import { logoutAdministrator, sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -23,6 +25,8 @@ import {
     CREATE_ROLE_MUTATION,
     DELETE_ADMINISTRATOR_MUTATION,
     TEAM_MANAGEMENT_QUERY,
+    TRANSFER_PLATFORM_OWNERSHIP_MUTATION,
+    TRANSFER_STORE_ADMINISTRATION_MUTATION,
     UPDATE_ADMINISTRATOR_MUTATION,
     UPDATE_ROLE_MUTATION,
     type AdministratorAccessRecord,
@@ -211,6 +215,7 @@ export function RolesModule() {
                     <MembersTable
                         members={filteredMembers}
                         activeId={query.data?.activeAdministrator?.id ?? null}
+                        actorAccess={query.data?.myAdministratorAccess ?? null}
                         onEdit={setMemberEditor}
                         onChanged={completed}
                         onError={setActionError}
@@ -257,20 +262,29 @@ export function RolesModule() {
 function MembersTable({
     members,
     activeId,
+    actorAccess,
     onEdit,
     onChanged,
     onError,
 }: {
     members: AdministratorRecord[];
     activeId: string | null;
+    actorAccess: AdministratorAccessRecord | null;
     onEdit: (member: AdministratorRecord) => void;
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
     const requestConfirmation = useConfirmDialog();
+    const navigate = useNavigate();
     const [remove, state] = useMutation<{
         suspendManagedAdministrator: { id: string; status: string };
     }>(DELETE_ADMINISTRATOR_MUTATION);
+    const [transferOwnership, ownershipState] = useMutation<{
+        transferPlatformOwnership: { id: string; authority: string };
+    }>(TRANSFER_PLATFORM_OWNERSHIP_MUTATION);
+    const [transferStore, storeTransferState] = useMutation<{
+        transferStoreAdministration: { id: string; authority: string };
+    }>(TRANSFER_STORE_ADMINISTRATION_MUTATION);
     const destroy = async (member: AdministratorRecord) => {
         if (member.id === activeId) return;
         const confirmation = await requestConfirmation({
@@ -292,6 +306,57 @@ function MembersTable({
         } catch (error) {
             onError(errorText(error));
         }
+    };
+    const transfer = async (member: AdministratorRecord, kind: 'PLATFORM' | 'STORE') => {
+        const channelId = member.access.channel?.id;
+        if (kind === 'STORE' && !channelId) return onError('目标账号未绑定店铺');
+        const name = `${member.firstName}${member.lastName}`;
+        const confirmation = await requestConfirmation({
+            title: kind === 'PLATFORM' ? `将平台所有权移交给“${name}”？` : `将店铺主管理员移交给“${name}”？`,
+            description:
+                kind === 'PLATFORM'
+                    ? '此操作会撤销您和目标账号的全部登录会话。您将降为平台管理员；平台仍只能有一名所有者。'
+                    : `目标账号将成为${getChannelDisplayName(member.access.channel?.code ?? '')}的唯一主管理员，原主管理员将降为普通管理员；双方会话立即失效。`,
+            confirmLabel: '确认移交',
+            tone: 'danger',
+            requireCurrentPassword: true,
+        });
+        if (!confirmation) return;
+        try {
+            if (kind === 'PLATFORM') {
+                const response = await transferOwnership({
+                    variables: {
+                        targetAdministratorId: member.id,
+                        currentPassword: confirmation.currentPassword ?? '',
+                    },
+                });
+                if (response.data?.transferPlatformOwnership.authority !== 'OWNER')
+                    throw new Error('平台所有权移交失败');
+            } else {
+                const response = await transferStore({
+                    variables: {
+                        channelId,
+                        targetAdministratorId: member.id,
+                        currentPassword: confirmation.currentPassword ?? '',
+                    },
+                });
+                if (response.data?.transferStoreAdministration.authority !== 'ADMIN')
+                    throw new Error('店铺主管理员移交失败');
+            }
+        } catch (error) {
+            onError(errorText(error));
+            return;
+        }
+        if (kind === 'PLATFORM' || actorAccess?.scope === 'STORE') {
+            try {
+                await logoutAdministrator();
+            } catch {
+                // The server has already revoked this session; local auth is cleared in finally.
+            }
+            navigate('/login', { replace: true });
+            return;
+        }
+        await onChanged('店铺主管理员已移交，相关账号需要重新登录');
     };
     return (
         <section className="min-h-[620px] overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -325,7 +390,7 @@ function MembersTable({
                             </th>
                             <th
                                 scope="col"
-                                className="sticky right-0 z-20 w-24 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                                className="sticky right-0 z-20 w-44 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
                             >
                                 操作
                             </th>
@@ -392,6 +457,44 @@ function MembersTable({
                                 </td>
                                 <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
                                     <div className="flex justify-end gap-1">
+                                        {actorAccess?.authority === 'OWNER' &&
+                                            member.access.scope === 'PLATFORM' &&
+                                            member.access.status === 'ACTIVE' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void transfer(member, 'PLATFORM')}
+                                                    disabled={
+                                                        ownershipState.loading || storeTransferState.loading
+                                                    }
+                                                    className="inline-flex items-center gap-1 rounded-md border border-amber-300 px-2 py-1 text-[10px] font-bold text-amber-800 hover:bg-amber-50 disabled:opacity-30"
+                                                    aria-label={`移交平台所有权给${member.firstName}${member.lastName}`}
+                                                    title="移交平台所有权"
+                                                >
+                                                    <ArrowRightLeft className="h-3 w-3" />
+                                                    移交所有权
+                                                </button>
+                                            )}
+                                        {(actorAccess?.authority === 'OWNER' ||
+                                            actorAccess?.authority === 'ADMIN') &&
+                                            member.access.scope === 'STORE' &&
+                                            (actorAccess.scope === 'PLATFORM' ||
+                                                actorAccess.channel?.id === member.access.channel?.id) &&
+                                            ['MANAGER', 'STAFF'].includes(member.access.authority) &&
+                                            member.access.status === 'ACTIVE' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void transfer(member, 'STORE')}
+                                                    disabled={
+                                                        ownershipState.loading || storeTransferState.loading
+                                                    }
+                                                    className="inline-flex items-center gap-1 rounded-md border border-amber-300 px-2 py-1 text-[10px] font-bold text-amber-800 hover:bg-amber-50 disabled:opacity-30"
+                                                    aria-label={`移交店铺主管理员给${member.firstName}${member.lastName}`}
+                                                    title="移交店铺主管理员"
+                                                >
+                                                    <ArrowRightLeft className="h-3 w-3" />
+                                                    移交主管理员
+                                                </button>
+                                            )}
                                         <button
                                             type="button"
                                             onClick={() => onEdit(member)}
