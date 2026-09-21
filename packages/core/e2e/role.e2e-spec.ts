@@ -247,7 +247,7 @@ describe('Role resolver', () => {
 
         it(
             'is not allowed for SuperAdmin role',
-            assertThrowsWithMessage(async () => {
+            assertThrowsWithMessage(() => {
                 const superAdminRole = defaultRoles.find(r => r.code === SUPER_ADMIN_ROLE_CODE);
                 if (!superAdminRole) {
                     fail('Could not find SuperAdmin role');
@@ -266,7 +266,7 @@ describe('Role resolver', () => {
 
         it(
             'is not allowed for Customer role',
-            assertThrowsWithMessage(async () => {
+            assertThrowsWithMessage(() => {
                 const customerRole = defaultRoles.find(r => r.code === CUSTOMER_ROLE_CODE);
                 if (!customerRole) {
                     fail('Could not find Customer role');
@@ -286,7 +286,7 @@ describe('Role resolver', () => {
 
     it(
         'deleteRole is not allowed for Customer role',
-        assertThrowsWithMessage(async () => {
+        assertThrowsWithMessage(() => {
             const customerRole = defaultRoles.find(r => r.code === CUSTOMER_ROLE_CODE);
             if (!customerRole) {
                 fail('Could not find Customer role');
@@ -300,7 +300,7 @@ describe('Role resolver', () => {
 
     it(
         'deleteRole is not allowed for SuperAdmin role',
-        assertThrowsWithMessage(async () => {
+        assertThrowsWithMessage(() => {
             const superAdminRole = defaultRoles.find(r => r.code === SUPER_ADMIN_ROLE_CODE);
             if (!superAdminRole) {
                 fail('Could not find Customer role');
