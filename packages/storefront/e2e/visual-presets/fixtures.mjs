@@ -36,6 +36,26 @@ const product = {
         manualDeliverySlaMinutes: 0,
     },
 };
+const collectionChild = {
+    id: 'collection-cups',
+    name: '随行杯',
+    slug: 'cups',
+    description: '',
+    position: 0,
+    parentId: 'collection-daily',
+    featuredAsset: asset,
+    children: [],
+};
+const collection = {
+    id: 'collection-daily',
+    name: '日常用品',
+    slug: 'daily',
+    description: '',
+    position: 0,
+    parentId: 'root',
+    featuredAsset: asset,
+    children: [collectionChild],
+};
 const order = {
     id: 'order-1',
     code: 'QA0001',
@@ -151,7 +171,14 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true) {
             customFields: { storefrontNameZh: '店铺皮肤验收', storefrontNameEn: 'Visual preset QA' },
         },
         availableCountries: [{ code: 'MY', name: 'Malaysia' }],
-        storefrontBranding: { logoUrl: null, description: '本地测试数据' },
+        storefrontBranding: {
+            logoUrl: null,
+            description: '本地测试数据',
+            backgroundColor: '#070b14',
+            primaryColor: '#3558aa',
+            accentColor: '#22d3ee',
+            highlightColor: '#8b5cf6',
+        },
         storefrontCurrencyConfiguration: {
             defaultCurrencyCode: 'MYR',
             availableCurrencyCodes: ['MYR'],
@@ -168,7 +195,7 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true) {
         activeSystemAnnouncements: [],
         products: { items: [product], totalItems: 1 },
         product,
-        collections: { items: [], totalItems: 0 },
+        collections: { items: [collection], totalItems: 1 },
         storefrontCatalog: { items: [product], totalItems: 1 },
         storefrontProductSales: [],
         activeStoreCommerceMode: 'HYBRID',

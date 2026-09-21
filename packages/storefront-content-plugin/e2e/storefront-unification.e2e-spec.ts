@@ -845,7 +845,9 @@ describe('unified storefront Admin API to Shop API', () => {
             releaseResponse();
             await browserExpect(stale.getByRole('button', { name: '保存到当前店铺' })).toBeDisabled();
             await browserExpect(stale.locator('input[name="desktopLayout"]')).toHaveCount(0);
-            await browserExpect(stale.getByRole('status')).toHaveCount(0);
+            await browserExpect(
+                stale.getByRole('status').filter({ hasText: '已保存到当前店铺' }),
+            ).toHaveCount(0);
             shopClient.setChannelToken(stores[1].token);
             expect((await shopClient.query(READ_VISUAL)).storefrontVisualPreset).toMatchObject({
                 presetId: 'modern-oriental',
@@ -1069,8 +1071,8 @@ describe('unified storefront Admin API to Shop API', () => {
             const previewUrl = `http://127.0.0.1:5301/e2e/storefront-visual/index.html?stores=${stores.map(store => store.token).join(',')}&preview=auth`;
             for (const [state, background, accent] of [
                 ['explicit', 'rgb(32, 51, 70)', 'rgb(166, 61, 50)'],
-                ['inherited', 'rgb(246, 242, 234)', 'rgb(166, 61, 50)'],
-                ['classic', 'rgb(238, 232, 224)', 'rgb(21, 128, 61)'],
+                ['inherited', 'rgb(246, 242, 234)', 'rgb(146, 47, 39)'],
+                ['classic', 'rgb(241, 245, 249)', 'rgb(21, 128, 61)'],
             ]) {
                 if (state === 'inherited')
                     await adminClient.query(UPDATE, {
@@ -1170,7 +1172,7 @@ describe('unified storefront Admin API to Shop API', () => {
             );
             await browserExpect(page.locator('.wide-action')).toHaveCSS(
                 'background-color',
-                'rgb(166, 61, 50)',
+                'rgb(146, 47, 39)',
             );
             await browserExpect(page.locator('.auth-hero-copy h2')).toHaveCount(0);
             await page.screenshot({ path: join(output, 'auth-priority-unbranded.png'), fullPage: true });

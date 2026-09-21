@@ -19,7 +19,7 @@
 
     body:has(.desktop-store-layout),
     html:has(.desktop-store-layout) {
-        background: #070B14;
+        background: var(--bg);
     }
 
     html,
@@ -33,7 +33,7 @@
     }
 
     html {
-        scrollbar-gutter: stable;
+        scrollbar-gutter: stable both-edges;
     }
 
     html::-webkit-scrollbar,
@@ -54,8 +54,8 @@
     .storefront-app.desktop-store-layout {
         width: 100%;
         max-width: 100%;
-        background: #070B14;
-        color: #f1f5f9;
+        background: var(--bg);
+        color: var(--text);
     }
 
     .desktop-store-layout .page.desktop-neo-home-page {
@@ -63,7 +63,22 @@
         max-width: 100%;
         margin: 0;
         padding: 0;
-        background: #070B14;
+        background: var(--bg);
+    }
+
+    .desktop-shell-frame {
+        width: min(calc(100% - 2 * var(--page-inline-gutter)), var(--desktop-shell-width));
+        min-width: 0;
+        min-height: calc(100dvh - var(--desktop-header-height, 72px));
+        margin-inline: auto;
+        border-inline: 1px solid var(--line);
+        background: var(--bg);
+    }
+
+    .desktop-shell-frame:not(.desktop-account-layout) > #storefront-content > :is(.page, .subpage) {
+        width: 100%;
+        max-width: none;
+        margin-inline: 0;
     }
 
     #storefront-content {
@@ -533,7 +548,7 @@
         border: 0;
         background: transparent;
         font-size: 12px;
-        color: #0284c7;
+        color: var(--accent-ink);
     }
 
     .category-product-list .product-row-warranty {
@@ -704,9 +719,9 @@
         overflow: hidden;
         display: grid;
         grid-template-columns: minmax(420px, 0.86fr) minmax(520px, 1.14fr);
-        border: 1px solid rgba(30, 76, 68, 0.1);
+        border: 1px solid var(--line);
         border-radius: 28px;
-        background: #fbfcfc;
+        background: var(--surface);
         box-shadow:
             0 30px 90px rgba(30, 57, 51, 0.13),
             0 2px 8px rgba(30, 57, 51, 0.04);
@@ -838,7 +853,7 @@
         padding: clamp(48px, 6vh, 72px) clamp(56px, 6vw, 86px);
         border: 0;
         border-radius: 0;
-        background: radial-gradient(circle at 100% 0%, rgba(13, 117, 104, 0.055), transparent 36%), #fbfcfc;
+        background: var(--surface);
         box-shadow: none;
         display: flex;
         align-items: center;

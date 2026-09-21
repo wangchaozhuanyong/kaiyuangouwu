@@ -13,6 +13,14 @@ export const STOREFRONT_VISUAL_PRESET_QUERY = gql`
             presetId
             revision
         }
+        storefrontPreviewBranding {
+            channelId
+            name
+            backgroundColor
+            primaryColor
+            accentColor
+            highlightColor
+        }
     }
 `;
 
@@ -31,4 +39,12 @@ export type StorefrontSkinConfig = Pick<StorefrontVisualPresetConfig, 'channelId
 export interface StorefrontVisualPresetResult {
     activeChannel: { id: string; code: string; token: string };
     storefrontVisualPreset: StorefrontSkinConfig;
+    storefrontPreviewBranding: {
+        channelId: string;
+        name: string;
+        backgroundColor?: string | null;
+        primaryColor?: string | null;
+        accentColor?: string | null;
+        highlightColor?: string | null;
+    };
 }

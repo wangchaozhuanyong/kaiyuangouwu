@@ -30,12 +30,21 @@ export function authVisualStyle(content?: AuthVisualData, imageTone?: ImageTone)
     const background = configuredColor(content?.backgroundColor);
     const accent = configuredColor(content?.settings?.accentColor);
     const configuredText = configuredColor(content?.textColor);
+    const hasImage = Boolean(content?.imageUrl?.trim());
     const isLightTone =
         imageTone === 'light' || (background ? readableColor(background) === '#172033' : false);
 
-    const defaultForeground = isLightTone ? '#0f172a' : '#ffffff';
+    const defaultForeground = isLightTone
+        ? '#0f172a'
+        : hasImage
+          ? '#ffffff'
+          : 'var(--auth-store-foreground, var(--store-foreground, #0f172a))';
     const foreground = configuredText ?? (background ? readableColor(background) : defaultForeground);
-    const secondaryColor = isLightTone ? '#334155' : 'rgba(239, 247, 255, 0.90)';
+    const secondaryColor = isLightTone
+        ? '#334155'
+        : hasImage
+          ? 'rgba(239, 247, 255, 0.90)'
+          : 'var(--muted, #475569)';
 
     return {
         '--auth-visual-background':

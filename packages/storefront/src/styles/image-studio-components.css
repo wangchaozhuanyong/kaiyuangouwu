@@ -975,7 +975,7 @@
 }
 
 .ai-studio-view-tabs button[aria-selected='true'] {
-    color: var(--accent);
+    color: var(--accent-ink);
 }
 
 .ai-studio-view-tabs button[aria-selected='true']::after {
@@ -1291,7 +1291,7 @@
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-terms-row button {
-    color: var(--accent);
+    color: var(--accent-ink);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-terms-row input {

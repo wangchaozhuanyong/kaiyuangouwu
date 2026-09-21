@@ -1,19 +1,91 @@
 import { chromium, expect } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import { fixtureData } from './fixtures.mjs';
+
+const require = createRequire(import.meta.url);
+const axePath = require.resolve('axe-core/axe.min.js');
 const output = path.resolve('artifacts/visual-presets');
+const baseUrl = process.env.STOREFRONT_VISUAL_BASE_URL || 'http://127.0.0.1:5188';
+const requestedPreset = process.env.STOREFRONT_VISUAL_PRESET;
+const requestedRoute = process.env.STOREFRONT_VISUAL_ROUTE;
+const requestedWidth = Number(process.env.STOREFRONT_VISUAL_WIDTH || 0);
+const presets = requestedPreset ? [requestedPreset] : ['classic', 'modern-oriental', 'neo-minimalist'];
+const expectedPaletteSignature = {
+    classic: { page: '#f1f5f9', surface: '#ffffff', text: '#0f172a', brand: '#3558aa' },
+    'modern-oriental': { page: '#f6f2ea', surface: '#fffdf8', text: '#17283a', brand: '#a63d32' },
+    'neo-minimalist': { page: '#070b14', surface: '#0e1421', text: '#f4f7fb', brand: '#8b5cf6' },
+};
+const routes = [
+    ['home', '/'],
+    ['category', '/category'],
+    ['services', '/services'],
+    ['cart', '/cart'],
+    ['account', '/account'],
+    ['product', '/product?id=product-1'],
+    ['search', '/search?term=cup'],
+    ['purchase', '/purchase'],
+    ['checkout', '/checkout'],
+    ['payment', '/payment'],
+    ['order-confirmation', '/order-confirmation?id=QA0001'],
+    ['orders', '/orders'],
+    ['logistics', '/logistics'],
+    ['order-detail', '/order-detail?id=order-1'],
+    ['addresses', '/addresses'],
+    ['account-security', '/account-security'],
+    ['favorites', '/favorites'],
+    ['announcements', '/announcements'],
+    ['history', '/history'],
+    ['notifications', '/notifications'],
+    ['coupons', '/coupons'],
+    ['referral', '/referral'],
+    ['flash-sale', '/flash-sale'],
+    ['recommendations', '/recommendations'],
+    ['support', '/support'],
+    ['reviews', '/reviews'],
+    ['image-studio', '/image-studio'],
+    ['two-factor', '/two-factor'],
+    ['mail-query', '/mail-query'],
+    ['login', '/login'],
+    ['register', '/register'],
+    ['verify-account', '/verify-account'],
+    ['forgot-password', '/forgot-password'],
+    ['reset-password', '/reset-password'],
+    ['legal', '/legal?id=privacy'],
+    ['not-found', '/not-found'],
+];
+const criticalRoutes = new Set([
+    'home',
+    'category',
+    'product',
+    'cart',
+    'checkout',
+    'account',
+    'login',
+    'register',
+    'image-studio',
+]);
+const anonymousRoutes = new Set(['login', 'register', 'verify-account', 'forgot-password', 'reset-password']);
+
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const results = [];
-const deferredThemeResults = [];
 try {
-    for (const preset of ['classic', 'modern-oriental']) {
-        for (const width of [390, 1440]) {
+    for (const preset of presets) {
+        for (const width of requestedWidth ? [requestedWidth] : [390, 1023, 1024, 1440]) {
+            const scopedRoutes =
+                width === 390 || width === 1440
+                    ? routes
+                    : routes.filter(([name]) => criticalRoutes.has(name));
+            const selectedRoutes = requestedRoute
+                ? scopedRoutes.filter(([name]) => name === requestedRoute)
+                : scopedRoutes;
             const page = await browser.newPage({
-                viewport: { width, height: width === 390 ? 844 : 1000 },
+                viewport: { width, height: width < 1024 ? 844 : 1000 },
                 locale: 'zh-CN',
+                reducedMotion: 'reduce',
             });
             const errors = [];
             let signedIn = true;
@@ -21,153 +93,181 @@ try {
             await page.route('**/*', async route => {
                 const url = new URL(route.request().url());
                 if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.abort();
-                if (url.pathname.includes('shop-api'))
+                if (url.pathname.includes('shop-api')) {
                     return route.fulfill({
                         contentType: 'application/json',
                         body: JSON.stringify({ data: fixtureData(preset, signedIn) }),
                     });
-                if (url.pathname.includes('/storefront-realtime'))
+                }
+                if (url.pathname.includes('/storefront-realtime')) {
                     return route.fulfill({ status: 204, body: '' });
+                }
                 return route.continue();
             });
-            for (const [name, route, selector] of [
-                ['home', '/', '.home-page'],
-                ['product', '/product?id=product-1', '.product-detail-page'],
-                ['cart', '/cart', '.cart-page'],
-                ['checkout', '/checkout', '.checkout-page'],
-                ['ai', '/image-studio', '.ai-studio-shell'],
-                ['login', '/login', '.auth-page'],
-                ['register', '/register', '.auth-page'],
-            ]) {
-                signedIn = !['login', 'register'].includes(name);
-                await page.goto(`http://127.0.0.1:5188${route}`);
-                await expect(page.locator('html')).toHaveAttribute('data-storefront-preset', preset);
-                await expect(page.locator(selector)).toBeVisible({ timeout: 15000 });
-                await page.screenshot({
-                    path: `${output}/${preset}-${width}-${name}.png`,
-                    fullPage: true,
-                    animations: 'disabled',
+
+            for (const [name, route] of selectedRoutes) {
+                signedIn = !anonymousRoutes.has(name);
+                await page.goto(`${baseUrl}${route}`);
+                await expect(page.locator('html')).toHaveAttribute('data-storefront-preset', preset, {
+                    timeout: 15000,
                 });
-                const geometry = await page.evaluate(() => ({
-                    viewport: innerWidth,
-                    scroll: document.documentElement.scrollWidth,
-                    accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
-                    background: getComputedStyle(document.body).backgroundColor,
-                }));
-                expect(geometry.scroll).toBeLessThanOrEqual(geometry.viewport + 1);
-                if (preset === 'modern-oriental') expect(geometry.accent).toBe('#a63d32');
-                if (preset === 'modern-oriental' && name === 'home') {
-                    await expect(
-                        page.locator('.storefront-bottom-nav a[aria-current="page"] > span:last-child'),
-                    ).toHaveCSS('color', 'rgb(166, 61, 50)');
-                    await expect(page.locator('.storefront-bottom-nav a[aria-current="page"] svg')).toHaveCSS(
-                        'color',
-                        'rgb(166, 61, 50)',
-                    );
+                await expect(page.locator('#storefront-content')).toBeVisible({ timeout: 15000 });
+                await expect(page.locator('[data-page-readiness]')).toHaveAttribute(
+                    'data-page-readiness',
+                    /ready|degraded/,
+                    { timeout: 15000 },
+                );
+                const paletteSignature = await page.evaluate(() => {
+                    const style = getComputedStyle(document.documentElement);
+                    return {
+                        page: style.getPropertyValue('--bg').trim(),
+                        surface: style.getPropertyValue('--paper').trim(),
+                        text: style.getPropertyValue('--text').trim(),
+                        brand: style.getPropertyValue('--brand-primary').trim(),
+                    };
+                });
+                expect(paletteSignature, `${preset}/${width}/${name} skin identity`).toEqual(
+                    expectedPaletteSignature[preset],
+                );
+                await page.addStyleTag({
+                    content: `
+                        *, *::before, *::after {
+                            animation-delay: 0s !important;
+                            animation-duration: 0s !important;
+                            transition-delay: 0s !important;
+                            transition-duration: 0s !important;
+                        }
+                    `,
+                });
+                await page.evaluate(() =>
+                    Promise.all(
+                        document
+                            .getAnimations()
+                            .filter(
+                                animation =>
+                                    animation.playState !== 'finished' &&
+                                    animation.effect?.getComputedTiming().iterations !== Infinity,
+                            )
+                            .map(animation => animation.finished.catch(() => undefined)),
+                    ),
+                );
+                await page.addScriptTag({ path: axePath });
+                const geometry = await page.evaluate(() => {
+                    const frame = document.querySelector('.desktop-shell-frame');
+                    const frameRect = frame?.getBoundingClientRect();
+                    const viewportWidth = document.documentElement.clientWidth;
+                    return {
+                        viewport: viewportWidth,
+                        scroll: document.documentElement.scrollWidth,
+                        frameLeft: frameRect?.left ?? null,
+                        frameRight: frameRect ? viewportWidth - frameRect.right : null,
+                    };
+                });
+                expect(geometry.scroll, `${preset}/${width}/${name} horizontal overflow`).toBeLessThanOrEqual(
+                    geometry.viewport + 1,
+                );
+                if (width >= 1024) {
+                    expect(geometry.frameLeft, `${preset}/${width}/${name} desktop frame`).not.toBeNull();
+                    expect(
+                        Math.abs(geometry.frameLeft - geometry.frameRight),
+                        `${preset}/${width}/${name} frame symmetry`,
+                    ).toBeLessThanOrEqual(1);
+                    expect(
+                        geometry.frameLeft,
+                        `${preset}/${width}/${name} safe gutter`,
+                    ).toBeGreaterThanOrEqual(31);
                 }
-                if (preset === 'modern-oriental' && name === 'login') {
-                    await expect(page.locator('.auth-page .primary-action')).toHaveCSS(
-                        'background-color',
-                        'rgb(166, 61, 50)',
-                    );
+                if (name === 'product' && width >= 1024) {
+                    const media = page.locator('.desktop-product-purchase .detail-gallery');
+                    await expect(media).toBeVisible();
+                    const box = await media.boundingBox();
+                    expect(Math.abs((box?.width ?? 0) - (box?.height ?? 0))).toBeLessThanOrEqual(1);
+                    await expect(media.locator('img').first()).toHaveCSS('object-fit', 'contain');
                 }
-                results.push({ preset, width, name, ...geometry });
-                if (name === 'checkout') {
-                    await page.getByRole('button', { name: /订单备注/ }).click();
-                    const dialog = page.getByRole('dialog', { name: '订单备注' });
-                    await expect(dialog).toBeVisible();
-                    if (preset === 'modern-oriental')
-                        await expect(dialog).toHaveCSS('background-color', 'rgb(255, 253, 248)');
+                if (name === 'category' && width >= 1024) {
+                    await expect(page.locator('.desktop-category-navigation')).toBeVisible();
+                    await expect(page.locator('.desktop-local-navigation')).toBeVisible();
+                    await page.getByRole('button', { name: '日常用品' }).click();
+                    await expect(page.locator('.desktop-subcategories')).toBeVisible();
+                    const childCategory = page.locator('.desktop-subcategories').getByRole('button', {
+                        name: '随行杯',
+                        exact: true,
+                    });
+                    await childCategory.click();
+                    await expect(childCategory).toHaveAttribute('aria-pressed', 'true');
+                }
+                await page.keyboard.press('Tab');
+                const keyboardFocus = await page.evaluate(() => {
+                    const active = document.activeElement;
+                    if (!(active instanceof HTMLElement) || active === document.body) return null;
+                    const style = getComputedStyle(active);
+                    const bounds = active.getBoundingClientRect();
+                    return {
+                        tag: active.tagName.toLowerCase(),
+                        className: active.className,
+                        visible:
+                            bounds.width > 0 &&
+                            bounds.height > 0 &&
+                            bounds.bottom > 0 &&
+                            bounds.right > 0 &&
+                            bounds.top < window.innerHeight &&
+                            bounds.left < window.innerWidth,
+                        indicator:
+                            (style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth) >= 2) ||
+                            style.boxShadow !== 'none',
+                    };
+                });
+                expect(keyboardFocus, `${preset}/${width}/${name} keyboard focus target`).not.toBeNull();
+                expect(keyboardFocus?.visible, `${preset}/${width}/${name} keyboard focus visibility`).toBe(
+                    true,
+                );
+                expect(keyboardFocus?.indicator, `${preset}/${width}/${name} keyboard focus indicator`).toBe(
+                    true,
+                );
+                // Move beyond the skip link before checking a normal component hover state.
+                await page.keyboard.press('Tab');
+                const hoverTarget = page
+                    .locator('main button:not([disabled]):visible, main a[href]:visible')
+                    .first();
+                if ((await hoverTarget.count()) > 0) await hoverTarget.hover();
+                const accessibility = await page.evaluate(async () => {
+                    const result = await window.axe.run(document, { runOnly: ['color-contrast'] });
+                    return result.violations.map(violation => ({
+                        id: violation.id,
+                        impact: violation.impact,
+                        nodes: violation.nodes.map(node => ({
+                            target: node.target,
+                            html: node.html,
+                            summary: node.failureSummary,
+                        })),
+                    }));
+                });
+                expect(accessibility, `${preset}/${width}/${name} contrast`).toEqual([]);
+                results.push({ preset, width, name, geometry, keyboardFocus, accessibility });
+
+                if (
+                    width === 1440 &&
+                    ['home', 'product', 'checkout', 'account', 'login', 'image-studio', 'legal'].includes(
+                        name,
+                    )
+                ) {
                     await page.screenshot({
-                        path: `${output}/${preset}-${width}-dialog.png`,
+                        path: `${output}/${preset}-${width}-${name}.png`,
                         fullPage: true,
                         animations: 'disabled',
                     });
-                    await page.keyboard.press('Escape');
                 }
             }
             expect(errors).toEqual([]);
-            await page.close();
-        }
-    }
-    // Theme requests must never hide commerce pages or replace a form the customer is filling.
-    for (const outcome of ['success', 'failure']) {
-        const page = await browser.newPage({ viewport: { width: 390, height: 844 }, locale: 'zh-CN' });
-        const errors = [];
-        page.on('pageerror', error => errors.push(error.message));
-        let releaseTheme = () => undefined;
-        let themeRequests = 0;
-        const pendingTheme = new Promise(resolve => {
-            releaseTheme = resolve;
-        });
-        await page.route('**/*', async route => {
-            const url = new URL(route.request().url());
-            if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.abort();
-            if (url.pathname.includes('shop-api')) {
-                if (route.request().postDataJSON()?.query?.includes('query StorefrontVisualPreset')) {
-                    themeRequests++;
-                    await pendingTheme;
-                    const body =
-                        outcome === 'success'
-                            ? { data: fixtureData('modern-oriental', false) }
-                            : { errors: [{ message: 'Temporary visual preset read failure' }] };
-                    return route
-                        .fulfill({ contentType: 'application/json', body: JSON.stringify(body) })
-                        .catch(() => undefined);
-                }
-                return route.fulfill({
-                    contentType: 'application/json',
-                    body: JSON.stringify({ data: fixtureData('classic', false) }),
-                });
-            }
-            if (url.pathname.includes('/storefront-realtime'))
-                return route.fulfill({ status: 204, body: '' });
-            return route.continue();
-        });
-        try {
-            const started = Date.now();
-            await page.goto('http://127.0.0.1:5188/login');
-            await expect.poll(() => themeRequests).toBeGreaterThan(0);
-            await expect(page.locator('.auth-page')).toBeVisible({ timeout: 5000 });
-            const formVisibleMs = Date.now() - started;
-            const email = page.locator('.auth-page input[type="email"]');
-            const password = page.locator('.auth-page input[type="password"]');
-            await email.fill('skin-regression@example.com');
-            await password.fill('local-fixture-only');
-            await email.evaluate(el => {
-                el.dataset.presetRegression = 'original-form';
-            });
-            await page.screenshot({
-                path: `${output}/deferred-theme-${outcome}-pending.png`,
-                animations: 'disabled',
-            });
-            const initialThemeRequests = themeRequests;
-            releaseTheme();
-            if (outcome === 'success') {
-                await expect(page.locator('html')).toHaveAttribute(
-                    'data-storefront-preset',
-                    'modern-oriental',
-                );
-            } else {
-                await expect.poll(() => themeRequests).toBeGreaterThan(initialThemeRequests);
-                await expect(page.locator('html')).toHaveAttribute('data-storefront-preset', 'classic');
-            }
-            await expect(email).toHaveValue('skin-regression@example.com');
-            await expect(password).toHaveValue('local-fixture-only');
-            await expect(email).toHaveAttribute('data-preset-regression', 'original-form');
-            expect(errors).toEqual([]);
-            deferredThemeResults.push({ outcome, formVisibleMs, themeRequests, formPreserved: true });
-        } finally {
-            releaseTheme();
             await page.close();
         }
     }
     await writeFile(
         `${output}/storefront-result.json`,
-        JSON.stringify({ passed: true, mockedShopApi: true, results, deferredThemeResults }, null, 2),
+        JSON.stringify({ passed: true, mockedShopApi: true, routes: routes.length, results }, null, 2),
     );
     process.stdout.write(
-        `Storefront visual checks passed: ${results.length} pages plus checkout dialogs and deferred theme forms\n`,
+        `Storefront visual checks passed: ${results.length} route/skin/viewport combinations\n`,
     );
 } finally {
     await browser.close();

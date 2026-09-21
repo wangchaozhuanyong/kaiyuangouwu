@@ -12,8 +12,8 @@ describe('global button foreground styles', () => {
         expect(globalButtonRule?.[1]).not.toMatch(/(?:^|;)\s*color\s*:/);
     });
 
-    it('uses a blue replacement focus treatment for text controls without a red outline', () => {
-        const boxShadow = 'box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12)';
+    it('uses the semantic focus color for text controls without a red outline', () => {
+        const boxShadow = 'box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus, #3b82f6) 22%, transparent)';
         const boxShadowIndex = stylesheet.indexOf(boxShadow);
         const focusDeclarations = stylesheet.slice(
             stylesheet.lastIndexOf('{', boxShadowIndex),
@@ -22,8 +22,8 @@ describe('global button foreground styles', () => {
 
         expect(boxShadowIndex).toBeGreaterThan(-1);
         expect(focusDeclarations).toContain('outline: none !important');
+        expect(focusDeclarations).toContain('border-color: var(--focus, #3b82f6)');
         expect(focusDeclarations).toContain(boxShadow);
-        expect(focusDeclarations).not.toContain('color-mix');
         expect(focusDeclarations).not.toContain('red');
     });
 
@@ -31,9 +31,11 @@ describe('global button foreground styles', () => {
         expect(stylesheet).toContain(
             ":where(input[type='checkbox'], input[type='radio'], input[type='range']):focus-visible",
         );
-        expect(stylesheet).toMatch(/button:focus-visible\s*\{[\s\S]*?outline:\s*2px\s*solid\s*#3b82f6/iu);
         expect(stylesheet).toMatch(
-            /input\[type='checkbox'\][^}]*:focus-visible\s*\{[\s\S]*?outline:\s*2px\s*solid\s*#3b82f6/iu,
+            /:where\(a\[href\], button, summary, \[role='button'\]\):focus-visible\s*\{[\s\S]*?outline:\s*2px\s*solid\s*var\(--focus,\s*#3b82f6\)/iu,
+        );
+        expect(stylesheet).toMatch(
+            /input\[type='checkbox'\][^}]*:focus-visible\s*\{[\s\S]*?outline:\s*2px\s*solid\s*var\(--focus,\s*#3b82f6\)/iu,
         );
     });
 });

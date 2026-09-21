@@ -10,6 +10,7 @@ import {
 } from './components/common/desktop-account-navigation';
 import { DesktopHeader } from './components/common/desktop-header';
 import { DesktopLayoutContext, useDesktopViewport } from './desktop-layout';
+import { desktopPageFamily } from './desktop-page-contract';
 import { type useStorefrontAppState } from './hooks/useStorefrontAppState';
 import { PageReadinessBoundary } from './page-readiness';
 import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
@@ -17,13 +18,28 @@ import { isBrowsingStorefrontRoute, isPublicStorefrontRoute } from './storefront
 import { routeHref } from './storefront-router';
 import { StorefrontContext } from './StorefrontContext';
 import { StorefrontUpdatePrompt } from './StorefrontUpdatePrompt';
+import { type ActiveCustomer } from './types';
 
 const LoginRoutePage = lazyRouteComponent(() => import('./route-pages/auth-route-pages'), 'LoginRoutePage');
 
 type StorefrontShellProps = { state: ReturnType<typeof useStorefrontAppState> };
 
+const PREVIEW_CUSTOMER: ActiveCustomer = {
+    id: '__storefront_preview_customer__',
+    firstName: '预览',
+    lastName: '用户',
+    emailAddress: 'preview@example.invalid',
+    phoneNumber: null,
+    avatar: null,
+    addresses: [],
+    orders: { items: [], totalItems: 0 },
+};
+
 export function StorefrontShell({ state }: StorefrontShellProps) {
     const desktop = useDesktopViewport();
+    const previewParameters = new URLSearchParams(window.location.search);
+    const previewEmbedded = previewParameters.get('storefrontPreviewEmbedded') === '1';
+    const previewScenario = previewEmbedded ? previewParameters.get('storefrontPreviewScenario') : null;
     const {
         storefrontContextValue,
         online,
@@ -33,11 +49,20 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
         cart,
         toast,
         language,
-        customer,
+        customer: sessionCustomer,
         customerLoadState,
         customerLoadError,
         retryAccount,
     } = state;
+    const customer = previewEmbedded
+        ? previewParameters.get('storefrontPreviewAuth') === 'authenticated'
+            ? PREVIEW_CUSTOMER
+            : null
+        : sessionCustomer;
+    const effectiveStorefrontContext =
+        customer === storefrontContextValue.customer
+            ? storefrontContextValue
+            : { ...storefrontContextValue, customer };
     const protectedRoute = !isPublicStorefrontRoute(displayedRoute.name);
     const waitingForAccount = !customer && customerLoadState !== 'ready';
     const accountFailed = customerLoadState === 'error' || customerLoadState === 'paused';
@@ -50,7 +75,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     const skeletonVariant = pageSkeletonVariantForPathname(routeHref(displayedRoute));
 
     return (
-        <StorefrontContext.Provider value={storefrontContextValue}>
+        <StorefrontContext.Provider value={effectiveStorefrontContext}>
             <DesktopLayoutContext.Provider value={desktop}>
                 <PageReadinessBoundary
                     requestKey={readinessIdentity}
@@ -63,6 +88,10 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                 >
                     <div
                         data-route={protectedRoute && !customer ? 'login' : displayedRoute.name}
+                        data-page-family={desktopPageFamily(
+                            protectedRoute && !customer ? 'login' : displayedRoute.name,
+                        )}
+                        data-preview-embedded={previewEmbedded ? 'true' : undefined}
                         className={`storefront-app${online ? '' : ' is-offline'}${desktop ? ' desktop-store-layout' : ''}`}
                     >
                         <a className="skip-link" href="#storefront-content">
@@ -84,8 +113,10 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                         )}
                         <div
                             className={
-                                desktop && customer && isDesktopAccountRoute(displayedRoute.name)
-                                    ? 'desktop-account-layout'
+                                desktop
+                                    ? customer && isDesktopAccountRoute(displayedRoute.name)
+                                        ? 'desktop-shell-frame desktop-account-layout'
+                                        : 'desktop-shell-frame'
                                     : undefined
                             }
                         >
@@ -116,6 +147,9 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                         <Outlet />
                                     )}
                                 </Suspense>
+                                {previewEmbedded && previewScenario && previewScenario !== 'normal' && (
+                                    <PreviewScenarioPanel scenario={previewScenario} isZh={isZh} />
+                                )}
                             </div>
                         </div>
                     </div>
@@ -168,5 +202,45 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                 </PageReadinessBoundary>
             </DesktopLayoutContext.Provider>
         </StorefrontContext.Provider>
+    );
+}
+
+function PreviewScenarioPanel({ scenario, isZh }: { scenario: string; isZh: boolean }) {
+    if (scenario === 'loading') return <PageSkeleton variant="account" language={isZh ? 'zh' : 'en'} root />;
+    const content =
+        scenario === 'empty'
+            ? {
+                  title: isZh ? '暂无数据' : 'No data yet',
+                  body: isZh ? '当前页面暂无可展示内容。' : 'There is nothing to display on this page.',
+              }
+            : scenario === 'error'
+              ? {
+                    title: isZh ? '加载失败' : 'Unable to load',
+                    body: isZh ? '请检查网络后重试。' : 'Check your connection and try again.',
+                }
+              : scenario === 'disabled'
+                ? {
+                      title: isZh ? '功能暂不可用' : 'Feature unavailable',
+                      body: isZh ? '当前操作条件尚未满足。' : 'The requirements for this action are not met.',
+                  }
+                : {
+                      title: isZh ? '确认操作' : 'Confirm action',
+                      body: isZh
+                          ? '这是用于验收弹窗状态的只读预览。'
+                          : 'This read-only preview verifies the dialog state.',
+                  };
+    return (
+        <div
+            className={`storefront-preview-scenario is-${scenario}`}
+            role={scenario === 'dialog' ? 'dialog' : 'status'}
+        >
+            <div className="storefront-preview-state-card">
+                <strong>{content.title}</strong>
+                <p>{content.body}</p>
+                <button type="button" disabled={scenario === 'disabled'}>
+                    {scenario === 'error' ? (isZh ? '重试' : 'Try again') : isZh ? '知道了' : 'Got it'}
+                </button>
+            </div>
+        </div>
     );
 }

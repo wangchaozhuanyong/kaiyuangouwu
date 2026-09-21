@@ -1,9 +1,35 @@
 import { Link } from '@tanstack/react-router';
-import { Search } from 'lucide-react';
+import { Search, ShoppingCart } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { BrandLogo } from '../../storefront-ui/content-ui';
 import { useStorefront } from '../../StorefrontContext';
 import { StorefrontContentBlock } from '../../types';
+
+import { resolveBottomNavigationItems } from './bottom-navigation';
+
+function activeNavigationRoute(route: string): string {
+    if (route === 'product' || route === 'search') return 'category';
+    if (route === 'purchase' || route === 'checkout' || route === 'payment') return 'cart';
+    if (
+        [
+            'orders',
+            'logistics',
+            'order-detail',
+            'addresses',
+            'account-security',
+            'favorites',
+            'history',
+            'notifications',
+            'coupons',
+            'referral',
+            'reviews',
+        ].includes(route)
+    ) {
+        return 'account';
+    }
+    return route;
+}
 
 export function DesktopHeader({
     navigationBlock,
@@ -15,12 +41,11 @@ export function DesktopHeader({
     const context = useStorefront();
     const isZh = context.language === 'zh';
     const [query, setQuery] = useState(context.route.term ?? '');
-    useEffect(() => setQuery(context.route.term ?? ''), [context.route.term]);
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const navigationItems = resolveBottomNavigationItems(navigationBlock, context.language);
+    const activeRoute = activeNavigationRoute(context.route.name);
 
-    const displayName =
-        context.storefrontName && context.storefrontName !== '店铺' ? context.storefrontName : 'MOYAO AI';
-
+    useEffect(() => setQuery(context.route.term ?? ''), [context.route.term]);
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
@@ -33,43 +58,32 @@ export function DesktopHeader({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    const isHome = context.route.name === 'home';
-    const isCategory = context.route.name === 'category';
-    const isServices = ['services', 'image-studio', 'two-factor'].includes(context.route.name);
-    const isOrders = ['orders', 'order-detail'].includes(context.route.name);
-
     return (
         <header className="proto-desktop-header">
             <div className="proto-header-inner">
-                {/* 1. LEFT BRAND & NAVIGATION (EXACTLY AS IN MEDIA_1789880297490.PNG) */}
                 <div className="proto-header-left">
-                    <Link className="proto-brand" to="/" aria-label={displayName}>
-                        <div className="proto-brand-badge" aria-hidden="true">
-                            M
-                        </div>
-                        <span className="proto-brand-text">{displayName}</span>
+                    <Link className="proto-brand" to="/" aria-label={context.storefrontName}>
+                        <BrandLogo
+                            url={context.logoUrl}
+                            name={context.storefrontName}
+                            className="proto-brand-badge"
+                        />
+                        <span className="proto-brand-text">{context.storefrontName}</span>
                     </Link>
-
-                    <nav className="proto-nav-links" aria-label="Main Navigation">
-                        <Link to="/" className={`proto-nav-link ${isHome || isCategory ? 'is-active' : ''}`}>
-                            {isZh ? '模型广场' : 'Model Plaza'}
-                        </Link>
-                        <Link to="/category" className="proto-nav-link">
-                            {isZh ? 'API 聚合中转' : 'API Hub'}
-                        </Link>
-                        <Link to="/services" className={`proto-nav-link ${isServices ? 'is-active' : ''}`}>
-                            {isZh ? 'AI 智能工具箱' : 'AI Tools'}
-                        </Link>
-                        <Link to="/orders" className={`proto-nav-link ${isOrders ? 'is-active' : ''}`}>
-                            {isZh ? '实时履约中心' : 'Fulfillment'}
-                        </Link>
-                        <Link to="/support" className="proto-nav-link">
-                            {isZh ? '企业定制' : 'Enterprise'}
-                        </Link>
+                    <nav className="proto-nav-links" aria-label={isZh ? '主导航' : 'Main navigation'}>
+                        {navigationItems.map(item => (
+                            <Link
+                                key={item.key}
+                                to={item.target}
+                                className={`proto-nav-link ${activeRoute === item.routeName ? 'is-active' : ''}`}
+                                aria-current={activeRoute === item.routeName ? 'page' : undefined}
+                            >
+                                {item.label}
+                            </Link>
+                        ))}
                     </nav>
                 </div>
 
-                {/* 2. CENTER SEARCH BAR (EXACTLY AS IN MEDIA_1789880297490.PNG) */}
                 <div className="proto-header-search">
                     <form
                         className="proto-search-form"
@@ -77,23 +91,15 @@ export function DesktopHeader({
                         action="/search"
                         onSubmit={event => {
                             event.preventDefault();
-                            if (query.trim()) {
-                                context.navigate({ name: 'search', term: query.trim() });
-                            }
+                            if (query.trim()) context.navigate({ name: 'search', term: query.trim() });
                         }}
                     >
                         <Search className="proto-search-icon" aria-hidden="true" />
                         <input
                             ref={searchInputRef}
                             className="proto-search-input"
-                            aria-label={
-                                isZh ? '搜索模型、订阅或服务' : 'Search models, subscriptions or services'
-                            }
-                            placeholder={
-                                isZh
-                                    ? '搜索模型、订阅或服务 (例如: Claude 3.5, GPT-4o)...'
-                                    : 'Search models, subscriptions or services (e.g. Claude 3.5)...'
-                            }
+                            aria-label={isZh ? '搜索商品或服务' : 'Search products or services'}
+                            placeholder={isZh ? '搜索商品或服务' : 'Search products or services'}
                             name="term"
                             type="search"
                             value={query}
@@ -105,32 +111,44 @@ export function DesktopHeader({
                     </form>
                 </div>
 
-                {/* 3. RIGHT ACTIONS (CURRENCY, CART, LOGIN) */}
                 <div className="proto-header-right">
+                    {context.currencySelectorEnabled && context.availableCurrencyCodes.length > 1 ? (
+                        <label className="proto-currency-select">
+                            <span className="sr-only">{isZh ? '选择币种' : 'Choose currency'}</span>
+                            <select
+                                value={context.displayCurrencyCode}
+                                disabled={context.cartLoading}
+                                onChange={event => void context.switchCurrency(event.target.value)}
+                            >
+                                {context.availableCurrencyCodes.map(currencyCode => (
+                                    <option key={currencyCode} value={currencyCode}>
+                                        {currencyCode}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    ) : (
+                        <span className="proto-currency-label">{context.displayCurrencyCode}</span>
+                    )}
                     <button
                         type="button"
-                        className="proto-currency-btn"
+                        className="proto-language-btn"
                         onClick={context.toggleLanguage}
-                        title={isZh ? '切换语言 / Switch Language' : 'Switch Language'}
+                        aria-label={isZh ? '切换到英文' : 'Switch to Chinese'}
                     >
-                        <span className="proto-currency-icon">🌐</span>
-                        <span className="proto-currency-label">{context.displayCurrencyCode || 'CNY'} ¥</span>
+                        {isZh ? 'EN' : '中'}
                     </button>
-
-                    <Link
-                        to="/cart"
-                        className="proto-cart-link"
-                        aria-label={isZh ? '购物袋' : 'Shopping Bag'}
-                    >
-                        <span className="proto-cart-icon">🛒</span>
-                        <span className="proto-cart-text">{isZh ? '购物袋' : 'Bag'}</span>
-                        <span className="proto-cart-badge">
-                            {cartQuantity > 0 ? (cartQuantity > 99 ? '99+' : cartQuantity) : '2'}
-                        </span>
+                    <Link to="/cart" className="proto-cart-link" aria-label={isZh ? '购物车' : 'Cart'}>
+                        <ShoppingCart className="proto-cart-icon" aria-hidden="true" />
+                        <span className="proto-cart-text">{isZh ? '购物车' : 'Cart'}</span>
+                        {cartQuantity > 0 && (
+                            <span className="proto-cart-badge">
+                                {cartQuantity > 99 ? '99+' : cartQuantity}
+                            </span>
+                        )}
                     </Link>
-
-                    <Link to="/orders" className="proto-login-btn">
-                        {isZh ? '登录控制台' : 'Console Login'}
+                    <Link to={context.customer ? '/account' : '/login'} className="proto-login-btn">
+                        {context.customer ? (isZh ? '我的账户' : 'My account') : isZh ? '登录' : 'Sign in'}
                     </Link>
                 </div>
             </div>

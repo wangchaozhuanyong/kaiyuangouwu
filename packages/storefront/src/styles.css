@@ -232,8 +232,8 @@ button:disabled {
     cursor: not-allowed;
 }
 
-button:focus-visible {
-    outline: 2px solid #3b82f6;
+:where(a[href], button, summary, [role='button']):focus-visible {
+    outline: 2px solid var(--focus, #3b82f6);
     outline-offset: 2px;
 }
 
@@ -252,12 +252,12 @@ button:focus-visible {
     select
 ):focus-visible {
     outline: none !important;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+    border-color: var(--focus, #3b82f6);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus, #3b82f6) 22%, transparent);
 }
 
 :where(input[type='checkbox'], input[type='radio'], input[type='range']):focus-visible {
-    outline: 2px solid #3b82f6;
+    outline: 2px solid var(--focus, #3b82f6);
     outline-offset: 2px;
 }
 
@@ -302,7 +302,9 @@ img {
 }
 
 .safe-image-frame.has-placeholder .safe-image {
-    transition: opacity 180ms ease, transform 220ms ease;
+    transition:
+        opacity 180ms ease,
+        transform 220ms ease;
 }
 
 .safe-image.is-loaded {
@@ -635,6 +637,12 @@ img {
     transform: translate(-50%, -140%);
 }
 
+.skip-link:focus-visible {
+    color: var(--bg);
+    outline-color: var(--focus, #3b82f6);
+    transform: translate(-50%, 0);
+}
+
 @keyframes pageEnter {
     from {
         opacity: 0;
@@ -754,7 +762,7 @@ img {
 .cart-topbar .topbar-title {
     font-size: 18px;
     font-weight: 800;
-    color: #0f172a;
+    color: var(--text);
     letter-spacing: -0.02em;
 }
 

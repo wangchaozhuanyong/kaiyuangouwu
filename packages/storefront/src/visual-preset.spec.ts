@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizeStorefrontVisualPreset } from '../../storefront-content-plugin/src/visual-presets';
 
 import { storefrontRealtimeQueryMatches, type StorefrontRealtimeEvent } from './realtime-updates';
-import { applyStorefrontVisualPreset } from './use-storefront-visual-preset';
+import { applyStorefrontVisualPreset, readStorefrontPreviewPreset } from './use-storefront-visual-preset';
 
 describe('storefront visual preset lifecycle', () => {
     it('removes the previous skin when switching back to classic or unmounting', () => {
@@ -39,5 +39,17 @@ describe('storefront visual preset lifecycle', () => {
                 scope,
             ),
         ).toBe(false);
+    });
+
+    it('accepts a draft skin only inside the explicit embedded preview context', () => {
+        expect(readStorefrontPreviewPreset('?storefrontPreviewPreset=neo-minimalist')).toBeNull();
+        expect(
+            readStorefrontPreviewPreset(
+                '?storefrontPreviewEmbedded=1&storefrontPreviewPreset=neo-minimalist',
+            ),
+        ).toBe('neo-minimalist');
+        expect(
+            readStorefrontPreviewPreset('?storefrontPreviewEmbedded=1&storefrontPreviewPreset=invalid'),
+        ).toBeNull();
     });
 });

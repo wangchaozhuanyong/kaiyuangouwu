@@ -30,7 +30,7 @@
         white-space: nowrap;
         color: var(--accent);
         border: 1px solid var(--line);
-        background: #fff;
+        background: var(--surface, var(--paper));
         border-radius: 2px;
     }
 
@@ -81,13 +81,14 @@
     }
     .desktop-control-label {
         display: inline;
+        color: var(--accent-ink);
         font-size: 14px;
     }
     .desktop-store-layout .page > .empty-state {
         min-height: 340px;
         margin: 0;
         padding: 48px 24px;
-        background: #fff;
+        background: var(--surface, var(--paper));
         border: 0;
         border-radius: 0;
     }
@@ -163,7 +164,7 @@
         grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr);
         gap: 44px;
         align-items: start;
-        background: #fff;
+        background: var(--surface, var(--paper));
         padding: 28px;
     }
     .desktop-product-purchase .detail-gallery {
@@ -221,7 +222,7 @@
     .desktop-product-buying .detail-price {
         margin: 0;
         font-size: 28px;
-        color: var(--accent);
+        color: var(--accent-ink);
     }
     .desktop-product-buying .detail-tags {
         display: flex;
@@ -329,7 +330,7 @@
     .desktop-store-layout .product-detail-page > .detail-block {
         padding: 28px;
         margin: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
         border: 0;
         border-radius: 0;
     }
@@ -397,7 +398,7 @@
     }
     .desktop-cart-row {
         min-height: 142px;
-        background: #fff;
+        background: var(--surface, var(--paper));
         border-top: 1px solid var(--line);
         font-size: 14px;
     }
@@ -450,7 +451,7 @@
         color: var(--text);
     }
     .desktop-cart-quantity button:disabled {
-        color: #ccc;
+        color: var(--muted);
     }
     .desktop-cart-quantity svg {
         width: 14px;
@@ -464,11 +465,11 @@
     .desktop-cart-quantity .cart-stock-error {
         grid-column: 1 / -1;
         margin-top: 8px;
-        color: var(--accent);
+        color: var(--danger);
         line-height: 1.5;
     }
     .desktop-cart-amount {
-        color: var(--accent);
+        color: var(--accent-ink);
         font-weight: 600;
     }
     .desktop-cart-actions {
@@ -494,7 +495,7 @@
         top: 40px;
         right: 0;
         z-index: 3;
-        background: #fff;
+        background: var(--surface, var(--paper));
         padding: 12px 16px;
         border: 1px solid var(--line);
         box-shadow: 0 4px 16px #0001;
@@ -542,7 +543,7 @@
         min-width: 0;
         gap: 0;
         padding: 24px;
-        background: #fff;
+        background: var(--surface, var(--paper));
         position: sticky;
         top: calc(var(--desktop-header-height) + 24px);
     }
@@ -551,7 +552,7 @@
         border: 0;
         border-radius: 0;
         box-shadow: none;
-        background: #fff;
+        background: var(--surface, var(--paper));
         padding: 24px;
     }
     .desktop-store-layout .checkout-page .checkout-section h2 {
@@ -567,7 +568,7 @@
         margin: 20px 0 0;
         border: 0;
         border-top: 1px solid var(--line);
-        background: #fff;
+        background: var(--surface, var(--paper));
         border-radius: 0;
         display: flex;
         flex-wrap: wrap;
@@ -653,7 +654,7 @@
     .desktop-store-layout :is(.payment-method-section, .payment-summary, .payment-test-notice) {
         padding: 24px;
         border: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
         border-radius: 0;
         box-shadow: none;
     }
@@ -697,13 +698,13 @@
         justify-content: center;
         padding: 36px;
         min-height: 280px;
-        background: #fff;
+        background: var(--surface, var(--paper));
         border-radius: 0;
     }
     .desktop-store-layout .order-confirmation-summary {
         margin: 0;
         padding: 28px;
-        background: #fff;
+        background: var(--surface, var(--paper));
         border: 0;
         border-radius: 0;
     }
@@ -798,7 +799,7 @@
         border-bottom: 2px solid transparent;
     }
     .desktop-store-layout .address-type-tabs button.is-active {
-        color: var(--accent);
+        color: var(--accent-ink);
         background: none;
         border-bottom-color: var(--accent);
     }
@@ -827,7 +828,7 @@
         padding: 28px;
         min-height: 128px;
         margin: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
         border: 0;
         border-radius: 0;
         box-shadow: none;
@@ -835,7 +836,7 @@
     .desktop-store-layout .security-group {
         margin: 0;
         padding: 24px;
-        background: #fff;
+        background: var(--surface, var(--paper));
         border: 0;
         border-radius: 0;
     }
@@ -851,7 +852,7 @@
     .desktop-store-layout .security-logout-button {
         width: 180px;
         margin: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
         border: 1px solid var(--line);
         border-radius: 2px;
         color: var(--muted);
@@ -878,7 +879,7 @@
     }
     .desktop-store-layout .coupon-center-tabs .is-active {
         border-bottom-color: var(--accent);
-        color: var(--accent);
+        color: var(--accent-ink);
     }
     .desktop-store-layout .coupon-center-panel {
         margin: 0;
@@ -903,7 +904,7 @@
     .desktop-store-layout .coupon-activity-action.is-claimed {
         color: var(--muted);
         border-color: var(--line);
-        background: #fff;
+        background: var(--surface, var(--paper));
         opacity: 1;
     }
     .desktop-store-layout .coupon-activity-card.is-claimed {
@@ -916,7 +917,7 @@
         border: 1px solid var(--line);
         border-radius: 0;
         box-shadow: none;
-        background: #fff;
+        background: var(--surface, var(--paper));
     }
     .desktop-store-layout .coupon-center-panel > .coupon-center-ticket-list {
         margin: 0;
@@ -951,13 +952,13 @@
     .desktop-store-layout .coupon-center-instructions {
         margin-top: 24px;
         padding: 24px;
-        background: #fff;
+        background: var(--surface, var(--paper));
         border-radius: 0;
     }
     .desktop-store-layout :is(.notification-list, .my-review-list, .review-candidate-list) {
         margin: 0;
         padding: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
     }
     .desktop-store-layout .notification-list > button {
         padding: 24px;
@@ -971,7 +972,7 @@
         margin: 0 0 24px;
         padding: 24px;
         border-radius: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
     }
     .desktop-store-layout .review-candidate-list {
         display: grid;
@@ -983,7 +984,7 @@
         margin: 0;
         padding: 28px;
         border-radius: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
     }
     .desktop-store-layout .review-composer textarea {
         min-height: 160px;
@@ -1009,7 +1010,7 @@
         padding: 24px;
         margin: 0;
         border-radius: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
         color: var(--text);
     }
     .desktop-store-layout .order-detail-products {
@@ -1018,7 +1019,7 @@
         padding: 24px;
         border: 0;
         border-radius: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
     }
     .desktop-store-layout .order-detail-products article {
         grid-template-columns: 76px minmax(0, 1fr) auto;
@@ -1041,7 +1042,7 @@
         grid-row: 3;
         margin: 0;
         padding: 24px;
-        background: #fff;
+        background: var(--surface, var(--paper));
         border: 0;
         border-radius: 0;
     }
@@ -1051,7 +1052,7 @@
         padding: 24px;
         border: 0;
         border-radius: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
     }
     .desktop-store-layout .order-detail-actions {
         position: static;
@@ -1064,7 +1065,7 @@
         transform: none;
         border: 0;
         border-radius: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
     }
     .desktop-store-layout .order-detail-actions button {
         flex: none;
@@ -1074,7 +1075,7 @@
     .desktop-store-layout .logistics-modular-hub {
         padding: 0;
         margin: 0 0 24px;
-        background: #fff;
+        background: var(--surface, var(--paper));
         border-radius: 0;
     }
     .desktop-store-layout .logistics-stats-grid {
@@ -1121,7 +1122,7 @@
         margin: 0;
         border-radius: 0;
         box-shadow: none;
-        background: #fff;
+        background: var(--surface, var(--paper));
     }
     .desktop-store-layout .after-sales-list {
         display: grid;
@@ -1130,7 +1131,7 @@
     }
     .desktop-store-layout .after-sales-card {
         border-radius: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
         box-shadow: none;
     }
 
@@ -1155,7 +1156,7 @@
         grid-template-columns: minmax(0, 1fr) 460px;
         border: 0;
         border-radius: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
         box-shadow: none;
         overflow: hidden;
     }
@@ -1166,7 +1167,8 @@
         border-radius: 0;
     }
     .desktop-store-layout .auth-page .auth-hero-header {
-        position: static;
+        position: absolute;
+        z-index: 4;
         padding: 0;
     }
     .desktop-store-layout .auth-page .auth-hero-message {
@@ -1182,7 +1184,7 @@
         display: flex;
         align-items: center;
         padding: 40px;
-        background: #fff;
+        background: var(--surface, var(--paper));
     }
     .desktop-store-layout .auth-form-column {
         width: 100%;
@@ -1212,7 +1214,7 @@
     .desktop-store-layout .auth-input-shell {
         min-height: 46px;
         border-radius: 2px;
-        background: #fff;
+        background: var(--surface, var(--paper));
     }
     .desktop-store-layout .auth-page .primary-action {
         min-height: 46px;
@@ -1236,30 +1238,6 @@
         padding: 36px;
     }
 
-    /* Without configured artwork, use a focused form instead of an empty art panel. */
-    .desktop-store-layout .page.auth-page:not(.auth-page-managed) {
-        display: block;
-        width: min(calc(100% - 64px), 520px);
-        min-height: 0;
-        margin-block: 48px;
-    }
-    .desktop-store-layout .auth-page:not(.auth-page-managed) .auth-hero {
-        min-height: 0;
-        padding: 20px 28px 0;
-        background: none;
-    }
-    .desktop-store-layout .auth-page:not(.auth-page-managed) .auth-hero-message {
-        display: none;
-    }
-    .desktop-store-layout .auth-page:not(.auth-page-managed) .auth-back-button {
-        background: none;
-        box-shadow: none;
-        color: var(--muted);
-    }
-    .desktop-store-layout .auth-page:not(.auth-page-managed) .login-content {
-        padding: 24px 48px 48px;
-    }
-
     /* Reading and service pages use comfortable content measures, not stretched phone cards. */
     .desktop-store-layout .legal-managed-content {
         max-width: none;
@@ -1267,7 +1245,7 @@
         padding: 36px 48px;
         border: 0;
         border-radius: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
     }
     .desktop-store-layout .legal-managed-content > * {
         max-width: 880px;
@@ -1328,7 +1306,7 @@
         padding: 28px;
         border: 0;
         border-radius: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
         box-shadow: none;
     }
     .desktop-store-layout .support-channel-list {
@@ -1342,13 +1320,13 @@
         border: 0;
         border-radius: 0;
         padding: 24px;
-        background: #fff;
+        background: var(--surface, var(--paper));
         box-shadow: none;
     }
     .desktop-store-layout .support-channel-empty {
         padding: 36px;
         margin: 0;
-        background: #fff;
+        background: var(--surface, var(--paper));
     }
     .desktop-store-layout .desktop-referral-content {
         max-width: none;
@@ -1382,7 +1360,7 @@
         border: 0;
         border-radius: 0;
         padding: 28px;
-        background: #fff;
+        background: var(--surface, var(--paper));
         box-shadow: none;
     }
     .desktop-store-layout .desktop-two-factor-content textarea {

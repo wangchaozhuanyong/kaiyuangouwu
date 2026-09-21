@@ -105,7 +105,7 @@ async function preview(count: number, prefix: string) {
     await imports.appendRows(ctx, { jobId: job.id, rows: rowsForCatalogTransport(parsed.rows) });
     await imports.finalizePreview(ctx, job.id);
     const warnings = (await imports.findRows(ctx, job.id)).filter(row => row.action === 'WARNING');
-    for (const row of warnings) expect(row.message).toBe('分类不存在，确认后将创建新分类');
+    for (const row of warnings) expect(row.message).toBe('分类不存在，确认后将随新商品创建');
     if (warnings.length)
         await imports.resolveRows(ctx, { rowIds: warnings.map(row => row.id), resolution: 'APPLY' });
     expect(

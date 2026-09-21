@@ -19,6 +19,7 @@ import './styles/visual-presets.css';
 import './styles/desktop-commerce.css';
 import './styles/desktop-home.css';
 import './styles/desktop-pages.css';
+import './styles/storefront-design-preview.css';
 /* eslint-enable import/order */
 
 const rootElement = document.getElementById('root');
