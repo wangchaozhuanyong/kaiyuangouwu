@@ -17,6 +17,11 @@ import {
     normalizeStorefrontAssetUrl,
     responsiveImageSources,
 } from '../../../../storefront-content-plugin/src/shared/responsive-image';
+import {
+    resolveStorefrontSemanticPalette,
+    semanticPaletteCssVariables,
+} from '../../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
+import { normalizeStorefrontVisualPreset } from '../../../../storefront-content-plugin/src/visual-presets';
 import { getActiveChannelToken } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { type StorefrontContentBlock, type StorefrontLanguageCode } from '../../graphql/storefront.graphql';
@@ -411,6 +416,8 @@ function AuthBlockPreview({
             name: string;
             backgroundColor?: string;
             primaryColor?: string;
+            accentColor?: string;
+            highlightColor?: string;
         };
     }>(PREVIEW_BRANDING, { fetchPolicy: 'no-cache' });
     const branding =
@@ -418,11 +425,10 @@ function AuthBlockPreview({
         (!getActiveChannelToken() || getActiveChannelToken() === brandingQuery.data?.activeChannel.token)
             ? brandingQuery.data?.storefrontPreviewBranding
             : undefined;
-    const oriental = Boolean(
-        branding && brandingQuery.data?.storefrontVisualPreset.presetId === 'modern-oriental',
+    const presetId = normalizeStorefrontVisualPreset(brandingQuery.data?.storefrontVisualPreset.presetId);
+    const paletteVariables = semanticPaletteCssVariables(
+        resolveStorefrontSemanticPalette(presetId, branding),
     );
-    const background = configuredColor(oriental ? undefined : branding?.backgroundColor);
-    const accent = configuredColor(oriental ? undefined : branding?.primaryColor);
     const authImageUrl = block.imageAsset?.preview ?? block.imageUrl;
     const authImageTone = useImageTone(authImageUrl);
     const content: AuthVisualData = {
@@ -470,15 +476,7 @@ function AuthBlockPreview({
                             style={
                                 {
                                     ...authVisualStyle(content, authImageTone),
-                                    '--auth-store-background':
-                                        background ?? (oriental ? '#f6f2ea' : '#f1f5f9'),
-                                    '--auth-store-foreground': background
-                                        ? readableColor(background)
-                                        : oriental
-                                          ? '#203346'
-                                          : '#172033',
-                                    '--accent': accent ?? (oriental ? '#a63d32' : '#635bff'),
-                                    '--accent-foreground': accent ? readableColor(accent) : '#ffffff',
+                                    ...paletteVariables,
                                     width: previewWidth,
                                     transform: `scale(${previewScale})`,
                                     transformOrigin: 'top left',
