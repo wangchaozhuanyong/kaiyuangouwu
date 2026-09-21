@@ -48,8 +48,12 @@ export class AdministratorAccessResolver {
 
     @Query()
     @Allow(Permission.Authenticated)
-    permissionPolicyCatalog() {
-        return { permissions: this.policies.catalog(), templates: this.policies.templates() };
+    async permissionPolicyCatalog(@Ctx() ctx: RequestContext) {
+        const actor = await this.accessService.current(ctx);
+        return {
+            permissions: this.policies.catalogForAccess(actor.scope, actor.authority),
+            templates: this.policies.templates(),
+        };
     }
 
     @Query()

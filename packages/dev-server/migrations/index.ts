@@ -118,6 +118,7 @@ import { AddCustomerGroupChannel1789398000000 } from './1789398000000-add-custom
 import { AddCustomerStoreEntry1789401600000 } from './1789401600000-add-customer-store-entry';
 import { AddOrderPaymentCurrency1789405200000 } from './1789405200000-add-order-payment-currency';
 import { AddAdministratorAccessGovernance1789408800000 } from './1789408800000-add-administrator-access-governance';
+import { GuardAdministratorPermissionAudit1789495200000 } from './1789495200000-guard-administrator-permission-audit';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -240,4 +241,5 @@ export const devServerMigrations = [
     AddCustomerStoreEntry1789401600000,
     AddOrderPaymentCurrency1789405200000,
     AddAdministratorAccessGovernance1789408800000,
+    GuardAdministratorPermissionAudit1789495200000,
 ];

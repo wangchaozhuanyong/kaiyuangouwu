@@ -60,7 +60,10 @@ const resourceLabels: Record<string, string> = {
     Country: '国家与地区',
     Customer: '客户',
     CustomerGroup: '客户组',
+    DashboardGlobalViews: '平台仪表盘视图',
     Facet: '商品属性',
+    IcloudRelay: 'iCloud 邮箱中转',
+    ImageGeneration: 'AI 图片服务',
     Order: '订单',
     PaymentMethod: '支付方式',
     Product: '商品',
@@ -83,16 +86,44 @@ const resourceLabels: Record<string, string> = {
     Zone: '销售区域',
 };
 
-const ownerOnlyResources = new Set(['ApiKey', 'System']);
+// Unknown permissions fail closed. A newly installed plugin must be classified here
+// before its capability can be delegated to any non-owner role.
+const storeResources = new Set([
+    'Asset',
+    'CatalogImport',
+    'CatalogExport',
+    'CatalogOperations',
+    'CatalogSupplier',
+    'Collection',
+    'Customer',
+    'CustomerGroup',
+    'Facet',
+    'Order',
+    'Product',
+    'Promotion',
+    'Referral',
+    'ReferralBalance',
+    'ReferralWithdrawal',
+    'ShippingMethod',
+    'StockLocation',
+    'StoreDomain',
+    'StoreProfile',
+    'StorefrontContent',
+    'Tag',
+]);
+const ownerOnlyResources = new Set(['ApiKey', 'IcloudRelay', 'ImageGeneration', 'Settings', 'System']);
 const platformResources = new Set([
     'Administrator',
+    'Catalog',
     'Channel',
+    'Country',
+    'DashboardGlobalViews',
     'PaymentMethod',
     'Role',
     'Seller',
-    'Settings',
     'TaxCategory',
     'TaxRate',
+    'Zone',
 ]);
 const sensitiveCodes = new Set<string>([
     'DeleteOrder',
@@ -226,6 +257,19 @@ export class PermissionPolicyRegistry {
             .map(code => this.describe(code));
     }
 
+    catalogForAccess(
+        scope: 'PLATFORM' | 'STORE',
+        authority: 'OWNER' | 'ADMIN' | 'MANAGER' | 'STAFF',
+    ): PermissionPolicyItem[] {
+        const visibleScope = scope === 'STORE' ? 'STORE' : 'PLATFORM';
+        return this.catalog().filter(
+            item =>
+                authority === 'OWNER' ||
+                item.scope === 'STORE' ||
+                (visibleScope === 'PLATFORM' && item.scope === 'PLATFORM'),
+        );
+    }
+
     templates(): PermissionTemplate[] {
         const validCodes = new Set(this.catalog().map(item => item.code));
         return storeRoleTemplates.map(template => ({
@@ -280,7 +324,16 @@ export class PermissionPolicyRegistry {
             };
         }
         const { operation, resource } = splitPermissionCode(code);
-        const ownerOnly = ownerOnlyResources.has(resource) || code === 'UpdateGlobalSettings';
+        const ownerOnly =
+            ownerOnlyResources.has(resource) ||
+            code === 'UpdateGlobalSettings' ||
+            (!storeResources.has(resource) &&
+                !platformResources.has(resource) &&
+                code !== MANAGE_STORE_TEAM_CODE &&
+                code !== MANAGE_PLATFORM_TEAM_CODE &&
+                code !== MANAGE_STORE_LIFECYCLE_CODE &&
+                code !== REVIEW_STORE_GOVERNANCE_CODE &&
+                code !== SENSITIVE_STORE_FINANCE_CODE);
         const storeSafePlatformResourceReads = new Set(['ReadChannel', 'ReadPaymentMethod']);
         const platform =
             ownerOnly ||

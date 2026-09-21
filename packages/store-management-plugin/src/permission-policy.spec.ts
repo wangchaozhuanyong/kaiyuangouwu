@@ -1,3 +1,4 @@
+import { CrudPermissionDefinition, PermissionDefinition, RwPermissionDefinition } from '@vendure/core';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -20,6 +21,10 @@ function registry() {
                 manageStoreLifecyclePermission,
                 reviewStoreGovernancePermission,
                 sensitiveStoreFinancePermission,
+                new CrudPermissionDefinition('IcloudRelay'),
+                new CrudPermissionDefinition('ImageGeneration'),
+                new RwPermissionDefinition('DashboardGlobalViews'),
+                new PermissionDefinition({ name: 'ManageUnclassifiedIntegration' }),
             ],
         },
     } as any);
@@ -35,6 +40,14 @@ describe('PermissionPolicyRegistry', () => {
 
         expect(catalog.get('SuperAdmin')).toMatchObject({ scope: 'OWNER_ONLY', delegable: false });
         expect(catalog.get('CreateApiKey')).toMatchObject({ scope: 'OWNER_ONLY', delegable: false });
+        expect(catalog.get('UpdateSettings')).toMatchObject({ scope: 'OWNER_ONLY', delegable: false });
+        expect(catalog.get('CreateIcloudRelay')).toMatchObject({ scope: 'OWNER_ONLY', delegable: false });
+        expect(catalog.get('UpdateImageGeneration')).toMatchObject({ scope: 'OWNER_ONLY', delegable: false });
+        expect(catalog.get('ManageUnclassifiedIntegration')).toMatchObject({
+            scope: 'OWNER_ONLY',
+            delegable: false,
+        });
+        expect(catalog.get('ReadDashboardGlobalViews')).toMatchObject({ scope: 'PLATFORM' });
         expect(catalog.get('CreateAdministrator')).toMatchObject({ scope: 'PLATFORM', delegable: false });
         expect(catalog.get('ManageStoreLifecycle')).toMatchObject({
             name: '管理店铺生命周期',
@@ -49,6 +62,19 @@ describe('PermissionPolicyRegistry', () => {
         expect(() => registry().assertStoreRolePermissions(['UpdateProduct'])).not.toThrow();
         expect(() => registry().assertStoreRolePermissions(['CreateApiKey'])).toThrow('平台专属');
         expect(() => registry().assertStoreRolePermissions(['CreateAdministrator'])).toThrow('不可下放');
+        expect(() => registry().assertStoreRolePermissions(['ManageUnclassifiedIntegration'])).toThrow();
+        expect(() => registry().assertPlatformRolePermissions(['ManageUnclassifiedIntegration'])).toThrow();
+    });
+
+    it('does not expose platform or owner-only catalog entries to store accounts', () => {
+        const storeCatalog = registry().catalogForAccess('STORE', 'ADMIN');
+        expect(storeCatalog.some(item => item.code === 'UpdateProduct')).toBe(true);
+        expect(storeCatalog.some(item => item.code === 'CreateAdministrator')).toBe(false);
+        expect(storeCatalog.some(item => item.code === 'CreateApiKey')).toBe(false);
+
+        const platformCatalog = registry().catalogForAccess('PLATFORM', 'ADMIN');
+        expect(platformCatalog.some(item => item.code === 'CreateAdministrator')).toBe(true);
+        expect(platformCatalog.some(item => item.code === 'CreateApiKey')).toBe(false);
     });
 
     it('publishes constrained store job templates without invalid permissions', () => {
