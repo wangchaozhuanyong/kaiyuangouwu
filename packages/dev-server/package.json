@@ -34,6 +34,7 @@
         "repair:sqlite-foreign-keys": "node ./scripts/repair-sqlite-foreign-keys.mjs",
         "migrate:commerce-mode": "node ./scripts/migrate-commerce-mode.mjs",
         "audit:storefront-readiness": "node ./scripts/storefront-readiness.mjs",
+        "audit:administrator-access": "node ./scripts/administrator-access-preflight.mjs",
         "audit:production-env": "node ./scripts/production-env-readiness.mjs",
         "build:production-runtime": "node ./scripts/production-runtime-artifact.mjs",
         "test:order-note:e2e": "node ./scripts/order-note-e2e.mjs",
