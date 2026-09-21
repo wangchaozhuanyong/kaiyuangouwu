@@ -20,6 +20,7 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { storefrontClientPreviewUrl } from './storefront-client-preview-url';
 import { storefrontVisualPreviewDocument } from './storefront-visual-preview';
 
 const STOREFRONT_PREVIEW_URL_QUERY = gql`
@@ -71,20 +72,30 @@ export function StorefrontVisualPresetPanel() {
         (!getActiveChannelToken() || channel.token === getActiveChannelToken()),
     );
     const selected = consistent && draft?.channelId === source?.channelId ? draft : source;
+    const previewUrl = selected
+        ? storefrontClientPreviewUrl(storefrontUrl, selected.presetId, preview === 'mobile' ? 390 : 1440)
+        : null;
+    const embeddedPreviewUrl = selected
+        ? storefrontClientPreviewUrl(
+              storefrontUrl,
+              selected.presetId,
+              preview === 'mobile' ? 390 : 1440,
+              true,
+          )
+        : null;
     const dirty = Boolean(consistent && selected && source && selected.presetId !== source.presetId);
     const busy = query.loading || mutation.loading;
     const disabled =
         !consistent || busy || Boolean(query.error) || !hasAnyPermission(['UpdateStorefrontContent']);
-    const paletteAudit = selected
-        ? auditStorefrontSemanticPalette(
-              resolveStorefrontSemanticPalette(selected.presetId, {
-                  backgroundColor: branding?.backgroundColor,
-                  primaryColor: branding?.primaryColor,
-                  accentColor: branding?.accentColor,
-                  highlightColor: branding?.highlightColor,
-              }),
-          )
+    const palette = selected
+        ? resolveStorefrontSemanticPalette(selected.presetId, {
+              backgroundColor: branding?.backgroundColor,
+              primaryColor: branding?.primaryColor,
+              accentColor: branding?.accentColor,
+              highlightColor: branding?.highlightColor,
+          })
         : null;
+    const paletteAudit = palette ? auditStorefrontSemanticPalette(palette) : null;
     useUnsavedChangesWarning(dirty || mutation.loading, '皮肤选择尚未保存，离开后将放弃本次选择。');
     const reload = async () => {
         const activeToken = getActiveChannelToken();
@@ -222,9 +233,9 @@ export function StorefrontVisualPresetPanel() {
                 >
                     恢复默认皮肤（保存后生效）
                 </button>
-                {storefrontUrl && (
+                {previewUrl && (
                     <a
-                        href={`${storefrontUrl.replace(/\/$/, '')}/__storefront-preview`}
+                        href={previewUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 text-blue-700"
@@ -234,7 +245,7 @@ export function StorefrontVisualPresetPanel() {
                 )}
             </div>
             <p className="mt-3 text-xs text-slate-500">
-                电脑端使用统一布局，首页按已保存的楼层顺序展示。切换皮肤会保留图片、文案、区块颜色和开关。
+                电脑端使用统一布局；选择的草稿皮肤只在预览中生效，保存后才影响当前店铺。
             </p>
             {paletteAudit && (
                 <p
@@ -266,7 +277,9 @@ export function StorefrontVisualPresetPanel() {
                                     />
                                 </h3>
                                 <p className="text-xs text-slate-500">
-                                    组件示例 · 尚未应用的选择不会发布 · 窄屏可横向滑动
+                                    {embeddedPreviewUrl
+                                        ? '当前店铺真实客户端页面 · 草稿不会发布 · 窄屏可横向滑动'
+                                        : '未配置可访问的店铺网址，仅显示配色示意；请勿据此验收真实页面'}
                                 </p>
                             </div>
                             <div className="flex items-center gap-3">
@@ -295,16 +308,24 @@ export function StorefrontVisualPresetPanel() {
                         </header>
                         <div className="min-h-0 min-w-0 overflow-auto bg-slate-100 p-3">
                             <iframe
-                                title="皮肤组件预览"
-                                sandbox=""
-                                className="mx-auto block h-[70dvh] max-w-none shrink-0 border-0 bg-white"
-                                style={{ width: preview === 'mobile' ? 390 : 1200 }}
-                                srcDoc={storefrontVisualPreviewDocument(selected.presetId, storeName, {
-                                    backgroundColor: branding?.backgroundColor,
-                                    primaryColor: branding?.primaryColor,
-                                    accentColor: branding?.accentColor,
-                                    highlightColor: branding?.highlightColor,
-                                })}
+                                title={embeddedPreviewUrl ? '真实客户端页面预览' : '皮肤配色示意'}
+                                sandbox={embeddedPreviewUrl ? 'allow-scripts allow-same-origin' : ''}
+                                className="mx-auto block h-[70dvh] max-w-none shrink-0 border-0"
+                                style={{
+                                    width: preview === 'mobile' ? 390 : 1440,
+                                    backgroundColor: palette?.page,
+                                }}
+                                src={embeddedPreviewUrl ?? undefined}
+                                srcDoc={
+                                    embeddedPreviewUrl
+                                        ? undefined
+                                        : storefrontVisualPreviewDocument(selected.presetId, storeName, {
+                                              backgroundColor: branding?.backgroundColor,
+                                              primaryColor: branding?.primaryColor,
+                                              accentColor: branding?.accentColor,
+                                              highlightColor: branding?.highlightColor,
+                                          })
+                                }
                             />
                         </div>
                     </AccessibleDialogSurface>

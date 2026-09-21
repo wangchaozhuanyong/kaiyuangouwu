@@ -302,7 +302,9 @@ img {
 }
 
 .safe-image-frame.has-placeholder .safe-image {
-    transition: opacity 180ms ease, transform 220ms ease;
+    transition:
+        opacity 180ms ease,
+        transform 220ms ease;
 }
 
 .safe-image.is-loaded {
@@ -1178,8 +1180,18 @@ img {
     min-height: 720px;
     margin-inline: auto;
     border: 1px solid #64748b;
-    background: #fff;
     box-shadow: 0 22px 60px rgb(0 0 0 / 35%);
+}
+
+.storefront-preview-feedback {
+    width: min(100%, 720px);
+    margin: 40px auto;
+    padding: 32px;
+    border: 1px solid #475569;
+    border-radius: 12px;
+    background: #1e293b;
+    color: #f8fafc;
+    text-align: center;
 }
 
 .storefront-app[data-preview-embedded='true'] #storefront-content {

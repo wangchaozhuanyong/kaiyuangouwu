@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { storefrontVisualPresets } from '../../../../storefront-content-plugin/src/visual-presets';
+import { STOREFRONT_VISUAL_PRESET_QUERY } from '../../graphql/storefront-visual-preset.graphql';
 import { StorefrontVisualPresetPanel } from './StorefrontVisualPresetPanel';
 
 const mocks = vi.hoisted(() => ({ query: vi.fn(), save: vi.fn(), refetch: vi.fn() }));
@@ -59,6 +60,42 @@ afterEach(() => {
 });
 
 describe('fixed desktop layout skin settings', () => {
+    it('embeds the real storefront home with the unsaved skin only in preview context', () => {
+        mocks.query.mockImplementation(document =>
+            document === STOREFRONT_VISUAL_PRESET_QUERY
+                ? {
+                      ...queryResult(),
+                      data: {
+                          ...queryResult().data,
+                          storefrontPreviewBranding: {
+                              channelId: 'local-store',
+                              backgroundColor: '#070b14',
+                          },
+                      },
+                  }
+                : {
+                      loading: false,
+                      data: {
+                          storeProfiles: [
+                              { channel: { id: 'local-store' }, storefrontUrl: 'https://shop.example.test' },
+                          ],
+                      },
+                  },
+        );
+        act(() => root.render(<StorefrontVisualPresetPanel />));
+        act(() => host.querySelector<HTMLInputElement>('input[value="classic"]')!.click());
+        const previewButton = Array.from(host.querySelectorAll('button')).find(
+            button => button.textContent === '预览效果',
+        );
+        act(() => previewButton!.click());
+        const iframe = host.querySelector('iframe');
+        expect(iframe?.src).toContain('storefrontPreviewPreset=classic');
+        expect(iframe?.src).toContain('storefrontPreviewEmbedded=1');
+        expect(iframe?.style.backgroundColor).toBe('rgb(7, 11, 20)');
+        expect(iframe?.srcdoc).toBe('');
+        expect(mocks.save).not.toHaveBeenCalled();
+    });
+
     it.each(['classic', 'catalog'])('shows only skin options with legacy %s data', desktopLayout => {
         mocks.query.mockReturnValue(queryResult(desktopLayout));
         act(() => root.render(<StorefrontVisualPresetPanel />));
