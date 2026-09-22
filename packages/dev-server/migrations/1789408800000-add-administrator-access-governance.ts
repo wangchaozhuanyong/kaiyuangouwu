@@ -427,6 +427,7 @@ export class AddAdministratorAccessGovernance1789408800000 implements MigrationI
             }
             const scope = account.channels.size === 1 ? 'STORE' : 'PLATFORM';
             const channelId = scope === 'STORE' ? [...account.channels][0] : null;
+            let status = 'SUSPENDED';
             if (scope === 'STORE') {
                 const invalid = [...account.permissions].find(isPlatformOnlyPermission);
                 if (invalid) {
@@ -434,31 +435,52 @@ export class AddAdministratorAccessGovernance1789408800000 implements MigrationI
                         `Administrator ${String(account.administratorId)} has platform-only permission ${invalid} in a store role`,
                     );
                 }
+                const channelRows = (await queryRunner.query(
+                    `SELECT ${escape('code')} AS code FROM ${escape('channel')} WHERE ${escape('id')} = ${parameter(1)}`,
+                    [channelId],
+                )) as Array<{ code: string }>;
+                if (channelRows.length !== 1 || channelRows[0].code === '__default_channel__') {
+                    throw new Error(
+                        `Administrator ${String(account.administratorId)} must belong to an operating store Channel`,
+                    );
+                }
+                status = 'ACTIVE';
             }
             await queryRunner.query(
                 [
                     profileInsert,
                     `VALUES (CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ${parameter(1)}, ${parameter(2)},`,
-                    `${parameter(3)}, 'STAFF', 'SUSPENDED', ${parameter(4)}, ${parameter(5)},`,
-                    `${parameter(6)}, NULL, NULL)`,
+                    `${parameter(3)}, 'STAFF', ${parameter(4)}, ${parameter(5)}, ${parameter(6)},`,
+                    `${parameter(7)}, NULL, NULL)`,
                 ].join(' '),
-                [account.administratorId, account.userId, scope, channelId, owners[0].administratorId, true],
+                [
+                    account.administratorId,
+                    account.userId,
+                    scope,
+                    status,
+                    channelId,
+                    owners[0].administratorId,
+                    status !== 'ACTIVE',
+                ],
             );
             await queryRunner.query(
                 [
                     `INSERT INTO ${escape('administrator_permission_audit')} (${auditColumns})`,
                     `VALUES (CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ${parameter(1)}, ${parameter(2)},`,
-                    `NULL, ${parameter(3)}, 'MIGRATION_MAPPING_REVIEW_REQUIRED', 'SUCCESS',`,
-                    `NULL, ${parameter(4)}, NULL)`,
+                    `NULL, ${parameter(3)}, ${parameter(4)}, 'SUCCESS',`,
+                    `NULL, ${parameter(5)}, NULL)`,
                 ].join(' '),
                 [
                     owners[0].administratorId,
                     account.administratorId,
                     channelId,
+                    status === 'ACTIVE'
+                        ? 'MIGRATION_STORE_STAFF_ACTIVATED'
+                        : 'MIGRATION_MAPPING_REVIEW_REQUIRED',
                     JSON.stringify({
                         scope,
                         authority: 'STAFF',
-                        status: 'SUSPENDED',
+                        status,
                         channelIds: [...account.channels],
                     }),
                 ],
