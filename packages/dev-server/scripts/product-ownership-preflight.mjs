@@ -3,7 +3,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createStoreIsolationAdapter } from './store-isolation-data-preflight.mjs';
+import { createStoreIsolationAdapter, safeReadOnlyAuditFailure } from './store-isolation-data-preflight.mjs';
 
 const ENTITY_TYPES = {
     variants: ['product_variant', 'product_variant_channels_channel', 'productVariantId', 'sku'],
@@ -256,7 +256,7 @@ async function main() {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     main().catch(error => {
-        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.stderr.write(`${safeReadOnlyAuditFailure(error)}\n`);
         process.exitCode = 1;
     });
 }
