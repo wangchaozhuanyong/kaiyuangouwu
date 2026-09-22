@@ -381,6 +381,16 @@ void test('repository and production workflows use the fail-closed retrying audi
             'u',
         ),
     );
+    assert.match(
+        repositoryWorkflow,
+        new RegExp(
+            'Build storefront integration acceptance harness[\\s\\S]+' +
+                "needs\\.detect-changes\\.outputs\\.storefrontIntegration == 'true'[\\s\\S]+" +
+                'bun run --cwd packages/testing build[\\s\\S]+' +
+                'Install browser for storefront configuration acceptance',
+            'u',
+        ),
+    );
     assert.doesNotMatch(repositoryWorkflow, /if: needs\.detect-changes\.outputs\.e2e == 'true'/u);
     for (const database of ['mysql', 'sqljs', 'postgres', 'mariadb']) {
         assert.ok(
