@@ -20,6 +20,7 @@ import {
     Send,
     Server,
     Settings2,
+    ShieldCheck,
     Terminal,
     Trash2,
     X,
@@ -57,6 +58,7 @@ import {
     type SystemJobRecord,
     type SystemOperationsResult,
 } from '../../graphql/management.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { copyAdminText } from '../../utils/admin-clipboard';
@@ -65,11 +67,12 @@ import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from '../Catalog/LookupPager';
 import { formatDateTime } from '../Sales/sales-utils';
 
+import { GovernanceRiskPanel } from './GovernanceRiskPanel';
 import { SettingsContentSkeleton } from './settings-ui';
 import { getSystemWorkerHealth } from './system-worker-health';
 import { TelegramNotificationsPanel } from './TelegramNotificationsPanel';
 
-type Tab = 'HEALTH' | 'JOBS' | 'SCHEDULES' | 'SETTINGS' | 'API_KEYS' | 'TELEGRAM';
+type Tab = 'HEALTH' | 'JOBS' | 'SCHEDULES' | 'SETTINGS' | 'API_KEYS' | 'TELEGRAM' | 'GOVERNANCE';
 const SYSTEM_OPS_TABS = {
     health: 'HEALTH',
     jobs: 'JOBS',
@@ -77,15 +80,19 @@ const SYSTEM_OPS_TABS = {
     settings: 'SETTINGS',
     'api-keys': 'API_KEYS',
     telegram: 'TELEGRAM',
+    governance: 'GOVERNANCE',
 } as const;
 
 export function SystemOpsModule() {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canGovern = hasAnyPermission(['SuperAdmin']);
     const apiKeyCustomFields = useCustomFieldDefinitions('ApiKey');
     const systemOperationsDocument = useMemo(
         () => addCustomFieldsToDocument(SYSTEM_OPERATIONS_QUERY, 'ApiKey', apiKeyCustomFields),
         [apiKeyCustomFields],
     );
     const [tab, setTab] = useUrlTab<Tab>(SYSTEM_OPS_TABS, 'health');
+    const activeTab = tab === 'GOVERNANCE' && !canGovern ? 'HEALTH' : tab;
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const [apiKeyPage, setApiKeyPage] = useState(0);
@@ -101,7 +108,8 @@ export function SystemOpsModule() {
         },
         fetchPolicy: 'cache-and-network',
         notifyOnNetworkStatusChange: true,
-        pollInterval: tab === 'HEALTH' || tab === 'JOBS' || tab === 'SCHEDULES' ? 10_000 : 0,
+        pollInterval:
+            activeTab === 'HEALTH' || activeTab === 'JOBS' || activeTab === 'SCHEDULES' ? 10_000 : 0,
     });
     const completed = async (message: string) => {
         setNotice(message);
@@ -126,7 +134,7 @@ export function SystemOpsModule() {
                             <FeatureHelpButton topic="settings.system-ops" title="系统运维" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            查看服务健康、任务队列、Telegram 通知、定时调度、配置仓库和 API 密钥
+                            查看服务健康、任务队列、治理审批、风险复核、定时调度、配置仓库和 API 密钥
                         </p>
                     </div>
                     <button
@@ -153,53 +161,64 @@ export function SystemOpsModule() {
                 )}
                 <div className="scrollbar-hidden flex w-max max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white p-1">
                     <TabButton
-                        active={tab === 'HEALTH'}
+                        active={activeTab === 'HEALTH'}
                         onClick={() => setTab('HEALTH')}
                         icon={<Activity className="h-3.5 w-3.5" />}
                     >
                         服务健康
                     </TabButton>
                     <TabButton
-                        active={tab === 'JOBS'}
+                        active={activeTab === 'JOBS'}
                         onClick={() => setTab('JOBS')}
                         icon={<Terminal className="h-3.5 w-3.5" />}
                     >
                         任务队列 {data?.jobs.totalItems ?? 0}
                     </TabButton>
                     <TabButton
-                        active={tab === 'SCHEDULES'}
+                        active={activeTab === 'SCHEDULES'}
                         onClick={() => setTab('SCHEDULES')}
                         icon={<CalendarClock className="h-3.5 w-3.5" />}
                     >
                         定时任务 {data?.scheduledTasks.length ?? 0}
                     </TabButton>
                     <TabButton
-                        active={tab === 'TELEGRAM'}
+                        active={activeTab === 'TELEGRAM'}
                         onClick={() => setTab('TELEGRAM')}
                         icon={<Send className="h-3.5 w-3.5" />}
                     >
                         Telegram 通知
                     </TabButton>
+                    {canGovern && (
+                        <TabButton
+                            active={activeTab === 'GOVERNANCE'}
+                            onClick={() => setTab('GOVERNANCE')}
+                            icon={<ShieldCheck className="h-3.5 w-3.5" />}
+                        >
+                            治理与风控
+                        </TabButton>
+                    )}
                     <TabButton
-                        active={tab === 'SETTINGS'}
+                        active={activeTab === 'SETTINGS'}
                         onClick={() => setTab('SETTINGS')}
                         icon={<Settings2 className="h-3.5 w-3.5" />}
                     >
                         配置仓库 {data?.settingsStoreFieldDefinitions.length ?? 0}
                     </TabButton>
                     <TabButton
-                        active={tab === 'API_KEYS'}
+                        active={activeTab === 'API_KEYS'}
                         onClick={() => setTab('API_KEYS')}
                         icon={<KeyRound className="h-3.5 w-3.5" />}
                     >
                         API 密钥 {data?.apiKeys.totalItems ?? 0}
                     </TabButton>
                 </div>
-                {tab === 'TELEGRAM' ? (
+                {activeTab === 'GOVERNANCE' ? (
+                    <GovernanceRiskPanel />
+                ) : activeTab === 'TELEGRAM' ? (
                     <TelegramNotificationsPanel />
                 ) : !data && !query.error ? (
                     <SettingsContentSkeleton label="正在读取系统运维数据" sections={2} />
-                ) : tab === 'HEALTH' ? (
+                ) : activeTab === 'HEALTH' ? (
                     <HealthPanel
                         data={data}
                         graphQLError={
@@ -216,7 +235,7 @@ export function SystemOpsModule() {
                 ) : (
                     data && (
                         <>
-                            {tab === 'JOBS' && (
+                            {activeTab === 'JOBS' && (
                                 <JobsPanel
                                     jobs={data.jobs.items}
                                     queues={data.jobQueues}
@@ -224,21 +243,21 @@ export function SystemOpsModule() {
                                     onError={setActionError}
                                 />
                             )}
-                            {tab === 'SCHEDULES' && (
+                            {activeTab === 'SCHEDULES' && (
                                 <SchedulesPanel
                                     tasks={data.scheduledTasks}
                                     onChanged={completed}
                                     onError={setActionError}
                                 />
                             )}
-                            {tab === 'SETTINGS' && (
+                            {activeTab === 'SETTINGS' && (
                                 <SettingsStorePanel
                                     fields={data.settingsStoreFieldDefinitions}
                                     onChanged={completed}
                                     onError={setActionError}
                                 />
                             )}
-                            {tab === 'API_KEYS' && (
+                            {activeTab === 'API_KEYS' && (
                                 <ApiKeysPanel
                                     pageSize={pageSize}
                                     onPageSizeChange={setPageSize}

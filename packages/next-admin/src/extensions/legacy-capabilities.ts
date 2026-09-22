@@ -27,9 +27,27 @@ export const LEGACY_ROUTE_CAPABILITIES: LegacyRouteCapability[] = [
         status: 'MIGRATED',
     },
     {
+        id: 'catalog-inventory-control',
+        legacyPath: '/catalog-inventory-control',
+        target: '/catalog/inventory-control',
+        status: 'MIGRATED',
+    },
+    {
+        id: 'catalog-purchase-orders',
+        legacyPath: '/catalog-purchase-orders',
+        target: '/catalog/purchase-orders',
+        status: 'MIGRATED',
+    },
+    {
         id: 'catalog-suppliers',
         legacyPath: '/catalog-suppliers',
         target: '/catalog/suppliers',
+        status: 'MIGRATED',
+    },
+    {
+        id: 'governance-risk',
+        legacyPath: '/governance-risk',
+        target: '/settings/system-ops?tab=governance',
         status: 'MIGRATED',
     },
     {
@@ -45,9 +63,21 @@ export const LEGACY_ROUTE_CAPABILITIES: LegacyRouteCapability[] = [
         status: 'MIGRATED',
     },
     {
+        id: 'incident-response',
+        legacyPath: '/incident-response',
+        target: '/settings/incident-response',
+        status: 'MIGRATED',
+    },
+    {
         id: 'manual-digital-delivery',
         legacyPath: '/manual-digital-delivery',
         target: '/operations/manual-digital-delivery',
+        status: 'MIGRATED',
+    },
+    {
+        id: 'marketing-attribution',
+        legacyPath: '/marketing-attribution',
+        target: '/marketing/promotions?tab=attribution',
         status: 'MIGRATED',
     },
     {
@@ -173,7 +203,7 @@ export const LEGACY_ROUTE_CAPABILITIES: LegacyRouteCapability[] = [
 ];
 
 export const LEGACY_EXTENSION_SURFACES = {
-    actions: ['catalog-safe-import', 'catalog-standard-export', 'catalog-bulk-channels'],
+    actions: ['catalog-safe-import', 'catalog-standard-export'],
     pageBlocks: [
         'catalog-product-operations',
         'product-variant-multi-currency-prices',

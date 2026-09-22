@@ -22,7 +22,7 @@ import {
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { sensitiveActionContext, switchActiveChannel } from '../../apollo';
+import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SearchInput } from '../../components/SearchInput';
@@ -38,12 +38,10 @@ import {
     type CatalogProductOperationsResult,
 } from '../../graphql/catalog-operations.graphql';
 import {
-    ASSIGN_PRODUCTS_TO_CHANNEL,
     DELETE_PRODUCT,
     GET_CATALOG_CHANNELS,
     GET_COLLECTIONS,
     GET_PRODUCTS,
-    REMOVE_PRODUCTS_FROM_CHANNEL,
 } from '../../graphql/catalog.graphql';
 import {
     STORE_COMMERCE_MODE_QUERY,
@@ -59,11 +57,8 @@ import {
     getCatalogEmptyStateDescription,
     getChannelDisplayLabel,
     getChannelDisplayName,
-    isDefaultChannelCode,
 } from '../../utils/channel-display';
 import { collectionHierarchySummary } from '../../utils/commerce-mode';
-import { toUserFacingError } from '../../utils/user-facing-error';
-import { CatalogBulkChannelBar } from './CatalogBulkChannelBar';
 
 interface ProductVariantItem {
     id: string;
@@ -132,6 +127,7 @@ interface GetCatalogChannelsData {
         code: string;
         token: string;
         defaultCurrencyCode: string;
+        customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
     };
     channels: {
         items: Array<{
@@ -139,6 +135,7 @@ interface GetCatalogChannelsData {
             code: string;
             token: string;
             defaultCurrencyCode: string;
+            customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
         }>;
         totalItems: number;
     };
@@ -225,7 +222,6 @@ export function CatalogModule() {
     );
     const [productToDelete, setProductToDelete] = useState<{ id: string; name: string } | null>(null);
     const [deletePassword, setDeletePassword] = useState('');
-    const [isSwitchingStore, setIsSwitchingStore] = useState(false);
     const deferredSearchTerm = useDeferredValue(searchTerm);
     const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {
         fetchPolicy: 'cache-first',
@@ -306,9 +302,6 @@ export function CatalogModule() {
         return map;
     }, [channelAssignmentsQuery.data]);
 
-    const [assignProductsToChannel, { loading: bulkAssigning }] = useMutation(ASSIGN_PRODUCTS_TO_CHANNEL);
-    const [removeProductsFromChannel, { loading: bulkRemoving }] = useMutation(REMOVE_PRODUCTS_FROM_CHANNEL);
-
     const [prevFilterKey, setPrevFilterKey] = useState(
         `${page}-${pageSize}-${statusFilter}-${categoryId}-${searchTerm}-${channelParameter}`,
     );
@@ -352,87 +345,11 @@ export function CatalogModule() {
         });
     }, [productList, channelParameter, channelAssignmentsByProduct]);
 
-    const handleBulkAssign = async (targetChannelId: string, priceFactor: number) => {
-        if (!selectedProductIds.length) return;
-        const targetChannel = activeChannelQuery.data?.channels.items.find(c => c.id === targetChannelId);
-        const targetName = targetChannel ? getChannelDisplayName(targetChannel.code) : '';
-        try {
-            await assignProductsToChannel({
-                variables: {
-                    input: {
-                        productIds: selectedProductIds,
-                        channelId: targetChannelId,
-                        priceFactor,
-                    },
-                },
-            });
-            showNotice(`已将选中的 ${selectedProductIds.length} 个商品批量上架至「${targetName}」`);
-            setSelectedProductIds([]);
-            void refetch();
-            void channelAssignmentsQuery.refetch();
-        } catch (err) {
-            showNotice(toUserFacingError(err, '批量上架失败'), 'error');
-        }
-    };
-
-    const handleBulkRemove = async (targetChannelId: string) => {
-        if (!selectedProductIds.length) return;
-        const targetChannel = activeChannelQuery.data?.channels.items.find(c => c.id === targetChannelId);
-        const targetName = targetChannel ? getChannelDisplayName(targetChannel.code) : '';
-
-        const eligibleIds: string[] = [];
-        let skippedCount = 0;
-        for (const id of selectedProductIds) {
-            const assigned = channelAssignmentsByProduct.get(id) ?? [];
-            if (assigned.some(c => c.id === targetChannelId)) {
-                if (assigned.length > 1) {
-                    eligibleIds.push(id);
-                } else {
-                    skippedCount++;
-                }
-            }
-        }
-
-        if (eligibleIds.length === 0) {
-            showNotice(
-                skippedCount > 0
-                    ? `所选商品仅属于「${targetName}」，必须至少保留在一个店铺中，无法下架。`
-                    : `所选商品未在上架状态，无需下架。`,
-                'error',
-            );
-            return;
-        }
-
-        try {
-            await removeProductsFromChannel({
-                variables: {
-                    input: {
-                        productIds: eligibleIds,
-                        channelId: targetChannelId,
-                    },
-                },
-            });
-            showNotice(
-                `已从「${targetName}」下架 ${eligibleIds.length} 个商品${skippedCount > 0 ? `（自动跳过 ${skippedCount} 个唯一归属该店的商品）` : ''}`,
-            );
-            setSelectedProductIds([]);
-            void refetch();
-            void channelAssignmentsQuery.refetch();
-        } catch (err) {
-            showNotice(toUserFacingError(err, '批量下架失败'), 'error');
-        }
-    };
     const operationsByProduct = new Map(
         (operationsQuery.data?.catalogProductOperations ?? []).map(summary => [summary.productId, summary]),
     );
     const activeChannel = activeChannelQuery.data?.activeChannel;
     const activeChannelLabel = activeChannel ? getChannelDisplayLabel(activeChannel) : '当前店铺';
-    const defaultChannel = activeChannelQuery.data?.channels.items.find(channel =>
-        isDefaultChannelCode(channel.code),
-    );
-    const canSwitchToDefault = Boolean(
-        defaultChannel && activeChannel && defaultChannel.id !== activeChannel.id,
-    );
 
     const handleDeleteConfirm = () => {
         if (!productToDelete) return;
@@ -456,20 +373,6 @@ export function CatalogModule() {
         });
     };
 
-    const handleSwitchToDefaultStore = async () => {
-        if (!defaultChannel || isSwitchingStore) return;
-        setIsSwitchingStore(true);
-        try {
-            await switchActiveChannel(defaultChannel.token);
-            setPage(0);
-            showNotice('已切换到默认店铺');
-        } catch (switchError) {
-            showNotice(toUserFacingError(switchError, '切换默认店铺失败'), 'error');
-        } finally {
-            setIsSwitchingStore(false);
-        }
-    };
-
     return (
         <div className="h-full flex flex-col bg-slate-50">
             {/* Header */}
@@ -489,7 +392,7 @@ export function CatalogModule() {
                         className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 cursor-pointer"
                     >
                         <Layers3 className="h-3.5 w-3.5 text-blue-600" />
-                        <span>店铺分配看板</span>
+                        <span>店铺归属检查</span>
                     </button>
                     <NextAdminActions pageId="product-list" collapseOnMobile />
                     <button
@@ -600,14 +503,9 @@ export function CatalogModule() {
                                 aria-label="按所属店铺筛选"
                                 className="max-w-44 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             >
-                                <option value="ALL">全部店铺</option>
-                                <option value="UNASSIGNED">⚠️ 仅默认店铺 (未分发)</option>
-                                <option value="MULTI_STORE">多店铺在售</option>
-                                {(activeChannelQuery.data?.channels.items ?? []).map(channel => (
-                                    <option key={channel.id} value={channel.id}>
-                                        已上架: {getChannelDisplayName(channel.code)}
-                                    </option>
-                                ))}
+                                <option value="ALL">当前店铺全部商品</option>
+                                <option value="UNASSIGNED">⚠️ 平台归属异常</option>
+                                <option value="MULTI_STORE">⚠️ 多店共享异常</option>
                             </select>
                             <select
                                 value={categoryId}
@@ -663,15 +561,18 @@ export function CatalogModule() {
                     </div>
 
                     {selectedProductIds.length > 0 && (
-                        <div className="border-b border-blue-100 bg-blue-50/50 p-3">
-                            <CatalogBulkChannelBar
-                                selectedCount={selectedProductIds.length}
-                                channels={activeChannelQuery.data?.channels.items ?? []}
-                                onAssign={handleBulkAssign}
-                                onRemove={handleBulkRemove}
-                                onClearSelection={() => setSelectedProductIds([])}
-                                busy={bulkAssigning || bulkRemoving}
-                            />
+                        <div className="flex items-center justify-between border-b border-blue-100 bg-blue-50/50 p-3 text-xs text-blue-800">
+                            <span>
+                                已选 {selectedProductIds.length}{' '}
+                                个商品。跨店共享已停用，需要跨店时必须创建独立副本。
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedProductIds([])}
+                                className="rounded border border-blue-200 bg-white px-2 py-1 font-bold text-blue-700"
+                            >
+                                取消选择
+                            </button>
                         </div>
                     )}
 
@@ -703,7 +604,7 @@ export function CatalogModule() {
                                 <div className="text-sm font-bold text-slate-700">暂无匹配的商品</div>
                                 <p className="text-xs text-slate-400 max-w-xs">
                                     {getCatalogEmptyStateDescription({
-                                        channelCode: activeChannel?.code,
+                                        channel: activeChannel,
                                         searchTerm,
                                         hasFilters:
                                             statusFilter !== 'ALL' ||
@@ -712,16 +613,6 @@ export function CatalogModule() {
                                     })}
                                 </p>
                                 <div className="mt-2 flex flex-wrap justify-center gap-2">
-                                    {canSwitchToDefault && (
-                                        <button
-                                            type="button"
-                                            onClick={() => void handleSwitchToDefaultStore()}
-                                            disabled={isSwitchingStore}
-                                            className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                        >
-                                            {isSwitchingStore ? '正在切换…' : '查看默认店铺商品'}
-                                        </button>
-                                    )}
                                     <button
                                         type="button"
                                         onClick={() =>
@@ -1056,10 +947,10 @@ export function CatalogModule() {
                                                                             title={
                                                                                 ch.isDefault
                                                                                     ? '默认店铺'
-                                                                                    : `分店: ${getChannelDisplayName(ch.code)}`
+                                                                                    : `分店: ${getChannelDisplayName(ch)}`
                                                                             }
                                                                         >
-                                                                            {getChannelDisplayName(ch.code)}
+                                                                            {getChannelDisplayName(ch)}
                                                                         </span>
                                                                     ))
                                                                 )}

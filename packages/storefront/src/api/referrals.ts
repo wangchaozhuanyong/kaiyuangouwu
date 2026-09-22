@@ -1,9 +1,11 @@
 import type { StorefrontPageViewInput } from '../storefront-traffic';
 import type {
+    DataConsentRecord,
     MyReferralOverview,
     ReferralBalancePaymentResult,
     ReferralProgram,
     RegisterCustomerInput,
+    StorefrontRegistrationConsentInput,
 } from '../types';
 import type { ErrorResult } from './helpers';
 
@@ -13,6 +15,22 @@ import { BaseDomainApi } from './base-domain-api';
 import { orderFields, referralWalletFields } from './fragments';
 
 export class ReferralsApi extends BaseDomainApi {
+    async recordAnalyticsConsent(input: {
+        consentId: string;
+        granted: boolean;
+        locale: string;
+    }): Promise<DataConsentRecord> {
+        const result = await this.request<{ recordStorefrontAnalyticsConsent: DataConsentRecord }>(
+            `mutation RecordStorefrontAnalyticsConsent($input: StorefrontAnalyticsConsentInput!) {
+                recordStorefrontAnalyticsConsent(input: $input) {
+                    id purpose action policyVersion policyDigest locale source recordedAt
+                }
+            }`,
+            { input },
+        );
+        return result.recordStorefrontAnalyticsConsent;
+    }
+
     async referralProgram(signal?: AbortSignal): Promise<ReferralProgram> {
         const result = await this.request<{ referralProgram: ReferralProgram }>(
             `
@@ -229,6 +247,7 @@ export class ReferralsApi extends BaseDomainApi {
 
     async registerCustomerAccount(
         input: RegisterCustomerInput,
+        consent: StorefrontRegistrationConsentInput,
         inviteCode?: string,
         source?: 'LINK' | 'POSTER' | 'CODE',
     ): Promise<void> {
@@ -236,17 +255,23 @@ export class ReferralsApi extends BaseDomainApi {
             `
                 mutation RegisterStorefrontCustomer(
                     $input: RegisterCustomerInput!
+                    $consent: StorefrontRegistrationConsentInput!
                     $inviteCode: String
                     $source: String
                 ) {
-                    registerCustomerWithReferral(input: $input, inviteCode: $inviteCode, source: $source) {
+                    registerCustomerWithReferral(
+                        input: $input
+                        consent: $consent
+                        inviteCode: $inviteCode
+                        source: $source
+                    ) {
                         __typename
                         ... on Success { success }
                         ... on ErrorResult { errorCode message }
                     }
                 }
             `,
-            { input, inviteCode: inviteCode || null, source: source ?? null },
+            { input, consent, inviteCode: inviteCode || null, source: source ?? null },
         );
         this.assertNoError(result.registerCustomerWithReferral);
     }

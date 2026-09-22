@@ -33,6 +33,7 @@ import {
     UPDATE_GLOBAL_SETTINGS_MUTATION,
     type BusinessSettingsResult,
 } from '../../graphql/management.graphql';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { runVerifiedMutation } from '../../utils/verified-mutation';
 import { MultiValueChoiceField } from './BusinessSettingsChoices';
@@ -495,7 +496,9 @@ function ChannelBusinessSettings({
                         当前店铺语言与币种
                         <FeatureHelpButton topic="settings.store-profile" title="当前店铺语言与币种" />
                     </h2>
-                    <p className="mt-1 text-xs text-slate-400">{channel.code} · 直接选择店铺要使用的选项</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                        {getChannelDisplayName(channel)} · 直接选择店铺要使用的选项
+                    </p>
                 </div>
                 <button
                     type="button"
@@ -1115,7 +1118,7 @@ function ZoneBusinessSettings({
                     channel.defaultTaxZone?.id === id ? '默认税务区域' : '',
                     channel.defaultShippingZone?.id === id ? '默认配送区域' : '',
                 ].filter(Boolean);
-                return `店铺 Channel“${channel.code}”（${roles.join('、')}）`;
+                return `店铺“${getChannelDisplayName(channel)}”（${roles.join('、')}）`;
             });
         const taxRateUsages = taxRates.filter(rate => rate.zone.id === id).map(rate => `税率“${rate.name}”`);
         const usages = [...channelUsages, ...taxRateUsages];

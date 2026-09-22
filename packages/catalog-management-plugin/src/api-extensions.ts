@@ -69,6 +69,169 @@ export const adminApiExtensions = gql`
         totalItems: Int!
     }
 
+    enum CatalogPurchaseOrderStatus {
+        DRAFT
+        SUBMITTED
+        PARTIALLY_RECEIVED
+        RECEIVED
+        VARIANCE_REVIEW
+        CLOSED
+        CANCELLED
+    }
+
+    enum CatalogPurchasePaymentStatus {
+        UNPAID
+        PARTIALLY_PAID
+        PAID
+        DISPUTED
+    }
+
+    type CatalogPurchaseReturnableLot {
+        id: ID!
+        lotCode: String!
+        quantityOnHand: Int!
+        expiresAt: DateTime
+    }
+
+    type CatalogPurchaseOrderLine implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        variantId: ID!
+        variant: ProductVariant!
+        orderedQuantity: Int!
+        receivedQuantity: Int!
+        acceptedQuantity: Int!
+        rejectedQuantity: Int!
+        returnedQuantity: Int!
+        outstandingQuantity: Int!
+        returnableQuantity: Int!
+        returnableLots: [CatalogPurchaseReturnableLot!]!
+        unitCostMicrounits: Float!
+        purchaseUnit: String
+        packageQuantity: Float!
+        notes: String
+    }
+
+    type CatalogPurchaseReceiptLine implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        purchaseOrderLineId: ID!
+        inventoryLotId: ID
+        receivedQuantity: Int!
+        acceptedQuantity: Int!
+        rejectedQuantity: Int!
+        lotCode: String
+        manufacturedAt: DateTime
+        expiresAt: DateTime
+        unitCostMicrounits: Float!
+        rejectionReason: String
+    }
+
+    type CatalogPurchaseReceipt implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        code: String!
+        supplierDeliveryReference: String
+        receivedAt: DateTime!
+        receivedByUserId: String
+        notes: String
+        lines: [CatalogPurchaseReceiptLine!]!
+    }
+
+    type CatalogPurchaseSupplierReturnLine implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        purchaseOrderLineId: ID!
+        inventoryLotId: ID!
+        quantity: Int!
+        unitCostMicrounits: Float!
+        creditMicrounits: Float!
+        reason: String!
+    }
+
+    type CatalogPurchaseSupplierReturn implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        code: String!
+        supplierAcknowledgementReference: String!
+        returnedAt: DateTime!
+        returnedByUserId: String
+        notes: String
+        lines: [CatalogPurchaseSupplierReturnLine!]!
+    }
+
+    type CatalogPurchaseOrderEvent implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        type: String!
+        actorUserId: String
+        summary: String!
+        details: JSON
+    }
+
+    type CatalogPurchaseOrder implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        channelId: ID!
+        supplierId: ID!
+        supplier: CatalogSupplier!
+        stockLocationId: ID!
+        stockLocation: StockLocation!
+        code: String!
+        status: CatalogPurchaseOrderStatus!
+        paymentStatus: CatalogPurchasePaymentStatus!
+        currencyCode: CurrencyCode!
+        totalMicrounits: Float!
+        paidMicrounits: Float!
+        returnCreditMicrounits: Float!
+        outstandingMicrounits: Float!
+        expectedAt: DateTime
+        submittedAt: DateTime
+        closedAt: DateTime
+        createdByUserId: String
+        submittedByUserId: String
+        closedByUserId: String
+        notes: String
+        closureNote: String
+        overdue: Boolean!
+        hasVariance: Boolean!
+        lines: [CatalogPurchaseOrderLine!]!
+        receipts: [CatalogPurchaseReceipt!]!
+        supplierReturns: [CatalogPurchaseSupplierReturn!]!
+        events: [CatalogPurchaseOrderEvent!]!
+    }
+
+    type CatalogPurchaseOrderList implements PaginatedList {
+        items: [CatalogPurchaseOrder!]!
+        totalItems: Int!
+    }
+
+    type CatalogSupplierPerformance {
+        supplierId: ID!
+        from: DateTime
+        to: DateTime
+        totalOrders: Int!
+        closedOrders: Int!
+        orderedQuantity: Int!
+        acceptedQuantity: Int!
+        rejectedQuantity: Int!
+        returnedQuantity: Int!
+        varianceOrders: Int!
+        disputeOrders: Int!
+        onTimeRate: Float
+        acceptanceRate: Float
+        varianceFreeRate: Float
+        disputeFreeRate: Float
+        score: Float
+    }
+
     type CatalogImportJob implements Node {
         id: ID!
         createdAt: DateTime!
@@ -155,6 +318,56 @@ export const adminApiExtensions = gql`
         currencyCode: CurrencyCode!
         state: String!
         daysUntilExpiry: Int
+    }
+
+    type CatalogInventoryOperationLine implements Node {
+        id: ID!
+        variant: ProductVariant!
+        stockLocation: StockLocation!
+        inventoryLot: CatalogInventoryLot
+        quantityDelta: Int!
+        previousLotQuantity: Int!
+        resultingLotQuantity: Int!
+        previousStockOnHand: Int!
+        resultingStockOnHand: Int!
+        reconciliationMode: String
+    }
+
+    type CatalogInventoryOperation implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        code: String!
+        type: String!
+        status: String!
+        actorUserId: String
+        reason: String!
+        reference: String
+        postedAt: DateTime!
+        lines: [CatalogInventoryOperationLine!]!
+    }
+
+    type CatalogInventoryOperationList implements PaginatedList {
+        items: [CatalogInventoryOperation!]!
+        totalItems: Int!
+    }
+
+    type CatalogInventoryReconciliationItem implements Node {
+        id: ID!
+        productVariantId: ID!
+        variantName: String!
+        sku: String!
+        stockLocationId: ID!
+        stockLocationName: String!
+        lotQuantity: Int!
+        stockOnHand: Int!
+        difference: Int!
+        canCreateBaselineLot: Boolean!
+    }
+
+    type CatalogInventoryReconciliationList implements PaginatedList {
+        items: [CatalogInventoryReconciliationItem!]!
+        totalItems: Int!
     }
 
     type CatalogWorkspaceVariant {
@@ -350,6 +563,9 @@ export const adminApiExtensions = gql`
         refundedRevenueMicrounits: Float!
         netRevenueMicrounits: Float!
         shippingRevenueMicrounits: Float!
+        grossSalesMicrounits: Float!
+        discountMicrounits: Float!
+        taxMicrounits: Float!
         productCostMicrounits: Float
         grossProfitMicrounits: Float
         grossMargin: Float
@@ -359,12 +575,15 @@ export const adminApiExtensions = gql`
         estimatedCostLineCount: Int!
         carrierShippingCostMicrounits: Float
         paymentFeeMicrounits: Float
+        chargebackMicrounits: Float
         netProfitMicrounits: Float
         netMargin: Float
         missingCarrierShippingCostOrderCount: Int!
         missingPaymentFeeOrderCount: Int!
+        missingChargebackOrderCount: Int!
         includesCarrierShippingCost: Boolean!
         includesPaymentFees: Boolean!
+        includesChargebacks: Boolean!
     }
 
     type CatalogProfitOrder implements Node {
@@ -377,11 +596,15 @@ export const adminApiExtensions = gql`
         refundedRevenueMicrounits: Float!
         netRevenueMicrounits: Float!
         shippingRevenueMicrounits: Float!
+        grossSalesMicrounits: Float!
+        discountMicrounits: Float!
+        taxMicrounits: Float!
         productCostMicrounits: Float
         grossProfitMicrounits: Float
         grossMargin: Float
         carrierShippingCostMicrounits: Float
         paymentFeeMicrounits: Float
+        chargebackMicrounits: Float
         netProfitMicrounits: Float
         netMargin: Float
         missingCostLineCount: Int!
@@ -402,17 +625,30 @@ export const adminApiExtensions = gql`
         currencyCode: CurrencyCode!
         carrierShippingCostMicrounits: Float
         paymentFeeMicrounits: Float
+        chargebackMicrounits: Float
         source: String!
         sourceReference: String
         note: String
+    }
+
+    type CatalogOrderProfitExpenseEvent implements Node {
+        id: ID!
+        createdAt: DateTime!
+        eventType: String!
+        actorUserId: String
+        sourceReference: String
+        before: JSON
+        after: JSON!
     }
 
     input SaveCatalogOrderProfitExpenseInput {
         orderId: ID!
         carrierShippingCostMicrounits: Float
         paymentFeeMicrounits: Float
+        chargebackMicrounits: Float
         note: String
         expectedUpdatedAt: DateTime
+        idempotencyKey: String
     }
 
     input CatalogOrderProfitExpenseImportRowInput {
@@ -420,6 +656,7 @@ export const adminApiExtensions = gql`
         orderCode: String!
         carrierShippingCostMicrounits: Float
         paymentFeeMicrounits: Float
+        chargebackMicrounits: Float
         note: String
     }
 
@@ -475,6 +712,8 @@ export const adminApiExtensions = gql`
         purchaseUnit: String!
         packageQuantity: Float
         stockOnHand: Int
+        stockAdjustmentIdempotencyKey: String
+        stockAdjustmentReason: String
         purchaseCost: Float
         sellingPrice: Float
         reportedMargin: Float
@@ -645,11 +884,111 @@ export const adminApiExtensions = gql`
         quantityOnHand: Int!
         purchaseCostMicrounits: Float
         currencyCode: CurrencyCode!
+        idempotencyKey: String!
+        reason: String!
+    }
+
+    input AdjustCatalogLegacyInventoryInput {
+        productVariantId: ID!
+        stockLocationId: ID!
+        stockOnHand: Int!
+        idempotencyKey: String!
+        reason: String!
+        reference: String
+    }
+
+    input TransferCatalogInventoryLotInput {
+        inventoryLotId: ID!
+        targetStockLocationId: ID!
+        quantity: Int!
+        idempotencyKey: String!
+        reason: String!
+        reference: String
+    }
+
+    input ResolveCatalogInventoryReconciliationInput {
+        productVariantId: ID!
+        stockLocationId: ID!
+        expectedDifference: Int!
+        mode: String!
+        idempotencyKey: String!
+        reason: String!
+    }
+
+    input CatalogPurchaseOrderListOptions {
+        skip: Int
+        take: Int
+        text: String
+        status: CatalogPurchaseOrderStatus
+        supplierId: ID
+        exceptionsOnly: Boolean
+    }
+
+    input CreateCatalogPurchaseOrderLineInput {
+        productVariantId: ID!
+        orderedQuantity: Int!
+        unitCostMicrounits: Float!
+        notes: String
+    }
+
+    input CreateCatalogPurchaseOrderInput {
+        supplierId: ID!
+        stockLocationId: ID!
+        currencyCode: CurrencyCode!
+        code: String
+        expectedAt: DateTime
+        notes: String
+        lines: [CreateCatalogPurchaseOrderLineInput!]!
+    }
+
+    input ReceiveCatalogPurchaseOrderLineInput {
+        purchaseOrderLineId: ID!
+        receivedQuantity: Int!
+        acceptedQuantity: Int!
+        rejectedQuantity: Int!
+        lotCode: String
+        manufacturedAt: DateTime
+        expiresAt: DateTime
+        unitCostMicrounits: Float
+        rejectionReason: String
+    }
+
+    input ReceiveCatalogPurchaseOrderInput {
+        purchaseOrderId: ID!
+        idempotencyKey: String!
+        supplierDeliveryReference: String
+        receivedAt: DateTime
+        notes: String
+        lines: [ReceiveCatalogPurchaseOrderLineInput!]!
+    }
+
+    input RecordCatalogPurchasePaymentInput {
+        purchaseOrderId: ID!
+        amountMicrounits: Float!
+        reference: String!
+        note: String
+    }
+
+    input ReturnCatalogPurchaseOrderLineInput {
+        purchaseOrderLineId: ID!
+        inventoryLotId: ID!
+        quantity: Int!
+        reason: String!
+    }
+
+    input ReturnCatalogPurchaseOrderInput {
+        purchaseOrderId: ID!
+        idempotencyKey: String!
+        supplierAcknowledgementReference: String!
+        returnedAt: DateTime
+        notes: String
+        lines: [ReturnCatalogPurchaseOrderLineInput!]!
     }
 
     type CatalogAssignmentChannel {
         id: ID!
         code: String!
+        displayName: String!
         isDefault: Boolean!
     }
 
@@ -716,13 +1055,19 @@ export const adminApiExtensions = gql`
         ): CatalogProductSummaryList!
         catalogProductOperations(productIds: [ID!]!): [CatalogProductOperationsSummary!]!
         catalogOrderProfitExpense(orderId: ID!): CatalogOrderProfitExpense
+        catalogOrderProfitExpenseEvents(orderId: ID!): [CatalogOrderProfitExpenseEvent!]!
         catalogProfitReport(input: CatalogProfitReportInput!): CatalogProfitReport!
         catalogProducts(filter: CatalogProductSummaryFilterInput, options: ProductListOptions): ProductList!
         catalogExportRows(skip: Int, take: Int): CatalogExportPage!
         catalogInventoryAlertOverview: CatalogInventoryAlertOverview!
+        catalogInventoryOperations(skip: Int, take: Int): CatalogInventoryOperationList!
+        catalogInventoryReconciliation: CatalogInventoryReconciliationList!
         catalogSuppliers(options: CatalogSupplierListOptions): CatalogSupplierList!
         catalogSupplier(id: ID!): CatalogSupplier!
         catalogSupplierVariants(supplierId: ID!, skip: Int, take: Int): CatalogSupplierVariantList!
+        catalogPurchaseOrders(options: CatalogPurchaseOrderListOptions): CatalogPurchaseOrderList!
+        catalogPurchaseOrder(id: ID!): CatalogPurchaseOrder!
+        catalogSupplierPerformance(supplierId: ID!, from: DateTime, to: DateTime): CatalogSupplierPerformance!
     }
 
     extend type Mutation {
@@ -742,11 +1087,24 @@ export const adminApiExtensions = gql`
         createCatalogProduct(input: CreateCatalogProductInput!): Product!
         saveCatalogProduct(input: SaveCatalogProductInput!): Product!
         saveCatalogInventoryLot(input: SaveCatalogInventoryLotInput!): CatalogInventoryLot!
+        adjustCatalogLegacyInventory(input: AdjustCatalogLegacyInventoryInput!): CatalogInventoryOperation!
+        transferCatalogInventoryLot(input: TransferCatalogInventoryLotInput!): CatalogInventoryOperation!
+        resolveCatalogInventoryReconciliation(
+            input: ResolveCatalogInventoryReconciliationInput!
+        ): CatalogInventoryOperation!
         saveCatalogOrderProfitExpense(input: SaveCatalogOrderProfitExpenseInput!): CatalogOrderProfitExpense!
         importCatalogOrderProfitExpenses(
             input: ImportCatalogOrderProfitExpensesInput!
         ): CatalogOrderProfitExpenseImportResult!
         createCatalogSupplier(input: CreateCatalogSupplierInput!): CatalogSupplier!
         updateCatalogSupplier(input: UpdateCatalogSupplierInput!): CatalogSupplier!
+        createCatalogPurchaseOrder(input: CreateCatalogPurchaseOrderInput!): CatalogPurchaseOrder!
+        submitCatalogPurchaseOrder(id: ID!): CatalogPurchaseOrder!
+        receiveCatalogPurchaseOrder(input: ReceiveCatalogPurchaseOrderInput!): CatalogPurchaseOrder!
+        closeCatalogPurchaseOrder(id: ID!, note: String): CatalogPurchaseOrder!
+        cancelCatalogPurchaseOrder(id: ID!, note: String): CatalogPurchaseOrder!
+        recordCatalogPurchasePayment(input: RecordCatalogPurchasePaymentInput!): CatalogPurchaseOrder!
+        disputeCatalogPurchasePayment(id: ID!, note: String!): CatalogPurchaseOrder!
+        returnCatalogPurchaseOrder(input: ReturnCatalogPurchaseOrderInput!): CatalogPurchaseOrder!
     }
 `;

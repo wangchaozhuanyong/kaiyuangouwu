@@ -4,14 +4,14 @@
 
 ## 数据流与存储位置
 
-| 内容 | 新写入位置 | 读取方式 |
-| --- | --- | --- |
-| 原始上传内容 | 独立图片进程的私有、限容 tmpfs 隔离区，完成或失败后清理 | 没有 HTTP 文件入口 |
-| 头像 | 本地 `CUSTOMER_AVATAR_STORAGE_ROOT/avatars/v2/`；启用 S3 后进入专用头像桶的 `avatars/v2/` | 本地 AssetServer；S3 模式通过独立 CloudFront 域名公开读取 |
-| 参考图、生成图 | 本地原有 `IMAGE_GENERATION_STORAGE_ROOT`；S3 模式进入另一私有桶的 `private/v1/` | 应用检查客户和 Channel，签发最长 5 分钟的下载链接 |
-| 管理端普通素材 | 保留原 AssetServer 存储策略 | 保留原接口 |
-| 2FA 临时账号 | 浏览器内存 | 离页、退出或闲置 5 分钟清空 |
-| 2FA 加密账号 | 2FA 页面所在 origin 的 localStorage，仅密文 | 用户独立口令解锁；不上传服务器 |
+| 内容           | 新写入位置                                                                                | 读取方式                                                  |
+| -------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| 原始上传内容   | 独立图片进程的私有、限容 tmpfs 隔离区，完成或失败后清理                                   | 没有 HTTP 文件入口                                        |
+| 头像           | 本地 `CUSTOMER_AVATAR_STORAGE_ROOT/avatars/v2/`；启用 S3 后进入专用头像桶的 `avatars/v2/` | 本地 AssetServer；S3 模式通过独立 CloudFront 域名公开读取 |
+| 参考图、生成图 | 本地原有 `IMAGE_GENERATION_STORAGE_ROOT`；S3 模式进入另一私有桶的 `private/v1/`           | 应用检查客户和 Channel，签发最长 5 分钟的下载链接         |
+| 管理端普通素材 | 保留原 AssetServer 存储策略                                                               | 保留原接口                                                |
+| 2FA 临时账号   | 浏览器内存                                                                                | 离页、退出或闲置 5 分钟清空                               |
+| 2FA 加密账号   | 2FA 页面所在 origin 的 localStorage，仅密文                                               | 用户独立口令解锁；不上传服务器                            |
 
 参考图按现有图像生成业务发送给所选图像服务；私有存储并不取消这项必要的数据传输。不要把参考图接入头像的公开 CDN。头像是公开内容，替换后旧 CDN 缓存可能继续存在最多约 5 分钟；无法撤回他人已经保存的副本。私有图片删除会立即撤销应用下载权限；存储删除失败留下待清理记录，定时任务重试。版本化 S3 的旧版本按模板保留 7 天用于恢复，这不是“物理立即擦除”。
 
@@ -19,11 +19,11 @@
 
 `../image-worker/server.cjs` 只接受 Unix socket 上的三种请求，不监听 TCP。先扫描原始字节，再使用独立子进程完整解码、去除元数据、重新编码。仅接收 JPEG、PNG、WebP，拒绝 SVG、动画、多页、损坏内容和超限输入。
 
-| 类型 | 输入容量 | 像素限制 | 输出 |
-| --- | --- | --- | --- |
-| 头像 | 5 MiB | 1600 万 | 不超过 512 × 512 的 WebP |
-| 参考图 | 10 MiB | 4000 万 | 重新编码的 JPEG/PNG/WebP |
-| 生成图 | 25 MiB | 4000 万 | 重新编码的 JPEG/PNG/WebP，并保留分辨率档位验证 |
+| 类型   | 输入容量 | 像素限制 | 输出                                           |
+| ------ | -------- | -------- | ---------------------------------------------- |
+| 头像   | 5 MiB    | 1600 万  | 不超过 512 × 512 的 WebP                       |
+| 参考图 | 10 MiB   | 4000 万  | 重新编码的 JPEG/PNG/WebP                       |
+| 生成图 | 25 MiB   | 4000 万  | 重新编码的 JPEG/PNG/WebP，并保留分辨率档位验证 |
 
 应用每进程最多 4 个在途处理请求；worker 最多 2 个活动请求，繁忙时拒绝而不无限排队。解码子进程最长 15 秒，应用请求最长 30 秒。生产缺少 socket、扫描服务故障、扫描超限、命中检测、病毒库超过 48 小时，均拒绝写入。开发模式未配置 socket 时使用进程内解码，**不代表已扫描或已隔离**。
 
@@ -41,7 +41,7 @@
 
 `storage.template.json` 准备两个桶、头像 CloudFront OAC、响应头策略和未挂载的应用 IAM policy：桶默认不公开，阻止公开 ACL/策略，启用 SSE-S3 和版本保留，禁止非 HTTPS 访问；只有 CloudFront 能公开读取头像前缀。应用写入使用随机键、条件写和 SHA-256 校验，不自动建桶。
 
-模板通过 JSON、针对性策略断言和 cfn-lint 1.56.1 的本地资源 schema 校验；尚未通过 AWS 服务端校验，也未验证目标账户 IAM、区域、配额、计费或 DNS。模板保留资源删除/替换保护，但生命周期本身会在 7 天后删除非当前版本；启用前必须确认保留期与备份要求。版本保留不替代独立备份。
+模板通过 JSON、针对性策略断言和 cfn-lint 1.56.1 的本地资源 schema 校验；尚未通过 AWS 服务端校验，也未验证目标账户 IAM、区域、配额、计费或 DNS。模板保留资源删除/替换保护，但生命周期本身会在 7 天后删除非当前版本；启用前必须确认保留期与备份要求。版本保留不替代独立备份。`CUSTOMER_IMAGE_STORAGE=s3` 时，每日持久文件备份会按源对象 `VersionId` 将 `avatars/v2/` 与 `private/v1/` 捕获到另一个受控备份桶；恢复演练会核对对象键、版本、大小和 SHA-256 清单。源桶和备份桶必须不同，实例角色需要限定前缀的 `s3:ListBucket`、`s3:GetBucketVersioning`、`s3:GetObject` 和 `s3:GetObjectVersion`。
 
 应用变量见 `packages/dev-server/.env.example`：
 
@@ -76,7 +76,17 @@
 本轮只提供 `migration-plan.cjs` 的本地准备模式，不执行 S3 写入、数据库更新或原文件删除。每批最多 200 条，inventory 最多 512 KiB。
 
 ```json
-{"version":1,"assets":[{"id":"synthetic-id","kind":"reference","storageKey":"reference/example.png","sha256":"<sha256>"}]}
+{
+    "version": 1,
+    "assets": [
+        {
+            "id": "synthetic-id",
+            "kind": "reference",
+            "storageKey": "reference/example.png",
+            "sha256": "<sha256>"
+        }
+    ]
+}
 ```
 
 类型为 `avatar-source`、`avatar-preview`、`reference`、`output`；只记录内部 ID、键和校验值，不在 inventory 中保存客户内容或签名链接。

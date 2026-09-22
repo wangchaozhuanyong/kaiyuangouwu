@@ -5,7 +5,11 @@ import { ConfirmDialogContext } from '../../components/confirm-dialog-context';
 import type { StoreManagementResult } from '../../graphql/management.graphql';
 import { AdminPermissionsContext } from '../../hooks/use-admin-permissions';
 import { PaymentShippingManager } from './PaymentShippingManager';
-import { formatShippingCalculatorSummary, formatShippingCheckerSummary } from './shipping-manager-utils';
+import {
+    formatFulfillmentHandlerSummary,
+    formatShippingCalculatorSummary,
+    formatShippingCheckerSummary,
+} from './shipping-manager-utils';
 
 const apolloMocks = vi.hoisted(() => ({
     useLazyQuery: vi.fn(),
@@ -64,6 +68,8 @@ describe('PaymentShippingManager', () => {
         expect(html).toContain('支付方式');
         expect(html).toContain('测试支付');
         expect(html).toContain('USDT 收款设置');
+        expect(html).not.toContain('test-payment');
+        expect(html).not.toContain('test-handler');
         expect(html).not.toContain('配送方式');
         expect(html).not.toContain('测试配送');
     });
@@ -73,6 +79,8 @@ describe('PaymentShippingManager', () => {
 
         expect(html).toContain('配送方式');
         expect(html).toContain('测试配送');
+        expect(html).not.toContain('test-shipping');
+        expect(html).not.toContain('test-fulfillment-handler');
         expect(html).not.toContain('支付方式');
         expect(html).not.toContain('测试支付');
         expect(html).not.toContain('USDT 收款设置');
@@ -129,6 +137,7 @@ describe('PaymentShippingManager', () => {
                 args: [],
             }),
         ).toBe('全场通用');
+        expect(formatFulfillmentHandlerSummary('unregistered-handler')).toBe('履约方式');
     });
 
     it('displays shipping guidance card and badges in shipping section', () => {
@@ -179,6 +188,7 @@ describe('PaymentShippingManager', () => {
         expect(html).toContain('满额免邮无需单独建两个方式');
         expect(html).toContain('基础运费: 5.00 CNY · 满 200.00 CNY 免邮');
         expect(html).toContain('仅限配送: MY');
+        expect(html).not.toContain('standard-shipping');
     });
 });
 

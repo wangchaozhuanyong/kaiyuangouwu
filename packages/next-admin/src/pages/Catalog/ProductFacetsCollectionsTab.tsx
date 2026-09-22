@@ -10,11 +10,8 @@ import { useProductEditor } from './ProductEditorContext';
 export function ProductFacetsCollectionsTab() {
     const {
         selectedFacetValueIds,
-        setSelectedFacetValueIds,
         selectedCollectionIds,
         setSelectedCollectionIds,
-        selectedChannelIds,
-        setSelectedChannelIds,
         facetSearch,
         setFacetSearch,
         facetPage,
@@ -111,9 +108,6 @@ export function ProductFacetsCollectionsTab() {
                                 <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                                     <Tag className="w-3.5 h-3.5 text-blue-500" />
                                     <span>{facet.name}</span>
-                                    <span className="text-[10px] text-slate-400 font-mono">
-                                        ({facet.code})
-                                    </span>
                                 </div>
 
                                 <div className="flex flex-wrap gap-2">

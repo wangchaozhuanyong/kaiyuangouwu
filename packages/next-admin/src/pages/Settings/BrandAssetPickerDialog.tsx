@@ -6,6 +6,7 @@ import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurfac
 import { ImageAssetUploadButton } from '../../components/ImageAssetUploadButton';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
 import { usePageSize } from '../../hooks/use-page-size';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from '../Catalog/LookupPager';
 import { inputClass, secondaryButton } from './settings-ui';
@@ -15,21 +16,11 @@ interface PickerProps {
     title: string;
     selectedAsset: StoreBrandAsset | null;
     channel: BrandChannel;
-    sharedChannel?: BrandChannel;
     onClose: () => void;
     onSelect: (asset: StoreBrandAsset) => void;
 }
 
-export function BrandAssetPickerDialog({
-    title,
-    selectedAsset,
-    channel,
-    sharedChannel,
-    onClose,
-    onSelect,
-}: PickerProps) {
-    const [useShared, setUseShared] = useState(false);
-    const sourceChannel = useShared && sharedChannel ? sharedChannel : channel;
+export function BrandAssetPickerDialog({ title, selectedAsset, channel, onClose, onSelect }: PickerProps) {
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 p-4">
             <AccessibleDialogSurface
@@ -48,31 +39,10 @@ export function BrandAssetPickerDialog({
                         <X className="h-5 w-5" />
                     </button>
                 </div>
-                {sharedChannel && sharedChannel.id !== channel.id && (
-                    <label className="mt-3 text-xs text-slate-700">
-                        素材来源
-                        <select
-                            className={`${inputClass} mt-1`}
-                            value={useShared ? 'shared' : 'store'}
-                            onChange={event => setUseShared(event.target.value === 'shared')}
-                        >
-                            <option value="store">本店素材</option>
-                            <option value="shared">默认店铺素材</option>
-                        </select>
-                    </label>
-                )}
                 <p className="mt-2 text-xs leading-5 text-slate-500">
-                    {useShared
-                        ? '保存店铺档案时，所选图片会同时加入本店素材库。'
-                        : '选择图片后，请保存店铺档案以应用到前台。'}
+                    只显示当前店铺的独立素材；选择图片后，请保存店铺档案以应用到前台。
                 </p>
-                {/* 重建查询并禁用共享缓存，避免切换来源时选中上一家店铺的结果。 */}
-                <BrandAssetResults
-                    key={sourceChannel.id}
-                    channel={sourceChannel}
-                    selectedAsset={selectedAsset}
-                    onSelect={onSelect}
-                />
+                <BrandAssetResults channel={channel} selectedAsset={selectedAsset} onSelect={onSelect} />
             </AccessibleDialogSurface>
         </div>
     );
@@ -119,7 +89,7 @@ function BrandAssetResults({
                     }}
                 />
                 <ImageAssetUploadButton
-                    ariaLabel={`上传品牌图片到${channel.code}素材库`}
+                    ariaLabel={`上传品牌图片到${getChannelDisplayName(channel)}素材库`}
                     channelToken={channel.token}
                     onUploaded={uploaded => {
                         const [asset] = uploaded;

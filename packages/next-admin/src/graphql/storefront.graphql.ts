@@ -74,6 +74,10 @@ export const STOREFRONT_CONTENT_QUERY = gql`
             token
             defaultLanguageCode
             availableLanguageCodes
+            customFields {
+                storefrontNameZh
+                storefrontNameEn
+            }
         }
         storefrontContentSettings {
             heroAutoplayIntervalSeconds
@@ -432,6 +436,10 @@ export interface StorefrontContentResult {
         token: string;
         defaultLanguageCode: string;
         availableLanguageCodes: string[];
+        customFields?: {
+            storefrontNameZh?: string | null;
+            storefrontNameEn?: string | null;
+        } | null;
     };
     storefrontContentSettings: {
         heroAutoplayIntervalSeconds: number;

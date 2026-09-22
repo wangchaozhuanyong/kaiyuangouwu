@@ -114,6 +114,7 @@ export const MY_STORE_FINANCE_QUERY = gql`
             settledCount
             manualReviewCount
             expiredCount
+            resolvedCount
             expectedUsdtTotal
             receivedUsdtTotal
             fiatTotals {
@@ -148,6 +149,10 @@ export const MY_STORE_FINANCE_QUERY = gql`
             blockNumber
             blockTimestamp
             lastCheckedAt
+            manualReviewCode
+            resolvedAt
+            resolvedByUserId
+            resolutionActionId
         }
         myStorePaymentStats {
             channelId
@@ -220,6 +225,20 @@ export const RECORD_STORE_USDT_MANUAL_REFUND_MUTATION = gql`
     }
 `;
 
+export const RESOLVE_STORE_USDT_PAYMENT_INTENT_MUTATION = gql`
+    mutation NextAdminResolveStoreUsdtPaymentIntent($input: ResolveStoreUsdtPaymentIntentInput!) {
+        resolveStoreUsdtPaymentIntent(input: $input) {
+            id
+            status
+            failureReason
+            manualReviewCode
+            resolvedAt
+            resolvedByUserId
+            resolutionActionId
+        }
+    }
+`;
+
 export const PLATFORM_USDT_PAYMENT_MANAGEMENT_QUERY = gql`
     ${USDT_WALLET_FIELDS}
     ${PAYMENT_REPORT_FIELDS}
@@ -230,6 +249,16 @@ export const PLATFORM_USDT_PAYMENT_MANAGEMENT_QUERY = gql`
         $paymentOptions: StorePaymentReportOptionsInput
         $refundOptions: StorePaymentReportOptionsInput
     ) {
+        channels(options: { take: 1000 }) {
+            items {
+                id
+                code
+                customFields {
+                    storefrontNameZh
+                    storefrontNameEn
+                }
+            }
+        }
         storeUsdtWallets {
             ...NextAdminUsdtWalletFields
         }
@@ -241,6 +270,7 @@ export const PLATFORM_USDT_PAYMENT_MANAGEMENT_QUERY = gql`
             settledCount
             manualReviewCount
             expiredCount
+            resolvedCount
             expectedUsdtTotal
             receivedUsdtTotal
             fiatTotals {
@@ -275,6 +305,10 @@ export const PLATFORM_USDT_PAYMENT_MANAGEMENT_QUERY = gql`
             blockNumber
             blockTimestamp
             lastCheckedAt
+            manualReviewCode
+            resolvedAt
+            resolvedByUserId
+            resolutionActionId
         }
         storePaymentStats(channelId: $channelId, options: $statsOptions) {
             channelId
@@ -298,6 +332,24 @@ export const PLATFORM_USDT_PAYMENT_MANAGEMENT_QUERY = gql`
                 ...NextAdminManualRefundFields
             }
             totalItems
+        }
+        storeUsdtReconciliationActions(channelId: $channelId) {
+            id
+            channelId
+            intentId
+            orderId
+            action
+            outcome
+            operatorUserId
+            reason
+            network
+            transactionId
+            usdtAmount
+            fromAddress
+            toAddress
+            blockNumber
+            blockTimestamp
+            createdAt
         }
     }
 `;
@@ -371,6 +423,7 @@ export interface UsdtPaymentStatsRecord {
     settledCount: number;
     manualReviewCount: number;
     expiredCount: number;
+    resolvedCount: number;
     expectedUsdtTotal: number;
     receivedUsdtTotal: number;
     fiatTotals: Array<{ currencyCode: string; amount: number }>;
@@ -394,7 +447,7 @@ export interface UsdtPaymentIntentRecord {
     expectedUsdtAmount: number;
     receivedUsdtAmount: number | null;
     senderAddressMasked: string | null;
-    status: 'PENDING' | 'SETTLED' | 'MANUAL_REVIEW' | 'EXPIRED';
+    status: 'PENDING' | 'SETTLED' | 'MANUAL_REVIEW' | 'EXPIRED' | 'RESOLVED';
     transactionId: string | null;
     failureReason: string | null;
     createdAt: string;
@@ -403,6 +456,29 @@ export interface UsdtPaymentIntentRecord {
     blockNumber: number | null;
     blockTimestamp: string | null;
     lastCheckedAt: string | null;
+    manualReviewCode: string | null;
+    resolvedAt: string | null;
+    resolvedByUserId: string | null;
+    resolutionActionId: string | null;
+}
+
+export interface UsdtReconciliationActionRecord {
+    id: string;
+    channelId: string;
+    intentId: string;
+    orderId: string;
+    action: 'RETRY_SETTLEMENT' | 'CONFIRM_EXTERNAL_REFUND';
+    outcome: string;
+    operatorUserId: string;
+    reason: string;
+    network: string | null;
+    transactionId: string | null;
+    usdtAmount: string | null;
+    fromAddress: string | null;
+    toAddress: string | null;
+    blockNumber: number | null;
+    blockTimestamp: string | null;
+    createdAt: string;
 }
 
 export interface PaymentStatsRecord {
@@ -467,10 +543,21 @@ export interface FinanceData {
 }
 
 export interface PlatformFinanceData {
+    channels: {
+        items: Array<{
+            id: string;
+            code: string;
+            customFields?: {
+                storefrontNameZh?: string | null;
+                storefrontNameEn?: string | null;
+            } | null;
+        }>;
+    };
     storeUsdtWallets: UsdtWalletRecord[];
     storeUsdtPaymentStats: UsdtPaymentStatsRecord[];
     storeUsdtPaymentIntents: UsdtPaymentIntentRecord[];
     storePaymentStats: PaymentStatsRecord[];
     storePaymentDetails: { items: PaymentDetailRecord[]; totalItems: number };
     storeUsdtManualRefunds: { items: ManualRefundRecord[]; totalItems: number };
+    storeUsdtReconciliationActions: UsdtReconciliationActionRecord[];
 }

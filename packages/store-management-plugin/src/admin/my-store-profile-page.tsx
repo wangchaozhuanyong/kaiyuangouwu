@@ -43,8 +43,10 @@ import { useEffect, useState } from 'react';
 import {
     MyStoreProfileRecord,
     MyStoreProfileResult,
+    SubmitStoreGovernanceChangeResult,
     UpdateMyStoreProfileResult,
     myStoreProfileQuery,
+    submitStoreGovernanceChangeMutation,
     updateMyStoreProfileMutation,
 } from '../dashboard/merchant-store.graphql';
 
@@ -94,9 +96,11 @@ const zhCopy = {
     accentColor: '强调色',
     highlightColor: '高亮色',
     legal: '法律与联系信息',
-    legalHelp: '隐私政策和使用条款会自动引用这些信息；四项填写完整后才能通过店铺上线检查。',
+    legalHelp: '客服和隐私邮箱可直接保存；主体名称和注册地会提交给平台审核，审核前不覆盖已批准值。',
     legalEntityName: '法定经营主体',
     legalRegistrationCountry: '注册国家/地区',
+    submitLegal: '提交主体变更审核',
+    legalSubmitted: '主体变更已提交，审核前线上资料保持不变',
     supportEmail: '客服邮箱',
     privacyEmail: '隐私邮箱',
     invalidEmail: '请填写有效的客服邮箱和隐私邮箱',
@@ -149,9 +153,11 @@ const enCopy: typeof zhCopy = {
     highlightColor: 'Highlight',
     legal: 'Legal and contact information',
     legalHelp:
-        'The privacy policy and terms automatically reference these details. Complete all four fields to pass the store launch checks.',
+        'Support and privacy email can be saved directly. Legal entity changes are submitted for platform review and do not replace approved values before approval.',
     legalEntityName: 'Legal entity',
     legalRegistrationCountry: 'Registration country/region',
+    submitLegal: 'Submit legal change for review',
+    legalSubmitted: 'Legal change submitted; approved live data remains unchanged until review',
     supportEmail: 'Support email',
     privacyEmail: 'Privacy email',
     invalidEmail: 'Enter valid support and privacy email addresses',
@@ -212,6 +218,15 @@ function MyStoreProfilePage() {
         enabled: Boolean(activeChannel?.id),
     });
     const profile = profileQuery.data?.myStoreProfile;
+    const latestLegalRequest = profileQuery.data?.myStoreGovernanceChanges.find(
+        request => request.requestType === 'LEGAL_IDENTITY',
+    );
+    const legalChangeDirty = Boolean(
+        draft &&
+        profile &&
+        (draft.legalEntityName.trim() !== (profile.legalEntityName ?? '') ||
+            draft.legalRegistrationCountry.trim() !== (profile.legalRegistrationCountry ?? '')),
+    );
     useEffect(() => {
         if (profile) {
             setDraft(toDraft(profile));
@@ -231,8 +246,6 @@ function MyStoreProfilePage() {
                 brandPrimaryColor: input.brandPrimaryColor || null,
                 brandAccentColor: input.brandAccentColor || null,
                 brandHighlightColor: input.brandHighlightColor || null,
-                legalEntityName: input.legalEntityName.trim() || null,
-                legalRegistrationCountry: input.legalRegistrationCountry.trim() || null,
                 supportEmail: input.supportEmail.trim() || null,
                 privacyEmail: input.privacyEmail.trim() || null,
                 logoAssetId: input.logoAsset?.id ?? null,
@@ -254,6 +267,24 @@ function MyStoreProfilePage() {
             toast.success(text.saved);
         },
         onError: error => toast.error(isConcurrentModification(error) ? text.conflict : errorMessage(error)),
+    });
+
+    const governanceMutation = useMutation({
+        mutationFn: (input: ProfileDraft) =>
+            api.mutate<SubmitStoreGovernanceChangeResult>(submitStoreGovernanceChangeMutation, {
+                input: {
+                    requestType: 'LEGAL_IDENTITY',
+                    payload: {
+                        legalEntityName: input.legalEntityName.trim(),
+                        legalRegistrationCountry: input.legalRegistrationCountry.trim(),
+                    },
+                },
+            }),
+        onSuccess: async () => {
+            toast.success(text.legalSubmitted);
+            await profileQuery.refetch();
+        },
+        onError: error => toast.error(errorMessage(error)),
     });
 
     const save = () => {
@@ -279,7 +310,11 @@ function MyStoreProfilePage() {
     const update = <K extends keyof ProfileDraft>(field: K, value: ProfileDraft[K]) => {
         if (draft) setDraft({ ...draft, [field]: value });
     };
-    const isDirty = Boolean(draft && profile && JSON.stringify(draft) !== JSON.stringify(toDraft(profile)));
+    const isDirty = Boolean(
+        draft &&
+        profile &&
+        JSON.stringify(publicProfileDraft(draft)) !== JSON.stringify(publicProfileDraft(toDraft(profile))),
+    );
 
     return (
         <Page pageId="my-store-profile">
@@ -541,6 +576,40 @@ function MyStoreProfilePage() {
                                             onChange={event => update('legalEntityName', event.target.value)}
                                         />
                                     </div>
+                                    <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            disabled={
+                                                !legalChangeDirty ||
+                                                !draft.legalEntityName.trim() ||
+                                                !draft.legalRegistrationCountry.trim() ||
+                                                governanceMutation.isPending
+                                            }
+                                            onClick={() => governanceMutation.mutate(draft)}
+                                        >
+                                            {governanceMutation.isPending ? (
+                                                <LoaderCircle
+                                                    className="size-4 animate-spin"
+                                                    aria-hidden="true"
+                                                />
+                                            ) : (
+                                                <Check className="size-4" aria-hidden="true" />
+                                            )}
+                                            {text.submitLegal}
+                                        </Button>
+                                        {latestLegalRequest ? (
+                                            <Badge variant="secondary">
+                                                {latestLegalRequest.status === 'PENDING'
+                                                    ? '待平台审核'
+                                                    : latestLegalRequest.status === 'APPROVED'
+                                                      ? '已通过'
+                                                      : latestLegalRequest.status === 'REJECTED'
+                                                        ? `已驳回${latestLegalRequest.reviewReason ? `：${latestLegalRequest.reviewReason}` : ''}`
+                                                        : '已取消'}
+                                            </Badge>
+                                        ) : null}
+                                    </div>
                                     <div className="space-y-1.5">
                                         <Label htmlFor="my-store-registration-country">
                                             {text.legalRegistrationCountry}
@@ -746,6 +815,15 @@ function toDraft(profile: MyStoreProfileRecord): ProfileDraft {
         logoOnLightAsset: profile.logoOnLightAsset,
         logoOnDarkAsset: profile.logoOnDarkAsset,
     };
+}
+
+function publicProfileDraft(draft: ProfileDraft) {
+    const {
+        legalEntityName: _legalEntityName,
+        legalRegistrationCountry: _legalCountry,
+        ...publicDraft
+    } = draft;
+    return publicDraft;
 }
 
 function validStorefrontName(value: string): boolean {

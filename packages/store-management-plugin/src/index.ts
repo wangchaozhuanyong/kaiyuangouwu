@@ -1,4 +1,52 @@
-export { storeProfilePermission } from './constants.js';
+export { AdministratorAccessService } from './administrator-access.service.js';
+export { AdministratorPermissionAuditService } from './administrator-permission-audit.service.js';
+export {
+    managePlatformTeamPermission,
+    manageStoreLifecyclePermission,
+    manageStoreTeamPermission,
+    reviewStoreGovernancePermission,
+    sensitiveStoreFinancePermission,
+    storeProfilePermission,
+} from './constants.js';
+export {
+    CustomerOperationsService,
+    deriveCustomerSegment,
+    scoreFrequency,
+    scoreRecency,
+} from './customer-operations.service.js';
+export type {
+    CreateCustomerFollowUpInput,
+    CustomerCurrencyMetric,
+    CustomerFollowUpListOptions,
+    CustomerOperationsProfileListOptions,
+    UpdateCustomerFollowUpInput,
+} from './customer-operations.types.js';
+export {
+    DataConsentService,
+    consentSubjectHash,
+    type StorefrontRegistrationConsentInput,
+} from './data-consent.service.js';
+export {
+    CUSTOMER_AVATAR_RETENTION_DAYS,
+    CUSTOMER_AVATAR_RETENTION_POLICY,
+    DataRetentionService,
+} from './data-retention.service.js';
+export { BeforeAccountAnonymizationEvent } from './data-subject.events.js';
+export { ACCOUNT_CLOSURE_COOLING_OFF_DAYS, DataSubjectService } from './data-subject.service.js';
+export {
+    AdministratorAccessProfile,
+    type AdministratorAccessAuthority,
+    type AdministratorAccessScope,
+    type AdministratorAccessStatus,
+} from './entities/administrator-access-profile.entity.js';
+export { AdministratorPermissionAudit } from './entities/administrator-permission-audit.entity.js';
+export { CustomerFollowUpEvent } from './entities/customer-follow-up-event.entity.js';
+export { CustomerFollowUp } from './entities/customer-follow-up.entity.js';
+export { CustomerOperationsProfile } from './entities/customer-operations-profile.entity.js';
+export { DataConsentRecord } from './entities/data-consent-record.entity.js';
+export { DataRetentionRecord } from './entities/data-retention-record.entity.js';
+export { DataSubjectRequest } from './entities/data-subject-request.entity.js';
+export { MarketingCampaignCost } from './entities/marketing-campaign-cost.entity.js';
 export { ReferralAccount } from './entities/referral-account.entity.js';
 export { ReferralLedgerEntry } from './entities/referral-ledger-entry.entity.js';
 export { ReferralProgramConfig } from './entities/referral-program-config.entity.js';
@@ -8,15 +56,22 @@ export { ReferralWalletUsage } from './entities/referral-wallet-usage.entity.js'
 export { ReferralWallet } from './entities/referral-wallet.entity.js';
 export { ReferralWithdrawal } from './entities/referral-withdrawal.entity.js';
 export { StoreAdministratorAccess } from './entities/store-administrator-access.entity.js';
+export { StoreGovernanceChangeRequest } from './entities/store-governance-change-request.entity.js';
 export { StoreProfile } from './entities/store-profile.entity.js';
 export { StoreUsdtManualRefund } from './entities/store-usdt-manual-refund.entity.js';
+export { StoreUsdtReconciliationAction } from './entities/store-usdt-reconciliation-action.entity.js';
 export { StoreUsdtWalletAudit } from './entities/store-usdt-wallet-audit.entity.js';
 export { StoreUsdtWallet } from './entities/store-usdt-wallet.entity.js';
+export { StorefrontOrderAttribution } from './entities/storefront-order-attribution.entity.js';
 export { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity.js';
 export { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity.js';
 export { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity.js';
 export { SystemAnnouncement } from './entities/system-announcement.entity.js';
+export { FraudRiskService } from './fraud-risk.service.js';
+export { GovernanceService } from './governance.service.js';
+export { MarketingAttributionService } from './marketing-attribution.service.js';
 export { MerchantCatalogAccessService } from './merchant-catalog-access.service.js';
+export { PermissionPolicyRegistry, storeRoleTemplates } from './permission-policy.js';
 export {
     accountEntryRoutes,
     createAccountEntryProof,
@@ -55,6 +110,7 @@ export {
     calculateUsdtCheckoutAmount,
     convertMinorPrice,
 } from './store-currency-settings.service.js';
+export { StoreGovernanceService } from './store-governance.service.js';
 export { StoreManagementPlugin } from './store-management.plugin.js';
 export { StorePaymentReportingService } from './store-payment-reporting.service.js';
 export { StoreProfileService } from './store-profile.service.js';

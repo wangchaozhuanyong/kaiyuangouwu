@@ -381,7 +381,7 @@ export function StorefrontModule() {
                         />
                         <Metric
                             label="当前店铺"
-                            value={query.data ? getChannelDisplayName(query.data.activeChannel.code) : '—'}
+                            value={query.data ? getChannelDisplayName(query.data.activeChannel) : '—'}
                             detail={`${heroCount} 张首页轮播图`}
                         />
                     </section>
@@ -572,7 +572,7 @@ export function StorefrontModule() {
 
             <StorefrontSettingsDrawer
                 open={settingsOpen}
-                channelName={query.data ? getChannelDisplayName(query.data.activeChannel.code) : '当前店铺'}
+                channelName={query.data ? getChannelDisplayName(query.data.activeChannel) : '当前店铺'}
                 onClose={() => setSettingsOpen(false)}
             >
                 {query.data?.storefrontAuthConfiguration ? (
@@ -591,9 +591,7 @@ export function StorefrontModule() {
                 <AccountHeroImagePanel
                     key={query.data?.activeChannel.id ?? 'loading'}
                     block={accountHeroBlock}
-                    channelName={
-                        query.data ? getChannelDisplayName(query.data.activeChannel.code) : '当前店铺'
-                    }
+                    channelName={query.data ? getChannelDisplayName(query.data.activeChannel) : '当前店铺'}
                     disabled={
                         query.loading ||
                         Boolean(query.error) ||

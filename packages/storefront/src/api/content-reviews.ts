@@ -1,5 +1,6 @@
 import type {
     AfterSalesRequest,
+    ConfirmAfterSalesReplacementInput,
     CreateAfterSalesRequestInput,
     StorefrontAuthSettings,
     StorefrontConfig,
@@ -9,6 +10,7 @@ import type {
     StorefrontReview,
     StorefrontReviewCandidate,
     StorefrontReviewList,
+    SubmitAfterSalesReturnShipmentInput,
     SubmitStorefrontReviewInput,
 } from '../types';
 import type { StorefrontContentQueryResult } from './helpers';
@@ -413,6 +415,32 @@ export class ContentReviewsApi extends BaseDomainApi {
             { id },
         );
         return result.cancelMyAfterSalesRequest;
+    }
+
+    async submitAfterSalesReturnShipment(
+        input: SubmitAfterSalesReturnShipmentInput,
+    ): Promise<AfterSalesRequest> {
+        const result = await this.request<{ submitMyAfterSalesReturnShipment: AfterSalesRequest }>(
+            `
+                mutation SubmitMyAfterSalesReturnShipment($input: SubmitAfterSalesReturnShipmentInput!) {
+                    submitMyAfterSalesReturnShipment(input: $input) { ${afterSalesFields} }
+                }
+            `,
+            { input },
+        );
+        return result.submitMyAfterSalesReturnShipment;
+    }
+
+    async confirmAfterSalesReplacement(input: ConfirmAfterSalesReplacementInput): Promise<AfterSalesRequest> {
+        const result = await this.request<{ confirmMyAfterSalesReplacement: AfterSalesRequest }>(
+            `
+                mutation ConfirmMyAfterSalesReplacement($input: ConfirmAfterSalesReplacementInput!) {
+                    confirmMyAfterSalesReplacement(input: $input) { ${afterSalesFields} }
+                }
+            `,
+            { input },
+        );
+        return result.confirmMyAfterSalesReplacement;
     }
 
     async productReviews(productId: string, signal?: AbortSignal): Promise<StorefrontReviewList> {

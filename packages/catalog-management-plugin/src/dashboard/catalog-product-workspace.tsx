@@ -44,6 +44,7 @@ import {
     createCatalogProductVariantMutation,
     createCatalogSupplierMutation,
     saveCatalogInventoryLotMutation,
+    transferCatalogInventoryLotMutation,
 } from './catalog-management.graphql';
 
 interface VariantDraft {
@@ -59,6 +60,8 @@ interface VariantDraft {
     sellingPrice: string;
     purchaseCost: string;
     stockOnHand: string;
+    originalStockOnHand: string;
+    stockAdjustmentReason: string;
     minimumStock: string;
     maximumStock: string;
     supplierId: string;
@@ -73,6 +76,18 @@ interface LotDraft {
     expiresAt: string;
     quantityOnHand: string;
     purchaseCost: string;
+    reason: string;
+}
+
+interface TransferDraft {
+    inventoryLotId: string;
+    lotCode: string;
+    sku: string;
+    sourceLocationId: string;
+    targetStockLocationId: string;
+    quantity: string;
+    maximumQuantity: number;
+    reason: string;
 }
 
 interface NewVariantDraft {
@@ -165,6 +180,7 @@ export function CatalogProductWorkspace({
     const [drafts, setDrafts] = useState<Record<string, VariantDraft>>({});
     const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
     const [lotDraft, setLotDraft] = useState<LotDraft | null>(null);
+    const [transferDraft, setTransferDraft] = useState<TransferDraft | null>(null);
     const [newVariantDraft, setNewVariantDraft] = useState<NewVariantDraft | null>(null);
     const [newVariantOpen, setNewVariantOpen] = useState(false);
     const newVariantIsDirty = useMemo(
@@ -208,6 +224,8 @@ export function CatalogProductWorkspace({
                     quantityOnHand: quantity,
                     purchaseCostMicrounits: cost,
                     currencyCode: workspace.currencyCode,
+                    idempotencyKey: crypto.randomUUID(),
+                    reason: draft.reason.trim(),
                 },
             });
         },
@@ -270,6 +288,26 @@ export function CatalogProductWorkspace({
                     queryKey: ['catalog-product-variant-creation-context', productId],
                 }),
             ]);
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+
+    const transferMutation = useMutation({
+        mutationFn: (draft: TransferDraft) =>
+            api.mutate(transferCatalogInventoryLotMutation, {
+                input: {
+                    inventoryLotId: draft.inventoryLotId,
+                    targetStockLocationId: draft.targetStockLocationId,
+                    quantity: requiredInteger(draft.quantity, '转仓数量'),
+                    idempotencyKey: crypto.randomUUID(),
+                    reason: draft.reason.trim(),
+                    reference: 'PRODUCT_WORKSPACE',
+                },
+            }),
+        onSuccess: async () => {
+            setTransferDraft(null);
+            toast.success('批次转仓已入账，来源与去向流水已保留');
+            await queryClient.invalidateQueries({ queryKey });
         },
         onError: error => toast.error(errorMessage(error)),
     });
@@ -626,13 +664,27 @@ export function CatalogProductWorkspace({
                                             </Badge>
                                         </TableCell>
                                         <TableCell>
-                                            <NumericInput
-                                                value={draft.stockOnHand}
-                                                onChange={value =>
-                                                    updateDraft(variant.id, { stockOnHand: value })
-                                                }
-                                                step="1"
-                                            />
+                                            <div className="min-w-40 space-y-2">
+                                                <NumericInput
+                                                    value={draft.stockOnHand}
+                                                    onChange={value =>
+                                                        updateDraft(variant.id, { stockOnHand: value })
+                                                    }
+                                                    step="1"
+                                                />
+                                                {draft.stockOnHand !== draft.originalStockOnHand && (
+                                                    <Input
+                                                        aria-label="库存调整原因"
+                                                        placeholder="必填：盘点原因"
+                                                        value={draft.stockAdjustmentReason}
+                                                        onChange={event =>
+                                                            updateDraft(variant.id, {
+                                                                stockAdjustmentReason: event.target.value,
+                                                            })
+                                                        }
+                                                    />
+                                                )}
+                                            </div>
                                         </TableCell>
                                         <TableCell>
                                             <NumericInput
@@ -739,29 +791,58 @@ export function CatalogProductWorkspace({
                                             </Badge>
                                         </TableCell>
                                         <TableCell>
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() =>
-                                                    setLotDraft({
-                                                        id: lot.id,
-                                                        productVariantId: lot.productVariantId,
-                                                        stockLocationId: lot.stockLocationId,
-                                                        lotCode: lot.lotCode,
-                                                        manufacturedAt: dateInput(lot.manufacturedAt),
-                                                        expiresAt: dateInput(lot.expiresAt),
-                                                        quantityOnHand: String(lot.quantityOnHand),
-                                                        purchaseCost:
-                                                            lot.purchaseCostMicrounits == null
-                                                                ? ''
-                                                                : (
-                                                                      lot.purchaseCostMicrounits / 1_000
-                                                                  ).toFixed(3),
-                                                    })
-                                                }
-                                            >
-                                                编辑
-                                            </Button>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() =>
+                                                        setLotDraft({
+                                                            id: lot.id,
+                                                            productVariantId: lot.productVariantId,
+                                                            stockLocationId: lot.stockLocationId,
+                                                            lotCode: lot.lotCode,
+                                                            manufacturedAt: dateInput(lot.manufacturedAt),
+                                                            expiresAt: dateInput(lot.expiresAt),
+                                                            quantityOnHand: String(lot.quantityOnHand),
+                                                            purchaseCost:
+                                                                lot.purchaseCostMicrounits == null
+                                                                    ? ''
+                                                                    : (
+                                                                          lot.purchaseCostMicrounits / 1_000
+                                                                      ).toFixed(3),
+                                                            reason: '',
+                                                        })
+                                                    }
+                                                >
+                                                    编辑
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    disabled={
+                                                        lot.quantityOnHand <= 0 ||
+                                                        workspace.stockLocations.length < 2
+                                                    }
+                                                    onClick={() =>
+                                                        setTransferDraft({
+                                                            inventoryLotId: lot.id,
+                                                            lotCode: lot.lotCode,
+                                                            sku: lot.sku,
+                                                            sourceLocationId: lot.stockLocationId,
+                                                            targetStockLocationId:
+                                                                workspace.stockLocations.find(
+                                                                    location =>
+                                                                        location.id !== lot.stockLocationId,
+                                                                )?.id ?? '',
+                                                            quantity: '1',
+                                                            maximumQuantity: lot.quantityOnHand,
+                                                            reason: '',
+                                                        })
+                                                    }
+                                                >
+                                                    转仓
+                                                </Button>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -779,6 +860,14 @@ export function CatalogProductWorkspace({
                 onChange={setLotDraft}
                 onClose={() => setLotDraft(null)}
                 onSave={() => lotDraft && lotMutation.mutate(lotDraft)}
+            />
+            <TransferEditor
+                draft={transferDraft}
+                stockLocations={workspace.stockLocations}
+                pending={transferMutation.isPending}
+                onChange={setTransferDraft}
+                onClose={() => setTransferDraft(null)}
+                onSave={() => transferDraft && transferMutation.mutate(transferDraft)}
             />
             <NewVariantEditor
                 open={newVariantOpen}
@@ -1082,13 +1171,105 @@ function LotEditor({
                             step="0.001"
                         />
                     </Field>
+                    <Field label="调整原因" className="sm:col-span-2">
+                        <Input
+                            value={draft.reason}
+                            placeholder="例如：月底盘点差异、破损报废"
+                            onChange={event => update({ reason: event.target.value })}
+                        />
+                    </Field>
                 </div>
                 <SheetFooter className="border-t pt-4">
                     <Button variant="outline" onClick={onClose}>
                         取消
                     </Button>
-                    <Button disabled={pending || !draft.lotCode.trim()} onClick={onSave}>
+                    <Button
+                        disabled={pending || !draft.lotCode.trim() || !draft.reason.trim()}
+                        onClick={onSave}
+                    >
                         {pending && <Loader2 className="mr-2 size-4 animate-spin" />}保存批次
+                    </Button>
+                </SheetFooter>
+            </SheetContent>
+        </Sheet>
+    );
+}
+
+function TransferEditor({
+    draft,
+    stockLocations,
+    pending,
+    onChange,
+    onClose,
+    onSave,
+}: Readonly<{
+    draft: TransferDraft | null;
+    stockLocations: Array<{ id: string; name: string }>;
+    pending: boolean;
+    onChange: (draft: TransferDraft | null) => void;
+    onClose: () => void;
+    onSave: () => void;
+}>) {
+    if (!draft) return null;
+    const update = (values: Partial<TransferDraft>) => onChange({ ...draft, ...values });
+    const quantity = Number(draft.quantity);
+    const validQuantity = Number.isSafeInteger(quantity) && quantity > 0 && quantity <= draft.maximumQuantity;
+    return (
+        <Sheet open onOpenChange={open => !open && onClose()}>
+            <SheetContent className="flex w-full flex-col overflow-y-auto sm:max-w-[520px]">
+                <SheetHeader>
+                    <SheetTitle>批次转仓</SheetTitle>
+                    <SheetDescription>
+                        {draft.sku} · {draft.lotCode}，最多可转 {draft.maximumQuantity}
+                    </SheetDescription>
+                </SheetHeader>
+                <div className="grid flex-1 content-start gap-4 py-6">
+                    <Field label="目标仓库">
+                        <Select
+                            value={draft.targetStockLocationId}
+                            onValueChange={value => value && update({ targetStockLocationId: value })}
+                        >
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {stockLocations
+                                    .filter(location => location.id !== draft.sourceLocationId)
+                                    .map(location => (
+                                        <SelectItem key={location.id} value={location.id}>
+                                            {location.name}
+                                        </SelectItem>
+                                    ))}
+                            </SelectContent>
+                        </Select>
+                    </Field>
+                    <Field label="转仓数量">
+                        <NumericInput
+                            value={draft.quantity}
+                            onChange={nextQuantity => update({ quantity: nextQuantity })}
+                            step="1"
+                        />
+                    </Field>
+                    <Field label="转仓原因">
+                        <Input
+                            value={draft.reason}
+                            placeholder="必填：调拨单号或业务原因"
+                            onChange={event => update({ reason: event.target.value })}
+                        />
+                    </Field>
+                </div>
+                <SheetFooter className="border-t pt-4">
+                    <Button variant="outline" onClick={onClose} disabled={pending}>
+                        取消
+                    </Button>
+                    <Button
+                        onClick={onSave}
+                        disabled={
+                            pending || !draft.targetStockLocationId || !draft.reason.trim() || !validQuantity
+                        }
+                    >
+                        {pending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                        确认转仓
                     </Button>
                 </SheetFooter>
             </SheetContent>
@@ -1161,6 +1342,8 @@ function toDraft(variant: CatalogWorkspaceVariantRecord, stockLocationId: string
         purchaseCost:
             variant.purchaseCostMicrounits == null ? '' : (variant.purchaseCostMicrounits / 1_000).toFixed(3),
         stockOnHand: String(stock?.stockOnHand ?? 0),
+        originalStockOnHand: String(stock?.stockOnHand ?? 0),
+        stockAdjustmentReason: '',
         minimumStock: stock?.minimumStock == null ? '' : String(stock.minimumStock),
         maximumStock: stock?.maximumStock == null ? '' : String(stock.maximumStock),
         supplierId: variant.supplier?.id ?? '',
@@ -1176,6 +1359,7 @@ function emptyLot(productVariantId: string, stockLocationId: string): LotDraft {
         expiresAt: '',
         quantityOnHand: '0',
         purchaseCost: '',
+        reason: '',
     };
 }
 
@@ -1185,6 +1369,9 @@ function validateDraft(draft: VariantDraft): void {
     const max = optionalInteger(draft.maximumStock, '库存上限');
     if (min != null && max != null && max < min) throw new Error('库存上限不能小于库存下限');
     if (requiredNumber(draft.packageQuantity, '包装换算') <= 0) throw new Error('包装换算必须大于 0');
+    if (draft.stockOnHand !== draft.originalStockOnHand && !draft.stockAdjustmentReason.trim()) {
+        throw new Error('库存变更必须填写盘点原因');
+    }
 }
 
 function variantOperationInput(
@@ -1211,7 +1398,13 @@ function variantOperationInput(
               }
             : {}),
         currencyCode,
-        stockOnHand: requiredInteger(draft.stockOnHand, '库存'),
+        ...(draft.stockOnHand !== draft.originalStockOnHand
+            ? {
+                  stockOnHand: requiredInteger(draft.stockOnHand, '库存'),
+                  stockAdjustmentIdempotencyKey: crypto.randomUUID(),
+                  stockAdjustmentReason: draft.stockAdjustmentReason.trim(),
+              }
+            : {}),
         minimumStock: optionalInteger(draft.minimumStock, '库存下限'),
         maximumStock: optionalInteger(draft.maximumStock, '库存上限'),
         supplierId: draft.supplierId || null,

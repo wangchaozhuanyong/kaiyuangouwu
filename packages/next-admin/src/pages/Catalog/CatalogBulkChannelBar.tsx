@@ -7,6 +7,7 @@ export interface ChannelOption {
     id: string;
     code: string;
     isDefault?: boolean;
+    displayName?: string | null;
 }
 
 export interface CatalogBulkChannelBarProps {
@@ -58,7 +59,7 @@ export function CatalogBulkChannelBar({
     if (selectedCount <= 0) return null;
 
     const selectedChannel = channels.find(c => c.id === effectiveChannelId);
-    const channelName = selectedChannel ? getChannelDisplayName(selectedChannel.code) : '';
+    const channelName = selectedChannel ? getChannelDisplayName(selectedChannel) : '';
 
     return (
         <div
@@ -90,7 +91,7 @@ export function CatalogBulkChannelBar({
                     >
                         {channels.map(channel => (
                             <option key={channel.id} value={channel.id}>
-                                {getChannelDisplayName(channel.code)}
+                                {getChannelDisplayName(channel)}
                                 {channel.isDefault ? ' (主店铺)' : ''}
                             </option>
                         ))}
@@ -99,7 +100,10 @@ export function CatalogBulkChannelBar({
 
                 {/* Price Factor (optional for assign) */}
                 <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-2 py-1 shadow-2xs">
-                    <label htmlFor="bulk-price-factor" className="text-[11px] text-slate-500 whitespace-nowrap">
+                    <label
+                        htmlFor="bulk-price-factor"
+                        className="text-[11px] text-slate-500 whitespace-nowrap"
+                    >
                         价格系数:
                     </label>
                     <input

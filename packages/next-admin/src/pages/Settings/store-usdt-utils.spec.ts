@@ -123,6 +123,7 @@ describe('store USDT setup helpers', () => {
         expect(storeUsdtPaymentIntentStatusLabel('SETTLED')).toBe('已到账');
         expect(storeUsdtPaymentIntentStatusLabel('MANUAL_REVIEW')).toBe('待人工复核');
         expect(storeUsdtPaymentIntentStatusLabel('EXPIRED')).toBe('已过期');
+        expect(storeUsdtPaymentIntentStatusLabel('RESOLVED')).toBe('已人工闭环');
         expect(storeUsdtPaymentIntentStatusLabel('NEW_BACKEND_STATUS')).toBe('未知状态');
     });
 });

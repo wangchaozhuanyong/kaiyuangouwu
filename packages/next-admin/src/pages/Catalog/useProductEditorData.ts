@@ -1,6 +1,6 @@
 import { useQuery } from '@apollo/client/react';
 import type { DocumentNode } from 'graphql';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { GET_STOCK_LOCATIONS } from '../../graphql/catalog-admin.graphql';
 import {
     CATALOG_PRODUCT_WORKSPACE_QUERY,
@@ -88,42 +88,24 @@ export function useProductEditorData({
     const fixedFulfillmentType = fulfillmentTypeForMode(commerceMode);
 
     const {
-        data: rawProductData,
+        data: productData,
         loading: productLoading,
         error: productError,
         refetch: refetchProduct,
-    } = useQuery<{
-        product: ProductDetailRecord | null;
-        catalogProductChannelAssignments?: {
-            items: Array<{ id: string; channels: ProductDetailRecord['channels'] }>;
-        };
-    }>(productDetailDocument, {
-        variables: { id: productId, assignmentId: productId },
+    } = useQuery<{ product: ProductDetailRecord | null }>(productDetailDocument, {
+        variables: { id: productId },
         skip: isCreateMode,
         fetchPolicy: 'network-only',
     });
-    const productData = useMemo(() => {
-        if (!rawProductData?.product) return rawProductData;
-        const assignment = rawProductData.catalogProductChannelAssignments?.items.find(
-            item => item.id === rawProductData.product?.id,
-        );
-        // Core Product.channels only exposes the current non-default channel.
-        // The existing assignment view returns exactly the stores this admin may read.
-        return assignment
-            ? { ...rawProductData, product: { ...rawProductData.product, channels: assignment.channels } }
-            : rawProductData;
-    }, [rawProductData]);
 
-    const {
-        data: workspaceData,
-        loading: workspaceLoading,
-        error: workspaceError,
-        refetch: refetchWorkspace,
-    } = useQuery<CatalogWorkspaceResult>(CATALOG_PRODUCT_WORKSPACE_QUERY, {
-        variables: { productId },
-        skip: !productId || isCreateMode,
-        fetchPolicy: 'cache-and-network',
-    });
+    const { data: workspaceData, refetch: refetchWorkspace } = useQuery<CatalogWorkspaceResult>(
+        CATALOG_PRODUCT_WORKSPACE_QUERY,
+        {
+            variables: { productId },
+            skip: !productId || isCreateMode,
+            fetchPolicy: 'cache-and-network',
+        },
+    );
 
     const { data: stockLocationsData } = useQuery<{
         stockLocations: { items: Array<{ id: string; name: string }>; totalItems: number };

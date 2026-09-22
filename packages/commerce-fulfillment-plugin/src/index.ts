@@ -1,6 +1,8 @@
 export type {
     AfterSalesActorType,
     AfterSalesReason,
+    AfterSalesReplacementStatus,
+    AfterSalesReturnStatus,
     AfterSalesState,
     AfterSalesType,
 } from './after-sales.constants';
@@ -49,6 +51,9 @@ export { AutoCardConfig } from './entities/auto-card-config.entity';
 export { AutoCardDeliveryEvent } from './entities/auto-card-delivery-event.entity';
 export { AutoCardDelivery } from './entities/auto-card-delivery.entity';
 export { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
+export { FulfillmentDeliveryEvent } from './entities/fulfillment-delivery-event.entity';
+export { FulfillmentDeliveryRecord } from './entities/fulfillment-delivery-record.entity';
+export type { FulfillmentDeliveryStatus } from './entities/fulfillment-delivery-record.entity';
 export { ManualDigitalDeliveryEvent } from './entities/manual-digital-delivery-event.entity';
 export { ManualDigitalDelivery } from './entities/manual-digital-delivery.entity';
 export { PackagingUnpackEvent } from './entities/packaging-unpack-event.entity';
@@ -63,6 +68,7 @@ export {
     summarizeOrderFulfillment,
 } from './fulfillment-classification';
 export type { CheckoutFulfillmentSummary } from './fulfillment-classification';
+export { FulfillmentDeliveryService } from './fulfillment-delivery.service';
 export { ManualDigitalDeliveryReadyEvent } from './manual-digital-delivery.event';
 export { ManualDigitalDeliveryService } from './manual-digital-delivery.service';
 export { manualServiceFulfillmentHandler } from './manual-service-fulfillment-handler';

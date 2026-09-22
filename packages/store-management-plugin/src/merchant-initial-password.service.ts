@@ -13,6 +13,7 @@ import {
     UserInputError,
 } from '@vendure/core';
 
+import { AdministratorAccessProfile } from './entities/administrator-access-profile.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 
 const passwordProtectedAdminMutations = new Set([
@@ -74,12 +75,14 @@ const passwordProtectedAdminMutations = new Set([
     'settlePayment',
     'settleRefund',
     'submitMyStoreUsdtWallet',
+    'suspendManagedAdministrator',
     'transitionPaymentToState',
     'updateApiKey',
     'updateMyStoreCurrencyConfiguration',
     'adjustReferralBalance',
     'processReferralWithdrawal',
     'updateRole',
+    'updateManagedRole',
 ]);
 
 const passwordProtectedEnabledMutations = new Set([
@@ -125,6 +128,13 @@ export class MerchantInitialPasswordService {
     ) {}
 
     async requirePasswordChange(ctx: RequestContext, administrator: Administrator): Promise<void> {
+        const profileRepository = this.connection.getRepository(ctx, AdministratorAccessProfile);
+        const profile = await profileRepository.findOne({ where: { administratorId: administrator.id } });
+        if (profile) {
+            profile.mustChangePassword = true;
+            profile.userId = administrator.user.id;
+            await profileRepository.save(profile);
+        }
         const repository = this.connection.getRepository(ctx, StoreAdministratorAccess);
         const existing = await repository.findOne({ where: { administratorId: administrator.id } });
         if (existing) {
@@ -169,6 +179,13 @@ export class MerchantInitialPasswordService {
         await this.administratorService.update(ctx, { id: administrator.id, password });
         access.mustChangePassword = false;
         await repository.save(access);
+        const profile = await this.connection
+            .getRepository(ctx, AdministratorAccessProfile)
+            .findOne({ where: { userId: ctx.activeUserId } });
+        if (profile) {
+            profile.mustChangePassword = false;
+            await this.connection.getRepository(ctx, AdministratorAccessProfile).save(profile);
+        }
         return { mustChangePassword: false };
     }
 
@@ -217,6 +234,10 @@ export class MerchantInitialPasswordService {
         if (!ctx.activeUserId) {
             return false;
         }
+        const profile = await this.connection
+            .getRepository(ctx, AdministratorAccessProfile)
+            .findOne({ where: { userId: ctx.activeUserId } });
+        if (profile) return profile.mustChangePassword;
         const access = await this.connection
             .getRepository(ctx, StoreAdministratorAccess)
             .findOne({ where: { userId: ctx.activeUserId } });

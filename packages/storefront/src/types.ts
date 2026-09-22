@@ -135,8 +135,11 @@ export interface ManualDigitalOrderDelivery {
     orderLineId: string;
 }
 
-export type AfterSalesType = 'REFUND_ONLY' | 'RETURN_AND_REFUND';
+export type AfterSalesType = 'REFUND_ONLY' | 'RETURN_AND_REFUND' | 'EXCHANGE' | 'RESHIP';
 export type AfterSalesState = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'COMPLETED';
+export type AfterSalesReturnStatus =
+    'NOT_REQUIRED' | 'AWAITING_SHIPMENT' | 'IN_TRANSIT' | 'RECEIVED' | 'INSPECTED';
+export type AfterSalesReplacementStatus = 'NOT_REQUIRED' | 'PENDING' | 'SHIPPED' | 'EXCEPTION' | 'DELIVERED';
 export type AfterSalesReason =
     | 'CHANGED_MIND'
     | 'NOT_AS_DESCRIBED'
@@ -155,12 +158,18 @@ export interface AfterSalesItem {
     productName: string;
     sku: string;
     fulfillmentType: FulfillmentType;
+    acceptedReturnQuantity: number;
+    rejectedReturnQuantity: number;
+    returnLotCode?: string | null;
+    inventoryOperationId?: string | null;
+    returnStockLocation?: { id: string; name: string } | null;
 }
 
 export interface AfterSalesEvent {
     id: string;
     createdAt: string;
     state: AfterSalesState;
+    eventType: string;
     actorType: 'CUSTOMER' | 'ADMIN' | 'SYSTEM';
     actorLabel: string;
     note: string;
@@ -179,6 +188,23 @@ export interface AfterSalesRequest {
     requestedAmount: number;
     approvedAmount?: number | null;
     resolution?: string | null;
+    returnStatus: AfterSalesReturnStatus;
+    returnInstructions?: string | null;
+    returnCarrier?: string | null;
+    returnTrackingCode?: string | null;
+    returnShippedAt?: string | null;
+    returnReceivedAt?: string | null;
+    inspectedAt?: string | null;
+    inspectionNote?: string | null;
+    replacementStatus: AfterSalesReplacementStatus;
+    replacementCarrier?: string | null;
+    replacementTrackingCode?: string | null;
+    replacementProofReference?: string | null;
+    replacementException?: string | null;
+    replacementShippedAt?: string | null;
+    replacementDeliveredAt?: string | null;
+    nextActionDueAt?: string | null;
+    overdue: boolean;
     respondedAt?: string | null;
     completedAt?: string | null;
     cancelledAt?: string | null;
@@ -193,6 +219,18 @@ export interface CreateAfterSalesRequestInput {
     reason: AfterSalesReason;
     description: string;
     items: Array<{ orderLineId: string; quantity: number }>;
+}
+
+export interface SubmitAfterSalesReturnShipmentInput {
+    id: string;
+    carrier: string;
+    trackingCode: string;
+    idempotencyKey: string;
+}
+
+export interface ConfirmAfterSalesReplacementInput {
+    id: string;
+    idempotencyKey: string;
 }
 
 export type StorefrontReviewState = 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -258,6 +296,33 @@ export interface OrderFulfillment {
     trackingCode?: string | null;
     createdAt: string;
     updatedAt: string;
+    deliveryEvidence?: FulfillmentDeliveryEvidence | null;
+}
+
+export interface FulfillmentDeliveryEvidence {
+    id: string;
+    status: 'IN_TRANSIT' | 'EXCEPTION' | 'DELIVERED';
+    carrier: string;
+    trackingCode: string;
+    exceptionReason?: string | null;
+    proofReference?: string | null;
+    shippedAt: string;
+    deliveredAt?: string | null;
+    nextActionDueAt?: string | null;
+    overdue: boolean;
+    events: Array<{
+        id: string;
+        createdAt: string;
+        status: 'IN_TRANSIT' | 'EXCEPTION' | 'DELIVERED';
+        actorType: 'CUSTOMER' | 'ADMIN' | 'SYSTEM';
+        actorLabel: string;
+        note: string;
+    }>;
+}
+
+export interface ConfirmFulfillmentDeliveryInput {
+    fulfillmentId: string;
+    idempotencyKey: string;
 }
 
 export interface DigitalDelivery {
@@ -417,6 +482,23 @@ export interface RegisterCustomerInput {
     password?: string;
 }
 
+export interface StorefrontRegistrationConsentInput {
+    termsAccepted: boolean;
+    privacyAcknowledged: boolean;
+    locale: string;
+}
+
+export interface DataConsentRecord {
+    id: string;
+    purpose: 'TERMS' | 'PRIVACY' | 'ANALYTICS';
+    action: 'GRANTED' | 'WITHDRAWN';
+    policyVersion: string;
+    policyDigest: string;
+    locale: string;
+    source: string;
+    recordedAt: string;
+}
+
 export interface ReferralProgram {
     channelId: string;
     enabled: boolean;
@@ -568,6 +650,58 @@ export interface ActiveCustomer {
     avatar?: Asset | null;
     addresses: CustomerAddress[] | null;
     orders: { items: OrderSummary[]; totalItems: number };
+}
+
+export interface CustomerAvatarHistoryEntry {
+    id: string;
+    status: 'PENDING' | 'BLOCKED_REFERENCE' | 'FAILED';
+    quarantinedAt: string;
+    purgeAfter: string;
+    legalHold: boolean;
+    asset: Asset | null;
+}
+
+export interface DataSubjectRequest {
+    id: string;
+    requestType: 'EXPORT' | 'ACCOUNT_CLOSURE';
+    status: 'PENDING' | 'PROCESSING' | 'BLOCKED' | 'FAILED' | 'FULFILLED' | 'CANCELLED';
+    requestedAt: string;
+    dueAt: string | null;
+    nextAttemptAt: string | null;
+    attemptCount: number;
+    blockersJson: string | null;
+    lastError: string | null;
+    resultDigest: string | null;
+    completedAt: string | null;
+    cancelledAt: string | null;
+}
+
+export interface DataSubjectExportPayload {
+    request: DataSubjectRequest;
+    fileName: string;
+    mimeType: string;
+    content: string;
+    sha256: string;
+}
+
+export interface FraudRiskAppeal {
+    id: string;
+    createdAt: string;
+    status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+    reason: string;
+    reviewedAt: string | null;
+}
+
+export interface FraudRiskCase {
+    id: string;
+    createdAt: string;
+    caseCode: string;
+    orderId: string | null;
+    status: 'OPEN' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED' | 'APPEALED' | 'CLOSED';
+    severity: 'P1' | 'P2' | 'P3';
+    dueAt: string;
+    decidedAt: string | null;
+    appeals: FraudRiskAppeal[];
 }
 
 export type StorefrontCartState = 'OPEN' | 'PAYMENT_PENDING';

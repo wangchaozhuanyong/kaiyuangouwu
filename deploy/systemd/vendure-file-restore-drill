@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+umask 077
+
+readonly vendure_repo_dir="${VENDURE_REPO_DIR:-/var/www/kaiyuangouwu}"
+readonly vendure_env_file="${VENDURE_ENV_FILE:-${vendure_repo_dir}/packages/dev-server/.env}"
+readonly vendure_backup_dir="${VENDURE_FILE_BACKUP_DIR:-/var/backups/vendure-files}"
+readonly vendure_evidence_dir="${VENDURE_READINESS_EVIDENCE_DIR:-/var/lib/vendure-readiness}"
+readonly recovery_rto_seconds="${VENDURE_FILE_RECOVERY_RTO_SECONDS:-14400}"
+readonly backup_tool="$(dirname "$(readlink -f "$0")")/vendure-file-backup.py"
+readonly s3_snapshot_tool="$(dirname "$(readlink -f "$0")")/vendure-s3-prefix-snapshot.py"
+
+if [[ ! -r "${vendure_env_file}" ]]; then
+    printf 'Production environment file is not readable: %s\n' "${vendure_env_file}" >&2
+    exit 1
+fi
+if [[ ! "${recovery_rto_seconds}" =~ ^[0-9]+$ ]] || ((recovery_rto_seconds < 300)); then
+    printf 'VENDURE_FILE_RECOVERY_RTO_SECONDS must be an integer of at least 300\n' >&2
+    exit 1
+fi
+
+set -a
+# shellcheck disable=SC1090
+source "${vendure_env_file}"
+set +a
+readonly offsite_backup_required="${VENDURE_REQUIRE_OFFSITE_FILE_BACKUP:-false}"
+readonly offsite_backup_uri="${VENDURE_FILE_BACKUP_S3_URI:-}"
+if [[ ! "${offsite_backup_required}" =~ ^(true|false)$ ]]; then
+    printf 'VENDURE_REQUIRE_OFFSITE_FILE_BACKUP must be true or false\n' >&2
+    exit 1
+fi
+if [[ "${offsite_backup_required}" == "true" && -z "${offsite_backup_uri}" ]]; then
+    printf 'Offsite file backup is mandatory but no S3 destination is configured\n' >&2
+    exit 1
+fi
+if [[ -n "${offsite_backup_uri}" && ! "${offsite_backup_uri}" =~ ^s3://[a-z0-9.-]+(/[A-Za-z0-9._/-]+)?$ ]]; then
+    printf 'VENDURE_FILE_BACKUP_S3_URI must be a safe s3:// bucket prefix\n' >&2
+    exit 1
+fi
+
+install -d -m 0700 "${vendure_backup_dir}" "${vendure_evidence_dir}"
+exec 8>"${vendure_backup_dir}/.backup.lock"
+flock --shared 8
+readonly started_epoch="$(date +%s)"
+drill_directory="$(mktemp -d "${vendure_evidence_dir}/file-restore-drill.XXXXXX")"
+readonly drill_directory
+cleanup() {
+    rm -rf -- "${drill_directory}"
+}
+trap cleanup EXIT
+
+backup_file=""
+backup_name=""
+backup_source="local"
+if [[ -n "${offsite_backup_uri}" ]]; then
+    command -v aws >/dev/null 2>&1 || {
+        printf 'AWS CLI is required for the offsite file restore drill\n' >&2
+        exit 1
+    }
+    backup_source="offsite"
+    readonly offsite_prefix="${offsite_backup_uri%/}"
+    readonly bucket_and_prefix="${offsite_prefix#s3://}"
+    readonly bucket="${bucket_and_prefix%%/*}"
+    prefix="${bucket_and_prefix#${bucket}}"
+    prefix="${prefix#/}"
+    object_prefix=""
+    if [[ -n "${prefix}" ]]; then object_prefix="${prefix}/"; fi
+    readonly object_prefix
+    objects_json="$(aws s3api list-objects-v2 --bucket "${bucket}" --prefix "${object_prefix}vendure-files-" --output json)"
+    checksum_key="$(jq -er --arg prefix "${object_prefix}" '
+        [.Contents[]?
+            | select(.Key | startswith($prefix))
+            | select((.Key | split("/") | last) | test("^vendure-files-[0-9]{8}T[0-9]{6}Z[.]tar[.]gz[.]sha256$"))]
+        | sort_by(.LastModified) | last | .Key
+    ' <<<"${objects_json}")" || {
+        printf 'No independently discoverable offsite file backup is available\n' >&2
+        exit 1
+    }
+    readonly checksum_key
+    backup_name="$(basename "${checksum_key%.sha256}")"
+    if [[ "${checksum_key}" != "${object_prefix}${backup_name}.sha256" ]]; then
+        printf 'Latest offsite file backup key is outside the configured prefix\n' >&2
+        exit 1
+    fi
+    backup_file="${drill_directory}/${backup_name}"
+    for suffix in '' '.manifest.json' '.sha256'; do
+        aws s3 cp "s3://${bucket}/${object_prefix}${backup_name}${suffix}" "${backup_file}${suffix}" \
+            --only-show-errors
+    done
+else
+    backup_checksum="$(find "${vendure_backup_dir}" -maxdepth 1 -type f -name 'vendure-files-*.tar.gz.sha256' -printf '%T@ %p\n' | sort -nr | awk 'NR == 1 { sub(/^[^ ]+ /, ""); print }')"
+    readonly backup_checksum
+    if [[ -z "${backup_checksum}" ]]; then
+        printf 'No verified persistent file backup is available for the restore drill\n' >&2
+        exit 1
+    fi
+    backup_file="${backup_checksum%.sha256}"
+    backup_name="$(basename "${backup_file}")"
+fi
+readonly backup_file backup_name backup_source
+
+(
+    cd "$(dirname "${backup_file}")"
+    sha256sum --check "$(basename "${backup_file}.sha256")"
+)
+gzip -t "${backup_file}"
+verify_result="$(python3 "${backup_tool}" verify "${backup_file}")"
+readonly verify_result
+restore_result="$(python3 "${backup_tool}" restore "${backup_file}" "${drill_directory}/restored")"
+readonly restore_result
+for restored_source in customer-avatars private-images; do
+    restored_source_root="${drill_directory}/restored/${restored_source}"
+    if [[ -f "${restored_source_root}/S3_SOURCE_MANIFEST.json" ]]; then
+        python3 "${s3_snapshot_tool}" verify "${restored_source_root}" >/dev/null
+    fi
+done
+readonly completed_epoch="$(date +%s)"
+readonly duration_seconds="$((completed_epoch - started_epoch))"
+if ((duration_seconds > recovery_rto_seconds)); then
+    printf 'Persistent file restore exceeded RTO: duration=%s rto=%s\n' \
+        "${duration_seconds}" "${recovery_rto_seconds}" >&2
+    exit 1
+fi
+[[ "${verify_result}" == "${restore_result}" ]] || {
+    printf 'Persistent file verify and restore summaries differ\n' >&2
+    exit 1
+}
+
+jq -n \
+    --arg completedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg backupFile "${backup_name}" \
+    --arg source "${backup_source}" \
+    --argjson durationSeconds "${duration_seconds}" \
+    --argjson rtoSeconds "${recovery_rto_seconds}" \
+    --argjson archive "${restore_result}" \
+    '{completedAt:$completedAt,backupFile:$backupFile,source:$source,durationSeconds:$durationSeconds,rtoSeconds:$rtoSeconds,archive:$archive}' \
+    >"${vendure_evidence_dir}/file-restore-drill.json"
+
+printf 'Persistent file restore drill passed: source=%s files=%s bytes=%s duration_seconds=%s rto_seconds=%s\n' \
+    "${backup_source}" "$(jq -r '.fileCount' <<<"${restore_result}")" \
+    "$(jq -r '.totalBytes' <<<"${restore_result}")" "${duration_seconds}" "${recovery_rto_seconds}"

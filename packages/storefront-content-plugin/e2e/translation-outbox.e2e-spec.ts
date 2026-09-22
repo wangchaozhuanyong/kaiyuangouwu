@@ -17,6 +17,7 @@ import {
 } from '@vendure/core';
 import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
+import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfig } from '@vendure/testing';
 import { TwoFactorDashboardPlugin } from '@vendure/two-factor-dashboard-plugin';
 import gql from 'graphql-tag';
@@ -28,7 +29,6 @@ import { In, Not } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
-import { StorefrontContentPlugin } from '../src/storefront-content.plugin';
 
 // Use the same CJS token as Vendure; Vite direct deep imports create a second class identity.
 const { SearchIndexService } = createRequire(__filename)(
@@ -117,15 +117,32 @@ describe('real Admin API saves and Shop API publication with the translation out
             customerCount: 0,
         });
         await adminClient.asSuperAdmin();
+        for (const [code, title] of [
+            ['terms', '测试使用条款'],
+            ['privacy', '测试隐私政策'],
+        ]) {
+            await adminClient.query(create, {
+                input: {
+                    code,
+                    internalName: title,
+                    type: 'LEGAL',
+                    enabled: true,
+                    position: 0,
+                    translations: [{ languageCode: 'zh_Hans', title, body: title }],
+                    items: [],
+                },
+            });
+        }
         await shopClient.query(gql`
             mutation {
-                registerCustomerAccount(
+                registerCustomerWithReferral(
                     input: {
                         emailAddress: "outbox-catalog@example.test"
                         password: "OutboxFixturePass123!"
                         firstName: "Outbox"
                         lastName: "Fixture"
                     }
+                    consent: { termsAccepted: true, privacyAcknowledged: true, locale: "zh" }
                 ) {
                     __typename
                 }

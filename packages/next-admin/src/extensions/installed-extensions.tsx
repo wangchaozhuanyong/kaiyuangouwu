@@ -1,10 +1,20 @@
 /* oxlint-disable react/only-export-components -- this module intentionally registers lazy extension components as import side effects */
-import { KeyRound, Mail, Puzzle, Share2, Sparkles, Terminal, Truck, WalletCards } from 'lucide-react';
+import {
+    ClipboardCheck,
+    Database,
+    KeyRound,
+    Mail,
+    Puzzle,
+    Share2,
+    Sparkles,
+    Terminal,
+    Truck,
+    WalletCards,
+} from 'lucide-react';
 import { lazy, type ComponentType } from 'react';
 import { Navigate } from 'react-router-dom';
 
 import { CatalogUnitCustomFieldInput } from '../pages/Catalog/catalog-unit-input';
-import { CatalogBulkChannelAction } from '../pages/Catalog/CatalogBulkChannelAction';
 import { CatalogExportAction } from '../pages/Catalog/CatalogExportAction';
 import {
     CatalogOperationsBlock,
@@ -82,8 +92,17 @@ const StoreSettingsModule = lazy(() =>
 const SuppliersModule = lazy(() =>
     routeModuleLoaders.suppliers().then(module => ({ default: module.SuppliersModule })),
 );
+const PurchaseOrdersModule = lazy(() =>
+    routeModuleLoaders.purchaseOrders().then(module => ({ default: module.PurchaseOrdersModule })),
+);
+const InventoryControlModule = lazy(() =>
+    routeModuleLoaders.inventoryControl().then(module => ({ default: module.InventoryControlModule })),
+);
 const UsdtPaymentManagementModule = lazy(() =>
     routeModuleLoaders.usdtPayments().then(module => ({ default: module.UsdtPaymentManagementModule })),
+);
+const DataManagementModule = lazy(() =>
+    routeModuleLoaders.dataManagement().then(module => ({ default: module.DataManagementModule })),
 );
 
 function redirectTo(target: string): ComponentType {
@@ -116,7 +135,7 @@ defineNextAdminExtension({
             legacyPaths: ['/image-generation-access'],
             title: 'AI 服务商接入',
             component: AiImageAccessModule,
-            permissions: ['SuperAdmin'],
+            permissions: ['ReviewStoreGovernance', 'SuperAdmin'],
             navItem: {
                 label: 'AI 服务商接入',
                 sectionId: 'plugins',
@@ -217,6 +236,44 @@ defineNextAdminExtension({
             },
             preload: routeModuleLoaders.suppliers,
         },
+        {
+            id: 'catalog-purchase-orders',
+            path: '/catalog/purchase-orders',
+            legacyPaths: ['/catalog-purchase-orders'],
+            title: '采购与收货',
+            component: PurchaseOrdersModule,
+            permissions: ['ReadCatalogSupplier', 'ReadCatalogOperations'],
+            navItem: {
+                label: '采购与收货',
+                sectionId: 'catalog',
+                icon: ClipboardCheck,
+                order: 65,
+            },
+            preload: routeModuleLoaders.purchaseOrders,
+        },
+        {
+            id: 'catalog-inventory-control-compatibility',
+            path: '/catalog/inventory-control',
+            legacyPaths: ['/catalog-inventory-control'],
+            title: '库存控制台',
+            component: InventoryControlModule,
+            permissions: ['ReadCatalogOperations'],
+            navItem: {
+                label: '库存对账',
+                sectionId: 'catalog',
+                icon: Database,
+                order: 67,
+            },
+            preload: routeModuleLoaders.inventoryControl,
+        },
+        {
+            id: 'incident-response-compatibility',
+            path: '/settings/incident-response',
+            legacyPaths: ['/incident-response'],
+            title: '事故响应',
+            component: redirectTo('/settings/system-ops?tab=telegram'),
+            permissions: ['ReadSettings'],
+        },
     ],
     actions: [
         {
@@ -234,14 +291,6 @@ defineNextAdminExtension({
             component: CatalogExportAction,
             permissions: ['ReadCatalogExport'],
             order: 20,
-        },
-        {
-            id: 'catalog-bulk-channels',
-            pageId: 'product-list',
-            label: '批量店铺',
-            component: CatalogBulkChannelAction,
-            permissions: ['UpdateProduct'],
-            order: 30,
         },
     ],
     pageBlocks: [
@@ -372,6 +421,15 @@ defineNextAdminExtension({
     ],
     routes: [
         {
+            id: 'operations-governance-risk-compatibility',
+            path: '/settings/governance-risk',
+            legacyPaths: [{ path: '/governance-risk', target: '/settings/system-ops?tab=governance' }],
+            title: '治理与风控',
+            component: redirectTo('/settings/system-ops?tab=governance'),
+            permissions: ['SuperAdmin'],
+            commandPalette: false,
+        },
+        {
             id: 'operations-after-sales',
             path: '/sales/after-sales',
             legacyPaths: ['/after-sales'],
@@ -443,6 +501,8 @@ defineNextAdminExtension({
                 'ReadSeller',
                 'ReadPaymentMethod',
                 'ReadShippingMethod',
+                'ManageStoreLifecycle',
+                'ReviewStoreGovernance',
             ],
             preload: routeModuleLoaders.storeSettings,
         },
@@ -462,12 +522,27 @@ defineNextAdminExtension({
             preload: routeModuleLoaders.usdtPayments,
         },
         {
+            id: 'store-data-management',
+            path: '/settings/data-management',
+            title: '数据管理中心',
+            component: DataManagementModule,
+            permissions: ['SuperAdmin'],
+            navItem: {
+                label: '数据管理中心',
+                sectionId: 'settings',
+                icon: Database,
+                order: 20,
+            },
+            preload: routeModuleLoaders.dataManagement,
+        },
+        {
             id: 'store-management-promotions',
             path: '/marketing/promotions',
             legacyPaths: [
                 { path: '/store-coupons', target: '/marketing/promotions?tab=coupons' },
                 { path: '/store-flash-sales', target: '/marketing/promotions?tab=flash-sales' },
                 { path: '/store-promotion-campaigns', target: '/marketing/promotions?tab=coupons' },
+                { path: '/marketing-attribution', target: '/marketing/promotions?tab=attribution' },
             ],
             title: '优惠与促销',
             component: PromotionsModule,

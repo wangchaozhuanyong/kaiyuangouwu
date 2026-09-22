@@ -134,7 +134,6 @@ function fixture(): SaveInput {
         },
         data: {
             productData: { product },
-            catalogChannelsData: undefined,
             refetchProduct: vi.fn().mockResolvedValue({ data: { product } }),
             refetchCollections: vi.fn().mockResolvedValue({}),
             defaultStockLocationId: 'stock-loc-1',

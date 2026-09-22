@@ -1,0 +1,10 @@
+[Unit]
+Description=Apply Vendure persistent file backup retention every day
+
+[Timer]
+OnCalendar=*-*-* 20:45:00 UTC
+Persistent=true
+Unit=vendure-file-backup-retention.service
+
+[Install]
+WantedBy=timers.target

@@ -117,6 +117,21 @@ import { AddCustomerIdentityKey1789394400000 } from './1789394400000-add-custome
 import { AddCustomerGroupChannel1789398000000 } from './1789398000000-add-customer-group-channel';
 import { AddCustomerStoreEntry1789401600000 } from './1789401600000-add-customer-store-entry';
 import { AddOrderPaymentCurrency1789405200000 } from './1789405200000-add-order-payment-currency';
+import { AddAdministratorAccessGovernance1789408800000 } from './1789408800000-add-administrator-access-governance';
+import { AddDataRetentionRecords1789488000000 } from './1789488000000-add-data-retention-records';
+import { AddDataSubjectRequests1789491600000 } from './1789491600000-add-data-subject-requests';
+import { AddDataConsentRecords1789495200000 } from './1789495200000-add-data-consent-records';
+import { AddUsdtReconciliationActions1789498800000 } from './1789498800000-add-usdt-reconciliation-actions';
+import { AddIncidentResponseWorkflow1789502400000 } from './1789502400000-add-incident-response-workflow';
+import { AddPurchaseOrderWorkflow1789506000000 } from './1789506000000-add-purchase-order-workflow';
+import { AddInventoryControlWorkflow1789509600000 } from './1789509600000-add-inventory-control-workflow';
+import { CloseAfterSalesWorkflow1789596000000 } from './1789596000000-close-after-sales-workflow';
+import { CloseFulfillmentDelivery1789599600000 } from './1789599600000-close-fulfillment-delivery';
+import { AddCustomerOperations1789686000000 } from './1789686000000-add-customer-operations';
+import { AddMarketingAttribution1789689600000 } from './1789689600000-add-marketing-attribution';
+import { CloseFinanceProfitReconciliation1789693200000 } from './1789693200000-close-finance-profit-reconciliation';
+import { AddGovernanceAndFraudControl1789696800000 } from './1789696800000-add-governance-and-fraud-control';
+import { GuardAdministratorPermissionAudit1789700400000 } from './1789700400000-guard-administrator-permission-audit';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -238,4 +253,19 @@ export const devServerMigrations = [
     AddCustomerGroupChannel1789398000000,
     AddCustomerStoreEntry1789401600000,
     AddOrderPaymentCurrency1789405200000,
+    AddAdministratorAccessGovernance1789408800000,
+    AddDataRetentionRecords1789488000000,
+    AddDataSubjectRequests1789491600000,
+    AddDataConsentRecords1789495200000,
+    AddUsdtReconciliationActions1789498800000,
+    AddIncidentResponseWorkflow1789502400000,
+    AddPurchaseOrderWorkflow1789506000000,
+    AddInventoryControlWorkflow1789509600000,
+    CloseAfterSalesWorkflow1789596000000,
+    CloseFulfillmentDelivery1789599600000,
+    AddCustomerOperations1789686000000,
+    AddMarketingAttribution1789689600000,
+    CloseFinanceProfitReconciliation1789693200000,
+    AddGovernanceAndFraudControl1789696800000,
+    GuardAdministratorPermissionAudit1789700400000,
 ];

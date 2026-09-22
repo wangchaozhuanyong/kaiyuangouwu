@@ -122,6 +122,12 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
                                     code: channelCode,
                                     token: 'meiyijia',
                                     defaultCurrencyCode: 'MYR',
+                                    customFields: {
+                                        storefrontNameZh:
+                                            channelCode === '__default_channel__' ? '' : channelCode,
+                                        storefrontNameEn:
+                                            channelCode === '__default_channel__' ? '' : channelCode,
+                                    },
                                 },
                                 channels: {
                                     totalItems: 1,
@@ -131,6 +137,12 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
                                             code: channelCode,
                                             token: 'meiyijia',
                                             defaultCurrencyCode: 'MYR',
+                                            customFields: {
+                                                storefrontNameZh:
+                                                    channelCode === '__default_channel__' ? '' : channelCode,
+                                                storefrontNameEn:
+                                                    channelCode === '__default_channel__' ? '' : channelCode,
+                                            },
                                         },
                                     ],
                                 },
@@ -166,9 +178,15 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
                                         {
                                             id: 'channel-default',
                                             code: '__default_channel__',
+                                            displayName: '平台管理（不经营）',
                                             isDefault: true,
                                         },
-                                        { id: 'channel-branch-1', code: 'branch-store', isDefault: false },
+                                        {
+                                            id: 'channel-branch-1',
+                                            code: 'branch-store',
+                                            displayName: '分店',
+                                            isDefault: false,
+                                        },
                                     ],
                                     items: [
                                         {
@@ -179,6 +197,7 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
                                                 {
                                                     id: 'channel-default',
                                                     code: '__default_channel__',
+                                                    displayName: '平台管理（不经营）',
                                                     isDefault: true,
                                                 },
                                             ],
@@ -268,11 +287,11 @@ describe('CatalogModule category columns', () => {
         );
 
         expect(headers).toContain('销售店铺');
-        expect(container.textContent).toContain('仅默认店铺 (未分发)');
-        expect(container.textContent).toContain('店铺分配看板');
+        expect(container.textContent).toContain('平台归属异常');
+        expect(container.textContent).toContain('店铺归属检查');
     });
 
-    it('supports selecting products and reveals floating bulk channel bar', async () => {
+    it('explains that selected products cannot be shared across stores', async () => {
         const container = await renderCatalog({ channelCode: '__default_channel__' });
         const selectAllCheckbox = container.querySelector<HTMLInputElement>(
             'thead th input[type="checkbox"]',
@@ -283,9 +302,9 @@ describe('CatalogModule category columns', () => {
             selectAllCheckbox!.click();
         });
 
-        expect(container.textContent).toContain('已勾选 1 个商品');
-        expect(container.textContent).toContain('批量上架到店铺');
-        expect(container.textContent).toContain('从店铺下架');
+        expect(container.textContent).toContain('已选 1 个商品');
+        expect(container.textContent).toContain('跨店共享已停用');
+        expect(container.textContent).not.toContain('批量上架到店铺');
     });
 });
 
@@ -293,7 +312,7 @@ describe('CatalogModule filtered empty results', () => {
     it('describes the default store as an independent store instead of an aggregate catalog', async () => {
         const container = await renderCatalog({ channelCode: '__default_channel__' });
 
-        expect(container.textContent).toContain('当前数据范围：默认店铺');
+        expect(container.textContent).toContain('当前数据范围：平台管理（不经营）');
         expect(container.textContent).toContain('仅显示分配到当前店铺的商品、库存和价格');
         expect(container.textContent).not.toContain('总目录');
         expect(container.textContent).not.toContain('汇总全部商品');

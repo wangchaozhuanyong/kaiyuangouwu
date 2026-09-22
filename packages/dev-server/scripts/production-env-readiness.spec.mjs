@@ -95,7 +95,7 @@ const confirmedSingleHostControls = {
 void test('passes a complete server production environment', () => {
     const report = evaluateProductionEnvironment(readyEnvironment(), 'server', confirmedControls);
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 36, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 37, manual: 0, blocker: 0 });
 });
 
 void test('uses different migration expectations for worker and migration roles', () => {
@@ -211,13 +211,15 @@ void test('allows a verified single-host database and system monitoring profile'
             OTEL_SERVICE_NAME: '',
             VENDURE_REQUIRE_OFFSITE_BACKUP: 'true',
             VENDURE_BACKUP_S3_URI: 's3://production-backups/vendure/mysql',
+            VENDURE_REQUIRE_OFFSITE_FILE_BACKUP: 'true',
+            VENDURE_FILE_BACKUP_S3_URI: 's3://production-backups/vendure/files',
         }),
         'server',
         confirmedSingleHostControls,
     );
 
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 37, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 39, manual: 0, blocker: 0 });
 });
 
 void test('accepts complete Cloudflare for SaaS automation without exposing its token', () => {
@@ -402,6 +404,8 @@ void test('blocks a single-host release without a required offsite backup destin
             IS_INSTRUMENTED: 'false',
             VENDURE_REQUIRE_OFFSITE_BACKUP: 'false',
             VENDURE_BACKUP_S3_URI: '',
+            VENDURE_REQUIRE_OFFSITE_FILE_BACKUP: 'false',
+            VENDURE_FILE_BACKUP_S3_URI: '',
         }),
         'server',
         confirmedSingleHostControls,
@@ -409,6 +413,84 @@ void test('blocks a single-host release without a required offsite backup destin
 
     assert.equal(
         report.checks.some(check => check.id === 'offsite-database-backup' && check.status === 'blocker'),
+        true,
+    );
+    assert.equal(
+        report.checks.some(check => check.id === 'offsite-file-backup' && check.status === 'blocker'),
+        true,
+    );
+
+    const overlapping = evaluateProductionEnvironment(
+        readyEnvironment({
+            PRODUCTION_DEPLOYMENT_PROFILE: 'single-host',
+            PRODUCTION_OBSERVABILITY_MODE: 'system',
+            DB_HOST: '127.0.0.1',
+            IS_INSTRUMENTED: 'false',
+            VENDURE_REQUIRE_OFFSITE_BACKUP: 'true',
+            VENDURE_BACKUP_S3_URI: 's3://production-backups/vendure',
+            VENDURE_REQUIRE_OFFSITE_FILE_BACKUP: 'true',
+            VENDURE_FILE_BACKUP_S3_URI: 's3://production-backups/vendure/files',
+        }),
+        'server',
+        confirmedSingleHostControls,
+    );
+    assert.equal(
+        overlapping.checks.some(check => check.id === 'offsite-file-backup' && check.status === 'blocker'),
+        true,
+    );
+
+    const sourceBucketReuse = evaluateProductionEnvironment(
+        readyEnvironment({
+            PRODUCTION_DEPLOYMENT_PROFILE: 'single-host',
+            PRODUCTION_OBSERVABILITY_MODE: 'system',
+            DB_HOST: '127.0.0.1',
+            IS_INSTRUMENTED: 'false',
+            CUSTOMER_IMAGE_STORAGE: 's3',
+            CUSTOMER_AVATAR_S3_BUCKET: 'customer-avatars',
+            CUSTOMER_PRIVATE_IMAGE_S3_BUCKET: 'customer-private-images',
+            CUSTOMER_AVATAR_CDN_ORIGIN: 'https://media.example.test',
+            AWS_REGION: 'ap-southeast-1',
+            VENDURE_REQUIRE_OFFSITE_BACKUP: 'true',
+            VENDURE_BACKUP_S3_URI: 's3://production-backups/mysql',
+            VENDURE_REQUIRE_OFFSITE_FILE_BACKUP: 'true',
+            VENDURE_FILE_BACKUP_S3_URI: 's3://customer-avatars/backups',
+        }),
+        'server',
+        confirmedSingleHostControls,
+    );
+    assert.equal(
+        sourceBucketReuse.checks.some(
+            check => check.id === 'offsite-file-backup' && check.status === 'blocker',
+        ),
+        true,
+    );
+});
+
+void test('blocks invalid database or file recovery objectives', () => {
+    const report = evaluateProductionEnvironment(
+        readyEnvironment({
+            VENDURE_DATABASE_RECOVERY_RPO_SECONDS: '0',
+            VENDURE_FILE_RECOVERY_RTO_SECONDS: 'not-a-number',
+        }),
+        'server',
+        confirmedControls,
+    );
+    assert.equal(
+        report.checks.some(check => check.id === 'recovery-objectives' && check.status === 'blocker'),
+        true,
+    );
+
+    const shorterThanRpo = evaluateProductionEnvironment(
+        readyEnvironment({
+            VENDURE_DATABASE_RECOVERY_RPO_SECONDS: '604800',
+            VENDURE_BACKUP_RETENTION_DAYS: '7',
+            VENDURE_DATABASE_BACKUP_S3_RETENTION_DAYS: '6',
+        }),
+        'server',
+        confirmedControls,
+    );
+    assert.equal(
+        shorterThanRpo.checks.some(check => check.id === 'recovery-objectives' && check.status === 'blocker'),
         true,
     );
 });

@@ -28,12 +28,14 @@ describe('getRouteModuleKey', () => {
             '/settings/store-profile',
             '/settings/team',
             '/settings/system-ops',
+            '/settings/data-management',
             '/settings/usdt-payments',
         ]);
         expect(SETTINGS_ROUTE_PRELOAD_TARGETS.map(getRouteModuleKey)).toEqual([
             'storeSettings',
             'roles',
             'systemOps',
+            'dataManagement',
             'usdtPayments',
         ]);
     });

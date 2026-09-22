@@ -36,6 +36,7 @@ export function OrderProfitExpensePanel({
     const [saveExpense, saveState] = useMutation<SaveResult>(SAVE_CATALOG_ORDER_PROFIT_EXPENSE_MUTATION);
     const [carrierCost, setCarrierCost] = useState('');
     const [paymentFee, setPaymentFee] = useState('');
+    const [chargeback, setChargeback] = useState('');
     const [note, setNote] = useState('');
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
@@ -46,6 +47,7 @@ export function OrderProfitExpensePanel({
         if (!query.data) return;
         setCarrierCost(expenseMicrounitsToInput(expense?.carrierShippingCostMicrounits));
         setPaymentFee(expenseMicrounitsToInput(expense?.paymentFeeMicrounits));
+        setChargeback(expenseMicrounitsToInput(expense?.chargebackMicrounits));
         setNote(expense?.note ?? '');
     }, [expense, query.data]);
     /* oxlint-enable react/set-state-in-effect */
@@ -63,8 +65,10 @@ export function OrderProfitExpensePanel({
                             '承运商实际物流成本',
                         ),
                         paymentFeeMicrounits: expenseInputToMicrounits(paymentFee, '支付手续费'),
+                        chargebackMicrounits: expenseInputToMicrounits(chargeback, '拒付损失'),
                         note: note.trim() || null,
                         expectedUpdatedAt: expense?.updatedAt ?? null,
+                        idempotencyKey: `next-admin:${crypto.randomUUID()}`,
                     },
                 },
             });
@@ -131,6 +135,13 @@ export function OrderProfitExpensePanel({
                             disabled={!canUpdate || saveState.loading}
                             onChange={setPaymentFee}
                         />
+                        <ExpenseField
+                            label="拒付损失"
+                            value={chargeback}
+                            currencyCode={currencyCode}
+                            disabled={!canUpdate || saveState.loading}
+                            onChange={setChargeback}
+                        />
                     </div>
                     <label className="mt-3 block text-[11px] font-semibold text-slate-600">
                         <span>财务备注</span>
@@ -173,6 +184,32 @@ export function OrderProfitExpensePanel({
                                 保存经营费用
                             </button>
                         </div>
+                    )}
+                    {(query.data?.catalogOrderProfitExpenseEvents?.length ?? 0) > 0 && (
+                        <details className="mt-4 border-t border-slate-100 pt-3">
+                            <summary className="cursor-pointer text-[11px] font-bold text-slate-600">
+                                费用修改审计（{query.data?.catalogOrderProfitExpenseEvents.length}）
+                            </summary>
+                            <div className="mt-2 space-y-2">
+                                {query.data?.catalogOrderProfitExpenseEvents.slice(0, 10).map(event => (
+                                    <div
+                                        key={event.id}
+                                        className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-600"
+                                    >
+                                        <div className="font-bold text-slate-800">
+                                            {event.eventType === 'IMPORT' ? '批量导入' : '人工保存'} ·{' '}
+                                            {new Date(event.createdAt).toLocaleString('zh-CN')}
+                                        </div>
+                                        <div className="mt-1">
+                                            操作人 {event.actorUserId ?? '系统'}
+                                            {event.sourceReference
+                                                ? ` · 凭证 ${event.sourceReference.slice(0, 12)}…`
+                                                : ''}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </details>
                     )}
                 </>
             )}

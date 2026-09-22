@@ -815,9 +815,15 @@ void test('MySQL restore drill is isolated, hardened, and scheduled weekly', asy
     );
 
     assert.match(restoreScript, /vendure_restore_drill_/u);
-    assert.match(restoreScript, /trap cleanup_restore_database EXIT/u);
+    assert.match(restoreScript, /trap cleanup_restore_drill EXIT/u);
     assert.match(restoreScript, /sha256sum --check/u);
     assert.match(restoreScript, /gzip -t/u);
+    assert.match(restoreScript, /aws s3 cp/u);
+    assert.match(restoreScript, /list-objects-v2/u);
+    assert.match(restoreScript, /independently discoverable offsite database backup/u);
+    assert.match(restoreScript, /backup_source="offsite"/u);
+    assert.match(restoreScript, /VENDURE_DATABASE_RECOVERY_RTO_SECONDS/u);
+    assert.match(restoreScript, /durationSeconds/u);
     assert.match(restoreScript, /backup_tables=.*CREATE TABLE/u);
     assert.match(restoreScript, /backupTables/u);
     assert.match(restoreScript, /backup_tables.*restored_tables/u);
@@ -832,6 +838,81 @@ void test('MySQL restore drill is isolated, hardened, and scheduled weekly', asy
     assert.match(timer, /^OnCalendar=Sun \*-\*-\* 20:15:00 UTC$/mu);
     assert.match(timer, /^RandomizedDelaySec=30m$/mu);
     assert.match(timer, /^Persistent=true$/mu);
+});
+
+void test('persistent business files have encrypted offsite backup, retention and full restore drills', async () => {
+    const backupScript = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-file-backup'),
+        'utf8',
+    );
+    const backupTool = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-file-backup.py'),
+        'utf8',
+    );
+    const s3PolicyGuard = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-backup-s3-guard.py'),
+        'utf8',
+    );
+    const s3SnapshotTool = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-s3-prefix-snapshot.py'),
+        'utf8',
+    );
+    const restoreScript = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-file-restore-drill'),
+        'utf8',
+    );
+    const backupService = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-file-backup.service'),
+        'utf8',
+    );
+    const restoreService = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-file-restore-drill.service'),
+        'utf8',
+    );
+    const backupTimer = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-file-backup.timer'),
+        'utf8',
+    );
+    const restoreTimer = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-file-restore-drill.timer'),
+        'utf8',
+    );
+
+    for (const label of ['public-assets', 'digital-delivery', 'customer-avatars', 'private-images']) {
+        assert.match(backupScript, new RegExp(label, 'u'));
+    }
+    assert.match(backupScript, /--sse AES256/u);
+    assert.match(backupScript, /head-object/u);
+    assert.match(backupScript, /vendure-backup-s3-guard\.py/u);
+    assert.match(backupScript, /vendure-s3-prefix-snapshot\.py/u);
+    assert.match(backupScript, /CUSTOMER_AVATAR_S3_BUCKET/u);
+    assert.match(backupScript, /CUSTOMER_PRIVATE_IMAGE_S3_BUCKET/u);
+    assert.match(s3SnapshotTool, /VersionId/u);
+    assert.match(s3SnapshotTool, /S3_SOURCE_MANIFEST\.json/u);
+    assert.match(s3SnapshotTool, /get-object/u);
+    assert.match(s3PolicyGuard, /get-bucket-versioning/u);
+    assert.match(s3PolicyGuard, /get-public-access-block/u);
+    assert.match(s3PolicyGuard, /get-bucket-lifecycle-configuration/u);
+    assert.match(s3PolicyGuard, /current_days \+ noncurrent_days <= maximum_days/u);
+    assert.match(backupScript, /sha256sum/u);
+    assert.match(backupTool, /BACKUP_MANIFEST\.json/u);
+    assert.match(backupTool, /O_NOFOLLOW/u);
+    assert.match(backupTool, /File changed while being backed up/u);
+    assert.match(restoreScript, /aws s3 cp/u);
+    assert.match(restoreScript, /list-objects-v2/u);
+    assert.match(restoreScript, /independently discoverable offsite file backup/u);
+    assert.match(restoreScript, /vendure-s3-prefix-snapshot\.py/u);
+    assert.match(restoreScript, /S3_SOURCE_MANIFEST\.json/u);
+    assert.match(restoreScript, /VENDURE_FILE_RECOVERY_RTO_SECONDS/u);
+    assert.match(restoreScript, /file-restore-drill\.json/u);
+    assert.match(restoreScript, /flock --shared/u);
+    assert.match(backupService, /^ProtectSystem=strict$/mu);
+    assert.match(backupService, /^ReadWritePaths=\/var\/backups\/vendure-files$/mu);
+    assert.match(restoreService, /^ReadOnlyPaths=\/var\/backups\/vendure-files$/mu);
+    assert.match(restoreService, /^ReadWritePaths=\/var\/lib\/vendure-readiness$/mu);
+    assert.match(backupTimer, /^OnCalendar=\*-\*-\* 20:00:00 UTC$/mu);
+    assert.match(restoreTimer, /^OnCalendar=Sun \*-\*-\* 22:00:00 UTC$/mu);
+    assert.match(restoreTimer, /^Persistent=true$/mu);
 });
 
 void test('production swap setup is fixed-size, persistent, and low-swappiness', async () => {
@@ -894,6 +975,8 @@ void test('scheduled production monitor checks memory, processes, and health thr
     assert.match(script, /vendure-production-healthcheck\.service/u);
     assert.match(script, /vendure-mysql-restore-drill\.timer/u);
     assert.match(script, /vendure-mysql-restore-drill\.service/u);
+    assert.match(script, /vendure-file-restore-drill\.timer/u);
+    assert.match(script, /vendure-file-restore-drill\.service/u);
     assert.match(script, /ExecMainExitTimestamp/u);
     assert.match(script, /ActiveState/u);
     assert.match(script, /systemd_completion_wait_attempts=46/u);
@@ -907,8 +990,11 @@ void test('scheduled production monitor checks memory, processes, and health thr
     assert.match(systemdHealthcheck, /127\.0\.0\.1:3002\/image-generation\/health/u);
     assert.match(systemdHealthcheck, /image-generation-health-failed/u);
     assert.match(systemdHealthcheck, /restore-drill\.json/u);
+    assert.match(systemdHealthcheck, /file-restore-drill\.json/u);
+    assert.match(systemdHealthcheck, /VENDURE_DATABASE_RECOVERY_RPO_SECONDS/u);
+    assert.match(systemdHealthcheck, /VENDURE_FILE_RECOVERY_RTO_SECONDS/u);
     assert.match(systemdHealthcheck, /maximum_restore_drill_age_seconds/u);
-    assert.match(systemdHealthcheck, /restore-drill-missing-or-stale/u);
+    assert.match(systemdHealthcheck, /\$\{failure_prefix\}-missing-or-stale/u);
 
     assert.match(workflow, /schedule:/u);
     assert.match(workflow, /workflow_dispatch:/u);
@@ -1075,7 +1161,7 @@ void test('backup reuse requires the current manifest format and keeps old archi
         case "$*" in
           *"-p Result --value") printf 'success\\n' ;;
           *"-p InvocationID --value") printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n' ;;
-          *journalctl*) printf 'Created verified MySQL backup: /var/backups/vendure-mysql/vendure-20260912T000000Z.sql.gz offsite=yes\\n' ;;
+          *journalctl*) printf 'Created verified MySQL backup: /var/backups/vendure-mysql/vendure-20260912T000000Z.sql.gz offsite=yes encrypted=yes\\n' ;;
           *format-version) printf '3\\n' ;;
           *jq*) printf '%s\\n' "$FIXTURE_MANIFEST_VERSION" ;;
           *"stat --format="*) date +%s ;;

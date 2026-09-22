@@ -1,7 +1,43 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { collectStoreAutonomyAudit } from './store-autonomy-data-audit.mjs';
+import { collectStoreAutonomyAudit, sharedResourceIsolationChecks } from './store-autonomy-data-audit.mjs';
+
+test('shared store-owned resources are release blockers while shared customer identity remains allowed', () => {
+    const empty = { available: true, shared: [] };
+    const snapshot = {
+        associations: {
+            customers: { available: true, shared: [{ entityId: 1, channelIds: ['2', '3'] }] },
+            stockLocations: empty,
+            paymentMethods: empty,
+            shippingMethods: empty,
+            products: { available: true, shared: [{ entityId: 2, channelIds: ['2', '3'] }] },
+            productVariants: empty,
+            collections: empty,
+            assets: { available: true, shared: [{ entityId: 3, channelIds: ['2', '3'] }] },
+            assetTags: empty,
+            facets: empty,
+            facetValues: empty,
+            productOptionGroups: empty,
+            productOptions: empty,
+            promotions: empty,
+            sellers: empty,
+        },
+    };
+
+    const checks = sharedResourceIsolationChecks(snapshot);
+    assert.equal(
+        checks.some(check => check.key === 'shared-customers'),
+        false,
+    );
+    assert.deepEqual(
+        checks.filter(check => check.status === 'FAIL').map(check => [check.key, check.count]),
+        [
+            ['shared-products', 1],
+            ['shared-assets', 1],
+        ],
+    );
+});
 
 async function createFixture({ legacyStructure = false, violations = false } = {}) {
     const { default: initialize } = await import('sql.js');
@@ -9,11 +45,40 @@ async function createFixture({ legacyStructure = false, violations = false } = {
     const database = new SQL.Database();
     const salesOwner = legacyStructure ? '' : ', salesChannelId INTEGER';
     database.run(`
-        CREATE TABLE channel (id INTEGER PRIMARY KEY, code TEXT NOT NULL);
-        INSERT INTO channel VALUES (1, '__default_channel__'), (2, 'store-a'), (3, 'store-b');
+        CREATE TABLE seller (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+        INSERT INTO seller VALUES (1, 'Platform'), (2, 'Store A'), (3, 'Store B');
+        CREATE TABLE channel (id INTEGER PRIMARY KEY, code TEXT NOT NULL, sellerId INTEGER);
+        INSERT INTO channel VALUES
+            (1, '__default_channel__', 1), (2, 'store-a', 2), (3, 'store-b', 3);
         CREATE TABLE \`user\` (id INTEGER PRIMARY KEY, identifier TEXT, deletedAt DATETIME);
         CREATE TABLE customer (id INTEGER PRIMARY KEY, userId INTEGER);
         CREATE TABLE customer_channels_channel (customerId INTEGER, channelId INTEGER);
+        CREATE TABLE stock_location (id INTEGER PRIMARY KEY, name TEXT);
+        CREATE TABLE stock_location_channels_channel (stockLocationId INTEGER, channelId INTEGER);
+        CREATE TABLE payment_method (id INTEGER PRIMARY KEY, code TEXT);
+        CREATE TABLE payment_method_channels_channel (paymentMethodId INTEGER, channelId INTEGER);
+        CREATE TABLE shipping_method (id INTEGER PRIMARY KEY, code TEXT);
+        CREATE TABLE shipping_method_channels_channel (shippingMethodId INTEGER, channelId INTEGER);
+        CREATE TABLE product (id INTEGER PRIMARY KEY);
+        CREATE TABLE product_channels_channel (productId INTEGER, channelId INTEGER);
+        CREATE TABLE product_variant (id INTEGER PRIMARY KEY, sku TEXT);
+        CREATE TABLE product_variant_channels_channel (productVariantId INTEGER, channelId INTEGER);
+        CREATE TABLE collection (id INTEGER PRIMARY KEY);
+        CREATE TABLE collection_channels_channel (collectionId INTEGER, channelId INTEGER);
+        CREATE TABLE asset (id INTEGER PRIMARY KEY, name TEXT);
+        CREATE TABLE asset_channels_channel (assetId INTEGER, channelId INTEGER);
+        CREATE TABLE tag (id INTEGER PRIMARY KEY, value TEXT);
+        CREATE TABLE asset_tags_tag (assetId INTEGER, tagId INTEGER);
+        CREATE TABLE facet (id INTEGER PRIMARY KEY, code TEXT);
+        CREATE TABLE facet_channels_channel (facetId INTEGER, channelId INTEGER);
+        CREATE TABLE facet_value (id INTEGER PRIMARY KEY, code TEXT);
+        CREATE TABLE facet_value_channels_channel (facetValueId INTEGER, channelId INTEGER);
+        CREATE TABLE product_option_group (id INTEGER PRIMARY KEY, code TEXT);
+        CREATE TABLE product_option_group_channels_channel (productOptionGroupId INTEGER, channelId INTEGER);
+        CREATE TABLE product_option (id INTEGER PRIMARY KEY, code TEXT);
+        CREATE TABLE product_option_channels_channel (productOptionId INTEGER, channelId INTEGER);
+        CREATE TABLE promotion (id INTEGER PRIMARY KEY, couponCode TEXT);
+        CREATE TABLE promotion_channels_channel (promotionId INTEGER, channelId INTEGER);
         CREATE TABLE customer_group (id INTEGER PRIMARY KEY${legacyStructure ? '' : ', channelId INTEGER'});
         ${legacyStructure ? '' : 'CREATE TABLE customer_store_entry (id INTEGER PRIMARY KEY, customerId INTEGER, channelId INTEGER);'}
         CREATE TABLE \`order\` (id INTEGER PRIMARY KEY, customerId INTEGER, active INTEGER${salesOwner});

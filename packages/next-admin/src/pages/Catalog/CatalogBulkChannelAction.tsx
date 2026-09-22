@@ -111,7 +111,7 @@ export function CatalogBulkChannelAction() {
             )
                 throw new Error('操作已返回，但最新分配状态未能确认，请刷新后核对');
             setNotice(
-                `已${mode === 'assign' ? '分配到' : '从'}「${getChannelDisplayName(target.code)}」${mode === 'remove' ? '移除' : ''} ${ids.length} 个商品${skipped ? `，跳过 ${skipped} 个状态已变化的商品` : ''}`,
+                `已${mode === 'assign' ? '分配到' : '从'}「${getChannelDisplayName(target)}」${mode === 'remove' ? '移除' : ''} ${ids.length} 个商品${skipped ? `，跳过 ${skipped} 个状态已变化的商品` : ''}`,
             );
             setSelectedIds([]);
         } catch (cause) {
@@ -195,7 +195,7 @@ export function CatalogBulkChannelAction() {
                                         <option value="">请选择</option>
                                         {page?.channels.map(channel => (
                                             <option key={channel.id} value={channel.id}>
-                                                {getChannelDisplayName(channel.code)}
+                                                {getChannelDisplayName(channel)}
                                             </option>
                                         ))}
                                     </select>
@@ -317,7 +317,7 @@ export function CatalogBulkChannelAction() {
                                                             key={channel.id}
                                                             className="rounded border border-slate-200 px-1.5 py-0.5"
                                                         >
-                                                            {getChannelDisplayName(channel.code)}
+                                                            {getChannelDisplayName(channel)}
                                                         </span>
                                                     ))}
                                                     {!item.channels.length && (

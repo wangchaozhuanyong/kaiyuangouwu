@@ -1,7 +1,10 @@
 import { gql } from 'graphql-tag';
 
 export type AfterSalesState = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'COMPLETED';
-export type AfterSalesType = 'REFUND_ONLY' | 'RETURN_AND_REFUND';
+export type AfterSalesType = 'REFUND_ONLY' | 'RETURN_AND_REFUND' | 'EXCHANGE' | 'RESHIP';
+export type AfterSalesReturnStatus =
+    'NOT_REQUIRED' | 'AWAITING_SHIPMENT' | 'IN_TRANSIT' | 'RECEIVED' | 'INSPECTED';
+export type AfterSalesReplacementStatus = 'NOT_REQUIRED' | 'PENDING' | 'SHIPPED' | 'EXCEPTION' | 'DELIVERED';
 
 export interface AfterSalesRequestRecord {
     id: string;
@@ -16,6 +19,17 @@ export interface AfterSalesRequestRecord {
     requestedAmount: number;
     approvedAmount: number | null;
     resolution: string | null;
+    returnStatus: AfterSalesReturnStatus;
+    returnInstructions: string | null;
+    returnCarrier: string | null;
+    returnTrackingCode: string | null;
+    replacementStatus: AfterSalesReplacementStatus;
+    replacementCarrier: string | null;
+    replacementTrackingCode: string | null;
+    replacementException: string | null;
+    replacementProofReference: string | null;
+    nextActionDueAt: string | null;
+    overdue: boolean;
     customerName: string;
     customerEmail: string;
     order: {
@@ -42,11 +56,17 @@ export interface AfterSalesRequestRecord {
         productName: string;
         sku: string;
         fulfillmentType: string;
+        acceptedReturnQuantity: number;
+        rejectedReturnQuantity: number;
+        returnLotCode: string | null;
+        inventoryOperationId: string | null;
+        returnStockLocation: { id: string; name: string } | null;
     }>;
     events: Array<{
         id: string;
         createdAt: string;
         state: AfterSalesState;
+        eventType: string;
         actorType: string;
         actorLabel: string;
         actorId: string | null;
@@ -78,6 +98,17 @@ export const afterSalesRequestsQuery = gql`
                 requestedAmount
                 approvedAmount
                 resolution
+                returnStatus
+                returnInstructions
+                returnCarrier
+                returnTrackingCode
+                replacementStatus
+                replacementCarrier
+                replacementTrackingCode
+                replacementException
+                replacementProofReference
+                nextActionDueAt
+                overdue
                 customerName
                 customerEmail
                 order {
@@ -109,11 +140,20 @@ export const afterSalesRequestsQuery = gql`
                     productName
                     sku
                     fulfillmentType
+                    acceptedReturnQuantity
+                    rejectedReturnQuantity
+                    returnLotCode
+                    inventoryOperationId
+                    returnStockLocation {
+                        id
+                        name
+                    }
                 }
                 events {
                     id
                     createdAt
                     state
+                    eventType
                     actorType
                     actorLabel
                     actorId
@@ -132,6 +172,47 @@ export const transitionAfterSalesRequestMutation = gql`
             approvedAmount
             resolution
             updatedAt
+        }
+    }
+`;
+
+export const receiveAfterSalesReturnMutation = gql`
+    mutation OperationsReceiveAfterSalesReturn($input: ReceiveAfterSalesReturnInput!) {
+        receiveAfterSalesReturn(input: $input) {
+            id
+            returnStatus
+            updatedAt
+        }
+    }
+`;
+
+export const inspectAfterSalesReturnMutation = gql`
+    mutation OperationsInspectAfterSalesReturn($input: InspectAfterSalesReturnInput!) {
+        inspectAfterSalesReturn(input: $input) {
+            id
+            returnStatus
+            updatedAt
+        }
+    }
+`;
+
+export const updateAfterSalesReplacementMutation = gql`
+    mutation OperationsUpdateAfterSalesReplacement($input: UpdateAfterSalesReplacementInput!) {
+        updateAfterSalesReplacement(input: $input) {
+            id
+            replacementStatus
+            updatedAt
+        }
+    }
+`;
+
+export const afterSalesStockLocationsQuery = gql`
+    query OperationsAfterSalesStockLocations {
+        stockLocations(options: { take: 200 }) {
+            items {
+                id
+                name
+            }
         }
     }
 `;

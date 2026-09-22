@@ -19,6 +19,12 @@ set +a
 
 readonly offsite_backup_required="${VENDURE_REQUIRE_OFFSITE_BACKUP:-false}"
 readonly offsite_backup_uri="${VENDURE_BACKUP_S3_URI:-}"
+readonly offsite_retention_days="${VENDURE_DATABASE_BACKUP_S3_RETENTION_DAYS:-30}"
+
+if [[ ! "${offsite_backup_required}" =~ ^(true|false)$ ]]; then
+    printf 'VENDURE_REQUIRE_OFFSITE_BACKUP must be true or false\n' >&2
+    exit 1
+fi
 
 for required_name in DB_HOST DB_PORT DB_USERNAME DB_PASSWORD DB_NAME; do
     if [[ -z "${!required_name:-}" ]]; then
@@ -31,8 +37,13 @@ if [[ "${offsite_backup_required}" == "true" && -z "${offsite_backup_uri}" ]]; t
     printf 'VENDURE_BACKUP_S3_URI is required when offsite backups are mandatory\n' >&2
     exit 1
 fi
-if [[ -n "${offsite_backup_uri}" && "${offsite_backup_uri}" != s3://* ]]; then
-    printf 'VENDURE_BACKUP_S3_URI must start with s3://\n' >&2
+if [[ -n "${offsite_backup_uri}" && ! "${offsite_backup_uri}" =~ ^s3://[a-z0-9.-]+(/[A-Za-z0-9._/-]+)?$ ]]; then
+    printf 'VENDURE_BACKUP_S3_URI must be a safe s3:// bucket prefix\n' >&2
+    exit 1
+fi
+if [[ ! "${offsite_retention_days}" =~ ^[0-9]+$ ]] ||
+    ((offsite_retention_days < 7 || offsite_retention_days > 365)); then
+    printf 'VENDURE_DATABASE_BACKUP_S3_RETENTION_DAYS must be between 7 and 365\n' >&2
     exit 1
 fi
 
@@ -71,6 +82,7 @@ trap preserve_failed_backup EXIT
 # One MVCC read snapshot covers both the export and its row manifest.
 # The DDL-only backup lock permits business writes. Timeout closes the snapshot and releases the lock.
 readonly manifest_tool="$(dirname "$(readlink -f "$0")")/vendure-mysql-backup-manifest.py"
+readonly s3_policy_guard="$(dirname "$(readlink -f "$0")")/vendure-backup-s3-guard.py"
 timeout --kill-after=5s 15m python3 "${manifest_tool}" capture "${backup_partial}"
 
 gzip -t "${backup_partial}"
@@ -87,11 +99,22 @@ if [[ -n "${offsite_backup_uri}" ]]; then
         printf 'AWS CLI is required to upload the offsite backup\n' >&2
         exit 1
     fi
+    python3 "${s3_policy_guard}" "${offsite_backup_uri}" "${offsite_retention_days}" >/dev/null
     readonly offsite_prefix="${offsite_backup_uri%/}"
-    aws s3 cp "${backup_file}" "${offsite_prefix}/$(basename "${backup_file}")" --only-show-errors
-    aws s3 cp "${backup_file}.manifest.json" "${offsite_prefix}/$(basename "${backup_file}.manifest.json")" --only-show-errors
-    aws s3 cp "${backup_file}.sha256" "${offsite_prefix}/$(basename "${backup_file}.sha256")" --only-show-errors
+    readonly bucket_and_prefix="${offsite_prefix#s3://}"
+    readonly bucket="${bucket_and_prefix%%/*}"
+    prefix="${bucket_and_prefix#${bucket}}"
+    prefix="${prefix#/}"
+    for source in "${backup_file}" "${backup_file}.manifest.json" "${backup_file}.sha256"; do
+        name="$(basename "${source}")"
+        key="${name}"
+        if [[ -n "${prefix}" ]]; then key="${prefix}/${name}"; fi
+        aws s3 cp "${source}" "s3://${bucket}/${key}" --sse AES256 --only-show-errors
+        [[ "$(aws s3api head-object --bucket "${bucket}" --key "${key}" --query ServerSideEncryption --output text)" == "AES256" ]]
+    done
 fi
 trap - EXIT
 
-printf 'Created verified MySQL backup: %s offsite=%s\n' "${backup_file}" "$([[ -n "${offsite_backup_uri}" ]] && printf yes || printf no)"
+printf 'Created verified MySQL backup: %s offsite=%s encrypted=%s\n' \
+    "${backup_file}" "$([[ -n "${offsite_backup_uri}" ]] && printf yes || printf no)" \
+    "$([[ -n "${offsite_backup_uri}" ]] && printf yes || printf local-volume)"

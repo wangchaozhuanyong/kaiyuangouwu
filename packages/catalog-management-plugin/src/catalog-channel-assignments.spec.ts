@@ -5,9 +5,17 @@ import { CatalogChannelAssignmentsService } from './catalog-channel-assignments.
 
 function setup(owner: boolean) {
     const channels = [
-        { id: 1, code: '__default_channel__' },
-        { id: 2, code: '店铺 A' },
-        { id: 3, code: '店铺 B' },
+        { id: 1, code: '__default_channel__', customFields: {} },
+        {
+            id: 2,
+            code: 'store-a',
+            customFields: { storefrontNameZh: '店铺 A', storefrontNameEn: 'Store A' },
+        },
+        {
+            id: 3,
+            code: 'store-b',
+            customFields: { storefrontNameZh: '店铺 B', storefrontNameEn: 'Store B' },
+        },
     ];
     let requestedIds: Array<string | number> = [];
     const query = {
@@ -32,6 +40,7 @@ function setup(owner: boolean) {
     const ctx = {
         channelId: 2,
         channel: channels[1],
+        languageCode: 'zh_Hans',
         userHasPermissions: () => owner,
         session: {
             user: {
@@ -62,7 +71,25 @@ describe('catalog channel assignments', () => {
         expect(result.items[0].channels[0].isDefault).toBe(true);
         expect(result.summary).toMatchObject({ totalItems: 1, unassignedItems: 0, multiChannelItems: 1 });
         expect(products.findAll).toHaveBeenCalledWith(ctx, { skip: 0, take: 100 }, ['translations']);
+        expect(result.channels.map(channel => channel.displayName)).toEqual([
+            '平台管理（不经营）',
+            '店铺 A',
+            '店铺 B',
+        ]);
         expect(query.where).toHaveBeenCalledWith('product.id IN (:...ids)', { ids: [10] });
+    });
+
+    it('returns only English store names for an English request', async () => {
+        const { service, ctx } = setup(true);
+        (ctx as { languageCode: string }).languageCode = 'en';
+
+        const result = await service.list(ctx);
+
+        expect(result.channels.map(channel => channel.displayName)).toEqual([
+            'Platform management (non-operating)',
+            'Store A',
+            'Store B',
+        ]);
     });
 
     it('does not disclose other stores to staff with only one readable product channel', async () => {

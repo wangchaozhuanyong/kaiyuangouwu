@@ -5,7 +5,14 @@ import {
     Button,
     ConfirmationDialog,
     DashboardRouteDefinition,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
     Input,
+    Label,
     Page,
     PageBlock,
     PageLayout,
@@ -16,12 +23,13 @@ import {
     SelectTrigger,
     SelectValue,
     Skeleton,
+    Textarea,
     api,
     toast,
     useMutation,
     useQuery,
 } from '@vendure/dashboard';
-import { Check, RefreshCw, WalletCards, X } from 'lucide-react';
+import { Check, LoaderCircle, RefreshCw, ShieldCheck, WalletCards, X } from 'lucide-react';
 import { useState } from 'react';
 
 import {
@@ -31,11 +39,13 @@ import {
     StoreUsdtManualRefundListRecord,
     StoreUsdtPaymentIntentRecord,
     StoreUsdtPaymentStatsRecord,
+    StoreUsdtReconciliationActionRecord,
     StoreUsdtWalletRecord,
 } from './store-currency.graphql';
 import { UsdtManualRefundDialog, UsdtManualRefundList } from './usdt-manual-refund-dialog';
 import {
     platformUsdtPaymentManagementQuery,
+    resolveStoreUsdtPaymentIntentMutation,
     reviewStoreUsdtWalletMutation,
 } from './usdt-payment-management.graphql';
 
@@ -46,6 +56,16 @@ interface PlatformUsdtPaymentManagementResult {
     storePaymentStats: StorePaymentStatsRecord[];
     storePaymentDetails: StorePaymentDetailListRecord;
     storeUsdtManualRefunds: StoreUsdtManualRefundListRecord;
+    storeUsdtReconciliationActions: StoreUsdtReconciliationActionRecord[];
+}
+
+interface ReconciliationInput {
+    id: string;
+    action: 'RETRY_SETTLEMENT' | 'CONFIRM_EXTERNAL_REFUND';
+    reason: string;
+    transactionId?: string;
+    usdtAmount?: string;
+    recipientAddress?: string;
 }
 
 const REPORT_PAGE_SIZE = 50;
@@ -71,6 +91,7 @@ function UsdtPaymentManagementPage() {
     const [paymentPage, setPaymentPage] = useState(0);
     const [refundPage, setRefundPage] = useState(0);
     const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
+    const [reviewIntent, setReviewIntent] = useState<StoreUsdtPaymentIntentRecord | null>(null);
     const dateOptions = reportDateOptions(fromDate, toDate);
     const query = useQuery({
         queryKey: ['platform-usdt-payment-management', channelId, fromDate, toDate, paymentPage, refundPage],
@@ -99,6 +120,16 @@ function UsdtPaymentManagementPage() {
         },
         onError: error => toast.error(errorMessage(error)),
     });
+    const reconciliationMutation = useMutation({
+        mutationFn: (input: ReconciliationInput) =>
+            api.mutate(resolveStoreUsdtPaymentIntentMutation, { input }),
+        onSuccess: async () => {
+            toast.success('对账异常已处理并留存操作证据');
+            setReviewIntent(null);
+            await query.refetch();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
 
     const wallets = query.data?.storeUsdtWallets ?? [];
     const stats = query.data?.storeUsdtPaymentStats ?? [];
@@ -108,6 +139,7 @@ function UsdtPaymentManagementPage() {
     const paymentDetailTotal = query.data?.storePaymentDetails.totalItems ?? 0;
     const manualRefunds = query.data?.storeUsdtManualRefunds.items ?? [];
     const manualRefundTotal = query.data?.storeUsdtManualRefunds.totalItems ?? 0;
+    const reconciliationActions = query.data?.storeUsdtReconciliationActions ?? [];
 
     return (
         <Page pageId="usdt-payment-management">
@@ -323,7 +355,7 @@ function UsdtPaymentManagementPage() {
                                 </p>
                                 <p className="mt-1 text-xs text-muted-foreground">
                                     等待 {summary.pendingCount} · 人工复核 {summary.manualReviewCount} · 过期{' '}
-                                    {summary.expiredCount}
+                                    {summary.expiredCount} · 已闭环 {summary.resolvedCount}
                                 </p>
                             </article>
                         ))}
@@ -338,13 +370,60 @@ function UsdtPaymentManagementPage() {
                 >
                     <div className="grid max-h-[44rem] gap-3 overflow-y-auto pr-1">
                         {intents.length ? (
-                            intents.map(intent => <PaymentDetail key={intent.id} intent={intent} />)
+                            intents.map(intent => (
+                                <PaymentDetail
+                                    key={intent.id}
+                                    intent={intent}
+                                    onResolve={() => setReviewIntent(intent)}
+                                />
+                            ))
                         ) : (
                             <p className="text-sm text-muted-foreground">暂无 USDT 收款记录。</p>
                         )}
                     </div>
                 </PageBlock>
+
+                <PageBlock
+                    column="full"
+                    blockId="usdt-reconciliation-actions"
+                    title="USDT 对账处理证据"
+                    description="人工重试入账或核验链上全额退款后生成的不可覆盖操作记录。"
+                >
+                    {reconciliationActions.length ? (
+                        <div className="grid max-h-[32rem] gap-3 overflow-y-auto pr-1">
+                            {reconciliationActions.map(action => (
+                                <article key={action.id} className="rounded-lg border p-4 text-sm">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <strong>
+                                            订单 {action.orderId} · {reconciliationActionLabel(action.action)}
+                                        </strong>
+                                        <Badge variant="outline">{action.outcome}</Badge>
+                                    </div>
+                                    <p className="mt-2 text-muted-foreground">{action.reason}</p>
+                                    {action.transactionId ? (
+                                        <p className="mt-1 break-all text-muted-foreground">
+                                            退款交易：{action.transactionId} · 数量 ₮{action.usdtAmount}
+                                        </p>
+                                    ) : null}
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        操作人 {action.operatorUserId} · {formatDate(action.createdAt)}
+                                    </p>
+                                </article>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">暂无人工对账处理记录。</p>
+                    )}
+                </PageBlock>
             </PageLayout>
+            {reviewIntent ? (
+                <ReconciliationDialog
+                    intent={reviewIntent}
+                    pending={reconciliationMutation.isPending}
+                    onClose={() => setReviewIntent(null)}
+                    onSubmit={input => reconciliationMutation.mutate(input)}
+                />
+            ) : null}
         </Page>
     );
 }
@@ -433,7 +512,153 @@ function PlatformPaymentDetails({
     );
 }
 
-function PaymentDetail({ intent }: { intent: StoreUsdtPaymentIntentRecord }) {
+function ReconciliationDialog({
+    intent,
+    pending,
+    onClose,
+    onSubmit,
+}: {
+    intent: StoreUsdtPaymentIntentRecord;
+    pending: boolean;
+    onClose: () => void;
+    onSubmit: (input: ReconciliationInput) => void;
+}) {
+    const retryAllowed = ['vendure-payment', 'order-validation-exception'].includes(
+        intent.manualReviewCode ?? '',
+    );
+    const [action, setAction] = useState<ReconciliationInput['action']>(
+        retryAllowed ? 'RETRY_SETTLEMENT' : 'CONFIRM_EXTERNAL_REFUND',
+    );
+    const [reason, setReason] = useState('');
+    const [transactionId, setTransactionId] = useState('');
+    const [usdtAmount, setUsdtAmount] = useState(
+        String(intent.receivedUsdtAmount ?? intent.expectedUsdtAmount),
+    );
+    const [recipientAddress, setRecipientAddress] = useState('');
+    const submit = () => {
+        const normalizedReason = reason.trim();
+        if (normalizedReason.length < 2) return toast.error('请填写至少 2 个字符的处理说明');
+        if (action === 'RETRY_SETTLEMENT') {
+            onSubmit({ id: intent.id, action, reason: normalizedReason });
+            return;
+        }
+        const normalizedTransaction = transactionId.trim();
+        const normalizedRecipient = recipientAddress.trim();
+        const normalizedAmount = usdtAmount.trim();
+        if (!/^[a-fA-F0-9]{64}$/u.test(normalizedTransaction)) {
+            return toast.error('请输入 64 位 TRON 退款交易哈希');
+        }
+        if (!/^T[1-9A-HJ-NP-Za-km-z]{33}$/u.test(normalizedRecipient)) {
+            return toast.error('请输入客户实际收到退款的 TRON 主网地址');
+        }
+        if (!/^(?:0|[1-9]\d{0,17})(?:\.\d{1,6})?$/u.test(normalizedAmount)) {
+            return toast.error('退款 USDT 数量格式不正确');
+        }
+        onSubmit({
+            id: intent.id,
+            action,
+            reason: normalizedReason,
+            transactionId: normalizedTransaction,
+            usdtAmount: normalizedAmount,
+            recipientAddress: normalizedRecipient,
+        });
+    };
+
+    return (
+        <Dialog open onOpenChange={open => !open && !pending && onClose()}>
+            <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>处理 USDT 对账异常</DialogTitle>
+                    <DialogDescription>
+                        订单 {intent.orderCode} · ₮{intent.expectedUsdtAmount.toFixed(6)} ·{' '}
+                        {intent.failureReason}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-2">
+                    <div className="grid gap-2">
+                        <Label htmlFor={`reconciliation-action-${intent.id}`}>处理方式</Label>
+                        <Select value={action} onValueChange={value => value && setAction(value)}>
+                            <SelectTrigger id={`reconciliation-action-${intent.id}`}>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {retryAllowed ? (
+                                    <SelectItem value="RETRY_SETTLEMENT">重试订单入账</SelectItem>
+                                ) : null}
+                                <SelectItem value="CONFIRM_EXTERNAL_REFUND">
+                                    核验并关闭链上全额退款
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    {action === 'CONFIRM_EXTERNAL_REFUND' ? (
+                        <>
+                            <div className="grid gap-2">
+                                <Label htmlFor={`reconciliation-amount-${intent.id}`}>全额退款 USDT</Label>
+                                <Input
+                                    id={`reconciliation-amount-${intent.id}`}
+                                    value={usdtAmount}
+                                    onChange={event => setUsdtAmount(event.target.value)}
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor={`reconciliation-recipient-${intent.id}`}>
+                                    退款收款 TRC20 地址
+                                </Label>
+                                <Input
+                                    id={`reconciliation-recipient-${intent.id}`}
+                                    value={recipientAddress}
+                                    onChange={event => setRecipientAddress(event.target.value)}
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor={`reconciliation-transaction-${intent.id}`}>
+                                    退款链上交易号
+                                </Label>
+                                <Input
+                                    id={`reconciliation-transaction-${intent.id}`}
+                                    maxLength={64}
+                                    value={transactionId}
+                                    onChange={event => setTransactionId(event.target.value)}
+                                />
+                            </div>
+                        </>
+                    ) : null}
+                    <div className="grid gap-2">
+                        <Label htmlFor={`reconciliation-reason-${intent.id}`}>处理说明</Label>
+                        <Textarea
+                            id={`reconciliation-reason-${intent.id}`}
+                            rows={3}
+                            maxLength={500}
+                            value={reason}
+                            onChange={event => setReason(event.target.value)}
+                        />
+                    </div>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                        重试仅适用于暂时性入账异常；外部退款会校验固化交易、全额数量、收款地址和已审核退款钱包。
+                    </p>
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" disabled={pending} onClick={onClose}>
+                        取消
+                    </Button>
+                    <Button type="button" disabled={pending} onClick={submit}>
+                        {pending ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                        确认处理并留存证据
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function PaymentDetail({
+    intent,
+    onResolve,
+}: {
+    intent: StoreUsdtPaymentIntentRecord;
+    onResolve: () => void;
+}) {
     return (
         <article className="grid gap-3 rounded-lg border p-4 lg:grid-cols-[1fr_auto]">
             <div className="min-w-0 space-y-1 text-sm">
@@ -458,6 +683,9 @@ function PaymentDetail({ intent }: { intent: StoreUsdtPaymentIntentRecord }) {
                 {intent.failureReason ? (
                     <p className="font-medium text-destructive">{intent.failureReason}</p>
                 ) : null}
+                {intent.manualReviewCode ? (
+                    <p className="text-xs text-muted-foreground">异常代码：{intent.manualReviewCode}</p>
+                ) : null}
             </div>
             <div className="text-left lg:text-right">
                 <strong className="block text-lg tabular-nums">
@@ -469,6 +697,12 @@ function PaymentDetail({ intent }: { intent: StoreUsdtPaymentIntentRecord }) {
                 <span className="mt-1 block text-xs text-muted-foreground">
                     {formatDate(intent.settledAt ?? intent.createdAt)}
                 </span>
+                {intent.status === 'MANUAL_REVIEW' ? (
+                    <Button type="button" size="sm" className="mt-3" onClick={onResolve}>
+                        <ShieldCheck className="size-4" />
+                        处理对账异常
+                    </Button>
+                ) : null}
             </div>
         </article>
     );
@@ -492,6 +726,7 @@ function paymentStatusLabel(status: string): string {
             SETTLED: '已确认到账',
             MANUAL_REVIEW: '人工复核',
             EXPIRED: '已过期',
+            RESOLVED: '已人工闭环',
         }[status] ?? status
     );
 }
@@ -507,6 +742,10 @@ function paymentStateLabel(state: string): string {
             Cancelled: '已取消',
         }[state] ?? state
     );
+}
+
+function reconciliationActionLabel(action: StoreUsdtReconciliationActionRecord['action']): string {
+    return action === 'RETRY_SETTLEMENT' ? '重试订单入账' : '核验链上全额退款';
 }
 
 function ReportPagination({

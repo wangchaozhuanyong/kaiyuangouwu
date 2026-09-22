@@ -5,6 +5,7 @@
 @import './styles/brand-shell.css';
 @import './styles/account-catalog-surfaces.css';
 @import './styles/skeletons.css';
+@import './styles/traffic-consent.css';
 :root {
     color: #0f172a;
     background: #f1f5f9;

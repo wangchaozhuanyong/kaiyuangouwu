@@ -66,16 +66,7 @@ export const GET_PRODUCTS = gql`
 `;
 
 export const GET_PRODUCT_DETAIL = gql`
-    query GetProductDetail($id: ID!, $assignmentId: String!) {
-        catalogProductChannelAssignments(options: { take: 1, filter: { id: { eq: $assignmentId } } }) {
-            items {
-                id
-                channels {
-                    id
-                    code
-                }
-            }
-        }
+    query GetProductDetail($id: ID!) {
         product(id: $id) {
             id
             createdAt
@@ -369,6 +360,10 @@ export const GET_CATALOG_CHANNELS = gql`
             code
             token
             defaultCurrencyCode
+            customFields {
+                storefrontNameZh
+                storefrontNameEn
+            }
         }
         channels(options: $options) {
             items {
@@ -376,6 +371,10 @@ export const GET_CATALOG_CHANNELS = gql`
                 code
                 token
                 defaultCurrencyCode
+                customFields {
+                    storefrontNameZh
+                    storefrontNameEn
+                }
             }
             totalItems
         }

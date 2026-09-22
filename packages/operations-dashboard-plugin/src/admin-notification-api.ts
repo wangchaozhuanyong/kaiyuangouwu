@@ -90,6 +90,23 @@ export const adminNotificationApiExtensions = gql`
         lastOccurredAt: DateTime!
         resolvedAt: DateTime
         escalatedAt: DateTime
+        incidentStatus: String!
+        acknowledgedAt: DateTime
+        acknowledgedByUserId: String
+        acknowledgementNote: String
+        recoveryObservedAt: DateTime
+        recoveryValidationDueAt: DateTime
+        recoveryValidatedAt: DateTime
+        recoveryValidatedByUserId: String
+        recoveryValidationNote: String
+        recoveryEscalatedAt: DateTime
+        reviewDueAt: DateTime
+        reviewSubmittedAt: DateTime
+        reviewSubmittedByUserId: String
+        rootCause: String
+        impactSummary: String
+        reviewEscalatedAt: DateTime
+        closedAt: DateTime
         priority: Int!
         silent: Boolean!
         deliveryAction: String!
@@ -106,6 +123,89 @@ export const adminNotificationApiExtensions = gql`
     type AdminNotificationDeliveryList {
         items: [AdminNotificationDelivery!]!
         totalItems: Int!
+    }
+
+    type AdminIncidentEvidence {
+        id: ID!
+        createdAt: DateTime!
+        eventId: String!
+        eventType: String!
+        actorType: String!
+        actorUserId: String
+        summary: String!
+        evidence: JSON!
+        occurredAt: DateTime!
+        evidenceHash: String!
+        integrityValid: Boolean!
+    }
+
+    type AdminIncidentAction {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        title: String!
+        ownerDepartmentCode: String!
+        dueAt: DateTime!
+        status: String!
+        completedAt: DateTime
+        completedByUserId: String
+        completionNote: String
+        escalatedAt: DateTime
+    }
+
+    type AdminIncidentDetail {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        eventType: String!
+        category: String!
+        ownerDepartmentCode: String!
+        collaboratorDepartmentCodes: [String!]!
+        escalationDepartmentCode: String
+        severity: String!
+        eventState: String!
+        title: String!
+        payload: JSON!
+        occurrenceCount: Int!
+        firstOccurredAt: DateTime!
+        lastOccurredAt: DateTime!
+        resolvedAt: DateTime
+        incidentStatus: String!
+        acknowledgedAt: DateTime
+        acknowledgedByUserId: String
+        acknowledgementNote: String
+        recoveryObservedAt: DateTime
+        recoveryValidationDueAt: DateTime
+        recoveryValidatedAt: DateTime
+        recoveryValidatedByUserId: String
+        recoveryValidationNote: String
+        recoveryEscalatedAt: DateTime
+        reviewDueAt: DateTime
+        reviewSubmittedAt: DateTime
+        reviewSubmittedByUserId: String
+        rootCause: String
+        impactSummary: String
+        reviewEscalatedAt: DateTime
+        closedAt: DateTime
+        evidence: [AdminIncidentEvidence!]!
+        actions: [AdminIncidentAction!]!
+    }
+
+    type AdminIncidentList {
+        items: [AdminIncidentDetail!]!
+        totalItems: Int!
+    }
+
+    input AdminIncidentCorrectiveActionInput {
+        title: String!
+        ownerDepartmentCode: String!
+        dueAt: DateTime!
+    }
+
+    input SubmitAdminIncidentReviewInput {
+        rootCause: String!
+        impactSummary: String!
+        correctiveActions: [AdminIncidentCorrectiveActionInput!]!
     }
 
     type TelegramNotificationStatus {
@@ -155,6 +255,8 @@ export const adminNotificationApiExtensions = gql`
         telegramNotificationStatus: TelegramNotificationStatus!
         telegramNotificationDeliveries(skip: Int, take: Int, status: String): AdminNotificationDeliveryList!
         telegramDepartmentRouting: TelegramDepartmentRouting!
+        adminIncidents(skip: Int, take: Int, status: String, severity: String): AdminIncidentList!
+        adminIncident(id: ID!): AdminIncidentDetail!
     }
 
     extend type Mutation {
@@ -164,5 +266,9 @@ export const adminNotificationApiExtensions = gql`
         testTelegramConnection: TelegramConnectionTestResult!
         sendTelegramNotificationTest(kind: String!): AdminNotificationDelivery!
         retryTelegramNotificationDelivery(id: ID!): AdminNotificationDelivery!
+        acknowledgeAdminIncident(id: ID!, note: String!, evidence: JSON): AdminIncidentDetail!
+        validateAdminIncidentRecovery(id: ID!, note: String!, evidence: JSON): AdminIncidentDetail!
+        submitAdminIncidentReview(id: ID!, input: SubmitAdminIncidentReviewInput!): AdminIncidentDetail!
+        completeAdminIncidentAction(actionId: ID!, note: String!): AdminIncidentDetail!
     }
 `;

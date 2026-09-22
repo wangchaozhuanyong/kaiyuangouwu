@@ -54,6 +54,65 @@ const ASSOCIATIONS = [
         relationTable: 'collection_channels_channel',
         entityIdColumn: 'collectionId',
     },
+    {
+        key: 'assets',
+        entityTable: 'asset',
+        relationTable: 'asset_channels_channel',
+        entityIdColumn: 'assetId',
+        labelColumn: 'name',
+    },
+    {
+        key: 'facets',
+        entityTable: 'facet',
+        relationTable: 'facet_channels_channel',
+        entityIdColumn: 'facetId',
+        labelColumn: 'code',
+    },
+    {
+        key: 'facetValues',
+        entityTable: 'facet_value',
+        relationTable: 'facet_value_channels_channel',
+        entityIdColumn: 'facetValueId',
+        labelColumn: 'code',
+    },
+    {
+        key: 'productOptionGroups',
+        entityTable: 'product_option_group',
+        relationTable: 'product_option_group_channels_channel',
+        entityIdColumn: 'productOptionGroupId',
+        labelColumn: 'code',
+    },
+    {
+        key: 'productOptions',
+        entityTable: 'product_option',
+        relationTable: 'product_option_channels_channel',
+        entityIdColumn: 'productOptionId',
+        labelColumn: 'code',
+    },
+    {
+        key: 'promotions',
+        entityTable: 'promotion',
+        relationTable: 'promotion_channels_channel',
+        entityIdColumn: 'promotionId',
+        labelColumn: 'couponCode',
+    },
+];
+
+export const FORBIDDEN_SHARED_ASSOCIATION_KEYS = [
+    'stockLocations',
+    'paymentMethods',
+    'shippingMethods',
+    'products',
+    'productVariants',
+    'collections',
+    'assets',
+    'assetTags',
+    'facets',
+    'facetValues',
+    'productOptionGroups',
+    'productOptions',
+    'promotions',
+    'sellers',
 ];
 
 const ICLOUD_TABLES = [
@@ -166,6 +225,27 @@ async function collectSharedSellers(adapter) {
          INNER JOIN ${quoted('channel')} channel
              ON channel.${quoted('sellerId')} = seller.${quoted('id')}
          ORDER BY seller.${quoted('id')} ASC, channel.${quoted('id')} ASC`,
+    );
+    return { available: true, shared: groupAssociations(rows) };
+}
+
+async function collectSharedAssetTags(adapter) {
+    if (
+        !(await adapter.tableExists('tag')) ||
+        !(await adapter.tableExists('asset_tags_tag')) ||
+        !(await adapter.tableExists('asset_channels_channel'))
+    ) {
+        return { available: false, shared: [] };
+    }
+    const rows = await adapter.query(
+        `SELECT tag.${quoted('id')} AS entityId, tag.${quoted('value')} AS label,
+                assetChannel.${quoted('channelId')} AS channelId
+         FROM ${quoted('tag')} tag
+         INNER JOIN ${quoted('asset_tags_tag')} assetTag
+             ON assetTag.${quoted('tagId')} = tag.${quoted('id')}
+         INNER JOIN ${quoted('asset_channels_channel')} assetChannel
+             ON assetChannel.${quoted('assetId')} = assetTag.${quoted('assetId')}
+         ORDER BY tag.${quoted('id')} ASC, assetChannel.${quoted('channelId')} ASC`,
     );
     return { available: true, shared: groupAssociations(rows) };
 }
@@ -380,6 +460,7 @@ export async function collectStoreIsolationSnapshot(adapter, digitalDeliveryRoot
         associations[definition.key] = await collectAssociation(adapter, definition);
     }
     associations.sellers = await collectSharedSellers(adapter);
+    associations.assetTags = await collectSharedAssetTags(adapter);
     const customerDetails = await collectCustomerDetails(
         adapter,
         associations.customers.shared.map(item => item.entityId),
@@ -423,7 +504,7 @@ export function buildStoreIsolationPreflight(snapshot, auditKey) {
         snapshot.stockLocationDetails.map(item => [String(item.stockLocationId), item]),
     );
     const associations = {};
-    for (const key of [...ASSOCIATIONS.map(definition => definition.key), 'sellers']) {
+    for (const key of [...ASSOCIATIONS.map(definition => definition.key), 'sellers', 'assetTags']) {
         associations[key] = {
             available: snapshot.associations[key].available,
             sharedCount: snapshot.associations[key].shared.length,
@@ -500,6 +581,14 @@ export function buildStoreIsolationPreflight(snapshot, auditKey) {
             sharedShippingMethods: associations.shippingMethods.sharedCount,
             sharedProducts: associations.products.sharedCount,
             sharedProductVariants: associations.productVariants.sharedCount,
+            sharedCollections: associations.collections.sharedCount,
+            sharedAssets: associations.assets.sharedCount,
+            sharedAssetTags: associations.assetTags.sharedCount,
+            sharedFacets: associations.facets.sharedCount,
+            sharedFacetValues: associations.facetValues.sharedCount,
+            sharedProductOptionGroups: associations.productOptionGroups.sharedCount,
+            sharedProductOptions: associations.productOptions.sharedCount,
+            sharedPromotions: associations.promotions.sharedCount,
             sharedSellers: associations.sellers.sharedCount,
             unscopedIcloudRows: 0,
             unsafeLegacyDigitalFiles: snapshot.digitalDelivery.unsafeLegacyFileNames?.length ?? 0,

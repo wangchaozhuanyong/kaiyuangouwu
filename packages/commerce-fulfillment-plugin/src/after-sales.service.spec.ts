@@ -9,6 +9,7 @@ function orderLine(
 ) {
     return {
         id: 'line-1',
+        productVariantId: 'variant-1',
         quantity: 2,
         proratedUnitPriceWithTax: 4_900,
         customFields: {
@@ -52,6 +53,12 @@ function createHarness(
     const savedItems: any[] = [];
     const savedEvents: any[] = [];
     let savedRequest: any;
+    const requestQueryBuilder = {
+        setLock: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        andWhere: vi.fn().mockReturnThis(),
+        getOne: vi.fn().mockResolvedValue({ id: 'request-1' }),
+    };
     const requestRepository = {
         find: vi.fn().mockResolvedValue(overrides.existingRequests ?? []),
         findAndCount: vi.fn(),
@@ -67,15 +74,25 @@ function createHarness(
             items: savedItems,
             events: savedEvents,
         })),
-        update: vi.fn().mockResolvedValue({ affected: 1 }),
+        update: vi.fn((_criteria: any, patch: any) => {
+            if (savedRequest) savedRequest = { ...savedRequest, ...patch, updatedAt: new Date() };
+            return Promise.resolve({ affected: 1 });
+        }),
+        createQueryBuilder: vi.fn().mockReturnValue(requestQueryBuilder),
     };
     const itemRepository = {
         save: vi.fn((items: any[]) => {
             savedItems.push(...items.map((item, index) => ({ ...item, id: `item-${index + 1}` })));
             return savedItems;
         }),
+        update: vi.fn((criteria: any, patch: any) => {
+            const item = savedItems.find(candidate => String(candidate.id) === String(criteria.id));
+            if (item) Object.assign(item, patch);
+            return Promise.resolve({ affected: item ? 1 : 0 });
+        }),
     };
     const eventRepository = {
+        exists: vi.fn().mockResolvedValue(false),
         save: vi.fn((event: any) => {
             const saved = { ...event, id: `event-${savedEvents.length + 1}`, createdAt: new Date() };
             savedEvents.push(saved);
@@ -127,7 +144,15 @@ function createHarness(
         ),
         recordPreparedFields: vi.fn(() => Promise.resolve(undefined)),
     };
-    const service = new AfterSalesService(connection as any, customerService as any, translations as any);
+    const inventoryControl = {
+        receiveCustomerReturn: vi.fn().mockResolvedValue({ id: 'inventory-operation-1' }),
+    };
+    const service = new AfterSalesService(
+        connection as any,
+        customerService as any,
+        translations as any,
+        inventoryControl as any,
+    );
     const ctx = {
         activeUserId: 'user-1',
         channelId: 'channel-1',
@@ -145,6 +170,8 @@ function createHarness(
         eventRepository,
         orderQueryBuilder,
         orderRepository,
+        inventoryControl,
+        requestQueryBuilder,
     };
 }
 
@@ -445,6 +472,95 @@ describe('AfterSalesService', () => {
         expect(
             (test.service as any).normalizeRelations(request, { languageCode: 'en' }).resolution,
         ).toBeNull();
+    });
+
+    it('closes the exchange loop from approval through audited restock and delivery confirmation', async () => {
+        const test = createHarness();
+        await test.service.create(test.ctx, {
+            orderId: 'order-1',
+            type: 'EXCHANGE',
+            reason: 'DAMAGED',
+            description: 'The physical item arrived damaged.',
+            items: [{ orderLineId: 'line-1', quantity: 1 }],
+        });
+
+        await test.service.transitionForAdmin(test.ctx, {
+            id: 'request-1',
+            state: 'APPROVED',
+            resolution: 'Exchange approved.',
+            returnInstructions: 'Send the item to the returns warehouse.',
+        });
+        await test.service.submitReturnShipmentForCustomer(test.ctx, {
+            id: 'request-1',
+            carrier: 'Test Carrier',
+            trackingCode: 'RETURN-001',
+            idempotencyKey: 'customer-return-001',
+        });
+        await test.service.receiveReturnForAdmin(test.ctx, {
+            id: 'request-1',
+            note: 'Warehouse received the parcel.',
+            idempotencyKey: 'warehouse-received-001',
+        });
+        await test.service.inspectReturnForAdmin(test.ctx, {
+            id: 'request-1',
+            note: 'One sellable unit accepted.',
+            idempotencyKey: 'inspection-001',
+            items: [
+                {
+                    itemId: 'item-1',
+                    acceptedQuantity: 1,
+                    rejectedQuantity: 0,
+                    stockLocationId: 'warehouse-1',
+                    lotCode: 'RETURN-LOT-001',
+                },
+            ],
+        });
+        await test.service.updateReplacementForAdmin(test.ctx, {
+            id: 'request-1',
+            status: 'SHIPPED',
+            carrier: 'Replacement Carrier',
+            trackingCode: 'REPLACEMENT-001',
+            note: 'Replacement shipped.',
+            idempotencyKey: 'replacement-shipped-001',
+        });
+        await test.service.confirmReplacementForCustomer(test.ctx, {
+            id: 'request-1',
+            idempotencyKey: 'replacement-delivered-001',
+        });
+        const completed = await test.service.transitionForAdmin(test.ctx, {
+            id: 'request-1',
+            state: 'COMPLETED',
+            resolution: 'Exchange completed after delivery confirmation.',
+        });
+
+        expect(completed).toMatchObject({
+            state: 'COMPLETED',
+            returnStatus: 'INSPECTED',
+            replacementStatus: 'DELIVERED',
+        });
+        expect(test.inventoryControl.receiveCustomerReturn).toHaveBeenCalledWith(
+            test.ctx,
+            expect.objectContaining({
+                reference: expect.stringMatching(/^AS-/),
+                lines: [
+                    expect.objectContaining({
+                        productVariantId: 'variant-1',
+                        stockLocationId: 'warehouse-1',
+                        lotCode: 'RETURN-LOT-001',
+                        quantity: 1,
+                    }),
+                ],
+            }),
+        );
+        expect(test.savedEvents.map(event => event.eventType)).toEqual(
+            expect.arrayContaining([
+                'RETURN_SHIPPED',
+                'RETURN_RECEIVED',
+                'RETURN_INSPECTED',
+                'REPLACEMENT_SHIPPED',
+                'REPLACEMENT_DELIVERED',
+            ]),
+        );
     });
 });
 

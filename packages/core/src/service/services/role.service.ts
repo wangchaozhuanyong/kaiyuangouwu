@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import {
     CreateRoleInput,
     DeletionResponse,
@@ -71,6 +72,7 @@ export class RoleService {
         private eventBus: EventBus,
         private requestContextCache: RequestContextCacheService,
         private cacheService: CacheService,
+        private moduleRef: ModuleRef,
     ) {
         // When a Role is created, updated or deleted, we need to invalidate the roles cache
         this.eventBus.ofType(RoleEvent).subscribe(event => {
@@ -313,6 +315,7 @@ export class RoleService {
         await this.connection.getRepository(ctx, Role).save(role, { reload: false });
         const updatedRole = await assertFound(this.findOne(ctx, role.id));
         await this.eventBus.publish(new RoleEvent(ctx, updatedRole, 'updated', input));
+        await this.revokeSessionsForRole(ctx, role.id);
         return updatedRole;
     }
 
@@ -324,9 +327,11 @@ export class RoleService {
         if (role.code === SUPER_ADMIN_ROLE_CODE || role.code === CUSTOMER_ROLE_CODE) {
             throw new InternalServerError('error.cannot-delete-role', { roleCode: role.code });
         }
+        const affectedUsers = await this.findUsersForRole(ctx, role.id);
         const deletedRole = new Role(role);
         await this.connection.getRepository(ctx, Role).remove(role);
         await this.eventBus.publish(new RoleEvent(ctx, deletedRole, 'deleted', id));
+        await Promise.all(affectedUsers.map(user => this.deleteSessionsByUser(ctx, user)));
         return {
             result: DeletionResult.DELETED,
         };
@@ -404,6 +409,17 @@ export class RoleService {
         });
     }
 
+    private findUsersForRole(ctx: RequestContext, roleId: ID): Promise<User[]> {
+        return this.connection.getRepository(ctx, User).find({
+            where: { roles: { id: roleId } },
+        });
+    }
+
+    private async revokeSessionsForRole(ctx: RequestContext, roleId: ID): Promise<void> {
+        const users = await this.findUsersForRole(ctx, roleId);
+        await Promise.all(users.map(user => this.deleteSessionsByUser(ctx, user)));
+    }
+
     /**
      * Ensure that the SuperAdmin role exists and that it has all possible Permissions.
      */
@@ -473,6 +489,13 @@ export class RoleService {
         });
         role.channels = channels;
         return this.connection.getRepository(ctx, Role).save(role);
+    }
+
+    private async deleteSessionsByUser(ctx: RequestContext, user: User): Promise<void> {
+        // Resolve lazily to avoid the Role -> Session -> Order/History service import cycle.
+        await this.moduleRef
+            .get((await import('./session.service.js')).SessionService)
+            .deleteSessionsByUser(ctx, user);
     }
 
     private getAllAssignablePermissions(): Permission[] {

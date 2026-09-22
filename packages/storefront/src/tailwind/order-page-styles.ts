@@ -18,12 +18,22 @@ export function pageClassName(styles: PageStyleMap, className?: string | false |
 }
 
 export const orderPageStyles: PageStyleMap = {
+    'after-sales-confirm-delivery':
+        '[width:100%] [min-height:44px] [margin-top:12px] [padding:0_14px] [border:1px_solid_var(--accent)] [border-radius:7px] [background:var(--accent)] [color:white] [font-weight:var(--font-weight-semibold)]',
     'after-sales-cancel':
         '[min-height:40px] [margin-top:12px] [padding:0_14px] [border:1px_solid_var(--line)] [border-radius:7px] [background:white]',
     'after-sales-field':
         '[&>span]:[margin-bottom:7px] [&>span]:[font-weight:var(--font-weight-medium)] [&_small]:[margin-top:3px] [&_small]:[color:var(--muted)] [margin-top:14px] [display:block] [&>span]:[display:block] [&>small]:[display:block] [&_select]:[width:100%] [&_select]:[padding:10px_11px] [&_select]:[border:1px_solid_var(--line)] [&_select]:[border-radius:7px] [&_select]:[background:white] [&_select]:[color:var(--text)] [&_select]:[font:inherit] [&_textarea]:[width:100%] [&_textarea]:[padding:10px_11px] [&_textarea]:[border:1px_solid_var(--line)] [&_textarea]:[border-radius:7px] [&_textarea]:[background:white] [&_textarea]:[color:var(--text)] [&_textarea]:[font:inherit] [&_select]:[min-height:44px] [&_textarea]:[min-height:112px] [&_textarea]:[resize:vertical]',
     'after-sales-items':
         '[padding:10px_0] [display:grid] [gap:7px] [&_span]:[display:block] [&_strong]:[display:block] [&_small]:[display:block] [&_small]:[margin-top:2px] [&_small]:[color:var(--muted)]',
+    'after-sales-instructions':
+        '[margin-top:12px] [padding:12px] [border-radius:8px] [background:var(--soft)] [&_strong]:[display:block] [&_strong]:[font-size:13px] [&_p]:[margin:6px_0_0] [&_p]:[white-space:pre-wrap] [&_p]:[font-size:13px] [&_p]:[line-height:1.55]',
+    'after-sales-tracking':
+        '[margin:10px_0_0] [padding:9px_11px] [border:1px_solid_var(--line)] [border-radius:7px] [font-size:13px] [overflow-wrap:anywhere]',
+    'after-sales-exception':
+        '[margin:10px_0_0] [padding:9px_11px] [border:1px_solid_#fecaca] [border-radius:7px] [background:#fff1f2] [color:#b42318] [font-size:13px]',
+    'after-sales-return-form':
+        '[margin-top:12px] [padding-top:12px] [border-top:1px_solid_var(--line)] [display:grid] [gap:10px] [&_label]:[display:grid] [&_label]:[gap:5px] [&_label_span]:[font-size:12px] [&_label_span]:[font-weight:600] [&_input]:[width:100%] [&_input]:[min-height:42px] [&_input]:[padding:0_11px] [&_input]:[border:1px_solid_var(--line)] [&_input]:[border-radius:7px] [&_input]:[background:white] [&_button]:[min-height:44px] [&_button]:[border:0] [&_button]:[border-radius:7px] [&_button]:[background:var(--accent)] [&_button]:[color:white] [&_button]:[font-weight:var(--font-weight-semibold)] [&_button:disabled]:[opacity:0.55]',
     'after-sales-line-selection':
         '[margin:0_0_14px] [padding:0] [border:0] [&_legend]:[margin-bottom:7px] [&_legend]:[font-weight:var(--font-weight-medium)] [&>div]:[min-height:58px] [&>div]:[padding:8px_0] [&>div]:[border-bottom:1px_solid_var(--line)] [&>div]:[display:flex] [&>div]:[align-items:center] [&>div]:[justify-content:space-between] [&>div]:[gap:10px] [&>.inline-notice]:[min-height:auto] [&>.inline-notice]:[margin-top:10px] [&>.inline-notice]:[padding:10px] [&>.inline-notice]:[border:1px_solid_#f0d8aa] [&>.inline-notice]:[border-radius:7px] [&>.inline-notice]:[background:#fff9ec] [&>.inline-notice]:[color:#815f1c] [&>.inline-notice]:[font-size:12px] [&>.inline-notice]:[line-height:1.5] [&>div>label:first-child]:[min-width:0] [&>div>label:first-child]:[flex:1] [&>div>label:first-child]:[display:flex] [&>div>label:first-child]:[align-items:center] [&>div>label:first-child]:[gap:10px] [&_label_span]:[min-width:0] [&_label_span]:[display:block] [&_label_strong]:[min-width:0] [&_label_strong]:[display:block] [&_label_small]:[min-width:0] [&_label_small]:[display:block] [&_label_strong]:[overflow:hidden] [&_label_strong]:[white-space:nowrap] [&_label_strong]:[text-overflow:ellipsis] [&_label_small]:[margin-top:3px] [&_label_small]:[color:var(--muted)]',
     'after-sales-list': '[padding:9px_0_28px]',

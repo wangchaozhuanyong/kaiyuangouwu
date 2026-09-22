@@ -31,11 +31,17 @@ import {
     type StoreManagementResult,
 } from '../../graphql/management.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { getAdminDisplayLanguage } from '../../utils/admin-language';
 import {
     configurableArgumentLabel,
     configurableOperationLabel,
     serializeConfigurableListValue,
 } from '../../utils/configurable-operation-localization';
+import {
+    getLocalizedEntityDescription,
+    getLocalizedEntityName,
+    getLocalizedEntityTranslation,
+} from '../../utils/localized-entity-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { UsdtPaymentSetupPanel } from './UsdtPaymentSetupPanel';
 import {
@@ -143,9 +149,10 @@ export function PaymentShippingManager({
 
     const removeMethod = async (state: EditorState) => {
         if (!state.item) return;
+        const displayName = getLocalizedEntityName(state.item);
         const confirmation = await requestConfirmation({
             title: state.kind === 'payment' ? '删除支付方式' : '删除配送方式',
-            description: `确定删除“${state.item.name}”？如果已有 Channel 或订单引用，后端会拒绝不安全的删除。`,
+            description: `确定删除“${displayName}”？如果已有店铺或订单引用，后端会拒绝不安全的删除。`,
             confirmLabel: '验证并删除',
             tone: 'danger',
             requireCurrentPassword: true,
@@ -155,9 +162,9 @@ export function PaymentShippingManager({
         const context = {
             ...sensitiveActionContext(confirmation.currentPassword ?? ''),
             adminFeedback: {
-                target: `${kindLabel}“${state.item.name}”`,
+                target: `${kindLabel}“${displayName}”`,
                 resolution: [
-                    `检查该${kindLabel}是否仍分配给店铺 Channel 或被订单引用`,
+                    `检查该${kindLabel}是否仍分配给店铺或被订单引用`,
                     `先解除关联，再重新删除${kindLabel}`,
                 ],
             },
@@ -229,6 +236,8 @@ export function PaymentShippingManager({
                         <div className="divide-y divide-slate-100">
                             {data.paymentMethods.items.map(item => {
                                 const systemManaged = isSystemManagedUsdtPaymentMethod(item);
+                                const displayName = getLocalizedEntityName(item);
+                                const displayDescription = getLocalizedEntityDescription(item);
                                 return (
                                     <div
                                         key={item.id}
@@ -237,7 +246,7 @@ export function PaymentShippingManager({
                                         <div className="min-w-0">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <strong className="text-xs text-slate-900">
-                                                    {item.name}
+                                                    {displayName}
                                                 </strong>
                                                 {systemManaged && (
                                                     <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">
@@ -245,12 +254,9 @@ export function PaymentShippingManager({
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="mt-1 font-mono text-[9px] text-slate-400">
-                                                {item.code} · {item.handler.code}
-                                            </p>
-                                            {item.description && (
+                                            {displayDescription && (
                                                 <p className="mt-1 line-clamp-2 text-[10px] text-slate-500">
-                                                    {item.description}
+                                                    {displayDescription}
                                                 </p>
                                             )}
                                             {systemManaged && (
@@ -289,7 +295,7 @@ export function PaymentShippingManager({
                                                                 setEditor({ kind: 'payment', item })
                                                             }
                                                             className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
-                                                            aria-label={`编辑支付方式${item.name}`}
+                                                            aria-label={`编辑支付方式${displayName}`}
                                                         >
                                                             <Pencil className="h-3.5 w-3.5" />
                                                         </button>
@@ -302,7 +308,7 @@ export function PaymentShippingManager({
                                                                 void removeMethod({ kind: 'payment', item })
                                                             }
                                                             className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
-                                                            aria-label={`删除支付方式${item.name}`}
+                                                            aria-label={`删除支付方式${displayName}`}
                                                         >
                                                             <Trash2 className="h-3.5 w-3.5" />
                                                         </button>
@@ -363,65 +369,71 @@ export function PaymentShippingManager({
                             </div>
                         </div>
                         <div className="divide-y divide-slate-100">
-                            {data.shippingMethods.items.map(item => (
-                                <div key={item.id} className="flex items-center justify-between gap-4 p-5">
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <strong className="text-xs font-bold text-slate-900">
-                                                {item.name}
-                                            </strong>
-                                            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">
-                                                {item.code}
-                                            </span>
+                            {data.shippingMethods.items.map(item => {
+                                const displayName = getLocalizedEntityName(item);
+                                const displayDescription = getLocalizedEntityDescription(item);
+                                return (
+                                    <div
+                                        key={item.id}
+                                        className="flex items-center justify-between gap-4 p-5"
+                                    >
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <strong className="text-xs font-bold text-slate-900">
+                                                    {displayName}
+                                                </strong>
+                                            </div>
+                                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                                <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                                                    {formatShippingCalculatorSummary(
+                                                        item.calculator,
+                                                        data.activeChannel.defaultCurrencyCode,
+                                                    )}
+                                                </span>
+                                                <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-700/10">
+                                                    {formatShippingCheckerSummary(item.checker)}
+                                                </span>
+                                                <span className="inline-flex items-center rounded-md bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10">
+                                                    {formatFulfillmentHandlerSummary(
+                                                        item.fulfillmentHandlerCode,
+                                                        data.fulfillmentHandlers,
+                                                    )}
+                                                </span>
+                                            </div>
+                                            {displayDescription && (
+                                                <p className="mt-1.5 line-clamp-2 text-[11px] text-slate-500">
+                                                    {displayDescription}
+                                                </p>
+                                            )}
                                         </div>
-                                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                            <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
-                                                {formatShippingCalculatorSummary(
-                                                    item.calculator,
-                                                    data.activeChannel.defaultCurrencyCode,
-                                                )}
-                                            </span>
-                                            <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-700/10">
-                                                {formatShippingCheckerSummary(item.checker)}
-                                            </span>
-                                            <span className="inline-flex items-center rounded-md bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10">
-                                                {formatFulfillmentHandlerSummary(
-                                                    item.fulfillmentHandlerCode,
-                                                    data.fulfillmentHandlers,
-                                                )}
-                                            </span>
+                                        <div className="flex shrink-0 items-center gap-1">
+                                            {canUpdateShipping && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setEditor({ kind: 'shipping', item })}
+                                                    className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
+                                                    aria-label={`编辑配送方式${displayName}`}
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5" />
+                                                </button>
+                                            )}
+                                            {canDeleteShipping && (
+                                                <button
+                                                    type="button"
+                                                    disabled={deleting}
+                                                    onClick={() =>
+                                                        void removeMethod({ kind: 'shipping', item })
+                                                    }
+                                                    className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
+                                                    aria-label={`删除配送方式${displayName}`}
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            )}
                                         </div>
-                                        {item.description && (
-                                            <p className="mt-1.5 line-clamp-2 text-[11px] text-slate-500">
-                                                {item.description}
-                                            </p>
-                                        )}
                                     </div>
-                                    <div className="flex shrink-0 items-center gap-1">
-                                        {canUpdateShipping && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setEditor({ kind: 'shipping', item })}
-                                                className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
-                                                aria-label={`编辑配送方式${item.name}`}
-                                            >
-                                                <Pencil className="h-3.5 w-3.5" />
-                                            </button>
-                                        )}
-                                        {canDeleteShipping && (
-                                            <button
-                                                type="button"
-                                                disabled={deleting}
-                                                onClick={() => void removeMethod({ kind: 'shipping', item })}
-                                                className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
-                                                aria-label={`删除配送方式${item.name}`}
-                                            >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                             {!data.shippingMethods.items.length && (
                                 <div className="p-10 text-center text-xs text-slate-400">未配置配送方式</div>
                             )}
@@ -495,7 +507,8 @@ function MethodEditorDialog({
 }) {
     const item = state.item;
     const initialTestPayment = state.kind === 'payment' && state.testPayment;
-    const languageCode = item?.translations[0]?.languageCode ?? data.activeChannel.defaultLanguageCode;
+    const languageCode = getAdminDisplayLanguage();
+    const selectedTranslation = getLocalizedEntityTranslation(item?.translations, languageCode);
     const checkerDefinitions =
         state.kind === 'payment' ? data.paymentMethodEligibilityCheckers : data.shippingEligibilityCheckers;
     const mainDefinitions =
@@ -505,8 +518,14 @@ function MethodEditorDialog({
     const [code, setCode] = useState(
         item?.code ?? (initialTestPayment ? `controlled-test-payment-${data.activeChannel.id}` : ''),
     );
-    const [name, setName] = useState(item?.name ?? (initialTestPayment ? '测试支付' : ''));
-    const [description, setDescription] = useState(item?.description ?? '');
+    const [name, setName] = useState(
+        selectedTranslation?.name ??
+            (!item?.translations.length ? item?.name : '') ??
+            (initialTestPayment ? '测试支付' : ''),
+    );
+    const [description, setDescription] = useState(
+        selectedTranslation?.description ?? (!item?.translations.length ? item?.description : '') ?? '',
+    );
     const [enabled, setEnabled] = useState(
         state.kind === 'payment' ? (state.item?.enabled ?? !initialTestPayment) : true,
     );
@@ -691,22 +710,31 @@ function MethodEditorDialog({
                   ? operationInput(checkerCode, checkerArgs, checkerDefinitions)
                   : null;
             const customFields = customFieldInputFromValues(customFieldDefinitions, customFieldValues);
-            const translations = (
-                item?.translations.length
-                    ? item.translations
-                    : [{ id: '', languageCode, name: '', description: '' }]
-            ).map(translation => ({
+            const existingTranslations = item?.translations ?? [];
+            const translations = existingTranslations.map(translation => ({
                 ...(translation.id ? { id: translation.id } : {}),
                 languageCode: translation.languageCode,
-                name: translation.languageCode === languageCode ? name.trim() : translation.name,
+                name: translation === selectedTranslation ? name.trim() : translation.name,
                 description:
-                    translation.languageCode === languageCode ? description.trim() : translation.description,
+                    translation === selectedTranslation ? description.trim() : translation.description,
                 customFields: localizedCustomFieldInputFromValues(
                     customFieldDefinitions,
                     customFieldValues,
                     translation.languageCode,
                 ),
             }));
+            if (!getLocalizedEntityTranslation(existingTranslations, languageCode)) {
+                translations.push({
+                    languageCode,
+                    name: name.trim(),
+                    description: description.trim(),
+                    customFields: localizedCustomFieldInputFromValues(
+                        customFieldDefinitions,
+                        customFieldValues,
+                        languageCode,
+                    ),
+                });
+            }
             if (state.kind === 'payment') {
                 if (
                     code.trim().toLowerCase() === USDT_PAYMENT_METHOD_CODE ||

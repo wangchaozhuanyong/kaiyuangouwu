@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import {
     CreateAdministratorInput,
     DeletionResult,
+    Permission,
     UpdateAdministratorInput,
 } from '@vendure/common/lib/generated-types';
 import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
+import { unique } from '@vendure/common/lib/unique';
 import { In, IsNull } from 'typeorm';
 
 import { RequestContext } from '../../api/common/request-context';
@@ -28,7 +31,10 @@ import { ListQueryBuilder } from '../helpers/list-query-builder/list-query-build
 import { PasswordCipher } from '../helpers/password-cipher/password-cipher';
 import { RequestContextService } from '../helpers/request-context/request-context.service';
 import { checkSuperadminCredentials } from '../helpers/utils/check-superadmin-credentials';
-import { getChannelPermissions } from '../helpers/utils/get-user-channels-permissions';
+import {
+    getChannelPermissions,
+    getUserChannelsPermissions,
+} from '../helpers/utils/get-user-channels-permissions';
 import { patchEntity } from '../helpers/utils/patch-entity';
 
 import { RoleService } from './role.service';
@@ -53,6 +59,7 @@ export class AdministratorService {
         private customFieldRelationService: CustomFieldRelationService,
         private eventBus: EventBus,
         private requestContextService: RequestContextService,
+        private moduleRef: ModuleRef,
     ) {}
 
     /** @internal */
@@ -64,43 +71,52 @@ export class AdministratorService {
      * @description
      * Get a paginated list of Administrators.
      */
-    findAll(
+    async findAll(
         ctx: RequestContext,
         options?: ListQueryOptions<Administrator>,
         relations?: RelationPaths<Administrator>,
     ): Promise<PaginatedList<Administrator>> {
-        return this.listQueryBuilder
-            .build(Administrator, options, {
-                relations: relations ?? ['user', 'user.roles'],
-                where: { deletedAt: IsNull() },
-                ctx,
-            })
-            .getManyAndCount()
-            .then(([items, totalItems]) => ({
-                items,
-                totalItems,
-            }));
+        const manageableIds = await this.getManageableAdministratorIds(ctx);
+        if (manageableIds?.length === 0) {
+            return { items: [], totalItems: 0 };
+        }
+        const query = this.listQueryBuilder.build(Administrator, options, {
+            relations: relations ?? ['user', 'user.roles'],
+            where: { deletedAt: IsNull() },
+            ctx,
+        });
+        if (manageableIds) {
+            query.andWhere({ id: In(manageableIds) });
+        }
+        return query.getManyAndCount().then(([items, totalItems]) => ({
+            items,
+            totalItems,
+        }));
     }
 
     /**
      * @description
      * Get an Administrator by id.
      */
-    findOne(
+    async findOne(
         ctx: RequestContext,
         administratorId: ID,
         relations?: RelationPaths<Administrator>,
     ): Promise<Administrator | undefined> {
-        return this.connection
+        const administrator = await this.connection
             .getRepository(ctx, Administrator)
             .findOne({
-                relations: relations ?? ['user', 'user.roles'],
+                relations: unique([...(relations ?? []), 'user', 'user.roles', 'user.roles.channels']),
                 where: {
                     id: administratorId,
                     deletedAt: IsNull(),
                 },
             })
             .then(result => result ?? undefined);
+        if (!administrator || !(await this.activeUserCanManageAdministrator(ctx, administrator))) {
+            return undefined;
+        }
+        return administrator;
     }
 
     /**
@@ -223,15 +239,24 @@ export class AdministratorService {
         if (input.roleIds) {
             await this.checkActiveUserCanGrantRoles(ctx, input.roleIds);
         }
+        const passwordChanged = !!input.password;
+        const rolesChanged =
+            input.roleIds != null &&
+            (input.roleIds.length !== administrator.user.roles.length ||
+                input.roleIds.some(
+                    roleId => !administrator.user.roles.some(role => idsAreEqual(role.id, roleId)),
+                ));
+        let identifierChanged = false;
         if (input.emailAddress) {
             const normalizedEmail = normalizeEmailAddress(input.emailAddress);
             await this.checkForDuplicateEmailAddress(ctx, normalizedEmail, input.id);
+            identifierChanged = normalizedEmail !== normalizeEmailAddress(administrator.emailAddress);
             input.emailAddress = normalizedEmail;
         }
         let updatedAdministrator = patchEntity(administrator, input);
         await this.connection.getRepository(ctx, Administrator).save(administrator, { reload: false });
 
-        if (input.emailAddress) {
+        if (identifierChanged && input.emailAddress) {
             updatedAdministrator.user.identifier = input.emailAddress;
             await this.connection.getRepository(ctx, User).save(updatedAdministrator.user);
         }
@@ -243,7 +268,7 @@ export class AdministratorService {
                 await this.connection.getRepository(ctx, NativeAuthenticationMethod).save(nativeAuthMethod);
             }
         }
-        if (input.roleIds) {
+        if (rolesChanged && input.roleIds) {
             const isSoleSuperAdmin = await this.isSoleSuperadmin(ctx, input.id);
             if (isSoleSuperAdmin) {
                 const superAdminRole = await this.roleService.getSuperAdminRole(ctx);
@@ -274,6 +299,9 @@ export class AdministratorService {
             updatedAdministrator,
         );
         await this.eventBus.publish(new AdministratorEvent(ctx, updatedAdministrator, 'updated', input));
+        if (identifierChanged || passwordChanged || rolesChanged) {
+            await this.deleteSessionsByUser(ctx, updatedAdministrator.user);
+        }
         return updatedAdministrator;
     }
 
@@ -287,6 +315,10 @@ export class AdministratorService {
             where: { id: In(roleIds) },
             relations: { channels: true },
         });
+        if (roles.length !== new Set(roleIds.map(String)).size) {
+            const missingRoleId = roleIds.find(id => !roles.some(role => idsAreEqual(role.id, id)));
+            throw new EntityNotFoundError('Role', missingRoleId ?? roleIds[0]);
+        }
         const permissionsRequired = getChannelPermissions(roles);
         for (const channelPermissions of permissionsRequired) {
             const activeUserHasRequiredPermissions = await this.roleService.userHasAllPermissionsOnChannel(
@@ -312,6 +344,44 @@ export class AdministratorService {
         }
     }
 
+    private async activeUserCanManageAdministrator(
+        ctx: RequestContext,
+        administrator: Administrator,
+    ): Promise<boolean> {
+        if (!ctx.activeUserId || ctx.userHasPermissions([Permission.SuperAdmin])) {
+            return true;
+        }
+        const activeUser = await this.connection.getRepository(ctx, User).findOne({
+            where: { id: ctx.activeUserId },
+            relations: { roles: { channels: true } },
+        });
+        if (!activeUser) {
+            return false;
+        }
+        const activePermissions = getUserChannelsPermissions(activeUser);
+        return getChannelPermissions(administrator.user.roles).every(required => {
+            const available = activePermissions.find(channel => idsAreEqual(channel.id, required.id));
+            return required.permissions.every(permission => available?.permissions.includes(permission));
+        });
+    }
+
+    private async getManageableAdministratorIds(ctx: RequestContext): Promise<ID[] | null> {
+        if (!ctx.activeUserId || ctx.userHasPermissions([Permission.SuperAdmin])) {
+            return null;
+        }
+        const administrators = await this.connection.getRepository(ctx, Administrator).find({
+            where: { deletedAt: IsNull() },
+            relations: { user: { roles: { channels: true } } },
+        });
+        const visible: ID[] = [];
+        for (const administrator of administrators) {
+            if (await this.activeUserCanManageAdministrator(ctx, administrator)) {
+                visible.push(administrator.id);
+            }
+        }
+        return visible;
+    }
+
     /**
      * @description
      * Assigns a Role to the Administrator's User entity.
@@ -321,12 +391,15 @@ export class AdministratorService {
         if (!administrator) {
             throw new EntityNotFoundError('Administrator', administratorId);
         }
+        await this.checkActiveUserCanManageAdministrator(ctx, administrator);
+        await this.checkActiveUserCanGrantRoles(ctx, [roleId]);
         const role = await this.roleService.findOne(ctx, roleId);
         if (!role) {
             throw new EntityNotFoundError('Role', roleId);
         }
         administrator.user.roles.push(role);
         await this.connection.getRepository(ctx, User).save(administrator.user, { reload: false });
+        await this.deleteSessionsByUser(ctx, administrator.user);
         return administrator;
     }
 
@@ -336,8 +409,9 @@ export class AdministratorService {
      */
     async softDelete(ctx: RequestContext, id: ID) {
         const administrator = await this.connection.getEntityOrThrow(ctx, Administrator, id, {
-            relations: ['user'],
+            relations: ['user', 'user.roles', 'user.roles.channels'],
         });
+        await this.checkActiveUserCanManageAdministrator(ctx, administrator);
         const isSoleSuperadmin = await this.isSoleSuperadmin(ctx, id);
         if (isSoleSuperadmin) {
             throw new InternalServerError('error.cannot-delete-sole-superadmin');
@@ -369,14 +443,7 @@ export class AdministratorService {
      * with SuperAdmin permissions.
      */
     private async isSoleSuperadmin(ctx: RequestContext, id: ID) {
-        const superAdminRole = await this.roleService.getSuperAdminRole(ctx);
-        const allAdmins = await this.connection.getRepository(ctx, Administrator).find({
-            relations: ['user', 'user.roles'],
-            where: { deletedAt: IsNull() },
-        });
-        const superAdmins = allAdmins.filter(
-            admin => !!admin.user.roles.find(r => idsAreEqual(r.id, superAdminRole.id)),
-        );
+        const superAdmins = await this.findSuperAdministrators(ctx);
         if (superAdmins.length === 0) {
             return false;
         }
@@ -384,6 +451,24 @@ export class AdministratorService {
             return false;
         }
         return idsAreEqual(superAdmins[0].id, id);
+    }
+
+    private async findSuperAdministrators(ctx: RequestContext): Promise<Administrator[]> {
+        const superAdminRole = await this.roleService.getSuperAdminRole(ctx);
+        const allAdmins = await this.connection.getRepository(ctx, Administrator).find({
+            relations: ['user', 'user.roles'],
+            where: { deletedAt: IsNull() },
+        });
+        return allAdmins.filter(admin =>
+            admin.user.roles.some(role => idsAreEqual(role.id, superAdminRole.id)),
+        );
+    }
+
+    private async deleteSessionsByUser(ctx: RequestContext, user: User): Promise<void> {
+        // Avoid the Administrator -> Session -> Order/History -> Administrator import cycle.
+        await this.moduleRef
+            .get((await import('./session.service.js')).SessionService)
+            .deleteSessionsByUser(ctx, user);
     }
 
     /**

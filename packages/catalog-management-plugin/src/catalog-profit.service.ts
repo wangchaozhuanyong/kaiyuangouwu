@@ -8,9 +8,11 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
+import { createHash } from 'node:crypto';
 import { And, In, LessThan, MoreThanOrEqual } from 'typeorm';
 
 import { manageCatalogOperationsPermission } from './constants';
+import { OrderProfitExpenseEvent } from './entities/order-profit-expense-event.entity';
 import { OrderProfitExpense } from './entities/order-profit-expense.entity';
 import { VariantCostRecord } from './entities/variant-cost-record.entity';
 
@@ -32,8 +34,10 @@ export interface SaveCatalogOrderProfitExpenseInput {
     orderId: string;
     carrierShippingCostMicrounits?: number | null;
     paymentFeeMicrounits?: number | null;
+    chargebackMicrounits?: number | null;
     note?: string | null;
     expectedUpdatedAt?: Date | string | null;
+    idempotencyKey?: string | null;
 }
 
 export interface CatalogOrderProfitExpenseImportRowInput {
@@ -41,6 +45,7 @@ export interface CatalogOrderProfitExpenseImportRowInput {
     orderCode: string;
     carrierShippingCostMicrounits?: number | null;
     paymentFeeMicrounits?: number | null;
+    chargebackMicrounits?: number | null;
     note?: string | null;
 }
 
@@ -74,6 +79,9 @@ export interface ProfitOrderSource {
     code: string;
     orderPlacedAt: Date;
     currencyCode: CurrencyCode;
+    total: number;
+    totalWithTax: number;
+    discountWithTax: number;
     shippingWithTax: number;
     lines: ProfitOrderLineSource[];
     payments: ProfitPaymentSource[];
@@ -89,11 +97,15 @@ export interface CatalogProfitOrderResult {
     refundedRevenueMicrounits: number;
     netRevenueMicrounits: number;
     shippingRevenueMicrounits: number;
+    grossSalesMicrounits: number;
+    discountMicrounits: number;
+    taxMicrounits: number;
     productCostMicrounits: number | null;
     grossProfitMicrounits: number | null;
     grossMargin: number | null;
     carrierShippingCostMicrounits: number | null;
     paymentFeeMicrounits: number | null;
+    chargebackMicrounits: number | null;
     netProfitMicrounits: number | null;
     netMargin: number | null;
     missingCostLineCount: number;
@@ -103,6 +115,7 @@ export interface CatalogProfitOrderResult {
 export interface OrderProfitExpenseSource {
     carrierShippingCostMicrounits: number | null;
     paymentFeeMicrounits: number | null;
+    chargebackMicrounits: number | null;
 }
 
 @Injectable()
@@ -122,6 +135,25 @@ export class CatalogProfitService {
         return expense ? expenseView(expense) : null;
     }
 
+    async orderExpenseEvents(ctx: RequestContext, orderId: string) {
+        this.requireRead(ctx);
+        const order = await this.scopedOrderById(ctx, orderId);
+        const events = await this.connection.getRepository(ctx, OrderProfitExpenseEvent).find({
+            where: { orderId: order.id, channelId: ctx.channelId },
+            order: { createdAt: 'DESC', id: 'DESC' },
+            take: 50,
+        });
+        return events.map(event => ({
+            id: String(event.id),
+            createdAt: event.createdAt,
+            eventType: event.eventType,
+            actorUserId: event.actorUserId,
+            sourceReference: event.sourceReference,
+            before: event.beforeJson ? JSON.parse(event.beforeJson) : null,
+            after: JSON.parse(event.afterJson),
+        }));
+    }
+
     async saveOrderExpense(ctx: RequestContext, input: SaveCatalogOrderProfitExpenseInput) {
         this.requireWrite(ctx);
         const carrierShippingCostMicrounits =
@@ -132,10 +164,41 @@ export class CatalogProfitService {
             input.paymentFeeMicrounits === undefined
                 ? undefined
                 : normalizeExpenseMicrounits(input.paymentFeeMicrounits, '支付手续费');
+        const chargebackMicrounits =
+            input.chargebackMicrounits === undefined
+                ? undefined
+                : normalizeExpenseMicrounits(input.chargebackMicrounits, '拒付损失');
         const note = input.note === undefined ? undefined : normalizeExpenseNote(input.note);
+        const idempotencyKey = normalizeExpenseIdempotencyKey(
+            input.idempotencyKey,
+            input.orderId,
+            carrierShippingCostMicrounits,
+            paymentFeeMicrounits,
+            chargebackMicrounits,
+            note,
+            input.expectedUpdatedAt,
+        );
         return this.connection.withTransaction(ctx, async txCtx => {
             const order = await this.scopedOrderById(txCtx, input.orderId);
             const repository = this.connection.getRepository(txCtx, OrderProfitExpense);
+            const eventRepository = this.connection.getRepository(txCtx, OrderProfitExpenseEvent);
+            const retried = await eventRepository.findOneBy({
+                channelId: txCtx.channelId,
+                idempotencyKey,
+            });
+            if (retried) {
+                const retryExpense = await repository.findOne({
+                    where: {
+                        orderId: order.id,
+                        channelId: txCtx.channelId,
+                        currencyCode: order.currencyCode,
+                    },
+                });
+                if (!retryExpense || String(retried.orderId) !== String(order.id)) {
+                    throw new UserInputError('该幂等键已用于其他费用记录');
+                }
+                return expenseView(retryExpense);
+            }
             const current = await repository.findOne({
                 where: {
                     orderId: order.id,
@@ -144,6 +207,7 @@ export class CatalogProfitService {
                 },
             });
             assertExpectedUpdatedAt(current, input.expectedUpdatedAt);
+            const beforeJson = current ? JSON.stringify(expenseAuditSnapshot(current)) : null;
             const expense =
                 current ??
                 repository.create({
@@ -152,6 +216,7 @@ export class CatalogProfitService {
                     currencyCode: order.currencyCode,
                     carrierShippingCostMicrounits: null,
                     paymentFeeMicrounits: null,
+                    chargebackMicrounits: null,
                     note: null,
                 });
             if (carrierShippingCostMicrounits !== undefined) {
@@ -160,10 +225,14 @@ export class CatalogProfitService {
             if (paymentFeeMicrounits !== undefined) {
                 expense.paymentFeeMicrounits = toStoredMicrounits(paymentFeeMicrounits);
             }
+            if (chargebackMicrounits !== undefined) {
+                expense.chargebackMicrounits = toStoredMicrounits(chargebackMicrounits);
+            }
             if (note !== undefined) expense.note = note;
             expense.source = 'MANUAL';
             expense.sourceReference = null;
             expense.actorId = txCtx.activeUserId ? String(txCtx.activeUserId) : null;
+            let persisted: OrderProfitExpense;
             if (current) {
                 const nextMillisecond = new Date(current.updatedAt.getTime() + 1);
                 const result = await repository.update(
@@ -176,6 +245,7 @@ export class CatalogProfitService {
                     {
                         carrierShippingCostMicrounits: expense.carrierShippingCostMicrounits,
                         paymentFeeMicrounits: expense.paymentFeeMicrounits,
+                        chargebackMicrounits: expense.chargebackMicrounits,
                         note: expense.note,
                         source: expense.source,
                         sourceReference: expense.sourceReference,
@@ -187,13 +257,26 @@ export class CatalogProfitService {
                 if (result.affected !== 1) {
                     throw new UserInputError('费用记录已被其他管理员修改，请刷新后重试');
                 }
-                return expenseView(
-                    await repository.findOneOrFail({
-                        where: { id: current.id, channelId: txCtx.channelId },
-                    }),
-                );
+                persisted = await repository.findOneOrFail({
+                    where: { id: current.id, channelId: txCtx.channelId },
+                });
+            } else {
+                persisted = await repository.save(expense);
             }
-            return expenseView(await repository.save(expense));
+            await eventRepository.save(
+                eventRepository.create({
+                    orderId: order.id,
+                    channelId: txCtx.channelId,
+                    currencyCode: order.currencyCode,
+                    eventType: 'MANUAL_SAVE',
+                    idempotencyKey,
+                    actorUserId: txCtx.activeUserId ? String(txCtx.activeUserId) : null,
+                    sourceReference: null,
+                    beforeJson,
+                    afterJson: JSON.stringify(expenseAuditSnapshot(persisted)),
+                }),
+            );
+            return expenseView(persisted);
         });
     }
 
@@ -224,6 +307,17 @@ export class CatalogProfitService {
             }
             const orderIds = orders.map(order => order.id);
             const repository = this.connection.getRepository(txCtx, OrderProfitExpense);
+            const eventRepository = this.connection.getRepository(txCtx, OrderProfitExpenseEvent);
+            const eventKey = (rowNumber: number) => `import:${input.fileHash}:${rowNumber}`;
+            const existingEvents = await eventRepository.find({
+                where: {
+                    channelId: txCtx.channelId,
+                    idempotencyKey: In(rows.map(row => eventKey(row.rowNumber))),
+                },
+            });
+            const existingEventKeys = new Set(existingEvents.map(event => event.idempotencyKey));
+            const pendingRows = rows.filter(row => !existingEventKeys.has(eventKey(row.rowNumber)));
+            if (!pendingRows.length) return { totalRows: rows.length, createdCount: 0, updatedCount: 0 };
             const current = await repository.find({
                 where: {
                     orderId: In(orderIds),
@@ -232,9 +326,15 @@ export class CatalogProfitService {
                 },
             });
             const expenseByOrder = new Map(current.map(expense => [String(expense.orderId), expense]));
+            const beforeByOrder = new Map(
+                current.map(expense => [
+                    String(expense.orderId),
+                    JSON.stringify(expenseAuditSnapshot(expense)),
+                ]),
+            );
             let createdCount = 0;
             let updatedCount = 0;
-            const expenses = rows.map(row => {
+            const expenses = pendingRows.map(row => {
                 const order = ordersByCode.get(normalizeOrderCode(row.orderCode));
                 if (!order) throw new UserInputError('找不到当前店铺与币种下的已下单订单');
                 const existing = expenseByOrder.get(String(order.id));
@@ -246,6 +346,7 @@ export class CatalogProfitService {
                         currencyCode: order.currencyCode,
                         carrierShippingCostMicrounits: null,
                         paymentFeeMicrounits: null,
+                        chargebackMicrounits: null,
                         note: null,
                     });
                 if (row.carrierShippingCostMicrounits !== undefined) {
@@ -256,6 +357,9 @@ export class CatalogProfitService {
                 if (row.paymentFeeMicrounits !== undefined) {
                     expense.paymentFeeMicrounits = toStoredMicrounits(row.paymentFeeMicrounits);
                 }
+                if (row.chargebackMicrounits !== undefined) {
+                    expense.chargebackMicrounits = toStoredMicrounits(row.chargebackMicrounits);
+                }
                 if (row.note !== undefined) expense.note = row.note;
                 expense.source = 'IMPORT';
                 expense.sourceReference = input.fileHash;
@@ -264,7 +368,27 @@ export class CatalogProfitService {
                 else createdCount += 1;
                 return expense;
             });
-            await repository.save(expenses);
+            const saved = await repository.save(expenses);
+            const savedByOrder = new Map(saved.map(expense => [String(expense.orderId), expense]));
+            await eventRepository.save(
+                pendingRows.map(row => {
+                    const order = ordersByCode.get(normalizeOrderCode(row.orderCode));
+                    if (!order) throw new UserInputError('找不到当前店铺与币种下的已下单订单');
+                    const expense = savedByOrder.get(String(order.id));
+                    if (!expense) throw new UserInputError('费用导入后无法读取保存结果');
+                    return eventRepository.create({
+                        orderId: order.id,
+                        channelId: txCtx.channelId,
+                        currencyCode: order.currencyCode,
+                        eventType: 'IMPORT',
+                        idempotencyKey: eventKey(row.rowNumber),
+                        actorUserId: txCtx.activeUserId ? String(txCtx.activeUserId) : null,
+                        sourceReference: input.fileHash,
+                        beforeJson: beforeByOrder.get(String(order.id)) ?? null,
+                        afterJson: JSON.stringify(expenseAuditSnapshot(expense)),
+                    });
+                }),
+            );
             return { totalRows: rows.length, createdCount, updatedCount };
         });
     }
@@ -300,6 +424,11 @@ export class CatalogProfitService {
 
         const orders = await baseQuery
             .leftJoinAndSelect('order.lines', 'line')
+            .leftJoinAndSelect('line.adjustments', 'lineAdjustment')
+            .leftJoinAndSelect('line.taxLines', 'lineTaxLine')
+            .leftJoinAndSelect('order.shippingLines', 'shippingLine')
+            .leftJoinAndSelect('shippingLine.adjustments', 'shippingAdjustment')
+            .leftJoinAndSelect('shippingLine.taxLines', 'shippingTaxLine')
             .leftJoinAndSelect('order.payments', 'payment')
             .leftJoinAndSelect('payment.refunds', 'refund')
             .distinct(true)
@@ -357,6 +486,7 @@ export class CatalogProfitService {
                         expense.carrierShippingCostMicrounits,
                     ),
                     paymentFeeMicrounits: fromStoredMicrounits(expense.paymentFeeMicrounits),
+                    chargebackMicrounits: fromStoredMicrounits(expense.chargebackMicrounits),
                 },
             ]),
         );
@@ -367,6 +497,15 @@ export class CatalogProfitService {
                 code: order.code,
                 orderPlacedAt: order.orderPlacedAt as Date,
                 currencyCode: order.currencyCode,
+                total: order.total,
+                totalWithTax: order.totalWithTax,
+                discountWithTax: Math.max(
+                    0,
+                    -(order.discounts ?? []).reduce(
+                        (total, discount) => total + Math.min(0, discount.amountWithTax),
+                        0,
+                    ),
+                ),
                 shippingWithTax: order.shippingWithTax,
                 lines: order.lines.map(line => ({
                     productVariantId: String(line.productVariantId),
@@ -453,6 +592,9 @@ export function calculateCatalogProfitReport(
                 .filter(refund => refund.state === SETTLED_STATE)
                 .reduce((total, refund) => total + refund.total, 0) * 10;
         const netRevenueMicrounits = settledRevenueMicrounits - refundedRevenueMicrounits;
+        const discountMicrounits = Math.max(order.discountWithTax, 0) * 10;
+        const grossSalesMicrounits = Math.max(order.totalWithTax + order.discountWithTax, 0) * 10;
+        const taxMicrounits = Math.max(order.totalWithTax - order.total, 0) * 10;
         let knownCostMicrounits = 0;
         let missingCostLineCount = 0;
         let estimatedCostLineCount = 0;
@@ -471,12 +613,17 @@ export function calculateCatalogProfitReport(
         const expense = expensesByOrder.get(order.id);
         const carrierShippingCostMicrounits = expense?.carrierShippingCostMicrounits ?? null;
         const paymentFeeMicrounits = expense?.paymentFeeMicrounits ?? null;
+        const chargebackMicrounits = expense?.chargebackMicrounits ?? null;
         const netProfitMicrounits =
             grossProfitMicrounits == null ||
             carrierShippingCostMicrounits == null ||
-            paymentFeeMicrounits == null
+            paymentFeeMicrounits == null ||
+            chargebackMicrounits == null
                 ? null
-                : grossProfitMicrounits - carrierShippingCostMicrounits - paymentFeeMicrounits;
+                : grossProfitMicrounits -
+                  carrierShippingCostMicrounits -
+                  paymentFeeMicrounits -
+                  chargebackMicrounits;
         return [
             {
                 id: order.id,
@@ -488,6 +635,9 @@ export function calculateCatalogProfitReport(
                 refundedRevenueMicrounits,
                 netRevenueMicrounits,
                 shippingRevenueMicrounits: Math.max(order.shippingWithTax, 0) * 10,
+                grossSalesMicrounits,
+                discountMicrounits,
+                taxMicrounits,
                 productCostMicrounits,
                 grossProfitMicrounits,
                 grossMargin:
@@ -496,6 +646,7 @@ export function calculateCatalogProfitReport(
                         : grossProfitMicrounits / netRevenueMicrounits,
                 carrierShippingCostMicrounits,
                 paymentFeeMicrounits,
+                chargebackMicrounits,
                 netProfitMicrounits,
                 netMargin:
                     netProfitMicrounits == null || netRevenueMicrounits <= 0
@@ -516,6 +667,7 @@ function summarizeCatalogProfit(items: CatalogProfitOrderResult[]) {
         item => item.carrierShippingCostMicrounits == null,
     ).length;
     const missingPaymentFeeOrderCount = items.filter(item => item.paymentFeeMicrounits == null).length;
+    const missingChargebackOrderCount = items.filter(item => item.chargebackMicrounits == null).length;
     const settledRevenueMicrounits = sum(items, item => item.settledRevenueMicrounits);
     const refundedRevenueMicrounits = sum(items, item => item.refundedRevenueMicrounits);
     const netRevenueMicrounits = sum(items, item => item.netRevenueMicrounits);
@@ -529,10 +681,18 @@ function summarizeCatalogProfit(items: CatalogProfitOrderResult[]) {
             : null;
     const paymentFeeMicrounits =
         missingPaymentFeeOrderCount === 0 ? sum(items, item => item.paymentFeeMicrounits ?? 0) : null;
+    const chargebackMicrounits =
+        missingChargebackOrderCount === 0 ? sum(items, item => item.chargebackMicrounits ?? 0) : null;
     const netProfitMicrounits =
-        grossProfitMicrounits == null || carrierShippingCostMicrounits == null || paymentFeeMicrounits == null
+        grossProfitMicrounits == null ||
+        carrierShippingCostMicrounits == null ||
+        paymentFeeMicrounits == null ||
+        chargebackMicrounits == null
             ? null
-            : grossProfitMicrounits - carrierShippingCostMicrounits - paymentFeeMicrounits;
+            : grossProfitMicrounits -
+              carrierShippingCostMicrounits -
+              paymentFeeMicrounits -
+              chargebackMicrounits;
     return {
         summary: {
             currencyCode: items[0]?.currencyCode ?? CurrencyCode.CNY,
@@ -542,6 +702,9 @@ function summarizeCatalogProfit(items: CatalogProfitOrderResult[]) {
             refundedRevenueMicrounits,
             netRevenueMicrounits,
             shippingRevenueMicrounits: sum(items, item => item.shippingRevenueMicrounits),
+            grossSalesMicrounits: sum(items, item => item.grossSalesMicrounits),
+            discountMicrounits: sum(items, item => item.discountMicrounits),
+            taxMicrounits: sum(items, item => item.taxMicrounits),
             productCostMicrounits,
             grossProfitMicrounits,
             grossMargin:
@@ -550,6 +713,7 @@ function summarizeCatalogProfit(items: CatalogProfitOrderResult[]) {
                     : grossProfitMicrounits / netRevenueMicrounits,
             carrierShippingCostMicrounits,
             paymentFeeMicrounits,
+            chargebackMicrounits,
             netProfitMicrounits,
             netMargin:
                 netProfitMicrounits == null || netRevenueMicrounits <= 0
@@ -561,8 +725,10 @@ function summarizeCatalogProfit(items: CatalogProfitOrderResult[]) {
             estimatedCostLineCount: sum(items, item => item.estimatedCostLineCount),
             missingCarrierShippingCostOrderCount,
             missingPaymentFeeOrderCount,
+            missingChargebackOrderCount,
             includesCarrierShippingCost: missingCarrierShippingCostOrderCount === 0,
             includesPaymentFees: missingPaymentFeeOrderCount === 0,
+            includesChargebacks: missingChargebackOrderCount === 0,
         },
         items,
     };
@@ -599,7 +765,15 @@ function normalizeExpenseImport(input: ImportCatalogOrderProfitExpensesInput) {
             row.paymentFeeMicrounits === undefined
                 ? undefined
                 : normalizeExpenseMicrounits(row.paymentFeeMicrounits, `第 ${rowNumber} 行支付手续费`);
-        if (carrierShippingCostMicrounits == null && paymentFeeMicrounits == null) {
+        const chargebackMicrounits =
+            row.chargebackMicrounits === undefined
+                ? undefined
+                : normalizeExpenseMicrounits(row.chargebackMicrounits, `第 ${rowNumber} 行拒付损失`);
+        if (
+            carrierShippingCostMicrounits == null &&
+            paymentFeeMicrounits == null &&
+            chargebackMicrounits == null
+        ) {
             throw new UserInputError(`第 ${rowNumber} 行：至少填写一项实际费用，0 元请明确填 0`);
         }
         return {
@@ -607,6 +781,7 @@ function normalizeExpenseImport(input: ImportCatalogOrderProfitExpensesInput) {
             orderCode,
             carrierShippingCostMicrounits,
             paymentFeeMicrounits,
+            chargebackMicrounits,
             note: row.note === undefined ? undefined : normalizeExpenseNote(row.note),
         };
     });
@@ -647,10 +822,51 @@ function expenseView(expense: OrderProfitExpense) {
         currencyCode: expense.currencyCode,
         carrierShippingCostMicrounits: fromStoredMicrounits(expense.carrierShippingCostMicrounits),
         paymentFeeMicrounits: fromStoredMicrounits(expense.paymentFeeMicrounits),
+        chargebackMicrounits: fromStoredMicrounits(expense.chargebackMicrounits),
         source: expense.source,
         sourceReference: expense.sourceReference,
         note: expense.note,
     };
+}
+
+function expenseAuditSnapshot(expense: OrderProfitExpense) {
+    return {
+        carrierShippingCostMicrounits: fromStoredMicrounits(expense.carrierShippingCostMicrounits),
+        paymentFeeMicrounits: fromStoredMicrounits(expense.paymentFeeMicrounits),
+        chargebackMicrounits: fromStoredMicrounits(expense.chargebackMicrounits),
+        source: expense.source,
+        sourceReference: expense.sourceReference,
+        note: expense.note,
+    };
+}
+
+function normalizeExpenseIdempotencyKey(
+    value: string | null | undefined,
+    orderId: string,
+    carrierShippingCostMicrounits: number | null | undefined,
+    paymentFeeMicrounits: number | null | undefined,
+    chargebackMicrounits: number | null | undefined,
+    note: string | null | undefined,
+    expectedUpdatedAt: Date | string | null | undefined,
+): string {
+    const provided = String(value ?? '').trim();
+    if (provided) {
+        if (!/^[a-zA-Z0-9:_-]{8,96}$/u.test(provided)) throw new UserInputError('费用操作幂等键格式无效');
+        return provided;
+    }
+    const digest = createHash('sha256')
+        .update(
+            JSON.stringify([
+                orderId,
+                carrierShippingCostMicrounits,
+                paymentFeeMicrounits,
+                chargebackMicrounits,
+                note,
+                expectedUpdatedAt ? new Date(expectedUpdatedAt).toISOString() : null,
+            ]),
+        )
+        .digest('hex');
+    return `legacy:${digest}`;
 }
 
 function assertExpectedUpdatedAt(

@@ -52,6 +52,7 @@ const businessSettings: BusinessSettingsResult = {
             {
                 id: 'channel-1',
                 code: 'malaysia-store',
+                customFields: { storefrontNameZh: '马来西亚店', storefrontNameEn: 'Malaysia store' },
                 defaultTaxZone: { id: 'zone-1' },
                 defaultShippingZone: { id: 'zone-1' },
             },
@@ -404,7 +405,7 @@ describe('BusinessBasicsPanel', () => {
         expect(requestConfirmation).not.toHaveBeenCalled();
         expect(deleteZone).not.toHaveBeenCalled();
         expect(onError).toHaveBeenCalledWith(
-            expect.stringContaining('店铺 Channel“malaysia-store”（默认税务区域、默认配送区域）'),
+            expect.stringContaining('店铺“马来西亚店”（默认税务区域、默认配送区域）'),
         );
         expect(onError).toHaveBeenCalledWith(expect.stringContaining('税率“标准商品 · 马来西亚区域 · 6%”'));
         expect(onError).toHaveBeenCalledWith(expect.stringContaining('先把这些店铺的默认区域和税率改绑'));

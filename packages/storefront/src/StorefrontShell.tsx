@@ -16,6 +16,7 @@ import { PageReadinessBoundary } from './page-readiness';
 import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { isBrowsingStorefrontRoute, isPublicStorefrontRoute } from './storefront-access';
 import { routeHref } from './storefront-router';
+import { StorefrontTrafficPreference } from './storefront-ui/storefront-traffic-preference';
 import { StorefrontContext } from './StorefrontContext';
 import { StorefrontUpdatePrompt } from './StorefrontUpdatePrompt';
 import { type ActiveCustomer } from './types';
@@ -197,6 +198,8 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                             )}
                         </div>
                     )}
+
+                    <StorefrontTrafficPreference api={storefrontContextValue.api} language={language} />
 
                     <StorefrontUpdatePrompt language={language} />
                 </PageReadinessBoundary>

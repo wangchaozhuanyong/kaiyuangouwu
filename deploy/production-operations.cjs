@@ -66,6 +66,7 @@ function validateRequest(environment) {
             'verify-security-dependencies',
             'inspect-storefront-config',
             'audit-store-isolation-data',
+            'audit-administrator-product-readiness',
             'plan-order-sales-ownership-backfill',
             'apply-order-sales-ownership-backfill-reviewed',
             'plan-moyao-default-store-migration',
@@ -80,6 +81,7 @@ function validateRequest(environment) {
     const expectedPlanSha256 = environment.OPS_EXPECTED_PLAN_SHA256 || '';
     const expectedChannelCodes = environment.OPS_EXPECTED_CHANNEL_CODES || '';
     const expectedRuntimeSha = environment.OPS_EXPECTED_RUNTIME_SHA || '';
+    const productId = environment.OPS_PRODUCT_ID || '';
     if (
         [
             'retain-reviewed',
@@ -114,6 +116,7 @@ function validateRequest(environment) {
         [
             'backup-database',
             'audit-store-isolation-data',
+            'audit-administrator-product-readiness',
             'plan-order-sales-ownership-backfill',
             'apply-order-sales-ownership-backfill-reviewed',
             'plan-moyao-default-store-migration',
@@ -129,12 +132,18 @@ function validateRequest(environment) {
             'Expected runtime SHA is only valid for a pinned store-data operation',
         );
     }
+    if (operation === 'audit-administrator-product-readiness') {
+        assert.match(productId, /^[1-9][0-9]*$/u, 'A positive product ID is required');
+    } else {
+        assert.equal(productId, '', 'Product ID is only valid for the administrator and product audit');
+    }
     return {
         operation,
         sourceSha: environment.OPS_SOURCE_SHA,
         expectedPlanSha256,
         expectedChannelCodes,
         expectedRuntimeSha,
+        ...(productId ? { productId } : {}),
     };
 }
 
@@ -611,26 +620,60 @@ function validateMoyaoDefaultStoreMigrationOutput(output, operation) {
         );
         assert.equal(plan?.copiedChannelTablesVerified, 1);
         assert.equal(plan?.defaultOwnedOrderCount, 0);
+        assert.equal(plan?.defaultOrderMembershipCount, 0);
+        assert.equal(plan?.defaultRelationCount, 0);
+        assert.equal(plan?.defaultCustomerStoreEntryCount, 0);
         assert.equal(plan?.profileMatches, true);
         assert.equal(plan?.contentSettingsMatch, true);
-        assert.equal(plan?.sellerMatches, true);
+        assert.equal(plan?.sellerSeparated, true);
+        assert.equal(plan?.targetRequiredRoleCount, 2);
     } else {
         assert.equal(plan?.schema, 'vendure-moyao-default-store-migration');
         assert.equal(plan?.mode, 'reviewed-default-to-dedicated-channel');
         assert.ok(Number.isSafeInteger(plan?.contentBlockCount) && plan.contentBlockCount > 0);
         assert.ok(Number.isSafeInteger(plan?.orderSalesOwnerCount) && plan.orderSalesOwnerCount >= 0);
         assert.equal(typeof plan?.sellerWillChange, 'boolean');
+        assert.ok(
+            ['NONE', 'SWAP_EXISTING_SELLERS', 'CREATE_PLATFORM_SELLER'].includes(
+                plan?.sellerSeparationAction,
+            ),
+        );
+        assert.equal(plan?.sellerIsolationConflictCount, 0);
+        assert.ok(
+            Number.isSafeInteger(plan?.addedRequiredRoleAssignments) &&
+                plan.addedRequiredRoleAssignments >= 0 &&
+                plan.addedRequiredRoleAssignments <= 2,
+        );
         assert.match(plan?.operationDigest || '', /^[a-f0-9]{64}$/u);
         assert.ok(plan?.addedRelations && typeof plan.addedRelations === 'object');
+        assert.ok(plan?.removedDefaultRelations && typeof plan.removedDefaultRelations === 'object');
+        assert.ok(plan?.crossStoreRelationConflicts && typeof plan.crossStoreRelationConflicts === 'object');
         assert.ok(plan?.copiedChannelRows && typeof plan.copiedChannelRows === 'object');
         assert.ok(plan?.movedChannelRows && typeof plan.movedChannelRows === 'object');
+        assert.ok(
+            Number.isSafeInteger(plan?.removedDefaultCustomerStoreEntries) &&
+                plan.removedDefaultCustomerStoreEntries >= 0,
+        );
+        assert.ok(
+            Number.isSafeInteger(plan?.removedDefaultOrderMemberships) &&
+                plan.removedDefaultOrderMemberships >= 0,
+        );
         for (const [table, count] of Object.entries({
             ...plan.addedRelations,
+            ...plan.removedDefaultRelations,
+            ...plan.crossStoreRelationConflicts,
             ...plan.copiedChannelRows,
             ...plan.movedChannelRows,
         })) {
             assert.match(table, /^[a-z][a-z0-9_]*$/u);
             assert.ok(Number.isSafeInteger(count) && count >= 0);
+        }
+        if (operation === 'apply') {
+            assert.equal(
+                Object.values(plan.crossStoreRelationConflicts).reduce((sum, count) => sum + count, 0),
+                0,
+                'Cross-store resource conflicts must be cloned before applying the MOYAO migration',
+            );
         }
     }
     assert.equal(plan?.sourceChannelCode, '__default_channel__');
@@ -661,7 +704,7 @@ function startVerifiedMysqlBackup() {
         { encoding: 'utf8', timeout: 30000, maxBuffer: 65536, stdio: ['ignore', 'pipe', 'pipe'] },
     );
     const evidence = journal.match(
-        /^Created verified MySQL backup: (\/var\/backups\/vendure-mysql\/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz) offsite=yes$/mu,
+        /^Created verified MySQL backup: (\/var\/backups\/vendure-mysql\/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz) offsite=yes encrypted=yes$/mu,
     );
     assert.ok(evidence, 'Database backup is missing verified offsite evidence');
     const file = evidence[1];
@@ -992,6 +1035,132 @@ function runStoreIsolationAudit(
     };
 }
 
+function runAdministratorProductReadinessAudit(
+    request,
+    {
+        inspect = inspectProductionReleases,
+        spawn = spawnSync,
+        health = productionHealthSnapshot,
+        administratorScript = path.join(
+            __dirname,
+            'repository',
+            'packages',
+            'dev-server',
+            'scripts',
+            'administrator-access-preflight.mjs',
+        ),
+        productScript = path.join(
+            __dirname,
+            'repository',
+            'packages',
+            'dev-server',
+            'scripts',
+            'product-ownership-preflight.mjs',
+        ),
+    } = {},
+) {
+    assert.equal(request.operation, 'audit-administrator-product-readiness');
+    const before = inspect();
+    assert.equal(
+        before.markerSha,
+        request.expectedRuntimeSha,
+        'Production runtime SHA changed or was not reviewed',
+    );
+    const healthBefore = health();
+    assertProductionHealthSnapshot(healthBefore, 'before');
+    let reports;
+    let auditError;
+    try {
+        const runReport = (script, args, label) => {
+            const result = spawn(
+                '/usr/bin/node',
+                ['--env-file=/var/www/kaiyuangouwu/packages/dev-server/.env', script, ...args],
+                {
+                    encoding: 'utf8',
+                    timeout: 120000,
+                    maxBuffer: 1024 * 1024,
+                    stdio: ['ignore', 'pipe', 'pipe'],
+                    env: { ...process.env, STORE_ISOLATION_MODULE_ROOT: before.currentRuntime },
+                },
+            );
+            assert.equal(result.status, 0, `The fixed read-only ${label} audit failed`);
+            let report;
+            try {
+                report = JSON.parse(String(result.stdout || ''));
+            } catch {
+                throw new Error(`The fixed read-only ${label} audit returned invalid JSON`);
+            }
+            assert.equal(report.mode, 'read-only', `The ${label} audit did not confirm read-only mode`);
+            return report;
+        };
+        const administrator = runReport(administratorScript, [], 'administrator');
+        assert.equal(typeof administrator.readyForStagedMigration, 'boolean');
+        assert.ok(Number.isSafeInteger(administrator.activeAdministratorCount));
+        assert.ok(Array.isArray(administrator.ownerAdministratorIds));
+        assert.ok(Number.isSafeInteger(administrator.existingProfileCount));
+        assert.ok(Array.isArray(administrator.blockers));
+        assert.ok(Array.isArray(administrator.unmapped));
+        assert.ok(Array.isArray(administrator.legacyPrimaries));
+        const product = runReport(productScript, [`--product-id=${request.productId}`], 'product');
+        assert.equal(product.productId, request.productId);
+        assert.equal(typeof product.editableAsExclusiveStoreProduct, 'boolean');
+        assert.ok(Array.isArray(product.product?.channels));
+        assert.ok(product.related && typeof product.related === 'object' && !Array.isArray(product.related));
+        assert.ok(Object.values(product.related).every(items => Array.isArray(items)));
+        assert.ok(Array.isArray(product.blockers));
+        reports = { administrator, product };
+    } catch (error) {
+        auditError = error;
+    }
+    let healthAfter;
+    let stateError;
+    try {
+        assert.deepEqual(inspect(), before, 'Production release state changed during the readiness audit');
+        healthAfter = health();
+        assertProductionHealthSnapshot(healthAfter, 'after');
+    } catch (error) {
+        stateError = error;
+    }
+    if (stateError) throw stateError;
+    if (auditError) throw auditError;
+
+    const { administrator, product } = reports;
+    const relatedCounts = Object.fromEntries(
+        Object.entries(product.related || {}).map(([type, items]) => [type, items.length]),
+    );
+    return {
+        sourceSha: request.sourceSha,
+        runtimeSha: before.markerSha,
+        productId: request.productId,
+        healthBefore,
+        healthAfter,
+        administrator: {
+            readyForStagedMigration: administrator.readyForStagedMigration,
+            activeAdministratorCount: administrator.activeAdministratorCount,
+            ownerAdministratorIds: administrator.ownerAdministratorIds,
+            existingProfileCount: administrator.existingProfileCount,
+            legacyPrimaryCount: administrator.legacyPrimaries.length,
+            legacyPrimaries: administrator.legacyPrimaries.slice(0, 25),
+            unmappedCount: administrator.unmapped.length,
+            unmapped: administrator.unmapped.slice(0, 25),
+            blockerCount: administrator.blockers.length,
+            blockers: administrator.blockers.slice(0, 50),
+            detailsTruncated:
+                administrator.legacyPrimaries.length > 25 ||
+                administrator.unmapped.length > 25 ||
+                administrator.blockers.length > 50,
+        },
+        product: {
+            editableAsExclusiveStoreProduct: product.editableAsExclusiveStoreProduct,
+            channels: product.product.channels,
+            relatedCounts,
+            blockerCount: product.blockers.length,
+            blockers: product.blockers.slice(0, 50),
+            detailsTruncated: product.blockers.length > 50,
+        },
+    };
+}
+
 function runLocked(environment = process.env) {
     const request = validateRequest(environment);
     if (request.operation === 'plan-deployment-cache-cleanup') {
@@ -1074,6 +1243,17 @@ function runLocked(environment = process.env) {
         );
         process.stdout.write(`${JSON.stringify(result)}\n`);
         process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=audit-store-isolation-data\n');
+        return;
+    }
+    if (request.operation === 'audit-administrator-product-readiness') {
+        const result = runAdministratorProductReadinessAudit(request);
+        process.stdout.write(
+            `PRODUCTION_ADMINISTRATOR_PRODUCT_REVISIONS source=${request.sourceSha} runtime=${result.runtimeSha} product=${request.productId}\n`,
+        );
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+        process.stdout.write(
+            'PRODUCTION_OPERATIONS_COMPLETE operation=audit-administrator-product-readiness\n',
+        );
         return;
     }
     if (request.operation === 'postflight-release') {
@@ -1284,6 +1464,7 @@ module.exports = {
     retainReviewedPlan,
     storefrontInspectionFailure,
     runStoreIsolationAudit,
+    runAdministratorProductReadinessAudit,
     runDatabaseBackup,
     runOrderSalesOwnershipBackfill,
     runMoyaoDefaultStoreMigration,

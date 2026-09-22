@@ -1,5 +1,7 @@
+import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { configureDefaultOrderProcess, LanguageCode, PluginCommonModule, VendurePlugin } from '@vendure/core';
+import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 
 import { AfterSalesAdminResolver, AfterSalesShopResolver } from './after-sales.resolver';
@@ -40,10 +42,20 @@ import { AutoCardDeliveryEvent } from './entities/auto-card-delivery-event.entit
 import { AutoCardDelivery } from './entities/auto-card-delivery.entity';
 import { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
 import { CustomerDeliveryEmail } from './entities/customer-delivery-email.entity';
+import { FulfillmentDeliveryEvent } from './entities/fulfillment-delivery-event.entity';
+import { FulfillmentDeliveryRecord } from './entities/fulfillment-delivery-record.entity';
 import { ManualDigitalDeliveryEvent } from './entities/manual-digital-delivery-event.entity';
 import { ManualDigitalDelivery } from './entities/manual-digital-delivery.entity';
 import { PackagingUnpackEvent } from './entities/packaging-unpack-event.entity';
 import { ProductPackagingRule } from './entities/product-packaging-rule.entity';
+import { fulfillmentDeliveryProcess } from './fulfillment-delivery.process';
+import {
+    FulfillmentDeliveryAdminResolver,
+    FulfillmentDeliveryFieldResolver,
+    FulfillmentDeliveryShopResolver,
+} from './fulfillment-delivery.resolver';
+import { FulfillmentDeliveryService } from './fulfillment-delivery.service';
+import { reconcileFulfillmentDeliveriesTask } from './fulfillment-delivery.tasks';
 import { FulfillmentModelService } from './fulfillment-model.service';
 import { ManualDigitalDeliveryEmailResultService } from './manual-digital-delivery-email-result.service';
 import { reconcileManualDigitalDeliveriesTask } from './manual-digital-delivery-tasks';
@@ -65,7 +77,13 @@ import { ProductPackagingService } from './product-packaging.service';
 import './types';
 
 @VendurePlugin({
-    imports: [PluginCommonModule, ContentTranslationPlugin, StorefrontCartPlugin],
+    imports: [
+        PluginCommonModule,
+        ContentTranslationPlugin,
+        StorefrontCartPlugin,
+        CatalogManagementPlugin,
+        StoreManagementPlugin,
+    ],
     entities: [
         AfterSalesRequest,
         AfterSalesItem,
@@ -79,6 +97,8 @@ import './types';
         ManualDigitalDelivery,
         ManualDigitalDeliveryEvent,
         CustomerDeliveryEmail,
+        FulfillmentDeliveryRecord,
+        FulfillmentDeliveryEvent,
     ],
     controllers: [DigitalDeliveryController],
     providers: [
@@ -100,6 +120,7 @@ import './types';
         ManualDigitalDeliveryService,
         ManualDigitalDeliveryEmailResultService,
         CustomerDeliveryEmailService,
+        FulfillmentDeliveryService,
     ],
     adminApiExtensions: {
         schema: adminApiExtensions,
@@ -112,6 +133,8 @@ import './types';
             ProductPackagingProductResolver,
             ManualDigitalDeliveryAdminResolver,
             ManualDigitalDeliveryOrderResolver,
+            FulfillmentDeliveryAdminResolver,
+            FulfillmentDeliveryFieldResolver,
         ],
     },
     shopApiExtensions: {
@@ -126,6 +149,8 @@ import './types';
             ProductPackagingProductResolver,
             ManualDigitalDeliveryOrderResolver,
             CustomerDeliveryEmailShopResolver,
+            FulfillmentDeliveryShopResolver,
+            FulfillmentDeliveryFieldResolver,
         ],
     },
     configuration: config => {
@@ -414,6 +439,7 @@ import './types';
         config.paymentOptions.process.push(testPayment.paymentProcess);
         config.shippingOptions.process = [
             testPayment.fulfillmentProcess,
+            fulfillmentDeliveryProcess,
             ...(config.shippingOptions.process ?? []),
         ];
         // Retain the checker when globally disabled so saved methods become ineligible without breaking checkout.
@@ -426,6 +452,7 @@ import './types';
         }
         config.schedulerOptions.tasks.push(reconcileAutoCardDeliveriesTask);
         config.schedulerOptions.tasks.push(reconcileManualDigitalDeliveriesTask);
+        config.schedulerOptions.tasks.push(reconcileFulfillmentDeliveriesTask);
         return config;
     },
     compatibility: '^3.7.0',

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { InventoryControlService } from '@vendure/catalog-management-plugin';
 import { ID } from '@vendure/common/lib/shared-types';
 import { ContentTranslationService, isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import {
@@ -12,8 +13,8 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
-import { randomBytes } from 'node:crypto';
-import { FindOptionsWhere, In, Like } from 'typeorm';
+import { createHash, randomBytes } from 'node:crypto';
+import { FindOptionsWhere, In, LessThanOrEqual, Like } from 'typeorm';
 
 import {
     activeAfterSalesStates,
@@ -29,8 +30,13 @@ import { getOrderLineFulfillmentType } from './fulfillment-classification';
 import { orderLineProductName } from './order-line-snapshot';
 import {
     AfterSalesRequestListOptions,
+    ConfirmAfterSalesReplacementInput,
     CreateAfterSalesRequestInput,
+    InspectAfterSalesReturnInput,
+    ReceiveAfterSalesReturnInput,
+    SubmitAfterSalesReturnShipmentInput,
     TransitionAfterSalesRequestInput,
+    UpdateAfterSalesReplacementInput,
 } from './types';
 
 const ELIGIBLE_ORDER_STATES = [
@@ -43,6 +49,12 @@ const ELIGIBLE_ORDER_STATES = [
 const DESCRIPTION_MAX_LENGTH = 2_000;
 const RESOLUTION_MAX_LENGTH = 2_000;
 const MAX_ITEMS_PER_REQUEST = 20;
+const RESPONSE_SLA_HOURS = 48;
+const RETURN_SHIPMENT_SLA_DAYS = 14;
+const RETURN_RECEIPT_SLA_DAYS = 14;
+const INSPECTION_SLA_HOURS = 48;
+const SETTLEMENT_SLA_HOURS = 72;
+const REPLACEMENT_DELIVERY_SLA_DAYS = 14;
 
 export interface AfterSalesRequestList {
     items: AfterSalesRequest[];
@@ -55,6 +67,7 @@ export class AfterSalesService {
         private readonly connection: TransactionalConnection,
         private readonly customerService: CustomerService,
         private readonly translations: ContentTranslationService,
+        private readonly inventoryControl: InventoryControlService,
     ) {}
 
     async findForCustomer(ctx: RequestContext): Promise<AfterSalesRequest[]> {
@@ -65,7 +78,7 @@ export class AfterSalesService {
                 customerId: customer.id,
                 order: { salesChannelId: ctx.channelId },
             },
-            relations: { items: true, events: true, order: true, refund: true },
+            relations: { items: { returnStockLocation: true }, events: true, order: true, refund: true },
             order: { createdAt: 'DESC', id: 'DESC', events: { createdAt: 'ASC' } },
         });
         return requests.map(request => this.normalizeRelations(request, ctx));
@@ -80,7 +93,7 @@ export class AfterSalesService {
                 customerId: customer.id,
                 order: { salesChannelId: ctx.channelId },
             },
-            relations: { items: true, events: true, order: true, refund: true },
+            relations: { items: { returnStockLocation: true }, events: true, order: true, refund: true },
             order: { events: { createdAt: 'ASC' } },
         });
         return request ? this.normalizeRelations(request, ctx) : undefined;
@@ -107,6 +120,12 @@ export class AfterSalesService {
             channelId: ctx.channelId,
             order: { salesChannelId: ctx.channelId },
             ...(selectedStates.length ? { state: In(selectedStates) } : {}),
+            ...(options.exceptionsOnly
+                ? {
+                      state: In(selectedStates.length ? selectedStates : ['PENDING', 'APPROVED']),
+                      nextActionDueAt: LessThanOrEqual(new Date()),
+                  }
+                : {}),
         };
         const search = options.search?.trim().slice(0, 200);
         const where: FindOptionsWhere<AfterSalesRequest> | Array<FindOptionsWhere<AfterSalesRequest>> = search
@@ -119,7 +138,7 @@ export class AfterSalesService {
             : baseWhere;
         const [items, totalItems] = await this.connection.getRepository(ctx, AfterSalesRequest).findAndCount({
             where,
-            relations: { items: true, events: true, order: true, refund: true },
+            relations: { items: { returnStockLocation: true }, events: true, order: true, refund: true },
             order: { createdAt: 'DESC', id: 'DESC', events: { createdAt: 'ASC' } },
             skip,
             take,
@@ -175,11 +194,8 @@ export class AfterSalesService {
         if (selectedLines.some(item => item.refundPolicy === 'NON_REFUNDABLE')) {
             throw new UserInputError('所选商品不支持自助退款；交付异常请联系客服人工处理');
         }
-        if (
-            input.type === 'RETURN_AND_REFUND' &&
-            selectedLines.some(item => item.fulfillmentType === 'digital')
-        ) {
-            throw new UserInputError('数字商品只能申请仅退款');
+        if (input.type !== 'REFUND_ONLY' && selectedLines.some(item => item.fulfillmentType === 'digital')) {
+            throw new UserInputError('数字商品只能申请仅退款；交付异常请使用数字发货重试流程');
         }
 
         const existingRequests = await this.connection.getRepository(ctx, AfterSalesRequest).find({
@@ -201,10 +217,13 @@ export class AfterSalesService {
             }
         }
 
-        const requestedAmount = selectedLines.reduce(
-            (total, item) => total + item.line.proratedUnitPriceWithTax * item.input.quantity,
-            0,
-        );
+        const requestedAmount = requiresRefund(input.type)
+            ? selectedLines.reduce(
+                  (total, item) => total + item.line.proratedUnitPriceWithTax * item.input.quantity,
+                  0,
+              )
+            : 0;
+        const now = new Date();
         const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ').trim();
         const request = await this.connection.getRepository(ctx, AfterSalesRequest).save(
             new AfterSalesRequest({
@@ -219,6 +238,22 @@ export class AfterSalesService {
                 resolution: null,
                 resolutionZh: null,
                 resolutionEn: null,
+                returnStatus: 'NOT_REQUIRED',
+                returnInstructions: null,
+                returnCarrier: null,
+                returnTrackingCode: null,
+                returnShippedAt: null,
+                returnReceivedAt: null,
+                inspectedAt: null,
+                inspectionNote: null,
+                replacementStatus: 'NOT_REQUIRED',
+                replacementCarrier: null,
+                replacementTrackingCode: null,
+                replacementProofReference: null,
+                replacementException: null,
+                replacementShippedAt: null,
+                replacementDeliveredAt: null,
+                nextActionDueAt: addHours(now, RESPONSE_SLA_HOURS),
                 customerName: customerName || customer.emailAddress,
                 customerEmail: customer.emailAddress,
                 respondedAt: null,
@@ -250,6 +285,12 @@ export class AfterSalesService {
                         productName: orderLineProductName(ctx, line),
                         sku: line.productVariant.sku,
                         fulfillmentType,
+                        acceptedReturnQuantity: 0,
+                        rejectedReturnQuantity: 0,
+                        returnLotCode: null,
+                        inventoryOperationId: null,
+                        returnStockLocation: null,
+                        returnStockLocationId: null,
                     }),
             ),
         );
@@ -275,7 +316,7 @@ export class AfterSalesService {
             .getRepository(ctx, AfterSalesRequest)
             .update(
                 { id: request.id, customerId: customer.id, state: 'PENDING' },
-                { state: 'CANCELLED', cancelledAt: new Date() },
+                { state: 'CANCELLED', cancelledAt: new Date(), nextActionDueAt: null },
             );
         if (result.affected !== 1) {
             throw new UserInputError('售后状态已更新，请刷新后重试');
@@ -296,7 +337,7 @@ export class AfterSalesService {
         ctx: RequestContext,
         input: TransitionAfterSalesRequestInput,
     ): Promise<AfterSalesRequest> {
-        const request = await this.getRequestForAdminOrThrow(ctx, input.id);
+        const request = await this.lockRequestForAdmin(ctx, input.id);
         const resolution = input.resolution.trim();
         if (!resolution || resolution.length > RESOLUTION_MAX_LENGTH) {
             throw new UserInputError('处理说明不能为空且不能超过 2000 个字符');
@@ -310,7 +351,9 @@ export class AfterSalesService {
 
         const approvedAmount =
             input.state === 'APPROVED'
-                ? (input.approvedAmount ?? request.requestedAmount)
+                ? requiresRefund(request.type)
+                    ? (input.approvedAmount ?? request.requestedAmount)
+                    : 0
                 : input.state === 'COMPLETED'
                   ? request.approvedAmount
                   : 0;
@@ -321,6 +364,24 @@ export class AfterSalesService {
             approvedAmount > request.requestedAmount
         ) {
             throw new UserInputError('通过金额必须是 0 到申请金额之间的整数金额');
+        }
+        const returnInstructions = input.returnInstructions?.trim().slice(0, RESOLUTION_MAX_LENGTH) || null;
+        if (input.state === 'APPROVED' && requiresReturn(request.type) && !returnInstructions) {
+            throw new UserInputError('退货或换货审核通过时必须填写退货说明');
+        }
+        if (
+            input.state === 'COMPLETED' &&
+            requiresReturn(request.type) &&
+            request.returnStatus !== 'INSPECTED'
+        ) {
+            throw new UserInputError('退货尚未完成签收和质检，不能结束售后');
+        }
+        if (
+            input.state === 'COMPLETED' &&
+            requiresReplacement(request.type) &&
+            request.replacementStatus !== 'DELIVERED'
+        ) {
+            throw new UserInputError('换货或补发尚未确认送达，不能结束售后');
         }
         let linkedRefund: Refund | null = null;
         if (input.state === 'COMPLETED' && approvedAmount > 0) {
@@ -361,6 +422,21 @@ export class AfterSalesService {
         const resolutionEn = prepared[0].translatedText;
 
         const now = new Date();
+        const approvalWorkflow =
+            input.state === 'APPROVED'
+                ? {
+                      returnStatus: requiresReturn(request.type)
+                          ? ('AWAITING_SHIPMENT' as const)
+                          : request.returnStatus,
+                      returnInstructions,
+                      replacementStatus: requiresReplacement(request.type)
+                          ? ('PENDING' as const)
+                          : request.replacementStatus,
+                      nextActionDueAt: requiresReturn(request.type)
+                          ? addDays(now, RETURN_SHIPMENT_SLA_DAYS)
+                          : addHours(now, SETTLEMENT_SLA_HOURS),
+                  }
+                : {};
         const result = await this.connection.getRepository(ctx, AfterSalesRequest).update(
             { id: request.id, channelId: ctx.channelId, state: request.state },
             {
@@ -369,8 +445,13 @@ export class AfterSalesService {
                 resolutionZh: resolution,
                 resolutionEn,
                 approvedAmount,
+                ...approvalWorkflow,
                 ...(request.state === 'PENDING' ? { respondedAt: now } : {}),
-                ...(input.state === 'COMPLETED' ? { completedAt: now } : {}),
+                ...(input.state === 'COMPLETED'
+                    ? { completedAt: now, nextActionDueAt: null }
+                    : input.state === 'REJECTED'
+                      ? { nextActionDueAt: null }
+                      : {}),
                 ...(linkedRefund ? { refundId: linkedRefund.id, refundedAt: now } : {}),
             },
         );
@@ -394,8 +475,321 @@ export class AfterSalesService {
             'Store team',
             String(ctx.activeUserId ?? ''),
             resolution,
+            'STATE_CHANGED',
+            null,
         );
         return this.getRequestForAdminOrThrow(ctx, request.id);
+    }
+
+    async submitReturnShipmentForCustomer(
+        ctx: RequestContext,
+        input: SubmitAfterSalesReturnShipmentInput,
+    ): Promise<AfterSalesRequest> {
+        const customer = await this.activeCustomerOrThrow(ctx);
+        const request = await this.lockRequestForAdmin(ctx, input.id);
+        if (String(request.customerId) !== String(customer.id)) {
+            throw new UserInputError('售后申请不存在或当前账号无权操作');
+        }
+        const key = requiredText(input.idempotencyKey, 80, '幂等键');
+        if (await this.eventExists(ctx, request.id, key)) {
+            return this.getOwnedRequestOrThrow(ctx, request.id, customer.id);
+        }
+        if (request.state !== 'APPROVED' || request.returnStatus !== 'AWAITING_SHIPMENT') {
+            throw new UserInputError('当前售后不在等待客户寄回状态');
+        }
+        const carrier = requiredText(input.carrier, 120, '退货物流公司');
+        const trackingCode = requiredText(input.trackingCode, 160, '退货运单号');
+        const now = new Date();
+        const result = await this.connection.getRepository(ctx, AfterSalesRequest).update(
+            { id: request.id, state: 'APPROVED', returnStatus: 'AWAITING_SHIPMENT' },
+            {
+                returnStatus: 'IN_TRANSIT',
+                returnCarrier: carrier,
+                returnTrackingCode: trackingCode,
+                returnShippedAt: now,
+                nextActionDueAt: addDays(now, RETURN_RECEIPT_SLA_DAYS),
+            },
+        );
+        if (result.affected !== 1) throw new UserInputError('退货状态已更新，请刷新后重试');
+        await this.addEvent(
+            ctx,
+            request,
+            'APPROVED',
+            'CUSTOMER',
+            request.customerName,
+            String(ctx.activeUserId ?? customer.id),
+            `客户已寄回：${carrier} ${trackingCode}`,
+            'RETURN_SHIPPED',
+            key,
+        );
+        return this.getOwnedRequestOrThrow(ctx, request.id, customer.id);
+    }
+
+    async receiveReturnForAdmin(
+        ctx: RequestContext,
+        input: ReceiveAfterSalesReturnInput,
+    ): Promise<AfterSalesRequest> {
+        const request = await this.lockRequestForAdmin(ctx, input.id);
+        const key = requiredText(input.idempotencyKey, 80, '幂等键');
+        if (await this.eventExists(ctx, request.id, key)) return request;
+        if (
+            request.state !== 'APPROVED' ||
+            !['AWAITING_SHIPMENT', 'IN_TRANSIT'].includes(request.returnStatus)
+        ) {
+            throw new UserInputError('当前售后不在可签收退货的状态');
+        }
+        const note = requiredText(input.note, RESOLUTION_MAX_LENGTH, '签收说明');
+        const now = new Date();
+        const result = await this.connection.getRepository(ctx, AfterSalesRequest).update(
+            { id: request.id, state: 'APPROVED', returnStatus: request.returnStatus },
+            {
+                returnStatus: 'RECEIVED',
+                returnReceivedAt: now,
+                nextActionDueAt: addHours(now, INSPECTION_SLA_HOURS),
+            },
+        );
+        if (result.affected !== 1) throw new UserInputError('退货状态已更新，请刷新后重试');
+        await this.addEvent(
+            ctx,
+            request,
+            'APPROVED',
+            'ADMIN',
+            'Store team',
+            String(ctx.activeUserId ?? ''),
+            note,
+            'RETURN_RECEIVED',
+            key,
+        );
+        return this.getRequestForAdminOrThrow(ctx, request.id);
+    }
+
+    async inspectReturnForAdmin(
+        ctx: RequestContext,
+        input: InspectAfterSalesReturnInput,
+    ): Promise<AfterSalesRequest> {
+        const request = await this.lockRequestForAdmin(ctx, input.id);
+        const key = requiredText(input.idempotencyKey, 80, '幂等键');
+        if (await this.eventExists(ctx, request.id, key)) return request;
+        if (request.state !== 'APPROVED' || request.returnStatus !== 'RECEIVED') {
+            throw new UserInputError('退货尚未签收或已经完成质检');
+        }
+        const note = requiredText(input.note, RESOLUTION_MAX_LENGTH, '质检说明');
+        if (input.items.length !== request.items.length) {
+            throw new UserInputError('质检必须覆盖售后申请中的全部商品');
+        }
+        const submitted = new Map(input.items.map(item => [String(item.itemId), item]));
+        if (submitted.size !== input.items.length) throw new UserInputError('同一售后商品不能重复质检');
+        const inventoryLines = new Map<
+            string,
+            {
+                productVariantId: ID;
+                stockLocationId: ID;
+                lotCode: string;
+                quantity: number;
+                currencyCode: AfterSalesRequest['currencyCode'];
+                purchaseCostMicrounits: null;
+            }
+        >();
+        const plans: Array<{
+            item: AfterSalesItem;
+            acceptedQuantity: number;
+            rejectedQuantity: number;
+            stockLocationId: ID | null;
+            lotCode: string | null;
+        }> = [];
+        for (const item of request.items) {
+            const inspection = submitted.get(String(item.id));
+            if (!inspection) throw new UserInputError('质检商品与售后申请不一致');
+            if (
+                !Number.isSafeInteger(inspection.acceptedQuantity) ||
+                !Number.isSafeInteger(inspection.rejectedQuantity) ||
+                inspection.acceptedQuantity < 0 ||
+                inspection.rejectedQuantity < 0 ||
+                inspection.acceptedQuantity + inspection.rejectedQuantity !== item.quantity
+            ) {
+                throw new UserInputError(`商品 ${item.productName} 的验收与拒收数量必须等于退货数量`);
+            }
+            let stockLocationId: ID | null = null;
+            let lotCode: string | null = null;
+            if (inspection.acceptedQuantity > 0) {
+                stockLocationId = inspection.stockLocationId ?? null;
+                lotCode = inspection.lotCode?.trim().slice(0, 80) || null;
+                const variantId = item.orderLine?.productVariantId;
+                if (!variantId || !stockLocationId || !lotCode) {
+                    throw new UserInputError(`商品 ${item.productName} 重新入库时必须选择仓库并填写批次号`);
+                }
+                const scope = `${String(variantId)}:${String(stockLocationId)}:${lotCode}`;
+                const existing = inventoryLines.get(scope);
+                if (existing) existing.quantity += inspection.acceptedQuantity;
+                else {
+                    inventoryLines.set(scope, {
+                        productVariantId: variantId,
+                        stockLocationId,
+                        lotCode,
+                        quantity: inspection.acceptedQuantity,
+                        currencyCode: request.currencyCode,
+                        purchaseCostMicrounits: null,
+                    });
+                }
+            }
+            plans.push({
+                item,
+                acceptedQuantity: inspection.acceptedQuantity,
+                rejectedQuantity: inspection.rejectedQuantity,
+                stockLocationId,
+                lotCode,
+            });
+        }
+        const inventoryOperation = inventoryLines.size
+            ? await this.inventoryControl.receiveCustomerReturn(ctx, {
+                  idempotencyKey: inventoryIdempotencyKey(request.id, key),
+                  reason: note,
+                  reference: request.code,
+                  lines: [...inventoryLines.values()],
+              })
+            : null;
+        for (const plan of plans) {
+            await this.connection.getRepository(ctx, AfterSalesItem).update(
+                { id: plan.item.id, requestId: request.id },
+                {
+                    acceptedReturnQuantity: plan.acceptedQuantity,
+                    rejectedReturnQuantity: plan.rejectedQuantity,
+                    returnStockLocationId: plan.stockLocationId,
+                    returnLotCode: plan.lotCode,
+                    inventoryOperationId: inventoryOperation ? String(inventoryOperation.id) : null,
+                },
+            );
+        }
+        const now = new Date();
+        const result = await this.connection.getRepository(ctx, AfterSalesRequest).update(
+            { id: request.id, state: 'APPROVED', returnStatus: 'RECEIVED' },
+            {
+                returnStatus: 'INSPECTED',
+                inspectedAt: now,
+                inspectionNote: note,
+                nextActionDueAt: addHours(now, SETTLEMENT_SLA_HOURS),
+            },
+        );
+        if (result.affected !== 1) throw new UserInputError('退货状态已更新，请刷新后重试');
+        await this.addEvent(
+            ctx,
+            request,
+            'APPROVED',
+            'ADMIN',
+            'Store team',
+            String(ctx.activeUserId ?? ''),
+            note,
+            'RETURN_INSPECTED',
+            key,
+        );
+        return this.getRequestForAdminOrThrow(ctx, request.id);
+    }
+
+    async updateReplacementForAdmin(
+        ctx: RequestContext,
+        input: UpdateAfterSalesReplacementInput,
+    ): Promise<AfterSalesRequest> {
+        const request = await this.lockRequestForAdmin(ctx, input.id);
+        const key = requiredText(input.idempotencyKey, 80, '幂等键');
+        if (await this.eventExists(ctx, request.id, key)) return request;
+        if (request.state !== 'APPROVED' || !requiresReplacement(request.type)) {
+            throw new UserInputError('当前售后不需要换货或补发');
+        }
+        if (request.type === 'EXCHANGE' && request.returnStatus !== 'INSPECTED') {
+            throw new UserInputError('换货必须先完成退货签收和质检');
+        }
+        const note = requiredText(input.note, RESOLUTION_MAX_LENGTH, '处理说明');
+        const now = new Date();
+        const patch: Partial<AfterSalesRequest> = { replacementStatus: input.status };
+        let eventType: string;
+        if (input.status === 'SHIPPED') {
+            if (!['PENDING', 'EXCEPTION'].includes(request.replacementStatus)) {
+                throw new UserInputError('当前换货或补发状态不能登记发货');
+            }
+            patch.replacementCarrier = requiredText(input.carrier, 120, '承运商');
+            patch.replacementTrackingCode = requiredText(input.trackingCode, 160, '运单号');
+            patch.replacementShippedAt = now;
+            patch.replacementException = null;
+            patch.nextActionDueAt = addDays(now, REPLACEMENT_DELIVERY_SLA_DAYS);
+            eventType = 'REPLACEMENT_SHIPPED';
+        } else if (input.status === 'EXCEPTION') {
+            if (request.replacementStatus !== 'SHIPPED') {
+                throw new UserInputError('只有运输中的换货或补发可以登记异常');
+            }
+            patch.replacementException = note;
+            patch.nextActionDueAt = now;
+            eventType = 'REPLACEMENT_EXCEPTION';
+        } else {
+            if (!['SHIPPED', 'EXCEPTION'].includes(request.replacementStatus)) {
+                throw new UserInputError('换货或补发尚未发出，不能确认送达');
+            }
+            patch.replacementProofReference = requiredText(input.proofReference, 255, '送达凭证');
+            patch.replacementDeliveredAt = now;
+            patch.replacementException = null;
+            patch.nextActionDueAt = addHours(now, RESPONSE_SLA_HOURS);
+            eventType = 'REPLACEMENT_DELIVERED';
+        }
+        const result = await this.connection
+            .getRepository(ctx, AfterSalesRequest)
+            .update(
+                { id: request.id, state: 'APPROVED', replacementStatus: request.replacementStatus },
+                patch,
+            );
+        if (result.affected !== 1) throw new UserInputError('换货或补发状态已更新，请刷新后重试');
+        await this.addEvent(
+            ctx,
+            request,
+            'APPROVED',
+            'ADMIN',
+            'Store team',
+            String(ctx.activeUserId ?? ''),
+            note,
+            eventType,
+            key,
+        );
+        return this.getRequestForAdminOrThrow(ctx, request.id);
+    }
+
+    async confirmReplacementForCustomer(
+        ctx: RequestContext,
+        input: ConfirmAfterSalesReplacementInput,
+    ): Promise<AfterSalesRequest> {
+        const customer = await this.activeCustomerOrThrow(ctx);
+        const request = await this.lockRequestForAdmin(ctx, input.id);
+        if (String(request.customerId) !== String(customer.id)) {
+            throw new UserInputError('售后申请不存在或当前账号无权操作');
+        }
+        const key = requiredText(input.idempotencyKey, 80, '幂等键');
+        if (await this.eventExists(ctx, request.id, key)) {
+            return this.getOwnedRequestOrThrow(ctx, request.id, customer.id);
+        }
+        if (request.state !== 'APPROVED' || !['SHIPPED', 'EXCEPTION'].includes(request.replacementStatus)) {
+            throw new UserInputError('当前换货或补发不能确认送达');
+        }
+        const now = new Date();
+        const result = await this.connection.getRepository(ctx, AfterSalesRequest).update(
+            { id: request.id, state: 'APPROVED', replacementStatus: request.replacementStatus },
+            {
+                replacementStatus: 'DELIVERED',
+                replacementProofReference: 'CUSTOMER_CONFIRMED',
+                replacementDeliveredAt: now,
+                replacementException: null,
+                nextActionDueAt: addHours(now, RESPONSE_SLA_HOURS),
+            },
+        );
+        if (result.affected !== 1) throw new UserInputError('换货或补发状态已更新，请刷新后重试');
+        await this.addEvent(
+            ctx,
+            request,
+            'APPROVED',
+            'CUSTOMER',
+            request.customerName,
+            String(ctx.activeUserId ?? customer.id),
+            '客户确认换货或补发已送达',
+            'REPLACEMENT_DELIVERED',
+            key,
+        );
+        return this.getOwnedRequestOrThrow(ctx, request.id, customer.id);
     }
 
     private validateCreateInput(input: CreateAfterSalesRequestInput): void {
@@ -447,7 +841,7 @@ export class AfterSalesService {
     ): Promise<AfterSalesRequest> {
         const request = await this.connection.getRepository(ctx, AfterSalesRequest).findOne({
             where: { id, channelId: ctx.channelId, customerId },
-            relations: { items: true, events: true, order: true, refund: true },
+            relations: { items: { returnStockLocation: true }, events: true, order: true, refund: true },
             order: { events: { createdAt: 'ASC' } },
         });
         if (!request) {
@@ -457,10 +851,33 @@ export class AfterSalesService {
         return this.normalizeRelations(request, ctx);
     }
 
+    private async lockRequestForAdmin(ctx: RequestContext, id: ID): Promise<AfterSalesRequest> {
+        const repository = this.connection.getRepository(ctx, AfterSalesRequest);
+        const databaseType = String(this.connection.rawConnection.options.type);
+        if (['sqlite', 'better-sqlite3', 'sqljs'].includes(databaseType)) {
+            const result = await repository.update({ id, channelId: ctx.channelId }, { id });
+            if (result.affected !== 1) throw new EntityNotFoundError(AfterSalesRequest.name, id);
+        } else {
+            const locked = await repository
+                .createQueryBuilder('request')
+                .setLock('pessimistic_write')
+                .where('request.id = :id', { id })
+                .andWhere('request.channelId = :channelId', { channelId: ctx.channelId })
+                .getOne();
+            if (!locked) throw new EntityNotFoundError(AfterSalesRequest.name, id);
+        }
+        return this.getRequestForAdminOrThrow(ctx, id);
+    }
+
     private async getRequestForAdminOrThrow(ctx: RequestContext, id: ID): Promise<AfterSalesRequest> {
         const request = await this.connection.getRepository(ctx, AfterSalesRequest).findOne({
             where: { id, channelId: ctx.channelId },
-            relations: { items: true, events: true, order: true, refund: true },
+            relations: {
+                items: { orderLine: { productVariant: true }, returnStockLocation: true },
+                events: true,
+                order: true,
+                refund: true,
+            },
             order: { events: { createdAt: 'ASC' } },
         });
         if (!request) {
@@ -468,6 +885,12 @@ export class AfterSalesService {
         }
         assertOrderSalesChannel(ctx, request.order);
         return this.normalizeRelations(request, ctx);
+    }
+
+    private async eventExists(ctx: RequestContext, requestId: ID, idempotencyKey: string): Promise<boolean> {
+        return this.connection.getRepository(ctx, AfterSalesEvent).exists({
+            where: { requestId, idempotencyKey },
+        });
     }
 
     private addEvent(
@@ -478,12 +901,16 @@ export class AfterSalesService {
         actorLabel: string,
         actorId: string | null,
         note: string,
+        eventType = 'STATE_CHANGED',
+        idempotencyKey: string | null = null,
     ): Promise<AfterSalesEvent> {
         return this.connection.getRepository(ctx, AfterSalesEvent).save(
             new AfterSalesEvent({
                 request,
                 requestId: request.id,
                 state,
+                eventType,
+                idempotencyKey,
                 actorType,
                 actorLabel,
                 actorId,
@@ -503,6 +930,10 @@ export class AfterSalesService {
             : isUsableEnglishTranslation(request.resolutionEn)
               ? request.resolutionEn
               : null;
+        request.overdue =
+            request.nextActionDueAt != null &&
+            request.nextActionDueAt.getTime() <= Date.now() &&
+            !['REJECTED', 'CANCELLED', 'COMPLETED'].includes(request.state);
         return request;
     }
 
@@ -522,4 +953,38 @@ export class AfterSalesService {
         }
         return value;
     }
+}
+
+function requiresRefund(type: AfterSalesRequest['type']): boolean {
+    return type === 'REFUND_ONLY' || type === 'RETURN_AND_REFUND';
+}
+
+function requiresReturn(type: AfterSalesRequest['type']): boolean {
+    return type === 'RETURN_AND_REFUND' || type === 'EXCHANGE';
+}
+
+function requiresReplacement(type: AfterSalesRequest['type']): boolean {
+    return type === 'EXCHANGE' || type === 'RESHIP';
+}
+
+function requiredText(value: unknown, max: number, label: string): string {
+    if (typeof value !== 'string') throw new UserInputError(`${label}不能为空`);
+    const text = value.trim();
+    if (!text || text.length > max) throw new UserInputError(`${label}不能为空且不能超过 ${max} 个字符`);
+    return text;
+}
+
+function addHours(date: Date, hours: number): Date {
+    return new Date(date.getTime() + hours * 60 * 60 * 1_000);
+}
+
+function addDays(date: Date, days: number): Date {
+    return addHours(date, days * 24);
+}
+
+function inventoryIdempotencyKey(requestId: ID, key: string): string {
+    return `ASR-${createHash('sha256')
+        .update(`${String(requestId)}:${key}`)
+        .digest('hex')
+        .slice(0, 64)}`;
 }

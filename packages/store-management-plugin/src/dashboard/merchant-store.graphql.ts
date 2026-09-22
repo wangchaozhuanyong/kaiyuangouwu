@@ -104,6 +104,14 @@ export const myStoreProfileQuery = gql`
         myStoreProfile {
             ...MyStoreProfileFields
         }
+        myStoreGovernanceChanges {
+            id
+            requestType
+            status
+            maskedSummary
+            reviewReason
+            submittedAt
+        }
     }
 `;
 
@@ -114,6 +122,19 @@ export const updateMyStoreProfileMutation = gql`
     mutation UpdateMyStoreProfile($input: UpdateMyStoreProfileInput!) {
         updateMyStoreProfile(input: $input) {
             ...MyStoreProfileFields
+        }
+    }
+`;
+
+export const submitStoreGovernanceChangeMutation = gql`
+    mutation SubmitStoreGovernanceChange($input: SubmitStoreGovernanceChangeInput!) {
+        submitStoreGovernanceChange(input: $input) {
+            id
+            requestType
+            status
+            maskedSummary
+            reviewReason
+            submittedAt
         }
     }
 `;
@@ -165,8 +186,22 @@ export interface MyStoreProfileRecord {
 
 export interface MyStoreProfileResult {
     myStoreProfile: MyStoreProfileRecord;
+    myStoreGovernanceChanges: StoreGovernanceChangeRecord[];
 }
 
 export interface UpdateMyStoreProfileResult {
     updateMyStoreProfile: MyStoreProfileRecord;
+}
+
+export interface StoreGovernanceChangeRecord {
+    id: string;
+    requestType: 'LEGAL_IDENTITY' | 'PAYOUT_ACCOUNT' | 'PAYMENT_CONFIGURATION' | 'USDT_WALLET';
+    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+    maskedSummary: Record<string, unknown>;
+    reviewReason: string | null;
+    submittedAt: string;
+}
+
+export interface SubmitStoreGovernanceChangeResult {
+    submitStoreGovernanceChange: StoreGovernanceChangeRecord;
 }

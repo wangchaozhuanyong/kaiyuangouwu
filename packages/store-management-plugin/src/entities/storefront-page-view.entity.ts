@@ -31,4 +31,29 @@ export class StorefrontPageView extends VendureEntity {
 
     @Column({ type: 'varchar', length: 64, nullable: true })
     ipHash: string | null;
+
+    /** Stable, pseudonymous key used only to freeze last-non-direct order attribution. */
+    @Column({ type: 'varchar', length: 64, nullable: true })
+    attributionKeyHash: string | null;
+
+    @Column({ type: 'varchar', length: 512, nullable: true })
+    path: string | null;
+
+    @Column({ type: 'varchar', length: 255, nullable: true })
+    referrerHost: string | null;
+
+    @Column({ type: 'varchar', length: 100, nullable: true })
+    source: string | null;
+
+    @Column({ type: 'varchar', length: 100, nullable: true })
+    medium: string | null;
+
+    @Column({ type: 'varchar', length: 160, nullable: true })
+    campaign: string | null;
+
+    @Column({ type: 'varchar', length: 160, nullable: true })
+    term: string | null;
+
+    @Column({ type: 'varchar', length: 160, nullable: true })
+    content: string | null;
 }

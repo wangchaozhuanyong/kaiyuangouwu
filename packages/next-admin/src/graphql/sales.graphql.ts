@@ -77,6 +77,26 @@ const ORDER_LIST_FIELDS = gql`
             handlerCode
             method
             trackingCode
+            deliveryEvidence {
+                id
+                status
+                carrier
+                trackingCode
+                exceptionReason
+                proofReference
+                shippedAt
+                deliveredAt
+                nextActionDueAt
+                overdue
+                events {
+                    id
+                    createdAt
+                    status
+                    actorType
+                    actorLabel
+                    note
+                }
+            }
             lines {
                 orderLineId
                 quantity
@@ -113,6 +133,23 @@ const AFTER_SALES_FIELDS = gql`
         requestedAmount
         approvedAmount
         resolution
+        returnStatus
+        returnInstructions
+        returnCarrier
+        returnTrackingCode
+        returnShippedAt
+        returnReceivedAt
+        inspectedAt
+        inspectionNote
+        replacementStatus
+        replacementCarrier
+        replacementTrackingCode
+        replacementProofReference
+        replacementException
+        replacementShippedAt
+        replacementDeliveredAt
+        nextActionDueAt
+        overdue
         customerName
         customerEmail
         respondedAt
@@ -155,11 +192,20 @@ const AFTER_SALES_FIELDS = gql`
             productName
             sku
             fulfillmentType
+            acceptedReturnQuantity
+            rejectedReturnQuantity
+            returnLotCode
+            inventoryOperationId
+            returnStockLocation {
+                id
+                name
+            }
         }
         events {
             id
             createdAt
             state
+            eventType
             actorType
             actorLabel
             actorId
@@ -181,6 +227,9 @@ export const GET_SALES_ORDERS = gql`
             totalItems
         }
         physicalFulfillmentTodoCount
+        fulfillmentDeliveryExceptions(options: { exceptionsOnly: true, take: 1 }) {
+            totalItems
+        }
     }
     ${ORDER_LIST_FIELDS}
 `;
@@ -546,6 +595,31 @@ export const TRANSITION_SALES_FULFILLMENT = gql`
     }
 `;
 
+export const UPDATE_FULFILLMENT_DELIVERY = gql`
+    mutation UpdateSalesFulfillmentDelivery($input: UpdateFulfillmentDeliveryInput!) {
+        updateFulfillmentDelivery(input: $input) {
+            id
+            status
+            carrier
+            trackingCode
+            exceptionReason
+            proofReference
+            shippedAt
+            deliveredAt
+            nextActionDueAt
+            overdue
+            events {
+                id
+                createdAt
+                status
+                actorType
+                actorLabel
+                note
+            }
+        }
+    }
+`;
+
 export const TRANSITION_SALES_ORDER = gql`
     mutation TransitionSalesOrder($id: ID!, $state: String!) {
         transitionOrderToState(id: $id, state: $state) {
@@ -627,6 +701,33 @@ export const GET_AFTER_SALES_REQUESTS = gql`
 export const TRANSITION_AFTER_SALES_REQUEST = gql`
     mutation TransitionAdminAfterSalesRequest($input: TransitionAfterSalesRequestInput!) {
         transitionAfterSalesRequest(input: $input) {
+            ...AdminAfterSalesFields
+        }
+    }
+    ${AFTER_SALES_FIELDS}
+`;
+
+export const RECEIVE_AFTER_SALES_RETURN = gql`
+    mutation ReceiveAdminAfterSalesReturn($input: ReceiveAfterSalesReturnInput!) {
+        receiveAfterSalesReturn(input: $input) {
+            ...AdminAfterSalesFields
+        }
+    }
+    ${AFTER_SALES_FIELDS}
+`;
+
+export const INSPECT_AFTER_SALES_RETURN = gql`
+    mutation InspectAdminAfterSalesReturn($input: InspectAfterSalesReturnInput!) {
+        inspectAfterSalesReturn(input: $input) {
+            ...AdminAfterSalesFields
+        }
+    }
+    ${AFTER_SALES_FIELDS}
+`;
+
+export const UPDATE_AFTER_SALES_REPLACEMENT = gql`
+    mutation UpdateAdminAfterSalesReplacement($input: UpdateAfterSalesReplacementInput!) {
+        updateAfterSalesReplacement(input: $input) {
             ...AdminAfterSalesFields
         }
     }

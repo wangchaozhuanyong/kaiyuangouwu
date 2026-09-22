@@ -29,6 +29,7 @@ export const platformUsdtPaymentManagementQuery = gql`
             settledCount
             manualReviewCount
             expiredCount
+            resolvedCount
             expectedUsdtTotal
             receivedUsdtTotal
             fiatTotals {
@@ -63,6 +64,10 @@ export const platformUsdtPaymentManagementQuery = gql`
             blockNumber
             blockTimestamp
             lastCheckedAt
+            manualReviewCode
+            resolvedAt
+            resolvedByUserId
+            resolutionActionId
         }
         storePaymentStats(channelId: $channelId, options: $statsOptions) {
             channelId
@@ -118,6 +123,24 @@ export const platformUsdtPaymentManagementQuery = gql`
             }
             totalItems
         }
+        storeUsdtReconciliationActions(channelId: $channelId) {
+            id
+            channelId
+            intentId
+            orderId
+            action
+            outcome
+            operatorUserId
+            reason
+            network
+            transactionId
+            usdtAmount
+            fromAddress
+            toAddress
+            blockNumber
+            blockTimestamp
+            createdAt
+        }
     }
 `;
 
@@ -127,6 +150,20 @@ export const reviewStoreUsdtWalletMutation = gql`
             channelId
             reviewStatus
             configured
+        }
+    }
+`;
+
+export const resolveStoreUsdtPaymentIntentMutation = gql`
+    mutation ResolveStoreUsdtPaymentIntent($input: ResolveStoreUsdtPaymentIntentInput!) {
+        resolveStoreUsdtPaymentIntent(input: $input) {
+            id
+            status
+            failureReason
+            manualReviewCode
+            resolvedAt
+            resolvedByUserId
+            resolutionActionId
         }
     }
 `;

@@ -5,13 +5,13 @@ import { adminMutationFeedbackLink } from './apollo-mutation-feedback';
 import { sensitiveActionPasswordLink } from './apollo-sensitive-action';
 import { CUSTOM_FIELD_POSSIBLE_TYPES } from './custom-fields/custom-fields.graphql';
 import { runAdminActionWithFeedback } from './utils/admin-action-feedback';
+import { getAdminDisplayLanguage } from './utils/admin-language';
 
 const AUTH_TOKEN_KEY = 'vendure-auth-token';
 const AUTH_PERSISTENCE_KEY = 'vendure-auth-persistence';
 const AUTH_TOKEN_HEADER = 'vendure-auth-token';
 const ACTIVE_CHANNEL_HEADER = 'vendure-token';
 const ACTIVE_CHANNEL_TOKEN_KEY = 'vendure-active-channel-token';
-const ADMIN_DISPLAY_LANGUAGE = 'zh_Hans';
 export { sensitiveActionContext } from './apollo-sensitive-action';
 
 export const ADMIN_API_URL = import.meta.env.VITE_VENDURE_ADMIN_API_URL?.trim() || '/admin-api';
@@ -20,7 +20,12 @@ export const getLocalizedAdminApiUrl = () => {
     const isAbsoluteUrl = /^(?:[a-z][a-z\d+.-]*:)?\/\//iu.test(ADMIN_API_URL);
     const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
     const url = new URL(ADMIN_API_URL, origin);
-    url.searchParams.set('displayLanguageCode', ADMIN_DISPLAY_LANGUAGE);
+    const languageCode = getAdminDisplayLanguage();
+    // Vendure uses `languageCode` for translated entity fields and `displayLanguageCode` for
+    // localized server messages. Keeping them identical prevents a single response from mixing
+    // Chinese entity names with English messages (or the reverse).
+    url.searchParams.set('languageCode', languageCode);
+    url.searchParams.set('displayLanguageCode', languageCode);
     return isAbsoluteUrl ? url.toString() : `${url.pathname}${url.search}${url.hash}`;
 };
 
@@ -38,13 +43,21 @@ export const getActiveChannelToken = () => sessionStorage.getItem(ACTIVE_CHANNEL
 
 export const hasActiveChannelSelection = () => Boolean(getActiveChannelToken());
 
+const replaceActiveChannelToken = (channelToken: string | null) => {
+    if (channelToken?.trim()) {
+        sessionStorage.setItem(ACTIVE_CHANNEL_TOKEN_KEY, channelToken);
+    } else {
+        sessionStorage.removeItem(ACTIVE_CHANNEL_TOKEN_KEY);
+    }
+};
+
 export const channelRequestContext = (channelToken: string) => {
     if (!channelToken.trim()) throw new Error('请先选择店铺后重试');
     return { headers: { [ACTIVE_CHANNEL_HEADER]: channelToken }, queryDeduplication: false };
 };
 
 export const setInitialActiveChannel = (channelToken: string) => {
-    if (channelToken.trim()) sessionStorage.setItem(ACTIVE_CHANNEL_TOKEN_KEY, channelToken);
+    if (channelToken.trim()) replaceActiveChannelToken(channelToken);
 };
 
 const persistAuthToken = (token: string) => {
@@ -284,6 +297,18 @@ export const switchActiveChannel = async (channelToken: string) => {
     if (!channelToken.trim()) {
         throw new Error('销售渠道标识不能为空');
     }
-    setInitialActiveChannel(channelToken);
-    await client.resetStore();
+    const previousChannelToken = getActiveChannelToken();
+    if (previousChannelToken === channelToken) return;
+    replaceActiveChannelToken(channelToken);
+    try {
+        await client.resetStore();
+    } catch (error) {
+        replaceActiveChannelToken(previousChannelToken);
+        try {
+            await client.resetStore();
+        } catch {
+            // Preserve the original switch failure. The restored token will be used on the next request.
+        }
+        throw error;
+    }
 };

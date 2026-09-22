@@ -60,7 +60,7 @@ describe('product editor pagination across the extracted data hook', () => {
         },
     );
 
-    it('shows only the permission-filtered assignment view for the current product', () => {
+    it('uses only the current store-scoped product channels', () => {
         queries.mockImplementation((query: DocumentNode) => ({
             loading: false,
             refetch: vi.fn(),
@@ -68,45 +68,13 @@ describe('product editor pagination across the extracted data hook', () => {
                 ? {
                       data: {
                           product: { id: '27', channels: [{ id: '16', code: 'sim-a' }] },
-                          catalogProductChannelAssignments: {
-                              items: [
-                                  {
-                                      id: '27',
-                                      channels: [
-                                          { id: '16', code: 'sim-a' },
-                                          { id: '17', code: 'sim-b' },
-                                      ],
-                                  },
-                              ],
-                          },
                       },
                   }
                 : {}),
         }));
-        expect(renderToStaticMarkup(<Probe sizes={[20, 20, 20]} productId="27" />)).toContain('16,17');
+        expect(renderToStaticMarkup(<Probe sizes={[20, 20, 20]} productId="27" />)).toContain('16');
         expect(queries.mock.calls.find(([query]) => query === GET_PRODUCT_DETAIL)?.[1].variables).toEqual({
             id: '27',
-            assignmentId: '27',
         });
-    });
-
-    it('does not substitute a different product assignment', () => {
-        queries.mockImplementation((query: DocumentNode) => ({
-            loading: false,
-            refetch: vi.fn(),
-            ...(query === GET_PRODUCT_DETAIL
-                ? {
-                      data: {
-                          product: { id: '27', channels: [{ id: '16', code: 'sim-a' }] },
-                          catalogProductChannelAssignments: {
-                              items: [{ id: '28', channels: [{ id: '17', code: 'sim-b' }] }],
-                          },
-                      },
-                  }
-                : {}),
-        }));
-        expect(renderToStaticMarkup(<Probe sizes={[20, 20, 20]} productId="27" />)).toBe(
-            '<output>16</output>',
-        );
     });
 });

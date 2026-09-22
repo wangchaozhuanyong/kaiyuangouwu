@@ -39,7 +39,9 @@ describe('AdministratorService.update privilege-escalation guard', () => {
         await adminClient.asSuperAdmin();
 
         const { administrators } = await adminClient.query(getAdministratorsDocument);
-        superAdminId = administrators.items.find(a => a.user.identifier === SUPER_ADMIN_USER_IDENTIFIER)!.id;
+        const superAdmin = administrators.items.find(a => a.user.identifier === SUPER_ADMIN_USER_IDENTIFIER);
+        if (!superAdmin) throw new Error('Test SuperAdmin not found');
+        superAdminId = superAdmin.id;
 
         // A "staff" administrator holding a narrow set of permissions.
         const { createRole: staffRole } = await adminClient.query(createRoleDocument, {
@@ -97,7 +99,7 @@ describe('AdministratorService.update privilege-escalation guard', () => {
             await adminClient.query(updateAdministratorDocument, {
                 input: { id: superAdminId, password: 'pwned' },
             });
-        }, 'does not have sufficient permissions'),
+        }, 'No Administrator with the id'),
     );
 
     it('leaves the SuperAdmin credentials intact after a blocked attempt', async () => {

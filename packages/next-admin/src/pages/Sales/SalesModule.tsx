@@ -32,6 +32,7 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUrlListState } from '../../hooks/use-url-list-state';
 import { type SortDirection, useUrlSortState } from '../../hooks/use-url-sort-state';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 import { csvCell } from './sales-csv';
@@ -124,6 +125,7 @@ interface SalesOrdersData {
     activeChannel: { id: string; code: string };
     orders: { items: SalesOrderItem[]; totalItems: number };
     physicalFulfillmentTodoCount: number;
+    fulfillmentDeliveryExceptions: { totalItems: number };
 }
 
 interface FulfillmentMutationData {
@@ -243,6 +245,7 @@ export function SalesModule() {
     const totalItems = data?.orders.totalItems ?? 0;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     const physicalTodoCount = data?.physicalFulfillmentTodoCount ?? 0;
+    const deliveryExceptionCount = data?.fulfillmentDeliveryExceptions.totalItems ?? 0;
     const selectableOrders = orders.filter(
         order =>
             canManageOrderInChannel(order, data?.activeChannel?.id) &&
@@ -388,7 +391,7 @@ export function SalesModule() {
             '收货地址',
         ];
         const rows = orders.map(order => [
-            order.salesChannel?.code ?? '归属待核实',
+            order.salesChannel ? getChannelDisplayName(order.salesChannel) : '归属待核实',
             order.code,
             formatDateTime(order.orderPlacedAt ?? order.createdAt),
             getCustomerName(order.customer),
@@ -480,7 +483,7 @@ export function SalesModule() {
 
             <div className="flex-1 overflow-y-auto p-5 sm:p-8">
                 <div className="w-full max-w-none space-y-4">
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
                         <div className="min-w-0 rounded-lg bg-slate-900 px-3 py-2.5 text-white shadow-sm">
                             <div className="text-[11px] font-medium text-slate-300">当前筛选</div>
                             <div className="mt-1 font-mono text-lg font-semibold tabular-nums">
@@ -498,7 +501,17 @@ export function SalesModule() {
                             </div>
                             <div className="mt-0.5 text-[11px] text-amber-700">已排除纯虚拟订单</div>
                         </div>
-                        <div className="col-span-2 min-w-0 rounded-lg border border-slate-200 bg-white sm:col-span-1 px-3 py-2.5">
+                        <div className="min-w-0 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5">
+                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-700">
+                                <AlertCircle className="h-3.5 w-3.5" />
+                                配送异常 / 逾期
+                            </div>
+                            <div className="mt-1 font-mono text-lg font-semibold tabular-nums text-rose-900">
+                                {deliveryExceptionCount}
+                            </div>
+                            <div className="mt-0.5 text-[11px] text-rose-700">需进入订单处理并留证</div>
+                        </div>
+                        <div className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5">
                             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
                                 <PackageCheck className="h-3.5 w-3.5" />
                                 本页可批量发货
@@ -790,10 +803,18 @@ export function SalesModule() {
                                                             <span
                                                                 className="block truncate text-[10px] text-slate-500"
                                                                 title={
-                                                                    order.salesChannel?.code ?? '归属待核实'
+                                                                    order.salesChannel
+                                                                        ? getChannelDisplayName(
+                                                                              order.salesChannel,
+                                                                          )
+                                                                        : '归属待核实'
                                                                 }
                                                             >
-                                                                {order.salesChannel?.code ?? '归属待核实'}
+                                                                {order.salesChannel
+                                                                    ? getChannelDisplayName(
+                                                                          order.salesChannel,
+                                                                      )
+                                                                    : '归属待核实'}
                                                             </span>
                                                         </td>
                                                         <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">

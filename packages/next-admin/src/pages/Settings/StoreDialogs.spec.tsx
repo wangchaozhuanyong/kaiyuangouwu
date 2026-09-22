@@ -229,6 +229,7 @@ describe('ProvisionStoreDialog', () => {
                 code: '美宜佳',
                 defaultLanguageCode: 'zh_Hans',
                 defaultCurrencyCode: 'MYR',
+                customFields: { storefrontNameZh: '美宜佳', storefrontNameEn: 'MYNEWS' },
             },
         ];
 
@@ -242,7 +243,7 @@ describe('ProvisionStoreDialog', () => {
         );
 
         expect(html).toContain('选择基础店铺');
-        expect(html).toContain('默认店铺 · zh_Hans / CNY');
+        expect(html).toContain('平台管理（不经营） · zh_Hans / CNY');
         expect(html).toContain('美宜佳 · zh_Hans / MYR');
         expect(html).toContain('新店会复制所选店铺的语言、币种、税务和库存默认值');
         expect(html).not.toContain('需要先在后端 Channel 配置中启用开店模板');
@@ -307,6 +308,7 @@ describe('ProvisionStoreDialog', () => {
             root.render(
                 <StoreDeprovisionDialog
                     profile={profile}
+                    allowPermanentDeprovision
                     onClose={() => undefined}
                     onCompleted={async () => undefined}
                     onError={() => undefined}

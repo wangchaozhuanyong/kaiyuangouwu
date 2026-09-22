@@ -6,6 +6,7 @@ import { IsNull } from 'typeorm';
 
 import { STOREFRONT_PROMOTION_OPTIONS } from '../constants';
 import { StorefrontPageView } from '../entities/storefront-page-view.entity';
+import { marketingAttributionKey } from '../marketing-attribution.service';
 import {
     normalizeStorefrontVisitorId,
     resolveStorefrontVisitorIdentity,
@@ -25,6 +26,13 @@ export interface StorefrontPageViewInput {
     eventId: string;
     visitorId?: string | null;
     pageView: boolean;
+    path?: string | null;
+    referrerHost?: string | null;
+    source?: string | null;
+    medium?: string | null;
+    campaign?: string | null;
+    term?: string | null;
+    content?: string | null;
 }
 
 @Injectable()
@@ -44,7 +52,11 @@ export class StorefrontTrafficService {
             throw new UserInputError('Invalid visitor ID');
         }
         const cookie = ctx.req?.headers.cookie ?? '';
-        if (cookie.split(';').some(part => part.trim() === 'storefront_analytics_opt_out=1')) {
+        const cookies = cookie.split(';').map(part => part.trim());
+        if (
+            !cookies.includes('storefront_analytics_consent=granted') ||
+            cookies.includes('storefront_analytics_opt_out=1')
+        ) {
             return { recorded: false, setCookie: null };
         }
         const identity = resolveStorefrontVisitorIdentity({
@@ -75,7 +87,13 @@ export class StorefrontTrafficService {
                 .digest('hex');
         const visitorKeyHash = digest('visitor', identity.keyMaterial);
         const customerKeyHash = customer ? digest('customer', String(customer.id)) : null;
+        const attributionKeyHash = marketingAttributionKey(
+            this.options.signingSecret,
+            String(ctx.channelId),
+            customer ? `customer:${String(customer.id)}` : identity.keyMaterial,
+        );
         const clientIp = trafficPublicIp(identity.clientIp);
+        const dimensions = normalizeAttributionInput(input);
         const repository = this.connection.getRepository(ctx, StorefrontPageView);
         const eventWhere = { channelId: ctx.channelId, eventId: input.eventId.toLowerCase() };
         if (input.pageView) {
@@ -89,6 +107,8 @@ export class StorefrontTrafficService {
                     visitorKeyHash,
                     customerKeyHash,
                     ipHash: clientIp ? digest('ip', clientIp) : null,
+                    attributionKeyHash,
+                    ...dimensions,
                 })
                 .orIgnore()
                 // MySQL INSERT IGNORE returns no generated ID for an existing event.
@@ -104,7 +124,7 @@ export class StorefrontTrafficService {
         if (customerKeyHash && !event.customerKeyHash) {
             await repository.update(
                 { ...eventWhere, visitorKeyHash, customerKeyHash: IsNull() },
-                { customerKeyHash },
+                { customerKeyHash, attributionKeyHash },
             );
         }
         return { recorded: true, setCookie: identity.setCookie };
@@ -153,6 +173,56 @@ export class StorefrontTrafficService {
             days: summarizeTraffic(dates, visitors, ips),
         };
     }
+}
+
+function normalizeAttributionInput(input: StorefrontPageViewInput) {
+    return {
+        path: normalizePath(input.path),
+        referrerHost: normalizeHost(input.referrerHost),
+        source: normalizeDimension(input.source, 100),
+        medium: normalizeDimension(input.medium, 100),
+        campaign: normalizeDimension(input.campaign, 160),
+        term: normalizeDimension(input.term, 160),
+        content: normalizeDimension(input.content, 160),
+    };
+}
+
+function normalizePath(value: string | null | undefined): string | null {
+    const normalized = String(value ?? '').trim();
+    if (!normalized) return null;
+    if (normalized.length > 2_048) throw new UserInputError('Invalid storefront path');
+    let parsed: URL;
+    try {
+        parsed = new URL(normalized, 'https://storefront.invalid');
+    } catch {
+        throw new UserInputError('Invalid storefront path');
+    }
+    const path = parsed.pathname.slice(0, 512);
+    return path.startsWith('/') ? path : null;
+}
+
+function normalizeHost(value: string | null | undefined): string | null {
+    const normalized = String(value ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/^www\./u, '');
+    if (!normalized) return null;
+    if (normalized.length > 255 || !/^[a-z0-9.-]+(?::\d{1,5})?$/u.test(normalized)) {
+        throw new UserInputError('Invalid referral host');
+    }
+    return normalized;
+}
+
+function normalizeDimension(value: string | null | undefined, max: number): string | null {
+    const normalized = String(value ?? '')
+        .normalize('NFKC')
+        .trim()
+        .toLowerCase();
+    if (!normalized) return null;
+    if (normalized.length > max || /[\u0000-\u001f\u007f]/u.test(normalized)) {
+        throw new UserInputError('Invalid marketing attribution value');
+    }
+    return normalized;
 }
 
 /** req.ip is resolved by Express's configured trusted proxies; never read client-supplied IP headers here. */

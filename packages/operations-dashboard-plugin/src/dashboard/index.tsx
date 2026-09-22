@@ -1,11 +1,15 @@
 import { msg } from '@lingui/core/macro';
 import { defineDashboardExtension } from '@vendure/dashboard';
-import type { OperationsNavigationTitles } from './operations-navigation';
 
 import { afterSalesRoute } from './after-sales-page';
 import { autoCardRoute } from './auto-card-page';
+import { CustomerOperationsPageBlock } from './customer-operations-page-block';
+import { FulfillmentDeliveryPageBlock } from './fulfillment-delivery-page-block';
+import { governanceRiskRoute } from './governance-risk-page';
+import { incidentResponseRoute } from './incident-response-page';
 import { manualDigitalDeliveryRoute } from './manual-digital-delivery-page';
-import { organizeOperationsNavigation } from './operations-navigation';
+import { marketingAttributionRoute } from './marketing-attribution-page';
+import { organizeOperationsNavigation, type OperationsNavigationTitles } from './operations-navigation';
 import { OperationsTodoWidget } from './operations-todo-widget';
 import { ProductPackagingPageBlock } from './product-packaging-page-block';
 import { reviewModerationRoute } from './review-moderation-page';
@@ -62,7 +66,15 @@ const navigationTitles = {
 } satisfies OperationsNavigationTitles;
 
 defineDashboardExtension({
-    routes: [afterSalesRoute, autoCardRoute, manualDigitalDeliveryRoute, reviewModerationRoute],
+    routes: [
+        afterSalesRoute,
+        autoCardRoute,
+        governanceRiskRoute,
+        incidentResponseRoute,
+        manualDigitalDeliveryRoute,
+        marketingAttributionRoute,
+        reviewModerationRoute,
+    ],
     pageBlocks: [
         {
             id: 'product-packaging',
@@ -84,6 +96,30 @@ defineDashboardExtension({
                 );
             },
             requiresPermission: ['UpdateProduct'],
+        },
+        {
+            id: 'fulfillment-delivery-evidence',
+            title: undefined,
+            location: {
+                pageId: 'order-detail',
+                column: 'main',
+                position: { blockId: 'order-table', order: 'after' },
+            },
+            component: FulfillmentDeliveryPageBlock,
+            shouldRender: context => Boolean(context.entity?.id),
+            requiresPermission: ['UpdateOrder'],
+        },
+        {
+            id: 'customer-operations-profile',
+            title: undefined,
+            location: {
+                pageId: 'customer-detail',
+                column: 'main',
+                position: { blockId: 'main-form', order: 'after' },
+            },
+            component: CustomerOperationsPageBlock,
+            shouldRender: context => Boolean(context.entity?.id),
+            requiresPermission: ['ReadCustomer'],
         },
     ],
     widgets: [

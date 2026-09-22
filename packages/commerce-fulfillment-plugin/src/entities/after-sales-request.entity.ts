@@ -3,7 +3,13 @@ import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
 import { Channel, Customer, EntityId, Money, Order, Refund, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 
-import { AfterSalesReason, AfterSalesState, AfterSalesType } from '../after-sales.constants';
+import {
+    AfterSalesReason,
+    AfterSalesReplacementStatus,
+    AfterSalesReturnStatus,
+    AfterSalesState,
+    AfterSalesType,
+} from '../after-sales.constants';
 
 import { AfterSalesEvent } from './after-sales-event.entity';
 import { AfterSalesItem } from './after-sales-item.entity';
@@ -14,6 +20,7 @@ import { AfterSalesItem } from './after-sales-item.entity';
 @Index('IDX_after_sales_request_customer_created', ['customerId', 'createdAt'])
 @Index('IDX_after_sales_request_order', ['orderId'])
 @Index('IDX_after_sales_request_refund', ['refundId'], { unique: true })
+@Index('IDX_after_sales_request_next_action', ['channelId', 'nextActionDueAt'])
 export class AfterSalesRequest extends VendureEntity {
     constructor(input?: DeepPartial<AfterSalesRequest>) {
         super(input);
@@ -51,6 +58,56 @@ export class AfterSalesRequest extends VendureEntity {
 
     @Column({ type: 'text', nullable: true })
     resolutionEn: string | null;
+
+    @Column({ type: 'varchar', length: 32, default: 'NOT_REQUIRED' })
+    returnStatus: AfterSalesReturnStatus;
+
+    @Column({ type: 'text', nullable: true })
+    returnInstructions: string | null;
+
+    @Column({ type: 'varchar', length: 120, nullable: true })
+    returnCarrier: string | null;
+
+    @Column({ type: 'varchar', length: 160, nullable: true })
+    returnTrackingCode: string | null;
+
+    @Column({ type: Date, nullable: true })
+    returnShippedAt: Date | null;
+
+    @Column({ type: Date, nullable: true })
+    returnReceivedAt: Date | null;
+
+    @Column({ type: Date, nullable: true })
+    inspectedAt: Date | null;
+
+    @Column({ type: 'text', nullable: true })
+    inspectionNote: string | null;
+
+    @Column({ type: 'varchar', length: 32, default: 'NOT_REQUIRED' })
+    replacementStatus: AfterSalesReplacementStatus;
+
+    @Column({ type: 'varchar', length: 120, nullable: true })
+    replacementCarrier: string | null;
+
+    @Column({ type: 'varchar', length: 160, nullable: true })
+    replacementTrackingCode: string | null;
+
+    @Column({ type: 'varchar', length: 255, nullable: true })
+    replacementProofReference: string | null;
+
+    @Column({ type: 'text', nullable: true })
+    replacementException: string | null;
+
+    @Column({ type: Date, nullable: true })
+    replacementShippedAt: Date | null;
+
+    @Column({ type: Date, nullable: true })
+    replacementDeliveredAt: Date | null;
+
+    @Column({ type: Date, nullable: true })
+    nextActionDueAt: Date | null;
+
+    overdue: boolean;
 
     @Column({ type: 'varchar', length: 200 })
     customerName: string;

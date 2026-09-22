@@ -45,27 +45,34 @@ import {
     ADD_CUSTOMER_TO_GROUP_MUTATION,
     ADD_CUSTOMERS_TO_GROUP_MUTATION,
     CREATE_CUSTOMER_ADDRESS_MUTATION,
+    CREATE_CUSTOMER_FOLLOW_UP_MUTATION,
     CREATE_CUSTOMER_GROUP_MUTATION,
     CREATE_CUSTOMER_MUTATION,
     CUSTOMER_ADDRESS_COUNTRIES_QUERY,
     CUSTOMER_DETAIL_QUERY,
+    CUSTOMER_FOLLOW_UP_COUNTS_QUERY,
     CUSTOMER_GROUP_MEMBERS_QUERY,
     CUSTOMER_GROUPS_QUERY,
+    CUSTOMER_OPERATIONS_QUERY,
     CustomerAddressCountriesResult,
     CustomerAddressRecord,
     CustomerDetailResult,
+    CustomerFollowUpCountsResult,
     CustomerGroupMembersResult,
     CustomerGroupRecord,
     CustomerGroupsResult,
     CustomerListRecord,
+    CustomerOperationsResult,
     CUSTOMERS_QUERY,
     CustomersResult,
     DELETE_CUSTOMER_ADDRESS_MUTATION,
     DELETE_CUSTOMER_GROUP_MUTATION,
     DELETE_CUSTOMERS_MUTATION,
+    REFRESH_CUSTOMER_OPERATIONS_MUTATION,
     REMOVE_CUSTOMER_FROM_GROUP_MUTATION,
     REMOVE_CUSTOMERS_FROM_GROUP_MUTATION,
     UPDATE_CUSTOMER_ADDRESS_MUTATION,
+    UPDATE_CUSTOMER_FOLLOW_UP_MUTATION,
     UPDATE_CUSTOMER_GROUP_MUTATION,
     UPDATE_CUSTOMER_MUTATION,
 } from '../../graphql/customers.graphql';
@@ -256,6 +263,9 @@ export function CustomersModule() {
         variables: { options: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } } },
         fetchPolicy: 'cache-first',
     });
+    const followUpCounts = useQuery<CustomerFollowUpCountsResult>(CUSTOMER_FOLLOW_UP_COUNTS_QUERY, {
+        fetchPolicy: 'cache-and-network',
+    });
     const {
         data: groupData,
         error: groupError,
@@ -303,7 +313,7 @@ export function CustomersModule() {
 
     const refresh = async () => {
         setActionError('');
-        await Promise.all([activeQuery.refetch(), groupQuery.refetch()]);
+        await Promise.all([activeQuery.refetch(), groupQuery.refetch(), followUpCounts.refetch()]);
     };
 
     const saveNewCustomer = async () => {
@@ -408,7 +418,7 @@ export function CustomersModule() {
                             <FeatureHelpButton topic="customers.management" title="客户管理" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            客户资料、分组、地址、订单与内部跟进记录集中处理
+                            客户 360、RFM 分层、流失预警与跟进结果集中处理
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -460,6 +470,19 @@ export function CustomersModule() {
                         客户分组读取失败，点击关闭后重试
                     </StatusMessage>
                 )}
+
+                <section className="grid gap-3 sm:grid-cols-2">
+                    <Metric
+                        label="待跟进客户"
+                        value={`${followUpCounts.data?.open.totalItems ?? 0} 项`}
+                        detail="自动风险任务与人工任务"
+                    />
+                    <Metric
+                        label="已逾期跟进"
+                        value={`${followUpCounts.data?.overdue.totalItems ?? 0} 项`}
+                        detail="逾期会进入运营事故提醒"
+                    />
+                </section>
 
                 <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -953,10 +976,6 @@ function CustomerDrawer({
             : emptyCustomerForm);
 
     const completedOrders = customer?.orders.items.filter(order => order.state !== 'Cancelled') ?? [];
-    const totals = completedOrders.reduce((map, order) => {
-        map.set(order.currencyCode, (map.get(order.currencyCode) ?? 0) + order.totalWithTax);
-        return map;
-    }, new Map<string, number>());
     const availableGroups = allGroups.filter(group => !customer?.groups.some(item => item.id === group.id));
 
     const saveCustomer = async () => {
@@ -1132,30 +1151,12 @@ function CustomerDrawer({
                                     }
                                 />
                             </section>
-                            {totals.size > 0 && (
-                                <section className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
-                                    <h3 className="flex items-center gap-2 text-xs font-bold text-blue-900">
-                                        历史有效订单金额
-                                        <FeatureHelpButton
-                                            topic="customers.management"
-                                            title="历史有效订单金额"
-                                        />
-                                    </h3>
-                                    <p className="mt-1 text-[10px] text-blue-700">
-                                        按最近100笔订单汇总并排除已取消订单，不等同于财务实收
-                                    </p>
-                                    <div className="mt-3 flex flex-wrap gap-4">
-                                        {Array.from(totals).map(([currency, amount]) => (
-                                            <strong
-                                                key={currency}
-                                                className="font-mono text-base text-blue-900"
-                                            >
-                                                {formatMoney(amount, currency)}
-                                            </strong>
-                                        ))}
-                                    </div>
-                                </section>
-                            )}
+                            <CustomerOperationsPanel
+                                customerId={customer.id}
+                                canUpdate={canUpdateCustomer}
+                                onChanged={onChanged}
+                                onError={onError}
+                            />
                             <section className="rounded-xl border border-slate-200 p-4">
                                 <div className="mb-3 flex items-center justify-between">
                                     <h3 className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
@@ -1496,6 +1497,460 @@ function CustomerDrawer({
             )}
         </>
     );
+}
+
+function CustomerOperationsPanel({
+    customerId,
+    canUpdate,
+    onChanged,
+    onError,
+}: {
+    customerId: string;
+    canUpdate: boolean;
+    onChanged: (message: string) => Promise<void>;
+    onError: (message: string) => void;
+}) {
+    const { data, loading, error, refetch } = useQuery<CustomerOperationsResult>(CUSTOMER_OPERATIONS_QUERY, {
+        variables: { customerId },
+        fetchPolicy: 'cache-and-network',
+    });
+    const [showCreate, setShowCreate] = useState(false);
+    const [title, setTitle] = useState('客户回访');
+    const [priority, setPriority] = useState('P2');
+    const [dueAt, setDueAt] = useState(() => localDateTimeValue(Date.now() + 24 * 60 * 60 * 1000));
+    const [createNote, setCreateNote] = useState('');
+    const [actionDraft, setActionDraft] = useState<{
+        id: string;
+        action: 'RESCHEDULE' | 'COMPLETE' | 'DISMISS';
+        dueAt: string;
+        outcomeCode: string;
+        note: string;
+    } | null>(null);
+    const [refreshProfile, refreshState] = useMutation(REFRESH_CUSTOMER_OPERATIONS_MUTATION);
+    const [createFollowUp, createState] = useMutation(CREATE_CUSTOMER_FOLLOW_UP_MUTATION);
+    const [updateFollowUp, updateState] = useMutation(UPDATE_CUSTOMER_FOLLOW_UP_MUTATION);
+    const profile = data?.customerOperationsProfile;
+    const openFollowUps = data?.openFollowUps.items ?? [];
+    const closedFollowUps = data?.closedFollowUps.items ?? [];
+
+    const refresh = async () => {
+        try {
+            await refreshProfile({ variables: { customerId } });
+            await refetch();
+            await onChanged('客户画像与流失风险已重新计算');
+        } catch (cause) {
+            onError(errorText(cause));
+        }
+    };
+    const create = async () => {
+        if (!title.trim() || !createNote.trim() || !dueAt) return onError('请填写标题、时间和跟进说明');
+        try {
+            await createFollowUp({
+                variables: {
+                    input: {
+                        customerId,
+                        priority,
+                        dueAt: new Date(dueAt).toISOString(),
+                        title: title.trim(),
+                        note: createNote.trim(),
+                        idempotencyKey: `admin-follow-up-${customerId}-${Date.now()}`,
+                    },
+                },
+            });
+            setShowCreate(false);
+            setCreateNote('');
+            await refetch();
+            await onChanged('客户跟进任务已创建');
+        } catch (cause) {
+            onError(errorText(cause));
+        }
+    };
+    const submitAction = async () => {
+        if (!actionDraft?.note.trim()) return onError('请填写本次操作说明');
+        if (actionDraft.action === 'RESCHEDULE' && !actionDraft.dueAt) {
+            return onError('请选择新的跟进时间');
+        }
+        try {
+            await updateFollowUp({
+                variables: {
+                    input: {
+                        id: actionDraft.id,
+                        action: actionDraft.action,
+                        dueAt:
+                            actionDraft.action === 'RESCHEDULE'
+                                ? new Date(actionDraft.dueAt).toISOString()
+                                : null,
+                        outcomeCode:
+                            actionDraft.action === 'COMPLETE'
+                                ? actionDraft.outcomeCode
+                                : actionDraft.action === 'DISMISS'
+                                  ? 'NOT_NEEDED'
+                                  : null,
+                        note: actionDraft.note.trim(),
+                        idempotencyKey: `${actionDraft.action.toLowerCase()}-${actionDraft.id}-${Date.now()}`,
+                    },
+                },
+            });
+            setActionDraft(null);
+            await refetch();
+            await onChanged('客户跟进状态已更新');
+        } catch (cause) {
+            onError(errorText(cause));
+        }
+    };
+
+    return (
+        <section className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h3 className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                        <UserCheck className="h-4 w-4 text-blue-600" />
+                        客户 360 与复购跟进
+                        <FeatureHelpButton topic="customers.management" title="客户 360 与复购跟进" />
+                    </h3>
+                    <p className="mt-1 text-[10px] text-blue-700">
+                        仅统计已结算订单；LTV 按币种独立核算，退款从对应币种扣除。
+                    </p>
+                </div>
+                <div className="flex gap-2">
+                    {canUpdate && (
+                        <button
+                            type="button"
+                            onClick={() => setShowCreate(value => !value)}
+                            className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-blue-700"
+                        >
+                            {showCreate ? '取消新任务' : '新建跟进'}
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={() => void refresh()}
+                        disabled={refreshState.loading}
+                        className="flex items-center gap-1 rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-blue-700 disabled:opacity-50"
+                    >
+                        <RefreshCw className={`h-3 w-3 ${refreshState.loading ? 'animate-spin' : ''}`} />
+                        重算
+                    </button>
+                </div>
+            </div>
+
+            {loading && !profile ? (
+                <p className="mt-4 text-xs text-blue-700">正在计算客户画像…</p>
+            ) : error ? (
+                <div className="mt-4 flex items-center justify-between rounded-lg bg-rose-50 p-3 text-xs text-rose-700">
+                    <span>客户画像读取失败</span>
+                    <button type="button" onClick={() => void refetch()} className="font-bold underline">
+                        重试
+                    </button>
+                </div>
+            ) : profile ? (
+                <>
+                    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <Metric label="客户分层" value={customerSegmentLabel(profile.segment)} />
+                        <Metric label="流失风险" value={customerRiskLabel(profile.churnRisk)} />
+                        <Metric
+                            label="R/F/M"
+                            value={`${profile.recencyScore}/${profile.frequencyScore}/${profile.monetaryScore}`}
+                        />
+                        <Metric
+                            label="最近购买"
+                            value={
+                                profile.recencyDays == null ? '无已结算订单' : `${profile.recencyDays} 天前`
+                            }
+                        />
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {profile.currencyMetrics.length ? (
+                            profile.currencyMetrics.map(metric => (
+                                <div
+                                    key={metric.currencyCode}
+                                    className="rounded-lg border border-blue-100 bg-white p-3"
+                                >
+                                    <div className="flex items-center justify-between text-[10px] text-slate-500">
+                                        <span>{metric.currencyCode} 净 LTV</span>
+                                        <span>{metric.orderCount} 笔已结算订单</span>
+                                    </div>
+                                    <strong className="mt-1 block font-mono text-sm text-blue-900">
+                                        {formatMoney(metric.netLifetimeValue, metric.currencyCode)}
+                                    </strong>
+                                    <p className="mt-1 text-[10px] text-slate-500">
+                                        实收口径 {formatMoney(metric.grossRevenue, metric.currencyCode)} ·
+                                        已退款 {formatMoney(metric.refundTotal, metric.currencyCode)}
+                                    </p>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="rounded-lg border border-blue-100 bg-white p-3 text-xs text-slate-500">
+                                暂无已结算订单，当前属于潜客阶段。
+                            </div>
+                        )}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-slate-600">
+                        <span>服务记录 {profile.serviceInteractionCount}</span>
+                        <span>售后 {profile.afterSalesCount}</span>
+                        <span>未结售后 {profile.openAfterSalesCount}</span>
+                        <span>评估 {formatDateTime(profile.lastEvaluatedAt)}</span>
+                        {profile.doNotContact && (
+                            <span className="font-bold text-rose-700">客户要求停止联系</span>
+                        )}
+                    </div>
+                    {profile.reasons.length > 0 && (
+                        <p className="mt-2 text-[10px] text-blue-800">依据：{profile.reasons.join('；')}</p>
+                    )}
+                </>
+            ) : null}
+
+            {showCreate && (
+                <div className="mt-4 grid gap-2 rounded-lg border border-blue-200 bg-white p-3 sm:grid-cols-2">
+                    <TextInput label="跟进标题" value={title} onChange={setTitle} />
+                    <label className="text-xs font-bold text-slate-700">
+                        优先级
+                        <select
+                            value={priority}
+                            onChange={event => setPriority(event.target.value)}
+                            className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-xs font-normal"
+                        >
+                            <option value="P1">P1 紧急</option>
+                            <option value="P2">P2 普通</option>
+                            <option value="P3">P3 低优先</option>
+                        </select>
+                    </label>
+                    <label className="text-xs font-bold text-slate-700">
+                        跟进时间
+                        <input
+                            type="datetime-local"
+                            value={dueAt}
+                            onChange={event => setDueAt(event.target.value)}
+                            className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-xs font-normal"
+                        />
+                    </label>
+                    <label className="text-xs font-bold text-slate-700 sm:col-span-2">
+                        跟进说明
+                        <textarea
+                            value={createNote}
+                            onChange={event => setCreateNote(event.target.value)}
+                            rows={2}
+                            maxLength={2000}
+                            className="mt-1.5 w-full rounded-lg border border-slate-300 p-2.5 text-xs font-normal"
+                        />
+                    </label>
+                    <div className="flex justify-end sm:col-span-2">
+                        <button
+                            type="button"
+                            onClick={() => void create()}
+                            disabled={createState.loading}
+                            className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                            创建跟进任务
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-bold text-blue-900">
+                    <span>待处理跟进</span>
+                    <span>{data?.openFollowUps.totalItems ?? 0} 项</span>
+                </div>
+                {openFollowUps.map(item => (
+                    <div
+                        key={item.id}
+                        className={`rounded-lg border bg-white p-3 ${item.overdue ? 'border-rose-200' : 'border-blue-100'}`}
+                    >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                                <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                                    {item.title}
+                                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px]">
+                                        {item.priority}
+                                    </span>
+                                    {item.overdue && (
+                                        <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[9px] text-rose-700">
+                                            已逾期
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="mt-1 whitespace-pre-wrap text-[10px] text-slate-600">
+                                    {item.note}
+                                </p>
+                                <p className="mt-1 text-[10px] text-slate-400">
+                                    截止 {formatDateTime(item.dueAt)} ·{' '}
+                                    {item.source === 'SYSTEM' ? '系统创建' : '人工创建'}
+                                </p>
+                            </div>
+                            {canUpdate && (
+                                <div className="flex gap-1">
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setActionDraft({
+                                                id: item.id,
+                                                action: 'COMPLETE',
+                                                dueAt: '',
+                                                outcomeCode: 'RESOLVED',
+                                                note: '',
+                                            })
+                                        }
+                                        className="rounded bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700"
+                                    >
+                                        登记结果
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setActionDraft({
+                                                id: item.id,
+                                                action: 'RESCHEDULE',
+                                                dueAt: localDateTimeValue(
+                                                    new Date(item.dueAt).getTime() + 24 * 60 * 60 * 1000,
+                                                ),
+                                                outcomeCode: 'RESOLVED',
+                                                note: '',
+                                            })
+                                        }
+                                        className="rounded bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700"
+                                    >
+                                        改期
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setActionDraft({
+                                                id: item.id,
+                                                action: 'DISMISS',
+                                                dueAt: '',
+                                                outcomeCode: 'NOT_NEEDED',
+                                                note: '',
+                                            })
+                                        }
+                                        className="rounded bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600"
+                                    >
+                                        关闭
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        {actionDraft?.id === item.id && (
+                            <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3 sm:grid-cols-2">
+                                {actionDraft.action === 'COMPLETE' && (
+                                    <label className="text-[10px] font-bold text-slate-600">
+                                        跟进结果
+                                        <select
+                                            value={actionDraft.outcomeCode}
+                                            onChange={event =>
+                                                setActionDraft({
+                                                    ...actionDraft,
+                                                    outcomeCode: event.target.value,
+                                                })
+                                            }
+                                            className="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-xs font-normal"
+                                        >
+                                            <option value="RESOLVED">问题已解决</option>
+                                            <option value="CONTACTED">已联系，后续观察</option>
+                                            <option value="NO_RESPONSE">未联系上，7 天后再跟进</option>
+                                            <option value="DO_NOT_CONTACT">客户要求停止联系</option>
+                                            <option value="NOT_NEEDED">无需继续跟进</option>
+                                        </select>
+                                    </label>
+                                )}
+                                {actionDraft.action === 'RESCHEDULE' && (
+                                    <label className="text-[10px] font-bold text-slate-600">
+                                        新的跟进时间
+                                        <input
+                                            type="datetime-local"
+                                            value={actionDraft.dueAt}
+                                            onChange={event =>
+                                                setActionDraft({ ...actionDraft, dueAt: event.target.value })
+                                            }
+                                            className="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-xs font-normal"
+                                        />
+                                    </label>
+                                )}
+                                <label className="text-[10px] font-bold text-slate-600 sm:col-span-2">
+                                    操作说明
+                                    <textarea
+                                        value={actionDraft.note}
+                                        onChange={event =>
+                                            setActionDraft({ ...actionDraft, note: event.target.value })
+                                        }
+                                        rows={2}
+                                        maxLength={2000}
+                                        className="mt-1 w-full rounded border border-slate-300 p-2 text-xs font-normal"
+                                    />
+                                </label>
+                                <div className="flex justify-end gap-2 sm:col-span-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActionDraft(null)}
+                                        className="rounded bg-slate-100 px-3 py-1.5 text-[10px] font-bold"
+                                    >
+                                        取消
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void submitAction()}
+                                        disabled={updateState.loading}
+                                        className="rounded bg-blue-600 px-3 py-1.5 text-[10px] font-bold text-white disabled:opacity-50"
+                                    >
+                                        保存结果
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ))}
+                {!openFollowUps.length && (
+                    <p className="rounded-lg border border-dashed border-blue-200 bg-white p-3 text-xs text-slate-500">
+                        当前没有待处理跟进。
+                    </p>
+                )}
+                {closedFollowUps.length > 0 && (
+                    <details className="rounded-lg border border-blue-100 bg-white p-3">
+                        <summary className="cursor-pointer text-[11px] font-bold text-slate-700">
+                            最近已完成记录（{data?.closedFollowUps.totalItems ?? 0}）
+                        </summary>
+                        <div className="mt-2 space-y-2">
+                            {closedFollowUps.map(item => (
+                                <div
+                                    key={item.id}
+                                    className="border-t border-slate-100 pt-2 text-[10px] text-slate-600"
+                                >
+                                    <strong>{item.title}</strong> · {item.outcomeCode ?? '已完成'} ·{' '}
+                                    {formatDateTime(item.completedAt)}
+                                    {item.outcomeNote && (
+                                        <p className="mt-1 whitespace-pre-wrap">{item.outcomeNote}</p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </details>
+                )}
+            </div>
+        </section>
+    );
+}
+
+function customerSegmentLabel(value: string): string {
+    return (
+        {
+            NEW: '新注册',
+            LEAD: '潜客',
+            ACTIVE: '活跃客户',
+            LOYAL: '忠诚客户',
+            VIP: '高价值客户',
+            AT_RISK: '流失风险',
+            DORMANT: '沉睡客户',
+        }[value] ?? value
+    );
+}
+
+function customerRiskLabel(value: string): string {
+    return { NONE: '暂无', LOW: '低', MEDIUM: '中', HIGH: '高' }[value] ?? value;
+}
+
+function localDateTimeValue(timestamp: number): string {
+    const date = new Date(timestamp - new Date(timestamp).getTimezoneOffset() * 60_000);
+    return date.toISOString().slice(0, 16);
 }
 
 function CustomerAddressEditor({

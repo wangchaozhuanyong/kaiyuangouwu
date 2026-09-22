@@ -52,6 +52,17 @@ module.exports = {
             },
         },
         {
+            files: [
+                './packages/store-management-plugin/src/admin/**/*',
+                './packages/store-management-plugin/src/dashboard/**/*',
+            ],
+            extends: ['plugin:@typescript-eslint/disable-type-checked'],
+            parserOptions: {
+                project: null,
+                sourceType: 'module',
+            },
+        },
+        {
             files: ['./packages/ui-devkit/src/client/**/*'],
             parserOptions: {
                 project: './packages/ui-devkit/tsconfig.json',

@@ -48,9 +48,7 @@ const profile: StoreProfileRecord = {
     },
 };
 
-function fixture(
-    options: { partialAssignment?: boolean; assignmentError?: boolean; staleProfile?: boolean } = {},
-) {
+function fixture(options: { staleProfile?: boolean } = {}) {
     const calls: Array<{ name: string; input: Record<string, unknown>; channel: string }> = [];
     const client = new ApolloClient({
         cache: new InMemoryCache(),
@@ -62,25 +60,11 @@ function fixture(
                         input: operation.variables.input,
                         channel: operation.getContext().headers['vendure-token'],
                     });
-                    if (operation.operationName === 'AssignStoreBrandAssets') {
-                        if (options.assignmentError) {
-                            observer.error(new Error('素材分配失败'));
-                            return;
-                        }
-                        observer.next({
-                            data: {
-                                assignAssetsToChannel: options.partialAssignment
-                                    ? []
-                                    : operation.variables.input.assetIds.map((id: string) => ({ id })),
-                            },
-                        });
-                    } else {
-                        if (options.staleProfile) {
-                            observer.error(new Error('店铺档案已被其他管理员修改'));
-                            return;
-                        }
-                        observer.next({ data: { updateStoreProfile: profile } });
+                    if (options.staleProfile) {
+                        observer.error(new Error('店铺档案已被其他管理员修改'));
+                        return;
                     }
+                    observer.next({ data: { updateStoreProfile: profile } });
                     observer.complete();
                 }),
         ),
@@ -97,28 +81,12 @@ function sharedDraft(): BrandAssetsDraft {
 }
 
 describe('store brand publication', () => {
-    it('assigns shared assets first, then saves the same IDs into the target store with its version', async () => {
+    it('rejects cross-store brand assets without writing the profile', async () => {
         const { client, calls } = fixture();
-        await saveStoreProfileWithBrandAssets(client, profile, sharedDraft(), { storefrontNameZh: '大马通' });
-        expect(calls).toEqual([
-            {
-                name: 'AssignStoreBrandAssets',
-                channel: 'default-channel',
-                input: { assetIds: ['new-icon', 'new-light', 'new-dark'], channelId: 'target-store' },
-            },
-            {
-                name: 'NextAdminUpdateStoreProfile',
-                channel: 'target-channel',
-                input: {
-                    id: profile.id,
-                    expectedUpdatedAt: profile.updatedAt,
-                    storefrontNameZh: '大马通',
-                    logoAssetId: 'new-icon',
-                    logoOnLightAssetId: 'new-light',
-                    logoOnDarkAssetId: 'new-dark',
-                },
-            },
-        ]);
+        await expect(
+            saveStoreProfileWithBrandAssets(client, profile, sharedDraft(), { storefrontNameZh: '大马通' }),
+        ).rejects.toThrow('不属于当前店铺');
+        expect(calls).toEqual([]);
     });
 
     it('does not overwrite unchanged brand bindings when editing other profile fields', async () => {
@@ -150,27 +118,21 @@ describe('store brand publication', () => {
         });
     });
 
-    it.each([{ partialAssignment: true }, { assignmentError: true }])(
-        'does not publish a profile after failed or incomplete assignment: %j',
-        async options => {
-            const { client, calls } = fixture(options);
-            await expect(
-                saveStoreProfileWithBrandAssets(client, profile, sharedDraft(), {}),
-            ).rejects.toThrow();
-            expect(calls.map(call => call.name)).toEqual(['AssignStoreBrandAssets']);
-        },
-    );
-
-    it('deduplicates shared assets and leaves local assets in their own store', async () => {
+    it('saves changed assets directly when every asset belongs to the current store', async () => {
         const { client, calls } = fixture();
         const draft = sharedDraft();
-        draft.logoOnLightAsset = draft.logoAsset;
-        draft.logoOnDarkAsset!.sourceChannelToken = profile.channel.token;
+        for (const asset of Object.values(draft)) {
+            if (asset) asset.sourceChannelToken = profile.channel.token;
+        }
         await saveStoreProfileWithBrandAssets(client, profile, draft, {});
-        expect(calls[0].input.assetIds).toEqual(['new-icon']);
-        expect(calls[1].input).toMatchObject({
+        expect(calls).toHaveLength(1);
+        expect(calls[0]).toMatchObject({
+            name: 'NextAdminUpdateStoreProfile',
+            channel: 'target-channel',
+        });
+        expect(calls[0].input).toMatchObject({
             logoAssetId: 'new-icon',
-            logoOnLightAssetId: 'new-icon',
+            logoOnLightAssetId: 'new-light',
             logoOnDarkAssetId: 'new-dark',
         });
     });

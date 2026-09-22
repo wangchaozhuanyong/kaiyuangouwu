@@ -1,5 +1,5 @@
-import { DeletionResult } from '@vendure/common/lib/generated-types';
-import { SUPER_ADMIN_USER_IDENTIFIER } from '@vendure/common/lib/shared-constants';
+import { DeletionResult, Permission } from '@vendure/common/lib/generated-types';
+import { SUPER_ADMIN_USER_IDENTIFIER, SUPER_ADMIN_USER_PASSWORD } from '@vendure/common/lib/shared-constants';
 import { createErrorResultGuard, createTestEnvironment, ErrorResultGuard } from '@vendure/testing';
 import { fail } from 'assert';
 import path from 'path';
@@ -13,6 +13,7 @@ import { FragmentOf } from './graphql/graphql-admin';
 import {
     attemptLoginDocument,
     createAdministratorDocument,
+    createRoleDocument,
     deleteAdministratorDocument,
     getActiveAdministratorDocument,
     getAdministratorDocument,
@@ -25,6 +26,7 @@ import { assertThrowsWithMessage } from './utils/assert-throws-with-message';
 describe('Administrator resolver', () => {
     const { server, adminClient } = createTestEnvironment(testConfig());
     let createdAdmin: FragmentOf<typeof administratorFragment>;
+    let ordinaryRoleId: string;
 
     beforeAll(async () => {
         await server.init({
@@ -33,6 +35,15 @@ describe('Administrator resolver', () => {
             customerCount: 1,
         });
         await adminClient.asSuperAdmin();
+        const { createRole } = await adminClient.query(createRoleDocument, {
+            input: {
+                code: 'ordinary-administrator-fixture',
+                description: 'Ordinary administrator for account tests',
+                permissions: [Permission.ReadAdministrator],
+                channelIds: ['T_1'],
+            },
+        });
+        ordinaryRoleId = createRole.id;
     }, TEST_SETUP_TIMEOUT_MS);
 
     afterAll(async () => {
@@ -52,12 +63,12 @@ describe('Administrator resolver', () => {
                 firstName: 'First',
                 lastName: 'Last',
                 password: 'password',
-                roleIds: ['1'],
+                roleIds: [ordinaryRoleId],
             },
         });
 
         createdAdmin = result.createAdministrator;
-        expect(createdAdmin).toMatchSnapshot();
+        expect(createdAdmin).toMatchObject({ emailAddress: 'test@test.com', firstName: 'First' });
     });
 
     it('administrator', async () => {
@@ -75,10 +86,14 @@ describe('Administrator resolver', () => {
                 firstName: 'new first',
                 lastName: 'new last',
                 password: 'new password',
-                roleIds: ['2'],
+                roleIds: [ordinaryRoleId],
             },
         });
-        expect(result.updateAdministrator).toMatchSnapshot();
+        expect(result.updateAdministrator).toMatchObject({
+            emailAddress: 'new-email',
+            firstName: 'new first',
+            lastName: 'new last',
+        });
     });
 
     it('updateAdministrator works with partial input', async () => {
@@ -185,7 +200,7 @@ describe('Administrator resolver', () => {
                 firstName: 'Recreated',
                 lastName: 'Admin',
                 password: 'recreated-password',
-                roleIds: ['1'],
+                roleIds: [ordinaryRoleId],
             },
         });
 
@@ -219,7 +234,7 @@ describe('Administrator resolver', () => {
                     firstName: 'Duplicate',
                     lastName: 'Admin',
                     password: 'password3',
-                    roleIds: ['1'],
+                    roleIds: [ordinaryRoleId],
                 },
             });
             fail('Should have thrown');
@@ -241,6 +256,31 @@ describe('Administrator resolver', () => {
     });
 
     it('updateActiveAdministrator', async () => {
+        const { activeAdministrator: currentAdministrator } = await adminClient.query(
+            getActiveAdministratorDocument,
+        );
+        const unchangedEmailAddress = currentAdministrator?.emailAddress;
+        if (!unchangedEmailAddress) {
+            throw new Error('Expected an active administrator email address');
+        }
+
+        const { updateActiveAdministrator: unchangedIdentityUpdate } = await adminClient.query(
+            updateActiveAdministratorDocument,
+            {
+                input: {
+                    firstName: 'Thomas',
+                    lastName: 'Anderson',
+                    emailAddress: unchangedEmailAddress,
+                },
+            },
+        );
+
+        expect(unchangedIdentityUpdate.firstName).toBe('Thomas');
+        const { activeAdministrator: administratorAfterProfileUpdate } = await adminClient.query(
+            getActiveAdministratorDocument,
+        );
+        expect(administratorAfterProfileUpdate?.emailAddress).toBe(unchangedEmailAddress);
+
         const { updateActiveAdministrator } = await adminClient.query(updateActiveAdministratorDocument, {
             input: {
                 firstName: 'Thomas',
@@ -251,6 +291,10 @@ describe('Administrator resolver', () => {
 
         expect(updateActiveAdministrator.firstName).toBe('Thomas');
         expect(updateActiveAdministrator.lastName).toBe('Anderson');
+
+        // Changing an administrator identity revokes the previous session immediately.
+        adminClient.setAuthToken('');
+        await adminClient.asUserWithCredentials('neo@metacortex.com', SUPER_ADMIN_USER_PASSWORD);
 
         const { activeAdministrator } = await adminClient.query(getActiveAdministratorDocument);
 
@@ -267,7 +311,7 @@ describe('Administrator resolver', () => {
                 firstName: 'New',
                 lastName: 'Admin',
                 password: 'password',
-                roleIds: ['1'],
+                roleIds: [ordinaryRoleId],
             },
         });
 

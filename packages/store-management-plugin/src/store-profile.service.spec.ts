@@ -574,7 +574,7 @@ describe('StoreProfileService', () => {
         ).rejects.toThrow('#RRGGBB');
     });
 
-    it('normalizes legal identity fields and rejects invalid contact emails', async () => {
+    it('keeps legal identity under platform review and normalizes merchant contact emails', async () => {
         const current = profile();
         const profileRepository = {
             findOne: vi.fn().mockResolvedValue(current),
@@ -584,15 +584,13 @@ describe('StoreProfileService', () => {
 
         const updated = await service.updateForMerchant({ channelId: 'channel-1' } as any, {
             expectedUpdatedAt: current.updatedAt,
-            legalEntityName: ' MOYAO AI Example Limited ',
-            legalRegistrationCountry: ' Malaysia ',
             supportEmail: ' Support@MOYAOAI.com ',
             privacyEmail: ' Privacy@MOYAOAI.com ',
         });
 
         expect(updated).toMatchObject({
-            legalEntityName: 'MOYAO AI Example Limited',
-            legalRegistrationCountry: 'Malaysia',
+            legalEntityName: null,
+            legalRegistrationCountry: null,
             supportEmail: 'support@moyaoai.com',
             privacyEmail: 'privacy@moyaoai.com',
         });

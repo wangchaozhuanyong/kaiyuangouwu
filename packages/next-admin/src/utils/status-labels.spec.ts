@@ -32,6 +32,9 @@ describe('status label helpers', () => {
         expect(getRoleLabel('__super_admin_role__')).toBe('超级管理员');
         expect(getRoleLabel('Customer')).toBe('普通客户');
         expect(getRoleLabel({ code: 'custom-role', description: '运营专员' })).toBe('运营专员');
+        expect(getRoleLabel({ code: 'store-admin', description: 'Administrator of 模铝科技' })).toBe(
+            '模铝科技管理员',
+        );
         expect(getRoleLabel(null)).toBe('未分配角色');
     });
 

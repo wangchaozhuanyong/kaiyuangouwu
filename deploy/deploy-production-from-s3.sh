@@ -594,7 +594,9 @@ pm2 save 9>&-
 node "${usdt_guard}" capture "${candidate}" "${usdt_snapshot}"
 printf 'DEPLOY_MIGRATION_BEGIN\n'
 # Install the snapshot proof helper together with its callers before the pre-migration backup.
-for backup_tool in vendure-mysql-backup vendure-mysql-backup-manifest.py vendure-mysql-backup-retention; do
+for backup_tool in \
+    vendure-mysql-backup vendure-mysql-backup-manifest.py vendure-mysql-backup-retention \
+    vendure-backup-s3-guard.py; do
     sudo -n install -o root -g root -m 0755 "${repository}/deploy/systemd/${backup_tool}" "/usr/local/sbin/${backup_tool}"
 done
 backup_file=""
@@ -610,10 +612,10 @@ load_verified_backup() {
     backup_evidence="$(
         sudo -n journalctl --quiet --no-pager --output=cat \
             "_SYSTEMD_INVOCATION_ID=${backup_invocation_id}" |
-            grep -E '^Created verified MySQL backup: /var/backups/vendure-mysql/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz offsite=yes$' |
+            grep -E '^Created verified MySQL backup: /var/backups/vendure-mysql/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz offsite=yes encrypted=yes$' |
             tail -n 1 || true
     )"
-    [[ "${backup_evidence}" =~ ^Created\ verified\ MySQL\ backup:\ (/var/backups/vendure-mysql/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz)\ offsite=yes$ ]] || return 1
+    [[ "${backup_evidence}" =~ ^Created\ verified\ MySQL\ backup:\ (/var/backups/vendure-mysql/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz)\ offsite=yes\ encrypted=yes$ ]] || return 1
     backup_file="${BASH_REMATCH[1]}"
     sudo -n test -s "${backup_file}" || return 1
     sudo -n test -s "${backup_file}.sha256" || return 1
@@ -641,7 +643,7 @@ else
     load_verified_backup || fail 'the fresh pre-migration database backup or offsite evidence failed'
 fi
 readonly backup_file backup_invocation_id backup_age_seconds backup_action
-printf 'DEPLOY_BACKUP_OK policy=%s action=%s data_risk=%s file=%s age_seconds=%s offsite=yes invocation_id=%s\n' \
+printf 'DEPLOY_BACKUP_OK policy=%s action=%s data_risk=%s file=%s age_seconds=%s offsite=yes encrypted=yes invocation_id=%s\n' \
     "${release_backup_policy}" "${backup_action}" "${release_data_risk}" "${backup_file}" \
     "${backup_age_seconds}" "${backup_invocation_id}"
 
@@ -862,6 +864,20 @@ sudo -n install -o root -g root -m 0644 \
 sudo -n install -o root -g root -m 0644 \
     "${repository}/deploy/systemd/vendure-production-healthcheck.timer" \
     /etc/systemd/system/vendure-production-healthcheck.timer
+for file_backup_tool in \
+    vendure-file-backup vendure-file-backup.py vendure-file-backup-retention \
+    vendure-file-restore-drill vendure-s3-prefix-snapshot.py; do
+    sudo -n install -o root -g root -m 0755 \
+        "${repository}/deploy/systemd/${file_backup_tool}" "/usr/local/sbin/${file_backup_tool}"
+done
+for file_backup_unit in \
+    vendure-file-backup.service vendure-file-backup.timer \
+    vendure-file-backup-retention.service vendure-file-backup-retention.timer \
+    vendure-file-restore-drill.service vendure-file-restore-drill.timer; do
+    sudo -n install -o root -g root -m 0644 \
+        "${repository}/deploy/systemd/${file_backup_unit}" "/etc/systemd/system/${file_backup_unit}"
+done
+sudo -n install -d -o root -g root -m 0700 /var/backups/vendure-files /var/lib/vendure-readiness
 sudo -n install -o root -g root -m 0755 \
     "${repository}/deploy/systemd/vendure-mysql-restore-drill" \
     /usr/local/sbin/vendure-mysql-restore-drill
@@ -887,11 +903,9 @@ printf 'PRODUCTION_BOOTSTRAP_VERIFIED sha=%s homepage_carousel_guard=enabled ref
 sudo -n systemctl daemon-reload
 sudo -n systemctl enable --now vendure-production-release-retention.path
 sudo -n systemctl enable --now vendure-mysql-restore-drill.timer
-sudo -n systemctl enable --now vendure-production-healthcheck.timer
-if ! sudo -n systemctl start vendure-production-healthcheck.service; then
-    sudo -n journalctl -u vendure-production-healthcheck.service -n 80 --no-pager >&2 || true
-    fail 'the production health check service failed'
-fi
+sudo -n systemctl enable --now vendure-file-backup.timer
+sudo -n systemctl enable --now vendure-file-backup-retention.timer
+sudo -n systemctl enable --now vendure-file-restore-drill.timer
 if [[ ! -s /var/lib/vendure-readiness/restore-drill.json || \
     "$(sudo -n systemctl show vendure-mysql-restore-drill.service -p Result --value)" != "success" ]]; then
     if ! sudo -n systemctl start vendure-mysql-restore-drill.service; then
@@ -899,9 +913,34 @@ if [[ ! -s /var/lib/vendure-readiness/restore-drill.json || \
         fail 'the MySQL restore drill failed'
     fi
 fi
+if ! sudo -n find /var/backups/vendure-files -maxdepth 1 -type f -name 'vendure-files-*.tar.gz.sha256' -print -quit | grep -q .; then
+    if ! sudo -n systemctl start vendure-file-backup.service; then
+        sudo -n journalctl -u vendure-file-backup.service -n 80 --no-pager >&2 || true
+        fail 'the persistent file backup failed'
+    fi
+fi
+if [[ ! -s /var/lib/vendure-readiness/file-restore-drill.json || \
+    "$(sudo -n systemctl show vendure-file-restore-drill.service -p Result --value)" != "success" ]]; then
+    if ! sudo -n systemctl start vendure-file-restore-drill.service; then
+        sudo -n journalctl -u vendure-file-restore-drill.service -n 80 --no-pager >&2 || true
+        fail 'the persistent file restore drill failed'
+    fi
+fi
+sudo -n systemctl enable --now vendure-production-healthcheck.timer
+if ! sudo -n systemctl start vendure-production-healthcheck.service; then
+    sudo -n journalctl -u vendure-production-healthcheck.service -n 80 --no-pager >&2 || true
+    fail 'the production health check service failed'
+fi
 [[ "$(sudo -n systemctl is-enabled vendure-mysql-restore-drill.timer)" == "enabled" ]]
 [[ "$(sudo -n systemctl is-active vendure-mysql-restore-drill.timer)" == "active" ]]
 [[ "$(sudo -n systemctl show vendure-mysql-restore-drill.service -p Result --value)" == "success" ]]
+[[ "$(sudo -n systemctl is-enabled vendure-file-backup.timer)" == "enabled" ]]
+[[ "$(sudo -n systemctl is-active vendure-file-backup.timer)" == "active" ]]
+[[ "$(sudo -n systemctl is-enabled vendure-file-backup-retention.timer)" == "enabled" ]]
+[[ "$(sudo -n systemctl is-active vendure-file-backup-retention.timer)" == "active" ]]
+[[ "$(sudo -n systemctl is-enabled vendure-file-restore-drill.timer)" == "enabled" ]]
+[[ "$(sudo -n systemctl is-active vendure-file-restore-drill.timer)" == "active" ]]
+[[ "$(sudo -n systemctl show vendure-file-restore-drill.service -p Result --value)" == "success" ]]
 [[ "$(sudo -n systemctl is-enabled vendure-production-healthcheck.timer)" == "enabled" ]]
 [[ "$(sudo -n systemctl is-active vendure-production-healthcheck.timer)" == "active" ]]
 [[ "$(sudo -n systemctl show vendure-production-healthcheck.service -p Result --value)" == "success" ]]

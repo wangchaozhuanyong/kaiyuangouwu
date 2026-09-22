@@ -3,6 +3,9 @@
     "include": [
         "./store-promotion-campaign-page.tsx",
         "./store-promotion-campaign-route.ts",
+        "./store-currency.graphql.ts",
+        "./usdt-payment-management-page.tsx",
+        "./usdt-payment-management.graphql.ts",
         "../../../dashboard/src/vite-env.d.ts"
     ]
 }

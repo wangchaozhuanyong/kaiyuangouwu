@@ -11,13 +11,11 @@ import { UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION } from '../../graphql/catalo
 import {
     ADD_OPTION_GROUP_TO_PRODUCT,
     APPLY_CATALOG_VARIANT_MATRIX,
-    ASSIGN_PRODUCTS_TO_CHANNEL,
     CREATE_PRODUCT,
     CREATE_PRODUCT_VARIANTS,
     GET_COLLECTION_ASSIGNMENT_DETAIL,
     GET_PRODUCTS,
     REMOVE_OPTION_GROUP_FROM_PRODUCT,
-    REMOVE_PRODUCTS_FROM_CHANNEL,
     UPDATE_COLLECTION_ASSIGNMENT,
     UPDATE_PRODUCT,
     UPDATE_PRODUCT_VARIANTS,
@@ -44,7 +42,6 @@ interface ProductEditorSaveInput {
     data: Pick<
         ReturnType<typeof useProductEditorData>,
         | 'productData'
-        | 'catalogChannelsData'
         | 'refetchCollections'
         | 'refetchProduct'
         | 'defaultStockLocationId'
@@ -109,7 +106,7 @@ export function productEditorChanges(
             assets: true,
             facets: true,
             collections: true,
-            channels: true,
+            channels: false,
             optionGroups: true,
             variants: true,
         };
@@ -142,7 +139,7 @@ export function productEditorChanges(
             sortedIds(draft.selectedCollectionIds),
             sortedIds(baseline.selectedCollectionIds),
         ),
-        channels: !sameValue(sortedIds(draft.selectedChannelIds), sortedIds(baseline.selectedChannelIds)),
+        channels: false,
         optionGroups: !sameValue(
             sortedIds(draft.selectedOptionGroupIds),
             sortedIds(baseline.selectedOptionGroupIds),
@@ -173,12 +170,11 @@ export function useProductEditorSave({
         selectedAssetIds,
         selectedFacetValueIds,
         selectedCollectionIds,
-        selectedChannelIds,
         selectedOptionGroupIds,
         variants,
         dynamicCustomFields: dynamicCustomFieldValues,
     } = draft;
-    const { productData, catalogChannelsData, refetchCollections, refetchProduct } = data;
+    const { productData, refetchCollections, refetchProduct } = data;
     const {
         requestConfirmation,
         navigate,
@@ -209,10 +205,6 @@ export function useProductEditorSave({
     }>(REMOVE_OPTION_GROUP_FROM_PRODUCT);
 
     const [updateCollectionAssignment] = useMutation(UPDATE_COLLECTION_ASSIGNMENT);
-
-    const [assignProductsToChannel] = useMutation(ASSIGN_PRODUCTS_TO_CHANNEL);
-
-    const [removeProductsFromChannel] = useMutation(REMOVE_PRODUCTS_FROM_CHANNEL);
 
     const syncProductOptionGroups = async (targetProductId: string, originalGroupIds: string[]) => {
         const isSingleProductWithoutOptions =
@@ -277,33 +269,6 @@ export function useProductEditorSave({
         );
 
         if (changes.length > 0) await refetchCollections();
-    };
-
-    const syncProductChannels = async (targetProductId: string, originalChannelIds: string[]) => {
-        const activeChannelId = catalogChannelsData?.activeChannel.id;
-        const nextChannelIds =
-            activeChannelId && !selectedChannelIds.includes(activeChannelId)
-                ? [...selectedChannelIds, activeChannelId]
-                : selectedChannelIds;
-        const originalIdSet = new Set(originalChannelIds);
-        const nextIdSet = new Set(nextChannelIds);
-        const addedChannelIds = nextChannelIds.filter(channelId => !originalIdSet.has(channelId));
-        const removedChannelIds = originalChannelIds.filter(
-            channelId => channelId !== activeChannelId && !nextIdSet.has(channelId),
-        );
-
-        await Promise.all([
-            ...addedChannelIds.map(channelId =>
-                assignProductsToChannel({
-                    variables: { input: { productIds: [targetProductId], channelId, priceFactor: 1 } },
-                }),
-            ),
-            ...removedChannelIds.map(channelId =>
-                removeProductsFromChannel({
-                    variables: { input: { productIds: [targetProductId], channelId } },
-                }),
-            ),
-        ]);
     };
 
     const changes = productEditorChanges(draft, baselineDraft);
@@ -656,15 +621,13 @@ export function useProductEditorSave({
                     }
                 }
 
-                // 阶段 4: 保存销售店铺范围与人工商品分类
+                // 阶段 4: 保存当前店铺的人工商品分类
                 try {
-                    const activeChannelId = catalogChannelsData?.activeChannel.id;
-                    await syncProductChannels(newProductId, activeChannelId ? [activeChannelId] : []);
                     await syncProductCollections(newProductId);
                 } catch (err: unknown) {
                     navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
                     showError(
-                        `[阶段 4：商品与 SKU 已保存，但销售店铺或分类归属保存失败] ${toUserFacingError(err, '请稍后重试')}`,
+                        `[阶段 4：商品与 SKU 已保存，但分类归属保存失败] ${toUserFacingError(err, '请稍后重试')}`,
                     );
                     setSaving(false);
                     return;
@@ -894,24 +857,12 @@ export function useProductEditorSave({
                     });
                 }
 
-                if (changes.channels || changes.collections) {
+                if (changes.collections) {
                     try {
-                        if (changes.channels) {
-                            await syncProductChannels(
-                                productId,
-                                productData?.product?.channels.map(channel => channel.id) ?? [],
-                            );
-                        }
-                        if (changes.collections) await syncProductCollections(productId);
-                        completedStages.push(
-                            [changes.channels ? '销售店铺' : '', changes.collections ? '商品分类' : '']
-                                .filter(Boolean)
-                                .join('、'),
-                        );
+                        await syncProductCollections(productId);
+                        completedStages.push('商品分类');
                     } catch (err: unknown) {
-                        throw new Error(
-                            `[销售店铺或商品分类更新失败] ${toUserFacingError(err, '请稍后重试')}`,
-                        );
+                        throw new Error(`[商品分类更新失败] ${toUserFacingError(err, '请稍后重试')}`);
                     }
                 }
 

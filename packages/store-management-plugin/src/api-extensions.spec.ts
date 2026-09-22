@@ -27,9 +27,9 @@ describe('store management API extensions', () => {
         }
     });
 
-    it('exposes managed legal identity fields to admins and the storefront', () => {
+    it('keeps legal identity writable only by the platform while exposing approved values', () => {
         const legalFields = ['legalEntityName', 'legalRegistrationCountry', 'supportEmail', 'privacyEmail'];
-        const adminTypeNames = ['StoreProfile', 'UpdateStoreProfileInput', 'UpdateMyStoreProfileInput'];
+        const adminTypeNames = ['StoreProfile', 'UpdateStoreProfileInput'];
 
         for (const name of adminTypeNames) {
             const definition = adminApiExtensions.definitions.find(
@@ -49,6 +49,21 @@ describe('store management API extensions', () => {
             );
         }
 
+        const merchantInput = adminApiExtensions.definitions.find(
+            candidate =>
+                candidate.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION &&
+                candidate.name.value === 'UpdateMyStoreProfileInput',
+        );
+        if (merchantInput?.kind !== Kind.INPUT_OBJECT_TYPE_DEFINITION) {
+            throw new Error('UpdateMyStoreProfileInput is missing');
+        }
+        expect(merchantInput.fields?.map(field => field.name.value)).toEqual(
+            expect.arrayContaining(['supportEmail', 'privacyEmail']),
+        );
+        expect(merchantInput.fields?.map(field => field.name.value)).not.toEqual(
+            expect.arrayContaining(['legalEntityName', 'legalRegistrationCountry']),
+        );
+
         const branding = shopApiExtensions.definitions.find(
             definition =>
                 definition.kind === Kind.OBJECT_TYPE_DEFINITION &&
@@ -58,6 +73,32 @@ describe('store management API extensions', () => {
             throw new Error('StorefrontBranding is missing');
         }
         expect(branding.fields?.map(field => field.name.value)).toEqual(expect.arrayContaining(legalFields));
+    });
+
+    it('exposes the scoped administrator, policy and governance workflow', () => {
+        const query = queryExtension(adminApiExtensions);
+        const mutation = mutationExtension(adminApiExtensions);
+        expect(query.fields?.map(field => field.name.value)).toEqual(
+            expect.arrayContaining([
+                'myAdministratorAccess',
+                'manageableAdministrators',
+                'manageableRoles',
+                'permissionPolicyCatalog',
+                'myStoreGovernanceChanges',
+            ]),
+        );
+        if (mutation?.kind !== Kind.OBJECT_TYPE_EXTENSION) throw new Error('Mutation extension is missing');
+        expect(mutation.fields?.map(field => field.name.value)).toEqual(
+            expect.arrayContaining([
+                'createManagedAdministrator',
+                'updateManagedAdministrator',
+                'suspendManagedAdministrator',
+                'transferPlatformOwnership',
+                'transferStoreAdministration',
+                'submitStoreGovernanceChange',
+                'reviewStoreGovernanceChange',
+            ]),
+        );
     });
 
     it('uses Node items for every PaginatedList implementation', () => {
@@ -125,10 +166,7 @@ describe('store management API extensions', () => {
                 definition.kind === Kind.OBJECT_TYPE_DEFINITION &&
                 definition.name.value === 'StoreCouponCampaign',
         );
-        const mutation = adminApiExtensions.definitions.find(
-            definition =>
-                definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Mutation',
-        );
+        const mutation = mutationExtension(adminApiExtensions);
 
         expect(couponCampaign?.kind).toBe(Kind.OBJECT_TYPE_DEFINITION);
         expect(mutation?.kind).toBe(Kind.OBJECT_TYPE_EXTENSION);
@@ -196,10 +234,7 @@ describe('store management API extensions', () => {
                 definition.kind === Kind.OBJECT_TYPE_DEFINITION &&
                 definition.name.value === 'ReferralProgram',
         );
-        const mutation = adminApiExtensions.definitions.find(
-            definition =>
-                definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Mutation',
-        );
+        const mutation = mutationExtension(adminApiExtensions);
 
         expect(referralProgram?.kind).toBe(Kind.OBJECT_TYPE_DEFINITION);
         if (referralProgram?.kind === Kind.OBJECT_TYPE_DEFINITION) {
@@ -221,10 +256,7 @@ describe('store management API extensions', () => {
         const query = shopApiExtensions.definitions.find(
             definition => definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Query',
         );
-        const mutation = shopApiExtensions.definitions.find(
-            definition =>
-                definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Mutation',
-        );
+        const mutation = mutationExtension(shopApiExtensions);
 
         expect(query?.kind).toBe(Kind.OBJECT_TYPE_EXTENSION);
         expect(mutation?.kind).toBe(Kind.OBJECT_TYPE_EXTENSION);
@@ -237,10 +269,7 @@ describe('store management API extensions', () => {
 
     it('exposes scoped announcements and Channel USDT administration only through the Admin API', () => {
         const adminQuery = queryExtension(adminApiExtensions);
-        const adminMutation = adminApiExtensions.definitions.find(
-            definition =>
-                definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Mutation',
-        );
+        const adminMutation = mutationExtension(adminApiExtensions);
         const announcement = adminApiExtensions.definitions.find(
             definition =>
                 definition.kind === Kind.OBJECT_TYPE_DEFINITION &&
@@ -280,6 +309,7 @@ describe('store management API extensions', () => {
                 'storePaymentStats',
                 'storePaymentDetails',
                 'storeUsdtManualRefunds',
+                'storeUsdtReconciliationActions',
             ]),
         );
         expect(adminMutation.fields?.map(field => field.name.value)).toEqual(
@@ -287,6 +317,7 @@ describe('store management API extensions', () => {
                 'submitMyStoreUsdtWallet',
                 'reviewStoreUsdtWallet',
                 'recordStoreUsdtManualRefund',
+                'resolveStoreUsdtPaymentIntent',
             ]),
         );
         expect(announcement.fields?.map(field => field.name.value)).toEqual(
@@ -300,6 +331,64 @@ describe('store management API extensions', () => {
             expect.arrayContaining(['targetMode', 'channelIds', 'titleEnLocked', 'contentEnLocked']),
         );
         expect(shopQuery.fields?.map(field => field.name.value)).not.toContain('storeUsdtWallets');
+    });
+
+    it('keeps extracted privacy, payment, customer, and governance schema definitions available', () => {
+        const definitions = (document: DocumentNode) =>
+            document.definitions.flatMap(definition =>
+                'name' in definition && definition.name && definition.kind !== Kind.OBJECT_TYPE_EXTENSION
+                    ? [definition.name.value]
+                    : [],
+            );
+        const adminNames = definitions(adminApiExtensions);
+        const shopNames = definitions(shopApiExtensions);
+
+        for (const names of [adminNames, shopNames]) {
+            expect(names).toEqual(
+                expect.arrayContaining([
+                    'DataSubjectRequest',
+                    'DataRetentionRecord',
+                    'StoreUsdtPaymentIntent',
+                    'StoreUsdtReconciliationAction',
+                ]),
+            );
+            expect(new Set(names).size).toBe(names.length);
+        }
+        expect(adminNames).toEqual(
+            expect.arrayContaining([
+                'CustomerOperationsProfile',
+                'CustomerFollowUp',
+                'GovernanceApprovalRequest',
+                'FraudRiskCase',
+            ]),
+        );
+        expect(shopNames).not.toContain('GovernanceApprovalRequest');
+        expect(shopNames).not.toContain('FraudRiskCase');
+        expect(shopNames).toEqual(
+            expect.arrayContaining(['CustomerFraudRiskCase', 'CustomerFraudRiskAppeal']),
+        );
+        const customerCase = shopApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.OBJECT_TYPE_DEFINITION &&
+                definition.name.value === 'CustomerFraudRiskCase',
+        );
+        if (customerCase?.kind !== Kind.OBJECT_TYPE_DEFINITION)
+            throw new Error('Customer risk case is missing');
+        const customerFields = customerCase.fields?.map(field => field.name.value) ?? [];
+        for (const sensitiveField of ['riskScore', 'signalsJson', 'decisionReason', 'ownerUserId']) {
+            expect(customerFields).not.toContain(sensitiveField);
+        }
+        const customerQuery = queryExtension(shopApiExtensions).fields?.find(
+            field => field.name.value === 'myFraudRiskCases',
+        );
+        expect(customerQuery && namedType(customerQuery.type)).toBe('CustomerFraudRiskCase');
+        expect(queryExtension(adminApiExtensions).fields?.map(field => field.name.value)).toEqual(
+            expect.arrayContaining([
+                'customerOperationsProfile',
+                'governanceAuditIntegrity',
+                'fraudRiskCases',
+            ]),
+        );
     });
 });
 
@@ -315,5 +404,14 @@ function queryExtension(document: DocumentNode): ObjectTypeExtensionNode {
             definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Query',
     );
     if (!extensions.length) throw new Error('Query extension is missing');
+    return { ...extensions[0], fields: extensions.flatMap(extension => extension.fields ?? []) };
+}
+
+function mutationExtension(document: DocumentNode): ObjectTypeExtensionNode {
+    const extensions = document.definitions.filter(
+        (definition): definition is ObjectTypeExtensionNode =>
+            definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Mutation',
+    );
+    if (!extensions.length) throw new Error('Mutation extension is missing');
     return { ...extensions[0], fields: extensions.flatMap(extension => extension.fields ?? []) };
 }

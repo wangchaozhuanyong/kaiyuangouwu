@@ -1,0 +1,27 @@
+[Unit]
+Description=Verify a Vendure persistent file backup through an isolated restore
+After=vendure-file-backup.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+StateDirectory=vendure-readiness
+StateDirectoryMode=0700
+ExecStart=/usr/local/sbin/vendure-file-restore-drill
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadOnlyPaths=/var/www/kaiyuangouwu/packages/dev-server/.env
+ReadOnlyPaths=/var/backups/vendure-files
+ReadWritePaths=/var/lib/vendure-readiness

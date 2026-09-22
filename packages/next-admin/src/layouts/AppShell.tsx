@@ -88,6 +88,8 @@ import {
     filterAccessibleAdminChannels,
     hasAppShellPermissionSnapshot,
     isAppShellPermissionLoading,
+    isPlatformBusinessPath,
+    isPlatformManagementChannel,
     resolveAppShellOpenMenu,
 } from './app-shell-navigation';
 
@@ -257,10 +259,15 @@ export function AppShell() {
         : '管';
     const isSuperAdmin =
         activeAdministrator?.user.roles.some(role => role.code === '__super_admin_role__') ?? false;
+    const isPlatformContext = isPlatformManagementChannel(channelData?.activeChannel.code);
     const accessibleChannels = useMemo(
         () =>
-            filterAccessibleAdminChannels(channelData?.channels.items ?? [], channelData?.me?.channels ?? []),
-        [channelData?.channels.items, channelData?.me?.channels],
+            filterAccessibleAdminChannels(
+                channelData?.channels.items ?? [],
+                channelData?.me?.channels ?? [],
+                isSuperAdmin,
+            ),
+        [channelData?.channels.items, channelData?.me?.channels, isSuperAdmin],
     );
     const activePermissions = useMemo(() => {
         const permissions =
@@ -272,12 +279,13 @@ export function AppShell() {
     }, [channelData, isSuperAdmin]);
     const canAccessPath = useCallback(
         (path: string) => {
+            if (isPlatformContext && isPlatformBusinessPath(path)) return false;
             const extensionRoute = getNextAdminExtensionRoute(path);
             return extensionRoute
                 ? hasAnyAdminPermission(activePermissions, extensionRoute.permissions ?? [])
                 : canAccessAdminPath(path, activePermissions);
         },
-        [activePermissions],
+        [activePermissions, isPlatformContext],
     );
     const currentRoutePermissions =
         getNextAdminExtensionRoute(location.pathname)?.permissions ??
@@ -298,6 +306,11 @@ export function AppShell() {
         const timer = window.setTimeout(preloadCommonRoutes, 1200);
         return () => window.clearTimeout(timer);
     }, []);
+
+    useEffect(() => {
+        if (!isPlatformContext || !isPlatformBusinessPath(location.pathname)) return;
+        void routerNavigate('/dashboard', { replace: true });
+    }, [isPlatformContext, location.pathname, routerNavigate]);
 
     useEffect(() => {
         if (

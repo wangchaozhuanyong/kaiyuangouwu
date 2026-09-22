@@ -87,6 +87,8 @@ export interface UpdateCatalogVariantOperationsInput {
     purchaseCostMicrounits?: number | null;
     currencyCode: CurrencyCode;
     stockOnHand?: number | null;
+    stockAdjustmentIdempotencyKey?: string | null;
+    stockAdjustmentReason?: string | null;
     minimumStock?: number | null;
     maximumStock?: number | null;
     supplierId?: ID | null;
@@ -127,6 +129,76 @@ export interface UpdateCatalogSupplierInput {
     email?: string | null;
     address?: string | null;
     notes?: string | null;
+}
+
+export interface PurchaseOrderListOptions {
+    skip?: number | null;
+    take?: number | null;
+    text?: string | null;
+    status?: string | null;
+    supplierId?: ID | null;
+    exceptionsOnly?: boolean | null;
+}
+
+export interface CreatePurchaseOrderLineInput {
+    productVariantId: ID;
+    orderedQuantity: number;
+    unitCostMicrounits: number;
+    notes?: string | null;
+}
+
+export interface CreatePurchaseOrderInput {
+    supplierId: ID;
+    stockLocationId: ID;
+    currencyCode: CurrencyCode;
+    code?: string | null;
+    expectedAt?: Date | string | null;
+    notes?: string | null;
+    lines: CreatePurchaseOrderLineInput[];
+}
+
+export interface ReceivePurchaseOrderLineInput {
+    purchaseOrderLineId: ID;
+    receivedQuantity: number;
+    acceptedQuantity: number;
+    rejectedQuantity: number;
+    lotCode?: string | null;
+    manufacturedAt?: Date | string | null;
+    expiresAt?: Date | string | null;
+    unitCostMicrounits?: number | null;
+    rejectionReason?: string | null;
+}
+
+export interface ReceivePurchaseOrderInput {
+    purchaseOrderId: ID;
+    idempotencyKey: string;
+    supplierDeliveryReference?: string | null;
+    receivedAt?: Date | string | null;
+    notes?: string | null;
+    lines: ReceivePurchaseOrderLineInput[];
+}
+
+export interface RecordPurchasePaymentInput {
+    purchaseOrderId: ID;
+    amountMicrounits: number;
+    reference: string;
+    note?: string | null;
+}
+
+export interface ReturnPurchaseOrderLineInput {
+    purchaseOrderLineId: ID;
+    inventoryLotId: ID;
+    quantity: number;
+    reason: string;
+}
+
+export interface ReturnPurchaseOrderInput {
+    purchaseOrderId: ID;
+    idempotencyKey: string;
+    supplierAcknowledgementReference: string;
+    returnedAt?: Date | string | null;
+    notes?: string | null;
+    lines: ReturnPurchaseOrderLineInput[];
 }
 
 export interface SaveCatalogProductInput {
@@ -207,6 +279,52 @@ export interface SaveInventoryLotInput {
     quantityOnHand: number;
     purchaseCostMicrounits?: number | null;
     currencyCode: CurrencyCode;
+}
+
+export interface SaveManualInventoryLotInput extends SaveInventoryLotInput {
+    idempotencyKey: string;
+    reason: string;
+}
+
+export interface TransferInventoryLotInput {
+    inventoryLotId: ID;
+    targetStockLocationId: ID;
+    quantity: number;
+    idempotencyKey: string;
+    reason: string;
+    reference?: string | null;
+}
+
+export interface AdjustLegacyInventoryInput {
+    productVariantId: ID;
+    stockLocationId: ID;
+    stockOnHand: number;
+    idempotencyKey: string;
+    reason: string;
+    reference?: string | null;
+}
+
+export interface ResolveInventoryReconciliationInput {
+    productVariantId: ID;
+    stockLocationId: ID;
+    expectedDifference: number;
+    mode: 'ALIGN_STOCK_TO_LOTS' | 'CREATE_BASELINE_LOT';
+    idempotencyKey: string;
+    reason: string;
+}
+
+export interface ReceiveCustomerReturnInput {
+    idempotencyKey: string;
+    reason: string;
+    reference: string;
+    lines: Array<{
+        productVariantId: ID;
+        stockLocationId: ID;
+        lotCode: string;
+        quantity: number;
+        currencyCode: CurrencyCode;
+        purchaseCostMicrounits?: number | null;
+    }>;
 }
 
 export interface NormalizedCatalogRow {

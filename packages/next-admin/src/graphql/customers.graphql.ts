@@ -294,6 +294,135 @@ export const DELETE_CUSTOMER_GROUP_MUTATION = gql`
     }
 `;
 
+export const CUSTOMER_OPERATIONS_QUERY = gql`
+    query AdminCustomerOperations($customerId: ID!) {
+        customerOperationsProfile(customerId: $customerId) {
+            id
+            segment
+            churnRisk
+            recencyScore
+            frequencyScore
+            monetaryScore
+            recencyDays
+            orderCount
+            currencyCode
+            grossRevenue
+            refundTotal
+            netLifetimeValue
+            averageOrderValue
+            currencyMetrics {
+                currencyCode
+                orderCount
+                grossRevenue
+                refundTotal
+                netLifetimeValue
+                averageOrderValue
+            }
+            serviceInteractionCount
+            afterSalesCount
+            openAfterSalesCount
+            lastOrderAt
+            lastServiceAt
+            nextFollowUpAt
+            doNotContact
+            reasons
+            evaluationVersion
+            lastEvaluatedAt
+        }
+        openFollowUps: customerFollowUps(options: { customerId: $customerId, status: OPEN, take: 50 }) {
+            totalItems
+            items {
+                id
+                createdAt
+                status
+                source
+                priority
+                reasonCode
+                title
+                note
+                dueAt
+                overdue
+                outcomeCode
+                outcomeNote
+                completedAt
+                events {
+                    id
+                    createdAt
+                    eventType
+                    actorLabel
+                    note
+                }
+            }
+        }
+        closedFollowUps: customerFollowUps(
+            options: { customerId: $customerId, status: COMPLETED, take: 10 }
+        ) {
+            totalItems
+            items {
+                id
+                createdAt
+                status
+                source
+                priority
+                reasonCode
+                title
+                note
+                dueAt
+                overdue
+                outcomeCode
+                outcomeNote
+                completedAt
+                events {
+                    id
+                    createdAt
+                    eventType
+                    actorLabel
+                    note
+                }
+            }
+        }
+    }
+`;
+
+export const REFRESH_CUSTOMER_OPERATIONS_MUTATION = gql`
+    mutation AdminRefreshCustomerOperations($customerId: ID!) {
+        refreshCustomerOperationsProfile(customerId: $customerId) {
+            id
+            lastEvaluatedAt
+        }
+    }
+`;
+
+export const CREATE_CUSTOMER_FOLLOW_UP_MUTATION = gql`
+    mutation AdminCreateCustomerFollowUp($input: CreateCustomerFollowUpInput!) {
+        createCustomerFollowUp(input: $input) {
+            id
+            status
+        }
+    }
+`;
+
+export const UPDATE_CUSTOMER_FOLLOW_UP_MUTATION = gql`
+    mutation AdminUpdateCustomerFollowUp($input: UpdateCustomerFollowUpInput!) {
+        updateCustomerFollowUp(input: $input) {
+            id
+            status
+            outcomeCode
+        }
+    }
+`;
+
+export const CUSTOMER_FOLLOW_UP_COUNTS_QUERY = gql`
+    query AdminCustomerFollowUpCounts {
+        open: customerFollowUps(options: { status: OPEN, take: 1 }) {
+            totalItems
+        }
+        overdue: customerFollowUps(options: { status: OPEN, overdue: true, take: 1 }) {
+            totalItems
+        }
+    }
+`;
+
 export interface CustomerGroupRecord {
     id: string;
     name: string;
@@ -378,4 +507,72 @@ export interface CustomerDetailRecord extends Omit<CustomerListRecord, 'orders'>
 
 export interface CustomerDetailResult {
     customer: CustomerDetailRecord | null;
+}
+
+export interface CustomerOperationsProfileRecord {
+    id: string;
+    segment: string;
+    churnRisk: string;
+    recencyScore: number;
+    frequencyScore: number;
+    monetaryScore: number;
+    recencyDays: number | null;
+    orderCount: number;
+    currencyCode: string;
+    grossRevenue: number;
+    refundTotal: number;
+    netLifetimeValue: number;
+    averageOrderValue: number;
+    currencyMetrics: Array<{
+        currencyCode: string;
+        orderCount: number;
+        grossRevenue: number;
+        refundTotal: number;
+        netLifetimeValue: number;
+        averageOrderValue: number;
+    }>;
+    serviceInteractionCount: number;
+    afterSalesCount: number;
+    openAfterSalesCount: number;
+    lastOrderAt: string | null;
+    lastServiceAt: string | null;
+    nextFollowUpAt: string | null;
+    doNotContact: boolean;
+    reasons: string[];
+    evaluationVersion: string;
+    lastEvaluatedAt: string;
+}
+
+export interface CustomerFollowUpRecord {
+    id: string;
+    createdAt: string;
+    status: string;
+    source: string;
+    priority: string;
+    reasonCode: string;
+    title: string;
+    note: string;
+    dueAt: string;
+    overdue: boolean;
+    outcomeCode: string | null;
+    outcomeNote: string | null;
+    completedAt: string | null;
+    events: Array<{
+        id: string;
+        createdAt: string;
+        eventType: string;
+        actorLabel: string;
+        note: string;
+    }>;
+}
+
+export interface CustomerOperationsResult {
+    customerOperationsProfile: CustomerOperationsProfileRecord;
+    openFollowUps: { totalItems: number; items: CustomerFollowUpRecord[] };
+    closedFollowUps: { totalItems: number; items: CustomerFollowUpRecord[] };
+}
+
+export interface CustomerFollowUpCountsResult {
+    open: { totalItems: number };
+    overdue: { totalItems: number };
 }

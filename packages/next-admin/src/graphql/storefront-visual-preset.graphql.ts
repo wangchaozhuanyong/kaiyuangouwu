@@ -7,6 +7,10 @@ export const STOREFRONT_VISUAL_PRESET_QUERY = gql`
             id
             code
             token
+            customFields {
+                storefrontNameZh
+                storefrontNameEn
+            }
         }
         storefrontVisualPreset {
             channelId
@@ -37,7 +41,15 @@ export const UPDATE_STOREFRONT_VISUAL_PRESET_MUTATION = gql`
 export type StorefrontSkinConfig = Pick<StorefrontVisualPresetConfig, 'channelId' | 'presetId' | 'revision'>;
 
 export interface StorefrontVisualPresetResult {
-    activeChannel: { id: string; code: string; token: string };
+    activeChannel: {
+        id: string;
+        code: string;
+        token: string;
+        customFields?: {
+            storefrontNameZh?: string | null;
+            storefrontNameEn?: string | null;
+        } | null;
+    };
     storefrontVisualPreset: StorefrontSkinConfig;
     storefrontPreviewBranding: {
         channelId: string;

@@ -4,10 +4,17 @@ import type {
     CustomerAddress,
     CustomerAddressInput,
     CustomerAddressUpdateInput,
+    CustomerAvatarHistoryEntry,
     CustomerOrderCounts,
+    DataSubjectExportPayload,
+    DataSubjectRequest,
+    FraudRiskAppeal,
+    FraudRiskCase,
+    FulfillmentDeliveryEvidence,
     Order,
     OrderConfirmationToken,
     OrderPage,
+    StorefrontRegistrationConsentInput,
 } from '../types';
 
 import { BaseDomainApi } from './base-domain-api';
@@ -103,6 +110,151 @@ export class AccountApi extends BaseDomainApi {
             throw new Error(body.errors?.[0]?.message ?? `Avatar upload failed (${response.status})`);
         }
         return body.data.setCustomerAvatar;
+    }
+
+    async customerAvatarHistory(signal?: AbortSignal): Promise<CustomerAvatarHistoryEntry[]> {
+        const result = await this.request<{ myCustomerAvatarHistory: CustomerAvatarHistoryEntry[] }>(
+            `
+                query CustomerAvatarHistory {
+                    myCustomerAvatarHistory {
+                        id
+                        status
+                        quarantinedAt
+                        purgeAfter
+                        legalHold
+                        asset { id preview }
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.myCustomerAvatarHistory;
+    }
+
+    async restoreCustomerAvatar(retentionId: string): Promise<Asset> {
+        const result = await this.request<{ restoreCustomerAvatar: Asset }>(
+            `
+                mutation RestoreCustomerAvatar($retentionId: ID!) {
+                    restoreCustomerAvatar(retentionId: $retentionId) { id preview }
+                }
+            `,
+            { retentionId },
+        );
+        return result.restoreCustomerAvatar;
+    }
+
+    async removeCustomerAvatar(): Promise<boolean> {
+        const result = await this.request<{ removeCustomerAvatar: boolean }>(`
+            mutation RemoveCustomerAvatar {
+                removeCustomerAvatar
+            }
+        `);
+        return result.removeCustomerAvatar;
+    }
+
+    async dataSubjectRequests(signal?: AbortSignal): Promise<DataSubjectRequest[]> {
+        const result = await this.request<{ myDataSubjectRequests: DataSubjectRequest[] }>(
+            `
+                query MyDataSubjectRequests {
+                    myDataSubjectRequests {
+                        id
+                        requestType
+                        status
+                        requestedAt
+                        dueAt
+                        nextAttemptAt
+                        attemptCount
+                        blockersJson
+                        lastError
+                        resultDigest
+                        completedAt
+                        cancelledAt
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.myDataSubjectRequests;
+    }
+
+    async exportPersonalData(password: string): Promise<DataSubjectExportPayload> {
+        const result = await this.request<{ exportMyPersonalData: DataSubjectExportPayload }>(
+            `
+                mutation ExportMyPersonalData($password: String!) {
+                    exportMyPersonalData(password: $password) {
+                        fileName
+                        mimeType
+                        content
+                        sha256
+                        request {
+                            id requestType status requestedAt dueAt nextAttemptAt attemptCount
+                            blockersJson lastError resultDigest completedAt cancelledAt
+                        }
+                    }
+                }
+            `,
+            { password },
+        );
+        return result.exportMyPersonalData;
+    }
+
+    async requestAccountClosure(password: string): Promise<DataSubjectRequest> {
+        const result = await this.request<{ requestMyAccountClosure: DataSubjectRequest }>(
+            `
+                mutation RequestMyAccountClosure($password: String!) {
+                    requestMyAccountClosure(password: $password) {
+                        id requestType status requestedAt dueAt nextAttemptAt attemptCount
+                        blockersJson lastError resultDigest completedAt cancelledAt
+                    }
+                }
+            `,
+            { password },
+        );
+        return result.requestMyAccountClosure;
+    }
+
+    async cancelAccountClosure(): Promise<DataSubjectRequest> {
+        const result = await this.request<{ cancelMyAccountClosure: DataSubjectRequest }>(`
+            mutation CancelMyAccountClosure {
+                cancelMyAccountClosure {
+                    id requestType status requestedAt dueAt nextAttemptAt attemptCount
+                    blockersJson lastError resultDigest completedAt cancelledAt
+                }
+            }
+        `);
+        return result.cancelMyAccountClosure;
+    }
+
+    async fraudRiskCases(signal?: AbortSignal): Promise<FraudRiskCase[]> {
+        const result = await this.request<{ myFraudRiskCases: FraudRiskCase[] }>(
+            `
+                query MyFraudRiskCases {
+                    myFraudRiskCases {
+                        id createdAt caseCode orderId status severity dueAt decidedAt
+                        appeals { id createdAt status reason reviewedAt }
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.myFraudRiskCases;
+    }
+
+    async appealFraudRiskCase(id: string, reason: string): Promise<FraudRiskAppeal> {
+        const result = await this.request<{ appealMyFraudRiskCase: FraudRiskAppeal }>(
+            `
+                mutation AppealMyFraudRiskCase($input: AppealFraudRiskCaseInput!) {
+                    appealMyFraudRiskCase(input: $input) {
+                        id createdAt status reason reviewedAt
+                    }
+                }
+            `,
+            { input: { id, reason, idempotencyKey: crypto.randomUUID() } },
+        );
+        return result.appealMyFraudRiskCase;
     }
 
     async customerOrders(
@@ -234,6 +386,24 @@ export class AccountApi extends BaseDomainApi {
         return result.cancelMyAuthorizedOrder;
     }
 
+    async confirmFulfillmentDelivery(fulfillmentId: string): Promise<FulfillmentDeliveryEvidence> {
+        const result = await this.request<{
+            confirmMyFulfillmentDelivery: FulfillmentDeliveryEvidence;
+        }>(
+            `
+                mutation ConfirmMyFulfillmentDelivery($input: ConfirmFulfillmentDeliveryInput!) {
+                    confirmMyFulfillmentDelivery(input: $input) {
+                        id status carrier trackingCode exceptionReason proofReference
+                        shippedAt deliveredAt nextActionDueAt overdue
+                        events { id createdAt status actorType actorLabel note }
+                    }
+                }
+            `,
+            { input: { fulfillmentId, idempotencyKey: `customer-delivered-${fulfillmentId}` } },
+        );
+        return result.confirmMyFulfillmentDelivery;
+    }
+
     async login(emailAddress: string, password: string): Promise<void> {
         const result = await this.authenticationRequest<{ login: ErrorResult }>(
             `
@@ -251,11 +421,29 @@ export class AccountApi extends BaseDomainApi {
         this.assertNoError(result.login);
     }
 
-    async authenticateWithGoogle(credential: string): Promise<void> {
+    async authenticateWithGoogle(
+        credential: string,
+        consent: StorefrontRegistrationConsentInput,
+    ): Promise<void> {
         const result = await this.request<{ authenticate: ErrorResult }>(
             `
-                mutation StorefrontGoogleAuthenticate($credential: String!) {
-                    authenticate(input: { google: { credential: $credential } }, rememberMe: true) {
+                mutation StorefrontGoogleAuthenticate(
+                    $credential: String!
+                    $termsAccepted: Boolean!
+                    $privacyAcknowledged: Boolean!
+                    $locale: String!
+                ) {
+                    authenticate(
+                        input: {
+                            google: {
+                                credential: $credential
+                                termsAccepted: $termsAccepted
+                                privacyAcknowledged: $privacyAcknowledged
+                                locale: $locale
+                            }
+                        }
+                        rememberMe: true
+                    ) {
                         __typename
                         ... on CurrentUser { id identifier }
                         ... on ErrorResult { errorCode message }
@@ -263,7 +451,7 @@ export class AccountApi extends BaseDomainApi {
                     }
                 }
             `,
-            { credential },
+            { credential, ...consent },
         );
         this.assertNoError(result.authenticate);
     }

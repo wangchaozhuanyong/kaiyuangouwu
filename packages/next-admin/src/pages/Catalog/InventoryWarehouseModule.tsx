@@ -36,12 +36,13 @@ import {
     GET_INVENTORY_OVERVIEW,
     GET_STOCK_LOCATIONS,
     UPDATE_STOCK_LOCATION,
-    UPDATE_VARIANT_STOCK,
 } from '../../graphql/catalog-admin.graphql';
 import {
+    ADJUST_CATALOG_LEGACY_INVENTORY_MUTATION,
     CATALOG_EXPORT_ROWS_QUERY,
     CATALOG_INVENTORY_ALERT_OVERVIEW_QUERY,
     SAVE_CATALOG_INVENTORY_LOT_MUTATION,
+    TRANSFER_CATALOG_INVENTORY_LOT_MUTATION,
     UPDATE_CATALOG_INVENTORY_THRESHOLD_MUTATION,
 } from '../../graphql/catalog-operations.graphql';
 import { UPDATE_PRODUCT_VARIANTS } from '../../graphql/catalog.graphql';
@@ -205,6 +206,18 @@ interface InventoryLotDraft {
     expiresAt: string;
     quantityOnHand: string;
     purchaseCost: string;
+    reason: string;
+}
+
+interface InventoryLotTransferDraft {
+    inventoryLotId: string;
+    sku: string;
+    lotCode: string;
+    sourceLocationId: string;
+    targetStockLocationId: string;
+    quantity: string;
+    maximumQuantity: number;
+    reason: string;
 }
 
 const EMPTY_VARIANTS: ProductVariantItem[] = [];
@@ -253,6 +266,7 @@ export function InventoryWarehouseModule() {
     const [actionError, setActionError] = useState('');
     const [selectedStock, setSelectedStock] = useState<StockRow | null>(null);
     const [adjustAmount, setAdjustAmount] = useState('');
+    const [adjustReason, setAdjustReason] = useState('');
     const [adjusting, setAdjusting] = useState(false);
     const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
     const [editingLocation, setEditingLocation] = useState<StockLocationItem | null>(null);
@@ -266,6 +280,7 @@ export function InventoryWarehouseModule() {
     const [bulkPrice, setBulkPrice] = useState('');
     const [bulkUpdating, setBulkUpdating] = useState(false);
     const [lotDraft, setLotDraft] = useState<InventoryLotDraft | null>(null);
+    const [lotTransferDraft, setLotTransferDraft] = useState<InventoryLotTransferDraft | null>(null);
     const [expandedAlertSkuIds, setExpandedAlertSkuIds] = useState<Set<string>>(() => new Set());
     const [thresholdDrafts, setThresholdDrafts] = useState<Record<string, string>>({});
     const [savingThresholdKey, setSavingThresholdKey] = useState<string | null>(null);
@@ -341,7 +356,7 @@ export function InventoryWarehouseModule() {
                 loadingAllLocationsRef.current = false;
             });
     }, [fetchMoreLocations, locationData, locationError, locationsLoading]);
-    const [updateVariantStock] = useMutation(UPDATE_VARIANT_STOCK);
+    const [adjustLegacyInventory] = useMutation(ADJUST_CATALOG_LEGACY_INVENTORY_MUTATION);
     const [createLocation] = useMutation(CREATE_STOCK_LOCATION);
     const [updateLocation] = useMutation(UPDATE_STOCK_LOCATION);
     const [deleteLocation] = useMutation<{ deleteStockLocation: { result: string; message?: string } }>(
@@ -354,6 +369,9 @@ export function InventoryWarehouseModule() {
         updateProductVariants: Array<{ id: string } | null>;
     }>(UPDATE_PRODUCT_VARIANTS);
     const [saveInventoryLot, saveInventoryLotState] = useMutation(SAVE_CATALOG_INVENTORY_LOT_MUTATION);
+    const [transferInventoryLot, transferInventoryLotState] = useMutation(
+        TRANSFER_CATALOG_INVENTORY_LOT_MUTATION,
+    );
     const [updateInventoryThreshold] = useMutation(UPDATE_CATALOG_INVENTORY_THRESHOLD_MUTATION);
 
     const variants = data?.productVariants.items ?? EMPTY_VARIANTS;
@@ -541,6 +559,7 @@ export function InventoryWarehouseModule() {
             expiresAt: '',
             quantityOnHand: '0',
             purchaseCost: '',
+            reason: '',
         });
         setActionError('');
     };
@@ -563,6 +582,10 @@ export function InventoryWarehouseModule() {
             showError('请输入有效的非负批次成本');
             return;
         }
+        if (!lotDraft.reason.trim()) {
+            showError('请填写库存调整原因');
+            return;
+        }
         setActionError('');
         try {
             await saveInventoryLot({
@@ -578,6 +601,8 @@ export function InventoryWarehouseModule() {
                         purchaseCostMicrounits:
                             purchaseCost == null ? null : Math.round(purchaseCost * 1_000),
                         currencyCode: variant.currencyCode,
+                        idempotencyKey: crypto.randomUUID(),
+                        reason: lotDraft.reason.trim(),
                     },
                 },
             });
@@ -601,14 +626,22 @@ export function InventoryWarehouseModule() {
             showError('调整后库存不能小于 0，当前最多可减少 ' + selectedStock.stockOnHand);
             return;
         }
+        if (!adjustReason.trim()) {
+            showError('请填写盘点调整原因');
+            return;
+        }
         setAdjusting(true);
         setActionError('');
         try {
-            await updateVariantStock({
+            await adjustLegacyInventory({
                 variables: {
                     input: {
-                        id: selectedStock.variantId,
-                        stockLevels: [{ stockLocationId: selectedStock.locationId, stockOnHand: nextStock }],
+                        productVariantId: selectedStock.variantId,
+                        stockLocationId: selectedStock.locationId,
+                        stockOnHand: nextStock,
+                        idempotencyKey: crypto.randomUUID(),
+                        reason: adjustReason.trim(),
+                        reference: 'NEXT_ADMIN_INVENTORY',
                     },
                 },
             });
@@ -623,10 +656,44 @@ export function InventoryWarehouseModule() {
             );
             setSelectedStock(null);
             setAdjustAmount('');
+            setAdjustReason('');
         } catch (adjustError) {
             showError(toUserFacingError(adjustError, '库存调整失败，请稍后重试'));
         } finally {
             setAdjusting(false);
+        }
+    };
+
+    const saveLotTransfer = async () => {
+        if (!lotTransferDraft) return;
+        const quantity = Number(lotTransferDraft.quantity);
+        if (!Number.isSafeInteger(quantity) || quantity <= 0 || quantity > lotTransferDraft.maximumQuantity) {
+            showError(`转仓数量必须是 1 到 ${lotTransferDraft.maximumQuantity} 的整数`);
+            return;
+        }
+        if (!lotTransferDraft.targetStockLocationId || !lotTransferDraft.reason.trim()) {
+            showError('请选择目标仓库并填写转仓原因');
+            return;
+        }
+        setActionError('');
+        try {
+            await transferInventoryLot({
+                variables: {
+                    input: {
+                        inventoryLotId: lotTransferDraft.inventoryLotId,
+                        targetStockLocationId: lotTransferDraft.targetStockLocationId,
+                        quantity,
+                        idempotencyKey: crypto.randomUUID(),
+                        reason: lotTransferDraft.reason.trim(),
+                        reference: 'NEXT_ADMIN_INVENTORY',
+                    },
+                },
+            });
+            setLotTransferDraft(null);
+            await Promise.all([lotQuery.refetch(), refetch()]);
+            showNotice('批次转仓已入账，来源与去向流水已保留');
+        } catch (cause) {
+            showError(toUserFacingError(cause, '批次转仓失败'));
         }
     };
 
@@ -1452,6 +1519,7 @@ export function InventoryWarehouseModule() {
                                                         onClick={() => {
                                                             setSelectedStock(stock);
                                                             setAdjustAmount('');
+                                                            setAdjustReason('');
                                                             setActionError('');
                                                         }}
                                                         className="whitespace-nowrap rounded bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700 hover:bg-blue-100"
@@ -1514,6 +1582,7 @@ export function InventoryWarehouseModule() {
                                 status: level.status,
                             });
                             setAdjustAmount('');
+                            setAdjustReason('');
                             setActionError('');
                         }}
                         onEditProduct={item =>
@@ -1620,11 +1689,38 @@ export function InventoryWarehouseModule() {
                                                                               lot.purchaseCostMicrounits /
                                                                               1_000
                                                                           ).toFixed(3),
+                                                                reason: '',
                                                             })
                                                         }
                                                         className="mr-3 font-bold text-blue-600 hover:underline"
                                                     >
                                                         编辑
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={
+                                                            lot.quantityOnHand <= 0 || locations.length < 2
+                                                        }
+                                                        onClick={() =>
+                                                            setLotTransferDraft({
+                                                                inventoryLotId: lot.id,
+                                                                sku: lot.sku,
+                                                                lotCode: lot.lotCode,
+                                                                sourceLocationId: lot.stockLocationId,
+                                                                targetStockLocationId:
+                                                                    locations.find(
+                                                                        location =>
+                                                                            location.id !==
+                                                                            lot.stockLocationId,
+                                                                    )?.id ?? '',
+                                                                quantity: '1',
+                                                                maximumQuantity: lot.quantityOnHand,
+                                                                reason: '',
+                                                            })
+                                                        }
+                                                        className="mr-3 font-bold text-blue-600 hover:underline disabled:text-slate-300"
+                                                    >
+                                                        转仓
                                                     </button>
                                                     <button
                                                         type="button"
@@ -1878,8 +1974,18 @@ export function InventoryWarehouseModule() {
                                 autoFocus
                             />
                             <p className="mt-1 text-[10px] text-slate-400">
-                                Vendure 会真实记录数量与时间；原生接口不支持人工备注，因此不展示假备注。
+                                保存后会记录调整前后数量、操作人、时间和原因。
                             </p>
+                        </div>
+                        <div>
+                            <label className="mb-1 block font-bold text-slate-700">调整原因 *</label>
+                            <input
+                                type="text"
+                                value={adjustReason}
+                                onChange={event => setAdjustReason(event.target.value)}
+                                placeholder="例如：月底盘点差异、破损报废"
+                                className="w-full rounded-lg border border-slate-300 p-2.5 outline-none focus:ring-1 focus:ring-blue-500"
+                            />
                         </div>
                         {actionError && (
                             <div className="rounded-lg bg-rose-50 p-3 text-rose-700">{actionError}</div>
@@ -1888,7 +1994,7 @@ export function InventoryWarehouseModule() {
                             <button
                                 type="button"
                                 onClick={() => setSelectedStock(null)}
-                                disabled={adjusting}
+                                disabled={adjusting || !adjustReason.trim()}
                                 className="rounded-lg bg-slate-100 px-4 py-2 font-bold text-slate-700"
                             >
                                 取消
@@ -2028,6 +2134,21 @@ export function InventoryWarehouseModule() {
                         setActionError('');
                     }}
                     onSave={() => void saveLot()}
+                />
+            )}
+            {lotTransferDraft && (
+                <InventoryLotTransferDialog
+                    draft={lotTransferDraft}
+                    locations={locations}
+                    saving={transferInventoryLotState.loading}
+                    error={actionError}
+                    onChange={setLotTransferDraft}
+                    onClose={() => {
+                        if (transferInventoryLotState.loading) return;
+                        setLotTransferDraft(null);
+                        setActionError('');
+                    }}
+                    onSave={() => void saveLotTransfer()}
                 />
             )}
         </div>
@@ -2413,6 +2534,103 @@ function InventoryPagination({
     );
 }
 
+function InventoryLotTransferDialog({
+    draft,
+    locations,
+    saving,
+    error,
+    onChange,
+    onClose,
+    onSave,
+}: {
+    draft: InventoryLotTransferDraft;
+    locations: StockLocationItem[];
+    saving: boolean;
+    error?: string;
+    onChange: (draft: InventoryLotTransferDraft) => void;
+    onClose: () => void;
+    onSave: () => void;
+}) {
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
+            onClick={onClose}
+        >
+            <AccessibleDialogSurface
+                accessibleName="批次转仓"
+                onRequestClose={onClose}
+                onClick={event => event.stopPropagation()}
+                className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6 text-xs shadow-2xl"
+            >
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div>
+                        <h2 className="flex items-center gap-2 text-base font-bold">
+                            批次转仓
+                            <FeatureHelpButton topic="catalog.inventory" title="批次转仓" />
+                        </h2>
+                        <p className="mt-1 text-slate-500">
+                            {draft.sku} · {draft.lotCode}，最多可转 {draft.maximumQuantity}
+                        </p>
+                    </div>
+                    <button type="button" onClick={onClose} disabled={saving} aria-label="关闭转仓">
+                        <X className="h-5 w-5 text-slate-400" />
+                    </button>
+                </div>
+                <label className="block font-bold text-slate-600">
+                    目标仓库 *
+                    <select
+                        value={draft.targetStockLocationId}
+                        onChange={event => onChange({ ...draft, targetStockLocationId: event.target.value })}
+                        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
+                    >
+                        {locations
+                            .filter(location => location.id !== draft.sourceLocationId)
+                            .map(location => (
+                                <option key={location.id} value={location.id}>
+                                    {location.name}
+                                </option>
+                            ))}
+                    </select>
+                </label>
+                <InventoryLotField
+                    label="转仓数量 *"
+                    type="number"
+                    value={draft.quantity}
+                    onChange={quantity => onChange({ ...draft, quantity })}
+                />
+                <InventoryLotField
+                    label="转仓原因 *"
+                    value={draft.reason}
+                    onChange={reason => onChange({ ...draft, reason })}
+                />
+                {error && (
+                    <div role="alert" className="rounded-lg bg-rose-50 p-3 text-rose-700">
+                        {error}
+                    </div>
+                )}
+                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={saving}
+                        className="rounded-lg bg-slate-100 px-4 py-2 font-bold"
+                    >
+                        取消
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onSave}
+                        disabled={saving || !draft.reason.trim()}
+                        className="rounded-lg bg-blue-600 px-4 py-2 font-bold text-white disabled:opacity-40"
+                    >
+                        {saving ? '转仓中…' : '确认转仓'}
+                    </button>
+                </div>
+            </AccessibleDialogSurface>
+        </div>
+    );
+}
+
 export function InventoryLotDialog({
     draft,
     variants,
@@ -2524,6 +2742,11 @@ export function InventoryLotDialog({
                         value={draft.purchaseCost}
                         onChange={purchaseCost => update({ purchaseCost })}
                     />
+                    <InventoryLotField
+                        label="调整原因 *"
+                        value={draft.reason}
+                        onChange={reason => update({ reason })}
+                    />
                 </div>
                 {error && (
                     <div role="alert" className="rounded-lg bg-rose-50 p-3 text-rose-700">
@@ -2534,7 +2757,7 @@ export function InventoryLotDialog({
                     <button
                         type="button"
                         onClick={onClose}
-                        disabled={saving}
+                        disabled={saving || !draft.reason.trim()}
                         className="rounded-lg bg-slate-100 px-4 py-2 font-bold text-slate-700"
                     >
                         取消

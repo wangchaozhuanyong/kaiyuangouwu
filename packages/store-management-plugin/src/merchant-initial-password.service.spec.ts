@@ -1,6 +1,7 @@
 import { ForbiddenError } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { AdministratorAccessProfile } from './entities/administrator-access-profile.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import {
     MerchantInitialPasswordService,
@@ -11,6 +12,10 @@ import {
 function createService(access: StoreAdministratorAccess | null = null, currentPasswordMatches = false) {
     const accessRepository = {
         findOne: vi.fn().mockResolvedValue(access),
+        save: vi.fn(value => Promise.resolve(value)),
+    };
+    const profileRepository = {
+        findOne: vi.fn().mockResolvedValue(null),
         save: vi.fn(value => Promise.resolve(value)),
     };
     const authenticationMethod = { passwordHash: 'current-hash' };
@@ -25,9 +30,11 @@ function createService(access: StoreAdministratorAccess | null = null, currentPa
         })),
     };
     const connection = {
-        getRepository: vi.fn((_ctx, entity) =>
-            entity === StoreAdministratorAccess ? accessRepository : userRepository,
-        ),
+        getRepository: vi.fn((_ctx, entity) => {
+            if (entity === StoreAdministratorAccess) return accessRepository;
+            if (entity === AdministratorAccessProfile) return profileRepository;
+            return userRepository;
+        }),
     };
     const administratorService = {
         findOneByUserId: vi.fn().mockResolvedValue({ id: 'administrator-1' }),

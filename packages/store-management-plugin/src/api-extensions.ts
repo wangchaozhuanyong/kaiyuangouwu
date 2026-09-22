@@ -1,68 +1,18 @@
 import { gql } from 'graphql-tag';
 
+import { administratorAccessSchema } from './administrator-access.schema';
+import { businessClosureCommonSchema } from './business-closure-common.schema';
+import { customerGovernanceApiSchema } from './customer-governance-api.schema';
 import { storeCustomerCouponSchema } from './promotion/store-coupon-api.schema';
+import { referralPosterFields } from './referral/referral-poster-fields';
+import { storePaymentApiSchema } from './store-payment-api.schema';
 import { storeProfileInputSchema } from './store-profile-input.schema';
 import { storefrontBrandingSchema, storefrontPreviewBrandingSchema } from './storefront-branding.schema';
 import { trafficAdminSchema, trafficShopSchema } from './traffic/traffic-api.schema';
 
-const referralPosterFields = `
-        design: JSON
-        createdAt: DateTime!
-        updatedAt: DateTime!
-        name: String!
-        enabled: Boolean!
-        position: Int!
-        layoutVariant: String!
-        posterBackgroundAsset: Asset
-        shareBackgroundAsset: Asset
-        titleZh: String!
-        titleEn: String!
-        headlineZh: String!
-        headlineEn: String!
-        rewardTextZh: String!
-        rewardTextEn: String!
-        siteIntroZh: String!
-        siteIntroEn: String!
-        serviceTextZh: String!
-        serviceTextEn: String!
-        featureOneTitleZh: String!
-        featureOneTitleEn: String!
-        featureOneTextZh: String!
-        featureOneTextEn: String!
-        featureTwoTitleZh: String!
-        featureTwoTitleEn: String!
-        featureTwoTextZh: String!
-        featureTwoTextEn: String!
-        featureThreeTitleZh: String!
-        featureThreeTitleEn: String!
-        featureThreeTextZh: String!
-        featureThreeTextEn: String!
-        qrEyebrowZh: String!
-        qrEyebrowEn: String!
-        qrTitleZh: String!
-        qrTitleEn: String!
-        qrDescriptionZh: String!
-        qrDescriptionEn: String!
-        sceneOneZh: String!
-        sceneOneEn: String!
-        sceneTwoZh: String!
-        sceneTwoEn: String!
-        sceneThreeZh: String!
-        sceneThreeEn: String!
-        sceneFourZh: String!
-        sceneFourEn: String!
-        ctaTextZh: String!
-        ctaTextEn: String!
-        footerTitleZh: String!
-        footerTitleEn: String!
-        footerTextZh: String!
-        footerTextEn: String!
-        foregroundColor: String!
-        accentColor: String!
-        overlayOpacity: Int!
-`;
-
 const commonTypes = gql`
+    ${businessClosureCommonSchema}
+
     enum StoreProfileStatus {
         DRAFT
         ACTIVE
@@ -164,145 +114,7 @@ const commonTypes = gql`
         expiresAt: DateTime!
     }
 
-    type StoreUsdtPaymentIntent {
-        id: ID!
-        channelId: ID!
-        channelCode: String!
-        orderId: ID!
-        orderCode: String!
-        network: String!
-        fiatCurrencyCode: String!
-        fiatAmount: Money!
-        fiatPerUsdtRate: Float!
-        markupPercent: Float!
-        rateSource: String!
-        receivingAddressMasked: String!
-        receivingAddressFingerprint: String!
-        baseUsdtAmount: Float!
-        expectedUsdtAmount: Float!
-        receivedUsdtAmount: Float
-        senderAddressMasked: String
-        status: String!
-        transactionId: String
-        failureReason: String
-        createdAt: DateTime!
-        expiresAt: DateTime!
-        settledAt: DateTime
-        blockNumber: Int
-        blockTimestamp: DateTime
-        lastCheckedAt: DateTime
-    }
-
-    type StoreUsdtWallet {
-        channelId: ID!
-        channelCode: String!
-        reviewStatus: String!
-        configured: Boolean!
-        network: String!
-        activeReceivingAddressMasked: String
-        activeReceivingAddressFingerprint: String
-        pendingReceivingAddress: String
-        pendingReceivingAddressFingerprint: String
-        canReview: Boolean!
-        submittedAt: DateTime
-        reviewedAt: DateTime
-        rejectionReason: String
-    }
-
-    type StoreUsdtFiatTotal {
-        currencyCode: String!
-        amount: Money!
-    }
-
-    type StoreUsdtChannelPaymentStats {
-        channelId: ID!
-        channelCode: String!
-        totalCount: Int!
-        pendingCount: Int!
-        settledCount: Int!
-        manualReviewCount: Int!
-        expiredCount: Int!
-        expectedUsdtTotal: Float!
-        receivedUsdtTotal: Float!
-        fiatTotals: [StoreUsdtFiatTotal!]!
-    }
-
-    type StorePaymentMethodStats {
-        channelId: ID!
-        channelCode: String!
-        paymentMethodCode: String!
-        currencyCode: CurrencyCode!
-        settledCount: Int!
-        refundCount: Int!
-        grossAmount: Money!
-        refundedAmount: Money!
-        netAmount: Money!
-    }
-
-    type StorePaymentDetail {
-        id: ID!
-        channelId: ID!
-        channelCode: String!
-        orderId: ID!
-        orderCode: String!
-        paymentMethodCode: String!
-        paymentState: String!
-        currencyCode: CurrencyCode!
-        amount: Money!
-        refundedAmount: Money!
-        netAmount: Money!
-        transactionId: String
-        createdAt: DateTime!
-    }
-
-    input StorePaymentReportOptionsInput {
-        from: DateTime
-        to: DateTime
-        skip: Int
-        take: Int
-    }
-
-    type StorePaymentDetailList {
-        items: [StorePaymentDetail!]!
-        totalItems: Int!
-    }
-
-    input StoreUsdtManualRefundInput {
-        paymentId: ID!
-        amount: Money!
-        usdtAmount: String!
-        recipientAddress: String!
-        transactionId: String!
-        reason: String!
-    }
-
-    type StoreUsdtManualRefund {
-        id: ID!
-        refundId: ID!
-        channelId: ID!
-        channelCode: String!
-        paymentId: ID!
-        orderId: ID!
-        orderCode: String!
-        currencyCode: CurrencyCode!
-        amount: Money!
-        usdtAmount: String!
-        network: String!
-        transactionId: String!
-        fromAddress: String!
-        toAddress: String!
-        blockNumber: Int!
-        blockTimestamp: DateTime!
-        reason: String!
-        operatorUserId: ID!
-        state: String!
-        createdAt: DateTime!
-    }
-
-    type StoreUsdtManualRefundList {
-        items: [StoreUsdtManualRefund!]!
-        totalItems: Int!
-    }
+    ${storePaymentApiSchema}
 
     input ReviewStoreUsdtWalletInput {
         channelId: ID!
@@ -389,6 +201,7 @@ const commonTypes = gql`
 `;
 
 export const adminApiExtensions = gql`
+    ${administratorAccessSchema}
     ${storefrontPreviewBrandingSchema}
     ${trafficAdminSchema}
     ${commonTypes}
@@ -543,6 +356,13 @@ export const adminApiExtensions = gql`
         estimateMinDays: Int!
         estimateMaxDays: Int!
         blockedPostalPrefixes: String!
+    }
+
+    type StorePaymentOption {
+        id: ID!
+        name: String!
+        code: String!
+        enabled: Boolean!
     }
 
     input UpdateStoreCurrencyConfigurationInput {
@@ -1118,12 +938,15 @@ export const adminApiExtensions = gql`
         note: String
     }
 
+    ${customerGovernanceApiSchema}
+
     extend type Query {
         storeProvisioningTemplates: [Channel!]!
         storeProfiles: [StoreProfile!]!
         storeDeprovisionImpact(profileId: ID!): StoreDeprovisionImpact!
         myStoreProfile: StoreProfile!
         myStoreCommerceConfiguration: StoreCommerceConfiguration!
+        myStorePaymentOptions: [StorePaymentOption!]!
         myStoreCurrencyConfiguration: StoreCurrencyConfiguration!
         myStoreUsdtWallet: StoreUsdtWallet!
         myStoreUsdtPaymentIntents: [StoreUsdtPaymentIntent!]!
@@ -1140,6 +963,7 @@ export const adminApiExtensions = gql`
             channelId: ID
             options: StorePaymentReportOptionsInput
         ): StoreUsdtManualRefundList!
+        storeUsdtReconciliationActions(channelId: ID): [StoreUsdtReconciliationAction!]!
         merchantInitialPasswordStatus: MerchantInitialPasswordStatus!
         storefrontPromotionPage: StorefrontPromotionPage!
         storeCouponCampaigns: [StoreCouponCampaign!]!
@@ -1158,7 +982,22 @@ export const adminApiExtensions = gql`
         referralCustomerWallets(customerId: ID!): [ReferralWallet!]!
         referralTodayMetrics: ReferralTodayMetrics!
         storefrontTraffic(days: Int = 7): StorefrontTrafficReport!
+        marketingAttributionReport(input: MarketingAttributionReportInput!): MarketingAttributionReport!
         referralBalanceAudit: ReferralBalanceAuditResult!
+        dataRetentionRecords: [DataRetentionRecord!]!
+        dataSubjectRequests: [DataSubjectRequest!]!
+        dataConsentRecords: [DataConsentRecord!]!
+        customerOperationsProfile(customerId: ID!): CustomerOperationsProfile!
+        customerOperationsProfiles(
+            options: CustomerOperationsProfileListOptions
+        ): CustomerOperationsProfileList!
+        customerFollowUps(options: CustomerFollowUpListOptions): CustomerFollowUpList!
+        governanceApprovals(status: GovernanceApprovalStatus): [GovernanceApprovalRequest!]!
+        governedConfigVersions(namespace: GovernedConfigNamespace): [GovernedConfigVersion!]!
+        governanceAuditEntries(skip: Int, take: Int): GovernanceAuditEntryList!
+        governanceAuditIntegrity: GovernanceAuditIntegrity!
+        governanceReports: [GovernanceReportSnapshot!]!
+        fraudRiskCases(options: FraudRiskCaseListOptions): FraudRiskCaseList!
     }
 
     extend type Mutation {
@@ -1170,6 +1009,7 @@ export const adminApiExtensions = gql`
         updateMyStoreCommerceConfiguration(
             input: UpdateMyStoreCommerceConfigurationInput!
         ): StoreCommerceConfiguration!
+        setMyStorePaymentOptionEnabled(id: ID!, enabled: Boolean!): StorePaymentOption!
         updateMyStoreCurrencyConfiguration(
             input: UpdateStoreCurrencyConfigurationInput!
         ): StoreCurrencyConfiguration!
@@ -1179,6 +1019,7 @@ export const adminApiExtensions = gql`
         submitMyStoreUsdtWallet(receivingAddress: String!): StoreUsdtWallet!
         reviewStoreUsdtWallet(input: ReviewStoreUsdtWalletInput!): StoreUsdtWallet!
         recordStoreUsdtManualRefund(input: StoreUsdtManualRefundInput!): StoreUsdtManualRefund!
+        resolveStoreUsdtPaymentIntent(input: ResolveStoreUsdtPaymentIntentInput!): StoreUsdtPaymentIntent!
         completeInitialPasswordChange(password: String!): MerchantInitialPasswordStatus!
         saveStorefrontPromotionDraft(input: UpdateStorefrontPromotionDraftInput!): StorefrontPromotionPage!
         publishStorefrontPromotionPage: StorefrontPromotionPage!
@@ -1220,6 +1061,16 @@ export const adminApiExtensions = gql`
             amount: Money!
             reason: String!
         ): ReferralWallet!
+        setDataRetentionLegalHold(id: ID!, enabled: Boolean!, reason: String): DataRetentionRecord!
+        retryDataRetentionRecord(id: ID!): DataRetentionRecord!
+        retryDataSubjectRequest(id: ID!): DataSubjectRequest!
+        refreshCustomerOperationsProfile(customerId: ID!): CustomerOperationsProfile!
+        createCustomerFollowUp(input: CreateCustomerFollowUpInput!): CustomerFollowUp!
+        updateCustomerFollowUp(input: UpdateCustomerFollowUpInput!): CustomerFollowUp!
+        recordMarketingCampaignCost(input: RecordMarketingCampaignCostInput!): MarketingCampaignCost!
+        submitGovernedConfig(input: SubmitGovernedConfigInput!): GovernanceApprovalRequest!
+        reviewGovernanceApproval(input: ReviewGovernanceApprovalInput!): GovernanceApprovalRequest!
+        reviewFraudRiskCase(input: ReviewFraudRiskCaseInput!): FraudRiskCase!
     }
 
     extend type Order {
@@ -1320,10 +1171,39 @@ export const shopApiExtensions = gql`
         recorded: Boolean!
     }
 
+    type CustomerFraudRiskAppeal {
+        id: ID!
+        createdAt: DateTime!
+        status: String!
+        reason: String!
+        reviewedAt: DateTime
+    }
+
+    type CustomerFraudRiskCase {
+        id: ID!
+        createdAt: DateTime!
+        caseCode: String!
+        orderId: ID
+        status: String!
+        severity: String!
+        dueAt: DateTime!
+        decidedAt: DateTime
+        appeals: [CustomerFraudRiskAppeal!]!
+    }
+
+    input AppealFraudRiskCaseInput {
+        id: ID!
+        reason: String!
+        idempotencyKey: String!
+    }
+
     extend type Query {
         storefrontBranding: StorefrontBranding!
         availableStorefrontProvinces: [StorefrontProvinceOption!]!
         myCustomerAvatar: Asset
+        myCustomerAvatarHistory: [CustomerAvatarHistoryEntry!]!
+        myDataSubjectRequests: [DataSubjectRequest!]!
+        myDataConsentRecords: [DataConsentRecord!]!
         storefrontCurrencyConfiguration: StoreCurrencyConfiguration!
         activeStorefrontCoupons: [StorefrontCoupon!]!
         myStorefrontCoupons: [StoreCustomerCoupon!]!
@@ -1335,6 +1215,7 @@ export const shopApiExtensions = gql`
         referralProgram: ReferralProgram!
         validateReferralInviteCode(code: String!): Boolean!
         myReferralOverview: MyReferralOverview!
+        myFraudRiskCases: [CustomerFraudRiskCase!]!
     }
 
     enum StorefrontCartCouponAction {
@@ -1354,6 +1235,12 @@ export const shopApiExtensions = gql`
     }
     extend type Mutation {
         setCustomerAvatar(file: Upload!): Asset!
+        restoreCustomerAvatar(retentionId: ID!): Asset!
+        removeCustomerAvatar: Boolean!
+        exportMyPersonalData(password: String!): DataSubjectExportPayload!
+        requestMyAccountClosure(password: String!): DataSubjectRequest!
+        cancelMyAccountClosure: DataSubjectRequest!
+        recordStorefrontAnalyticsConsent(input: StorefrontAnalyticsConsentInput!): DataConsentRecord!
         setStorefrontPaymentCurrency(currencyCode: String!): Order!
         createStorefrontUsdtCheckoutQuote: StorefrontUsdtCheckoutQuote!
         claimStorefrontCoupon(campaignId: ID!): StoreCustomerCoupon!
@@ -1362,11 +1249,13 @@ export const shopApiExtensions = gql`
         removeStorefrontCoupon(id: ID!): StoreCustomerCoupon!
         registerCustomerWithReferral(
             input: RegisterCustomerInput!
+            consent: StorefrontRegistrationConsentInput!
             inviteCode: String
             source: String
         ): RegisterCustomerAccountResult!
         useMyReferralBalance(amount: Money!): ReferralBalancePaymentResult!
         recordStorefrontVisit(visitorId: String): StorefrontVisitResult!
         recordStorefrontPageView(input: StorefrontPageViewInput!): StorefrontVisitResult!
+        appealMyFraudRiskCase(input: AppealFraudRiskCaseInput!): CustomerFraudRiskAppeal!
     }
 `;
