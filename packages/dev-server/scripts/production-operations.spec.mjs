@@ -79,6 +79,21 @@ void test('release workflow ships the fixed live preflight inputs and migration 
     assert.match(workflow, /audit-administrator-product-readiness/u);
     assert.match(workflow, /\[\[ "\$OPS_PRODUCT_ID" =~ \^\[1-9\]\[0-9\]\*\$ \]\]/u);
     assert.match(workflow, /OPS_PRODUCT_ID=\{product_id\}/u);
+    assert.match(
+        workflow,
+        /'backup-database',[\s\S]*'apply-order-sales-ownership-backfill-reviewed',[\s\S]*'apply-moyao-default-store-migration-reviewed'/u,
+    );
+    const backupFiles = [
+        'vendure-mysql-backup',
+        'vendure-mysql-backup-manifest.py',
+        'vendure-backup-s3-guard.py',
+    ];
+    for (const backupTool of backupFiles) {
+        assert.ok(workflow.includes(`'${backupTool}'`));
+        assert.ok(readFileSync(path.join(repositoryRoot, 'deploy/systemd', backupTool)).length > 0);
+    }
+    assert.match(workflow, /transport\(f'deploy\/systemd\/\{tool\}', f'systemd\/\{tool\}'\)/u);
+    assert.match(workflow, /sudo -n install -o root -g root -m 0755[^\n]+\/usr\/local\/sbin\/\{tool\}/u);
     assert.doesNotMatch(workflow, /git diff --name-only "\$OPS_EXPECTED_RUNTIME_SHA"/u);
 
     const commonFiles = [
@@ -86,6 +101,17 @@ void test('release workflow ships the fixed live preflight inputs and migration 
         'deploy/systemd/vendure-production-release-retention.cjs',
     ];
     const bundles = [
+        [...commonFiles, ...backupFiles.map(file => `deploy/systemd/${file}`)],
+        [
+            ...commonFiles,
+            ...backupFiles.map(file => `deploy/systemd/${file}`),
+            'packages/dev-server/scripts/order-sales-ownership-backfill.mjs',
+        ],
+        [
+            ...commonFiles,
+            ...backupFiles.map(file => `deploy/systemd/${file}`),
+            'packages/dev-server/scripts/moyao-default-store-migration.mjs',
+        ],
         [...commonFiles, 'deploy/two-factor-key-backup.py'],
         [...commonFiles, 'deploy/verify-runtime-security-dependencies.cjs'],
         [
