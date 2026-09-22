@@ -197,7 +197,8 @@ export async function collectAdministratorAccessPreflight(adapter) {
 }
 
 async function main() {
-    await import('dotenv/config');
+    // Production operations invoke this transported script with Node's --env-file.
+    // Avoid resolving dotenv relative to the temporary transport directory.
     const adapter = await createStoreIsolationAdapter(process.env);
     try {
         process.stdout.write(

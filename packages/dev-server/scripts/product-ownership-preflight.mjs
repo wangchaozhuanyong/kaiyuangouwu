@@ -243,7 +243,8 @@ async function main() {
     }
     const productId = argument.slice('--product-id='.length);
     if (!/^[1-9][0-9]*$/u.test(productId)) throw new Error('Product ID must be a positive integer');
-    await import('dotenv/config');
+    // Production operations invoke this transported script with Node's --env-file.
+    // Avoid resolving dotenv relative to the temporary transport directory.
     const adapter = await createStoreIsolationAdapter(process.env);
     try {
         const report = await collectProductOwnershipPreflight(adapter, productId);
