@@ -14,26 +14,68 @@ import {
 import { lazy, type ComponentType } from 'react';
 import { Navigate } from 'react-router-dom';
 
-import { CatalogUnitCustomFieldInput } from '../pages/Catalog/catalog-unit-input';
-import { CatalogExportAction } from '../pages/Catalog/CatalogExportAction';
-import {
-    CatalogOperationsBlock,
-    ProductPackagingBlock,
-    ProductVariantCustomFieldsBlock,
-    ProductVariantPricesBlock,
-} from '../pages/Catalog/CatalogOperationsBlocks';
-import { CatalogImportAction } from '../pages/Catalog/import/CatalogImportAction';
-import {
-    ReferralTodayExtensionWidget,
-    StaleTranslationExtensionAlert,
-} from '../pages/Dashboard/DashboardExtensionPanels';
-import { StorefrontTrafficPanel } from '../pages/Dashboard/StorefrontTrafficPanel';
-import { OrderOperationsBlock } from '../pages/Sales/OrderOperationsBlock';
 import { routeModuleLoaders } from '../route-modules';
 
 import { defineNextAdminExtension } from './extension-api';
 
 export const STORE_CURRENCY_COMPATIBILITY_TARGET = '/settings/store-profile?tab=payment';
+
+// Extension registration stays eager so navigation and permission metadata are immediately
+// available. Heavy feature implementations remain route/surface scoped and are fetched only
+// when their host is actually rendered.
+const CatalogUnitCustomFieldInput = lazy(() =>
+    import('../pages/Catalog/catalog-unit-input').then(module => ({
+        default: module.CatalogUnitCustomFieldInput,
+    })),
+);
+const CatalogExportAction = lazy(() =>
+    import('../pages/Catalog/CatalogExportAction').then(module => ({ default: module.CatalogExportAction })),
+);
+const CatalogImportAction = lazy(() =>
+    import('../pages/Catalog/import/CatalogImportAction').then(module => ({
+        default: module.CatalogImportAction,
+    })),
+);
+const CatalogOperationsBlock = lazy(() =>
+    import('../pages/Catalog/CatalogOperationsBlocks').then(module => ({
+        default: module.CatalogOperationsBlock,
+    })),
+);
+const ProductPackagingBlock = lazy(() =>
+    import('../pages/Catalog/CatalogOperationsBlocks').then(module => ({
+        default: module.ProductPackagingBlock,
+    })),
+);
+const ProductVariantPricesBlock = lazy(() =>
+    import('../pages/Catalog/CatalogOperationsBlocks').then(module => ({
+        default: module.ProductVariantPricesBlock,
+    })),
+);
+const ProductVariantCustomFieldsBlock = lazy(() =>
+    import('../pages/Catalog/CatalogOperationsBlocks').then(module => ({
+        default: module.ProductVariantCustomFieldsBlock,
+    })),
+);
+const StaleTranslationExtensionAlert = lazy(() =>
+    import('../pages/Dashboard/DashboardExtensionPanels').then(module => ({
+        default: module.StaleTranslationExtensionAlert,
+    })),
+);
+const ReferralTodayExtensionWidget = lazy(() =>
+    import('../pages/Dashboard/DashboardExtensionPanels').then(module => ({
+        default: module.ReferralTodayExtensionWidget,
+    })),
+);
+const StorefrontTrafficPanel = lazy(() =>
+    import('../pages/Dashboard/StorefrontTrafficPanel').then(module => ({
+        default: module.StorefrontTrafficPanel,
+    })),
+);
+const OrderOperationsBlock = lazy(() =>
+    import('../pages/Sales/OrderOperationsBlock').then(module => ({
+        default: module.OrderOperationsBlock,
+    })),
+);
 
 const AiImageSettingsModule = lazy(() =>
     routeModuleLoaders.aiImageSettings().then(module => ({

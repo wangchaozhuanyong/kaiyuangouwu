@@ -138,20 +138,22 @@ describe('auth password visibility controls', () => {
             }),
         );
 
-        expect(markup).not.toContain('auth-login-ai-campaign-v2-480.webp');
+        expect(markup).toContain('auth-login-ai-campaign-v2-480.webp');
         expect(markup).not.toContain('auth-register-ai-campaign-v2');
         expect(markup).toContain('登录账号');
         expect(markup).not.toContain('购买记录与状态清晰可查');
         expect(markup).not.toContain('支持服务类型');
         expect(markup).not.toContain('人工服务');
-        expect(markup).not.toContain('欢迎回来');
-        expect(markup).not.toContain('登录后管理你的账户与订单');
-        expect(markup).not.toContain('auth-form-heading');
+        expect(markup).toContain('欢迎回来');
+        expect(markup).toContain('登录后查看订单、管理账户并继续使用店铺服务。');
+        expect(markup).toContain('auth-form-heading');
         expect(markup).not.toContain('账户登录');
         expect(markup).toContain('auth-hero-header');
         expect(markup).toContain('>返回</span>');
-        expect(markup).toContain('class="auth-route-tabs"');
-        expect(markup).toContain('aria-current="page"');
+        expect(markup).toContain('class="auth-mobile-back-button"');
+        expect(markup).not.toContain('auth-route-tabs');
+        expect(markup).toContain('立即注册');
+        expect(markup).toContain('class="auth-assurance-rail"');
         expect(markup).toContain('class="auth-account-form"');
         expect(markup).toContain('aria-label="登录表单"');
         expect(markup).not.toContain('auth-field-label-row');
@@ -166,17 +168,20 @@ describe('auth password visibility controls', () => {
     it('renders independent password visibility buttons for registration and confirmation', () => {
         const markup = renderToStaticMarkup(createElement(RegisterPage, authPageProps));
 
-        expect(markup).not.toContain('auth-register-ai-campaign-v2-480.webp');
+        expect(markup).toContain('auth-register-ai-campaign-v2-480.webp');
         expect(markup).not.toContain('auth-login-ai-campaign-v2');
         expect(markup).toContain('创建账号');
         expect(markup).not.toContain('验证邮箱即可开始使用');
         expect(markup).not.toContain('订单与售后状态清晰可查');
         expect(markup).not.toContain('新账户');
-        expect(markup).not.toContain('创建账户');
+        expect(markup).toContain('创建账户');
+        expect(markup).toContain('验证邮箱并完成注册，开始选购商品与使用店铺服务。');
         expect(markup).not.toContain('验证邮箱后，即可统一管理收藏与订单');
-        expect(markup).not.toContain('auth-form-heading');
+        expect(markup).toContain('auth-form-heading');
         expect(markup).toContain('auth-hero-header');
-        expect(markup).toContain('class="auth-route-tabs"');
+        expect(markup).not.toContain('auth-route-tabs');
+        expect(markup).toContain('立即登录');
+        expect(markup).toContain('class="auth-assurance-rail"');
         expect(markup).not.toContain('全球模型 · 一钥直达');
         expect(markup).toContain('class="auth-account-form"');
         expect(markup).toContain('aria-label="注册表单"');
@@ -204,10 +209,14 @@ describe('auth password visibility controls', () => {
             createElement(RegisterPage, { ...authPageProps, language: 'en' }),
         );
 
-        expect(loginMarkup).not.toContain('Welcome back');
-        expect(loginMarkup).not.toContain('Sign in to manage your account and orders');
-        expect(registerMarkup).not.toContain('Create your account');
-        expect(registerMarkup).not.toContain('Verify your email to manage favorites and orders');
+        expect(loginMarkup).toContain('Welcome back');
+        expect(loginMarkup).toContain(
+            'Sign in to view orders, manage your account, and continue using store services.',
+        );
+        expect(registerMarkup).toContain('Create your account');
+        expect(registerMarkup).toContain(
+            'Verify your email and create an account to shop and use store services.',
+        );
         expect(loginMarkup).not.toContain('auth-field-label-row');
         expect(registerMarkup).not.toContain('auth-field-label-row');
         expect(loginMarkup).toContain('placeholder="Email address"');
@@ -314,13 +323,13 @@ describe('auth password visibility controls', () => {
         expect(markup).toContain('managed-login.webp');
         expect(markup).toContain('preset=storefront-detail-640');
         expect(markup).toContain('preset=storefront-detail-1200');
-        expect(markup).toContain('sizes="(min-width: 1024px) 640px, 100vw"');
+        expect(markup).toContain('sizes="(min-width: 1024px) 640px, 1px"');
         expect(markup).not.toContain('preset=storefront-hero-');
         expect(markup).toContain('后台登录主标题');
         expect(markup).toContain('后台卖点3');
         expect(markup).toContain('--auth-visual-background:#010203');
         expect(markup).toContain('--auth-visual-foreground:#fefefe');
-        expect(markup).toContain('--auth-accent:#abcdef');
+        expect(markup).toContain('--auth-visual-accent:#abcdef');
         expect(markup).toContain('auth-hero-managed');
         expect(markup).toContain('auth-hero-message-managed');
         expect(markup).toContain('class="auth-hero-tags"');
@@ -393,8 +402,13 @@ describe('managed auth visual layout', () => {
         expect(styles).toContain('.auth-page-managed .login-content');
         expect(styles).toContain('.auth-page .auth-hero-header .auth-back-button');
         expect(styles).toContain('.auth-page .auth-password-toggle svg');
-        expect(styles).toContain('.auth-route-tabs');
-        expect(styles).toMatch(/\.auth-route-tabs\s*\{[^}]*display:\s*grid;/);
+        expect(styles).not.toContain('.auth-route-tabs');
+        expect(styles).toContain('.auth-mobile-back-button');
+        expect(styles).toContain('.auth-assurance-rail');
+        expect(styles).toMatch(
+            /\.auth-page-login \.auth-hero,[\s\S]*?\.auth-page-register \.auth-hero\s*\{[^}]*display:\s*none;/,
+        );
+        expect(styles).toMatch(/\.auth-assurance-rail\s*\{[^}]*grid-template-columns:\s*repeat\(2,/);
         expect(styles).toMatch(/\.auth-account-form\s*\{[^}]*margin-top:\s*0;[^}]*display:\s*grid;/);
         expect(styles).toMatch(
             /@media \(min-width:\s*1024px\)[\s\S]*?\.auth-page \.auth-hero-tags\s*\{[^}]*width:\s*100%;[^}]*flex-wrap:\s*wrap;[^}]*overflow:\s*visible;/,
@@ -421,7 +435,15 @@ describe('managed auth visual layout', () => {
             /\.desktop-store-layout:has\(\.auth-page\) #storefront-content\s*\{[^}]*min-height:\s*100dvh;[^}]*padding:\s*32px;[^}]*display:\s*flex;/,
         );
         expect(styles).toMatch(
-            /\.desktop-store-layout \.page\.auth-page\s*\{[^}]*width:\s*min\(100%, 1060px\);[^}]*min-height:\s*min\(600px, calc\(100dvh - 64px\)\);[^}]*margin:\s*auto;/,
+            // eslint-disable-next-line max-len -- Keeping the complete CSS contract in one expression makes regression failures actionable.
+            /\.desktop-store-layout \.page\.auth-page\s*\{[^}]*width:\s*min\(100%, 1160px\);[^}]*min-height:\s*min\(680px, calc\(100dvh - 64px\)\);[^}]*margin:\s*auto;[^}]*grid-template-rows:\s*minmax\(0, 1fr\) auto;/,
+        );
+        expect(styles).toMatch(
+            /\.desktop-store-layout \.auth-assurance-rail\s*\{[^}]*grid-column:\s*1 \/ -1;[^}]*grid-template-columns:\s*repeat\(4,/,
+        );
+        expect(styles).toMatch(/\.desktop-store-layout \.auth-page \.auth-hero\s*\{[^}]*border-radius:\s*0;/);
+        expect(styles).not.toMatch(
+            /\.desktop-store-layout \.auth-page \.auth-hero\s*\{[^}]*border-radius:\s*var\(--skin-hero-radius\) 0 0 var\(--skin-hero-radius\);/,
         );
     });
 });

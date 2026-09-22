@@ -21,6 +21,7 @@ interface CategoryPaginationOptions {
     input: StorefrontCatalogInput;
     enabled: boolean;
     suspended: boolean;
+    pageSize?: number;
 }
 
 export function useCategoryPagination({
@@ -31,6 +32,7 @@ export function useCategoryPagination({
     input,
     enabled,
     suspended,
+    pageSize = 12,
 }: CategoryPaginationOptions) {
     const queryClient = useQueryClient();
     const queryKey = storefrontQueryKeys.catalog(storefrontQueryKeys.market(market), languageCode, {
@@ -62,7 +64,7 @@ export function useCategoryPagination({
     const query = useInfiniteQuery({
         queryKey,
         queryFn: async ({ pageParam, signal }) => {
-            const page = await api.catalog({ ...input, skip: pageParam, take: 12 }, signal);
+            const page = await api.catalog({ ...input, skip: pageParam, take: pageSize }, signal);
             const cached = queryClient.getQueryData<InfiniteData<ProductSearchPage, number>>(queryKey);
             // Compare only earlier offsets: a background refresh may legitimately return the same page.
             const previousIds = new Set(

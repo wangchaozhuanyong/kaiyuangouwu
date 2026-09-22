@@ -2,7 +2,6 @@ import { useNavigate } from '@tanstack/react-router';
 import {
     Bell,
     Check,
-    ChevronDown,
     ChevronLeft,
     ChevronRight,
     CircleCheck,
@@ -33,6 +32,7 @@ import {
 
 import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
 import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
+import { LocalePreferencesSheet, LocalePreferencesTrigger } from '../components/common/locale-preferences';
 import { ProductCard } from '../components/common/product-card';
 import { DesktopUnifiedHome } from '../components/desktop/desktop-unified-home';
 import { claimableCouponCampaigns } from '../coupon-center-state';
@@ -233,70 +233,6 @@ export function NoticeDetailSheet({
                         </button>
                     </div>
                 ) : null}
-            </div>
-        </Sheet>
-    );
-}
-
-export function CurrencySelectionSheet({
-    currencyCodes,
-    selectedCurrencyCode,
-    currencyLoading,
-    language,
-    onSelect,
-    onClose,
-}: {
-    currencyCodes: string[];
-    selectedCurrencyCode: string;
-    currencyLoading: boolean;
-    language: StorefrontLanguage;
-    onSelect: (currencyCode: string) => void;
-    onClose: () => void;
-}) {
-    const isZh = language === 'zh';
-
-    return (
-        <Sheet
-            title={isZh ? '选择付款币种' : 'Choose payment currency'}
-            language={language}
-            onClose={onClose}
-            className="currency-sheet"
-        >
-            <div
-                className="currency-sheet-options"
-                role="radiogroup"
-                aria-label={isZh ? '付款币种' : 'Payment currency'}
-                aria-busy={currencyLoading}
-            >
-                {currencyCodes.map(currencyCode => {
-                    const selected = currencyCode === selectedCurrencyCode;
-                    return (
-                        <button
-                            key={currencyCode}
-                            className={`currency-sheet-option${selected ? ' is-selected' : ''}`}
-                            type="button"
-                            role="radio"
-                            aria-checked={selected}
-                            disabled={currencyLoading}
-                            onClick={() => {
-                                onSelect(currencyCode);
-                                onClose();
-                            }}
-                        >
-                            <span className="currency-sheet-option-copy">
-                                <strong>{currencyCode}</strong>
-                                {currencyCode === 'USDT' ? (
-                                    <small>
-                                        {isZh
-                                            ? '按锁价金额通过 TRC20 付款'
-                                            : 'Pay the locked amount over TRC20'}
-                                    </small>
-                                ) : null}
-                            </span>
-                            {selected ? <Check aria-hidden="true" /> : null}
-                        </button>
-                    );
-                })}
             </div>
         </Sheet>
     );
@@ -552,7 +488,7 @@ export function HomePage() {
     const [heroInteractionPaused, setHeroInteractionPaused] = useState(false);
     const [noticeIndex, setNoticeIndex] = useState(0);
     const [openNoticeId, setOpenNoticeId] = useState<string | null>(null);
-    const [currencySheetOpen, setCurrencySheetOpen] = useState(false);
+    const [preferencesOpen, setPreferencesOpen] = useState(false);
     const [heroGestureActive, setHeroGestureActive] = useState(false);
     const [heroAutoplayStopped, setHeroAutoplayStopped] = useState(false);
     const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -835,13 +771,24 @@ export function HomePage() {
     const colorfulQuickLinks = isColorfulHomepageStyle(quickBlock?.settings?.visualStyle);
 
     if (desktop) {
+        const previewParameters =
+            typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        const previewHomeScenario =
+            previewParameters?.get('storefrontPreviewEmbedded') === '1'
+                ? previewParameters.get('storefrontPreviewScenario')
+                : null;
         return (
             <main
                 className="page home-page desktop-neo-home-page"
                 data-page-pending={loading ? 'query' : undefined}
             >
                 <DesktopUnifiedHome
-                    products={products}
+                    products={
+                        previewHomeScenario === 'empty' || previewHomeScenario === 'loading' ? [] : products
+                    }
+                    loading={
+                        previewHomeScenario === 'loading' || (previewHomeScenario !== 'empty' && loading)
+                    }
                     collections={collections}
                     contentBlocks={contentBlocks}
                     language={language}
@@ -873,53 +820,26 @@ export function HomePage() {
                     <strong>{storefrontName}</strong>
                 </button>
                 <div className="topbar-actions">
-                    {currencySelectorEnabled && availableCurrencyCodes.length > 1 ? (
-                        <div className="topbar-capsule">
-                            <button
-                                className="currency-select"
-                                type="button"
-                                disabled={currencyLoading}
-                                onClick={() => setCurrencySheetOpen(true)}
-                                aria-label={isZh ? '选择付款币种' : 'Choose payment currency'}
-                                title={isZh ? '选择付款币种' : 'Choose payment currency'}
-                                aria-haspopup="dialog"
-                                aria-expanded={currencySheetOpen}
-                            >
-                                <span>{displayCurrencyCode}</span>
-                                <ChevronDown aria-hidden="true" />
-                            </button>
-                            <span className="topbar-capsule-divider" aria-hidden="true" />
-                            <button
-                                className="language-button"
-                                type="button"
-                                onClick={onToggleLanguage}
-                                aria-label={isZh ? '切换为英文' : 'Switch to Chinese'}
-                            >
-                                {isZh ? '中' : 'EN'}
-                            </button>
-                        </div>
-                    ) : (
-                        <button
-                            className="language-button"
-                            type="button"
-                            onClick={onToggleLanguage}
-                            aria-label={isZh ? '切换为英文' : 'Switch to Chinese'}
-                        >
-                            {isZh ? '中' : 'EN'}
-                        </button>
-                    )}
+                    <LocalePreferencesTrigger
+                        language={language}
+                        currencyCode={displayCurrencyCode}
+                        expanded={preferencesOpen}
+                        onClick={() => setPreferencesOpen(true)}
+                    />
                     <NoticeButton language={language} onClick={onNotifications} />
                 </div>
             </header>
 
-            {currencySheetOpen ? (
-                <CurrencySelectionSheet
-                    currencyCodes={availableCurrencyCodes}
+            {preferencesOpen ? (
+                <LocalePreferencesSheet
+                    currencyCodes={currencySelectorEnabled ? availableCurrencyCodes : [displayCurrencyCode]}
                     selectedCurrencyCode={displayCurrencyCode}
                     currencyLoading={currencyLoading}
                     language={language}
-                    onSelect={onCurrencyChange}
-                    onClose={() => setCurrencySheetOpen(false)}
+                    marketLabel={market.label}
+                    onToggleLanguage={onToggleLanguage}
+                    onSelectCurrency={onCurrencyChange}
+                    onClose={() => setPreferencesOpen(false)}
                 />
             ) : null}
 

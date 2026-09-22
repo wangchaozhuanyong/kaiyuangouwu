@@ -4,8 +4,10 @@ import {
     auditStorefrontSemanticPalette,
     normalizeStorefrontColor,
     resolveStorefrontSemanticPalette,
+    resolveStorefrontSkinTreatment,
     semanticPaletteCssVariables,
     storefrontContrastRatio,
+    storefrontSkinCssVariables,
 } from './storefront-semantic-palette';
 
 describe('storefront semantic palette', () => {
@@ -61,5 +63,40 @@ describe('storefront semantic palette', () => {
             '--accent-foreground': '#ffffff',
         });
         expect(Object.values(variables).every(value => /^#[0-9a-f]{6}$/i.test(value))).toBe(true);
+    });
+
+    it('keeps skin surfaces distinct while preserving strong accessible control borders', () => {
+        const treatments = (['classic', 'modern-oriental', 'neo-minimalist'] as const).map(presetId =>
+            resolveStorefrontSkinTreatment(presetId),
+        );
+        expect(new Set(treatments.map(treatment => treatment.divider)).size).toBe(3);
+        expect(resolveStorefrontSkinTreatment('modern-oriental').displayFont).toContain('Songti SC');
+        for (const presetId of ['classic', 'modern-oriental', 'neo-minimalist'] as const) {
+            const palette = resolveStorefrontSemanticPalette(presetId);
+            const paletteVariables = semanticPaletteCssVariables(palette);
+            const skinVariables = storefrontSkinCssVariables(presetId);
+            expect(
+                storefrontContrastRatio(paletteVariables['--line'], palette.surface),
+            ).toBeGreaterThanOrEqual(3);
+            expect(skinVariables).toMatchObject({
+                '--skin-divider': resolveStorefrontSkinTreatment(presetId).divider,
+                '--skin-display-font': resolveStorefrontSkinTreatment(presetId).displayFont,
+                '--skin-card-radius': resolveStorefrontSkinTreatment(presetId).cardRadius,
+            });
+        }
+    });
+
+    it('keeps all five service icon tones readable in every skin', () => {
+        for (const presetId of ['classic', 'modern-oriental', 'neo-minimalist'] as const) {
+            const variables = storefrontSkinCssVariables(presetId);
+            for (const tone of ['security', 'mail', 'studio', 'coupon', 'support']) {
+                expect(
+                    storefrontContrastRatio(
+                        variables[`--skin-tool-${tone}-foreground`],
+                        variables[`--skin-tool-${tone}-background`],
+                    ),
+                ).toBeGreaterThanOrEqual(3);
+            }
+        }
     });
 });

@@ -1,14 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { LocalePreferencesSheet } from './components/common/locale-preferences';
 import { DesktopLayoutContext } from './desktop-layout';
-import {
-    buildHomeNoticeItems,
-    CurrencySelectionSheet,
-    HomePage,
-    NoticeDetailSheet,
-    type HomePageProps,
-} from './pages/home-page';
+import { buildHomeNoticeItems, HomePage, NoticeDetailSheet, type HomePageProps } from './pages/home-page';
 import { HomePageContext } from './storefront-page-contexts';
 import { aggregateFlashSaleProducts, FlashSalePage, FlashSaleSection } from './storefront-ui/content-ui';
 import { readStorefrontStylesheet } from './test-stylesheet';
@@ -845,7 +840,7 @@ describe('HomePage mobile header layout', () => {
         expect(stylesheet).not.toMatch(/\.home-topbar > \.search-trigger/);
     });
 
-    it('uses a compact dialog trigger for the selected currency', () => {
+    it('uses one compact dialog trigger for language and currency preferences', () => {
         const markup = renderHome({
             availableCurrencyCodes: ['CNY', 'MYR', 'USDT'],
             currencySelectorEnabled: true,
@@ -855,32 +850,38 @@ describe('HomePage mobile header layout', () => {
         });
         const stylesheet = readStorefrontStylesheet();
 
-        expect(markup).toContain('class="currency-select"');
+        expect(markup).toContain('class="locale-preferences-trigger"');
         expect(markup).toContain('aria-haspopup="dialog"');
         expect(markup).toContain('aria-expanded="false"');
+        expect(markup).toContain('<span>简中</span>');
         expect(markup).toContain('<span>USDT</span>');
         expect(markup).not.toContain('<select');
-        expect(stylesheet).toMatch(/\.currency-select\s*\{[^}]*min-width:\s*58px;/);
     });
 });
 
-describe('CurrencySelectionSheet', () => {
-    it('shows every currency and identifies the selected USDT payment option', () => {
+describe('LocalePreferencesSheet', () => {
+    it('stages language and currency in one accessible preference dialog', () => {
         const markup = renderToStaticMarkup(
-            <CurrencySelectionSheet
+            <LocalePreferencesSheet
                 currencyCodes={['MYR', 'USDT']}
                 selectedCurrencyCode="USDT"
                 currencyLoading={false}
                 language="zh"
-                onSelect={vi.fn()}
+                marketLabel="马来西亚"
+                onToggleLanguage={vi.fn()}
+                onSelectCurrency={vi.fn()}
                 onClose={vi.fn()}
             />,
         );
 
-        expect(markup).toContain('class="sheet currency-sheet"');
+        expect(markup).toContain('class="sheet locale-preferences-sheet"');
+        expect(markup).toContain('语言与货币');
+        expect(markup).toContain('马来西亚');
+        expect(markup.match(/role="radiogroup"/g)).toHaveLength(2);
         expect(markup).toContain('role="radiogroup"');
         expect(markup).toContain('role="radio" aria-checked="true"');
-        expect(markup).toContain('按锁价金额通过 TRC20 付款');
+        expect(markup).toContain('TRC20 锁价付款');
+        expect(markup).toContain('保存设置');
     });
 });
 
@@ -897,18 +898,69 @@ describe('HomePage desktop intro layout', () => {
         items: [],
     };
 
-    it('expands the hero instead of showing an empty shortcut card', () => {
+    it('uses real navigation fallbacks when managed shortcuts are empty', () => {
         const desktopMarkup = renderHome({ contentBlocks: [quickLinksBlock] }, true);
         const mobileMarkup = renderHome({ contentBlocks: [quickLinksBlock] });
-        const stylesheet = readStorefrontStylesheet(['./styles/desktop-home.css']);
 
-        expect(desktopMarkup).not.toContain('proto-hero-tools');
+        expect(desktopMarkup).toContain('proto-hero-tools');
+        expect(desktopMarkup).toContain('帮助中心');
         expect(desktopMarkup).not.toContain('快捷入口将从后台装修内容中读取');
-        expect(stylesheet).toMatch(/\.proto-hero-featured:only-child\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/);
         expect(mobileMarkup).toBe(renderHome({ contentBlocks: [] }));
     });
 
-    it('reuses every managed shortcut in the desktop Bento without changing mobile content', () => {
+    it('never promotes the first product into the desktop hero and respects managed hero copy', () => {
+        const fallbackMarkup = renderHome({ storefrontTagline: '在马生活，好物相伴' }, true);
+        expect(fallbackMarkup).toContain('<h1 class="proto-flagship-title">在马生活，好物相伴</h1>');
+        expect(fallbackMarkup).not.toContain('<h1 class="proto-flagship-title">不应自动进入轮播的商品</h1>');
+        expect(fallbackMarkup).not.toContain('发现好物');
+
+        const managedMarkup = renderHome({ contentBlocks: [heroBlock] }, true);
+        expect(managedMarkup).toContain('<h1 class="proto-flagship-title">后台配置的首页轮播</h1>');
+        expect(managedMarkup).toContain('只显示后台配置的内容');
+        expect(managedMarkup).toContain('浏览商品');
+        expect(managedMarkup).not.toContain('查看活动');
+    });
+
+    it('renders distinct desktop loading and empty states without altering the mobile layout', () => {
+        const loadingMarkup = renderHome({ loading: true, products: [] }, true);
+        const emptyMarkup = renderHome({ products: [] }, true);
+        const mobileMarkup = renderHome({ products: [] });
+
+        expect(loadingMarkup).toContain('aria-label="商品加载中"');
+        expect(loadingMarkup.match(/proto-product-skeleton/g)).toHaveLength(4);
+        expect(emptyMarkup).toContain('当前店铺暂无上架商品');
+        expect(emptyMarkup).not.toContain('proto-product-skeleton');
+        expect(mobileMarkup).not.toContain('proto-home-container');
+    });
+
+    it('uses skin surface roles for desktop cards instead of repeating control outlines', () => {
+        const stylesheet = readStorefrontStylesheet(['./styles/desktop-home.css']);
+        expect(stylesheet).toMatch(
+            /\.proto-hero-featured\s*\{[^}]*border-radius:\s*var\(--skin-hero-radius\);/,
+        );
+        expect(stylesheet).toMatch(/\.proto-product-grid > \.product-card\s*\{[^}]*border:\s*0;/);
+        expect(stylesheet).toMatch(/\.proto-filter-bar\s*\{[^}]*border:\s*none;/);
+        expect(stylesheet).toMatch(
+            // eslint-disable-next-line max-len -- The control surface, elevation and border belong to one selector contract.
+            /\.proto-sort-controls select\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--control-surface, var\(--soft\)\);[^}]*box-shadow:\s*var\(--control-elevation, var\(--shadow-sm\)\);/,
+        );
+    });
+
+    it('uses the managed hero image as a full-bleed backdrop with readable overlaid copy', () => {
+        const stylesheet = readStorefrontStylesheet(['./styles/desktop-home.css']);
+
+        expect(stylesheet).toMatch(
+            /\.proto-featured-media-frame\s*\{[^}]*inset:\s*0;[^}]*width:\s*100%;[^}]*height:\s*100%;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.proto-featured-media-frame \.proto-featured-media\s*\{[^}]*object-fit:\s*cover;[^}]*object-position:\s*center;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.proto-hero-featured\.has-media::after\s*\{[^}]*background:\s*linear-gradient\(/,
+        );
+    });
+
+    it('renders only the active desktop shortcut page without changing mobile content', () => {
         const overrides: Partial<HomePageProps> = {
             collections: [
                 {
@@ -932,13 +984,15 @@ describe('HomePage desktop intro layout', () => {
                             targetValue: 'child-collection',
                         },
                         { label: '自定义服务入口', targetType: 'PAGE', targetValue: 'services' },
+                        { label: '第四个快捷入口', targetType: 'PAGE', targetValue: 'coupons' },
+                        { label: '第五个快捷入口', targetType: 'PAGE', targetValue: 'support' },
                     ].map((item, position) => ({
                         ...item,
                         targetType: item.targetType as 'COLLECTION' | 'PAGE',
                         id: `shortcut-${position}`,
                         enabled: true,
                         position,
-                        imageUrl: null,
+                        imageUrl: `/assets/preview/shortcut-${position}.png`,
                         description: '',
                     })),
                 },
@@ -949,10 +1003,25 @@ describe('HomePage desktop intro layout', () => {
         expect(desktopMarkup).toContain('主分类快捷入口');
         expect(desktopMarkup).toContain('子分类快捷入口');
         expect(desktopMarkup).toContain('自定义服务入口');
+        expect(desktopMarkup).not.toContain('第四个快捷入口');
+        expect(desktopMarkup).not.toContain('第五个快捷入口');
+        expect(desktopMarkup.match(/preset=storefront-icon-64/g) ?? []).toHaveLength(3);
+        expect(desktopMarkup).not.toContain('src="/assets/preview/shortcut-0.png"');
+        expect(desktopMarkup).not.toContain('shortcut-3.png');
+        expect(desktopMarkup).toContain('aria-label="上一组快捷入口"');
+        expect(desktopMarkup).toContain('aria-label="下一组快捷入口"');
+        expect(desktopMarkup).toContain('proto-tools-title-mark');
+        expect(desktopMarkup).toContain('proto-tools-page-status');
+        expect(desktopMarkup).toContain('1 / 2');
+        expect(desktopMarkup.indexOf('proto-tools-title')).toBeLessThan(
+            desktopMarkup.indexOf('proto-tools-pagination'),
+        );
         const mobileMarkup = renderHome(overrides);
         expect(mobileMarkup).toContain('<b>主分类快捷入口</b>');
         expect(mobileMarkup).toContain('<b>子分类快捷入口</b>');
         expect(mobileMarkup).toContain('<b>自定义服务入口</b>');
+        expect(mobileMarkup).toContain('<b>第四个快捷入口</b>');
+        expect(mobileMarkup).toContain('<b>第五个快捷入口</b>');
     });
 
     it('keeps adjacent hero, trust and shortcuts as independent full-width floors', () => {

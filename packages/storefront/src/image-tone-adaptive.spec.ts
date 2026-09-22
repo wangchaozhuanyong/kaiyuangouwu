@@ -45,6 +45,13 @@ describe('Adaptive Image Tone & Typography Contrast Engine', () => {
         expect(style['--hero-body-shadow']).toContain('rgba(255, 255, 255');
     });
 
+    it('keeps secondary text light while image tone is still unknown when title is light', () => {
+        const style = heroThemeStyle({ textColor: '#ffffff' });
+        expect(style['--hero-title-color']).toBe('#ffffff');
+        expect(style['--hero-body-color']).toBe('#f1f5f9');
+        expect(style['--hero-overlay-strong']).not.toContain('255, 255, 255');
+    });
+
     it('uses a strong protective overlay scrim to keep text readable on any background image', () => {
         const lightStyle = heroThemeStyle({}, 'light');
         // Strong protective scrim (0.94) ensures dark text remains readable on any photo

@@ -198,7 +198,7 @@
 .category-product-list .product-row-name {
     font-size: 13.5px;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--text);
     line-height: 1.35;
     white-space: nowrap;
     overflow: hidden;
@@ -209,7 +209,7 @@
 
 .category-product-list .product-row-desc {
     font-size: 11px;
-    color: #94a3b8;
+    color: var(--muted);
     line-height: 1.2;
     overflow: hidden;
     white-space: nowrap;
@@ -220,7 +220,7 @@
 .category-product-list .product-row-badge {
     font-size: 11px;
     font-weight: 500;
-    color: #0284c7;
+    color: var(--accent-ink);
     background: transparent;
     padding: 0;
     border: 0;
@@ -729,10 +729,10 @@
 .filter-actions .reset-filter-button {
     width: 88px;
     height: 48px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--line);
     border-radius: 9999px;
-    background: #f8fafc;
-    color: #475569;
+    background: var(--soft);
+    color: var(--muted);
     font-size: 14px;
     font-weight: 600;
     transition:
@@ -743,9 +743,9 @@
 }
 
 .filter-actions .reset-filter-button:hover {
-    background: #f1f5f9;
-    color: #0f172a;
-    border-color: #cbd5e1;
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--line-strong);
 }
 
 .filter-actions .filter-confirm-button {
@@ -754,10 +754,10 @@
     border: 0;
     border-radius: 9999px;
     background: var(--accent);
-    color: #ffffff;
+    color: var(--accent-foreground);
     font-size: 14px;
     font-weight: 700;
-    box-shadow: 0 4px 14px rgba(209, 60, 48, 0.28);
+    box-shadow: var(--accent-shadow);
     transition:
         transform 150ms ease,
         background-color 150ms ease,
@@ -765,9 +765,9 @@
 }
 
 .filter-actions .filter-confirm-button:hover {
-    background: #b82f24;
+    background: var(--accent-hover);
     transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba(209, 60, 48, 0.38);
+    box-shadow: var(--accent-shadow);
 }
 
 .select-all {
@@ -1737,13 +1737,14 @@
 }
 
 .primary-action:hover:not(:disabled) {
-    background: #b82f24;
-    box-shadow: 0 6px 18px rgba(209, 60, 48, 0.38);
+    background: var(--accent-hover);
+    color: var(--accent-foreground);
+    box-shadow: var(--accent-shadow);
 }
 
 .primary-action:disabled {
-    background: #e2e8f0;
-    color: #94a3b8;
+    background: var(--accent-disabled-bg);
+    color: var(--accent-disabled-text);
     box-shadow: none;
 }
 

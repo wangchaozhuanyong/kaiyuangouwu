@@ -19,7 +19,14 @@ export function preloadRouteMedia(route: RouteState, blocks: StorefrontContentBl
         sizes = '(min-width: 1024px) 640px, 100vw';
     } else if (route.name === 'home') {
         source = blocks.find(block => block.type === 'HERO' && block.imageUrl?.trim())?.imageUrl ?? undefined;
-        kind = 'hero';
+        if (source) {
+            kind = 'hero';
+        } else {
+            const firstProduct = products[0];
+            if (firstProduct) source = productImage(firstProduct) ?? undefined;
+            kind = 'detail';
+            sizes = '(min-width: 1280px) 202px, (min-width: 1024px) 18vw, calc(50vw - 24px)';
+        }
     } else if (route.name === 'product') {
         const product = products.find(item => item.id === route.id);
         if (product) source = productImage(product) ?? undefined;

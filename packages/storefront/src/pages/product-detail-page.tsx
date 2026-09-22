@@ -1,5 +1,14 @@
 import { useNavigate, useRouter } from '@tanstack/react-router';
-import { ChevronRight, CircleCheck, Heart, RotateCcw, Share2, ShoppingCart, Truck } from 'lucide-react';
+import {
+    ArrowLeft,
+    ChevronRight,
+    CircleCheck,
+    Heart,
+    RotateCcw,
+    Share2,
+    ShoppingCart,
+    Truck,
+} from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
 
 import { ShopApi } from '../api';
@@ -17,6 +26,7 @@ import { SubHeader } from '../storefront-ui/page-shell';
 import { formatMoney, SafeImage } from '../storefront-ui/product-display';
 import { ProductGallery } from '../storefront-ui/product-gallery';
 import { ProductSection } from '../storefront-ui/product-section';
+import '../styles/product-detail-surfaces.css';
 import {
     DigitalDeliveryMode,
     MarketConfig,
@@ -146,10 +156,21 @@ export function ProductDetailPage() {
     };
 
     useEffect(() => {
-        const updateHeader = () => setHeaderScrolled(window.scrollY > 16);
+        let frame = 0;
+        const updateHeader = () => {
+            frame = 0;
+            const next = window.scrollY > 16;
+            setHeaderScrolled(current => (current === next ? current : next));
+        };
+        const scheduleHeaderUpdate = () => {
+            if (!frame) frame = window.requestAnimationFrame(updateHeader);
+        };
         updateHeader();
-        window.addEventListener('scroll', updateHeader, { passive: true });
-        return () => window.removeEventListener('scroll', updateHeader);
+        window.addEventListener('scroll', scheduleHeaderUpdate, { passive: true });
+        return () => {
+            window.removeEventListener('scroll', scheduleHeaderUpdate);
+            if (frame) window.cancelAnimationFrame(frame);
+        };
     }, []);
 
     const desktop = useDesktopLayout();
@@ -417,21 +438,48 @@ export function ProductDetailPage() {
 
     return (
         <main className="page subpage product-detail-page">
-            <SubHeader
-                className={`product-detail-header${headerScrolled ? ' is-scrolled' : ''}`}
-                title={isZh ? '商品详情' : 'Product details'}
-                language={language}
-                onBack={goBack}
-                action={
+            {desktop ? (
+                <nav
+                    className="desktop-product-toolbar"
+                    aria-label={isZh ? '商品详情导航' : 'Product details navigation'}
+                >
+                    <div className="desktop-product-toolbar-path">
+                        <button type="button" onClick={goBack} className="desktop-product-toolbar-back">
+                            <ArrowLeft aria-hidden="true" />
+                            <span>{isZh ? '返回商品列表' : 'Back to products'}</span>
+                        </button>
+                        <span className="desktop-product-toolbar-divider" aria-hidden="true" />
+                        <span className="desktop-product-toolbar-current" aria-current="page">
+                            {isZh ? '商品详情' : 'Product details'}
+                        </span>
+                    </div>
                     <button
                         type="button"
                         onClick={() => void shareProduct()}
+                        className="desktop-product-toolbar-share"
                         aria-label={isZh ? '分享' : 'Share'}
                     >
-                        <Share2 />
+                        <Share2 aria-hidden="true" />
+                        <span>{isZh ? '分享' : 'Share'}</span>
                     </button>
-                }
-            />
+                </nav>
+            ) : (
+                <SubHeader
+                    className={`product-detail-header${headerScrolled ? ' is-scrolled' : ''}`}
+                    title={isZh ? '商品详情' : 'Product details'}
+                    language={language}
+                    onBack={goBack}
+                    action={
+                        <button
+                            type="button"
+                            onClick={() => void shareProduct()}
+                            aria-label={isZh ? '分享' : 'Share'}
+                        >
+                            <Share2 />
+                        </button>
+                    }
+                />
+            )}
             {desktop ? (
                 <div className="desktop-product-purchase">
                     <ProductGallery product={product} language={language} />
@@ -523,7 +571,7 @@ export function ProductDetailPage() {
                         alt={isZh ? `${product.name}细节展示` : `${product.name} details`}
                         imageKind="detail"
                         frameClassName="detail-description-media"
-                        sizes="(min-width: 1024px) 960px, 100vw"
+                        sizes="(min-width: 1024px) 790px, 100vw"
                         loading="lazy"
                     />
                 )}

@@ -74,7 +74,7 @@ import {
     type AppShellProfileContextData,
 } from '../graphql/auth.graphql';
 import { requestAppNavigation } from '../hooks/use-unsaved-changes-warning';
-import { preloadCommonRoutes, preloadRoute, preloadSettingsRoutes } from '../route-modules';
+import { allowsBackgroundRoutePreload, preloadCommonRoutes, preloadRoute } from '../route-modules';
 import { useTheme } from '../theme/theme-context';
 import {
     canAccessAdminPath,
@@ -86,6 +86,7 @@ import { commerceModeAllowsPath } from '../utils/commerce-mode';
 import { isInputMethodKey } from '../utils/input-method';
 import { toUserFacingError } from '../utils/user-facing-error';
 
+import '../extensions/installed-extensions';
 import {
     filterAccessibleAdminChannels,
     hasAppShellPermissionSnapshot,
@@ -311,8 +312,25 @@ export function AppShell() {
     const refetchProfile = refetchAppShell;
 
     useEffect(() => {
-        preloadSettingsRoutes();
-        const timer = window.setTimeout(preloadCommonRoutes, 1200);
+        const connection = (
+            navigator as Navigator & {
+                connection?: { effectiveType?: string; saveData?: boolean };
+            }
+        ).connection;
+        if (!allowsBackgroundRoutePreload(connection)) return;
+
+        const idleWindow = window as Window & {
+            cancelIdleCallback?: (handle: number) => void;
+            requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+        };
+        const warmCommonRoutes = () => {
+            if (document.visibilityState === 'visible') preloadCommonRoutes();
+        };
+        if (idleWindow.requestIdleCallback) {
+            const idle = idleWindow.requestIdleCallback(warmCommonRoutes, { timeout: 5_000 });
+            return () => idleWindow.cancelIdleCallback?.(idle);
+        }
+        const timer = window.setTimeout(warmCommonRoutes, 2_500);
         return () => window.clearTimeout(timer);
     }, []);
 

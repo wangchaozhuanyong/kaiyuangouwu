@@ -30,6 +30,7 @@ import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions, RouteState } from './storefront-router';
 import { CouponSheet } from './storefront-ui/cart-ui';
 import { SafeImage } from './storefront-ui/product-display';
+import './styles/checkout-payment-surfaces.css';
 import { checkoutPageStyles, pageClassName } from './tailwind/checkout-page-styles';
 import { TaxSummaryRows } from './tax-summary';
 import {

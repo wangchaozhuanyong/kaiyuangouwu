@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from 'lucide-react';
-import { createElement, useMemo, useState, type ReactNode } from 'react';
+import { createElement, Suspense, useMemo, useState, type ReactNode } from 'react';
 import { FeatureHelpButton } from '../components/FeatureHelp';
 import type { FeatureHelpTopic } from '../components/feature-help-content';
 import type { CustomFieldDefinition, CustomFieldValueMap, StructFieldDefinition } from './custom-field-types';
@@ -116,12 +116,18 @@ function CustomFieldControl({
     if (pluginInput) {
         return (
             <FieldShell label={label} description={description} error={error} fullWidth={fullWidth}>
-                {createElement(pluginInput, {
-                    field: field as unknown as Record<string, unknown>,
-                    value,
-                    onChange,
-                    disabled,
-                })}
+                <Suspense
+                    fallback={
+                        <div className="h-10 animate-pulse rounded-lg bg-slate-100" aria-hidden="true" />
+                    }
+                >
+                    {createElement(pluginInput, {
+                        field: field as unknown as Record<string, unknown>,
+                        value,
+                        onChange,
+                        disabled,
+                    })}
+                </Suspense>
             </FieldShell>
         );
     }

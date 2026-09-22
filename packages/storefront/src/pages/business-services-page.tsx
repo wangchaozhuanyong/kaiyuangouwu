@@ -1,8 +1,7 @@
-import { ExternalLink, Puzzle, Waypoints } from 'lucide-react';
+import { ExternalLink, Puzzle } from 'lucide-react';
 
 import { ClientPluginSlot, resolveClientPlugins } from '../client-plugins/client-plugin-registry';
 import { resolveBottomNavigationItems } from '../components/common/bottom-navigation';
-import { useDesktopLayout } from '../desktop-layout';
 import { BusinessServicesPageContext } from '../storefront-page-contexts';
 import { type RouteState } from '../storefront-router';
 import {
@@ -24,7 +23,6 @@ export interface BusinessServicesPageProps {
 export function BusinessServicesPage() {
     const { contentBlocks, language, onNavigate, onContentTarget } = BusinessServicesPageContext.useValue();
     const isZh = language === 'zh';
-    const desktop = useDesktopLayout();
     const clientPluginBlock = contentBlocks.find(
         block => block.type === 'CLIENT_PLUGINS' && block.code === CLIENT_PLUGIN_BLOCK_CODE,
     );
@@ -48,50 +46,33 @@ export function BusinessServicesPage() {
             : null;
     const plugins = resolveClientPlugins(clientPluginBlock, 'BUSINESS_SERVICES_MAIN');
 
-    const hero = (
-        <section className="business-services-hero" aria-labelledby="business-services-heading">
-            <span className="business-services-hero-icon" aria-hidden="true">
-                <Waypoints strokeWidth={1.8} />
-            </span>
-            <div className="business-services-hero-copy">
-                <h2 id="business-services-heading">{heroTitle}</h2>
-                <p>{heroDescription}</p>
-            </div>
-            {heroLinkTarget ? (
-                <button
-                    type="button"
-                    className="business-services-hero-link"
-                    onClick={() => onContentTarget('URL', heroLinkTarget)}
-                >
-                    {isZh ? '点击前往' : 'Open link'}
-                    <ExternalLink aria-hidden="true" />
-                </button>
-            ) : null}
-        </section>
-    );
-
     return (
         <main className="page business-services-page">
-            <header className="topbar business-services-topbar">
-                <h1 className="business-services-page-title">{pageTitle}</h1>
+            <header className="business-services-heading">
+                <div className="business-services-heading-copy">
+                    <span className="business-services-heading-kicker">{heroTitle}</span>
+                    <h1 className="business-services-page-title">{pageTitle}</h1>
+                    <p>{heroDescription}</p>
+                </div>
+                {heroLinkTarget ? (
+                    <button
+                        type="button"
+                        className="business-services-heading-link"
+                        onClick={() => onContentTarget('URL', heroLinkTarget)}
+                    >
+                        {isZh ? '点击前往' : 'Open link'}
+                        <ExternalLink aria-hidden="true" />
+                    </button>
+                ) : null}
             </header>
-
-            {!desktop && hero}
 
             <ClientPluginSlot
                 block={clientPluginBlock}
                 placement="BUSINESS_SERVICES_MAIN"
-                toolsFirst={desktop}
+                toolsFirst
                 language={language}
                 onNavigate={onNavigate}
             />
-
-            {desktop && (
-                <details className="desktop-service-description">
-                    <summary>{isZh ? '服务说明' : 'About these services'}</summary>
-                    {hero}
-                </details>
-            )}
 
             {!plugins.length ? (
                 <section className="business-services-empty" aria-live="polite">

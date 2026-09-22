@@ -23,7 +23,6 @@ export function DesktopCategoryNavigation() {
     const activeCollection = isCatalogPage
         ? collections.find(collection => collection.id === route.collectionId)
         : undefined;
-    const activeChild = activeCollection?.children?.find(collection => collection.id === route.childId);
     const update = (changes: Partial<RouteState>) => navigate(catalogRouteWithChanges(catalogRoute, changes));
     const clearFilters = () => navigate(catalogRouteWithChanges({ name: 'home' }));
 
@@ -34,7 +33,6 @@ export function DesktopCategoryNavigation() {
             aria-label={isZh ? '商品分类' : 'Product categories'}
         >
             <div className="desktop-category-row">
-                <span className="desktop-category-label">{isZh ? '一级分类' : 'Categories'}</span>
                 <nav
                     className="desktop-local-navigation"
                     aria-label={isZh ? '选择商品分类' : 'Choose a category'}
@@ -69,33 +67,6 @@ export function DesktopCategoryNavigation() {
                     ))}
                 </nav>
             </div>
-            {activeCollection?.children?.length ? (
-                <div className="desktop-category-row desktop-category-row-children">
-                    <span className="desktop-category-label">{isZh ? '二级分类' : 'Subcategories'}</span>
-                    <nav
-                        className="desktop-subcategories"
-                        aria-label={isZh ? '选择子分类' : 'Choose a subcategory'}
-                    >
-                        <button
-                            type="button"
-                            aria-pressed={!activeChild}
-                            onClick={() => update({ childId: 'all' })}
-                        >
-                            {isZh ? '全部' : 'All'}
-                        </button>
-                        {activeCollection.children.map(child => (
-                            <button
-                                key={child.id}
-                                type="button"
-                                aria-pressed={activeChild?.id === child.id}
-                                onClick={() => update({ childId: child.id })}
-                            >
-                                {child.name}
-                            </button>
-                        ))}
-                    </nav>
-                </div>
-            ) : null}
             {runtime.loading && !collections.length ? (
                 <p className="desktop-category-status" role="status">
                     {isZh ? '正在加载分类…' : 'Loading categories…'}
@@ -111,5 +82,39 @@ export function DesktopCategoryNavigation() {
                 </button>
             ) : null}
         </section>
+    );
+}
+
+export function DesktopSubcategoryNavigation() {
+    const runtime: DesktopCategoryNavigationContext = useStorefront();
+    const { route, language, collections, navigate } = runtime;
+    if (route.name !== 'category') return null;
+
+    const activeCollection = collections.find(collection => collection.id === route.collectionId);
+    if (!activeCollection?.children?.length) return null;
+
+    const activeChild = activeCollection.children.find(collection => collection.id === route.childId);
+    const update = (changes: Partial<RouteState>) => navigate(catalogRouteWithChanges(route, changes));
+    const isZh = language === 'zh';
+
+    return (
+        <aside className="desktop-subcategory-sidebar" aria-label={isZh ? '子分类' : 'Subcategories'}>
+            <strong>{activeCollection.name}</strong>
+            <nav aria-label={isZh ? `选择${activeCollection.name}分类` : `Choose ${activeCollection.name}`}>
+                <button type="button" aria-pressed={!activeChild} onClick={() => update({ childId: 'all' })}>
+                    {isZh ? `全部${activeCollection.name}` : `All ${activeCollection.name}`}
+                </button>
+                {activeCollection.children.map(child => (
+                    <button
+                        key={child.id}
+                        type="button"
+                        aria-pressed={activeChild?.id === child.id}
+                        onClick={() => update({ childId: child.id })}
+                    >
+                        {child.name}
+                    </button>
+                ))}
+            </nav>
+        </aside>
     );
 }

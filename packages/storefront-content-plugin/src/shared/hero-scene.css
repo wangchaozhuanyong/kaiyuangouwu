@@ -1,9 +1,9 @@
 html[data-storefront-preset='modern-oriental'] {
-    --skin-hero-background: #203346;
+    --skin-hero-background: #1c302d;
     --skin-hero-foreground: #fffdf8;
-    --skin-hero-body: #ede5d6;
-    --skin-hero-accent: #a63d32;
-    --skin-hero-secondary: #8b3027;
+    --skin-hero-body: #e8dfd0;
+    --skin-hero-accent: #9f3b30;
+    --skin-hero-secondary: #b08a4a;
 }
 
 .hero {
@@ -357,7 +357,7 @@ html[data-storefront-preset='modern-oriental'] {
 }
 
 html[data-storefront-preset='modern-oriental'] .hero {
-    border: 1px solid var(--line, #ded5c6);
+    border: 1px solid var(--skin-divider, #ded2c0);
     border-radius: var(--radius-md, 12px);
-    box-shadow: var(--shadow-md, 0 8px 24px rgb(62 45 25 / 7%));
+    box-shadow: var(--shadow-md, 0 14px 34px rgb(55 39 22 / 10%));
 }

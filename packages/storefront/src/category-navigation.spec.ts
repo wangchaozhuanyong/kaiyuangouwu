@@ -74,6 +74,7 @@ describe('category navigation labels', () => {
 
 describe('category navigation responsive spacing', () => {
     const stylesheet = readStorefrontStylesheet();
+    const presetStylesheet = readFileSync(new URL('./styles/visual-presets.css', import.meta.url), 'utf8');
     const categoryPageSource = readFileSync(new URL('./pages/category-page.tsx', import.meta.url), 'utf8');
 
     it('keeps client plugin spacing symmetric at every insertion point', () => {
@@ -88,7 +89,7 @@ describe('category navigation responsive spacing', () => {
             /\.category-client-plugin-slot\.is-[^{]+\{[^}]*(?:padding-top|padding-bottom):/,
         );
         expect(stylesheet).toMatch(
-            /\.business-services-page \.category-client-plugin-slot\s*\{[^}]*--client-plugin-slot-block-space:\s*10px;[^}]*--client-plugin-slot-inline-space:\s*12px;/,
+            /\.business-services-page \.category-client-plugin-slot\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*padding:\s*0;/,
         );
     });
 
@@ -118,10 +119,18 @@ describe('category navigation responsive spacing', () => {
         expect(stylesheet).toMatch(/\.primary-category-switcher\s*\{[^}]*height:\s*80px;/);
     });
 
-    it('balances the primary category row and uses a category-list symbol for the all entry', () => {
+    it('uses the page viewport for mobile catalog scrolling instead of a nested product scrollbar', () => {
         expect(stylesheet).toMatch(
-            /\.primary-category-strip\s*\{[^}]*height:\s*81px;[^}]*padding:\s*0 0 12px;/,
+            /\.category-page\s*\{[^}]*height:\s*auto;[^}]*max-height:\s*none;[^}]*overflow:\s*visible;/,
         );
+        expect(stylesheet).toMatch(/\.category-layout\s*\{[^}]*height:\s*auto;[^}]*overflow:\s*visible;/);
+        expect(stylesheet).toMatch(
+            /\.category-results\s*\{[^}]*height:\s*auto;[^}]*max-height:\s*none;[^}]*overflow:\s*visible;/,
+        );
+    });
+
+    it('balances the primary category row and uses a category-list symbol for the all entry', () => {
+        expect(stylesheet).toMatch(/\.primary-category-strip\s*\{[^}]*height:\s*70px;[^}]*padding:\s*0;/);
         expect(stylesheet).toMatch(/\.primary-categories\s*\{[^}]*padding:\s*0 4px 0 10px;/);
         expect(stylesheet).toMatch(/\.primary-categories-all\s*\{[^}]*padding:\s*0 4px 0 0;/);
         expect(stylesheet).toMatch(
@@ -132,7 +141,9 @@ describe('category navigation responsive spacing', () => {
         expect(stylesheet).toMatch(
             /\.primary-categories-all-icon\s*\{[^}]*border:\s*1px solid color-mix\([^}]*color:\s*var\(--accent\);/,
         );
-        expect(stylesheet).toMatch(/\.category-page \.primary-category-strip\s*\{[^}]*gap:\s*4px;/);
+        expect(stylesheet).toMatch(
+            /\.category-page \.primary-category-strip\s*\{[^}]*margin:\s*4px var\(--page-section-inset, 16px\) 8px;[^}]*gap:\s*0;/,
+        );
         expect(stylesheet).toMatch(
             /\.category-page \.primary-categories-all\s*\{[^}]*width:\s*56px;[^}]*min-width:\s*56px;[^}]*flex:\s*0 0 56px;/,
         );
@@ -146,16 +157,66 @@ describe('category navigation responsive spacing', () => {
         expect(stylesheet).toMatch(/\.category-results \.sort-bar\s*\{[^}]*height:\s*44px;/);
     });
 
+    it('aligns mobile search, primary navigation, sorting and product rows to one inset', () => {
+        expect(stylesheet).toMatch(
+            /@media \(max-width:\s*1023px\)[\s\S]*?\.category-page\s*\{[^}]*--page-section-inset:\s*16px;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.category-navigation-shell > \.topbar\.category-topbar\s*\{[^}]*padding:\s*12px var\(--page-section-inset, 16px\);/,
+        );
+        expect(stylesheet).toMatch(
+            /\.category-page \.primary-category-strip\s*\{[^}]*margin:\s*4px var\(--page-section-inset, 16px\) 8px;/,
+        );
+        expect(presetStylesheet).toMatch(
+            /\.category-page \.category-results \.sort-bar\s*\{[^}]*margin:\s*8px var\(--page-section-inset, 16px\) 0;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.category-product-list\s*\{[^}]*padding:\s*8px var\(--page-section-inset, 10px\) 12px;/,
+        );
+    });
+
+    it('keeps equal space above and below the mobile sorting surface', () => {
+        expect(presetStylesheet).toMatch(
+            /\.category-page \.category-results \.sort-bar\s*\{[^}]*margin:\s*8px var\(--page-section-inset, 16px\) 0;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.category-product-list\s*\{[^}]*padding:\s*8px var\(--page-section-inset, 10px\) 12px;/,
+        );
+    });
+
     it('connects the active mobile subcategory to the product area without vertical dividers', () => {
+        const layoutRule = stylesheet.match(/\.category-layout\s*\{([^}]*)\}/)?.[1] ?? '';
         const sidebarRule = stylesheet.match(/\.category-subcat-sidebar\s*\{([^}]*)\}/)?.[1] ?? '';
         const itemRule = stylesheet.match(/\.subcat-side-item\s*\{([^}]*)\}/)?.[1] ?? '';
         const activeItemRule = stylesheet.match(/\.subcat-side-item\.is-active\s*\{([^}]*)\}/)?.[1] ?? '';
+        const resultsRule = stylesheet.match(/\.category-results\s*\{([^}]*)\}/)?.[1] ?? '';
 
+        expect(layoutRule).toMatch(/--category-results-surface:\s*var\(--surface\);/);
         expect(sidebarRule).toMatch(/border-right:\s*0;/);
         expect(itemRule).not.toMatch(/border-left/);
-        expect(activeItemRule).toMatch(/background:\s*var\(--accent-soft\);/);
+        expect(activeItemRule).toMatch(/background:\s*var\(--category-results-surface\);/);
         expect(activeItemRule).toMatch(/color:\s*var\(--accent-ink\);/);
-        expect(activeItemRule).toMatch(/box-shadow:\s*none;/);
+        expect(activeItemRule).toMatch(/box-shadow:\s*1px 0 0 var\(--category-results-surface\);/);
+        expect(resultsRule).toMatch(/background:\s*var\(--category-results-surface\);/);
+        expect(presetStylesheet).toMatch(
+            /html\[data-storefront-preset\] \.category-page \.category-layout\s*\{[^}]*--category-results-surface:\s*var\(--bg\);/,
+        );
+    });
+
+    it('uses the product row as the only mobile catalog frame', () => {
+        expect(presetStylesheet).toMatch(
+            // eslint-disable-next-line max-len -- This single rule is the mobile product-frame contract.
+            /\.category-page \.category-product-list \.product-row\s*\{[^}]*min-height:\s*96px;[^}]*padding:\s*0;[^}]*overflow:\s*hidden;[^}]*border-radius:\s*var\(--radius-md\);/,
+        );
+        expect(presetStylesheet).toMatch(
+            /\.category-page \.category-product-list \.product-row-image\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*96px;[^}]*border:\s*0;[^}]*border-radius:\s*0;/,
+        );
+        expect(presetStylesheet).toMatch(
+            /\.category-page\s+\.category-product-list\s+\.product-row-image\s+:is\(\.responsive-picture, img, \.image-placeholder\)\s*\{[^}]*border-radius:\s*0;/,
+        );
+        expect(presetStylesheet).toMatch(
+            /\.category-page \.category-product-list \.product-row-content\s*\{[^}]*padding:\s*8px 10px 8px 0;/,
+        );
     });
 
     it('keeps the search bar full width on narrow mobile screens', () => {
@@ -176,7 +237,7 @@ describe('category navigation responsive spacing', () => {
         );
     });
 
-    it('keeps Chinese labels single-line and balances five mobile navigation slots', () => {
+    it('keeps Chinese labels single-line and balances the visible mobile navigation slots', () => {
         const mobileChineseCategoryPrefix =
             String.raw`@media \(max-width:\s*1023px\)[\s\S]*?` +
             String.raw`html:not\(\[lang='en'\]\) \.category-page `;
@@ -188,31 +249,38 @@ describe('category navigation responsive spacing', () => {
             /\.primary-categories button\s*\{[^}]*width:\s*76px;[^}]*min-width:\s*76px;[^}]*max-width:\s*76px;/,
         );
         expect(stylesheet).toMatch(
-            new RegExp(
-                mobileChineseCategoryPrefix +
-                    String.raw`\.primary-category-strip\s*\{[^}]*padding-inline:\s*16px;[^}]*gap:\s*0;`,
-            ),
+            // eslint-disable-next-line max-len -- This single rule is the shared mobile gutter contract.
+            /@media \(max-width:\s*1023px\)[\s\S]*?\.category-page \.primary-category-strip\s*\{[^}]*margin-inline:\s*var\(--page-section-inset, 16px\);[^}]*padding-inline:\s*0;/,
+        );
+        expect(stylesheet).toMatch(
+            new RegExp(mobileChineseCategoryPrefix + String.raw`\.primary-category-strip\s*\{[^}]*gap:\s*0;`),
         );
         expect(stylesheet).toMatch(
             new RegExp(
                 mobileChineseCategoryPrefix +
-                    String.raw`\.primary-categories\s*\{[^}]*width:\s*80%;[^}]*flex:\s*0 0 80%;[^}]*gap:\s*0;`,
+                    String.raw`\.primary-categories\s*\{[^}]*width:\s*auto;` +
+                    String.raw`[^}]*flex:\s*var\(--primary-category-visible-slots, 4\) 1 0;[^}]*gap:\s*0;`,
             ),
         );
         expect(stylesheet).toMatch(
             new RegExp(
                 mobileChineseCategoryPrefix +
                     String.raw`\.primary-category-strip \.primary-categories button\s*\{` +
-                    String.raw`[^}]*width:\s*25%;[^}]*min-width:\s*25%;` +
-                    String.raw`[^}]*max-width:\s*25%;[^}]*flex:\s*0 0 25%;`,
+                    String.raw`[^}]*width:\s*calc\(100% / var\(--primary-category-visible-slots, 4\)\);` +
+                    String.raw`[^}]*min-width:\s*calc\(100% / var\(--primary-category-visible-slots, 4\)\);` +
+                    String.raw`[^}]*max-width:\s*calc\(100% / var\(--primary-category-visible-slots, 4\)\);` +
+                    String.raw`[^}]*flex:\s*0 0 calc\(100% / var\(--primary-category-visible-slots, 4\)\);`,
             ),
         );
         expect(stylesheet).toMatch(
             new RegExp(
                 mobileChineseCategoryPrefix +
-                    String.raw`\.primary-categories-all\s*\{[^}]*width:\s*20%;` +
-                    String.raw`[^}]*min-width:\s*20%;[^}]*flex:\s*0 0 20%;`,
+                    String.raw`\.primary-categories-all\s*\{[^}]*width:\s*auto;` +
+                    String.raw`[^}]*min-width:\s*0;[^}]*flex:\s*1 1 0;`,
             ),
+        );
+        expect(categoryPageSource).toContain(
+            "'--primary-category-visible-slots': Math.min(primaryCollections.length + 1, 4)",
         );
         expect(stylesheet).toMatch(/\.primary-category-image\s*\{[^}]*width:\s*48px;[^}]*height:\s*48px;/);
         expect(stylesheet).toMatch(/\.primary-categories button\s*\{[^}]*gap:\s*2px;/);

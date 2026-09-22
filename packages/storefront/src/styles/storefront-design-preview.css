@@ -47,19 +47,19 @@
 
 .storefront-preview-stage {
     min-height: calc(100dvh - 72px);
-    padding: 22px;
+    padding: 0;
     overflow: auto;
 }
 
 .storefront-preview-stage iframe {
     display: block;
-    /* The selected width is the embedded page's viewport, excluding this preview border. */
+    /* The selected width is exactly the embedded page's viewport. */
     box-sizing: content-box;
     height: calc(100dvh - 118px);
     min-height: 720px;
-    margin-inline: auto;
-    border: 1px solid #64748b;
-    box-shadow: 0 22px 60px rgb(0 0 0 / 35%);
+    margin-inline: 0;
+    border: 0;
+    box-shadow: none;
 }
 
 .storefront-preview-feedback {
@@ -89,15 +89,14 @@
     min-height: 70dvh;
     place-items: center;
     padding: 24px;
-    background: color-mix(in srgb, var(--bg) 72%, transparent);
-    backdrop-filter: blur(6px);
+    background: color-mix(in srgb, var(--bg) 90%, transparent);
 }
 
 .storefront-preview-state-card {
     width: min(100%, 420px);
     padding: 28px;
-    border: 1px solid var(--line);
-    border-radius: 16px;
+    border: 0;
+    border-radius: var(--skin-card-radius);
     background: var(--surface-elevated, var(--paper));
     color: var(--text);
     box-shadow: 0 24px 70px rgb(0 0 0 / 22%);

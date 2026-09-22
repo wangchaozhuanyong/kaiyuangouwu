@@ -39,6 +39,16 @@ export const routeModuleLoaders = {
 
 export type RouteModuleKey = keyof typeof routeModuleLoaders;
 
+export interface AdminConnectionHints {
+    effectiveType?: string;
+    saveData?: boolean;
+}
+
+export function allowsBackgroundRoutePreload(connection?: AdminConnectionHints): boolean {
+    if (connection?.saveData) return false;
+    return !connection?.effectiveType || !/^(?:slow-)?2g$/i.test(connection.effectiveType);
+}
+
 export function getRouteModuleKey(target: string): RouteModuleKey | null {
     const pathname = target.split(/[?#]/, 1)[0] || '/';
 

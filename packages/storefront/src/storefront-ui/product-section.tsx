@@ -55,13 +55,15 @@ export function ProductSection({
                 />
             ) : null}
             <div className="product-grid">
-                {products.map(product => (
+                {products.map((product, index) => (
                     <ProductCard
                         key={product.id}
                         product={product}
                         market={market}
                         locale={locale}
                         language={language}
+                        priority={index === 0}
+                        imageSizes="(min-width: 1280px) 220px, (min-width: 1024px) 20vw, calc(50vw - 24px)"
                         favorite={favoriteProductIds?.includes(product.id)}
                         onOpen={() => onProduct(product)}
                         onFavorite={onFavorite ? () => onFavorite(product) : undefined}

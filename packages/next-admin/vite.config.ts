@@ -16,7 +16,6 @@ export default defineConfig(({ command, isPreview }) => ({
                 manualChunks: {
                     'react-vendor': ['react', 'react-dom', 'react-router-dom'],
                     'data-vendor': ['@apollo/client', 'graphql'],
-                    'lucide-icons': ['lucide-react'],
                 },
             },
         },

@@ -9,6 +9,7 @@ import { cartLineCanSelect } from '../product-availability';
 import { storefrontQueryKeys } from '../query-client';
 import { invalidateStorefrontRealtimeQueries } from '../realtime-updates';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
+import { preloadRouteMedia } from '../route-media-preload';
 import { isPublicStorefrontRoute } from '../storefront-access';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { scopedStorageKey } from '../storefront-storage';
@@ -126,6 +127,10 @@ export function useStorefrontAppState() {
         updateCategory,
         openContentTarget,
     } = useStorefrontNavigation({ collections, contentBlocks, products });
+
+    // React DOM deduplicates resource hints. Calling this during render lets a restored public
+    // query cache announce the LCP candidate before the route component commits its image node.
+    preloadRouteMedia(route, contentBlocks, products);
 
     const {
         cartQueryKey,
