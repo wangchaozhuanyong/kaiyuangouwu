@@ -129,8 +129,8 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
                 {} as never,
                 { sourceHash: 'hash' } as never,
             );
-            vi.spyOn(service as never, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
-            vi.spyOn(service as never, 'getConfig').mockResolvedValue({
+            vi.spyOn(service as any, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
+            vi.spyOn(service as any, 'getConfig').mockResolvedValue({
                 enabled: true,
                 promptOptimizationEnabled: true,
                 promptRateLimitPerMinute: 3,
@@ -144,7 +144,7 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
                 termsZh: 'test',
                 termsEn,
             });
-            vi.spyOn(service as never, 'getOrCreateModels').mockResolvedValue([]);
+            vi.spyOn(service as any, 'getOrCreateModels').mockResolvedValue([]);
 
             const result = await service.shopConfig({
                 languageCode,
@@ -174,8 +174,8 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
             } as never,
             { sourceHash: 'hash' } as never,
         );
-        vi.spyOn(service as never, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
-        vi.spyOn(service as never, 'getConfig').mockResolvedValue({
+        vi.spyOn(service as any, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
+        vi.spyOn(service as any, 'getConfig').mockResolvedValue({
             enabled: true,
             promptOptimizationEnabled: true,
             promptRateLimitPerMinute: 3,
@@ -189,7 +189,7 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
             termsZh: 'test',
             termsEn: 'test',
         });
-        vi.spyOn(service as never, 'getOrCreateModels').mockResolvedValue([
+        vi.spyOn(service as any, 'getOrCreateModels').mockResolvedValue([
             {
                 id: 1,
                 code: 'OPENAI_HIGH_QUALITY',
@@ -237,9 +237,9 @@ describe('ImageGenerationConfigService admin readiness', () => {
             { hasAvailable } as never,
             { sourceHash: 'hash' } as never,
         );
-        vi.spyOn(service as never, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
-        vi.spyOn(service as never, 'getOrCreateConfig').mockResolvedValue({ enabled: true });
-        vi.spyOn(service as never, 'getOrCreateModels').mockResolvedValue([
+        vi.spyOn(service as any, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
+        vi.spyOn(service as any, 'getOrCreateConfig').mockResolvedValue({ enabled: true });
+        vi.spyOn(service as any, 'getOrCreateModels').mockResolvedValue([
             {
                 id: 'model-1',
                 enabled: true,
@@ -462,7 +462,7 @@ describe('ImageGenerationConfigService unified prompt routing', () => {
             router as never,
             {} as never,
         );
-        vi.spyOn(service as never, 'getOrCreatePromptRoutingConfig').mockResolvedValue({
+        vi.spyOn(service as any, 'getOrCreatePromptRoutingConfig').mockResolvedValue({
             strategy: 'AUTO',
         });
 
@@ -493,7 +493,7 @@ describe('ImageGenerationConfigService unified prompt routing', () => {
             {} as never,
             {} as never,
         );
-        vi.spyOn(service as never, 'getOrCreatePromptRoutingConfig').mockResolvedValue({
+        vi.spyOn(service as any, 'getOrCreatePromptRoutingConfig').mockResolvedValue({
             strategy: 'FIXED',
             primaryCredentialCode: 'openai-primary',
             fallbackEnabled: false,
