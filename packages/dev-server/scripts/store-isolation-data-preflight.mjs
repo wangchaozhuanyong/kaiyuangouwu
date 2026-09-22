@@ -716,7 +716,8 @@ export async function createReadOnlyMysqlAdapter(connection, { closeConnection =
 }
 
 async function main() {
-    await import('dotenv/config');
+    // Production operations invoke this transported script with Node's --env-file.
+    // Avoid resolving dotenv relative to the temporary transport directory.
     const adapter = await createStoreIsolationAdapter(process.env);
     try {
         const snapshot = await collectStoreIsolationSnapshot(adapter, process.env.DIGITAL_DELIVERY_ROOT);
