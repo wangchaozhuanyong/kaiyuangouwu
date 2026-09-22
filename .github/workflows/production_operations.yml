@@ -224,6 +224,25 @@ jobs:
                       transport('deploy/production-operations.cjs', 'production-operations.cjs'),
                       transport('deploy/systemd/vendure-production-release-retention.cjs', 'systemd/vendure-production-release-retention.cjs'),
                   ]
+                  backup_operations = {
+                      'backup-database',
+                      'apply-order-sales-ownership-backfill-reviewed',
+                      'apply-moyao-default-store-migration-reviewed',
+                  }
+                  if operation_name in backup_operations:
+                      backup_tools = [
+                          'vendure-mysql-backup',
+                          'vendure-mysql-backup-manifest.py',
+                          'vendure-backup-s3-guard.py',
+                      ]
+                      lines.extend(
+                          transport(f'deploy/systemd/{tool}', f'systemd/{tool}')
+                          for tool in backup_tools
+                      )
+                      lines.extend(
+                          f'sudo -n install -o root -g root -m 0755 "$operations_dir/systemd/{tool}" "/usr/local/sbin/{tool}"'
+                          for tool in backup_tools
+                      )
                   if 'two-factor' in operation_name:
                       lines.append(transport('deploy/two-factor-key-backup.py', 'two-factor-key-backup.py'))
                   if operation_name == 'verify-security-dependencies':
