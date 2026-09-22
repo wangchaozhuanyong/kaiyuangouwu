@@ -746,6 +746,63 @@ void test('MOYAO migration logs only aggregate evidence and verifies after backu
     assert.equal(result.verification.targetContentBlockCount, 24);
 });
 
+void test('MOYAO migration plan reports Seller conflicts while reviewed apply blocks before backup', () => {
+    const runtimeSha = 'b'.repeat(40);
+    const operationDigest = 'c'.repeat(64);
+    const plan = {
+        format: 1,
+        schema: 'vendure-moyao-default-store-migration',
+        mode: 'reviewed-default-to-dedicated-channel',
+        sourceChannelCode: '__default_channel__',
+        targetChannelCode: 'moyao-ai',
+        contentBlockCount: 1,
+        movedChannelRows: { storefront_content_block: 1 },
+        addedRelations: { product_channels_channel: 0 },
+        removedDefaultRelations: { product_channels_channel: 1 },
+        crossStoreRelationConflicts: { product_channels_channel: 0 },
+        copiedChannelRows: { customer_store_entry: 0 },
+        removedDefaultCustomerStoreEntries: 0,
+        removedDefaultOrderMemberships: 0,
+        profileWillChange: false,
+        contentSettingsWillChange: false,
+        sellerWillChange: true,
+        sellerSeparationAction: 'SWAP_EXISTING_SELLERS',
+        sellerIsolationConflictCount: 1,
+        addedRequiredRoleAssignments: 0,
+        orderSalesOwnerCount: 0,
+        operationDigest,
+    };
+    const planOutput =
+        `MOYAO_DEFAULT_STORE_PLAN ${JSON.stringify(plan)}\n` +
+        'MOYAO_DEFAULT_STORE_MIGRATION_OK operation=plan\n';
+    assert.deepEqual(operations.validateMoyaoDefaultStoreMigrationOutput(planOutput, 'plan'), plan);
+
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'apply-moyao-default-store-migration-reviewed',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+        OPS_EXPECTED_PLAN_SHA256: operationDigest,
+    });
+    let backupCount = 0;
+    assert.throws(
+        () =>
+            operations.runMoyaoDefaultStoreMigration(request, {
+                inspect: () => ({ markerSha: runtimeSha, currentRuntime: '/immutable/runtime' }),
+                health: () => ({
+                    status: 'ok',
+                    output: 'Result=success\nExecMainStatus=0\nActiveState=inactive',
+                }),
+                backup: () => {
+                    backupCount++;
+                    return {};
+                },
+                spawn: () => ({ status: 0, stdout: planOutput, stderr: '' }),
+            }),
+        /Seller is already used by another operating store/u,
+    );
+    assert.equal(backupCount, 0);
+});
+
 void test('order ownership operation logs only aggregate evidence and preserves the runtime', () => {
     const runtimeSha = 'b'.repeat(40);
     const operationDigest = 'c'.repeat(64);
