@@ -638,7 +638,11 @@ function validateMoyaoDefaultStoreMigrationOutput(output, operation) {
                 plan?.sellerSeparationAction,
             ),
         );
-        assert.equal(plan?.sellerIsolationConflictCount, 0);
+        assert.ok(
+            Number.isSafeInteger(plan?.sellerIsolationConflictCount) &&
+                plan.sellerIsolationConflictCount >= 0,
+            'Invalid MOYAO Seller isolation conflict count',
+        );
         assert.ok(
             Number.isSafeInteger(plan?.addedRequiredRoleAssignments) &&
                 plan.addedRequiredRoleAssignments >= 0 &&
@@ -884,6 +888,11 @@ function runMoyaoDefaultStoreMigration(
     } else {
         plan = run('plan');
         if (apply) {
+            assert.equal(
+                plan.sellerIsolationConflictCount,
+                0,
+                'A migration Seller is already used by another operating store; review Seller ownership before applying the MOYAO migration',
+            );
             assert.equal(
                 plan.operationDigest,
                 request.expectedPlanSha256,
