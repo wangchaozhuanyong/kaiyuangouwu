@@ -591,6 +591,47 @@ void test('database backup pins the reviewed runtime and preserves release and h
     assert.deepEqual(result.healthAfter, health);
 });
 
+void test('production health snapshots wait for transient systemd states to settle', () => {
+    let reads = 0;
+    let waits = 0;
+    const snapshot = operations.productionHealthSnapshot(
+        () => {
+            reads++;
+            return {
+                status: 'ok',
+                output:
+                    reads === 1
+                        ? 'Result=success\nExecMainStatus=0\nActiveState=activating\n'
+                        : 'Result=success\nExecMainStatus=0\nActiveState=inactive\n',
+            };
+        },
+        () => {
+            waits++;
+        },
+    );
+    assert.equal(reads, 2);
+    assert.equal(waits, 1);
+    assert.match(snapshot.output, /^ActiveState=inactive$/mu);
+
+    reads = 0;
+    waits = 0;
+    const stillTransient = operations.productionHealthSnapshot(
+        () => {
+            reads++;
+            return {
+                status: 'ok',
+                output: 'Result=success\nExecMainStatus=0\nActiveState=activating\n',
+            };
+        },
+        () => {
+            waits++;
+        },
+    );
+    assert.equal(reads, 10);
+    assert.equal(waits, 9);
+    assert.match(stillTransient.output, /^ActiveState=activating$/mu);
+});
+
 void test('order ownership backfill separates read-only planning from reviewed writes', () => {
     const runtimeSha = 'b'.repeat(40);
     assert.deepEqual(
