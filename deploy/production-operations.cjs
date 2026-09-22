@@ -550,12 +550,23 @@ function validateMigrationAuditOutput(output) {
     };
 }
 
-function productionHealthSnapshot() {
-    return readCommand('systemctl', [
-        'show',
-        'vendure-production-healthcheck.service',
-        '--property=Result,ExecMainStatus,ActiveState',
-    ]);
+function productionHealthSnapshot(
+    read = readCommand,
+    wait = () => spawnSync('/bin/sleep', ['1'], { stdio: 'ignore', timeout: 2000 }),
+) {
+    let snapshot;
+    for (let attempt = 0; attempt < 10; attempt++) {
+        snapshot = read('systemctl', [
+            'show',
+            'vendure-production-healthcheck.service',
+            '--property=Result,ExecMainStatus,ActiveState',
+        ]);
+        const transient =
+            snapshot.status === 'ok' && /^ActiveState=(?:activating|deactivating)$/mu.test(snapshot.output);
+        if (!transient) return snapshot;
+        if (attempt < 9) wait();
+    }
+    return snapshot;
 }
 
 function validateOrderSalesOwnershipOutput(output, operation) {
@@ -1479,6 +1490,7 @@ module.exports = {
     inspectDeploymentCacheCleanup,
     inspectRepositoryState,
     planDigest,
+    productionHealthSnapshot,
     retainReviewedPlan,
     storefrontInspectionFailure,
     runStoreIsolationAudit,
