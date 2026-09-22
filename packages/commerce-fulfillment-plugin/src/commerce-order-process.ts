@@ -11,7 +11,6 @@ import {
     StockMovementService,
     TransactionalConnection,
 } from '@vendure/core';
-import { FraudRiskService } from '@vendure/store-management-plugin';
 import { LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { AutoCardService } from './auto-card.service';
@@ -36,7 +35,6 @@ let autoCardService: AutoCardService;
 let productPackagingService: ProductPackagingService;
 let commerceModeService: CommerceModeService;
 let manualDigitalDeliveryService: ManualDigitalDeliveryService;
-let fraudRiskService: FraudRiskService;
 
 export const commerceOrderProcess: OrderProcess<string> = {
     init(injector) {
@@ -50,7 +48,6 @@ export const commerceOrderProcess: OrderProcess<string> = {
         productPackagingService = injector.get(ProductPackagingService);
         commerceModeService = injector.get(CommerceModeService);
         manualDigitalDeliveryService = injector.get(ManualDigitalDeliveryService);
-        fraudRiskService = injector.get(FraudRiskService);
     },
 
     async onTransitionStart(fromState, toState, { ctx, order }) {
@@ -68,10 +65,6 @@ export const commerceOrderProcess: OrderProcess<string> = {
             commerceModeService.assertProductTypeAllowed(commerceMode, getOrderLineFulfillmentType(line));
         }
         if (entersPayment) {
-            const risk = await fraudRiskService.evaluateOrder(ctx, order.id);
-            if (risk.blocked) {
-                return `订单需人工风险复核（${risk.caseCode ?? '待分配'}），复核通过后可继续支付`;
-            }
             const autoCardError = await autoCardService.availabilityError(ctx, order);
             if (autoCardError) {
                 return autoCardError;

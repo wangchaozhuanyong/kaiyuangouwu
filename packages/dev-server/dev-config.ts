@@ -975,7 +975,6 @@ export const devConfig: VendureConfig = {
                       contentTranslationOptions(contentTranslationApiKey, process.env),
                   ),
                   StorefrontCartPlugin,
-                  CommerceFulfillmentPlugin.init({ testPaymentsEnabled }),
                   CatalogManagementPlugin,
                   StoreManagementPlugin.init({
                       enabled: storefrontPromotionGateEnabled,
@@ -984,6 +983,7 @@ export const devConfig: VendureConfig = {
                       trustProxyHeaders: process.env.STORE_DOMAIN_TRUST_PROXY === 'true',
                       bypassHosts: storeDomainBypassHosts(),
                   }),
+                  CommerceFulfillmentPlugin.init({ testPaymentsEnabled }),
                   ImageGenerationPlugin.init({
                       blobStore: customerImages.privateObjects,
                       storageRoot: process.env.IMAGE_GENERATION_STORAGE_ROOT,

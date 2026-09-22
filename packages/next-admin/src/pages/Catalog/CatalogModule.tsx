@@ -129,16 +129,6 @@ interface GetCatalogChannelsData {
         defaultCurrencyCode: string;
         customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
     };
-    channels: {
-        items: Array<{
-            id: string;
-            code: string;
-            token: string;
-            defaultCurrencyCode: string;
-            customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
-        }>;
-        totalItems: number;
-    };
 }
 
 interface CollectionFilterItem {
@@ -273,7 +263,6 @@ export function CatalogModule() {
         notifyOnNetworkStatusChange: true,
     });
     const activeChannelQuery = useQuery<GetCatalogChannelsData>(GET_CATALOG_CHANNELS, {
-        variables: { options: { skip: 0, take: 100, sort: { code: 'ASC', id: 'ASC' } } },
         fetchPolicy: 'cache-first',
     });
     const productIds = useMemo(() => data?.products.items.map(product => product.id) ?? [], [data]);

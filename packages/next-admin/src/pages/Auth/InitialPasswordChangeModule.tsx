@@ -57,6 +57,10 @@ export function InitialPasswordChangeModule({ onCompleted }: InitialPasswordChan
             setNewPassword('');
             setConfirmPassword('');
             await onCompleted();
+            navigate('/login', {
+                replace: true,
+                state: { notice: '密码已更新，原会话已安全退出，请使用新密码重新登录。' },
+            });
         } catch (mutationError) {
             setError(toUserFacingError(mutationError, '首次密码修改失败，请稍后重试'));
         }
@@ -175,7 +179,7 @@ export function InitialPasswordChangeModule({ onCompleted }: InitialPasswordChan
                                         正在更新密码
                                     </>
                                 ) : (
-                                    <>确认并进入后台</>
+                                    <>确认并重新登录</>
                                 )}
                             </button>
                             <button

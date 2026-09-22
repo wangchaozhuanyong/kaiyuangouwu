@@ -60,12 +60,6 @@ describe('commerceOrderProcess digital fulfillment', () => {
         createSettledOrderTasks: vi.fn().mockResolvedValue([]),
         cancelOrder: vi.fn().mockResolvedValue(undefined),
     };
-    const fraudRiskService = {
-        evaluateOrder: vi
-            .fn()
-            .mockResolvedValue({ blocked: false, caseCode: null, riskScore: 0, action: 'ALLOW' }),
-    };
-
     beforeEach(async () => {
         vi.clearAllMocks();
         orderService.createFulfillment.mockResolvedValue({ id: 'fulfillment-1' });
@@ -83,34 +77,9 @@ describe('commerceOrderProcess digital fulfillment', () => {
             productPackagingService,
             commerceModeService,
             manualDigitalDeliveryService,
-            fraudRiskService,
         ];
         await commerceOrderProcess.init?.({ get: vi.fn(() => services.shift()) } as any);
         hydratedOrder = undefined;
-    });
-
-    it('blocks payment entry until a flagged order is released', async () => {
-        fraudRiskService.evaluateOrder.mockResolvedValueOnce({
-            blocked: true,
-            caseCode: 'FR-REVIEW123',
-            riskScore: 75,
-            action: 'HOLD_FULFILLMENT',
-        });
-        const order = {
-            id: 'order-risk',
-            lines: [],
-            customFields: {},
-            shippingAddress: {},
-            shippingLines: [],
-        };
-
-        const result = await commerceOrderProcess.onTransitionStart?.('AddingItems', 'ArrangingPayment', {
-            ctx: { channelId: 'channel-1' },
-            order,
-        } as any);
-
-        expect(result).toContain('FR-REVIEW123');
-        expect(autoCardService.availabilityError).not.toHaveBeenCalled();
     });
 
     it('creates a pending digital fulfillment after payment settles', async () => {

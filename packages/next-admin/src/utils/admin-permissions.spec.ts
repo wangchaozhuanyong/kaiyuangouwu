@@ -36,6 +36,8 @@ describe('admin permissions', () => {
 
     it('allows any permission accepted by a merged settings page', () => {
         expect(canAccessAdminPath('/settings/store-profile', ['ReadPaymentMethod'])).toBe(true);
+        expect(canAccessAdminPath('/settings/store-profile', ['ReadStoreProfile'])).toBe(true);
+        expect(canAccessAdminPath('/settings/store-profile', ['ReadStoreDomain'])).toBe(true);
         expect(canAccessAdminPath('/settings/store-profile', ['ReadOrder'])).toBe(false);
     });
 

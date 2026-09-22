@@ -10,7 +10,7 @@ import {
     UserRound,
 } from 'lucide-react';
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { prepareAuthSession, setInitialActiveChannel } from '../../apollo';
 import { ThemeToggleButton } from '../../components/ThemeToggleButton';
 import {
@@ -24,6 +24,8 @@ const adminBrandIcon = `${import.meta.env.BASE_URL}favicon.png`;
 
 export function LoginModule() {
     const navigate = useNavigate();
+    const location = useLocation();
+    const loginNotice = (location.state as { notice?: string } | null)?.notice;
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(false);
@@ -135,6 +137,15 @@ export function LoginModule() {
                         </div>
 
                         <form onSubmit={handleSubmit} className="space-y-5">
+                            {loginNotice && !loginError && (
+                                <div
+                                    role="status"
+                                    className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm leading-5 text-emerald-700"
+                                >
+                                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                                    <span>{loginNotice}</span>
+                                </div>
+                            )}
                             {loginError && (
                                 <div
                                     role="alert"

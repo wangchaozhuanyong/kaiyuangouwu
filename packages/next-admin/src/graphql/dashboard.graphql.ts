@@ -19,83 +19,44 @@ export const DASHBOARD_METRICS_QUERY = gql`
                 value
             }
         }
-        pendingSearchIndexUpdates
     }
 `;
 
-export const DASHBOARD_TODO_QUERY = gql`
-    query NextAdminDashboardTodo {
+export const DASHBOARD_ORDER_TODO_QUERY = gql`
+    query NextAdminDashboardOrderTodo {
         pendingShipment: physicalFulfillmentTodoCount
         pendingAfterSales: afterSalesRequests(options: { state: PENDING, take: 1 }) {
             totalItems
         }
+    }
+`;
+
+export const DASHBOARD_REVIEW_TODO_QUERY = gql`
+    query NextAdminDashboardReviewTodo {
         pendingReviews: storefrontReviews(options: { state: PENDING, take: 1 }) {
             totalItems
         }
+    }
+`;
+
+export const DASHBOARD_PRODUCT_TODO_QUERY = gql`
+    query NextAdminDashboardProductTodo {
         autoCardTodoSummary {
             lowStockSkuCount
             waitingStockDeliveryCount
             manualReviewCount
         }
+    }
+`;
+
+export const DASHBOARD_SEARCH_INDEX_QUERY = gql`
+    query NextAdminDashboardSearchIndex {
+        pendingSearchIndexUpdates
     }
 `;
 
 export const DASHBOARD_RECENT_ORDERS_QUERY = gql`
     query NextAdminDashboardRecentOrders($options: OrderListOptions) {
-        orders(options: $options) {
-            totalItems
-            items {
-                id
-                createdAt
-                orderPlacedAt
-                code
-                state
-                totalQuantity
-                totalWithTax
-                currencyCode
-                customer {
-                    id
-                    firstName
-                    lastName
-                    emailAddress
-                }
-            }
-        }
-    }
-`;
-
-export const DASHBOARD_BOOTSTRAP_QUERY = gql`
-    query NextAdminDashboardBootstrap($input: DashboardMetricSummaryInput!, $options: OrderListOptions) {
-        activeChannel {
-            id
-            code
-            defaultCurrencyCode
-            customFields {
-                storefrontNameZh
-                storefrontNameEn
-            }
-        }
-        dashboardMetricSummary(input: $input) {
-            type
-            title
-            entries {
-                label
-                value
-            }
-        }
-        pendingSearchIndexUpdates
-        pendingShipment: physicalFulfillmentTodoCount
-        pendingAfterSales: afterSalesRequests(options: { state: PENDING, take: 1 }) {
-            totalItems
-        }
-        pendingReviews: storefrontReviews(options: { state: PENDING, take: 1 }) {
-            totalItems
-        }
-        autoCardTodoSummary {
-            lowStockSkuCount
-            waitingStockDeliveryCount
-            manualReviewCount
-        }
         orders(options: $options) {
             totalItems
             items {
@@ -135,18 +96,27 @@ export interface DashboardMetricsData {
         } | null;
     };
     dashboardMetricSummary: DashboardMetricSummary[];
-    pendingSearchIndexUpdates: number;
 }
 
-export interface DashboardTodoData {
+export interface DashboardOrderTodoData {
     pendingShipment: number;
     pendingAfterSales: { totalItems: number };
+}
+
+export interface DashboardReviewTodoData {
     pendingReviews: { totalItems: number };
+}
+
+export interface DashboardProductTodoData {
     autoCardTodoSummary: {
         lowStockSkuCount: number;
         waitingStockDeliveryCount: number;
         manualReviewCount: number;
     };
+}
+
+export interface DashboardSearchIndexData {
+    pendingSearchIndexUpdates: number;
 }
 
 export interface DashboardOrderItem {
@@ -169,5 +139,3 @@ export interface DashboardOrderItem {
 export interface DashboardRecentOrdersData {
     orders: { totalItems: number; items: DashboardOrderItem[] };
 }
-
-export type DashboardBootstrapData = DashboardMetricsData & DashboardTodoData & DashboardRecentOrdersData;

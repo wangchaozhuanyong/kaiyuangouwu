@@ -293,22 +293,33 @@ export const logoutAdministrator = async () => {
     }
 };
 
+const ACTIVE_CHANNEL_SWITCH_PROBE = gql`
+    query NextAdminActiveChannelSwitchProbe {
+        activeChannel {
+            token
+        }
+    }
+`;
+
 export const switchActiveChannel = async (channelToken: string) => {
     if (!channelToken.trim()) {
         throw new Error('销售渠道标识不能为空');
     }
     const previousChannelToken = getActiveChannelToken();
     if (previousChannelToken === channelToken) return;
-    replaceActiveChannelToken(channelToken);
+    const probe = await client.query<{ activeChannel: { token: string } }>({
+        query: ACTIVE_CHANNEL_SWITCH_PROBE,
+        fetchPolicy: 'no-cache',
+        context: channelRequestContext(channelToken),
+    });
+    if (probe.data?.activeChannel.token !== channelToken) {
+        throw new Error('目标店铺验证失败，请刷新后重试');
+    }
     try {
-        await client.resetStore();
+        replaceActiveChannelToken(channelToken);
+        await client.clearStore();
     } catch (error) {
         replaceActiveChannelToken(previousChannelToken);
-        try {
-            await client.resetStore();
-        } catch {
-            // Preserve the original switch failure. The restored token will be used on the next request.
-        }
         throw error;
     }
 };

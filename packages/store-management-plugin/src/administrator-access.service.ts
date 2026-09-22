@@ -140,7 +140,7 @@ export class AdministratorAccessService {
             },
             order: { createdAt: 'DESC' },
         });
-        return profiles.filter(profile => this.canManage(actor, profile, true));
+        return profiles.filter(profile => this.canManage(actor, profile, false));
     }
 
     async manageableRoles(ctx: RequestContext): Promise<Role[]> {
@@ -195,8 +195,7 @@ export class AdministratorAccessService {
         if (actor.scope === 'STORE') {
             return actor.channel ? [actor.channel] : [];
         }
-        const channels = await this.connection.getRepository(ctx, Channel).find({ order: { code: 'ASC' } });
-        return channels.filter(channel => channel.code !== '__default_channel__');
+        return this.connection.getRepository(ctx, Channel).find({ order: { code: 'ASC' } });
     }
 
     async createManagedAdministrator(

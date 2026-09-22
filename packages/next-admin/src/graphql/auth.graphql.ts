@@ -76,7 +76,7 @@ export const ACTIVE_ADMINISTRATOR_PROFILE_QUERY = gql`
 `;
 
 export const APP_SHELL_BOOTSTRAP_QUERY = gql`
-    query NextAdminAppShellBootstrap($options: ChannelListOptions) {
+    query NextAdminAppShellBootstrap {
         me {
             id
             identifier
@@ -130,30 +130,32 @@ export const APP_SHELL_BOOTSTRAP_QUERY = gql`
                 storefrontNameEn
             }
         }
-        channels(options: $options) {
-            items {
-                id
-                code
-                token
-                defaultCurrencyCode
-                defaultLanguageCode
-                customFields {
-                    storefrontNameZh
-                    storefrontNameEn
-                }
+        manageableChannels {
+            id
+            code
+            token
+            defaultCurrencyCode
+            defaultLanguageCode
+            customFields {
+                storefrontNameZh
+                storefrontNameEn
             }
-            totalItems
         }
     }
 `;
 
 // Store presentation data must not prevent permission/bootstrap data from loading when a legacy
 // Channel is temporarily missing one of its managed records.
-export const APP_SHELL_STORE_CONTEXT_QUERY = gql`
-    query NextAdminAppShellStoreContext {
+export const APP_SHELL_COMMERCE_CONTEXT_QUERY = gql`
+    query NextAdminAppShellCommerceContext {
         myStoreCommerceMode {
             mode
         }
+    }
+`;
+
+export const APP_SHELL_PROFILE_CONTEXT_QUERY = gql`
+    query NextAdminAppShellProfileContext {
         myStoreProfile {
             id
             logoAsset {
@@ -253,15 +255,19 @@ export interface CurrentAdministratorUser {
     }>;
 }
 
-export type AppShellBootstrapData = ActiveAdministratorProfileData &
-    ChannelSwitcherData & {
-        me: CurrentAdministratorUser | null;
-    };
+export type AppShellBootstrapData = ActiveAdministratorProfileData & {
+    me: CurrentAdministratorUser | null;
+    activeChannel: AdministrationChannel;
+    manageableChannels: AdministrationChannel[];
+};
 
-export interface AppShellStoreContextData {
+export interface AppShellCommerceContextData {
     myStoreCommerceMode?: {
         mode: 'DIGITAL_ONLY' | 'PHYSICAL_ONLY' | 'HYBRID';
     } | null;
+}
+
+export interface AppShellProfileContextData {
     myStoreProfile?: {
         id: string;
         logoAsset: { id: string; preview: string } | null;

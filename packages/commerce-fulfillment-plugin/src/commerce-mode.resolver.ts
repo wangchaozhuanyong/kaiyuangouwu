@@ -9,7 +9,7 @@ export class CommerceModeAdminResolver {
     constructor(private readonly commerceModeService: CommerceModeService) {}
 
     @Query()
-    @Allow(Permission.ReadCatalog)
+    @Allow(Permission.ReadCatalog, Permission.ReadProduct)
     async myStoreCommerceMode(@Ctx() ctx: RequestContext) {
         return { mode: await this.commerceModeService.activeMode(ctx), conflicts: [] };
     }
