@@ -247,6 +247,8 @@ jobs:
                   if operation_name == 'audit-administrator-product-readiness':
                       lines.extend([
                           transport('packages/dev-server/scripts/store-isolation-data-preflight.mjs', 'repository/packages/dev-server/scripts/store-isolation-data-preflight.mjs'),
+                          transport('packages/dev-server/scripts/store-isolation-ownership-evidence.mjs', 'repository/packages/dev-server/scripts/store-isolation-ownership-evidence.mjs'),
+                          transport('packages/dev-server/scripts/store-isolation-customer-dependencies.mjs', 'repository/packages/dev-server/scripts/store-isolation-customer-dependencies.mjs'),
                           transport('packages/dev-server/scripts/administrator-access-preflight.mjs', 'repository/packages/dev-server/scripts/administrator-access-preflight.mjs'),
                           transport('packages/dev-server/scripts/product-ownership-preflight.mjs', 'repository/packages/dev-server/scripts/product-ownership-preflight.mjs'),
                       ])

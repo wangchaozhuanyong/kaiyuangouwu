@@ -106,6 +106,8 @@ void test('release workflow ships the fixed live preflight inputs and migration 
         [
             ...commonFiles,
             'packages/dev-server/scripts/store-isolation-data-preflight.mjs',
+            'packages/dev-server/scripts/store-isolation-ownership-evidence.mjs',
+            'packages/dev-server/scripts/store-isolation-customer-dependencies.mjs',
             'packages/dev-server/scripts/administrator-access-preflight.mjs',
             'packages/dev-server/scripts/product-ownership-preflight.mjs',
         ],
