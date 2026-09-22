@@ -968,6 +968,26 @@ void test('administrator and product readiness audit reports blockers without ex
             }),
         /fixed read-only administrator audit failed/u,
     );
+    assert.throws(
+        () =>
+            operations.runAdministratorProductReadinessAudit(request, {
+                inspect: () => structuredClone(plan),
+                health: () => ({
+                    status: 'ok',
+                    output: 'Result=success\nExecMainStatus=0\nActiveState=inactive',
+                }),
+                spawn: () => ({
+                    status: 1,
+                    stdout: '',
+                    stderr: 'PRIVATE_ERROR_NOT_FORWARDED\nREAD_ONLY_AUDIT_FAILURE code=ER_BAD_FIELD_ERROR digest=0123456789ab\n',
+                }),
+            }),
+        error => {
+            assert.match(error.message, /code=ER_BAD_FIELD_ERROR digest=0123456789ab/u);
+            assert.doesNotMatch(error.message, /PRIVATE_ERROR_NOT_FORWARDED/u);
+            return true;
+        },
+    );
 });
 
 void test('reviewed retention preserves current, two rollback releases, backup and unrelated files', t => {

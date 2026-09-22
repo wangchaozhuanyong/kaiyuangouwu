@@ -1083,7 +1083,16 @@ function runAdministratorProductReadinessAudit(
                     env: { ...process.env, STORE_ISOLATION_MODULE_ROOT: before.currentRuntime },
                 },
             );
-            assert.equal(result.status, 0, `The fixed read-only ${label} audit failed`);
+            if (result.status !== 0) {
+                const safeFailure = String(result.stderr || '')
+                    .split(/\r?\n/u)
+                    .find(line =>
+                        /^READ_ONLY_AUDIT_FAILURE code=[A-Z][A-Z0-9_]{1,63} digest=[a-f0-9]{12}$/u.test(line),
+                    );
+                throw new Error(
+                    `The fixed read-only ${label} audit failed${safeFailure ? ` (${safeFailure})` : ''}`,
+                );
+            }
             let report;
             try {
                 report = JSON.parse(String(result.stdout || ''));

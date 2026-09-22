@@ -604,6 +604,14 @@ function runtimeRequire(environment) {
         : createRequire(import.meta.url);
 }
 
+export function safeReadOnlyAuditFailure(error) {
+    const candidate = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+    const code = /^[A-Z][A-Z0-9_]{1,63}$/u.test(candidate) ? candidate : 'UNCLASSIFIED';
+    const message = error instanceof Error ? error.message : String(error);
+    const digest = createHash('sha256').update(message).digest('hex').slice(0, 12);
+    return `READ_ONLY_AUDIT_FAILURE code=${code} digest=${digest}`;
+}
+
 export async function createStoreIsolationAdapter(environment) {
     const databaseType = String(environment.DB ?? 'mysql').toLowerCase();
     if (databaseType === 'sqlite' || databaseType === 'better-sqlite3') {
@@ -733,7 +741,7 @@ async function main() {
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
     main().catch(error => {
-        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.stderr.write(`${safeReadOnlyAuditFailure(error)}\n`);
         process.exitCode = 1;
     });
 }
