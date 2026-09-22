@@ -69,18 +69,6 @@ async function renderAllocationMatrix() {
                                 },
                             },
                         });
-                    } else if (operation.operationName === 'AssignCatalogProductsToChannel') {
-                        observer.next({
-                            data: {
-                                assignProductsToChannel: [{ id: 'product-1' }],
-                            },
-                        });
-                    } else if (operation.operationName === 'RemoveCatalogProductsFromChannel') {
-                        observer.next({
-                            data: {
-                                removeProductsFromChannel: [{ id: 'product-2' }],
-                            },
-                        });
                     } else {
                         observer.error(new Error(`Unexpected operation: ${operation.operationName}`));
                         return;
@@ -118,12 +106,12 @@ describe('StoreAllocationMatrixModule', () => {
     it('renders header, title and metric cards properly', async () => {
         const container = await renderAllocationMatrix();
 
-        expect(container.textContent).toContain('商品多店铺分配中心');
+        expect(container.textContent).toContain('商品店铺归属检查');
         expect(container.textContent).toContain('当前渠道可见商品');
         expect(container.textContent).toContain('150');
         expect(container.textContent).toContain('当前第 1 / 3 页');
-        expect(container.textContent).toContain('仅默认店铺 (未分发)');
-        expect(container.textContent).toContain('默认店铺');
+        expect(container.textContent).toContain('平台归属异常');
+        expect(container.textContent).toContain('平台管理（不经营）');
         expect(container.textContent).toContain('meiyijia');
         expect(container.textContent).toContain('direct-store');
     });
@@ -143,49 +131,18 @@ describe('StoreAllocationMatrixModule', () => {
         expect(container.textContent).toContain('红双喜');
 
         // Check channel indicators
-        expect(container.textContent).toContain('未分发到分店');
-        expect(container.textContent).toContain('已上架 2 个店铺');
+        expect(container.textContent).toContain('多店共享异常（2 个店铺）');
+        expect(container.textContent).toContain('本页不再修改店铺关联');
 
-        // Check toggle buttons
-        expect(container.textContent).toContain('已在售');
-        expect(container.textContent).toContain('未上架');
+        // Check read-only ownership cells
+        expect(container.textContent).toContain('归属');
+        expect(container.textContent).toContain('无归属');
     });
 
-    it('displays warning when attempting to remove a product from its only store', async () => {
+    it('does not expose channel assignment controls', async () => {
         const container = await renderAllocationMatrix();
-
-        // Find the "已在售" button for product-1 on default channel
-        // product-1 only belongs to default channel
-        const firstRow = container.querySelector('tbody tr:first-child');
-        expect(firstRow).not.toBeNull();
-
-        const activeButtons = Array.from(firstRow!.querySelectorAll('button')).filter(btn =>
-            btn.textContent?.includes('已在售'),
-        );
-        expect(activeButtons.length).toBe(1);
-
-        await act(async () => {
-            activeButtons[0].click();
-        });
-
-        // Should display the warning notice
-        expect(container.textContent).toContain('无法移除唯一归属店铺');
-    });
-
-    it('supports selecting products and reveals floating bulk bar', async () => {
-        const container = await renderAllocationMatrix();
-
-        const selectAllCheckbox = container.querySelector<HTMLInputElement>(
-            'thead th input[type="checkbox"]',
-        );
-        expect(selectAllCheckbox).not.toBeNull();
-
-        await act(async () => {
-            selectAllCheckbox!.click();
-        });
-
-        expect(container.textContent).toContain('已勾选 2 个商品');
-        expect(container.textContent).toContain('批量上架到店铺');
-        expect(container.textContent).toContain('从店铺下架');
+        expect(container.querySelector('thead input[type="checkbox"]')).toBeNull();
+        expect(container.textContent).not.toContain('批量上架到店铺');
+        expect(container.textContent).not.toContain('从店铺下架');
     });
 });

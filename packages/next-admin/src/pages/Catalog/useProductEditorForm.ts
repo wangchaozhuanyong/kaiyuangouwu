@@ -579,7 +579,6 @@ export function useProductEditorForm() {
         activeCurrencyCode,
         data: {
             productData,
-            catalogChannelsData,
             refetchCollections,
             refetchProduct,
             defaultStockLocationId,

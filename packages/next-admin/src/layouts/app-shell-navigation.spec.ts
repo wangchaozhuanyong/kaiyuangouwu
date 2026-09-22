@@ -4,6 +4,8 @@ import {
     filterAccessibleAdminChannels,
     hasAppShellPermissionSnapshot,
     isAppShellPermissionLoading,
+    isPlatformBusinessPath,
+    isPlatformManagementChannel,
     resolveAppShellOpenMenu,
 } from './app-shell-navigation';
 
@@ -32,9 +34,29 @@ describe('admin channel switcher', () => {
             { id: 'mjj', token: 'mjj-token' },
         ]);
     });
+
+    it('exposes every store to a SuperAdmin even when the session permission snapshot is stale', () => {
+        const channels = [
+            { id: 'default', token: 'default-token' },
+            { id: 'moyao', token: 'moyao-token' },
+            { id: 'mjj', token: 'mjj-token' },
+        ];
+
+        expect(filterAccessibleAdminChannels(channels, [{ id: 'default' }], true)).toEqual(channels);
+    });
 });
 
 describe('app shell navigation', () => {
+    it('treats the default Channel as platform management and blocks store business routes', () => {
+        expect(isPlatformManagementChannel('__default_channel__')).toBe(true);
+        expect(isPlatformManagementChannel('moyao-ai')).toBe(false);
+        expect(isPlatformBusinessPath('/catalog/list')).toBe(true);
+        expect(isPlatformBusinessPath('/sales/orders')).toBe(true);
+        expect(isPlatformBusinessPath('/customers/list')).toBe(true);
+        expect(isPlatformBusinessPath('/settings/team')).toBe(false);
+        expect(isPlatformBusinessPath('/dashboard')).toBe(false);
+    });
+
     it('keeps an extension in its registered menu even when its URL uses another section prefix', () => {
         expect(resolveAppShellOpenMenu('/storefront/business-services-copy', 'plugins')).toBe('plugins');
     });

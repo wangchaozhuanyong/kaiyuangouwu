@@ -14,13 +14,11 @@ import {
 export function StoreBrandAssets({
     assets,
     channel,
-    sharedChannel,
     disabled,
     onChange,
 }: {
     assets: BrandAssetsDraft;
     channel: BrandChannel;
-    sharedChannel?: BrandChannel;
     disabled: boolean;
     onChange: (assets: BrandAssetsDraft) => void;
 }) {
@@ -96,7 +94,6 @@ export function StoreBrandAssets({
                     title={`选择${BRAND_ASSET_SLOTS.find(slot => slot.field === editing)?.label}`}
                     selectedAsset={assets[editing]}
                     channel={channel}
-                    sharedChannel={sharedChannel}
                     onClose={() => setEditing(null)}
                     onSelect={asset => {
                         onChange({ ...assets, [editing]: asset });

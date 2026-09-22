@@ -126,6 +126,7 @@ describe('StoreCommerceSettingsService', () => {
             {} as any,
             shippingMethodService as any,
             {} as any,
+            {} as any,
         );
 
         const result = await service.get({ channelId: channel.id } as any);
@@ -228,6 +229,7 @@ describe('StoreCommerceSettingsService', () => {
             zoneService as any,
             taxRateService as any,
             shippingMethodService as any,
+            {} as any,
             translations as any,
         );
         const result = { channelId: channel.id, ready: true } as any;

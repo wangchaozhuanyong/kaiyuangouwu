@@ -1,17 +1,36 @@
 import { gql } from '@apollo/client';
 
 export const TEAM_MANAGEMENT_QUERY = gql`
-    query NextAdminTeamManagement(
-        $administratorOptions: AdministratorListOptions
-        $roleOptions: RoleListOptions
-        $channelOptions: ChannelListOptions
-    ) {
+    query NextAdminTeamManagement {
         activeAdministrator {
             id
         }
-        administrators(options: $administratorOptions) {
-            totalItems
-            items {
+        myAdministratorAccess {
+            id
+            scope
+            authority
+            status
+            channel {
+                id
+                code
+                customFields {
+                    storefrontNameZh
+                }
+            }
+        }
+        manageableAdministrators {
+            id
+            scope
+            authority
+            status
+            channel {
+                id
+                code
+                customFields {
+                    storefrontNameZh
+                }
+            }
+            administrator {
                 id
                 createdAt
                 updatedAt
@@ -30,51 +49,61 @@ export const TEAM_MANAGEMENT_QUERY = gql`
                 }
             }
         }
-        roles(options: $roleOptions) {
-            totalItems
-            items {
+        manageableRoles {
+            id
+            createdAt
+            updatedAt
+            code
+            description
+            permissions
+            channels {
                 id
-                createdAt
-                updatedAt
                 code
+                customFields {
+                    storefrontNameZh
+                }
+            }
+        }
+        manageableChannels {
+            id
+            code
+            customFields {
+                storefrontNameZh
+            }
+        }
+        permissionPolicyCatalog {
+            permissions {
+                code
+                name
+                description
+                group
+                scope
+                minimumAuthority
+                sensitive
+                delegable
+                dependencies
+            }
+            templates {
+                code
+                name
                 description
                 permissions
-                channels {
-                    id
-                    code
-                }
-            }
-        }
-        channels(options: $channelOptions) {
-            totalItems
-            items {
-                id
-                code
-            }
-        }
-        globalSettings {
-            serverConfig {
-                permissions {
-                    name
-                    description
-                    assignable
-                }
             }
         }
     }
 `;
 
 export const CREATE_ROLE_MUTATION = gql`
-    mutation NextAdminCreateRole($input: CreateRoleInput!) {
-        createRole(input: $input) {
+    mutation NextAdminCreateManagedRole($input: CreateManagedRoleInput!) {
+        createManagedRole(input: $input) {
             id
         }
     }
 `;
 
 export const UPDATE_ROLE_MUTATION = gql`
-    mutation NextAdminUpdateRole($input: UpdateRoleInput!) {
-        updateRole(input: $input) {
+    mutation NextAdminUpdateManagedRole($input: UpdateManagedRoleInput!) {
+        updateManagedRole(input: $input) {
             id
         }
     }
@@ -90,31 +119,110 @@ export const DELETE_ROLE_MUTATION = gql`
 `;
 
 export const CREATE_ADMINISTRATOR_MUTATION = gql`
-    mutation NextAdminCreateAdministrator($input: CreateAdministratorInput!) {
-        createAdministrator(input: $input) {
+    mutation NextAdminCreateManagedAdministrator($input: CreateManagedAdministratorInput!) {
+        createManagedAdministrator(input: $input) {
             id
         }
     }
 `;
 
 export const UPDATE_ADMINISTRATOR_MUTATION = gql`
-    mutation NextAdminUpdateAdministrator($input: UpdateAdministratorInput!) {
-        updateAdministrator(input: $input) {
+    mutation NextAdminUpdateManagedAdministrator($input: UpdateManagedAdministratorInput!) {
+        updateManagedAdministrator(input: $input) {
             id
         }
     }
 `;
 
 export const DELETE_ADMINISTRATOR_MUTATION = gql`
-    mutation NextAdminDeleteAdministrator($id: ID!) {
-        deleteAdministrator(id: $id) {
-            result
-            message
+    mutation NextAdminSuspendManagedAdministrator($administratorId: ID!) {
+        suspendManagedAdministrator(administratorId: $administratorId) {
+            id
+            status
         }
     }
 `;
 
-const STORE_PROFILE_FIELDS = gql`
+export const TRANSFER_PLATFORM_OWNERSHIP_MUTATION = gql`
+    mutation NextAdminTransferPlatformOwnership($targetAdministratorId: ID!, $currentPassword: String!) {
+        transferPlatformOwnership(
+            targetAdministratorId: $targetAdministratorId
+            currentPassword: $currentPassword
+        ) {
+            id
+            authority
+        }
+    }
+`;
+
+export const TRANSFER_STORE_ADMINISTRATION_MUTATION = gql`
+    mutation NextAdminTransferStoreAdministration(
+        $channelId: ID!
+        $targetAdministratorId: ID!
+        $currentPassword: String!
+    ) {
+        transferStoreAdministration(
+            channelId: $channelId
+            targetAdministratorId: $targetAdministratorId
+            currentPassword: $currentPassword
+        ) {
+            id
+            authority
+        }
+    }
+`;
+
+export const REVIEW_STORE_GOVERNANCE_CHANGE_MUTATION = gql`
+    mutation NextAdminReviewStoreGovernanceChange($input: ReviewStoreGovernanceChangeInput!) {
+        reviewStoreGovernanceChange(input: $input) {
+            id
+            status
+            reviewReason
+        }
+    }
+`;
+
+export const PLATFORM_GOVERNANCE_REVIEW_QUERY = gql`
+    query NextAdminPlatformGovernanceReview {
+        storeGovernanceChanges {
+            id
+            requestType
+            version
+            status
+            maskedSummary
+            reviewPayload
+            reviewReason
+            submittedAt
+            channel {
+                id
+                code
+                customFields {
+                    storefrontNameZh
+                }
+            }
+        }
+    }
+`;
+
+export const ADMINISTRATOR_ACCESS_SCOPE_QUERY = gql`
+    query NextAdminAdministratorAccessScope {
+        myAdministratorAccess {
+            id
+            scope
+            authority
+            status
+            channel {
+                id
+                code
+                customFields {
+                    storefrontNameZh
+                }
+            }
+        }
+    }
+`;
+
+export const STORE_PROFILE_FIELDS = gql`
     fragment NextAdminStoreProfileFields on StoreProfile {
         id
         updatedAt
@@ -174,6 +282,130 @@ const STORE_PROFILE_FIELDS = gql`
                 storefrontNameZh
                 storefrontNameEn
             }
+        }
+    }
+`;
+
+export const MY_STORE_SETTINGS_QUERY = gql`
+    ${STORE_PROFILE_FIELDS}
+    query NextAdminMyStoreSettings {
+        myStoreProfile {
+            ...NextAdminStoreProfileFields
+        }
+        myStoreGovernanceChanges {
+            id
+            requestType
+            status
+            maskedSummary
+            reviewReason
+            submittedAt
+        }
+        myStoreCommerceConfiguration {
+            channelId
+            channelCode
+            updatedAt
+            currencyCode
+            pricesIncludeTax
+            countryCode
+            taxRate
+            shippingMethodNameZh
+            shippingMethodNameEn
+            shippingDescriptionZh
+            shippingDescriptionEn
+            baseRate
+            freeShippingThreshold
+            shippingTaxRate
+            shippingPriceIncludesTax
+            estimateMinDays
+            estimateMaxDays
+            blockedPostalPrefixes
+        }
+        myStoreCurrencyConfiguration {
+            channelId
+            channelCode
+            defaultCurrencyCode
+            availableCurrencyCodes
+            selectorEnabled
+            rateMode
+            usdtDisplayEnabled
+            usdtPaymentConfigured
+            usdtWalletReviewStatus
+        }
+        myStorePaymentOptions {
+            id
+            name
+            code
+            enabled
+        }
+        myStoreUsdtWallet {
+            channelId
+            reviewStatus
+            configured
+            network
+            activeReceivingAddressMasked
+            pendingReceivingAddress
+            submittedAt
+            reviewedAt
+            rejectionReason
+        }
+    }
+`;
+
+export const UPDATE_MY_STORE_PROFILE_MUTATION = gql`
+    ${STORE_PROFILE_FIELDS}
+    mutation NextAdminUpdateMyStoreProfile($input: UpdateMyStoreProfileInput!) {
+        updateMyStoreProfile(input: $input) {
+            ...NextAdminStoreProfileFields
+        }
+    }
+`;
+
+export const UPDATE_MY_STORE_COMMERCE_CONFIGURATION_MUTATION = gql`
+    mutation NextAdminUpdateMyStoreCommerceConfiguration($input: UpdateMyStoreCommerceConfigurationInput!) {
+        updateMyStoreCommerceConfiguration(input: $input) {
+            channelId
+            updatedAt
+            ready
+        }
+    }
+`;
+
+export const SET_MY_STORE_PAYMENT_OPTION_ENABLED_MUTATION = gql`
+    mutation NextAdminSetMyStorePaymentOptionEnabled($id: ID!, $enabled: Boolean!) {
+        setMyStorePaymentOptionEnabled(id: $id, enabled: $enabled) {
+            id
+            name
+            code
+            enabled
+        }
+    }
+`;
+
+export const SUBMIT_MY_STORE_USDT_WALLET_MUTATION = gql`
+    mutation NextAdminSubmitMyStoreUsdtWallet($receivingAddress: String!) {
+        submitMyStoreUsdtWallet(receivingAddress: $receivingAddress) {
+            channelId
+            reviewStatus
+            configured
+            network
+            activeReceivingAddressMasked
+            pendingReceivingAddress
+            submittedAt
+            reviewedAt
+            rejectionReason
+        }
+    }
+`;
+
+export const SUBMIT_STORE_GOVERNANCE_CHANGE_MUTATION = gql`
+    mutation NextAdminSubmitStoreGovernanceChange($input: SubmitStoreGovernanceChangeInput!) {
+        submitStoreGovernanceChange(input: $input) {
+            id
+            requestType
+            status
+            maskedSummary
+            reviewReason
+            submittedAt
         }
     }
 `;
@@ -263,6 +495,36 @@ export const STORE_MANAGEMENT_QUERY = gql`
         }
         storeProfiles {
             ...NextAdminStoreProfileFields
+        }
+        storeGovernanceChanges {
+            id
+            requestType
+            version
+            status
+            maskedSummary
+            reviewPayload
+            reviewReason
+            submittedAt
+            channel {
+                id
+                code
+                customFields {
+                    storefrontNameZh
+                }
+            }
+        }
+        administratorPermissionAudits {
+            id
+            createdAt
+            actorAdministratorId
+            targetAdministratorId
+            targetRoleId
+            channelId
+            action
+            result
+            beforeSummary
+            afterSummary
+            failureReason
         }
         storeProvisioningTemplates {
             id
@@ -1071,7 +1333,11 @@ export interface RoleRecord {
     code: string;
     description: string;
     permissions: string[];
-    channels: Array<{ id: string; code: string }>;
+    channels: Array<{
+        id: string;
+        code: string;
+        customFields?: { storefrontNameZh?: string | null } | null;
+    }>;
 }
 
 export interface AdministratorRecord {
@@ -1087,17 +1353,120 @@ export interface AdministratorRecord {
         lastLogin: string | null;
         roles: Array<{ id: string; code: string; description: string }>;
     };
+    access: AdministratorAccessRecord;
+}
+
+export type AdministratorAccessScope = 'PLATFORM' | 'STORE';
+export type AdministratorAccessAuthority = 'OWNER' | 'ADMIN' | 'MANAGER' | 'STAFF';
+
+export interface AdministratorAccessRecord {
+    id: string;
+    scope: AdministratorAccessScope;
+    authority: AdministratorAccessAuthority;
+    status: 'ACTIVE' | 'SUSPENDED';
+    channel: {
+        id: string;
+        code: string;
+        customFields?: { storefrontNameZh?: string | null } | null;
+    } | null;
+}
+
+export interface PermissionPolicyRecord {
+    code: string;
+    name: string;
+    description: string;
+    group: string;
+    scope: 'OWNER_ONLY' | 'PLATFORM' | 'STORE';
+    minimumAuthority: AdministratorAccessAuthority;
+    sensitive: boolean;
+    delegable: boolean;
+    dependencies: string[];
 }
 
 export interface TeamManagementResult {
     activeAdministrator: { id: string } | null;
-    administrators: { totalItems: number; items: AdministratorRecord[] };
-    roles: { totalItems: number; items: RoleRecord[] };
-    channels: { totalItems: number; items: Array<{ id: string; code: string }> };
-    globalSettings: {
-        serverConfig: {
-            permissions: Array<{ name: string; description: string; assignable: boolean }>;
-        };
+    myAdministratorAccess: AdministratorAccessRecord;
+    manageableAdministrators: Array<
+        AdministratorAccessRecord & { administrator: Omit<AdministratorRecord, 'access'> }
+    >;
+    manageableRoles: RoleRecord[];
+    manageableChannels: Array<{
+        id: string;
+        code: string;
+        customFields?: { storefrontNameZh?: string | null } | null;
+    }>;
+    permissionPolicyCatalog: {
+        permissions: PermissionPolicyRecord[];
+        templates: Array<{
+            code: string;
+            name: string;
+            description: string;
+            permissions: string[];
+        }>;
+    };
+}
+
+export interface AdministratorAccessScopeResult {
+    myAdministratorAccess: AdministratorAccessRecord;
+}
+
+export interface MyStoreSettingsResult {
+    myStoreProfile: StoreProfileRecord;
+    myStoreGovernanceChanges: Array<{
+        id: string;
+        requestType: string;
+        status: string;
+        maskedSummary: Record<string, unknown>;
+        reviewReason: string | null;
+        submittedAt: string;
+    }>;
+    myStoreCommerceConfiguration: {
+        channelId: string;
+        channelCode: string;
+        updatedAt: string;
+        currencyCode: string;
+        pricesIncludeTax: boolean;
+        countryCode: string | null;
+        taxRate: number;
+        shippingMethodNameZh: string;
+        shippingMethodNameEn: string;
+        shippingDescriptionZh: string;
+        shippingDescriptionEn: string;
+        baseRate: number;
+        freeShippingThreshold: number;
+        shippingTaxRate: number;
+        shippingPriceIncludesTax: boolean;
+        estimateMinDays: number;
+        estimateMaxDays: number;
+        blockedPostalPrefixes: string;
+    };
+    myStoreCurrencyConfiguration: {
+        channelId: string;
+        channelCode: string;
+        defaultCurrencyCode: string;
+        availableCurrencyCodes: string[];
+        selectorEnabled: boolean;
+        rateMode: string;
+        usdtDisplayEnabled: boolean;
+        usdtPaymentConfigured: boolean;
+        usdtWalletReviewStatus: string;
+    };
+    myStorePaymentOptions: Array<{
+        id: string;
+        name: string;
+        code: string;
+        enabled: boolean;
+    }>;
+    myStoreUsdtWallet: {
+        channelId: string;
+        reviewStatus: string;
+        configured: boolean;
+        network: string;
+        activeReceivingAddressMasked: string | null;
+        pendingReceivingAddress: string | null;
+        submittedAt: string | null;
+        reviewedAt: string | null;
+        rejectionReason: string | null;
     };
 }
 
@@ -1175,6 +1544,34 @@ export interface StoreManagementResult {
     } | null;
     activeChannel: { id: string; defaultLanguageCode: string; defaultCurrencyCode: string };
     storeProfiles: StoreProfileRecord[];
+    storeGovernanceChanges: Array<{
+        id: string;
+        requestType: string;
+        version: number;
+        status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+        maskedSummary: Record<string, unknown>;
+        reviewPayload: Record<string, unknown> | null;
+        reviewReason: string | null;
+        submittedAt: string;
+        channel: {
+            id: string;
+            code: string;
+            customFields?: { storefrontNameZh?: string | null } | null;
+        };
+    }>;
+    administratorPermissionAudits: Array<{
+        id: string;
+        createdAt: string;
+        actorAdministratorId: string | null;
+        targetAdministratorId: string | null;
+        targetRoleId: string | null;
+        channelId: string | null;
+        action: string;
+        result: string;
+        beforeSummary: Record<string, unknown> | null;
+        afterSummary: Record<string, unknown> | null;
+        failureReason: string | null;
+    }>;
     storeProvisioningTemplates: Array<{
         id: string;
         code: string;
@@ -1226,6 +1623,10 @@ export interface StoreManagementResult {
     shippingEligibilityCheckers: ConfigurableOperationDefinitionRecord[];
     shippingCalculators: ConfigurableOperationDefinitionRecord[];
     fulfillmentHandlers: ConfigurableOperationDefinitionRecord[];
+}
+
+export interface PlatformGovernanceReviewResult {
+    storeGovernanceChanges: StoreManagementResult['storeGovernanceChanges'];
 }
 
 export interface BusinessSettingsResult {

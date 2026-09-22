@@ -1,66 +1,11 @@
 import { gql } from 'graphql-tag';
 
+import { administratorAccessSchema } from './administrator-access.schema';
 import { storeCustomerCouponSchema } from './promotion/store-coupon-api.schema';
+import { referralPosterFields } from './referral/referral-poster-fields';
 import { storeProfileInputSchema } from './store-profile-input.schema';
 import { storefrontBrandingSchema, storefrontPreviewBrandingSchema } from './storefront-branding.schema';
 import { trafficAdminSchema, trafficShopSchema } from './traffic/traffic-api.schema';
-
-const referralPosterFields = `
-        design: JSON
-        createdAt: DateTime!
-        updatedAt: DateTime!
-        name: String!
-        enabled: Boolean!
-        position: Int!
-        layoutVariant: String!
-        posterBackgroundAsset: Asset
-        shareBackgroundAsset: Asset
-        titleZh: String!
-        titleEn: String!
-        headlineZh: String!
-        headlineEn: String!
-        rewardTextZh: String!
-        rewardTextEn: String!
-        siteIntroZh: String!
-        siteIntroEn: String!
-        serviceTextZh: String!
-        serviceTextEn: String!
-        featureOneTitleZh: String!
-        featureOneTitleEn: String!
-        featureOneTextZh: String!
-        featureOneTextEn: String!
-        featureTwoTitleZh: String!
-        featureTwoTitleEn: String!
-        featureTwoTextZh: String!
-        featureTwoTextEn: String!
-        featureThreeTitleZh: String!
-        featureThreeTitleEn: String!
-        featureThreeTextZh: String!
-        featureThreeTextEn: String!
-        qrEyebrowZh: String!
-        qrEyebrowEn: String!
-        qrTitleZh: String!
-        qrTitleEn: String!
-        qrDescriptionZh: String!
-        qrDescriptionEn: String!
-        sceneOneZh: String!
-        sceneOneEn: String!
-        sceneTwoZh: String!
-        sceneTwoEn: String!
-        sceneThreeZh: String!
-        sceneThreeEn: String!
-        sceneFourZh: String!
-        sceneFourEn: String!
-        ctaTextZh: String!
-        ctaTextEn: String!
-        footerTitleZh: String!
-        footerTitleEn: String!
-        footerTextZh: String!
-        footerTextEn: String!
-        foregroundColor: String!
-        accentColor: String!
-        overlayOpacity: Int!
-`;
 
 const commonTypes = gql`
     enum StoreProfileStatus {
@@ -389,6 +334,7 @@ const commonTypes = gql`
 `;
 
 export const adminApiExtensions = gql`
+    ${administratorAccessSchema}
     ${storefrontPreviewBrandingSchema}
     ${trafficAdminSchema}
     ${commonTypes}
@@ -543,6 +489,13 @@ export const adminApiExtensions = gql`
         estimateMinDays: Int!
         estimateMaxDays: Int!
         blockedPostalPrefixes: String!
+    }
+
+    type StorePaymentOption {
+        id: ID!
+        name: String!
+        code: String!
+        enabled: Boolean!
     }
 
     input UpdateStoreCurrencyConfigurationInput {
@@ -1124,6 +1077,7 @@ export const adminApiExtensions = gql`
         storeDeprovisionImpact(profileId: ID!): StoreDeprovisionImpact!
         myStoreProfile: StoreProfile!
         myStoreCommerceConfiguration: StoreCommerceConfiguration!
+        myStorePaymentOptions: [StorePaymentOption!]!
         myStoreCurrencyConfiguration: StoreCurrencyConfiguration!
         myStoreUsdtWallet: StoreUsdtWallet!
         myStoreUsdtPaymentIntents: [StoreUsdtPaymentIntent!]!
@@ -1170,6 +1124,7 @@ export const adminApiExtensions = gql`
         updateMyStoreCommerceConfiguration(
             input: UpdateMyStoreCommerceConfigurationInput!
         ): StoreCommerceConfiguration!
+        setMyStorePaymentOptionEnabled(id: ID!, enabled: Boolean!): StorePaymentOption!
         updateMyStoreCurrencyConfiguration(
             input: UpdateStoreCurrencyConfigurationInput!
         ): StoreCurrencyConfiguration!

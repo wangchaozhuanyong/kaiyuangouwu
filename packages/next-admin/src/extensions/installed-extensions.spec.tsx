@@ -53,7 +53,6 @@ describe('installed next-admin extensions', () => {
                     permissions: ['CreateCatalogImport'],
                 }),
                 expect.objectContaining({ id: 'catalog-standard-export', pageId: 'product-list' }),
-                expect.objectContaining({ id: 'catalog-bulk-channels', pageId: 'product-list' }),
             ]),
         );
     });

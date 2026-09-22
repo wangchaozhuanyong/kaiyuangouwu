@@ -176,10 +176,12 @@ export function StoresPanel({
     profiles,
     onEdit,
     onDeprovision,
+    allowPermanentDeprovision,
 }: {
     profiles: StoreProfileRecord[];
     onEdit: (profile: StoreProfileRecord) => void;
     onDeprovision: (profile: StoreProfileRecord) => void;
+    allowPermanentDeprovision: boolean;
 }) {
     if (!profiles.length)
         return (
@@ -257,7 +259,7 @@ export function StoresPanel({
                                     className={`${secondaryButton} text-rose-600`}
                                 >
                                     <Trash2 className="h-3.5 w-3.5" />
-                                    安全清退
+                                    {allowPermanentDeprovision ? '暂停或清退' : '暂停营业'}
                                 </button>
                                 {profile.storefrontUrl && (
                                     <a

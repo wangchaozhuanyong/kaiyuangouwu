@@ -32,8 +32,6 @@ export function ProductVariantsTab() {
         optionGroupsLoading,
         optionGroupsError,
         catalogChannelsData,
-        selectedChannelIds,
-        setSelectedChannelIds,
         formErrors,
         handleSave,
         saving,
@@ -87,74 +85,32 @@ export function ProductVariantsTab() {
                 </div>
             </section>
 
-            <details className="rounded-xl border border-slate-200 bg-white shadow-2xs">
-                <summary className="cursor-pointer list-none p-4 sm:p-5">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                                <FolderTree className="h-4 w-4 text-blue-600" />
-                                销售店铺（无特殊需求不用修改）
-                                <FeatureHelpButton
-                                    topic="catalog.variant-channels"
-                                    title="销售店铺与独立定价"
-                                />
-                            </h3>
-                            <p className="mt-1 text-xs text-slate-500">
-                                当前为{' '}
-                                <strong className="text-blue-700">
-                                    {catalogChannelsData
-                                        ? getChannelDisplayName(catalogChannelsData.activeChannel.code)
-                                        : '当前店铺'}
-                                </strong>{' '}
-                                设置 {activeCurrencyCode} 销售价。
-                            </p>
-                        </div>
-                        <span className="rounded-lg bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">
-                            已发布 {selectedChannelIds.length} 个店铺
-                        </span>
+            <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs sm:p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            <FolderTree className="h-4 w-4 text-blue-600" />
+                            店铺归属与定价
+                            <FeatureHelpButton topic="catalog.variant-channels" title="店铺独立商品" />
+                        </h3>
+                        <p className="mt-1 text-xs text-slate-500">
+                            本商品仅属于{' '}
+                            <strong className="text-blue-700">
+                                {catalogChannelsData
+                                    ? getChannelDisplayName(catalogChannelsData.activeChannel.code)
+                                    : '当前店铺'}
+                            </strong>
+                            ，在本店独立设置 {activeCurrencyCode} 销售价。
+                        </p>
                     </div>
-                </summary>
-                <div className="border-t border-slate-100 px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
-                    <div className="flex flex-wrap gap-2">
-                        {catalogChannelsData?.channels.items.map(channel => {
-                            const isActiveChannel = channel.id === catalogChannelsData.activeChannel.id;
-                            const isSelected = selectedChannelIds.includes(channel.id);
-                            return (
-                                <label
-                                    key={channel.id}
-                                    className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${isSelected ? 'border-blue-300 bg-blue-50 font-bold text-blue-800' : 'border-slate-200 bg-white text-slate-600'}`}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={isSelected}
-                                        disabled={isActiveChannel}
-                                        onChange={() =>
-                                            setSelectedChannelIds(ids =>
-                                                isSelected
-                                                    ? ids.filter(id => id !== channel.id)
-                                                    : [...ids, channel.id],
-                                            )
-                                        }
-                                        className="h-4 w-4 rounded border-slate-300 text-blue-600"
-                                    />
-                                    <span>{getChannelDisplayName(channel.code)}</span>
-                                    <span className="font-mono text-[10px] text-slate-400">
-                                        {channel.defaultCurrencyCode}
-                                    </span>
-                                    {isActiveChannel && (
-                                        <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[9px] text-blue-700">
-                                            当前
-                                        </span>
-                                    )}
-                                </label>
-                            );
-                        })}
-                    </div>
-                    <p className="mt-3 text-[10px] leading-4 text-slate-400">
-                        要发布到其他店铺时才需要勾选；各店价格在顶部切换“当前店铺”后分别保存。
-                    </p>
+                    <span className="rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                        单店独立
+                    </span>
                 </div>
-            </details>
+                <p className="mt-3 text-[10px] leading-4 text-slate-400">
+                    如果其他店铺也要销售同款商品，请切换到目标店铺后重新创建或导入独立副本。
+                </p>
+            </section>
 
             <div className="bg-white rounded-xl shadow-2xs border border-slate-200 overflow-hidden">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/50 p-4 sm:p-5">

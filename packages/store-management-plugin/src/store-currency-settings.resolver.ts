@@ -1,7 +1,7 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendure/core';
 
-import { storeProfilePermission } from './constants';
+import { reviewStoreGovernancePermission, storeProfilePermission } from './constants';
 import { StoreCurrencySettingsService } from './store-currency-settings.service';
 import { StorePaymentReportingService } from './store-payment-reporting.service';
 import { StoreReportListOptions } from './store-reporting-options';
@@ -63,25 +63,25 @@ export class StoreCurrencySettingsAdminResolver {
     }
 
     @Query()
-    @Allow(Permission.SuperAdmin)
+    @Allow(reviewStoreGovernancePermission.Permission, Permission.SuperAdmin)
     storeUsdtWallets(@Ctx() ctx: RequestContext) {
         return this.usdtWallets.list(ctx);
     }
 
     @Query()
-    @Allow(Permission.SuperAdmin)
+    @Allow(reviewStoreGovernancePermission.Permission, Permission.SuperAdmin)
     storeUsdtPaymentIntents(@Ctx() ctx: RequestContext, @Args('channelId') channelId?: ID) {
         return this.usdtPayments.listForPlatform(ctx, channelId == null ? null : String(channelId));
     }
 
     @Query()
-    @Allow(Permission.SuperAdmin)
+    @Allow(reviewStoreGovernancePermission.Permission, Permission.SuperAdmin)
     storeUsdtPaymentStats(@Ctx() ctx: RequestContext, @Args('channelId') channelId?: ID) {
         return this.usdtPayments.stats(ctx, channelId == null ? null : String(channelId));
     }
 
     @Query()
-    @Allow(Permission.SuperAdmin)
+    @Allow(reviewStoreGovernancePermission.Permission, Permission.SuperAdmin)
     storePaymentStats(
         @Ctx() ctx: RequestContext,
         @Args('channelId') channelId?: ID,
@@ -91,7 +91,7 @@ export class StoreCurrencySettingsAdminResolver {
     }
 
     @Query()
-    @Allow(Permission.SuperAdmin)
+    @Allow(reviewStoreGovernancePermission.Permission, Permission.SuperAdmin)
     storePaymentDetails(
         @Ctx() ctx: RequestContext,
         @Args('channelId') channelId?: ID,
@@ -101,7 +101,7 @@ export class StoreCurrencySettingsAdminResolver {
     }
 
     @Query()
-    @Allow(Permission.SuperAdmin)
+    @Allow(reviewStoreGovernancePermission.Permission, Permission.SuperAdmin)
     storeUsdtManualRefunds(
         @Ctx() ctx: RequestContext,
         @Args('channelId') channelId?: ID,
@@ -150,7 +150,7 @@ export class StoreCurrencySettingsAdminResolver {
 
     @Transaction()
     @Mutation()
-    @Allow(Permission.SuperAdmin)
+    @Allow(reviewStoreGovernancePermission.Permission, Permission.SuperAdmin)
     reviewStoreUsdtWallet(@Ctx() ctx: RequestContext, @Args('input') input: ReviewStoreUsdtWalletInput) {
         return this.usdtWallets.review(ctx, input);
     }

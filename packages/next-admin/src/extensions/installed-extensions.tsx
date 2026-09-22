@@ -4,7 +4,6 @@ import { lazy, type ComponentType } from 'react';
 import { Navigate } from 'react-router-dom';
 
 import { CatalogUnitCustomFieldInput } from '../pages/Catalog/catalog-unit-input';
-import { CatalogBulkChannelAction } from '../pages/Catalog/CatalogBulkChannelAction';
 import { CatalogExportAction } from '../pages/Catalog/CatalogExportAction';
 import {
     CatalogOperationsBlock,
@@ -116,7 +115,7 @@ defineNextAdminExtension({
             legacyPaths: ['/image-generation-access'],
             title: 'AI 服务商接入',
             component: AiImageAccessModule,
-            permissions: ['SuperAdmin'],
+            permissions: ['ReviewStoreGovernance', 'SuperAdmin'],
             navItem: {
                 label: 'AI 服务商接入',
                 sectionId: 'plugins',
@@ -234,14 +233,6 @@ defineNextAdminExtension({
             component: CatalogExportAction,
             permissions: ['ReadCatalogExport'],
             order: 20,
-        },
-        {
-            id: 'catalog-bulk-channels',
-            pageId: 'product-list',
-            label: '批量店铺',
-            component: CatalogBulkChannelAction,
-            permissions: ['UpdateProduct'],
-            order: 30,
         },
     ],
     pageBlocks: [
@@ -443,6 +434,8 @@ defineNextAdminExtension({
                 'ReadSeller',
                 'ReadPaymentMethod',
                 'ReadShippingMethod',
+                'ManageStoreLifecycle',
+                'ReviewStoreGovernance',
             ],
             preload: routeModuleLoaders.storeSettings,
         },

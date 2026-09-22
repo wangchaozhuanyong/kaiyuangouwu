@@ -7,6 +7,24 @@ const BUILT_IN_MENU_ROUTES = [
     ['/settings', 'settings'],
 ] as const;
 
+const PLATFORM_BLOCKED_BUSINESS_PREFIXES = [
+    '/catalog',
+    '/sales',
+    '/customers',
+    '/marketing',
+    '/storefront',
+] as const;
+
+export function isPlatformManagementChannel(code?: string | null) {
+    return /^_+default_channel_+$/iu.test(code?.trim() ?? '');
+}
+
+export function isPlatformBusinessPath(pathname: string) {
+    return PLATFORM_BLOCKED_BUSINESS_PREFIXES.some(
+        prefix => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    );
+}
+
 interface AppShellPermissionSnapshot {
     activeChannel?: { id: string } | null;
     me?: {
@@ -24,7 +42,9 @@ interface ChannelIdentity {
 export function filterAccessibleAdminChannels<T extends ChannelIdentity>(
     channels: readonly T[],
     administratorChannels: ReadonlyArray<ChannelIdentity>,
+    isSuperAdmin = false,
 ) {
+    if (isSuperAdmin) return [...channels];
     const accessibleChannelIds = new Set(administratorChannels.map(channel => channel.id));
     return channels.filter(channel => accessibleChannelIds.has(channel.id));
 }

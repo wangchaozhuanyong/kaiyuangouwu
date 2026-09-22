@@ -1,4 +1,20 @@
-export { storeProfilePermission } from './constants.js';
+export { AdministratorAccessService } from './administrator-access.service.js';
+export { AdministratorPermissionAuditService } from './administrator-permission-audit.service.js';
+export {
+    managePlatformTeamPermission,
+    manageStoreLifecyclePermission,
+    manageStoreTeamPermission,
+    reviewStoreGovernancePermission,
+    sensitiveStoreFinancePermission,
+    storeProfilePermission,
+} from './constants.js';
+export {
+    AdministratorAccessProfile,
+    type AdministratorAccessAuthority,
+    type AdministratorAccessScope,
+    type AdministratorAccessStatus,
+} from './entities/administrator-access-profile.entity.js';
+export { AdministratorPermissionAudit } from './entities/administrator-permission-audit.entity.js';
 export { ReferralAccount } from './entities/referral-account.entity.js';
 export { ReferralLedgerEntry } from './entities/referral-ledger-entry.entity.js';
 export { ReferralProgramConfig } from './entities/referral-program-config.entity.js';
@@ -8,6 +24,7 @@ export { ReferralWalletUsage } from './entities/referral-wallet-usage.entity.js'
 export { ReferralWallet } from './entities/referral-wallet.entity.js';
 export { ReferralWithdrawal } from './entities/referral-withdrawal.entity.js';
 export { StoreAdministratorAccess } from './entities/store-administrator-access.entity.js';
+export { StoreGovernanceChangeRequest } from './entities/store-governance-change-request.entity.js';
 export { StoreProfile } from './entities/store-profile.entity.js';
 export { StoreUsdtManualRefund } from './entities/store-usdt-manual-refund.entity.js';
 export { StoreUsdtWalletAudit } from './entities/store-usdt-wallet-audit.entity.js';
@@ -17,6 +34,7 @@ export { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout
 export { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity.js';
 export { SystemAnnouncement } from './entities/system-announcement.entity.js';
 export { MerchantCatalogAccessService } from './merchant-catalog-access.service.js';
+export { PermissionPolicyRegistry, storeRoleTemplates } from './permission-policy.js';
 export {
     accountEntryRoutes,
     createAccountEntryProof,
@@ -55,6 +73,7 @@ export {
     calculateUsdtCheckoutAmount,
     convertMinorPrice,
 } from './store-currency-settings.service.js';
+export { StoreGovernanceService } from './store-governance.service.js';
 export { StoreManagementPlugin } from './store-management.plugin.js';
 export { StorePaymentReportingService } from './store-payment-reporting.service.js';
 export { StoreProfileService } from './store-profile.service.js';

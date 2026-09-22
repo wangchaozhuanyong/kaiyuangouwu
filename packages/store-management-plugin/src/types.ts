@@ -440,8 +440,6 @@ export interface UpdateMyStoreProfileInput {
     brandPrimaryColor?: string | null;
     brandAccentColor?: string | null;
     brandHighlightColor?: string | null;
-    legalEntityName?: string | null;
-    legalRegistrationCountry?: string | null;
     supportEmail?: string | null;
     privacyEmail?: string | null;
 }

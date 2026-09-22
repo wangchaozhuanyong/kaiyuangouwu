@@ -15,6 +15,12 @@ export class StoreCommerceSettingsResolver {
         return this.storeCommerceSettingsService.get(ctx);
     }
 
+    @Query()
+    @Allow(storeProfilePermission.Read)
+    myStorePaymentOptions(@Ctx() ctx: RequestContext) {
+        return this.storeCommerceSettingsService.paymentOptions(ctx);
+    }
+
     @Transaction()
     @Mutation()
     @Allow(storeProfilePermission.Update)
@@ -23,5 +29,16 @@ export class StoreCommerceSettingsResolver {
         @Args('input') input: UpdateMyStoreCommerceConfigurationInput,
     ) {
         return this.storeCommerceSettingsService.update(ctx, input);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(storeProfilePermission.Update)
+    setMyStorePaymentOptionEnabled(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: string,
+        @Args('enabled') enabled: boolean,
+    ) {
+        return this.storeCommerceSettingsService.setPaymentOptionEnabled(ctx, id, enabled);
     }
 }

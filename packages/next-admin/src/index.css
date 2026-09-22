@@ -308,6 +308,10 @@
         background-color: rgb(5 150 105 / 22%);
     }
 
+    .dark .hover\:bg-amber-50:hover {
+        background-color: rgb(217 119 6 / 16%);
+    }
+
     .dark .hover\:bg-amber-200:hover {
         background-color: rgb(217 119 6 / 28%);
     }

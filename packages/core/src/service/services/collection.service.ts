@@ -78,6 +78,8 @@ export type ApplyCollectionFiltersJobData = {
 @Injectable()
 @Instrument()
 export class CollectionService implements OnModuleInit {
+    // The collection tree has one structural root. Store isolation is enforced on each
+    // non-root Collection's Channel assignment, not by creating a root per Channel.
     private rootCollection: Translated<Collection> | undefined;
     private applyFiltersQueue: JobQueue<ApplyCollectionFiltersJobData>;
     private applyAllFiltersOnProductUpdates = true;

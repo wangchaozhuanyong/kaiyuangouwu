@@ -172,7 +172,7 @@ export class StoreUsdtWalletService {
             wallet.submittedByUserId != null &&
             String(ctx.activeUserId) === String(wallet.submittedByUserId)
         ) {
-            throw new UserInputError('提交人不能审核自己提交的 USDT 收款地址，请使用另一名 SuperAdmin 复核');
+            throw new UserInputError('提交人不能审核自己提交的 USDT 收款地址，请由其他平台审核人员复核');
         }
         const reviewedFingerprint = wallet.pendingReceivingAddressFingerprint;
         if (input.approved) {

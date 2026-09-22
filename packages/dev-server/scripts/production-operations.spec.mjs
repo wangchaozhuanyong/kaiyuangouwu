@@ -76,6 +76,9 @@ void test('release workflow ships the fixed live preflight inputs and migration 
     assert.match(workflow, /\| base64 -d \| gzip -d >/u);
     assert.match(workflow, /len\(payload\.encode\('utf-8'\)\) <= 80_000/u);
     assert.match(workflow, /git merge-base --is-ancestor "\$OPS_EXPECTED_RUNTIME_SHA" "\$OPS_SOURCE_SHA"/u);
+    assert.match(workflow, /audit-administrator-product-readiness/u);
+    assert.match(workflow, /\[\[ "\$OPS_PRODUCT_ID" =~ \^\[1-9\]\[0-9\]\*\$ \]\]/u);
+    assert.match(workflow, /OPS_PRODUCT_ID=\{product_id\}/u);
     assert.doesNotMatch(workflow, /git diff --name-only "\$OPS_EXPECTED_RUNTIME_SHA"/u);
 
     const commonFiles = [
@@ -99,6 +102,12 @@ void test('release workflow ships the fixed live preflight inputs and migration 
             'packages/dev-server/scripts/store-isolation-data-preflight.mjs',
             'packages/dev-server/scripts/store-isolation-ownership-evidence.mjs',
             'packages/dev-server/scripts/store-isolation-customer-dependencies.mjs',
+        ],
+        [
+            ...commonFiles,
+            'packages/dev-server/scripts/store-isolation-data-preflight.mjs',
+            'packages/dev-server/scripts/administrator-access-preflight.mjs',
+            'packages/dev-server/scripts/product-ownership-preflight.mjs',
         ],
         [...commonFiles, 'packages/dev-server/scripts/order-sales-ownership-backfill.mjs'],
         [...commonFiles, 'packages/dev-server/scripts/moyao-default-store-migration.mjs'],
@@ -491,6 +500,42 @@ void test('store isolation audit requires one exact runtime SHA and rejects it f
     );
 });
 
+void test('administrator and product readiness audit requires a pinned runtime and one positive product ID', () => {
+    const runtimeSha = 'b'.repeat(40);
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'audit-administrator-product-readiness',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+        OPS_PRODUCT_ID: '1',
+    });
+    assert.equal(request.productId, '1');
+    assert.equal(request.expectedRuntimeSha, runtimeSha);
+    for (const invalidProductId of ['', '0', '-1', '1;DROP TABLE product', 'abc']) {
+        assert.throws(() =>
+            operations.validateRequest({
+                OPS_OPERATION: 'audit-administrator-product-readiness',
+                OPS_SOURCE_SHA: sourceSha,
+                OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+                OPS_PRODUCT_ID: invalidProductId,
+            }),
+        );
+    }
+    assert.throws(() =>
+        operations.validateRequest({
+            OPS_OPERATION: 'audit-administrator-product-readiness',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_PRODUCT_ID: '1',
+        }),
+    );
+    assert.throws(() =>
+        operations.validateRequest({
+            OPS_OPERATION: 'diagnose',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_PRODUCT_ID: '1',
+        }),
+    );
+});
+
 void test('database backup pins the reviewed runtime and preserves release and health state', () => {
     const runtimeSha = 'b'.repeat(40);
     const request = operations.validateRequest({
@@ -633,10 +678,17 @@ void test('MOYAO migration logs only aggregate evidence and verifies after backu
         contentBlockCount: 24,
         movedChannelRows: { storefront_promotion_page: 1 },
         addedRelations: { customer_channels_channel: 3 },
+        removedDefaultRelations: { customer_channels_channel: 3 },
+        crossStoreRelationConflicts: { customer_channels_channel: 0 },
         copiedChannelRows: { customer_store_entry: 2 },
+        removedDefaultCustomerStoreEntries: 2,
+        removedDefaultOrderMemberships: 7,
         profileWillChange: true,
         contentSettingsWillChange: false,
         sellerWillChange: true,
+        sellerSeparationAction: 'SWAP_EXISTING_SELLERS',
+        sellerIsolationConflictCount: 0,
+        addedRequiredRoleAssignments: 2,
         orderSalesOwnerCount: 7,
         operationDigest,
     };
@@ -650,9 +702,13 @@ void test('MOYAO migration logs only aggregate evidence and verifies after backu
         copiedChannelTablesVerified: 1,
         movedChannelTablesVerified: 51,
         defaultOwnedOrderCount: 0,
+        defaultOrderMembershipCount: 0,
+        defaultRelationCount: 0,
+        defaultCustomerStoreEntryCount: 0,
         profileMatches: true,
         contentSettingsMatch: true,
-        sellerMatches: true,
+        sellerSeparated: true,
+        targetRequiredRoleCount: 2,
     };
     let backupCount = 0;
     const result = operations.runMoyaoDefaultStoreMigration(request, {
@@ -836,6 +892,81 @@ void test('store isolation audit validates sanitized output and stable runtime e
                 spawn: () => assert.fail('must not run'),
             }),
         /not successful/u,
+    );
+});
+
+void test('administrator and product readiness audit reports blockers without exposing SKU labels', () => {
+    const runtimeSha = 'b'.repeat(40);
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'audit-administrator-product-readiness',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+        OPS_PRODUCT_ID: '1',
+    });
+    const plan = { markerSha: runtimeSha, currentRuntime: '/immutable/runtime' };
+    const administrator = {
+        mode: 'read-only',
+        readyForStagedMigration: false,
+        activeAdministratorCount: 3,
+        ownerAdministratorIds: ['1'],
+        existingProfileCount: 0,
+        legacyPrimaries: [],
+        unmapped: [{ administratorId: '3', roleCodes: ['Staff'], channelIds: [], channelCodes: [] }],
+        blockers: [{ code: 'MANUAL_ACCOUNT_MAPPING_REQUIRED', count: 1 }],
+    };
+    const product = {
+        mode: 'read-only',
+        productId: '1',
+        editableAsExclusiveStoreProduct: false,
+        product: { id: '1', channels: [{ id: '1', code: '__default_channel__' }] },
+        related: { variants: [{ id: '7', label: 'PRIVATE-SKU' }] },
+        blockers: [{ code: 'PRODUCT_WITHOUT_STORE', entityId: '1' }],
+    };
+    let healthChecks = 0;
+    const result = operations.runAdministratorProductReadinessAudit(request, {
+        inspect: () => structuredClone(plan),
+        health: () => {
+            healthChecks++;
+            return { status: 'ok', output: 'Result=success\nExecMainStatus=0\nActiveState=inactive' };
+        },
+        spawn: (_command, arguments_, options) => {
+            assert.equal(options.env.STORE_ISOLATION_MODULE_ROOT, plan.currentRuntime);
+            assert.ok(arguments_[0].startsWith('--env-file='));
+            return {
+                status: 0,
+                stdout: JSON.stringify(arguments_.includes('--product-id=1') ? product : administrator),
+                stderr: 'PRIVATE_ERROR_NOT_FORWARDED',
+            };
+        },
+        administratorScript: '/fixed/administrator-access-preflight.mjs',
+        productScript: '/fixed/product-ownership-preflight.mjs',
+    });
+    assert.equal(healthChecks, 2);
+    assert.equal(result.administrator.readyForStagedMigration, false);
+    assert.equal(result.administrator.unmappedCount, 1);
+    assert.equal(result.product.editableAsExclusiveStoreProduct, false);
+    assert.equal(result.product.relatedCounts.variants, 1);
+    assert.equal(result.product.blockerCount, 1);
+    assert.ok(!JSON.stringify(result).includes('PRIVATE-SKU'));
+    assert.ok(!JSON.stringify(result).includes('PRIVATE_ERROR_NOT_FORWARDED'));
+    assert.throws(() =>
+        operations.runAdministratorProductReadinessAudit(request, {
+            inspect: () => ({ ...plan, markerSha: 'c'.repeat(40) }),
+            health: () => assert.fail('must not run'),
+            spawn: () => assert.fail('must not run'),
+        }),
+    );
+    assert.throws(
+        () =>
+            operations.runAdministratorProductReadinessAudit(request, {
+                inspect: () => structuredClone(plan),
+                health: () => ({
+                    status: 'ok',
+                    output: 'Result=success\nExecMainStatus=0\nActiveState=inactive',
+                }),
+                spawn: () => ({ status: 1, stdout: '', stderr: 'PRIVATE_ERROR_NOT_FORWARDED' }),
+            }),
+        /fixed read-only administrator audit failed/u,
     );
 });
 

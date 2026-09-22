@@ -247,7 +247,7 @@ describe('Role resolver', () => {
 
         it(
             'is not allowed for SuperAdmin role',
-            assertThrowsWithMessage(async () => {
+            assertThrowsWithMessage(() => {
                 const superAdminRole = defaultRoles.find(r => r.code === SUPER_ADMIN_ROLE_CODE);
                 if (!superAdminRole) {
                     fail('Could not find SuperAdmin role');
@@ -266,7 +266,7 @@ describe('Role resolver', () => {
 
         it(
             'is not allowed for Customer role',
-            assertThrowsWithMessage(async () => {
+            assertThrowsWithMessage(() => {
                 const customerRole = defaultRoles.find(r => r.code === CUSTOMER_ROLE_CODE);
                 if (!customerRole) {
                     fail('Could not find Customer role');
@@ -286,7 +286,7 @@ describe('Role resolver', () => {
 
     it(
         'deleteRole is not allowed for Customer role',
-        assertThrowsWithMessage(async () => {
+        assertThrowsWithMessage(() => {
             const customerRole = defaultRoles.find(r => r.code === CUSTOMER_ROLE_CODE);
             if (!customerRole) {
                 fail('Could not find Customer role');
@@ -300,7 +300,7 @@ describe('Role resolver', () => {
 
     it(
         'deleteRole is not allowed for SuperAdmin role',
-        assertThrowsWithMessage(async () => {
+        assertThrowsWithMessage(() => {
             const superAdminRole = defaultRoles.find(r => r.code === SUPER_ADMIN_ROLE_CODE);
             if (!superAdminRole) {
                 fail('Could not find Customer role');
@@ -592,24 +592,21 @@ describe('Role resolver', () => {
     });
 
     describe('roles query', () => {
-        let limitedChannelAdmin: FragmentOf<typeof administratorFragment>
+        let limitedChannelAdmin: FragmentOf<typeof administratorFragment>;
 
         beforeAll(async () => {
             adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
             await adminClient.asSuperAdmin();
 
             // Create roles that will be hidden from limited admin
-            await adminClient.query(
-                createRoleDocument,
-                {
-                    input: {
-                        code: 'hidden-role',
-                        description: 'Hidden role',
-                        // Some permission the limited admin user doesn't have, so the role is hidden
-                        permissions: [Permission.ReadOrder],
-                    },
+            await adminClient.query(createRoleDocument, {
+                input: {
+                    code: 'hidden-role',
+                    description: 'Hidden role',
+                    // Some permission the limited admin user doesn't have, so the role is hidden
+                    permissions: [Permission.ReadOrder],
                 },
-            );
+            });
 
             // Create a role to assign to the limited admin user
             const visibleRole = await adminClient.query(createRoleDocument, {
@@ -637,14 +634,11 @@ describe('Role resolver', () => {
             await adminClient.asUserWithCredentials(limitedChannelAdmin.emailAddress, 'test');
 
             // Query first page with pagination, sorted by createdAt ASC
-            const result = await adminClient.query(
-                getRolesDocument,
-                {
-                    options: {
-                        take: 2,
-                    },
+            const result = await adminClient.query(getRolesDocument, {
+                options: {
+                    take: 2,
                 },
-            );
+            });
 
             // Should have at least visible role and test role created earlier
             expect(result.roles.items).toHaveLength(2);

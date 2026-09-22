@@ -49,8 +49,6 @@ export const storeProfileInputSchema = gql`
         brandPrimaryColor: String
         brandAccentColor: String
         brandHighlightColor: String
-        legalEntityName: String
-        legalRegistrationCountry: String
         supportEmail: String
         privacyEmail: String
     }
