@@ -272,6 +272,7 @@ export interface StoreUsdtPaymentStatsRecord {
     settledCount: number;
     manualReviewCount: number;
     expiredCount: number;
+    resolvedCount: number;
     expectedUsdtTotal: number;
     receivedUsdtTotal: number;
     fiatTotals: Array<{ currencyCode: string; amount: number }>;
@@ -379,7 +380,7 @@ export interface StoreUsdtPaymentIntentRecord {
     expectedUsdtAmount: number;
     receivedUsdtAmount: number | null;
     senderAddressMasked: string | null;
-    status: 'PENDING' | 'SETTLED' | 'MANUAL_REVIEW' | 'EXPIRED';
+    status: 'PENDING' | 'SETTLED' | 'MANUAL_REVIEW' | 'EXPIRED' | 'RESOLVED';
     transactionId: string | null;
     failureReason: string | null;
     createdAt: string;
@@ -388,6 +389,29 @@ export interface StoreUsdtPaymentIntentRecord {
     blockNumber: number | null;
     blockTimestamp: string | null;
     lastCheckedAt: string | null;
+    manualReviewCode: string | null;
+    resolvedAt: string | null;
+    resolvedByUserId: string | null;
+    resolutionActionId: string | null;
+}
+
+export interface StoreUsdtReconciliationActionRecord {
+    id: string;
+    channelId: string;
+    intentId: string;
+    orderId: string;
+    action: 'RETRY_SETTLEMENT' | 'CONFIRM_EXTERNAL_REFUND';
+    outcome: string;
+    operatorUserId: string;
+    reason: string;
+    network: string | null;
+    transactionId: string | null;
+    usdtAmount: string | null;
+    fromAddress: string | null;
+    toAddress: string | null;
+    blockNumber: number | null;
+    blockTimestamp: string | null;
+    createdAt: string;
 }
 
 export interface SubmitMyStoreUsdtWalletResult {

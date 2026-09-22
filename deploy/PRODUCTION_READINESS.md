@@ -181,6 +181,16 @@ READINESS_OPERATIONS_JSON='{"persistentAssetStorage":true,"databaseBackups":true
 | `RUN_MIGRATIONS`                                | 只在受控迁移进程中为 `true`                       |
 | `VENDURE_REQUIRE_OFFSITE_BACKUP`                | 单机生产必须为 `true`                             |
 | `VENDURE_BACKUP_S3_URI`                         | 单机生产必须为可写的 `s3://` 路径                 |
+| `VENDURE_BACKUP_RETENTION_DAYS`                 | 数据库本地备份保留期，默认 14 天                  |
+| `VENDURE_DATABASE_BACKUP_S3_RETENTION_DAYS`     | 数据库异地版本最长窗口，默认 30 天                |
+| `VENDURE_REQUIRE_OFFSITE_FILE_BACKUP`           | 单机生产必须为 `true`                             |
+| `VENDURE_FILE_BACKUP_S3_URI`                    | 资源、头像和私有交付文件的独立版本化路径          |
+| `VENDURE_FILE_BACKUP_RETENTION_DAYS`            | 持久文件本地备份保留期，默认 14 天                |
+| `VENDURE_FILE_BACKUP_S3_RETENTION_DAYS`         | 持久文件异地版本最长窗口，默认 30 天              |
+| `VENDURE_DATABASE_RECOVERY_RPO_SECONDS`         | 数据库最大可接受数据窗口，默认 86400 秒           |
+| `VENDURE_DATABASE_RECOVERY_RTO_SECONDS`         | 数据库恢复演练时限，默认 14400 秒                 |
+| `VENDURE_FILE_RECOVERY_RPO_SECONDS`             | 持久文件最大可接受数据窗口，默认 86400 秒         |
+| `VENDURE_FILE_RECOVERY_RTO_SECONDS`             | 持久文件恢复演练时限，默认 14400 秒               |
 | `RUN_JOB_QUEUE`                                 | 独立 Worker 模式下 Server 设为 `0`                |
 | `VENDURE_ASSET_UPLOAD_DIR`                      | Server 与 Worker 可访问的绝对持久目录             |
 | `VENDURE_IMPORT_ASSETS_DIR`                     | 受控且持久的绝对导入目录                          |

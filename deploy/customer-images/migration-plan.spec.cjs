@@ -93,4 +93,14 @@ test('storage template retains buckets and never grants public or decoder access
         false,
     );
     assert.equal(template.Resources.ApplicationImagePolicy.Properties.Roles, undefined);
+    const applicationStatements =
+        template.Resources.ApplicationImagePolicy.Properties.PolicyDocument.Statement;
+    assert.equal(
+        applicationStatements.some(statement => statement.Action.includes('s3:GetBucketVersioning')),
+        true,
+    );
+    assert.equal(
+        applicationStatements.some(statement => statement.Action.includes('s3:GetObjectVersion')),
+        true,
+    );
 });

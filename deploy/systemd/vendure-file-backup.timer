@@ -1,0 +1,11 @@
+[Unit]
+Description=Back up Vendure persistent files every day
+
+[Timer]
+OnCalendar=*-*-* 20:00:00 UTC
+RandomizedDelaySec=5m
+Persistent=true
+Unit=vendure-file-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -4,12 +4,9 @@ import {
     Asset,
     AssetService,
     Channel,
-    ChannelService,
-    ConfigService,
     Customer,
     CustomerService,
     isGraphQlErrorResult,
-    Logger,
     normalizeAvatarImage,
     RequestContext,
     TransactionalConnection,
@@ -18,12 +15,14 @@ import {
 import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 
+import { CustomerAvatarHistoryEntry, DataRetentionService } from './data-retention.service';
+
 export const CUSTOMER_AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 export const CUSTOMER_AVATAR_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
 const CUSTOMER_AVATAR_TAG = 'customer-avatar';
 const CUSTOMER_AVATAR_OWNER_TAG_PREFIX = 'customer-avatar-owner:';
-const AVATAR_CUSTOMER_LIMIT = 5;
+const AVATAR_CUSTOMER_MAX_STORED = 32;
 const AVATAR_CHANNEL_MAX_BYTES = 1024 * 1024 * 1024;
 const AVATAR_CHANNEL_MAX_FILES = 10_000;
 
@@ -40,21 +39,77 @@ export class CustomerAvatarService {
         private readonly assetService: AssetService,
         private readonly customerService: CustomerService,
         private readonly connection: TransactionalConnection,
-        private readonly config: ConfigService,
-        private readonly channelService: ChannelService,
+        private readonly dataRetention: DataRetentionService,
     ) {}
 
     async findMine(ctx: RequestContext): Promise<Asset | null> {
         if (!ctx.activeUserId) return null;
         const customer = await this.customerService.findOneByUserId(ctx, ctx.activeUserId);
         if (!customer) return null;
-        const avatars = await this.assetService.findAll(ctx, {
-            take: 1,
+        const avatars = await this.ownerAvatars(ctx, customer);
+        const retired = await this.dataRetention.retiredAvatarIds(ctx, customer.id);
+        return avatars.items.find(avatar => !retired.has(String(avatar.id))) ?? null;
+    }
+
+    async historyMine(ctx: RequestContext): Promise<CustomerAvatarHistoryEntry[]> {
+        const customer = await this.activeCustomerOrThrow(ctx);
+        return this.dataRetention.avatarHistory(ctx, customer.id);
+    }
+
+    async restoreMine(ctx: RequestContext, retentionId: string): Promise<Asset> {
+        const customer = await this.activeCustomerOrThrow(ctx);
+        return this.connection.withTransaction(ctx, async txCtx => {
+            await this.lockChannel(txCtx);
+            const record = await this.dataRetention.ownedAvatarRecordForRestore(
+                txCtx,
+                retentionId,
+                customer.id,
+            );
+            const asset = await this.connection.getRepository(txCtx, Asset).findOne({
+                where: { id: record.resourceKey },
+                relations: ['channels', 'tags'],
+            });
+            if (
+                !asset ||
+                !asset.tags.some(tag => tag.value === CUSTOMER_AVATAR_TAG) ||
+                !asset.tags.some(tag => tag.value === this.ownerTag(customer)) ||
+                !asset.channels.some(channel => String(channel.id) === String(txCtx.channelId))
+            ) {
+                throw new UserInputError('历史头像文件已不可用');
+            }
+            const avatars = await this.ownerAvatars(txCtx, customer);
+            const retired = await this.dataRetention.retiredAvatarIds(txCtx, customer.id);
+            for (const current of avatars.items.filter(
+                item => !retired.has(String(item.id)) && String(item.id) !== String(asset.id),
+            )) {
+                await this.dataRetention.quarantineAvatar(txCtx, current, customer.id, 'RESTORE_REPLACEMENT');
+            }
+            await this.dataRetention.restoreAvatarRecord(txCtx, record);
+            return asset;
+        });
+    }
+
+    async removeMine(ctx: RequestContext): Promise<boolean> {
+        const customer = await this.activeCustomerOrThrow(ctx);
+        return this.connection.withTransaction(ctx, async txCtx => {
+            await this.lockChannel(txCtx);
+            const avatars = await this.ownerAvatars(txCtx, customer);
+            const retired = await this.dataRetention.retiredAvatarIds(txCtx, customer.id);
+            const active = avatars.items.filter(avatar => !retired.has(String(avatar.id)));
+            for (const avatar of active) {
+                await this.dataRetention.quarantineAvatar(txCtx, avatar, customer.id, 'REMOVED');
+            }
+            return active.length > 0;
+        });
+    }
+
+    private ownerAvatars(ctx: RequestContext, customer: Customer) {
+        return this.assetService.findAll(ctx, {
+            take: AVATAR_CUSTOMER_MAX_STORED,
             tags: [CUSTOMER_AVATAR_TAG, this.ownerTag(customer)],
             tagsOperator: LogicalOperator.AND,
             sort: { createdAt: SortOrder.DESC },
         });
-        return avatars.items[0] ?? null;
     }
 
     async uploadMine(ctx: RequestContext, file: Promise<CustomerAvatarUpload>): Promise<Asset> {
@@ -66,38 +121,23 @@ export class CustomerAvatarService {
         }
 
         const bytes = await normalizeAvatarImage(await readAvatarUpload(uploaded));
-        let previous: Asset[] = [];
         const asset = await this.connection.withTransaction(ctx, async txCtx => {
             // The channel row serializes quota checks across server processes. The
             // transaction owns the upload, so failures roll back both row and quota.
-            const channel = this.connection
-                .getRepository(txCtx, Channel)
-                .createQueryBuilder('channel')
-                .where('channel.id = :id', { id: txCtx.channelId });
-            if (
-                !['sqljs', 'sqlite', 'better-sqlite3'].includes(
-                    String(this.connection.rawConnection.options.type),
-                )
-            ) {
-                channel.setLock('pessimistic_write');
-            }
-            await channel.getOneOrFail();
-            const avatars = await this.assetService.findAll(txCtx, {
-                take: AVATAR_CUSTOMER_LIMIT,
-                tags: [CUSTOMER_AVATAR_TAG, this.ownerTag(customer)],
-                tagsOperator: LogicalOperator.AND,
-                sort: { createdAt: SortOrder.DESC },
-            });
-            if (avatars.totalItems >= AVATAR_CUSTOMER_LIMIT)
-                throw new UserInputError('头像存储配额已满，请联系管理员清理被引用的旧头像');
+            await this.lockChannel(txCtx);
+            const avatars = await this.ownerAvatars(txCtx, customer);
+            if (avatars.totalItems >= AVATAR_CUSTOMER_MAX_STORED)
+                throw new UserInputError('头像恢复区已满，请联系管理员检查保留或引用记录');
+            const retired = await this.dataRetention.retiredAvatarIds(txCtx, customer.id);
+            const activeAvatars = avatars.items.filter(avatar => !retired.has(String(avatar.id)));
             // Compare timestamps inside the database: timestamp columns can otherwise
             // be decoded in a different timezone by API processes.
             const recentlyChanged =
-                avatars.items[0] &&
+                activeAvatars[0] &&
                 (await this.connection
                     .getRepository(txCtx, Asset)
                     .createQueryBuilder('avatar')
-                    .where('avatar.id = :id', { id: avatars.items[0].id })
+                    .where('avatar.id = :id', { id: activeAvatars[0].id })
                     .andWhere(
                         `avatar.createdAt > ${recentAvatarCutoff(this.connection.rawConnection.options.type)}`,
                     )
@@ -120,7 +160,6 @@ export class CustomerAvatarService {
                 Number(usage?.count ?? 0) >= AVATAR_CHANNEL_MAX_FILES
             )
                 throw new UserInputError('店铺头像存储配额已满');
-            previous = avatars.items;
             const created = await this.assetService.create(txCtx, {
                 file: Promise.resolve({
                     filename: `customer-avatar-${randomUUID()}.webp`,
@@ -131,88 +170,27 @@ export class CustomerAvatarService {
                 tags: [CUSTOMER_AVATAR_TAG, this.ownerTag(customer)],
             });
             if (isGraphQlErrorResult(created)) throw new UserInputError(created.message);
+            for (const old of activeAvatars) {
+                await this.dataRetention.quarantineAvatar(txCtx, old, customer.id, 'REPLACED');
+            }
             return created;
         });
-        // Cleanup happens after the replacement commits; a failed replacement never
-        // removes the previous avatar. Shared/referenced assets retain their quota.
-        for (const old of previous) {
-            try {
-                await this.removeUnusedAvatar(ctx, old, customer);
-            } catch {
-                Logger.warn('Old customer avatar retained after cleanup failure', 'CustomerAvatarService');
-            }
-        }
         return asset;
     }
 
-    private async removeUnusedAvatar(ctx: RequestContext, old: Asset, customer: Customer): Promise<void> {
-        const defaultChannel = await this.channelService.getDefaultChannel(ctx);
-        await this.connection.withTransaction(ctx, async txCtx => {
-            if (
-                !['sqljs', 'sqlite', 'better-sqlite3'].includes(
-                    String(this.connection.rawConnection.options.type),
-                )
-            ) {
-                await this.connection
-                    .getRepository(txCtx, Asset)
-                    .createQueryBuilder('avatar')
-                    .where('avatar.id = :id', { id: old.id })
-                    .setLock('pessimistic_write')
-                    .getOneOrFail();
-            }
-            const asset = await this.connection.getRepository(txCtx, Asset).findOne({
-                where: { id: old.id },
-                relations: ['channels', 'tags'],
-            });
-            if (
-                !asset ||
-                asset.tags.length !== 2 ||
-                !asset.channels.some(channel => String(channel.id) === String(ctx.channelId)) ||
-                !asset.tags.some(tag => tag.value === this.ownerTag(customer)) ||
-                !asset.tags.some(tag => tag.value === CUSTOMER_AVATAR_TAG) ||
-                asset.channels.some(
-                    channel =>
-                        ![String(ctx.channelId), String(defaultChannel.id)].includes(String(channel.id)),
-                )
+    private async lockChannel(ctx: RequestContext): Promise<void> {
+        const channel = this.connection
+            .getRepository(ctx, Channel)
+            .createQueryBuilder('channel')
+            .where('channel.id = :id', { id: ctx.channelId });
+        if (
+            !['sqljs', 'sqlite', 'better-sqlite3'].includes(
+                String(this.connection.rawConnection.options.type),
             )
-                return;
-            // Inspect registered relations, including plugin/custom-field references.
-            for (const metadata of this.connection.rawConnection.entityMetadatas) {
-                if (
-                    ['Asset', 'AssetTranslation', 'Channel', 'Tag'].includes(metadata.name) ||
-                    metadata.isJunction
-                )
-                    continue;
-                for (const relation of metadata.relations.filter(
-                    item => item.inverseEntityMetadata.target === Asset,
-                )) {
-                    const referenced = await this.connection
-                        .getRepository(txCtx, metadata.target)
-                        .createQueryBuilder('owner')
-                        .innerJoin(`owner.${relation.propertyPath}`, 'avatar')
-                        .where('avatar.id = :id', { id: asset.id })
-                        .getExists();
-                    if (referenced) return;
-                }
-                // Manual delivery packages store attachment IDs in JSON rather than a foreign key.
-                if (metadata.findColumnWithPropertyName('attachmentAssetIdsJson')) {
-                    const referenced = await this.connection
-                        .getRepository(txCtx, metadata.target)
-                        .createQueryBuilder('owner')
-                        .where('owner.attachmentAssetIdsJson LIKE :id', {
-                            id: `%${JSON.stringify(String(asset.id))}%`,
-                        })
-                        .getExists();
-                    if (referenced) return;
-                }
-            }
-            // Keep the row and its quota until both files have been removed. A storage
-            // outage must not leave an untracked object after the replacement commits.
-            const storage = this.config.assetOptions.assetStorageStrategy;
-            await storage.deleteFile(asset.source);
-            await storage.deleteFile(asset.preview);
-            await this.connection.getRepository(txCtx, Asset).remove(asset);
-        });
+        ) {
+            channel.setLock('pessimistic_write');
+        }
+        await channel.getOneOrFail();
     }
 
     private async activeCustomerOrThrow(ctx: RequestContext): Promise<Customer> {

@@ -57,7 +57,8 @@ export function ProfitReportModule() {
     const hasMissingCost = (summary?.missingCostLineCount ?? 0) > 0;
     const hasMissingExpenses =
         (summary?.missingCarrierShippingCostOrderCount ?? 0) > 0 ||
-        (summary?.missingPaymentFeeOrderCount ?? 0) > 0;
+        (summary?.missingPaymentFeeOrderCount ?? 0) > 0 ||
+        (summary?.missingChargebackOrderCount ?? 0) > 0;
 
     return (
         <div className="min-h-full bg-slate-50">
@@ -72,7 +73,7 @@ export function ProfitReportModule() {
                             </h1>
                         </div>
                         <p className="mt-1 text-xs text-slate-500">
-                            按下单日期、当前店铺、已结算支付和商品历史成本核算；已结算退款会从收入中扣除，明确标记的测试或沙盒支付及其退款不计入。
+                            按下单日期、当前店铺和已结算支付核算；折扣、税额、退款、商品成本、物流、渠道手续费和拒付分开列示。
                         </p>
                     </div>
                     <div className="flex flex-wrap items-end gap-2">
@@ -169,8 +170,8 @@ export function ProfitReportModule() {
                     </summary>
                     <div className="mt-2">
                         <strong>利润口径：</strong>净实收 = 已结算支付 − 已结算退款；可核算毛利润 = 净实收 −
-                        商品成本；净利润 = 可核算毛利润 − 承运商实际物流成本 −
-                        支付手续费。订单上的买家物流费已包含在支付金额中，这里只单独列出，不会再加一次；退款暂时无法拆分到商品或物流费。
+                        商品成本；净利润 = 可核算毛利润 − 承运商实际物流成本 − 支付手续费 −
+                        拒付损失。订单上的买家物流费已包含在支付金额中，这里只单独列出，不会再加一次；退款暂时无法拆分到商品或物流费。
                         <span className="block font-bold">
                             商品成本或任一实际费用未核算时，系统不会显示该订单及报表合计的净利润。
                         </span>
@@ -197,12 +198,15 @@ export function ProfitReportModule() {
                         </div>
                     ) : report && report.items.length > 0 ? (
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[1680px] border-collapse text-left text-xs">
+                            <table className="w-full min-w-[2100px] border-collapse text-left text-xs">
                                 <thead className="bg-slate-50 text-slate-500">
                                     <tr className="border-b border-slate-200">
                                         <Header>订单</Header>
                                         <Header>下单时间</Header>
                                         <Header>商品数量</Header>
+                                        <Header>折扣前销售额</Header>
+                                        <Header>折扣</Header>
+                                        <Header>税额</Header>
                                         <Header>已结算</Header>
                                         <Header>已退款</Header>
                                         <Header>净实收</Header>
@@ -212,6 +216,7 @@ export function ProfitReportModule() {
                                         <Header>毛利率</Header>
                                         <Header>实际物流成本</Header>
                                         <Header>支付手续费</Header>
+                                        <Header>拒付损失</Header>
                                         <Header>净利润</Header>
                                         <Header>净利率</Header>
                                     </tr>
@@ -236,6 +241,18 @@ export function ProfitReportModule() {
                                             </Cell>
                                             <Cell>{formatDateTime(item.orderPlacedAt)}</Cell>
                                             <Cell>{item.quantity}</Cell>
+                                            <MoneyCell
+                                                value={item.grossSalesMicrounits}
+                                                currency={item.currencyCode}
+                                            />
+                                            <MoneyCell
+                                                value={item.discountMicrounits}
+                                                currency={item.currencyCode}
+                                            />
+                                            <MoneyCell
+                                                value={item.taxMicrounits}
+                                                currency={item.currencyCode}
+                                            />
                                             <MoneyCell
                                                 value={item.settledRevenueMicrounits}
                                                 currency={item.currencyCode}
@@ -306,6 +323,18 @@ export function ProfitReportModule() {
                                                     })
                                                 }
                                             />
+                                            <ExpenseCell
+                                                value={item.chargebackMicrounits}
+                                                currency={item.currencyCode}
+                                                label="拒付损失"
+                                                onEdit={() =>
+                                                    navigate(`/sales/orders/${item.id}`, {
+                                                        state: {
+                                                            returnTo: `${location.pathname}${location.search}`,
+                                                        },
+                                                    })
+                                                }
+                                            />
                                             <MoneyCell
                                                 value={item.netProfitMicrounits}
                                                 currency={item.currencyCode}
@@ -365,6 +394,13 @@ export function ProfitReportModule() {
 function SummaryCards({ summary, loading }: { summary?: CatalogProfitReportSummary; loading: boolean }) {
     const currency = summary?.currencyCode ?? 'CNY';
     const cards = [
+        [
+            '折扣前销售额',
+            summary ? formatMicrounits(summary.grossSalesMicrounits, currency) : '—',
+            'text-slate-900',
+        ],
+        ['折扣', summary ? formatMicrounits(summary.discountMicrounits, currency) : '—', 'text-amber-700'],
+        ['税额', summary ? formatMicrounits(summary.taxMicrounits, currency) : '—', 'text-slate-700'],
         ['净实收', summary ? formatMicrounits(summary.netRevenueMicrounits, currency) : '—', 'text-blue-700'],
         [
             '商品成本',
@@ -417,6 +453,15 @@ function SummaryCards({ summary, loading }: { summary?: CatalogProfitReportSumma
                     : '—'
                 : formatMicrounits(summary.paymentFeeMicrounits, currency),
             summary?.paymentFeeMicrounits == null && summary ? 'text-rose-600' : 'text-slate-900',
+        ],
+        [
+            '拒付损失',
+            summary?.chargebackMicrounits == null
+                ? summary
+                    ? '待确认'
+                    : '—'
+                : formatMicrounits(summary.chargebackMicrounits, currency),
+            summary?.chargebackMicrounits == null && summary ? 'text-rose-600' : 'text-slate-900',
         ],
         [
             '净利润',

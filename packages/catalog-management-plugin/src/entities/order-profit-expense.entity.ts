@@ -36,6 +36,9 @@ export class OrderProfitExpense extends VendureEntity {
     @Column({ type: 'bigint', nullable: true })
     paymentFeeMicrounits: string | null;
 
+    @Column({ type: 'bigint', nullable: true })
+    chargebackMicrounits: string | null;
+
     @Column({ type: 'varchar', length: 24 })
     source: string;
 

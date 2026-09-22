@@ -151,19 +151,23 @@ export function OrdersPage({
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const [cancellingAfterSalesId, setCancellingAfterSalesId] = useState('');
+    const [updatingAfterSalesId, setUpdatingAfterSalesId] = useState('');
+    const updateAfterSalesCache = (updated: AfterSalesRequest) => {
+        queryClient.setQueryData<AfterSalesRequest[]>(
+            storefrontQueryKeys.afterSalesRequests(
+                storefrontQueryKeys.market(market),
+                languageCodeFor(language),
+                customer?.id ?? '',
+            ),
+            current => current?.map(item => (item.id === updated.id ? updated : item)) ?? [updated],
+        );
+    };
     const cancelAfterSales = async (id: string) => {
         if (cancellingAfterSalesId) return;
         setCancellingAfterSalesId(id);
         try {
             const cancelled = await api.cancelAfterSalesRequest(id);
-            queryClient.setQueryData<AfterSalesRequest[]>(
-                storefrontQueryKeys.afterSalesRequests(
-                    storefrontQueryKeys.market(market),
-                    languageCodeFor(language),
-                    customer?.id ?? '',
-                ),
-                current => current?.map(item => (item.id === cancelled.id ? cancelled : item)) ?? [cancelled],
-            );
+            updateAfterSalesCache(cancelled);
             onNotify(isZh ? '售后申请已撤销' : 'Return request cancelled');
         } catch (requestError) {
             onNotify(
@@ -175,6 +179,52 @@ export function OrdersPage({
             );
         } finally {
             setCancellingAfterSalesId('');
+        }
+    };
+    const submitAfterSalesReturn = async (id: string, carrier: string, trackingCode: string) => {
+        if (updatingAfterSalesId) return;
+        setUpdatingAfterSalesId(id);
+        try {
+            const updated = await api.submitAfterSalesReturnShipment({
+                id,
+                carrier,
+                trackingCode,
+                idempotencyKey: `storefront-return-${id}`,
+            });
+            updateAfterSalesCache(updated);
+            onNotify(isZh ? '退货物流已提交' : 'Return shipment submitted');
+        } catch (requestError) {
+            onNotify(
+                requestError instanceof Error
+                    ? storefrontErrorMessage(requestError, language)
+                    : isZh
+                      ? '提交退货物流失败'
+                      : 'Could not submit return shipment',
+            );
+        } finally {
+            setUpdatingAfterSalesId('');
+        }
+    };
+    const confirmAfterSalesReplacement = async (id: string) => {
+        if (updatingAfterSalesId) return;
+        setUpdatingAfterSalesId(id);
+        try {
+            const updated = await api.confirmAfterSalesReplacement({
+                id,
+                idempotencyKey: `storefront-received-${id}`,
+            });
+            updateAfterSalesCache(updated);
+            onNotify(isZh ? '已确认收到换货/补发商品' : 'Replacement delivery confirmed');
+        } catch (requestError) {
+            onNotify(
+                requestError instanceof Error
+                    ? storefrontErrorMessage(requestError, language)
+                    : isZh
+                      ? '确认收货失败'
+                      : 'Could not confirm delivery',
+            );
+        } finally {
+            setUpdatingAfterSalesId('');
         }
     };
     const totalItems = ordersQuery.data?.pages[0]?.totalItems ?? 0;
@@ -301,11 +351,16 @@ export function OrdersPage({
                               : ''
                     }
                     cancellingId={cancellingAfterSalesId}
+                    updatingId={updatingAfterSalesId}
                     locale={locale}
                     language={language}
                     onRetry={() => void afterSalesQuery.refetch()}
                     onOpenOrder={orderId => navigateTo({ name: 'order-detail', id: orderId })}
                     onCancel={id => void cancelAfterSales(id)}
+                    onSubmitReturn={(id, carrier, trackingCode) =>
+                        void submitAfterSalesReturn(id, carrier, trackingCode)
+                    }
+                    onConfirmReplacement={id => void confirmAfterSalesReplacement(id)}
                 />
             ) : loading && !orders.length ? (
                 <PageSkeleton label={isZh ? '正在加载订单' : 'Loading orders'} />
@@ -789,23 +844,32 @@ function AfterSalesList({
     loading,
     error,
     cancellingId,
+    updatingId,
     locale,
     language,
     onRetry,
     onOpenOrder,
     onCancel,
+    onSubmitReturn,
+    onConfirmReplacement,
 }: {
     requests: AfterSalesRequest[];
     loading: boolean;
     error: string;
     cancellingId: string;
+    updatingId: string;
     locale: string;
     language: StorefrontLanguage;
     onRetry: () => void;
     onOpenOrder: (orderId: string) => void;
     onCancel: (id: string) => void;
+    onSubmitReturn: (id: string, carrier: string, trackingCode: string) => void;
+    onConfirmReplacement: (id: string) => void;
 }) {
     const isZh = language === 'zh';
+    const [shipmentDrafts, setShipmentDrafts] = useState<
+        Record<string, { carrier: string; trackingCode: string }>
+    >({});
     if (loading && !requests.length) {
         return <PageSkeleton label={isZh ? '正在加载售后记录' : 'Loading after-sales requests'} />;
     }
@@ -881,7 +945,47 @@ function AfterSalesList({
                             <dt>{isZh ? '更新时间' : 'Updated'}</dt>
                             <dd>{formatOrderDate(request.updatedAt, locale)}</dd>
                         </div>
+                        <div>
+                            <dt>{isZh ? '退货进度' : 'Return'}</dt>
+                            <dd>{afterSalesReturnStatusLabel(request.returnStatus, language)}</dd>
+                        </div>
+                        <div>
+                            <dt>{isZh ? '换货/补发进度' : 'Replacement'}</dt>
+                            <dd>{afterSalesReplacementStatusLabel(request.replacementStatus, language)}</dd>
+                        </div>
+                        {request.nextActionDueAt && (
+                            <div>
+                                <dt>{isZh ? '下一步时限' : 'Next action due'}</dt>
+                                <dd>
+                                    {formatOrderDate(request.nextActionDueAt, locale)}
+                                    {request.overdue ? (isZh ? '（已超时）' : ' (overdue)') : ''}
+                                </dd>
+                            </div>
+                        )}
                     </dl>
+                    {request.returnInstructions && (
+                        <div className={orderPageClassName('after-sales-instructions')}>
+                            <strong>{isZh ? '退货说明' : 'Return instructions'}</strong>
+                            <p>{request.returnInstructions}</p>
+                        </div>
+                    )}
+                    {request.returnTrackingCode && (
+                        <p className={orderPageClassName('after-sales-tracking')}>
+                            {isZh ? '退货物流' : 'Return shipment'}: {request.returnCarrier} ·{' '}
+                            {request.returnTrackingCode}
+                        </p>
+                    )}
+                    {request.replacementTrackingCode && (
+                        <p className={orderPageClassName('after-sales-tracking')}>
+                            {isZh ? '换货/补发物流' : 'Replacement shipment'}: {request.replacementCarrier} ·{' '}
+                            {request.replacementTrackingCode}
+                        </p>
+                    )}
+                    {request.replacementException && (
+                        <p className={orderPageClassName('after-sales-exception')}>
+                            {request.replacementException}
+                        </p>
+                    )}
                     <details>
                         <summary>{isZh ? '查看处理时间线' : 'View timeline'}</summary>
                         <ol>
@@ -913,6 +1017,85 @@ function AfterSalesList({
                                   : 'Cancel request'}
                         </button>
                     )}
+                    {request.state === 'APPROVED' && request.returnStatus === 'AWAITING_SHIPMENT' && (
+                        <form
+                            className={orderPageClassName('after-sales-return-form')}
+                            onSubmit={event => {
+                                event.preventDefault();
+                                const draft = shipmentDrafts[request.id];
+                                if (!draft?.carrier.trim() || !draft.trackingCode.trim()) return;
+                                onSubmitReturn(request.id, draft.carrier.trim(), draft.trackingCode.trim());
+                            }}
+                        >
+                            <label>
+                                <span>{isZh ? '物流公司' : 'Carrier'}</span>
+                                <input
+                                    value={shipmentDrafts[request.id]?.carrier ?? ''}
+                                    maxLength={120}
+                                    disabled={Boolean(updatingId)}
+                                    onChange={event =>
+                                        setShipmentDrafts(current => ({
+                                            ...current,
+                                            [request.id]: {
+                                                carrier: event.target.value,
+                                                trackingCode: current[request.id]?.trackingCode ?? '',
+                                            },
+                                        }))
+                                    }
+                                />
+                            </label>
+                            <label>
+                                <span>{isZh ? '退货单号' : 'Return tracking code'}</span>
+                                <input
+                                    value={shipmentDrafts[request.id]?.trackingCode ?? ''}
+                                    maxLength={160}
+                                    disabled={Boolean(updatingId)}
+                                    onChange={event =>
+                                        setShipmentDrafts(current => ({
+                                            ...current,
+                                            [request.id]: {
+                                                carrier: current[request.id]?.carrier ?? '',
+                                                trackingCode: event.target.value,
+                                            },
+                                        }))
+                                    }
+                                />
+                            </label>
+                            <button
+                                type="submit"
+                                disabled={
+                                    Boolean(updatingId) ||
+                                    !shipmentDrafts[request.id]?.carrier.trim() ||
+                                    !shipmentDrafts[request.id]?.trackingCode.trim()
+                                }
+                            >
+                                {updatingId === request.id
+                                    ? isZh
+                                        ? '正在提交'
+                                        : 'Submitting'
+                                    : isZh
+                                      ? '提交退货物流'
+                                      : 'Submit return shipment'}
+                            </button>
+                        </form>
+                    )}
+                    {request.state === 'APPROVED' &&
+                        ['SHIPPED', 'EXCEPTION'].includes(request.replacementStatus) && (
+                            <button
+                                type="button"
+                                className={orderPageClassName('after-sales-confirm-delivery')}
+                                disabled={Boolean(updatingId)}
+                                onClick={() => onConfirmReplacement(request.id)}
+                            >
+                                {updatingId === request.id
+                                    ? isZh
+                                        ? '正在确认'
+                                        : 'Confirming'
+                                    : isZh
+                                      ? '确认已收到换货/补发商品'
+                                      : 'Confirm replacement received'}
+                            </button>
+                        )}
                 </article>
             ))}
         </section>
@@ -929,6 +1112,7 @@ export function OrderDetailPage({
     onReopen,
     onCancelOrder,
     onCreateAfterSales,
+    onConfirmDelivery,
     onUnavailable,
     onNotify,
 }: {
@@ -942,6 +1126,7 @@ export function OrderDetailPage({
     onReopen: (order: Order) => Promise<void>;
     onCancelOrder: (order: Order, reason: string) => Promise<void>;
     onCreateAfterSales: (input: CreateAfterSalesRequestInput) => Promise<void>;
+    onConfirmDelivery: (fulfillmentId: string) => Promise<void>;
     onUnavailable: () => void;
     onNotify?: (message: string) => void;
 }) {
@@ -950,6 +1135,7 @@ export function OrderDetailPage({
     const [cancelOpen, setCancelOpen] = useState(false);
     const [afterSalesOpen, setAfterSalesOpen] = useState(false);
     const [logisticsSheetOpen, setLogisticsSheetOpen] = useState(false);
+    const [confirmingDeliveryId, setConfirmingDeliveryId] = useState('');
     if (!order) {
         return (
             <Subpage title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack}>
@@ -1080,9 +1266,46 @@ export function OrderDetailPage({
                                               : 'Tracking number is not available yet'}
                                     </b>
                                     <em>
-                                        {fulfillmentStateLabel(fulfillment.state, language)} ·{' '}
-                                        {formatOrderDate(fulfillment.updatedAt, locale)}
+                                        {fulfillment.deliveryEvidence?.status === 'EXCEPTION'
+                                            ? isZh
+                                                ? '配送异常待处理'
+                                                : 'Delivery exception'
+                                            : fulfillmentStateLabel(fulfillment.state, language)}{' '}
+                                        · {formatOrderDate(fulfillment.updatedAt, locale)}
                                     </em>
+                                    {fulfillment.deliveryEvidence?.exceptionReason && (
+                                        <small>
+                                            {isZh ? '异常说明：' : 'Exception: '}
+                                            {fulfillment.deliveryEvidence.exceptionReason}
+                                        </small>
+                                    )}
+                                    {fulfillment.state === 'Shipped' &&
+                                        fulfillment.deliveryEvidence?.status !== 'DELIVERED' && (
+                                            <button
+                                                type="button"
+                                                disabled={confirmingDeliveryId === fulfillment.id}
+                                                onClick={event => {
+                                                    event.stopPropagation();
+                                                    setConfirmingDeliveryId(fulfillment.id);
+                                                    void onConfirmDelivery(fulfillment.id)
+                                                        .catch(error =>
+                                                            onNotify?.(
+                                                                storefrontErrorMessage(error, language),
+                                                            ),
+                                                        )
+                                                        .finally(() => setConfirmingDeliveryId(''));
+                                                }}
+                                            >
+                                                <PackageCheck aria-hidden="true" />
+                                                {confirmingDeliveryId === fulfillment.id
+                                                    ? isZh
+                                                        ? '正在确认'
+                                                        : 'Confirming'
+                                                    : isZh
+                                                      ? '确认已收货'
+                                                      : 'Confirm delivery'}
+                                            </button>
+                                        )}
                                 </div>
                             ))
                         ) : (
@@ -1514,6 +1737,31 @@ export function LogisticsTrackingSheet({
                             </div>
 
                             <div className="logistics-timeline">
+                                {currentFulfillment.deliveryEvidence?.events
+                                    .slice()
+                                    .reverse()
+                                    .map(event => (
+                                        <div className="timeline-step is-active" key={event.id}>
+                                            <div className="timeline-dot" />
+                                            <div className="timeline-body">
+                                                <strong>
+                                                    {event.status === 'EXCEPTION'
+                                                        ? isZh
+                                                            ? '配送异常'
+                                                            : 'Delivery exception'
+                                                        : event.status === 'DELIVERED'
+                                                          ? isZh
+                                                              ? '包裹已签收'
+                                                              : 'Package delivered'
+                                                          : isZh
+                                                            ? '运输信息已更新'
+                                                            : 'Delivery updated'}
+                                                </strong>
+                                                <p>{event.note}</p>
+                                                <time>{formatOrderDate(event.createdAt, locale)}</time>
+                                            </div>
+                                        </div>
+                                    ))}
                                 {isDelivered && (
                                     <div className="timeline-step is-active">
                                         <div className="timeline-dot" />
@@ -1824,6 +2072,12 @@ function AfterSalesRequestSheet({
                             </option>
                             <option value="RETURN_AND_REFUND" disabled={containsDigital}>
                                 {afterSalesTypeLabel('RETURN_AND_REFUND', language)}
+                            </option>
+                            <option value="EXCHANGE" disabled={containsDigital}>
+                                {afterSalesTypeLabel('EXCHANGE', language)}
+                            </option>
+                            <option value="RESHIP" disabled={containsDigital}>
+                                {afterSalesTypeLabel('RESHIP', language)}
                             </option>
                         </select>
                         {containsDigital && (
@@ -2513,7 +2767,37 @@ function afterSalesStateIcon(state: AfterSalesState): ReactNode {
 
 function afterSalesTypeLabel(type: AfterSalesType, language: StorefrontLanguage): string {
     if (type === 'RETURN_AND_REFUND') return language === 'zh' ? '退货退款' : 'Return and refund';
+    if (type === 'EXCHANGE') return language === 'zh' ? '换货' : 'Exchange';
+    if (type === 'RESHIP') return language === 'zh' ? '补发' : 'Reship';
     return language === 'zh' ? '仅退款' : 'Refund only';
+}
+
+function afterSalesReturnStatusLabel(
+    status: AfterSalesRequest['returnStatus'],
+    language: StorefrontLanguage,
+): string {
+    const labels: Record<AfterSalesRequest['returnStatus'], { zh: string; en: string }> = {
+        NOT_REQUIRED: { zh: '无需退货', en: 'Not required' },
+        AWAITING_SHIPMENT: { zh: '等待寄回', en: 'Awaiting shipment' },
+        IN_TRANSIT: { zh: '退货运输中', en: 'Return in transit' },
+        RECEIVED: { zh: '仓库已签收', en: 'Warehouse received' },
+        INSPECTED: { zh: '质检已完成', en: 'Inspection completed' },
+    };
+    return labels[status][language];
+}
+
+function afterSalesReplacementStatusLabel(
+    status: AfterSalesRequest['replacementStatus'],
+    language: StorefrontLanguage,
+): string {
+    const labels: Record<AfterSalesRequest['replacementStatus'], { zh: string; en: string }> = {
+        NOT_REQUIRED: { zh: '无需换货/补发', en: 'Not required' },
+        PENDING: { zh: '等待发出', en: 'Awaiting shipment' },
+        SHIPPED: { zh: '运输中', en: 'In transit' },
+        EXCEPTION: { zh: '物流异常', en: 'Shipment exception' },
+        DELIVERED: { zh: '已送达', en: 'Delivered' },
+    };
+    return labels[status][language];
 }
 
 function afterSalesReasonLabel(reason: AfterSalesReason, language: StorefrontLanguage): string {

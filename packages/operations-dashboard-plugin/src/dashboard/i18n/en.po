@@ -14,6 +14,11 @@ msgstr ""
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.acceptedQuantity"
+msgstr "Accepted quantity"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.activeStore"
 msgstr "Active store"
 
@@ -49,6 +54,11 @@ msgstr "Cancel"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.carrier"
+msgstr "Carrier"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.closed"
 msgstr "Closed"
 
@@ -61,6 +71,11 @@ msgstr "Mark completed"
 #: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.completeAfterRefund"
 msgstr "Refund completed, mark complete"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.completionBlocked"
+msgstr "Complete return inspection and replacement delivery before closing this request."
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -79,6 +94,11 @@ msgstr "Customer description"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.deliveryProof"
+msgstr "Delivery proof reference"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.description"
 msgstr "Prioritize requests awaiting a decision. Approval and a completed payment refund are shown separately."
 
@@ -89,8 +109,18 @@ msgstr "No after-sales requests match this filter"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.exceptions"
+msgstr "Overdue / exception"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.filter"
 msgstr "Status filter"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.inspectReturn"
+msgstr "Inspect and restock"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -104,6 +134,11 @@ msgstr "The resolution note is required and cannot exceed 2000 characters"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.invalidWorkflow"
+msgstr "Complete all required workflow fields before saving"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.items"
 msgstr "Items"
 
@@ -114,8 +149,23 @@ msgstr "Could not load after-sales requests"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.lotCode"
+msgstr "Return lot code"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.markDelivered"
+msgstr "Mark delivered"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.missingRefund"
 msgstr "Select the settled refund that completed this request"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.nextActionDue"
+msgstr "Next action due"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -134,6 +184,11 @@ msgstr "Order"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.overdue"
+msgstr "Overdue"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.page"
 msgstr "Page"
 
@@ -146,6 +201,11 @@ msgstr "Previous page"
 #: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.processing"
 msgstr "Processing"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.receiveReturn"
+msgstr "Confirm return received"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -179,6 +239,21 @@ msgstr "Reject"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.rejectedQuantity"
+msgstr "Rejected quantity"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.replacementStatus"
+msgstr "Replacement status"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.reportException"
+msgstr "Record shipment exception"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.requested"
 msgstr "Requested"
 
@@ -199,8 +274,28 @@ msgstr "Retry"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.returnInstructions"
+msgstr "Return instructions"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.returnInstructionsHint"
+msgstr "Required for return and exchange approvals. The customer will see these instructions."
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.returnStatus"
+msgstr "Return status"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.selectRefund"
 msgstr "Select a settled refund"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.shipReplacement"
+msgstr "Record replacement shipment"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -229,6 +324,11 @@ msgstr "Rejected"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.stockLocation"
+msgstr "Stock location"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.submittedAt"
 msgstr "Submitted"
 
@@ -241,6 +341,11 @@ msgstr "Timeline"
 #: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.title"
 msgstr "After-sales management"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.trackingCode"
+msgstr "Tracking code"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -259,8 +364,18 @@ msgstr "Reject request"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.type.exchange"
+msgstr "Exchange"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.type.refundOnly"
 msgstr "Refund only"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.type.reship"
+msgstr "Reship"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -276,6 +391,21 @@ msgstr "After-sales status updated"
 #: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.viewDetails"
 msgstr "View details"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.workflow"
+msgstr "Return and replacement workflow"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.workflowNote"
+msgstr "Operation note"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.workflowUpdated"
+msgstr "After-sales workflow updated"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
@@ -673,6 +803,806 @@ msgid "operations.autoCard.waiting"
 msgstr "Waiting for stock"
 
 #. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.actionNote"
+msgstr "Action note"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.afterSales"
+msgstr "After-sales"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.cancel"
+msgstr "Cancel"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.cancelNew"
+msgstr "Cancel new task"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.churnRisk"
+msgstr "Churn risk"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.close"
+msgstr "Close"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.completeTask"
+msgstr "Complete the follow-up task"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.contacted"
+msgstr "Contacted"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.created"
+msgstr "Customer follow-up created"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.createFailed"
+msgstr "Could not create customer follow-up"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.createTask"
+msgstr "Create task"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.daysAgo"
+msgstr "days ago"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.deadline"
+msgstr "Due"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.defaultTitle"
+msgstr "Customer follow-up"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.description"
+msgstr "Net lifetime value is calculated by currency from settled orders. At-risk customers enter the follow-up queue automatically."
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.doNotContact"
+msgstr "Customer requested no contact"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.dueAt"
+msgstr "Follow-up time"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.empty"
+msgstr "No pending follow-ups."
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.enterNote"
+msgstr "Enter an action note"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.followUpNote"
+msgstr "Follow-up note"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.followUpTitle"
+msgstr "Follow-up title"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.heading"
+msgstr "Customer 360 and follow-up workflow"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.itemsUnit"
+msgstr "items"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.loadFailed"
+msgstr "Could not load customer profile"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.manuallyCreated"
+msgstr "Created manually"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.netLtv"
+msgstr "net LTV"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.newDueAt"
+msgstr "New follow-up time"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.newFollowUp"
+msgstr "New follow-up"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.noResponse"
+msgstr "No response"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.noSettledOrders"
+msgstr "No settled orders"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.notNeeded"
+msgstr "No further action"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.openAfterSales"
+msgstr "Open after-sales"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.ordersUnit"
+msgstr "orders"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.outcome"
+msgstr "Outcome"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.overdue"
+msgstr "Overdue"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.pending"
+msgstr "Pending follow-ups"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.priority"
+msgstr "Priority"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.priority1"
+msgstr "P1"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.priority2"
+msgstr "P2"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.priority3"
+msgstr "P3"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.recalculate"
+msgstr "Recalculate profile"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.received"
+msgstr "Received"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.recentPurchase"
+msgstr "Recent purchase"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.recordOutcome"
+msgstr "Record outcome"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.refreshed"
+msgstr "Customer profile recalculated"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.refreshFailed"
+msgstr "Could not recalculate customer profile"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.refunded"
+msgstr "Refunded"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.reschedule"
+msgstr "Reschedule"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.resolved"
+msgstr "Resolved"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.retry"
+msgstr "Retry"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.save"
+msgstr "Save"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.segment"
+msgstr "Customer segment"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.segmentReasons"
+msgstr "Segment reasons:"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.serviceRecords"
+msgstr "Service records"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.stopContact"
+msgstr "Do not contact"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.systemCreated"
+msgstr "Created by system"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.updated"
+msgstr "Customer follow-up updated"
+
+#. js-lingui-explicit-id
+#: src/dashboard/customer-operations-page-block.tsx
+msgid "operations.customer360.updateFailed"
+msgstr "Could not update customer follow-up"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.actionNote"
+msgstr "Action note"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.cancel"
+msgstr "Cancel"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.carrier"
+msgstr "Carrier"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.confirmDelivered"
+msgstr "Confirm delivery"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.description"
+msgstr "Delivery requires proof. Exceptions, reshipments, and customer confirmations are retained as events."
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.enterNote"
+msgstr "Enter an action note"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.fulfillment"
+msgstr "Fulfillment #"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.heading"
+msgstr "Delivery evidence and exceptions"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.loadFailed"
+msgstr "Could not load delivery evidence"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.newTracking"
+msgstr "New tracking code"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.noTracking"
+msgstr "No tracking code"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.overdue"
+msgstr "Overdue"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.proof"
+msgstr "Proof of delivery"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.proofRequired"
+msgstr "Traceable proof is required to confirm delivery"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.recordException"
+msgstr "Record exception"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.reship"
+msgstr "Reship"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.reshipDetails"
+msgstr "Carrier and tracking code are required to reship"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.retry"
+msgstr "Retry"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.save"
+msgstr "Save delivery event"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.updated"
+msgstr "Delivery evidence updated"
+
+#. js-lingui-explicit-id
+#: src/dashboard/fulfillment-delivery-page-block.tsx
+msgid "operations.delivery.updateFailed"
+msgstr "Could not update delivery evidence"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.anomalies"
+msgstr "Anomalies"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.approvalUpdated"
+msgstr "Governance approval updated."
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.approve"
+msgstr "Approve"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.auditChain"
+msgstr "Audit chain"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.auditEntries"
+msgstr "Audit entries"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.block"
+msgstr "Block"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.changeReason"
+msgstr "Reason for change"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.claim"
+msgstr "Claim"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.configDescription"
+msgstr "Submitters cannot approve their own changes. Approval retires the old version, and all decisions enter the chained audit log."
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.controlledConfig"
+msgstr "Controlled configuration and two-person approval"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.customerAppeal"
+msgstr "Customer appeal:"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.dailyReports"
+msgstr "Daily governance reports"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.decisionReason"
+msgstr "Enter review evidence or decision reason"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.defaultReason"
+msgstr "Adjust governance configuration with two-person approval evidence"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.due"
+msgstr "Due"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.expired"
+msgstr "Governance approval expired. Submit the configuration again."
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.expires"
+msgstr "Expires"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.fraudRules"
+msgstr "Fraud rules"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.immutableAudit"
+msgstr "Immutable audit chain"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.invalid"
+msgstr "Invalid"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.noApprovals"
+msgstr "No pending configurations"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.noRiskCases"
+msgstr "No risk cases"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.operationFailed"
+msgstr "Governance action failed"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.order"
+msgstr "Order"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.pendingApprovals"
+msgstr "Pending configurations"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.refresh"
+msgstr "Refresh"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.reject"
+msgstr "Reject"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.release"
+msgstr "Release"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.reportSchedule"
+msgstr "Report schedule"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.reportsPending"
+msgstr "Daily governance reports appear after the scheduled job runs"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.riskAndAppeals"
+msgstr "Risk cases and customer appeals"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.riskCases"
+msgstr "Risk cases"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.riskUpdated"
+msgstr "Risk case updated."
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.score"
+msgstr "Score"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.submit"
+msgstr "Submit for approval"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.submitted"
+msgstr "Configuration submitted. Another administrator must approve it."
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.submittedBy"
+msgstr "Submitted by"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.title"
+msgstr "Governance & risk control"
+
+#. js-lingui-explicit-id
+#: src/dashboard/governance-risk-page.tsx
+msgid "operations.governanceRisk.valid"
+msgstr "Valid"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.acknowledge"
+msgstr "Acknowledge"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.acknowledgeTitle"
+msgstr "Acknowledge incident"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.actionNote"
+msgstr "Action note"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.actionTitle"
+msgstr "Complete corrective action"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.active"
+msgstr "Open incidents"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.all"
+msgstr "All"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.allSeverities"
+msgstr "All severities"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.cancel"
+msgstr "Cancel"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.complete"
+msgstr "Complete"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.confirm"
+msgstr "Confirm and retain evidence"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.correctiveAction"
+msgstr "Corrective action"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.description"
+msgstr "P0/P1 incidents require acknowledgement, recovery validation, review, and corrective action. Telegram is only a notification channel."
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.dueAt"
+msgstr "Due date"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.empty"
+msgstr "No incidents match this filter."
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.evidence"
+msgstr "Evidence"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.evidenceChain"
+msgstr "Incident evidence chain"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.evidenceDescription"
+msgstr "Evidence hashes are verified in real time. Any mismatch is shown as an integrity failure."
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.hashMismatch"
+msgstr "Hash mismatch"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.heading"
+msgstr "Incident handling and evidence closure"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.immutableNote"
+msgstr "This action is recorded in the immutable incident evidence chain."
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.impact"
+msgstr "Impact summary"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.occurrences"
+msgstr "occurrences"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.ownerDepartment"
+msgstr "Owner department"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.recoveryTitle"
+msgstr "Validate business recovery"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.refresh"
+msgstr "Refresh"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.reviewTitle"
+msgstr "Submit incident review"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.rootCause"
+msgstr "Root cause"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.saving"
+msgstr "Saving…"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.severity"
+msgstr "Severity"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.statusAcknowledged"
+msgstr "In progress"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.statusAction"
+msgstr "Corrective action in progress"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.statusClosed"
+msgstr "Closed"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.statusOpen"
+msgstr "Awaiting acknowledgement"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.statusRecovery"
+msgstr "Awaiting recovery validation"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.statusReview"
+msgstr "Awaiting review"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.submitReview"
+msgstr "Submit review"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.title"
+msgstr "Incident response"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.unknownError"
+msgstr "Unknown error"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.updated"
+msgstr "Incident workflow updated"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.valid"
+msgstr "Valid"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.validateRecovery"
+msgstr "Validate recovery"
+
+#. js-lingui-explicit-id
+#: src/dashboard/incident-response-page.tsx
+msgid "operations.incidents.workflowStatus"
+msgstr "Workflow status"
+
+#. js-lingui-explicit-id
 #: src/dashboard/manual-digital-delivery-page.tsx
 msgid "operations.manualDelivery.account"
 msgstr "Account"
@@ -886,6 +1816,161 @@ msgstr "Verified, publish email"
 #: src/dashboard/manual-digital-delivery-page.tsx
 msgid "operations.manualDelivery.view"
 msgstr "View"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.amount"
+msgstr "Amount"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.amountError"
+msgstr "Amount is invalid"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.appendCost"
+msgstr "Append cost"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.businessDate"
+msgstr "Business date"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.campaign"
+msgstr "Campaign"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.campaignCost"
+msgstr "Campaign cost"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.cancel"
+msgstr "Cancel"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.checkoutViews"
+msgstr "Checkout views"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.conversion"
+msgstr "Conversion"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.cost"
+msgstr "Cost"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.costAppended"
+msgstr "Campaign cost appended"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.description"
+msgstr "Last non-direct touch within 30 days. Order attribution is frozen after payment settles; revenue and return metrics deduct settled refunds."
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.from"
+msgstr "From"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.invalidAmount"
+msgstr "Amount must be non-zero with at most three decimals"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.ledgerHint"
+msgstr "Append-only ledger. Record a negative amount to correct a prior entry."
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.medium"
+msgstr "Medium"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.netRevenue"
+msgstr "Net revenue"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.orders"
+msgstr "Orders"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.productCheckout"
+msgstr "Product / checkout"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.productViews"
+msgstr "Product views"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.reasonInvoice"
+msgstr "Reason / invoice"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.recordCost"
+msgstr "Record campaign cost"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.refresh"
+msgstr "Refresh"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.refundAdjustedRoas"
+msgstr "Refund-adjusted ROAS"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.refundAdjustedRoi"
+msgstr "Refund-adjusted ROI"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.searchTerms"
+msgstr "Search terms"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.source"
+msgstr "Source"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.sourceMedium"
+msgstr "Source / medium"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.title"
+msgstr "Marketing attribution"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.to"
+msgstr "To"
+
+#. js-lingui-explicit-id
+#: src/dashboard/marketing-attribution-page.tsx
+msgid "operations.marketingAttribution.visitors"
+msgstr "Visitors"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
@@ -1339,6 +2424,16 @@ msgstr "Data unavailable"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.deliveryExceptions"
+msgstr "Delivery exceptions"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.deliveryExceptionsDescription"
+msgstr "Carrier exceptions or shipments past their follow-up deadline"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
 msgid "operations.todo.description"
 msgstr "Orders, after-sales requests, and reviews that need attention right now"
 
@@ -1361,6 +2456,16 @@ msgstr "Could not load order tasks"
 #: src/dashboard/operations-todo-widget.tsx
 msgid "operations.todo.openOrders"
 msgstr "Open order center"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.overdueCustomerFollowUps"
+msgstr "Customer follow-ups overdue"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.overdueCustomerFollowUpsDescription"
+msgstr "RFM or manual follow-up tasks past their deadline"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx

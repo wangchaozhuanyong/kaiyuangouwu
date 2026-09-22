@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly vendure_backup_dir="${VENDURE_FILE_BACKUP_DIR:-/var/backups/vendure-files}"
+readonly vendure_retention_days="${VENDURE_FILE_BACKUP_RETENTION_DAYS:-14}"
+
+if [[ ! "${vendure_retention_days}" =~ ^[0-9]+$ ]] || ((vendure_retention_days < 7)); then
+    printf 'VENDURE_FILE_BACKUP_RETENTION_DAYS must be an integer of at least 7\n' >&2
+    exit 1
+fi
+
+install -d -m 0700 "${vendure_backup_dir}"
+exec 8>"${vendure_backup_dir}/.backup.lock"
+flock --exclusive 8
+
+find "${vendure_backup_dir}" -maxdepth 1 -type f \
+    \( -name 'vendure-files-*.tar.gz' -o -name 'vendure-files-*.tar.gz.sha256' \
+    -o -name 'vendure-files-*.tar.gz.manifest.json' -o -name '*.part.failed' \
+    -o -name '*.part.manifest.json.failed' \) \
+    -mtime "+${vendure_retention_days}" -print -delete
+
+while IFS= read -r -d '' stale_snapshot; do
+    if [[ ! "${stale_snapshot}" =~ ^${vendure_backup_dir}/\.s3-source-[0-9]{8}T[0-9]{6}Z$ ]]; then
+        printf 'Refusing to remove an unexpected S3 snapshot directory: %s\n' "${stale_snapshot}" >&2
+        exit 1
+    fi
+    rm -rf -- "${stale_snapshot}"
+done < <(
+    find "${vendure_backup_dir}" -mindepth 1 -maxdepth 1 -type d \
+        -name '.s3-source-????????T??????Z' -mtime +1 -print0
+)

@@ -1,7 +1,15 @@
 import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import { api, Button, DashboardBaseWidget, Link, Skeleton, useQuery } from '@vendure/dashboard';
-import { KeyRound, MessageSquareText, PackageCheck, RefreshCw, RotateCcw } from 'lucide-react';
+import {
+    KeyRound,
+    MessageSquareText,
+    PackageCheck,
+    RefreshCw,
+    RotateCcw,
+    Truck,
+    UsersRound,
+} from 'lucide-react';
 
 import { operationsTodoQuery } from './operations-todo-widget.graphql';
 
@@ -21,6 +29,19 @@ const messages = {
         id: 'operations.todo.pendingAfterSalesDescription',
         message: 'Refund and return requests awaiting a decision',
     }),
+    deliveryExceptions: msg({ id: 'operations.todo.deliveryExceptions', message: 'Delivery exceptions' }),
+    deliveryExceptionsDescription: msg({
+        id: 'operations.todo.deliveryExceptionsDescription',
+        message: 'Carrier exceptions or shipments past their follow-up deadline',
+    }),
+    overdueCustomerFollowUps: msg({
+        id: 'operations.todo.overdueCustomerFollowUps',
+        message: 'Customer follow-ups overdue',
+    }),
+    overdueCustomerFollowUpsDescription: msg({
+        id: 'operations.todo.overdueCustomerFollowUpsDescription',
+        message: 'RFM or manual follow-up tasks past their deadline',
+    }),
     pendingReviews: msg({ id: 'operations.todo.pendingReviews', message: 'Reviews pending' }),
     pendingReviewsDescription: msg({
         id: 'operations.todo.pendingReviewsDescription',
@@ -39,6 +60,8 @@ const messages = {
 interface OperationsTodoCounts {
     pendingShipment: number;
     pendingAfterSales: { totalItems: number };
+    deliveryExceptions: { totalItems: number };
+    overdueCustomerFollowUps: { totalItems: number };
     pendingReviews: { totalItems: number };
     autoCardTodoSummary: {
         lowStockSkuCount: number;
@@ -76,6 +99,15 @@ export function OperationsTodoWidget() {
             search: {},
         },
         {
+            id: 'delivery-exceptions',
+            label: t(messages.deliveryExceptions),
+            description: t(messages.deliveryExceptionsDescription),
+            count: data?.deliveryExceptions.totalItems ?? 0,
+            icon: Truck,
+            to: '/orders' as const,
+            search: {},
+        },
+        {
             id: 'pending-auto-card',
             label: t(messages.pendingAutoCard),
             description: t(messages.pendingAutoCardDescription),
@@ -85,6 +117,15 @@ export function OperationsTodoWidget() {
                 (data?.autoCardTodoSummary.manualReviewCount ?? 0),
             icon: KeyRound,
             to: '/auto-card' as const,
+            search: {},
+        },
+        {
+            id: 'overdue-customer-follow-ups',
+            label: t(messages.overdueCustomerFollowUps),
+            description: t(messages.overdueCustomerFollowUpsDescription),
+            count: data?.overdueCustomerFollowUps.totalItems ?? 0,
+            icon: UsersRound,
+            to: '/customers' as const,
             search: {},
         },
         {
@@ -110,8 +151,8 @@ export function OperationsTodoWidget() {
             }
         >
             {isPending ? (
-                <div className="grid h-full grid-cols-1 gap-4 py-2 sm:grid-cols-4">
-                    {[0, 1, 2, 3].map(item => (
+                <div className="grid h-full grid-cols-1 gap-4 py-2 sm:grid-cols-6">
+                    {[0, 1, 2, 3, 4, 5].map(item => (
                         <div key={item} className="flex min-h-20 items-center gap-3">
                             <Skeleton className="size-9 rounded-md" />
                             <div className="flex-1 space-y-2">
@@ -131,7 +172,7 @@ export function OperationsTodoWidget() {
                     </Button>
                 </div>
             ) : (
-                <div className="grid h-full grid-cols-1 divide-y sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+                <div className="grid h-full grid-cols-1 divide-y sm:grid-cols-6 sm:divide-x sm:divide-y-0">
                     {items.map(item => {
                         const Icon = item.icon;
                         return (

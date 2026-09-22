@@ -2340,6 +2340,33 @@
     margin-top: 2px;
 }
 
+.auth-registration-consent {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    align-items: start;
+    gap: 9px;
+    color: var(--auth-muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.auth-registration-consent > input {
+    width: 16px;
+    min-height: 16px;
+    margin-top: 2px;
+    accent-color: var(--auth-accent);
+}
+
+.auth-registration-consent .auth-legal-links {
+    display: inline-flex;
+    margin: 0 4px;
+    gap: 6px;
+}
+
+.auth-registration-consent .auth-legal-links button {
+    min-height: 24px;
+}
+
 .auth-page-register .auth-account-form {
     gap: 12px;
 }

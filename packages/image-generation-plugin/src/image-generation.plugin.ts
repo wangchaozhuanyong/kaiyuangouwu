@@ -4,6 +4,7 @@ import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 import { IMAGE_GENERATION_OPTIONS, manageImageGenerationPermission } from './constants';
+import { DataSubjectImageHandlerService } from './data-subject-image-handler.service';
 import { ImageComplianceAuditEvent } from './entities/image-compliance-audit-event.entity';
 import { ImageGenerationConfig } from './entities/image-generation-config.entity';
 import { ImageGenerationCostEvent } from './entities/image-generation-cost-event.entity';
@@ -83,6 +84,7 @@ import { ImageGenerationPluginOptions } from './types';
         ImageUsageQuotaService,
         ImagePromptEngineService,
         ImageGenerationService,
+        DataSubjectImageHandlerService,
         ImageGenerationQueueService,
         {
             provide: IMAGE_GENERATION_OPTIONS,

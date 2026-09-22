@@ -278,6 +278,7 @@ describe('OrderDetailPage fulfillment actions', () => {
                 onReopen: vi.fn(),
                 onCancelOrder: vi.fn(),
                 onCreateAfterSales: vi.fn(),
+                onConfirmDelivery: vi.fn(),
                 onUnavailable: vi.fn(),
             }),
         );

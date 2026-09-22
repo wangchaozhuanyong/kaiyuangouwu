@@ -37,8 +37,17 @@ export function useStorefrontTraffic(input: {
                 month: '2-digit',
                 day: '2-digit',
             }).format(new Date());
+            let referrerHost: string | null = null;
+            try {
+                const referrer = document.referrer ? new URL(document.referrer) : null;
+                if (referrer && referrer.hostname !== window.location.hostname) {
+                    referrerHost = referrer.host;
+                }
+            } catch {
+                referrerHost = null;
+            }
             void tracker.current.track(
-                { channel, location, businessDate, customerId },
+                { channel, location, businessDate, customerId, referrerHost },
                 storefrontVisitorId(),
                 value => api.recordStorefrontPageView(value),
             );

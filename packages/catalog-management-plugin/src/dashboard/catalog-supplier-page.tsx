@@ -42,8 +42,10 @@ import { Loader2, Pencil, Plus, RefreshCw, Truck } from 'lucide-react';
 import { useState } from 'react';
 
 import {
+    CatalogSupplierPerformanceRecord,
     CatalogSupplierRecord,
     CatalogSupplierVariantRecord,
+    catalogSupplierPerformanceQuery,
     catalogSupplierVariantsQuery,
     catalogSuppliersQuery,
     createCatalogSupplierMutation,
@@ -315,6 +317,15 @@ function SupplierEditor({
             }>(catalogSupplierVariantsQuery, { supplierId: draft?.id, skip: 0, take: 50 }),
         enabled: Boolean(draft?.id),
     });
+    const performanceQuery = useQuery({
+        queryKey: ['catalog-supplier-performance', draft?.id],
+        queryFn: () =>
+            api.query<{ catalogSupplierPerformance: CatalogSupplierPerformanceRecord }>(
+                catalogSupplierPerformanceQuery,
+                { supplierId: draft?.id },
+            ),
+        enabled: Boolean(draft?.id),
+    });
     if (!draft) return null;
     const update = (values: Partial<SupplierDraft>) => onChange({ ...draft, ...values });
     const linked = variantsQuery.data?.catalogSupplierVariants;
@@ -382,7 +393,11 @@ function SupplierEditor({
                         />
                     </Field>
                     {draft.id && (
-                        <div className="space-y-2 border-t pt-4 sm:col-span-2">
+                        <div className="space-y-4 border-t pt-4 sm:col-span-2">
+                            <SupplierPerformance
+                                pending={performanceQuery.isPending}
+                                performance={performanceQuery.data?.catalogSupplierPerformance}
+                            />
                             <div className="text-sm font-medium">已关联 SKU（{linked?.totalItems ?? 0}）</div>
                             {variantsQuery.isPending ? (
                                 <Skeleton className="h-20 w-full" />
@@ -419,6 +434,50 @@ function SupplierEditor({
             </SheetContent>
         </Sheet>
     );
+}
+
+function SupplierPerformance({
+    pending,
+    performance,
+}: Readonly<{
+    pending: boolean;
+    performance?: CatalogSupplierPerformanceRecord;
+}>) {
+    if (pending) return <Skeleton className="h-24 w-full" />;
+    if (!performance?.totalOrders) {
+        return <div className="text-sm text-muted-foreground">暂无已提交采购单，供货表现尚未形成。</div>;
+    }
+    return (
+        <div className="space-y-2">
+            <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">供货表现</div>
+                <Badge
+                    variant={performance.score != null && performance.score >= 80 ? 'default' : 'secondary'}
+                >
+                    {performance.score == null ? '待评估' : `${performance.score.toFixed(1)} 分`}
+                </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-2 rounded-lg border p-3 text-sm sm:grid-cols-4">
+                <PerformanceMetric label="准时到货" value={percent(performance.onTimeRate)} />
+                <PerformanceMetric label="净验收合格" value={percent(performance.acceptanceRate)} />
+                <PerformanceMetric label="无差异订单" value={percent(performance.varianceFreeRate)} />
+                <PerformanceMetric label="无付款争议" value={percent(performance.disputeFreeRate)} />
+            </div>
+        </div>
+    );
+}
+
+function PerformanceMetric({ label, value }: Readonly<{ label: string; value: string }>) {
+    return (
+        <div>
+            <div className="text-xs text-muted-foreground">{label}</div>
+            <div className="font-medium">{value}</div>
+        </div>
+    );
+}
+
+function percent(value: number | null): string {
+    return value == null ? '—' : `${value.toFixed(1)}%`;
 }
 
 function Field({

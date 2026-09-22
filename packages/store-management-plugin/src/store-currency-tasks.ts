@@ -1,5 +1,6 @@
 import { ScheduledTask } from '@vendure/core';
 
+import { PaymentReconciliationService } from './payment-reconciliation.service';
 import { StoreCurrencySettingsService } from './store-currency-settings.service';
 import { UsdtPaymentService } from './usdt/usdt-payment.service';
 
@@ -34,5 +35,15 @@ export const reconcileStoreUsdtPaymentsTask = new ScheduledTask({
     timeout: '2m',
     async execute({ injector, scheduledContext }) {
         return injector.get(UsdtPaymentService).scanPendingPayments(scheduledContext);
+    },
+});
+
+export const reconcileStorePaymentsDailyTask = new ScheduledTask({
+    id: 'reconcile-store-payments-daily',
+    description: 'Cross-check USDT receipts, Vendure payments, refunds and overdue manual-review cases',
+    schedule: '20 2 * * *',
+    timeout: '10m',
+    async execute({ injector, scheduledContext }) {
+        return injector.get(PaymentReconciliationService).reconcile(scheduledContext);
     },
 });

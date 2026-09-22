@@ -98,6 +98,26 @@ export const orderFields = `${cartQuoteFields}
         trackingCode
         createdAt
         updatedAt
+        deliveryEvidence {
+            id
+            status
+            carrier
+            trackingCode
+            exceptionReason
+            proofReference
+            shippedAt
+            deliveredAt
+            nextActionDueAt
+            overdue
+            events {
+                id
+                createdAt
+                status
+                actorType
+                actorLabel
+                note
+            }
+        }
     }
     digitalDeliveries {
         orderLineId
@@ -255,6 +275,23 @@ export const afterSalesFields = `
     requestedAmount
     approvedAmount
     resolution
+    returnStatus
+    returnInstructions
+    returnCarrier
+    returnTrackingCode
+    returnShippedAt
+    returnReceivedAt
+    inspectedAt
+    inspectionNote
+    replacementStatus
+    replacementCarrier
+    replacementTrackingCode
+    replacementProofReference
+    replacementException
+    replacementShippedAt
+    replacementDeliveredAt
+    nextActionDueAt
+    overdue
     respondedAt
     completedAt
     cancelledAt
@@ -268,11 +305,17 @@ export const afterSalesFields = `
         productName
         sku
         fulfillmentType
+        acceptedReturnQuantity
+        rejectedReturnQuantity
+        returnLotCode
+        inventoryOperationId
+        returnStockLocation { id name }
     }
     events {
         id
         createdAt
         state
+        eventType
         actorType
         actorLabel
         note

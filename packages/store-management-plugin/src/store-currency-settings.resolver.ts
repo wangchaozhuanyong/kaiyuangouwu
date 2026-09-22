@@ -8,7 +8,7 @@ import { StoreReportListOptions } from './store-reporting-options';
 import { UpdateStoreCurrencyConfigurationInput } from './types';
 import { ReviewStoreUsdtWalletInput, StoreUsdtWalletService } from './usdt/store-usdt-wallet.service';
 import { StoreUsdtManualRefundInput, UsdtManualRefundService } from './usdt/usdt-manual-refund.service';
-import { UsdtPaymentService } from './usdt/usdt-payment.service';
+import { ResolveStoreUsdtPaymentIntentInput, UsdtPaymentService } from './usdt/usdt-payment.service';
 
 @Resolver()
 export class StoreCurrencySettingsAdminResolver {
@@ -110,6 +110,12 @@ export class StoreCurrencySettingsAdminResolver {
         return this.usdtManualRefunds.listForPlatform(ctx, channelId ?? null, options);
     }
 
+    @Query()
+    @Allow(Permission.SuperAdmin)
+    storeUsdtReconciliationActions(@Ctx() ctx: RequestContext, @Args('channelId') channelId?: ID) {
+        return this.usdtPayments.listReconciliationActions(ctx, channelId ?? null);
+    }
+
     @Transaction()
     @Mutation()
     @Allow(storeProfilePermission.Update)
@@ -162,6 +168,16 @@ export class StoreCurrencySettingsAdminResolver {
         @Args('input') input: StoreUsdtManualRefundInput,
     ) {
         return this.usdtManualRefunds.record(ctx, input);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    resolveStoreUsdtPaymentIntent(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: ResolveStoreUsdtPaymentIntentInput,
+    ) {
+        return this.usdtPayments.resolveManualReview(ctx, input);
     }
 }
 

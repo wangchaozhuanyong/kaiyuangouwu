@@ -93,9 +93,36 @@ describe('AdminNotificationService', () => {
         });
         expect(test.worker.dispatch).toHaveBeenCalledWith(8);
     });
+
+    it('persists a new incident even when Telegram delivery is disabled', async () => {
+        const test = serviceTest({}, { enabled: false });
+
+        const result = await test.service.upsertIncident(null, {
+            eventType: 'system.database.down',
+            category: 'SYSTEM',
+            severity: 'P0',
+            fingerprint: 'database:offline-notification-channel',
+            title: '数据库中断',
+        });
+
+        expect(result).toMatchObject({ incidentStatus: 'OPEN', deliveryStatus: 'SKIPPED' });
+        expect(test.repository.save).toHaveBeenCalled();
+        expect(test.incidentResponse.appendSystemEvidence).toHaveBeenCalledWith(
+            expect.any(Object),
+            expect.objectContaining({ id: 11 }),
+            'CREATED',
+            expect.any(String),
+            expect.any(Object),
+            expect.any(Date),
+        );
+        expect(test.worker.dispatch).not.toHaveBeenCalled();
+    });
 });
 
-function serviceTest(repositoryOverrides: Record<string, unknown> = {}) {
+function serviceTest(
+    repositoryOverrides: Record<string, unknown> = {},
+    configOverrides: Record<string, unknown> = {},
+) {
     const repository = {
         findOne: vi.fn().mockResolvedValue(null),
         save: vi.fn().mockImplementation(value => {
@@ -105,7 +132,12 @@ function serviceTest(repositoryOverrides: Record<string, unknown> = {}) {
         ...repositoryOverrides,
     };
     const connection = {
-        rawConnection: { getRepository: vi.fn().mockReturnValue(repository) },
+        rawConnection: { options: { type: 'sqljs' }, getRepository: vi.fn().mockReturnValue(repository) },
+        getRepository: vi.fn().mockReturnValue(repository),
+        withTransaction: vi.fn((ctxOrWork: unknown, maybeWork?: (ctx: unknown) => unknown) => {
+            const work = typeof ctxOrWork === 'function' ? ctxOrWork : maybeWork;
+            return Promise.resolve(work?.({}));
+        }),
     };
     const configService = {
         get: vi.fn().mockResolvedValue({
@@ -124,13 +156,21 @@ function serviceTest(repositoryOverrides: Record<string, unknown> = {}) {
             p2Silent: true,
             p3Silent: true,
             routeOverrides: [],
+            ...configOverrides,
         }),
         shouldDeliver: vi.fn().mockReturnValue(true),
     };
     const worker = { dispatch: vi.fn().mockResolvedValue(true) };
+    const incidentResponse = { appendSystemEvidence: vi.fn().mockResolvedValue(undefined) };
     return {
         repository,
         worker,
-        service: new AdminNotificationService(connection as never, configService as never, worker as never),
+        incidentResponse,
+        service: new AdminNotificationService(
+            connection as never,
+            configService as never,
+            worker as never,
+            incidentResponse as never,
+        ),
     };
 }

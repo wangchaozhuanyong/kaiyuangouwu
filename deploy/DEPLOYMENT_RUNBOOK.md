@@ -93,9 +93,11 @@ verification_result:
 - 在源站验证尚未安装的候选片段，使用 `sudo -n python3 -B deploy/validate-nginx-candidate.py deploy/nginx/damatong.conf`。脚本显式保留 `www-data` 身份、隔离全部 5 个临时目录和日志，并检查线上目录元数据未变。禁止以 root 对遗漏 `user` 或临时目录隔离的自制配置运行 `nginx -t/-T`：语法检查也会调整临时目录所有者，导致线上大请求返回 500。正式安装后的配置仍按发布脚本执行默认 `nginx -t` 与 reload。
 - TLS 协议只在 `deploy/nginx/damatong.conf` 的 `http` 作用域声明一次，固定为 `ssl_protocols TLSv1.2 TLSv1.3;`；生产机 `/etc/nginx/nginx.conf` 不得保留发行版默认的重复 `ssl_protocols` 声明。
 - 数据库：同一 EC2 上的 MySQL 8.0，使用 `single-host` 生产模式；每日逻辑备份与恢复演练脚本位于 `deploy/systemd/`。
-- 异地备份：`yunqiao-vendure-prod-backup-079740175286-apne1/mysql`，实例角色只能访问该前缀；存储桶已启用版本控制、SSE-S3 默认加密、阻止全部公网访问与 Bucket owner enforced。本地备份保留 14 天；S3 当前不自动删除，设置生命周期前必须单独确认保留期限。
+- 异地备份：`yunqiao-vendure-prod-backup-079740175286-apne1/mysql`，实例角色只能访问已审核的 MySQL 与持久文件前缀；存储桶必须启用版本控制、SSE-S3 默认加密、阻止全部公网访问、Bucket owner enforced 以及有界生命周期。默认本地保留 14 天，异地当前版本与非当前版本合计最长 30 天。
 
-单机生产环境必须在 `.env` 中设置 `VENDURE_REQUIRE_OFFSITE_BACKUP=true` 和可写的 `VENDURE_BACKUP_S3_URI=s3://<bucket>/<prefix>`。备份脚本会上传压缩备份与 SHA-256 文件；未配置或上传失败时 systemd 任务失败。恢复演练完成后会自动删除临时数据库。
+单机生产环境必须在 `.env` 中设置 `VENDURE_REQUIRE_OFFSITE_BACKUP=true` 和可写的 `VENDURE_BACKUP_S3_URI=s3://<bucket>/<mysql-prefix>`，同时设置 `VENDURE_REQUIRE_OFFSITE_FILE_BACKUP=true` 和不重叠的 `VENDURE_FILE_BACKUP_S3_URI=s3://<bucket>/<files-prefix>`。数据库、商品资源、客户头像、私有生图和数字交付文件都使用带 SHA-256 和内嵌清单的版本化异地备份；对象明确使用 SSE-S3 加密。如果客户图片本身已使用 S3，备份会按源对象 `VersionId` 捕获当前头像与私有图片，并且拒绝把备份写回任一源桶。每周恢复演练不依赖本机目录，使用 `s3:ListBucket` 独立发现最新完整备份，再下载并在隔离目标中校验全量内容与 S3 源清单，完成后删除临时数据库和文件。RPO/RTO 由四个 `VENDURE_*_RECOVERY_*_SECONDS` 变量声明并由生产健康检查强制。
+
+S3 生命周期由账户基础设施负责配置，发布脚本不自动改存储桶。每次备份前，共享策略门禁会读取版本控制、所有权、公网阻断、加密与生命周期；对应前缀必须有启用的当前版本到期、非当前版本到期和不超过 7 天的未完成分段上传清理，且两个到期天数之和不得超过对应 `VENDURE_*_BACKUP_S3_RETENTION_DAYS`。缺失任一项时备份与发布失败关闭。这个到期策略只清理历史备份，不会定时删除正在使用的头像；头像仍活跃时会持续进入新备份，只有在正式替换或删除后，历史副本才会随备份窗口到期。
 
 Cloudflare DNS 和 EC2 实例详情才是当前源站地址的准确信息来源。2026-08-21 核对的 EC2 公网 IPv4 是 `52.196.65.143`；不要把该 IP 当成永久地址。发布前必须重新核对。
 
@@ -124,17 +126,17 @@ Nginx 会按 Cloudflare 官方 IPv4/IPv6 网段恢复 `CF-Connecting-IP`，按�
 
 检查范围由 `scripts/ci-impact.mjs` 决定，PR 和发布共用同一份规则。发布比较**当前生产后端 SHA 到目标 SHA 的全部累计差异**，不能只看最后一个提交，也不能只看本次 PR。
 
-| 改动                                              | CI 范围                                     | 发布路径                         |
-| ------------------------------------------------- | ------------------------------------------- | -------------------------------- |
-| 仅文档                                            | 范围识别与最终状态                          | 不部署网站                       |
-| Storefront 样式、文案、普通组件                   | 变更 lint、架构预算、关联前端测试与该包构建 | 商城静态指针                     |
-| Next Admin 样式、文案、普通组件                   | 变更 lint、架构预算、关联前端测试与该包构建 | 后台静态指针                     |
-| 两个前端同时变化                                  | 两个前端的相关检查                          | 同批切换，任一验收失败恢复两者   |
-| 插件和业务后端                                    | 受影响包与依赖构建、关联测试及适用集成检查  | 运行时发布                       |
-| 核心、共享依赖、锁文件 | 依赖图中的受影响包；依赖变更增加审计 | 运行时发布 |
-| CI、发布与备份控制脚本 | 控制回归与变更 lint，不触发业务包/数据库 | 运行时发布 |
-| 未映射可执行输入 | 明确报错并补充范围映射，不自动 full | 范围明确后选择 |
-| 迁移、实体或受管配置/图片                         | 相应迁移、配置保留和发布门禁                | 保留备份、审核范围及兼容回滚限制 |
+| 改动                            | CI 范围                                     | 发布路径                         |
+| ------------------------------- | ------------------------------------------- | -------------------------------- |
+| 仅文档                          | 范围识别与最终状态                          | 不部署网站                       |
+| Storefront 样式、文案、普通组件 | 变更 lint、架构预算、关联前端测试与该包构建 | 商城静态指针                     |
+| Next Admin 样式、文案、普通组件 | 变更 lint、架构预算、关联前端测试与该包构建 | 后台静态指针                     |
+| 两个前端同时变化                | 两个前端的相关检查                          | 同批切换，任一验收失败恢复两者   |
+| 插件和业务后端                  | 受影响包与依赖构建、关联测试及适用集成检查  | 运行时发布                       |
+| 核心、共享依赖、锁文件          | 依赖图中的受影响包；依赖变更增加审计        | 运行时发布                       |
+| CI、发布与备份控制脚本          | 控制回归与变更 lint，不触发业务包/数据库    | 运行时发布                       |
+| 未映射可执行输入                | 明确报错并补充范围映射，不自动 full         | 范围明确后选择                   |
+| 迁移、实体或受管配置/图片       | 相应迁移、配置保留和发布门禁                | 保留备份、审核范围及兼容回滚限制 |
 
 `packages/dashboard` 是上游组件库，`packages/next-admin` 才是生产后台；二者不混用。独立 2FA 工具、构建配置、依赖清单和受管品牌素材不进入普通前端快速路径。插件变更仍可能通过依赖关系影响多个包，但不因路径以 `packages/` 开头就无条件启用所有检查。默认数据库回归使用生产 MySQL；修改其他数据库驱动时增加该数据库。显式 `full=true` 才启用四数据库、额外 Node 版本和 Windows 完整兼容矩阵。
 
@@ -524,7 +526,7 @@ sudo -n systemctl reload nginx
 5. 对该 SHA 手动运行一次 `Production Release` 工作流；如果本版本包含已审核店铺媒体、登录视觉或 MOYAO AI 品牌，在同一次调度填写 `media_keys`/勾选 `auth_visuals`/勾选 `moyao_brand`，并填写对应已审核 `channel_codes`。大马通整店内容必须勾选 `damatong_storefront` 并填写 `damatong_channel_token=my-malaysia`。现场预检、制品和部署使用同一个运行编号。或在受控 `linux/x64` 构建机生成唯一的 production runtime 目录并走人工发布。两种方式都必须完成自验证并记录外层校验和。
 6. 自动路径由工作流上传归档并调用 `/usr/local/sbin/vendure-production-deploy-from-s3`；人工路径将工作流归档或整个产物目录原样传入 `/var/www/kaiyuangouwu-releases/<sha>-<唯一标识>-linux-x64`。禁止在 EC2 安装依赖或构建。
 7. 服务器校验外层清单哈希、产物内全部文件、符号链接、平台、Git SHA 和运行依赖清单。
-8. 记录当前稳定指针；如果发布计划包含任一受管 publisher，先使用当前健康 API 完成只读 dry-run。数据库迁移只在该预检和生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。部署日志必须包含 `DEPLOY_BACKUP_OK file=<本地备份> offsite=yes invocation_id=<systemd invocation>`，缺失精确备份文件、校验文件或异地上传证据时停止迁移。
+8. 记录当前稳定指针；如果发布计划包含任一受管 publisher，先使用当前健康 API 完成只读 dry-run。数据库迁移只在该预检和生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。部署日志必须包含 `DEPLOY_BACKUP_OK file=<本地备份> offsite=yes encrypted=yes invocation_id=<systemd invocation>`，缺失精确备份文件、校验文件、异地上传或加密证据时停止迁移。
 9. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 与 `127.0.0.1:3002/image-generation/health` 成功，并递归验证候选 Dashboard 的入口、样式、主包与懒加载 JS/CSS 全部可访问。
 10. 从候选产物预演并执行本次审核过的库存继承修复、店铺图片同步、登录/注册内容批次和 MOYAO AI 品牌同步；所有远程写入都必须使用 `--apply --allow-remote`，媒体随后还必须通过 `--verify`，并且必须已通过第 8 步的只读预检。全部成功后才原子切换 `kaiyuangouwu-current`。
 11. 验收前台、后台、Shop API、Admin API、静态资源和 PM2 状态，确认线上 Git SHA。

@@ -104,6 +104,41 @@ const result: TelegramNotificationsResult = {
             },
         ],
     },
+    adminIncidents: {
+        totalItems: 1,
+        items: [
+            {
+                id: '9',
+                createdAt: '2026-09-03T10:00:00.000Z',
+                updatedAt: '2026-09-03T10:05:00.000Z',
+                eventType: 'system.database.down',
+                category: 'SYSTEM',
+                ownerDepartmentCode: 'TECH',
+                collaboratorDepartmentCodes: ['DATA_FINANCE', 'GOVERNANCE'],
+                escalationDepartmentCode: 'EXEC',
+                severity: 'P0',
+                eventState: 'FIRING',
+                title: '数据库连接中断',
+                occurrenceCount: 2,
+                firstOccurredAt: '2026-09-03T10:00:00.000Z',
+                lastOccurredAt: '2026-09-03T10:05:00.000Z',
+                resolvedAt: null,
+                incidentStatus: 'OPEN',
+                acknowledgedAt: null,
+                acknowledgementNote: null,
+                recoveryObservedAt: null,
+                recoveryValidationDueAt: null,
+                recoveryValidatedAt: null,
+                recoveryValidationNote: null,
+                reviewDueAt: null,
+                reviewSubmittedAt: null,
+                rootCause: null,
+                impactSummary: null,
+                closedAt: null,
+                actions: [],
+            },
+        ],
+    },
     telegramDepartmentRouting: {
         departments: departmentCodes.map(code => ({ code, nameZh: code + ' 部门', nameEn: code })),
         routes: [
@@ -146,6 +181,8 @@ describe('TelegramNotificationsPanel', () => {
         expect(html).toContain('system.database.down');
         expect(html).toContain('GOVERNANCE · GOVERNANCE 部门');
         expect(html).toContain('配置变更审计');
+        expect(html).toContain('事故响应与闭环');
+        expect(html).toContain('确认接手');
         expect(html).toContain('修改字段：enabled');
         expect(html).toContain('重试');
     });

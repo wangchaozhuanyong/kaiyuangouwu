@@ -6,6 +6,12 @@ export const operationsTodoQuery = graphql(`
         pendingAfterSales: afterSalesRequests(options: { state: PENDING, take: 1 }) {
             totalItems
         }
+        deliveryExceptions: fulfillmentDeliveryExceptions(options: { exceptionsOnly: true, take: 1 }) {
+            totalItems
+        }
+        overdueCustomerFollowUps: customerFollowUps(options: { status: OPEN, overdue: true, take: 1 }) {
+            totalItems
+        }
         pendingReviews: storefrontReviews(options: { state: PENDING, take: 1 }) {
             totalItems
         }

@@ -1,7 +1,7 @@
 import { DataSource, QueryRunner } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
-import { GuardAdministratorPermissionAudit1789495200000 } from './1789495200000-guard-administrator-permission-audit';
+import { GuardAdministratorPermissionAudit1789700400000 } from './1789700400000-guard-administrator-permission-audit';
 
 describe('append-only administrator permission audit migration', () => {
     it('allows inserts but rejects updates and deletes in SQLite, including after a repeated up', async () => {
@@ -11,7 +11,7 @@ describe('append-only administrator permission audit migration', () => {
             await runner.query(
                 'CREATE TABLE administrator_permission_audit (id integer PRIMARY KEY, action text)',
             );
-            const migration = new GuardAdministratorPermissionAudit1789495200000();
+            const migration = new GuardAdministratorPermissionAudit1789700400000();
             await migration.up(runner);
             await migration.up(runner);
             await runner.query(
@@ -41,7 +41,7 @@ describe('append-only administrator permission audit migration', () => {
                 hasTable: vi.fn().mockResolvedValue(true),
                 query,
             } as unknown as QueryRunner;
-            await new GuardAdministratorPermissionAudit1789495200000().up(runner);
+            await new GuardAdministratorPermissionAudit1789700400000().up(runner);
             const statements = query.mock.calls.map(([sql]) => sql);
             expect(statements.filter(sql => sql.includes('CREATE TRIGGER'))).toHaveLength(2);
             expect(statements.join('\n')).toContain('BEFORE UPDATE');
@@ -57,7 +57,7 @@ describe('append-only administrator permission audit migration', () => {
             hasTable: vi.fn().mockResolvedValue(false),
             query,
         } as unknown as QueryRunner;
-        await expect(new GuardAdministratorPermissionAudit1789495200000().up(runner)).rejects.toThrow(
+        await expect(new GuardAdministratorPermissionAudit1789700400000().up(runner)).rejects.toThrow(
             'must exist',
         );
         expect(query).not.toHaveBeenCalled();
@@ -101,7 +101,7 @@ describe('append-only administrator permission audit migration', () => {
                     await runner.query(
                         'CREATE TABLE administrator_permission_audit (id INT PRIMARY KEY, action VARCHAR(50))',
                     );
-                    const migration = new GuardAdministratorPermissionAudit1789495200000();
+                    const migration = new GuardAdministratorPermissionAudit1789700400000();
                     await migration.up(runner);
                     await migration.up(runner);
                     await runner.query(

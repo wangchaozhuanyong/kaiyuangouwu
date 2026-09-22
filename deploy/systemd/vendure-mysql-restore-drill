@@ -7,6 +7,7 @@ readonly vendure_repo_dir="${VENDURE_REPO_DIR:-/var/www/kaiyuangouwu}"
 readonly vendure_env_file="${VENDURE_ENV_FILE:-${vendure_repo_dir}/packages/dev-server/.env}"
 readonly vendure_backup_dir="${VENDURE_BACKUP_DIR:-/var/backups/vendure-mysql}"
 readonly vendure_evidence_dir="${VENDURE_READINESS_EVIDENCE_DIR:-/var/lib/vendure-readiness}"
+readonly recovery_rto_seconds="${VENDURE_DATABASE_RECOVERY_RTO_SECONDS:-14400}"
 readonly restore_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 readonly restore_database="vendure_restore_drill_${restore_stamp}"
 
@@ -26,31 +27,97 @@ for required_name in DB_HOST DB_PORT DB_USERNAME DB_PASSWORD DB_NAME; do
         exit 1
     fi
 done
+if [[ ! "${recovery_rto_seconds}" =~ ^[0-9]+$ ]] || ((recovery_rto_seconds < 300)); then
+    printf 'VENDURE_DATABASE_RECOVERY_RTO_SECONDS must be an integer of at least 300\n' >&2
+    exit 1
+fi
+if [[ ! "${VENDURE_REQUIRE_OFFSITE_BACKUP:-false}" =~ ^(true|false)$ ]]; then
+    printf 'VENDURE_REQUIRE_OFFSITE_BACKUP must be true or false\n' >&2
+    exit 1
+fi
+if [[ -n "${VENDURE_BACKUP_S3_URI:-}" && ! "${VENDURE_BACKUP_S3_URI}" =~ ^s3://[a-z0-9.-]+(/[A-Za-z0-9._/-]+)?$ ]]; then
+    printf 'VENDURE_BACKUP_S3_URI must be a safe s3:// bucket prefix\n' >&2
+    exit 1
+fi
 
 restore_database_created=false
-cleanup_restore_database() {
+drill_directory=""
+cleanup_restore_drill() {
     if [[ "${restore_database_created}" == "true" ]]; then
         mysql --protocol=socket --user=root --execute="DROP DATABASE IF EXISTS \`${restore_database}\`"
     fi
+    if [[ -n "${drill_directory}" && -d "${drill_directory}" ]]; then
+        rm -rf -- "${drill_directory}"
+    fi
 }
-trap cleanup_restore_database EXIT
+trap cleanup_restore_drill EXIT
 
-# The checksum file is published last, so an in-progress backup cannot hide the last complete one.
-backup_checksum="$(find "${vendure_backup_dir}" -maxdepth 1 -type f -name 'vendure-*.sql.gz.sha256' -printf '%T@ %p\n' | sort -nr | awk 'NR == 1 { sub(/^[^ ]+ /, ""); print }')"
-readonly backup_checksum
-readonly backup_file="${backup_checksum%.sha256}"
-if [[ -z "${backup_checksum}" ]]; then
-    printf 'No verified backup is available for the restore drill\n' >&2
+install -d -m 0700 "${vendure_backup_dir}" "${vendure_evidence_dir}"
+exec 8>"${vendure_backup_dir}/.backup.lock"
+flock --shared 8
+readonly started_epoch="$(date +%s)"
+drill_directory="$(mktemp -d "${vendure_evidence_dir}/mysql-restore-drill.XXXXXX")"
+readonly drill_directory
+backup_file=""
+backup_name=""
+backup_source="local"
+if [[ -n "${VENDURE_BACKUP_S3_URI:-}" ]]; then
+    command -v aws >/dev/null 2>&1 || {
+        printf 'AWS CLI is required for the offsite database restore drill\n' >&2
+        exit 1
+    }
+    backup_source="offsite"
+    readonly offsite_prefix="${VENDURE_BACKUP_S3_URI%/}"
+    readonly bucket_and_prefix="${offsite_prefix#s3://}"
+    readonly bucket="${bucket_and_prefix%%/*}"
+    prefix="${bucket_and_prefix#${bucket}}"
+    prefix="${prefix#/}"
+    object_prefix=""
+    if [[ -n "${prefix}" ]]; then object_prefix="${prefix}/"; fi
+    readonly object_prefix
+    objects_json="$(aws s3api list-objects-v2 --bucket "${bucket}" --prefix "${object_prefix}vendure-" --output json)"
+    checksum_key="$(jq -er --arg prefix "${object_prefix}" '
+        [.Contents[]?
+            | select(.Key | startswith($prefix))
+            | select((.Key | split("/") | last) | test("^vendure-[0-9]{8}T[0-9]{6}Z[.]sql[.]gz[.]sha256$"))]
+        | sort_by(.LastModified) | last | .Key
+    ' <<<"${objects_json}")" || {
+        printf 'No independently discoverable offsite database backup is available\n' >&2
+        exit 1
+    }
+    readonly checksum_key
+    backup_name="$(basename "${checksum_key%.sha256}")"
+    if [[ "${checksum_key}" != "${object_prefix}${backup_name}.sha256" ]]; then
+        printf 'Latest offsite database backup key is outside the configured prefix\n' >&2
+        exit 1
+    fi
+    backup_file="${drill_directory}/${backup_name}"
+    for suffix in '' '.manifest.json' '.sha256'; do
+        aws s3 cp "s3://${bucket}/${object_prefix}${backup_name}${suffix}" "${backup_file}${suffix}" \
+            --only-show-errors
+    done
+elif [[ "${VENDURE_REQUIRE_OFFSITE_BACKUP:-false}" == "true" ]]; then
+    printf 'Offsite database backup is mandatory but no S3 destination is configured\n' >&2
     exit 1
+else
+    # The checksum file is published last, so an in-progress backup cannot hide the last complete one.
+    backup_checksum="$(find "${vendure_backup_dir}" -maxdepth 1 -type f -name 'vendure-*.sql.gz.sha256' -printf '%T@ %p\n' | sort -nr | awk 'NR == 1 { sub(/^[^ ]+ /, ""); print }')"
+    readonly backup_checksum
+    if [[ -z "${backup_checksum}" ]]; then
+        printf 'No verified backup is available for the restore drill\n' >&2
+        exit 1
+    fi
+    backup_file="${backup_checksum%.sha256}"
+    backup_name="$(basename "${backup_file}")"
 fi
+readonly backup_file backup_name backup_source
 
 if [[ ! -s "${backup_file}.manifest.json" ]]; then
     printf 'Backup lacks a source data manifest; record-level recovery cannot be verified\n' >&2
     exit 1
 fi
-
 (
-    cd "${vendure_backup_dir}"
+    cd "$(dirname "${backup_file}")"
     sha256sum --check "$(basename "${backup_file}.sha256")"
 )
 gzip -t "${backup_file}"
@@ -62,7 +129,6 @@ gzip -dc "${backup_file}" | mysql --protocol=socket --user=root "${restore_datab
 readonly source_tables="$(MYSQL_PWD="${DB_PASSWORD}" mysql --host="${DB_HOST}" --port="${DB_PORT}" --user="${DB_USERNAME}" --batch --skip-column-names --execute="SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'" "${DB_NAME}")"
 readonly backup_tables="$(gzip -dc "${backup_file}" | awk '/^CREATE TABLE `/ { count++ } END { print count + 0 }')"
 readonly restored_tables="$(mysql --protocol=socket --user=root --batch --skip-column-names --execute="SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '${restore_database}' AND table_type = 'BASE TABLE'")"
-
 if [[ "${backup_tables}" -eq 0 || "${backup_tables}" -ne "${restored_tables}" ]]; then
     printf 'Restore drill table count mismatch: backup=%s restored=%s current_source=%s\n' \
         "${backup_tables}" "${restored_tables}" "${source_tables}" >&2
@@ -75,11 +141,28 @@ readonly verified_data
 
 mysql --protocol=socket --user=root --execute="DROP DATABASE \`${restore_database}\`"
 restore_database_created=false
+readonly completed_epoch="$(date +%s)"
+readonly duration_seconds="$((completed_epoch - started_epoch))"
+if ((duration_seconds > recovery_rto_seconds)); then
+    printf 'MySQL restore drill exceeded RTO: duration=%s rto=%s\n' \
+        "${duration_seconds}" "${recovery_rto_seconds}" >&2
+    exit 1
+fi
 
-install -d -m 0700 "${vendure_evidence_dir}"
-printf '{"completedAt":"%s","backupFile":"%s","temporaryRestoreDatabase":"%s","sourceTables":%s,"backupTables":%s,"restoredTables":%s,"dataValidation":%s}\n' \
-    "${restore_stamp}" "${backup_file}" "${restore_database}" "${source_tables}" "${backup_tables}" "${restored_tables}" "${verified_data}" \
-    > "${vendure_evidence_dir}/restore-drill.json"
+jq -n \
+    --arg completedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg backupFile "${backup_name}" \
+    --arg temporaryRestoreDatabase "${restore_database}" \
+    --arg source "${backup_source}" \
+    --argjson sourceTables "${source_tables}" \
+    --argjson backupTables "${backup_tables}" \
+    --argjson restoredTables "${restored_tables}" \
+    --argjson durationSeconds "${duration_seconds}" \
+    --argjson rtoSeconds "${recovery_rto_seconds}" \
+    --argjson dataValidation "${verified_data}" \
+    '{completedAt:$completedAt,backupFile:$backupFile,temporaryRestoreDatabase:$temporaryRestoreDatabase,source:$source,sourceTables:$sourceTables,backupTables:$backupTables,restoredTables:$restoredTables,durationSeconds:$durationSeconds,rtoSeconds:$rtoSeconds,dataValidation:$dataValidation}' \
+    >"${vendure_evidence_dir}/restore-drill.json"
 
-printf 'Restore drill passed and temporary database removed: database=%s backup_tables=%s restored_tables=%s current_source_tables=%s\n' \
-    "${restore_database}" "${backup_tables}" "${restored_tables}" "${source_tables}"
+printf 'Restore drill passed and temporary database removed: database=%s source=%s backup_tables=%s restored_tables=%s current_source_tables=%s duration_seconds=%s rto_seconds=%s\n' \
+    "${restore_database}" "${backup_source}" "${backup_tables}" "${restored_tables}" \
+    "${source_tables}" "${duration_seconds}" "${recovery_rto_seconds}"

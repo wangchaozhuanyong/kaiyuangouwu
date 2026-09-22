@@ -67,6 +67,7 @@ interface LotDraft {
     expiresAt: string;
     quantityOnHand: string;
     purchaseCost: string;
+    reason: string;
 }
 
 export function CatalogOperationsBlock({ context }: { context: NextAdminPageBlockContext }) {
@@ -167,6 +168,8 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                             ? Math.round(number(draft.purchaseCost, '批次成本') * 1_000)
                             : null,
                         currencyCode: workspace.currencyCode,
+                        idempotencyKey: crypto.randomUUID(),
+                        reason: requiredText(draft.reason, '调整原因'),
                     },
                 },
             });
@@ -478,6 +481,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                                                 : (
                                                                       lot.purchaseCostMicrounits / 1_000
                                                                   ).toFixed(3),
+                                                        reason: '',
                                                     })
                                                 }
                                                 className="font-bold text-blue-600 hover:underline"
@@ -1135,6 +1139,12 @@ function LotEditor({
                         value={draft.purchaseCost}
                         onChange={cost => update('purchaseCost', cost)}
                     />
+                    <TextField
+                        label="调整原因 *"
+                        description="用于审计追溯，例如盘点差异、破损报废或入库单号。"
+                        value={draft.reason}
+                        onChange={reason => update('reason', reason)}
+                    />
                 </div>
                 <div className="mt-6 flex justify-end gap-2 border-t pt-4">
                     <button
@@ -1147,7 +1157,7 @@ function LotEditor({
                     <button
                         type="button"
                         onClick={() => void onSave(draft)}
-                        disabled={saving}
+                        disabled={saving || !draft.reason.trim()}
                         className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"
                     >
                         {saving ? '保存中…' : '保存批次'}
@@ -1201,7 +1211,6 @@ function operationInput(draft: VariantDraft, stockLocationId: string, currencyCo
         shelfLifeDays: optionalInteger(draft.shelfLifeDays, '保质期'),
         sellingPrice: Math.round(number(draft.sellingPrice, '销售价') * 100),
         currencyCode,
-        stockOnHand: integer(draft.stockOnHand, '库存'),
         minimumStock,
         maximumStock,
         supplierId: draft.supplierId || null,
@@ -1219,6 +1228,7 @@ const emptyLot = (productVariantId: string, stockLocationId: string): LotDraft =
     expiresAt: '',
     quantityOnHand: '0',
     purchaseCost: '',
+    reason: '',
 });
 const stringId = (value: unknown) =>
     typeof value === 'string' || typeof value === 'number' ? String(value) : '';

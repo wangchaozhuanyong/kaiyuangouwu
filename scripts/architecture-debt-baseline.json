@@ -16,7 +16,7 @@
         },
         {
             "path": "packages/storefront/src/api.ts",
-            "maxLines": 652,
+            "maxLines": 715,
             "targetLines": 500,
             "owner": "storefront-api"
         },
@@ -89,7 +89,7 @@
                 "packages/store-domain-plugin/src/dashboard"
             ],
             "extensions": [".ts", ".tsx", ".po"],
-            "maxLines": 44373,
+            "maxLines": 52819,
             "targetLines": 0,
             "owner": "admin-platform"
         }

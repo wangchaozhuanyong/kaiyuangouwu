@@ -1,6 +1,7 @@
 import { getMetadataArgsStorage } from 'typeorm';
 import { describe, expect, it } from 'vitest';
 
+import { StoreUsdtReconciliationAction } from './store-usdt-reconciliation-action.entity';
 import { StorefrontUsdtCheckoutQuote } from './storefront-usdt-checkout-quote.entity';
 import { StorefrontUsdtPaymentIntent } from './storefront-usdt-payment-intent.entity';
 
@@ -29,5 +30,21 @@ describe('storefront USDT entity schema', () => {
             quote: 'FK_storefront_usdt_intent_quote',
             payment: 'FK_storefront_usdt_intent_payment',
         });
+    });
+
+    it('keeps reconciliation evidence indexed by intent, channel and unique chain transaction', () => {
+        const indices = getMetadataArgsStorage().indices.filter(
+            index => index.target === StoreUsdtReconciliationAction,
+        );
+        expect(indices.map(index => index.name)).toEqual(
+            expect.arrayContaining([
+                'IDX_store_usdt_reconciliation_intent_created',
+                'IDX_store_usdt_reconciliation_channel_created',
+                'IDX_store_usdt_reconciliation_transaction',
+            ]),
+        );
+        expect(
+            indices.find(index => index.name === 'IDX_store_usdt_reconciliation_transaction'),
+        ).toMatchObject({ unique: true });
     });
 });

@@ -35,11 +35,40 @@ import {
 } from './constants';
 import { CustomerAvatarShopResolver } from './customer-avatar.resolver';
 import { CustomerAvatarService } from './customer-avatar.service';
+import {
+    CustomerFollowUpResolver,
+    CustomerOperationsAdminResolver,
+    CustomerOperationsProfileResolver,
+} from './customer-operations.resolver';
+import { CustomerOperationsService } from './customer-operations.service';
+import { reconcileCustomerOperationsTask } from './customer-operations.tasks';
+import { DataConsentAdminResolver, DataConsentShopResolver } from './data-consent.resolver';
+import { DATA_CONSENT_SERVICE_TOKEN, DataConsentService } from './data-consent.service';
+import { DataRetentionAdminResolver } from './data-retention.resolver';
+import { DataRetentionService } from './data-retention.service';
+import { purgeDueDataRetentionTask } from './data-retention.tasks';
+import { DataSubjectAdminResolver, DataSubjectShopResolver } from './data-subject.resolver';
+import { DataSubjectService } from './data-subject.service';
+import { processDueAccountClosuresTask } from './data-subject.tasks';
 import { AdministratorAccessProfile } from './entities/administrator-access-profile.entity';
 import { AdministratorPermissionAudit } from './entities/administrator-permission-audit.entity';
 import { CouponLedgerEntry } from './entities/coupon-ledger-entry.entity';
 import { CouponOrderAllocation } from './entities/coupon-order-allocation.entity';
 import { CustomerCoupon } from './entities/customer-coupon.entity';
+import { CustomerFollowUpEvent } from './entities/customer-follow-up-event.entity';
+import { CustomerFollowUp } from './entities/customer-follow-up.entity';
+import { CustomerOperationsProfile } from './entities/customer-operations-profile.entity';
+import { DataConsentRecord } from './entities/data-consent-record.entity';
+import { DataRetentionRecord } from './entities/data-retention-record.entity';
+import { DataSubjectRequest } from './entities/data-subject-request.entity';
+import { FraudRiskAppeal } from './entities/fraud-risk-appeal.entity';
+import { FraudRiskCaseEvent } from './entities/fraud-risk-case-event.entity';
+import { FraudRiskCase } from './entities/fraud-risk-case.entity';
+import { GovernanceApprovalRequest } from './entities/governance-approval-request.entity';
+import { GovernanceAuditEntry } from './entities/governance-audit-entry.entity';
+import { GovernanceReportSnapshot } from './entities/governance-report-snapshot.entity';
+import { GovernedConfigVersion } from './entities/governed-config-version.entity';
+import { MarketingCampaignCost } from './entities/marketing-campaign-cost.entity';
 import { ReferralAccount } from './entities/referral-account.entity';
 import { ReferralBalanceUse } from './entities/referral-balance-use.entity';
 import { ReferralLedgerEntry } from './entities/referral-ledger-entry.entity';
@@ -55,20 +84,30 @@ import { StoreCouponCampaignConfig } from './entities/store-coupon-campaign-conf
 import { StoreGovernanceChangeRequest } from './entities/store-governance-change-request.entity';
 import { StoreProfile } from './entities/store-profile.entity';
 import { StoreUsdtManualRefund } from './entities/store-usdt-manual-refund.entity';
+import { StoreUsdtReconciliationAction } from './entities/store-usdt-reconciliation-action.entity';
 import { StoreUsdtWalletAudit } from './entities/store-usdt-wallet-audit.entity';
 import { StoreUsdtWallet } from './entities/store-usdt-wallet.entity';
 import { StorefrontDailyVisitor } from './entities/storefront-daily-visitor.entity';
+import { StorefrontOrderAttribution } from './entities/storefront-order-attribution.entity';
 import { StorefrontPageView } from './entities/storefront-page-view.entity';
 import { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity';
 import { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity';
 import { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity';
 import { SystemAnnouncement } from './entities/system-announcement.entity';
+import { FraudRiskService } from './fraud-risk.service';
+import { reconcileFraudRiskCasesTask } from './fraud-risk.tasks';
+import { GovernanceRiskAdminResolver, GovernanceRiskShopResolver } from './governance-risk.resolver';
+import { GovernanceService } from './governance.service';
+import { generateGovernanceReportsTask } from './governance.tasks';
+import { MarketingAttributionService } from './marketing-attribution.service';
+import { purgeExpiredMarketingAnalyticsTask } from './marketing-attribution.tasks';
 import { MerchantCatalogAccessInterceptor } from './merchant-catalog-access.interceptor';
 import { MerchantCatalogAccessService } from './merchant-catalog-access.service';
 import { MerchantInitialPasswordInterceptor } from './merchant-initial-password.interceptor';
 import { MerchantInitialPasswordResolver } from './merchant-initial-password.resolver';
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
 import { isStorefrontPaymentCurrencyCode, STOREFRONT_PAYMENT_CURRENCY_CODES } from './payment-currency';
+import { PaymentReconciliationService } from './payment-reconciliation.service';
 import { PermissionPolicyRegistry } from './permission-policy';
 import { CartCouponCommandAdapter } from './promotion/cart-coupon-command.adapter';
 import {
@@ -118,6 +157,7 @@ import {
 } from './store-currency-settings.resolver';
 import { StoreCurrencySettingsService } from './store-currency-settings.service';
 import {
+    reconcileStorePaymentsDailyTask,
     reconcileStoreUsdtPaymentsTask,
     refreshStoreUsdtRatesTask,
     syncAutomaticStoreCurrencyPricesTask,
@@ -195,11 +235,27 @@ import {
         ReferralWithdrawal,
         StorefrontDailyVisitor,
         StorefrontPageView,
+        StorefrontOrderAttribution,
+        MarketingCampaignCost,
         StorefrontUsdtCheckoutQuote,
         StorefrontUsdtPaymentIntent,
         StoreUsdtManualRefund,
+        StoreUsdtReconciliationAction,
         StoreUsdtWallet,
         StoreUsdtWalletAudit,
+        DataSubjectRequest,
+        DataRetentionRecord,
+        DataConsentRecord,
+        CustomerOperationsProfile,
+        CustomerFollowUp,
+        CustomerFollowUpEvent,
+        GovernedConfigVersion,
+        GovernanceApprovalRequest,
+        GovernanceAuditEntry,
+        GovernanceReportSnapshot,
+        FraudRiskCase,
+        FraudRiskCaseEvent,
+        FraudRiskAppeal,
     ],
     controllers: [StorefrontPromotionController, StorefrontRealtimeController],
     providers: [
@@ -218,6 +274,7 @@ import {
         StoreCommerceSettingsService,
         StoreCurrencySettingsService,
         StorePaymentReportingService,
+        PaymentReconciliationService,
         UsdtOtcRateService,
         UsdtWalletConfigurationService,
         StoreUsdtWalletService,
@@ -235,10 +292,18 @@ import {
         StoreCouponClosureRepairService,
         ReferralService,
         StorefrontTrafficService,
+        MarketingAttributionService,
         ReferralWalletSpendService,
         SystemAnnouncementService,
         StorefrontRealtimeService,
         CustomerAvatarService,
+        DataConsentService,
+        { provide: DATA_CONSENT_SERVICE_TOKEN, useExisting: DataConsentService },
+        DataSubjectService,
+        DataRetentionService,
+        CustomerOperationsService,
+        GovernanceService,
+        FraudRiskService,
         {
             provide: STOREFRONT_PROMOTION_OPTIONS,
             useFactory: () => StoreManagementPlugin.promotionOptions,
@@ -268,7 +333,7 @@ import {
             useClass: StorefrontPaymentCurrencyInterceptor,
         },
     ],
-    exports: [ReferralWalletSpendService],
+    exports: [ReferralWalletSpendService, FraudRiskService],
     configuration: config => {
         config.customFields.Order ??= [];
         if (!config.customFields.Order.some(field => field.name === 'paymentCurrencyCode')) {
@@ -355,6 +420,13 @@ import {
         config.schedulerOptions.tasks.push(syncAutomaticStoreCurrencyPricesTask);
         config.schedulerOptions.tasks.push(refreshStoreUsdtRatesTask);
         config.schedulerOptions.tasks.push(reconcileStoreUsdtPaymentsTask);
+        config.schedulerOptions.tasks.push(reconcileStorePaymentsDailyTask);
+        config.schedulerOptions.tasks.push(purgeDueDataRetentionTask);
+        config.schedulerOptions.tasks.push(processDueAccountClosuresTask);
+        config.schedulerOptions.tasks.push(reconcileCustomerOperationsTask);
+        config.schedulerOptions.tasks.push(purgeExpiredMarketingAnalyticsTask);
+        config.schedulerOptions.tasks.push(generateGovernanceReportsTask);
+        config.schedulerOptions.tasks.push(reconcileFraudRiskCasesTask);
         return config;
     },
     adminApiExtensions: {
@@ -374,6 +446,13 @@ import {
             SystemAnnouncementAdminResolver,
             ReferralAdminResolver,
             StorefrontTrafficAdminResolver,
+            DataRetentionAdminResolver,
+            DataSubjectAdminResolver,
+            DataConsentAdminResolver,
+            CustomerOperationsAdminResolver,
+            CustomerOperationsProfileResolver,
+            CustomerFollowUpResolver,
+            GovernanceRiskAdminResolver,
         ],
     },
     shopApiExtensions: {
@@ -382,12 +461,15 @@ import {
             StorefrontBrandingShopResolver,
             StorefrontRegionShopResolver,
             CustomerAvatarShopResolver,
+            DataConsentShopResolver,
+            DataSubjectShopResolver,
             StoreCurrencySettingsShopResolver,
             StorePromotionCampaignShopResolver,
             StoreCouponVariantResolver,
             SystemAnnouncementShopResolver,
             ReferralShopResolver,
             StorefrontTrafficShopResolver,
+            GovernanceRiskShopResolver,
         ],
     },
     compatibility: '^3.7.0',

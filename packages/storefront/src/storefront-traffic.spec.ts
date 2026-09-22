@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createStorefrontTrafficTracker, shouldTrackStorefrontTraffic } from './storefront-traffic';
+import {
+    createStorefrontTrafficTracker,
+    shouldTrackStorefrontTraffic,
+    storefrontAttributionInput,
+} from './storefront-traffic';
 
 const page = { channel: 'my-malaysia', location: '/', businessDate: '2026-09-05', customerId: null };
 const visitor = 'test-visitor-id-00000001';
@@ -100,5 +104,27 @@ describe('storefront traffic collection', () => {
             { optedOut: true },
         ])
             expect(shouldTrackStorefrontTraffic({ ...input, ...override })).toBe(false);
+    });
+
+    it('extracts explicit campaign and search-term attribution without retaining the full query', () => {
+        expect(
+            storefrontAttributionInput(
+                '/products/one?utm_source=Google&utm_medium=CPC&utm_campaign=Launch&utm_term=red+shoe&email=secret',
+                'www.example.com',
+            ),
+        ).toEqual({
+            path: '/products/one',
+            referrerHost: 'example.com',
+            source: 'Google',
+            medium: 'CPC',
+            campaign: 'Launch',
+            term: 'red shoe',
+            content: null,
+        });
+    });
+
+    it('recognizes paid click identifiers without persisting the identifier itself', () => {
+        expect(storefrontAttributionInput('/?gclid=private-click-id').source).toBe('google');
+        expect(storefrontAttributionInput('/?gclid=private-click-id')).not.toHaveProperty('gclid');
     });
 });

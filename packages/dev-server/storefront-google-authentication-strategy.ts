@@ -13,9 +13,35 @@ import gql from 'graphql-tag';
 
 export const STOREFRONT_GOOGLE_AUTH_UNAVAILABLE = 'STOREFRONT_GOOGLE_AUTH_UNAVAILABLE';
 export const STOREFRONT_GOOGLE_AUTH_INVALID = 'STOREFRONT_GOOGLE_AUTH_INVALID';
+export const STOREFRONT_GOOGLE_CONSENT_REQUIRED = 'STOREFRONT_GOOGLE_CONSENT_REQUIRED';
+const DATA_CONSENT_SERVICE_TOKEN = 'STORE_DATA_CONSENT_SERVICE';
+
+interface RegistrationConsentRecorder {
+    assertRegistrationConsent(
+        ctx: RequestContext,
+        input: StorefrontGoogleAuthenticationData,
+    ): Promise<{
+        terms: { version: string; digest: string };
+        privacy: { version: string; digest: string };
+        locale: string;
+    }>;
+    recordRegistrationByEmail(
+        ctx: RequestContext,
+        emailAddress: string,
+        source: 'GOOGLE_REGISTRATION',
+        snapshots: {
+            terms: { version: string; digest: string };
+            privacy: { version: string; digest: string };
+            locale: string;
+        },
+    ): Promise<void>;
+}
 
 export type StorefrontGoogleAuthenticationData = {
     credential: string;
+    termsAccepted: boolean;
+    privacyAcknowledged: boolean;
+    locale: string;
 };
 
 export class StorefrontGoogleAuthenticationStrategy implements AuthenticationStrategy<StorefrontGoogleAuthenticationData> {
@@ -23,17 +49,22 @@ export class StorefrontGoogleAuthenticationStrategy implements AuthenticationStr
 
     private externalAuthenticationService: ExternalAuthenticationService;
     private settingsStore: SettingsStoreService;
+    private consents: RegistrationConsentRecorder;
     private readonly clients = new Map<string, OAuth2Client>();
 
     init(injector: Injector): void {
         this.externalAuthenticationService = injector.get(ExternalAuthenticationService);
         this.settingsStore = injector.get(SettingsStoreService);
+        this.consents = injector.get(DATA_CONSENT_SERVICE_TOKEN);
     }
 
     defineInputType(): DocumentNode {
         return gql`
             input StorefrontGoogleAuthInput {
                 credential: String!
+                termsAccepted: Boolean!
+                privacyAcknowledged: Boolean!
+                locale: String!
             }
         `;
     }
@@ -64,7 +95,14 @@ export class StorefrontGoogleAuthenticationStrategy implements AuthenticationStr
             );
             if (existing) return existing;
 
-            return this.externalAuthenticationService.createCustomerAndUser(ctx, {
+            let consentSnapshots;
+            try {
+                consentSnapshots = await this.consents.assertRegistrationConsent(ctx, data);
+            } catch {
+                return STOREFRONT_GOOGLE_CONSENT_REQUIRED;
+            }
+
+            const user = await this.externalAuthenticationService.createCustomerAndUser(ctx, {
                 strategy: this.name,
                 externalIdentifier: payload.sub,
                 verified: true,
@@ -72,6 +110,13 @@ export class StorefrontGoogleAuthenticationStrategy implements AuthenticationStr
                 firstName: payload.given_name || payload.name || '',
                 lastName: payload.family_name || '',
             });
+            await this.consents.recordRegistrationByEmail(
+                ctx,
+                payload.email,
+                'GOOGLE_REGISTRATION',
+                consentSnapshots,
+            );
+            return user;
         } catch {
             return STOREFRONT_GOOGLE_AUTH_INVALID;
         }

@@ -35,6 +35,25 @@ describe('Telegram notification formatting', () => {
             error: 'line one line two',
         });
     });
+
+    it('labels a recovered P0 incident as pending human validation rather than closed', () => {
+        const delivery = deliveryFixture({
+            mode: 'INCIDENT',
+            severity: 'P0',
+            eventState: 'RESOLVED',
+            incidentStatus: 'RECOVERY_PENDING',
+            recoveryValidationDueAt: new Date('2026-09-03T11:00:00Z'),
+        });
+
+        const result = formatTelegramNotification(delivery, {
+            timezone: 'Asia/Kuala_Lumpur',
+            adminBaseUrl: null,
+        });
+
+        expect(result.text).toContain('[待恢复验证]');
+        expect(result.text).toContain('系统已恢复，待人工验证');
+        expect(result.text).not.toContain('[已闭环]');
+    });
 });
 
 function deliveryFixture(overrides: Partial<AdminNotificationDelivery>): AdminNotificationDelivery {
@@ -62,6 +81,23 @@ function deliveryFixture(overrides: Partial<AdminNotificationDelivery>): AdminNo
             lastOccurredAt: new Date('2026-09-03T10:00:00Z'),
             resolvedAt: null,
             escalatedAt: null,
+            incidentStatus: 'NOT_APPLICABLE',
+            acknowledgedAt: null,
+            acknowledgedByUserId: null,
+            acknowledgementNote: null,
+            recoveryObservedAt: null,
+            recoveryValidationDueAt: null,
+            recoveryValidatedAt: null,
+            recoveryValidatedByUserId: null,
+            recoveryValidationNote: null,
+            recoveryEscalatedAt: null,
+            reviewDueAt: null,
+            reviewSubmittedAt: null,
+            reviewSubmittedByUserId: null,
+            rootCause: null,
+            impactSummary: null,
+            reviewEscalatedAt: null,
+            closedAt: null,
             priority: 20,
             silent: true,
             deliveryAction: 'SEND',

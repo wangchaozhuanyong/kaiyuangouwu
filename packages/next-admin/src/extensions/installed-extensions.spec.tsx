@@ -59,7 +59,7 @@ describe('installed next-admin extensions', () => {
 
     it('provides unique routes plus the plugin navigation entries', () => {
         const routes = getNextAdminExtensionRoutes();
-        expect(routes).toHaveLength(27);
+        expect(routes).toHaveLength(32);
         expect(new Set(routes.map(route => route.id)).size).toBe(routes.length);
         expect(new Set(routes.map(route => route.path)).size).toBe(routes.length);
         expect(routes).toContainEqual(
@@ -98,6 +98,13 @@ describe('installed next-admin extensions', () => {
                 path: '/plugins/icloud-relay',
                 title: '邮件验证码查询',
                 permissions: ['ReadIcloudRelay'],
+            }),
+        );
+        expect(getNextAdminExtensionNavItems('settings')).toContainEqual(
+            expect.objectContaining({
+                path: '/settings/data-management',
+                title: '数据管理中心',
+                permissions: ['SuperAdmin'],
             }),
         );
     });

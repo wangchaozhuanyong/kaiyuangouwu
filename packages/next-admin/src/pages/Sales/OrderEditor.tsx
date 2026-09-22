@@ -47,6 +47,7 @@ import {
     SET_SALES_ORDER_CUSTOM_FIELDS,
     TRANSITION_SALES_FULFILLMENT,
     TRANSITION_SALES_ORDER,
+    UPDATE_FULFILLMENT_DELIVERY,
 } from '../../graphql/sales.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminReturn } from '../../hooks/use-admin-return';
@@ -120,6 +121,28 @@ interface FulfillmentItem {
     method: string;
     trackingCode?: string | null;
     lines: Array<{ orderLineId: string; quantity: number }>;
+    deliveryEvidence?: FulfillmentDeliveryEvidence | null;
+}
+
+interface FulfillmentDeliveryEvidence {
+    id: string;
+    status: 'IN_TRANSIT' | 'EXCEPTION' | 'DELIVERED';
+    carrier: string;
+    trackingCode: string;
+    exceptionReason?: string | null;
+    proofReference?: string | null;
+    shippedAt: string;
+    deliveredAt?: string | null;
+    nextActionDueAt?: string | null;
+    overdue: boolean;
+    events: Array<{
+        id: string;
+        createdAt: string;
+        status: string;
+        actorType: string;
+        actorLabel: string;
+        note: string;
+    }>;
 }
 
 interface HistoryItem {
@@ -240,6 +263,14 @@ export function OrderEditor() {
     const [isFulfillOpen, setIsFulfillOpen] = useState(false);
     const [carrier, setCarrier] = useState('');
     const [trackingCode, setTrackingCode] = useState('');
+    const [deliveryAction, setDeliveryAction] = useState<{
+        fulfillment: FulfillmentItem;
+        status: 'IN_TRANSIT' | 'EXCEPTION' | 'DELIVERED';
+    } | null>(null);
+    const [deliveryNote, setDeliveryNote] = useState('');
+    const [deliveryCarrier, setDeliveryCarrier] = useState('');
+    const [deliveryTrackingCode, setDeliveryTrackingCode] = useState('');
+    const [deliveryProof, setDeliveryProof] = useState('');
     const [isRefundOpen, setIsRefundOpen] = useState(false);
     const [refundPaymentId, setRefundPaymentId] = useState('');
     const [refundAmount, setRefundAmount] = useState('');
@@ -264,6 +295,9 @@ export function OrderEditor() {
     const [transitionFulfillment, { loading: transitioningFulfillment }] = useMutation<{
         transitionFulfillmentToState: ResultPayload;
     }>(TRANSITION_SALES_FULFILLMENT);
+    const [updateFulfillmentDelivery, { loading: updatingDelivery }] = useMutation<{
+        updateFulfillmentDelivery: FulfillmentDeliveryEvidence;
+    }>(UPDATE_FULFILLMENT_DELIVERY);
     const [refundOrder, { loading: refunding }] = useMutation<{ refundOrder: RefundResultPayload }>(
         REFUND_SALES_ORDER,
     );
@@ -312,6 +346,7 @@ export function OrderEditor() {
         addingNote ||
         addingFulfillment ||
         transitioningFulfillment ||
+        updatingDelivery ||
         transitioningOrder ||
         refunding ||
         cancelling;
@@ -417,19 +452,57 @@ export function OrderEditor() {
         }
     };
 
-    const handleFulfillmentDelivered = async (fulfillment: FulfillmentItem) => {
+    const openDeliveryAction = (
+        fulfillment: FulfillmentItem,
+        status: 'IN_TRANSIT' | 'EXCEPTION' | 'DELIVERED',
+    ) => {
+        setDeliveryAction({ fulfillment, status });
+        setDeliveryNote('');
+        setDeliveryCarrier(fulfillment.deliveryEvidence?.carrier ?? fulfillment.method ?? '');
+        setDeliveryTrackingCode(fulfillment.deliveryEvidence?.trackingCode ?? fulfillment.trackingCode ?? '');
+        setDeliveryProof('');
+        setActionError('');
+    };
+
+    const handleDeliveryAction = async () => {
+        if (!deliveryAction) return;
+        const { fulfillment, status } = deliveryAction;
+        if (!deliveryNote.trim()) {
+            setActionError('请填写本次操作说明');
+            return;
+        }
+        if (status === 'IN_TRANSIT' && (!deliveryCarrier.trim() || !deliveryTrackingCode.trim())) {
+            setActionError('重新发运必须填写物流公司和真实运单号');
+            return;
+        }
+        if (status === 'DELIVERED' && !deliveryProof.trim()) {
+            setActionError('确认送达必须填写签收单、物流回执或其他送达凭证');
+            return;
+        }
         try {
-            const response = await transitionFulfillment({
-                variables: { id: fulfillment.id, state: 'Delivered' },
+            await updateFulfillmentDelivery({
+                variables: {
+                    input: {
+                        fulfillmentId: fulfillment.id,
+                        status,
+                        carrier: status === 'IN_TRANSIT' ? deliveryCarrier.trim() : null,
+                        trackingCode: status === 'IN_TRANSIT' ? deliveryTrackingCode.trim() : null,
+                        proofReference: status === 'DELIVERED' ? deliveryProof.trim() : null,
+                        note: deliveryNote.trim(),
+                        idempotencyKey: `${status.toLowerCase()}-${fulfillment.id}-${Date.now()}`,
+                    },
+                },
             });
-            const result = response.data?.transitionFulfillmentToState;
-            if (result?.__typename !== 'Fulfillment') {
-                setActionError(getMutationError(result));
-                return;
-            }
-            await refreshAfterMutation('履约记录已标记为送达');
+            setDeliveryAction(null);
+            await refreshAfterMutation(
+                status === 'EXCEPTION'
+                    ? '配送异常已登记并进入待处理队列'
+                    : status === 'IN_TRANSIT'
+                      ? '重新发运信息已保存'
+                      : '送达凭证已保存，履约已完成',
+            );
         } catch (mutationError) {
-            setActionError(toUserFacingError(mutationError, '履约状态更新失败，请稍后重试'));
+            setActionError(toUserFacingError(mutationError, '配送证据更新失败，请稍后重试'));
         }
     };
 
@@ -904,21 +977,91 @@ export function OrderEditor() {
                                                                 {fulfillment.trackingCode || '无物流单号'}
                                                             </span>
                                                         </div>
+                                                        {fulfillment.deliveryEvidence && (
+                                                            <div
+                                                                className={`mt-2 rounded-md px-2 py-1.5 text-[10px] leading-4 ${
+                                                                    fulfillment.deliveryEvidence.status ===
+                                                                    'EXCEPTION'
+                                                                        ? 'bg-rose-50 text-rose-700'
+                                                                        : fulfillment.deliveryEvidence.overdue
+                                                                          ? 'bg-amber-50 text-amber-700'
+                                                                          : 'bg-white text-slate-500'
+                                                                }`}
+                                                            >
+                                                                {fulfillment.deliveryEvidence.status ===
+                                                                'EXCEPTION'
+                                                                    ? `配送异常：${fulfillment.deliveryEvidence.exceptionReason ?? '待处理'}`
+                                                                    : fulfillment.deliveryEvidence.status ===
+                                                                        'DELIVERED'
+                                                                      ? `送达凭证：${fulfillment.deliveryEvidence.proofReference ?? '-'}`
+                                                                      : fulfillment.deliveryEvidence.overdue
+                                                                        ? '配送已超过跟进时限'
+                                                                        : `运输中${fulfillment.deliveryEvidence.nextActionDueAt ? ` · ${formatDateTime(fulfillment.deliveryEvidence.nextActionDueAt)} 前跟进` : ''}`}
+                                                            </div>
+                                                        )}
+                                                        {fulfillment.deliveryEvidence?.events
+                                                            .slice(-2)
+                                                            .reverse()
+                                                            .map(event => (
+                                                                <div
+                                                                    key={event.id}
+                                                                    className="mt-1 text-[10px] leading-4 text-slate-500"
+                                                                >
+                                                                    {formatDateTime(event.createdAt)} ·{' '}
+                                                                    {event.actorLabel} · {event.note}
+                                                                </div>
+                                                            ))}
                                                     </div>
-                                                    {canUpdateOrder &&
-                                                        fulfillment.nextStates.includes('Delivered') && (
+                                                    {canUpdateOrder && fulfillment.state === 'Shipped' && (
+                                                        <div className="flex flex-wrap justify-end gap-1.5">
+                                                            {fulfillment.deliveryEvidence?.status !==
+                                                                'EXCEPTION' && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        openDeliveryAction(
+                                                                            fulfillment,
+                                                                            'EXCEPTION',
+                                                                        )
+                                                                    }
+                                                                    disabled={updatingDelivery}
+                                                                    className="rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                                                                >
+                                                                    登记异常
+                                                                </button>
+                                                            )}
+                                                            {fulfillment.deliveryEvidence?.status ===
+                                                                'EXCEPTION' && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        openDeliveryAction(
+                                                                            fulfillment,
+                                                                            'IN_TRANSIT',
+                                                                        )
+                                                                    }
+                                                                    disabled={updatingDelivery}
+                                                                    className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                                                                >
+                                                                    重新发运
+                                                                </button>
+                                                            )}
                                                             <button
                                                                 type="button"
                                                                 onClick={() =>
-                                                                    handleFulfillmentDelivered(fulfillment)
+                                                                    openDeliveryAction(
+                                                                        fulfillment,
+                                                                        'DELIVERED',
+                                                                    )
                                                                 }
-                                                                disabled={transitioningFulfillment}
+                                                                disabled={updatingDelivery}
                                                                 className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 disabled:opacity-50"
                                                             >
                                                                 <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
                                                                 确认送达
                                                             </button>
-                                                        )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ))
                                         )}
@@ -1405,6 +1548,79 @@ export function OrderEditor() {
                         本次发货：{remainingPhysicalLines.reduce((sum, line) => sum + line.quantity, 0)}{' '}
                         件实物商品
                     </div>
+                </ActionDialog>
+            )}
+
+            {canUpdateOrder && deliveryAction && (
+                <ActionDialog
+                    title={
+                        deliveryAction.status === 'EXCEPTION'
+                            ? '登记配送异常'
+                            : deliveryAction.status === 'IN_TRANSIT'
+                              ? '登记重新发运'
+                              : '确认包裹送达'
+                    }
+                    description="操作会写入不可省略的配送事件；确认送达还会推进 Vendure 履约和订单状态。"
+                    icon={<PackageCheck className="h-5 w-5 text-blue-600" />}
+                    busy={updatingDelivery}
+                    error={actionError}
+                    onClose={() => setDeliveryAction(null)}
+                    onConfirm={handleDeliveryAction}
+                    confirmLabel={
+                        deliveryAction.status === 'EXCEPTION'
+                            ? '确认登记异常'
+                            : deliveryAction.status === 'IN_TRANSIT'
+                              ? '确认重新发运'
+                              : '保存凭证并完成'
+                    }
+                >
+                    {deliveryAction.status === 'IN_TRANSIT' && (
+                        <>
+                            <label className="block text-xs font-semibold text-slate-700">
+                                新物流公司 / 配送方式 *
+                            </label>
+                            <input
+                                value={deliveryCarrier}
+                                onChange={event => setDeliveryCarrier(event.target.value)}
+                                className="mt-1.5 w-full rounded-lg border border-slate-300 p-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                            />
+                            <label className="mt-4 block text-xs font-semibold text-slate-700">
+                                新运单号 *
+                            </label>
+                            <input
+                                value={deliveryTrackingCode}
+                                onChange={event => setDeliveryTrackingCode(event.target.value)}
+                                className="mt-1.5 w-full rounded-lg border border-slate-300 p-2.5 font-mono text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                            />
+                        </>
+                    )}
+                    {deliveryAction.status === 'DELIVERED' && (
+                        <>
+                            <label className="block text-xs font-semibold text-slate-700">送达凭证 *</label>
+                            <input
+                                value={deliveryProof}
+                                onChange={event => setDeliveryProof(event.target.value)}
+                                placeholder="签收单号、物流回执编号或可追溯凭证"
+                                className="mt-1.5 w-full rounded-lg border border-slate-300 p-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                            />
+                        </>
+                    )}
+                    <label
+                        className={`${deliveryAction.status === 'EXCEPTION' ? 'block' : 'mt-4 block'} text-xs font-semibold text-slate-700`}
+                    >
+                        操作说明 *
+                    </label>
+                    <textarea
+                        value={deliveryNote}
+                        onChange={event => setDeliveryNote(event.target.value)}
+                        rows={3}
+                        placeholder={
+                            deliveryAction.status === 'EXCEPTION'
+                                ? '填写退回、丢件、地址错误等实际异常'
+                                : '填写操作依据，便于客服和审计追踪'
+                        }
+                        className="mt-1.5 w-full rounded-lg border border-slate-300 p-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
                 </ActionDialog>
             )}
 

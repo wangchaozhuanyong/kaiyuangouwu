@@ -6,13 +6,20 @@ import type {
     AfterSalesRequest,
     Asset,
     CollectionSummary,
+    ConfirmAfterSalesReplacementInput,
     CreateAfterSalesRequestInput,
     CreateImageGenerationInput,
     CustomerAddress,
     CustomerAddressInput,
     CustomerAddressUpdateInput,
+    CustomerAvatarHistoryEntry,
     CustomerDeliveryEmail,
     CustomerOrderCounts,
+    DataSubjectExportPayload,
+    DataSubjectRequest,
+    FraudRiskAppeal,
+    FraudRiskCase,
+    FulfillmentDeliveryEvidence,
     ImageGenerationJob,
     ImageModelQuotaStatus,
     ImageModelRecommendation,
@@ -40,10 +47,12 @@ import type {
     StorefrontConfig,
     StorefrontContentResponse,
     StorefrontCouponCampaign,
+    StorefrontRegistrationConsentInput,
     StorefrontReview,
     StorefrontReviewCandidate,
     StorefrontReviewList,
     StorefrontUsdtCheckoutQuote,
+    SubmitAfterSalesReturnShipmentInput,
     SubmitStorefrontReviewInput,
     VendureLanguageCode,
 } from './types';
@@ -196,6 +205,42 @@ export class ShopApi {
         return this.accountApi.uploadCustomerAvatar(file);
     }
 
+    async customerAvatarHistory(signal?: AbortSignal): Promise<CustomerAvatarHistoryEntry[]> {
+        return this.accountApi.customerAvatarHistory(signal);
+    }
+
+    async restoreCustomerAvatar(retentionId: string): Promise<Asset> {
+        return this.accountApi.restoreCustomerAvatar(retentionId);
+    }
+
+    async removeCustomerAvatar(): Promise<boolean> {
+        return this.accountApi.removeCustomerAvatar();
+    }
+
+    async dataSubjectRequests(signal?: AbortSignal): Promise<DataSubjectRequest[]> {
+        return this.accountApi.dataSubjectRequests(signal);
+    }
+
+    async exportPersonalData(password: string): Promise<DataSubjectExportPayload> {
+        return this.accountApi.exportPersonalData(password);
+    }
+
+    async requestAccountClosure(password: string): Promise<DataSubjectRequest> {
+        return this.accountApi.requestAccountClosure(password);
+    }
+
+    async cancelAccountClosure(): Promise<DataSubjectRequest> {
+        return this.accountApi.cancelAccountClosure();
+    }
+
+    async fraudRiskCases(signal?: AbortSignal): Promise<FraudRiskCase[]> {
+        return this.accountApi.fraudRiskCases(signal);
+    }
+
+    async appealFraudRiskCase(id: string, reason: string): Promise<FraudRiskAppeal> {
+        return this.accountApi.appealFraudRiskCase(id, reason);
+    }
+
     async customerOrders(
         skip = 0,
         take = 10,
@@ -226,6 +271,10 @@ export class ShopApi {
         return this.accountApi.cancelMyAuthorizedOrder(orderId, reason);
     }
 
+    async confirmFulfillmentDelivery(fulfillmentId: string): Promise<FulfillmentDeliveryEvidence> {
+        return this.accountApi.confirmFulfillmentDelivery(fulfillmentId);
+    }
+
     async afterSalesRequests(signal?: AbortSignal): Promise<AfterSalesRequest[]> {
         return this.contentReviewsApi.afterSalesRequests(signal);
     }
@@ -236,6 +285,16 @@ export class ShopApi {
 
     async cancelAfterSalesRequest(id: string): Promise<AfterSalesRequest> {
         return this.contentReviewsApi.cancelAfterSalesRequest(id);
+    }
+
+    async submitAfterSalesReturnShipment(
+        input: SubmitAfterSalesReturnShipmentInput,
+    ): Promise<AfterSalesRequest> {
+        return this.contentReviewsApi.submitAfterSalesReturnShipment(input);
+    }
+
+    async confirmAfterSalesReplacement(input: ConfirmAfterSalesReplacementInput): Promise<AfterSalesRequest> {
+        return this.contentReviewsApi.confirmAfterSalesReplacement(input);
     }
 
     async productReviews(productId: string, signal?: AbortSignal): Promise<StorefrontReviewList> {
@@ -259,8 +318,11 @@ export class ShopApi {
         this.publishCookieAuthenticationChange();
     }
 
-    async authenticateWithGoogle(credential: string): Promise<void> {
-        return this.accountApi.authenticateWithGoogle(credential);
+    async authenticateWithGoogle(
+        credential: string,
+        consent: StorefrontRegistrationConsentInput,
+    ): Promise<void> {
+        return this.accountApi.authenticateWithGoogle(credential, consent);
     }
 
     async referralProgram(signal?: AbortSignal): Promise<ReferralProgram> {
@@ -277,10 +339,11 @@ export class ShopApi {
 
     async registerCustomerAccount(
         input: RegisterCustomerInput,
+        consent: StorefrontRegistrationConsentInput,
         inviteCode?: string,
         source?: 'LINK' | 'POSTER' | 'CODE',
     ): Promise<void> {
-        return this.referralsApi.registerCustomerAccount(input, inviteCode, source);
+        return this.referralsApi.registerCustomerAccount(input, consent, inviteCode, source);
     }
 
     async useReferralBalance(amount: number): Promise<ReferralBalancePaymentResult> {
@@ -355,6 +418,10 @@ export class ShopApi {
 
     async recordStorefrontPageView(input: StorefrontPageViewInput): Promise<boolean> {
         return this.referralsApi.recordStorefrontPageView(input);
+    }
+
+    async recordAnalyticsConsent(input: { consentId: string; granted: boolean; locale: string }) {
+        return this.referralsApi.recordAnalyticsConsent(input);
     }
 
     async refreshCustomerVerification(emailAddress: string): Promise<void> {

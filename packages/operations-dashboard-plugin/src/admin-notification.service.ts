@@ -11,10 +11,13 @@ import {
 } from './department-notification-router';
 import {
     AdminNotificationDelivery,
+    IncidentStatus,
     NotificationDeliveryStatus,
     NotificationEventState,
     NotificationMode,
 } from './entities/admin-notification-delivery.entity';
+import { IncidentResponseService, incidentWorkflowPolicy } from './incident-response.service';
+import { boundedText, normalizedOptional, sanitizePayload } from './notification-payload';
 import { TelegramNotificationWorkerService } from './telegram-notification-worker.service';
 
 const LOGGER_CTX = 'AdminNotificationService';
@@ -48,6 +51,7 @@ export class AdminNotificationService {
         private readonly connection: TransactionalConnection,
         private readonly configService: AdminNotificationConfigService,
         private readonly worker: TelegramNotificationWorkerService,
+        private readonly incidentResponse: IncidentResponseService,
     ) {}
 
     async enqueueOneOff(ctx: RequestContext | null, input: AdminNotificationInput, force = false) {
@@ -57,31 +61,53 @@ export class AdminNotificationService {
     async upsertIncident(ctx: RequestContext | null, input: AdminNotificationInput, force = false) {
         if (!input.fingerprint?.trim()) throw new Error('持续事件必须提供 fingerprint');
         const config = await this.configService.get();
-        if (!force && !this.shouldEnqueue(config, input)) return null;
-        const repository = this.repository(ctx);
+        const shouldDeliver = force ? true : this.shouldEnqueue(config, input);
         const fingerprint = boundedText(input.fingerprint, 255);
-        const existing = await repository.findOne({ where: { activeFingerprint: fingerprint } });
-        if (!existing) return this.enqueue(ctx, input, 'INCIDENT', 'FIRING', force);
-        const now = input.occurredAt ?? new Date();
-        existing.occurrenceCount += 1;
-        existing.lastOccurredAt = now;
-        existing.payload = sanitizePayload(input.payload ?? {});
-        existing.title = boundedText(input.title, 300);
-        existing.severity = input.severity;
-        const repeatMinutes = input.severity === 'P0' ? config.p0RepeatMinutes : config.p1RepeatMinutes;
-        const repeatDue =
-            (input.severity === 'P0' || input.severity === 'P1') &&
-            (!existing.sentAt || now.getTime() - existing.sentAt.getTime() >= repeatMinutes * 60_000);
-        if (repeatDue) {
-            existing.deliveryAction = existing.telegramMessageId ? 'EDIT' : 'SEND';
-            existing.deliveryStatus = 'PENDING';
-            existing.availableAt = now;
-            existing.claimedAt = null;
-            existing.claimedBy = null;
-        }
-        await repository.save(existing);
-        if (repeatDue) await this.worker.dispatch(existing.id);
-        return existing;
+        const updated = await this.inTransaction(ctx, async txCtx => {
+            const repository = this.repository(txCtx);
+            const current = supportsWriteLock(this.connection.rawConnection.options.type)
+                ? await repository
+                      .createQueryBuilder('incident')
+                      .where('incident.activeFingerprint = :fingerprint', { fingerprint })
+                      .setLock('pessimistic_write')
+                      .getOne()
+                : await repository.findOne({ where: { activeFingerprint: fingerprint } });
+            if (!current) return null;
+            const now = input.occurredAt ?? new Date();
+            current.occurrenceCount += 1;
+            current.lastOccurredAt = now;
+            current.payload = sanitizePayload(input.payload ?? {});
+            current.title = boundedText(input.title, 300);
+            current.severity = input.severity;
+            const repeatMinutes = input.severity === 'P0' ? config.p0RepeatMinutes : config.p1RepeatMinutes;
+            const repeatDue =
+                (input.severity === 'P0' || input.severity === 'P1') &&
+                (!current.sentAt || now.getTime() - current.sentAt.getTime() >= repeatMinutes * 60_000);
+            if (repeatDue && shouldDeliver) {
+                current.deliveryAction = current.telegramMessageId ? 'EDIT' : 'SEND';
+                current.deliveryStatus = 'PENDING';
+                current.availableAt = now;
+                current.claimedAt = null;
+                current.claimedBy = null;
+            }
+            await repository.save(current);
+            await this.incidentResponse.appendSystemEvidence(
+                txCtx,
+                current,
+                'OCCURRED',
+                '事故仍在持续',
+                {
+                    occurrenceCount: current.occurrenceCount,
+                    severity: current.severity,
+                    payload: current.payload,
+                },
+                now,
+            );
+            return { incident: current, repeatDue };
+        });
+        if (!updated) return this.enqueue(ctx, input, 'INCIDENT', 'FIRING', force);
+        if (updated.repeatDue && shouldDeliver) await this.worker.dispatch(updated.incident.id);
+        return updated.incident;
     }
 
     async resolveIncident(
@@ -90,24 +116,65 @@ export class AdminNotificationService {
         payload: Record<string, unknown> = {},
     ) {
         const config = await this.configService.get();
-        const repository = this.repository(ctx);
-        const delivery = await repository.findOne({
-            where: { activeFingerprint: boundedText(fingerprint, 255) },
+        const delivery = await this.inTransaction(ctx, async txCtx => {
+            const repository = this.repository(txCtx);
+            const normalizedFingerprint = boundedText(fingerprint, 255);
+            const current = supportsWriteLock(this.connection.rawConnection.options.type)
+                ? await repository
+                      .createQueryBuilder('incident')
+                      .where('incident.activeFingerprint = :fingerprint', {
+                          fingerprint: normalizedFingerprint,
+                      })
+                      .setLock('pessimistic_write')
+                      .getOne()
+                : await repository.findOne({
+                      where: { activeFingerprint: normalizedFingerprint },
+                  });
+            if (!current) return null;
+            const resolvedAt = new Date();
+            current.activeFingerprint = null;
+            current.eventState = 'RESOLVED';
+            current.resolvedAt = resolvedAt;
+            current.lastOccurredAt = resolvedAt;
+            current.payload = sanitizePayload({ ...current.payload, ...payload });
+            current.recoveryObservedAt = resolvedAt;
+            const severity = current.severity === 'P0' || current.severity === 'P1' ? current.severity : null;
+            current.incidentStatus = severity ? 'RECOVERY_PENDING' : 'CLOSED';
+            current.recoveryValidationDueAt = severity
+                ? new Date(
+                      resolvedAt.getTime() +
+                          incidentWorkflowPolicy.recoveryValidationMinutes[severity] * 60_000,
+                  )
+                : null;
+            current.closedAt = severity ? null : resolvedAt;
+            current.deliveryAction = current.telegramMessageId ? 'EDIT' : 'SEND';
+            current.deliveryStatus = config.sendResolved && config.enabled ? 'PENDING' : 'SKIPPED';
+            current.availableAt = resolvedAt;
+            current.silent = true;
+            current.claimedAt = null;
+            current.claimedBy = null;
+            await repository.save(current);
+            await this.incidentResponse.appendSystemEvidence(
+                txCtx,
+                current,
+                'RECOVERY_OBSERVED',
+                severity ? '系统已观测恢复，等待人工验证' : '系统已恢复，事故自动闭环',
+                { payload: current.payload, recoveryValidationDueAt: current.recoveryValidationDueAt },
+                resolvedAt,
+            );
+            if (!severity) {
+                await this.incidentResponse.appendSystemEvidence(
+                    txCtx,
+                    current,
+                    'CLOSED',
+                    'P2/P3 事故恢复后自动闭环',
+                    {},
+                    resolvedAt,
+                );
+            }
+            return current;
         });
         if (!delivery) return null;
-        const resolvedAt = new Date();
-        delivery.activeFingerprint = null;
-        delivery.eventState = 'RESOLVED';
-        delivery.resolvedAt = resolvedAt;
-        delivery.lastOccurredAt = resolvedAt;
-        delivery.payload = sanitizePayload({ ...delivery.payload, ...payload });
-        delivery.deliveryAction = delivery.telegramMessageId ? 'EDIT' : 'SEND';
-        delivery.deliveryStatus = config.sendResolved && config.enabled ? 'PENDING' : 'SKIPPED';
-        delivery.availableAt = resolvedAt;
-        delivery.silent = true;
-        delivery.claimedAt = null;
-        delivery.claimedBy = null;
-        await repository.save(delivery);
         if (delivery.deliveryStatus === 'PENDING') await this.worker.dispatch(delivery.id);
         return delivery;
     }
@@ -158,21 +225,56 @@ export class AdminNotificationService {
                 actionRequired: true,
                 slaDueAt: LessThanOrEqual(new Date()),
                 escalatedAt: IsNull(),
+                acknowledgedAt: IsNull(),
                 deliveryStatus: Not('CLAIMED'),
             },
             take: 100,
         });
-        for (const delivery of overdue) {
-            delivery.escalatedAt = new Date();
-            delivery.escalationDepartmentCode = 'EXEC';
-            delivery.payload = sanitizePayload({ ...delivery.payload, escalated: '已超时升级总经办' });
-            delivery.deliveryAction = delivery.telegramMessageId ? 'EDIT' : 'SEND';
-            delivery.deliveryStatus = 'PENDING';
-            delivery.availableAt = new Date();
-            await repository.save(delivery);
+        let escalated = 0;
+        for (const candidate of overdue) {
+            const delivery = await this.inTransaction(null, async txCtx => {
+                const txRepository = this.repository(txCtx);
+                const current = supportsWriteLock(this.connection.rawConnection.options.type)
+                    ? await txRepository
+                          .createQueryBuilder('incident')
+                          .where('incident.id = :id', { id: candidate.id })
+                          .setLock('pessimistic_write')
+                          .getOne()
+                    : await txRepository.findOne({ where: { id: candidate.id } });
+                if (
+                    !current ||
+                    current.acknowledgedAt ||
+                    current.escalatedAt ||
+                    current.eventState !== 'FIRING'
+                ) {
+                    return null;
+                }
+                const now = new Date();
+                current.escalatedAt = now;
+                current.escalationDepartmentCode = 'EXEC';
+                current.payload = sanitizePayload({
+                    ...current.payload,
+                    escalated: '已超时升级总经办',
+                });
+                current.deliveryAction = current.telegramMessageId ? 'EDIT' : 'SEND';
+                current.deliveryStatus = 'PENDING';
+                current.availableAt = now;
+                await txRepository.save(current);
+                await this.incidentResponse.appendSystemEvidence(
+                    txCtx,
+                    current,
+                    'ESCALATED',
+                    '负责人确认超时，已升级总经办',
+                    { stage: 'ACKNOWLEDGEMENT', slaDueAt: current.slaDueAt },
+                    now,
+                );
+                return current;
+            });
+            if (!delivery) continue;
+            escalated += 1;
             await this.worker.dispatch(delivery.id);
         }
-        return overdue.length;
+        return escalated;
     }
 
     async sendTest(kind: string): Promise<AdminNotificationDelivery> {
@@ -238,7 +340,8 @@ export class AdminNotificationService {
         force: boolean,
     ): Promise<AdminNotificationDelivery | null> {
         const config = await this.configService.get();
-        if (!force && !this.shouldEnqueue(config, input)) return null;
+        const shouldDeliver = force ? true : this.shouldEnqueue(config, input);
+        if (mode === 'ONE_OFF' && !shouldDeliver) return null;
         if (force && (!config.enabled || !config.tokenConfigured || !config.chatId)) {
             throw new Error('请先启用 Telegram 通知并配置 Bot Token 和 Chat ID');
         }
@@ -281,6 +384,23 @@ export class AdminNotificationService {
             lastOccurredAt: now,
             resolvedAt: eventState === 'RESOLVED' ? now : null,
             escalatedAt: input.severity === 'P0' ? now : null,
+            incidentStatus: (mode === 'INCIDENT' ? 'OPEN' : 'NOT_APPLICABLE') as IncidentStatus,
+            acknowledgedAt: null,
+            acknowledgedByUserId: null,
+            acknowledgementNote: null,
+            recoveryObservedAt: null,
+            recoveryValidationDueAt: null,
+            recoveryValidatedAt: null,
+            recoveryValidatedByUserId: null,
+            recoveryValidationNote: null,
+            recoveryEscalatedAt: null,
+            reviewDueAt: null,
+            reviewSubmittedAt: null,
+            reviewSubmittedByUserId: null,
+            rootCause: null,
+            impactSummary: null,
+            reviewEscalatedAt: null,
+            closedAt: null,
             priority: input.priority ?? severityPriority(input.severity),
             silent:
                 input.silent ??
@@ -290,7 +410,7 @@ export class AdminNotificationService {
                       ? config.p3Silent
                       : false),
             deliveryAction: 'SEND',
-            deliveryStatus: 'PENDING',
+            deliveryStatus: shouldDeliver ? 'PENDING' : 'SKIPPED',
             availableAt: now,
             attempts: 0,
             maxAttempts: 6,
@@ -303,10 +423,36 @@ export class AdminNotificationService {
             sentAt: null,
         });
         delivery.payload = sanitizePayload(input.payload ?? {});
+        let saved: AdminNotificationDelivery;
         try {
-            const saved = await repository.save(delivery);
-            await this.worker.dispatch(saved.id);
-            return saved;
+            saved = await this.inTransaction(ctx, async txCtx => {
+                const persisted = await this.repository(txCtx).save(delivery);
+                if (mode === 'INCIDENT') {
+                    await this.incidentResponse.appendSystemEvidence(
+                        txCtx,
+                        persisted,
+                        'CREATED',
+                        '事故记录已创建',
+                        {
+                            severity: persisted.severity,
+                            ownerDepartmentCode: persisted.ownerDepartmentCode,
+                            payload: persisted.payload,
+                        },
+                        now,
+                    );
+                    if (input.severity === 'P0') {
+                        await this.incidentResponse.appendSystemEvidence(
+                            txCtx,
+                            persisted,
+                            'ESCALATED',
+                            'P0 事故已立即升级总经办',
+                            { stage: 'IMMEDIATE' },
+                            now,
+                        );
+                    }
+                }
+                return persisted;
+            });
         } catch (error) {
             if (dedupKey || fingerprint) {
                 const existing = await repository.findOne({
@@ -316,6 +462,8 @@ export class AdminNotificationService {
             }
             throw error;
         }
+        if (shouldDeliver) await this.worker.dispatch(saved.id);
+        return saved;
     }
 
     private shouldEnqueue(
@@ -336,67 +484,23 @@ export class AdminNotificationService {
             ? this.connection.getRepository(ctx, AdminNotificationDelivery)
             : this.connection.rawConnection.getRepository(AdminNotificationDelivery);
     }
-}
 
-export function sanitizePayload(input: Record<string, unknown>): Record<string, unknown> {
-    const output: Record<string, unknown> = {};
-    for (const [rawKey, rawValue] of Object.entries(input).slice(0, 40)) {
-        const key = boundedText(rawKey, 64);
-        if (/token|secret|password|authorization|cookie|credential|private.?key|api.?key/iu.test(key))
-            continue;
-        output[key] = sanitizeValue(key, rawValue);
+    private inTransaction<T>(
+        ctx: RequestContext | null,
+        work: (transactionContext: RequestContext) => Promise<T>,
+    ): Promise<T> {
+        return ctx ? this.connection.withTransaction(ctx, work) : this.connection.withTransaction(work);
     }
-    return output;
 }
 
-function sanitizeValue(key: string, value: unknown): unknown {
-    if (value == null || typeof value === 'boolean' || typeof value === 'number') return value;
-    if (Array.isArray(value)) return value.slice(0, 20).map(item => sanitizeValue(key, item));
-    if (typeof value === 'object') return '[object omitted]';
-    if (typeof value !== 'string') return `[${typeof value} omitted]`;
-    let text = value
-        .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
-        .replace(/\s+/gu, ' ')
-        .trim();
-    if (/email/iu.test(key)) text = maskEmail(text);
-    if (/ip/iu.test(key)) text = maskIp(text);
-    return text.slice(0, /error|message|reason/iu.test(key) ? 500 : 300);
-}
-
-function maskEmail(value: string): string {
-    const match = /^([^@]+)@(.+)$/u.exec(value);
-    if (!match) return value.slice(0, 3) + '***';
-    const local = match[1];
-    return `${local.slice(0, Math.min(2, local.length))}***@${match[2]}`;
-}
-
-function maskIp(value: string): string {
-    if (/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(value)) return value.replace(/\.\d{1,3}\.\d{1,3}$/u, '.x.x');
-    return value.slice(0, 8) + '…';
-}
-
-function boundedText(value: unknown, length: number): string {
-    const scalar =
-        value == null
-            ? ''
-            : typeof value === 'string'
-              ? value
-              : typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint'
-                ? String(value)
-                : '';
-    return scalar
-        .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
-        .trim()
-        .slice(0, length);
-}
-
-function normalizedOptional(value: unknown, length: number): string | null {
-    const normalized = boundedText(value, length);
-    return normalized || null;
-}
+export { sanitizePayload } from './notification-payload';
 
 function severityPriority(severity: NotificationSeverity): number {
     return { P0: 100, P1: 80, P2: 50, P3: 20 }[severity];
+}
+
+function supportsWriteLock(type: unknown): boolean {
+    return ['mysql', 'mariadb', 'postgres', 'aurora-postgres'].includes(String(type));
 }
 
 export function departmentCodesForDelivery(delivery: AdminNotificationDelivery): DepartmentCode[] {

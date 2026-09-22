@@ -6,7 +6,7 @@ const deleteTrigger = 'administrator_permission_audit_no_delete';
 const postgresFunction = 'reject_administrator_permission_audit_change';
 const message = 'Administrator permission audit is append-only';
 
-export class GuardAdministratorPermissionAudit1789495200000 implements MigrationInterface {
+export class GuardAdministratorPermissionAudit1789700400000 implements MigrationInterface {
     async up(queryRunner: QueryRunner): Promise<void> {
         if (!(await queryRunner.hasTable(tableName))) {
             throw new Error('Administrator permission audit table must exist before guard migration');

@@ -1,4 +1,4 @@
-import { ID } from '@vendure/common/lib/shared-types';
+import type { ID } from '@vendure/common/lib/shared-types';
 import {
     CustomChannelFields,
     CustomOrderFields,
@@ -7,7 +7,12 @@ import {
     CustomProductVariantFields,
 } from '@vendure/core/dist/entity/custom-entity-fields';
 
-import { AfterSalesReason, AfterSalesState, AfterSalesType } from './after-sales.constants';
+import {
+    AfterSalesReason,
+    AfterSalesReplacementStatus,
+    AfterSalesState,
+    AfterSalesType,
+} from './after-sales.constants';
 import { AutoCardFieldDefinition } from './auto-card-format';
 import { AutoCardDeliveryState, AutoCardPoolItemState, DigitalDeliveryMode } from './auto-card.constants';
 
@@ -88,6 +93,7 @@ export interface AfterSalesRequestListOptions {
     state?: AfterSalesState | null;
     states?: AfterSalesState[] | null;
     search?: string | null;
+    exceptionsOnly?: boolean | null;
 }
 
 export interface TransitionAfterSalesRequestInput {
@@ -96,6 +102,69 @@ export interface TransitionAfterSalesRequestInput {
     resolution: string;
     approvedAmount?: number | null;
     refundId?: ID | null;
+    returnInstructions?: string | null;
+}
+
+export interface SubmitAfterSalesReturnShipmentInput {
+    id: ID;
+    carrier: string;
+    trackingCode: string;
+    idempotencyKey: string;
+}
+
+export interface ReceiveAfterSalesReturnInput {
+    id: ID;
+    note: string;
+    idempotencyKey: string;
+}
+
+export interface InspectAfterSalesReturnInput {
+    id: ID;
+    note: string;
+    idempotencyKey: string;
+    items: Array<{
+        itemId: ID;
+        acceptedQuantity: number;
+        rejectedQuantity: number;
+        stockLocationId?: ID | null;
+        lotCode?: string | null;
+    }>;
+}
+
+export interface UpdateAfterSalesReplacementInput {
+    id: ID;
+    status: Extract<AfterSalesReplacementStatus, 'SHIPPED' | 'EXCEPTION' | 'DELIVERED'>;
+    carrier?: string | null;
+    trackingCode?: string | null;
+    proofReference?: string | null;
+    note: string;
+    idempotencyKey: string;
+}
+
+export interface ConfirmAfterSalesReplacementInput {
+    id: ID;
+    idempotencyKey: string;
+}
+
+export interface FulfillmentDeliveryListOptions {
+    skip?: number | null;
+    take?: number | null;
+    exceptionsOnly?: boolean | null;
+}
+
+export interface UpdateFulfillmentDeliveryInput {
+    fulfillmentId: ID;
+    status: 'IN_TRANSIT' | 'EXCEPTION' | 'DELIVERED';
+    carrier?: string | null;
+    trackingCode?: string | null;
+    proofReference?: string | null;
+    note: string;
+    idempotencyKey: string;
+}
+
+export interface ConfirmFulfillmentDeliveryInput {
+    fulfillmentId: ID;
+    idempotencyKey: string;
 }
 
 declare module '@vendure/core/dist/entity/custom-entity-fields' {

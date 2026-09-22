@@ -407,6 +407,30 @@ describe('ShopApi storefront mutations', () => {
         expect(request.variables).toEqual({ input });
     });
 
+    it('records an explicit analytics grant or withdrawal', async () => {
+        const record = {
+            id: 'consent-1',
+            purpose: 'ANALYTICS',
+            action: 'WITHDRAWN',
+            policyVersion: 'storefront-analytics-v1',
+            policyDigest: 'a'.repeat(64),
+            locale: 'zh',
+            source: 'COOKIE_PREFERENCE',
+            recordedAt: '2026-09-20T00:00:00.000Z',
+        };
+        const fetchMock = mockGraphQlResponse({ recordStorefrontAnalyticsConsent: record });
+        const input = {
+            consentId: '00000000-0000-4000-8000-000000000123',
+            granted: false,
+            locale: 'zh',
+        };
+
+        await expect(new ShopApi(market).recordAnalyticsConsent(input)).resolves.toEqual(record);
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1]));
+        expect(request.query).toContain('recordStorefrontAnalyticsConsent(input: $input)');
+        expect(request.variables).toEqual({ input });
+    });
+
     it('surfaces the specific native authentication failure returned by the Shop API', async () => {
         const fetchMock = mockGraphQlResponse({
             login: {
@@ -432,15 +456,24 @@ describe('ShopApi storefront mutations', () => {
             authenticate: { __typename: 'CurrentUser', id: 'user-1', identifier: 'buyer@gmail.com' },
         });
 
-        await expect(new ShopApi(market).authenticateWithGoogle('signed-google-id-token')).resolves.toBe(
-            undefined,
-        );
+        await expect(
+            new ShopApi(market).authenticateWithGoogle('signed-google-id-token', {
+                termsAccepted: true,
+                privacyAcknowledged: true,
+                locale: 'en',
+            }),
+        ).resolves.toBe(undefined);
         const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as {
             query: string;
             variables: Record<string, unknown>;
         };
-        expect(request.query).toContain('authenticate(input: { google: { credential: $credential } }');
-        expect(request.variables).toEqual({ credential: 'signed-google-id-token' });
+        expect(request.query).toContain('termsAccepted: $termsAccepted');
+        expect(request.variables).toEqual({
+            credential: 'signed-google-id-token',
+            termsAccepted: true,
+            privacyAcknowledged: true,
+            locale: 'en',
+        });
     });
 
     it('limits the initial storefront product request to 12 items', async () => {
@@ -1387,6 +1420,7 @@ describe('ShopApi storefront mutations', () => {
                 lastName: 'Customer',
                 password: 'secure-password',
             },
+            { termsAccepted: true, privacyAcknowledged: true, locale: 'en' },
             'INVITE88',
             'POSTER',
         );
@@ -1395,7 +1429,7 @@ describe('ShopApi storefront mutations', () => {
             query: string;
             variables: Record<string, unknown>;
         };
-        expect(request.query).toContain('registerCustomerWithReferral(input: $input');
+        expect(request.query).toContain('consent: $consent');
         expect(request.variables).toEqual({
             input: {
                 emailAddress: 'customer@example.com',
@@ -1403,6 +1437,7 @@ describe('ShopApi storefront mutations', () => {
                 lastName: 'Customer',
                 password: 'secure-password',
             },
+            consent: { termsAccepted: true, privacyAcknowledged: true, locale: 'en' },
             inviteCode: 'INVITE88',
             source: 'POSTER',
         });
@@ -1804,6 +1839,161 @@ describe('ShopApi storefront mutations', () => {
         expect((form.get('0') as File).name).toBe('avatar.png');
     });
 
+    it('lists, restores and removes avatars through the recovery API', async () => {
+        const history = [
+            {
+                id: 'retention-1',
+                status: 'PENDING',
+                quarantinedAt: '2026-09-20T00:00:00.000Z',
+                purgeAfter: '2026-10-20T00:00:00.000Z',
+                legalHold: false,
+                asset: { id: 'asset-1', preview: '/assets/avatar.webp' },
+            },
+        ];
+        const restored = { id: 'asset-1', preview: '/assets/avatar.webp' };
+        const fetchMock = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ data: { myCustomerAvatarHistory: history } })),
+            )
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ data: { restoreCustomerAvatar: restored } })),
+            )
+            .mockResolvedValueOnce(new Response(JSON.stringify({ data: { removeCustomerAvatar: true } })));
+        vi.stubGlobal('fetch', fetchMock);
+        const api = new ShopApi(market);
+
+        await expect(api.customerAvatarHistory()).resolves.toEqual(history);
+        await expect(api.restoreCustomerAvatar('retention-1')).resolves.toEqual(restored);
+        await expect(api.removeCustomerAvatar()).resolves.toBe(true);
+
+        const requests = fetchMock.mock.calls.map(
+            call =>
+                JSON.parse(jsonRequestBody(call[1])) as {
+                    query: string;
+                    variables?: Record<string, unknown>;
+                },
+        );
+        expect(requests[0].query).toContain('myCustomerAvatarHistory');
+        expect(requests[1]).toMatchObject({ variables: { retentionId: 'retention-1' } });
+        expect(requests[1].query).toContain('restoreCustomerAvatar');
+        expect(requests[2].query).toContain('removeCustomerAvatar');
+    });
+
+    it('uses password-verified personal-data export and account-closure mutations', async () => {
+        const closure = {
+            id: 'request-1',
+            requestType: 'ACCOUNT_CLOSURE',
+            status: 'PENDING',
+            requestedAt: '2026-09-20T00:00:00.000Z',
+            dueAt: '2026-09-27T00:00:00.000Z',
+            nextAttemptAt: '2026-09-27T00:00:00.000Z',
+            attemptCount: 0,
+            blockersJson: null,
+            lastError: null,
+            resultDigest: null,
+            completedAt: null,
+            cancelledAt: null,
+        };
+        const exported = {
+            request: { ...closure, id: 'export-1', requestType: 'EXPORT', status: 'FULFILLED' },
+            fileName: 'my-data-2026-09-20.json',
+            mimeType: 'application/json',
+            content: '{"version":1}',
+            sha256: 'a'.repeat(64),
+        };
+        const fetchMock = vi
+            .spyOn(globalThis, 'fetch')
+            .mockResolvedValueOnce(new Response(JSON.stringify({ data: { myDataSubjectRequests: [] } })))
+            .mockResolvedValueOnce(new Response(JSON.stringify({ data: { exportMyPersonalData: exported } })))
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ data: { requestMyAccountClosure: closure } })),
+            )
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        data: {
+                            cancelMyAccountClosure: {
+                                ...closure,
+                                status: 'CANCELLED',
+                                cancelledAt: '2026-09-21T00:00:00.000Z',
+                            },
+                        },
+                    }),
+                ),
+            );
+        const api = new ShopApi(market);
+
+        await expect(api.dataSubjectRequests()).resolves.toEqual([]);
+        await expect(api.exportPersonalData('current-password')).resolves.toEqual(exported);
+        await expect(api.requestAccountClosure('current-password')).resolves.toEqual(closure);
+        await expect(api.cancelAccountClosure()).resolves.toMatchObject({ status: 'CANCELLED' });
+
+        const requests = fetchMock.mock.calls.map(call => {
+            const body = call[1]?.body;
+            if (typeof body !== 'string') throw new Error('Expected a serialized GraphQL request body');
+            return JSON.parse(body) as {
+                query: string;
+                variables?: Record<string, unknown>;
+            };
+        });
+        expect(requests[0].query).toContain('myDataSubjectRequests');
+        expect(requests[1].query).toContain('exportMyPersonalData(password: $password)');
+        expect(requests[1].variables).toEqual({ password: 'current-password' });
+        expect(requests[2].query).toContain('requestMyAccountClosure(password: $password)');
+        expect(requests[2].variables).toEqual({ password: 'current-password' });
+        expect(requests[3].query).toContain('cancelMyAccountClosure');
+    });
+
+    it('lists customer risk reviews and submits an idempotent appeal', async () => {
+        const riskCase = {
+            id: 'risk-1',
+            createdAt: '2026-09-21T00:00:00.000Z',
+            caseCode: 'FR-TEST',
+            orderId: 'order-1',
+            status: 'OPEN',
+            severity: 'P1',
+            riskScore: 70,
+            recommendedAction: 'HOLD_FULFILLMENT',
+            dueAt: '2026-09-21T02:00:00.000Z',
+            decisionReason: null,
+            decidedAt: null,
+            appeals: [],
+        };
+        const appeal = {
+            id: 'appeal-1',
+            createdAt: '2026-09-21T00:10:00.000Z',
+            status: 'PENDING',
+            reason: '付款信息可以补充',
+            response: null,
+            reviewedAt: null,
+        };
+        const fetchMock = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(new Response(JSON.stringify({ data: { myFraudRiskCases: [riskCase] } })))
+            .mockResolvedValueOnce(new Response(JSON.stringify({ data: { appealMyFraudRiskCase: appeal } })));
+        vi.stubGlobal('fetch', fetchMock);
+        const api = new ShopApi(market);
+
+        await expect(api.fraudRiskCases()).resolves.toEqual([riskCase]);
+        await expect(api.appealFraudRiskCase('risk-1', appeal.reason)).resolves.toEqual(appeal);
+
+        const requests = fetchMock.mock.calls.map(
+            call =>
+                JSON.parse(jsonRequestBody(call[1])) as {
+                    query: string;
+                    variables?: { input?: Record<string, unknown> };
+                },
+        );
+        expect(requests[0].query).toContain('myFraudRiskCases');
+        expect(requests[1].query).toContain('appealMyFraudRiskCase(input: $input)');
+        expect(requests[1].variables?.input).toMatchObject({
+            id: 'risk-1',
+            reason: appeal.reason,
+        });
+        expect(requests[1].variables?.input?.idempotencyKey).toMatch(/^[0-9a-f]{8}-[0-9a-f-]{27}$/u);
+    });
+
     it('requires a CORS preflight for image reference uploads while preserving multipart metadata', async () => {
         const reference = { id: 'reference-fixture' };
         const fetchMock = mockGraphQlResponse({ uploadImageReference: reference });
@@ -1963,6 +2153,41 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('mutation CreateAfterSalesRequest');
         expect(request.variables).toEqual({ input });
         expect(JSON.stringify(request.variables)).not.toContain('requestedAmount');
+    });
+
+    it('submits customer return tracking through the guarded workflow mutation', async () => {
+        const response = { id: 'request-1', returnStatus: 'IN_TRANSIT' };
+        const fetchMock = mockGraphQlResponse({ submitMyAfterSalesReturnShipment: response });
+        const input = {
+            id: 'request-1',
+            carrier: 'Test Carrier',
+            trackingCode: 'RETURN-001',
+            idempotencyKey: 'return-key-1',
+        };
+
+        await expect(new ShopApi(market).submitAfterSalesReturnShipment(input)).resolves.toEqual(response);
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.query).toContain('mutation SubmitMyAfterSalesReturnShipment');
+        expect(request.variables).toEqual({ input });
+    });
+
+    it('lets the customer confirm replacement delivery with an idempotency key', async () => {
+        const response = { id: 'request-1', replacementStatus: 'DELIVERED' };
+        const fetchMock = mockGraphQlResponse({ confirmMyAfterSalesReplacement: response });
+        const input = { id: 'request-1', idempotencyKey: 'replacement-key-1' };
+
+        await expect(new ShopApi(market).confirmAfterSalesReplacement(input)).resolves.toEqual(response);
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.query).toContain('mutation ConfirmMyAfterSalesReplacement');
+        expect(request.variables).toEqual({ input });
     });
 
     it('loads only server-approved product reviews through the public review query', async () => {

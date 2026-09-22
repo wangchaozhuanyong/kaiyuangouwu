@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
     BadgePercent,
+    BarChart3,
     Flame,
     Plus,
     RefreshCw,
@@ -33,6 +34,7 @@ import { copyAdminText } from '../../utils/admin-clipboard';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney } from '../Sales/sales-utils';
 import { GenericPromotionsPanel } from './GenericPromotionsPanel';
+import { MarketingAttributionPanel } from './MarketingAttributionPanel';
 import { NameDialog, SensitiveDialog } from './promotion-actions';
 import { CampaignDetailDialog } from './promotion-details';
 import { CouponEditor, FlashEditor, GrantCouponDialog } from './promotion-editors';
@@ -54,11 +56,12 @@ import {
 import { CouponLedger, CouponReport } from './promotion-reports';
 import { ErrorState, LoadingState, Message, OverviewMetric, TabButton } from './promotion-ui';
 
-type PromotionTab = 'COUPONS' | 'FLASH_SALES' | 'REPORT' | 'LEDGER' | 'GENERIC';
+type PromotionTab = 'COUPONS' | 'FLASH_SALES' | 'ATTRIBUTION' | 'REPORT' | 'LEDGER' | 'GENERIC';
 
 const PROMOTION_TABS = {
     coupons: 'COUPONS',
     'flash-sales': 'FLASH_SALES',
+    attribution: 'ATTRIBUTION',
     report: 'REPORT',
     ledger: 'LEDGER',
     generic: 'GENERIC',
@@ -312,6 +315,12 @@ export function PromotionsModule() {
                 </section>
                 <nav className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 text-xs shadow-2xs">
                     <TabButton
+                        active={activeTab === 'ATTRIBUTION'}
+                        onClick={() => setActiveTab('ATTRIBUTION')}
+                        icon={BarChart3}
+                        label="渠道归因"
+                    />
+                    <TabButton
                         active={activeTab === 'COUPONS'}
                         onClick={() => setActiveTab('COUPONS')}
                         icon={BadgePercent}
@@ -386,7 +395,9 @@ export function PromotionsModule() {
                     </div>
                 )}
 
-                {activeTab === 'GENERIC' ? (
+                {activeTab === 'ATTRIBUTION' ? (
+                    <MarketingAttributionPanel currencyCode={currencyCode} />
+                ) : activeTab === 'GENERIC' ? (
                     <GenericPromotionsPanel />
                 ) : overview.loading && !overview.data ? (
                     <LoadingState label="正在读取营销活动…" />

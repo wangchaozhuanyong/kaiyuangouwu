@@ -1,5 +1,136 @@
 import { gql } from '@apollo/client';
 
+export const MARKETING_ATTRIBUTION_REPORT_QUERY = gql`
+    query AdminMarketingAttributionReport($input: MarketingAttributionReportInput!) {
+        marketingAttributionReport(input: $input) {
+            from
+            to
+            currencyCode
+            attributionModel
+            summary {
+                source
+                medium
+                campaign
+                term
+                content
+                searchTerms
+                visitorCount
+                pageViewCount
+                productViewCount
+                cartViewCount
+                checkoutViewCount
+                orderCount
+                conversionRate
+                settledRevenueMicrounits
+                refundedRevenueMicrounits
+                netRevenueMicrounits
+                campaignCostMicrounits
+                refundAdjustedRoas
+                refundAdjustedRoi
+            }
+            items {
+                source
+                medium
+                campaign
+                term
+                content
+                searchTerms
+                visitorCount
+                pageViewCount
+                productViewCount
+                cartViewCount
+                checkoutViewCount
+                orderCount
+                conversionRate
+                settledRevenueMicrounits
+                refundedRevenueMicrounits
+                netRevenueMicrounits
+                campaignCostMicrounits
+                refundAdjustedRoas
+                refundAdjustedRoi
+            }
+            costEntries {
+                id
+                createdAt
+                businessDate
+                currencyCode
+                source
+                medium
+                campaign
+                amountMicrounits
+                idempotencyKey
+                actorUserId
+                reason
+            }
+        }
+    }
+`;
+
+export const RECORD_MARKETING_CAMPAIGN_COST_MUTATION = gql`
+    mutation AdminRecordMarketingCampaignCost($input: RecordMarketingCampaignCostInput!) {
+        recordMarketingCampaignCost(input: $input) {
+            id
+            createdAt
+            businessDate
+            currencyCode
+            source
+            medium
+            campaign
+            amountMicrounits
+            idempotencyKey
+            reason
+        }
+    }
+`;
+
+export interface MarketingAttributionMetricRecord {
+    source: string;
+    medium: string;
+    campaign: string;
+    term: string;
+    content: string;
+    searchTerms: string[];
+    visitorCount: number;
+    pageViewCount: number;
+    productViewCount: number;
+    cartViewCount: number;
+    checkoutViewCount: number;
+    orderCount: number;
+    conversionRate?: number | null;
+    settledRevenueMicrounits: number;
+    refundedRevenueMicrounits: number;
+    netRevenueMicrounits: number;
+    campaignCostMicrounits: number;
+    refundAdjustedRoas?: number | null;
+    refundAdjustedRoi?: number | null;
+}
+
+export interface MarketingCampaignCostRecord {
+    id: string;
+    createdAt: string;
+    businessDate: string;
+    currencyCode: string;
+    source: string;
+    medium: string;
+    campaign: string;
+    amountMicrounits: number;
+    idempotencyKey: string;
+    actorUserId?: string | null;
+    reason: string;
+}
+
+export interface MarketingAttributionReportResult {
+    marketingAttributionReport: {
+        from: string;
+        to: string;
+        currencyCode: string;
+        attributionModel: string;
+        summary: MarketingAttributionMetricRecord;
+        items: MarketingAttributionMetricRecord[];
+        costEntries: MarketingCampaignCostRecord[];
+    };
+}
+
 export const MARKETING_OVERVIEW_QUERY = gql`
     query AdminMarketingOverview {
         activeChannel {

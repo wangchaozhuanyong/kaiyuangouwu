@@ -13,6 +13,7 @@ import {
     NotificationSeverity,
 } from './department-notification-router';
 import { type NotificationDeliveryStatus } from './entities/admin-notification-delivery.entity';
+import { IncidentCorrectiveActionInput, IncidentResponseService } from './incident-response.service';
 import { departmentName } from './telegram-notification-formatter';
 
 @Resolver()
@@ -20,6 +21,7 @@ export class AdminNotificationResolver {
     constructor(
         private readonly configService: AdminNotificationConfigService,
         private readonly notifications: AdminNotificationService,
+        private readonly incidents: IncidentResponseService,
     ) {}
 
     @Query()
@@ -93,6 +95,23 @@ export class AdminNotificationResolver {
         };
     }
 
+    @Query()
+    @Allow(Permission.SuperAdmin)
+    adminIncidents(
+        @Args('skip') skip?: number,
+        @Args('take') take?: number,
+        @Args('status') status?: string,
+        @Args('severity') severity?: string,
+    ) {
+        return this.incidents.listIncidents({ skip, take, status, severity });
+    }
+
+    @Query()
+    @Allow(Permission.SuperAdmin)
+    adminIncident(@Args('id') id: ID) {
+        return this.incidents.incidentDetail(id);
+    }
+
     @Mutation()
     @Allow(Permission.SuperAdmin)
     updateTelegramNotificationConfig(
@@ -118,6 +137,53 @@ export class AdminNotificationResolver {
     @Allow(Permission.SuperAdmin)
     retryTelegramNotificationDelivery(@Args('id') id: ID) {
         return this.notifications.retryDelivery(id);
+    }
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    acknowledgeAdminIncident(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: ID,
+        @Args('note') note: string,
+        @Args('evidence') evidence?: Record<string, unknown>,
+    ) {
+        return this.incidents.acknowledgeIncident(ctx, id, note, evidence);
+    }
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    validateAdminIncidentRecovery(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: ID,
+        @Args('note') note: string,
+        @Args('evidence') evidence?: Record<string, unknown>,
+    ) {
+        return this.incidents.validateRecovery(ctx, id, note, evidence);
+    }
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    submitAdminIncidentReview(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: ID,
+        @Args('input')
+        input: {
+            rootCause: string;
+            impactSummary: string;
+            correctiveActions: IncidentCorrectiveActionInput[];
+        },
+    ) {
+        return this.incidents.submitReview(ctx, id, input);
+    }
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    completeAdminIncidentAction(
+        @Ctx() ctx: RequestContext,
+        @Args('actionId') actionId: ID,
+        @Args('note') note: string,
+    ) {
+        return this.incidents.completeAction(ctx, actionId, note);
     }
 }
 

@@ -3,8 +3,10 @@ import 'reflect-metadata';
 import type { Injector, RequestContext } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { PaymentReconciliationService } from './payment-reconciliation.service';
 import { StoreCurrencySettingsService } from './store-currency-settings.service';
 import {
+    reconcileStorePaymentsDailyTask,
     reconcileStoreUsdtPaymentsTask,
     refreshStoreUsdtRatesTask,
     syncAutomaticStoreCurrencyPricesTask,
@@ -73,5 +75,25 @@ describe('automatic USDT payment reconciliation task', () => {
             reconcileStoreUsdtPaymentsTask.options.execute({ injector, scheduledContext, params: {} }),
         ).resolves.toEqual(expected);
         expect(scanPendingPayments).toHaveBeenCalledWith(scheduledContext);
+    });
+});
+
+describe('daily payment integrity task', () => {
+    it('runs once per business day and delegates to the cross-ledger reconciliation service', async () => {
+        expect(reconcileStorePaymentsDailyTask.options.schedule).toBe('20 2 * * *');
+        const expected = { healthy: true, scannedIntentCount: 12 };
+        const reconcile = vi.fn().mockResolvedValue(expected);
+        const injector = {
+            get: (token: unknown) => {
+                expect(token).toBe(PaymentReconciliationService);
+                return { reconcile };
+            },
+        } as Injector;
+        const scheduledContext = {} as RequestContext;
+
+        await expect(
+            reconcileStorePaymentsDailyTask.options.execute({ injector, scheduledContext, params: {} }),
+        ).resolves.toEqual(expected);
+        expect(reconcile).toHaveBeenCalledWith(scheduledContext);
     });
 });

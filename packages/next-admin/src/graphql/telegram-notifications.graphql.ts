@@ -73,6 +73,48 @@ export const TELEGRAM_NOTIFICATIONS_QUERY = gql`
                 sentAt
             }
         }
+        adminIncidents(take: 25, status: "ACTIVE") {
+            totalItems
+            items {
+                id
+                createdAt
+                updatedAt
+                eventType
+                category
+                ownerDepartmentCode
+                collaboratorDepartmentCodes
+                escalationDepartmentCode
+                severity
+                eventState
+                title
+                occurrenceCount
+                firstOccurredAt
+                lastOccurredAt
+                resolvedAt
+                incidentStatus
+                acknowledgedAt
+                acknowledgementNote
+                recoveryObservedAt
+                recoveryValidationDueAt
+                recoveryValidatedAt
+                recoveryValidationNote
+                reviewDueAt
+                reviewSubmittedAt
+                rootCause
+                impactSummary
+                closedAt
+                actions {
+                    id
+                    title
+                    ownerDepartmentCode
+                    dueAt
+                    status
+                    completedAt
+                    completionNote
+                    escalatedAt
+                }
+            }
+        }
         telegramDepartmentRouting {
             departments {
                 code
@@ -156,6 +198,47 @@ export const RETRY_TELEGRAM_NOTIFICATION = gql`
         retryTelegramNotificationDelivery(id: $id) {
             id
             deliveryStatus
+        }
+    }
+`;
+
+export const ACKNOWLEDGE_ADMIN_INCIDENT = gql`
+    mutation NextAdminAcknowledgeIncident($id: ID!, $note: String!) {
+        acknowledgeAdminIncident(id: $id, note: $note) {
+            id
+            incidentStatus
+            acknowledgedAt
+        }
+    }
+`;
+
+export const VALIDATE_ADMIN_INCIDENT_RECOVERY = gql`
+    mutation NextAdminValidateIncidentRecovery($id: ID!, $note: String!) {
+        validateAdminIncidentRecovery(id: $id, note: $note) {
+            id
+            incidentStatus
+            recoveryValidatedAt
+            reviewDueAt
+        }
+    }
+`;
+
+export const SUBMIT_ADMIN_INCIDENT_REVIEW = gql`
+    mutation NextAdminSubmitIncidentReview($id: ID!, $input: SubmitAdminIncidentReviewInput!) {
+        submitAdminIncidentReview(id: $id, input: $input) {
+            id
+            incidentStatus
+            reviewSubmittedAt
+        }
+    }
+`;
+
+export const COMPLETE_ADMIN_INCIDENT_ACTION = gql`
+    mutation NextAdminCompleteIncidentAction($actionId: ID!, $note: String!) {
+        completeAdminIncidentAction(actionId: $actionId, note: $note) {
+            id
+            incidentStatus
+            closedAt
         }
     }
 `;
@@ -264,6 +347,48 @@ export interface TelegramDepartmentRouteRecord {
     defaultSlaMinutes: number | null;
 }
 
+export interface AdminIncidentActionRecord {
+    id: string;
+    title: string;
+    ownerDepartmentCode: string;
+    dueAt: string;
+    status: string;
+    completedAt: string | null;
+    completionNote: string | null;
+    escalatedAt: string | null;
+}
+
+export interface AdminIncidentRecord {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+    eventType: string;
+    category: string;
+    ownerDepartmentCode: string;
+    collaboratorDepartmentCodes: string[];
+    escalationDepartmentCode: string | null;
+    severity: string;
+    eventState: string;
+    title: string;
+    occurrenceCount: number;
+    firstOccurredAt: string;
+    lastOccurredAt: string;
+    resolvedAt: string | null;
+    incidentStatus: string;
+    acknowledgedAt: string | null;
+    acknowledgementNote: string | null;
+    recoveryObservedAt: string | null;
+    recoveryValidationDueAt: string | null;
+    recoveryValidatedAt: string | null;
+    recoveryValidationNote: string | null;
+    reviewDueAt: string | null;
+    reviewSubmittedAt: string | null;
+    rootCause: string | null;
+    impactSummary: string | null;
+    closedAt: string | null;
+    actions: AdminIncidentActionRecord[];
+}
+
 export interface TelegramNotificationsResult {
     telegramNotificationConfig: TelegramNotificationConfigRecord;
     telegramNotificationConfigAudits: TelegramNotificationConfigAuditRecord[];
@@ -271,6 +396,10 @@ export interface TelegramNotificationsResult {
     telegramNotificationDeliveries: {
         totalItems: number;
         items: TelegramNotificationDeliveryRecord[];
+    };
+    adminIncidents: {
+        totalItems: number;
+        items: AdminIncidentRecord[];
     };
     telegramDepartmentRouting: {
         departments: TelegramDepartmentRecord[];

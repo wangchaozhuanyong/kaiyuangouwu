@@ -16,6 +16,7 @@ describe('inventory batch dialog validation', () => {
                         expiresAt: '',
                         quantityOnHand: '0',
                         purchaseCost: '',
+                        reason: '月底盘点',
                     }}
                     variants={[]}
                     saving={false}

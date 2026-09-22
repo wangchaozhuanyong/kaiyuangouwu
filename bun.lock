@@ -237,6 +237,7 @@
       "dependencies": {
         "@nestjs/common": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
+        "@vendure/catalog-management-plugin": "0.1.0",
         "@vendure/common": "3.7.2",
         "@vendure/content-translation-plugin": "0.1.0",
         "@vendure/core": "3.7.2",

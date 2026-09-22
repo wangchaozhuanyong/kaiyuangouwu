@@ -24,15 +24,19 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
+import { randomUUID } from 'node:crypto';
 import { In } from 'typeorm';
 
 import { catalogCollectionPath, preferredCatalogCategoryPath } from './catalog-import-classification';
 import { CatalogSupplierService } from './catalog-supplier.service';
 import { manageCatalogImportPermission, manageCatalogOperationsPermission } from './constants';
 import { InventoryLot } from './entities/inventory-lot.entity';
+import { InventoryOperationLine } from './entities/inventory-operation-line.entity';
+import { InventoryOperation } from './entities/inventory-operation.entity';
 import { InventoryPolicy } from './entities/inventory-policy.entity';
 import { VariantCostRecord } from './entities/variant-cost-record.entity';
 import {
+    AdjustLegacyInventoryInput,
     CatalogProductListOptions,
     CatalogProductSummaryFilterInput,
     CreateCatalogProductInput,
@@ -973,6 +977,21 @@ export class CatalogOperationsService {
         if (!allowConfirmedNegativeStock && input.stockOnHand != null && input.stockOnHand < 0) {
             throw new UserInputError('库存不能为负数');
         }
+        const stockAdjustmentReason = input.stockAdjustmentReason?.trim();
+        const stockAdjustmentIdempotencyKey = input.stockAdjustmentIdempotencyKey?.trim();
+        let stockAdjustment: { reason: string; idempotencyKey: string } | null = null;
+        if (input.stockOnHand != null) {
+            if (!stockAdjustmentReason) {
+                throw new UserInputError('库存变更必须填写调整原因');
+            }
+            if (!stockAdjustmentIdempotencyKey) {
+                throw new UserInputError('库存变更缺少幂等键');
+            }
+            stockAdjustment = {
+                reason: stockAdjustmentReason,
+                idempotencyKey: stockAdjustmentIdempotencyKey,
+            };
+        }
         if (input.purchaseCostMicrounits != null && input.purchaseCostMicrounits < 0) {
             throw new UserInputError('进货价不能为负数');
         }
@@ -1017,10 +1036,15 @@ export class CatalogOperationsService {
                 customFields,
             },
         ]);
-        if (input.stockOnHand != null) {
-            await this.stockMovementService.adjustProductVariantStock(ctx, variant.id, [
-                { stockLocationId: input.stockLocationId, stockOnHand: input.stockOnHand },
-            ]);
+        if (input.stockOnHand != null && stockAdjustment) {
+            await this.adjustLegacyStock(ctx, {
+                productVariantId: variant.id,
+                stockLocationId: input.stockLocationId,
+                stockOnHand: input.stockOnHand,
+                idempotencyKey: stockAdjustment.idempotencyKey,
+                reason: stockAdjustment.reason,
+                reference: 'PRODUCT_WORKSPACE',
+            });
         }
         if (input.minimumStock !== undefined || input.maximumStock !== undefined) {
             await this.savePolicy(
@@ -1047,6 +1071,84 @@ export class CatalogOperationsService {
         return returnWorkspace ? this.workspace(ctx, variant.productId) : null;
     }
 
+    async adjustLegacyStock(ctx: RequestContext, input: AdjustLegacyInventoryInput) {
+        return this.connection.withTransaction(ctx, txCtx =>
+            this.applyAuditedLegacyStockAdjustment(txCtx, input),
+        );
+    }
+
+    private async applyAuditedLegacyStockAdjustment(
+        ctx: RequestContext,
+        input: AdjustLegacyInventoryInput,
+    ): Promise<InventoryOperation> {
+        if (!Number.isSafeInteger(input.stockOnHand) || input.stockOnHand < 0) {
+            throw new UserInputError('盘点后库存必须是非负整数');
+        }
+        const reason = input.reason?.trim().slice(0, 500);
+        const idempotencyKey = input.idempotencyKey?.trim().slice(0, 80);
+        if (!reason) throw new UserInputError('库存调整原因不能为空');
+        if (!idempotencyKey) throw new UserInputError('幂等键不能为空');
+
+        const operationRepository = this.connection.getRepository(ctx, InventoryOperation);
+        const duplicate = await operationRepository.findOne({
+            where: { channelId: ctx.channelId, idempotencyKey },
+            relations: ['lines', 'lines.inventoryLot', 'lines.variant', 'lines.stockLocation'],
+        });
+        if (duplicate) {
+            if (duplicate.type !== 'LEGACY_STOCK_ADJUSTMENT') {
+                throw new UserInputError('幂等键已被其他库存操作使用');
+            }
+            return duplicate;
+        }
+
+        await this.requireStockLocation(ctx, input.stockLocationId);
+        await this.connection.getEntityOrThrow(ctx, ProductVariant, input.productVariantId, {
+            channelId: ctx.channelId,
+        });
+        const stockLevel = await this.stockLevelForUpdate(ctx, input.productVariantId, input.stockLocationId);
+        const lotCount = await this.connection.getRepository(ctx, InventoryLot).count({
+            where: { variantId: input.productVariantId, stockLocationId: input.stockLocationId },
+        });
+        if (lotCount > 0) {
+            throw new UserInputError('该 SKU 已启用批次跟踪，请盘点具体批次，不能直接改总库存');
+        }
+        const previousStock = stockLevel?.stockOnHand ?? 0;
+        await this.stockMovementService.adjustProductVariantStock(ctx, input.productVariantId, [
+            { stockLocationId: input.stockLocationId, stockOnHand: input.stockOnHand },
+        ]);
+        const operation = await operationRepository.save(
+            new InventoryOperation({
+                channelId: ctx.channelId,
+                code: `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8).toUpperCase()}`,
+                idempotencyKey,
+                type: 'LEGACY_STOCK_ADJUSTMENT',
+                status: 'POSTED',
+                actorUserId: ctx.activeUserId == null ? null : String(ctx.activeUserId),
+                reason,
+                reference: input.reference?.trim().slice(0, 160) || null,
+                postedAt: new Date(),
+            }),
+        );
+        await this.connection.getRepository(ctx, InventoryOperationLine).save(
+            new InventoryOperationLine({
+                operationId: operation.id,
+                variantId: input.productVariantId,
+                stockLocationId: input.stockLocationId,
+                inventoryLotId: null,
+                quantityDelta: input.stockOnHand - previousStock,
+                previousLotQuantity: 0,
+                resultingLotQuantity: 0,
+                previousStockOnHand: previousStock,
+                resultingStockOnHand: input.stockOnHand,
+                reconciliationMode: null,
+            }),
+        );
+        return operationRepository.findOneOrFail({
+            where: { id: operation.id, channelId: ctx.channelId },
+            relations: ['lines', 'lines.inventoryLot', 'lines.variant', 'lines.stockLocation'],
+        });
+    }
+
     async saveLot(ctx: RequestContext, input: SaveInventoryLotInput, adjustStock = true) {
         await this.requireStockLocation(ctx, input.stockLocationId);
         if (!input.lotCode.trim()) throw new UserInputError('批次号不能为空');
@@ -1065,16 +1167,39 @@ export class CatalogOperationsService {
         if (manufacturedAt && expiresAt && expiresAt < manufacturedAt) {
             throw new UserInputError('到期日期不能早于生产日期');
         }
+        const stockLevel = adjustStock
+            ? await this.stockLevelForUpdate(ctx, variant.id, input.stockLocationId)
+            : null;
         const repository = this.connection.getRepository(ctx, InventoryLot);
-        const existing = input.id
-            ? await repository.findOne({ where: { id: input.id, variantId: variant.id } })
-            : await repository.findOne({
-                  where: {
-                      variantId: variant.id,
-                      stockLocationId: input.stockLocationId,
-                      lotCode: input.lotCode.trim(),
-                  },
-              });
+        const existingQuery = repository.createQueryBuilder('lot').where('lot.variantId = :variantId', {
+            variantId: variant.id,
+        });
+        if (input.id) {
+            existingQuery.andWhere('lot.id = :id', { id: input.id });
+        } else {
+            existingQuery
+                .andWhere('lot.stockLocationId = :stockLocationId', {
+                    stockLocationId: input.stockLocationId,
+                })
+                .andWhere('lot.lotCode = :lotCode', { lotCode: input.lotCode.trim() });
+        }
+        if (
+            supportsPessimisticLocks(
+                repository.manager.connection.options.type,
+                repository.manager.queryRunner,
+            )
+        ) {
+            existingQuery.setLock('pessimistic_write');
+        }
+        const existing = await existingQuery.getOne();
+        if (
+            existing &&
+            (String(existing.variantId) !== String(variant.id) ||
+                String(existing.stockLocationId) !== String(input.stockLocationId) ||
+                existing.lotCode !== input.lotCode.trim())
+        ) {
+            throw new UserInputError('已有批次的 SKU、仓库和批次号不能修改');
+        }
         const previousQuantity = existing?.quantityOnHand ?? 0;
         const lot = existing ?? new InventoryLot();
         lot.variantId = variant.id;
@@ -1095,9 +1220,6 @@ export class CatalogOperationsService {
         const saved = await repository.save(lot);
 
         if (adjustStock && previousQuantity !== input.quantityOnHand) {
-            const stockLevel = await this.connection.getRepository(ctx, StockLevel).findOne({
-                where: { productVariantId: variant.id, stockLocationId: input.stockLocationId },
-            });
             const current = stockLevel?.stockOnHand ?? 0;
             await this.stockMovementService.adjustProductVariantStock(ctx, variant.id, [
                 {
@@ -1107,6 +1229,71 @@ export class CatalogOperationsService {
             ]);
         }
         return toLotView(saved);
+    }
+
+    async changeLotQuantity(
+        ctx: RequestContext,
+        input: Omit<SaveInventoryLotInput, 'quantityOnHand'> & { quantityDelta: number },
+    ) {
+        if (!Number.isSafeInteger(input.quantityDelta) || input.quantityDelta === 0) {
+            throw new UserInputError('批次数量变化必须是非零整数');
+        }
+        await this.requireStockLocation(ctx, input.stockLocationId);
+        await this.connection.getEntityOrThrow(ctx, ProductVariant, input.productVariantId, {
+            channelId: ctx.channelId,
+        });
+        await this.stockLevelForUpdate(ctx, input.productVariantId, input.stockLocationId);
+        const repository = this.connection.getRepository(ctx, InventoryLot);
+        const query = repository.createQueryBuilder('lot').where('lot.variantId = :variantId', {
+            variantId: input.productVariantId,
+        });
+        if (input.id) {
+            query.andWhere('lot.id = :id', { id: input.id });
+        } else {
+            query
+                .andWhere('lot.stockLocationId = :stockLocationId', {
+                    stockLocationId: input.stockLocationId,
+                })
+                .andWhere('lot.lotCode = :lotCode', { lotCode: input.lotCode.trim() });
+        }
+        if (
+            supportsPessimisticLocks(
+                repository.manager.connection.options.type,
+                repository.manager.queryRunner,
+            )
+        ) {
+            query.setLock('pessimistic_write');
+        }
+        const existing = await query.getOne();
+        if (!existing && input.quantityDelta < 0) throw new UserInputError('库存批次不存在');
+        const quantityOnHand = (existing?.quantityOnHand ?? 0) + input.quantityDelta;
+        if (quantityOnHand < 0) throw new UserInputError('批次当前库存不足');
+        return this.saveLot(
+            ctx,
+            {
+                ...input,
+                id: existing?.id ?? input.id,
+                quantityOnHand,
+            },
+            true,
+        );
+    }
+
+    private async stockLevelForUpdate(ctx: RequestContext, variantId: ID, stockLocationId: ID) {
+        const repository = this.connection.getRepository(ctx, StockLevel);
+        const query = repository
+            .createQueryBuilder('stock')
+            .where('stock.productVariantId = :variantId', { variantId })
+            .andWhere('stock.stockLocationId = :stockLocationId', { stockLocationId });
+        if (
+            supportsPessimisticLocks(
+                repository.manager.connection.options.type,
+                repository.manager.queryRunner,
+            )
+        ) {
+            query.setLock('pessimistic_write');
+        }
+        return query.getOne();
     }
 
     async recordCost(
@@ -1590,4 +1777,14 @@ function nullableDateValue(value: unknown): Date | null {
     if (!(value instanceof Date) && typeof value !== 'string' && typeof value !== 'number') return null;
     const date = value instanceof Date ? value : new Date(value);
     return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function supportsPessimisticLocks(
+    databaseType: unknown,
+    queryRunner: { isTransactionActive?: boolean } | undefined,
+): boolean {
+    return (
+        !['sqlite', 'better-sqlite3', 'sqljs'].includes(String(databaseType)) &&
+        queryRunner?.isTransactionActive === true
+    );
 }

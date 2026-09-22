@@ -3,10 +3,12 @@ import { EntityId, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 
 import { AfterSalesActorType, AfterSalesState } from '../after-sales.constants';
+
 import { AfterSalesRequest } from './after-sales-request.entity';
 
 @Entity({ name: 'after_sales_event' })
 @Index('IDX_after_sales_event_request_created', ['requestId', 'createdAt'])
+@Index('IDX_after_sales_event_request_key', ['requestId', 'idempotencyKey'], { unique: true })
 export class AfterSalesEvent extends VendureEntity {
     constructor(input?: DeepPartial<AfterSalesEvent>) {
         super(input);
@@ -14,6 +16,12 @@ export class AfterSalesEvent extends VendureEntity {
 
     @Column({ type: 'varchar', length: 24 })
     state: AfterSalesState;
+
+    @Column({ type: 'varchar', length: 48, default: 'STATE_CHANGED' })
+    eventType: string;
+
+    @Column({ type: 'varchar', length: 80, nullable: true })
+    idempotencyKey: string | null;
 
     @Column({ type: 'varchar', length: 16 })
     actorType: AfterSalesActorType;

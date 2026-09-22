@@ -82,10 +82,14 @@ describe('public storefront browsing boundary', () => {
         'activeChannel',
         'imageStudioConfig',
     ])('preserves public account bootstrap: %s', field => expect(invoke(field).run).not.toThrow());
-    it.each(['login', 'registerCustomerAccount', 'requestPasswordReset', 'resetPassword'])(
+    it.each(['login', 'registerCustomerWithReferral', 'requestPasswordReset', 'resetPassword'])(
         'preserves account mutation: %s',
         field => expect(invoke(field, 'Mutation').run).not.toThrow(),
     );
+    it('blocks the unaudited built-in registration mutation', () => {
+        expect(invoke('registerCustomerAccount', 'Mutation').run).toThrow();
+        expect(invoke('registerCustomerAccount', 'Mutation', 'customer-user').run).toThrow();
+    });
     it('passes anonymous cart operations to their existing resolver ownership checks', () => {
         for (const field of [
             'storefrontCart',

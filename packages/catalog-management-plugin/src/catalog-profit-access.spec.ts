@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CatalogProfitService } from './catalog-profit.service';
 import { manageCatalogOperationsPermission } from './constants';
+import { OrderProfitExpenseEvent } from './entities/order-profit-expense-event.entity';
 import { OrderProfitExpense } from './entities/order-profit-expense.entity';
 
 const updatedAt = new Date('2026-09-06T00:00:00.000Z');
@@ -18,6 +19,7 @@ function setup(permissions: string[] = [Permission.UpdateOrder, manageCatalogOpe
         updatedAt,
         carrierShippingCostMicrounits: '5000',
         paymentFeeMicrounits: '2000',
+        chargebackMicrounits: '0',
         note: 'original note',
         source: 'IMPORT',
     });
@@ -34,6 +36,12 @@ function setup(permissions: string[] = [Permission.UpdateOrder, manageCatalogOpe
         update: vi.fn().mockResolvedValue({ affected: 1 }),
         save: vi.fn().mockImplementation((value: OrderProfitExpense) => Promise.resolve(value)),
     };
+    const eventRepository = {
+        findOneBy: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockImplementation(value => value),
+        save: vi.fn().mockImplementation(value => Promise.resolve(value)),
+        find: vi.fn().mockResolvedValue([]),
+    };
     const ctx = {
         channelId: 9,
         activeUserId: 10,
@@ -49,13 +57,18 @@ function setup(permissions: string[] = [Permission.UpdateOrder, manageCatalogOpe
         getRepository: vi
             .fn()
             .mockImplementation((_: RequestContext, entity: unknown) =>
-                entity === Order ? { createQueryBuilder: () => query } : repository,
+                entity === Order
+                    ? { createQueryBuilder: () => query }
+                    : entity === OrderProfitExpenseEvent
+                      ? eventRepository
+                      : repository,
             ),
     };
     return {
         ctx,
         query,
         repository,
+        eventRepository,
         connection,
         service: new CatalogProfitService(connection as unknown as TransactionalConnection),
     };
@@ -149,7 +162,7 @@ describe('catalog profit access and expense writes', () => {
     });
 
     it('preserves omitted fields while allowing an explicit zero or null', async () => {
-        const { ctx, service, repository } = setup();
+        const { ctx, service, repository, eventRepository } = setup();
         const result = await service.saveOrderExpense(ctx, {
             orderId: '8',
             paymentFeeMicrounits: 0,
@@ -168,11 +181,31 @@ describe('catalog profit access and expense writes', () => {
                 actorId: '10',
             }),
         );
+        expect(eventRepository.save).toHaveBeenCalledWith(
+            expect.objectContaining({
+                eventType: 'MANUAL_SAVE',
+                beforeJson: expect.stringContaining('5000'),
+                afterJson: expect.stringContaining('"paymentFeeMicrounits":0'),
+            }),
+        );
         const cleared = await service.saveOrderExpense(ctx, {
             orderId: '8',
             carrierShippingCostMicrounits: null,
         });
         expect(cleared.carrierShippingCostMicrounits).toBeNull();
+    });
+
+    it('returns the current expense without a second write when a manual idempotency key is retried', async () => {
+        const { ctx, service, repository, eventRepository } = setup();
+        eventRepository.findOneBy.mockResolvedValue({ orderId: 8, idempotencyKey: 'manual:test:retry' });
+        const result = await service.saveOrderExpense(ctx, {
+            orderId: '8',
+            paymentFeeMicrounits: 2000,
+            idempotencyKey: 'manual:test:retry',
+        });
+        expect(result.paymentFeeMicrounits).toBe(2000);
+        expect(repository.update).not.toHaveBeenCalled();
+        expect(eventRepository.save).not.toHaveBeenCalled();
     });
 
     it('rejects stale edits before writing', async () => {

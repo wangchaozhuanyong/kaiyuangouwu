@@ -4,6 +4,7 @@ import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { Allow, Ctx, ID, Permission, RequestContext, Transaction, UserInputError } from '@vendure/core';
 import type { Response } from 'express';
 
+import { DataConsentService, StorefrontRegistrationConsentInput } from '../data-consent.service';
 import { StorefrontTrafficService } from '../traffic/storefront-traffic.service';
 
 import {
@@ -24,7 +25,10 @@ import {
 
 @Resolver()
 export class ReferralShopResolver {
-    constructor(private readonly referralService: ReferralService) {}
+    constructor(
+        private readonly referralService: ReferralService,
+        private readonly consents: DataConsentService,
+    ) {}
 
     @Query()
     @Allow(Permission.Public)
@@ -47,13 +51,25 @@ export class ReferralShopResolver {
     @Transaction()
     @Mutation()
     @Allow(Permission.Public)
-    registerCustomerWithReferral(
+    async registerCustomerWithReferral(
         @Ctx() ctx: RequestContext,
         @Args('input') input: RegisterCustomerInput,
+        @Args('consent') consent: StorefrontRegistrationConsentInput,
         @Args('inviteCode') inviteCode?: string,
         @Args('source') source?: string,
     ) {
-        return this.referralService.registerCustomerWithReferral(ctx, input, inviteCode, source);
+        const snapshots = await this.consents.assertRegistrationConsent(ctx, consent);
+        const existing = await this.consents.existingCustomerForEmail(ctx, input.emailAddress);
+        const result = await this.referralService.registerCustomerWithReferral(
+            ctx,
+            input,
+            inviteCode,
+            source,
+        );
+        if (!existing && !('errorCode' in result)) {
+            await this.consents.recordRegistrationByEmail(ctx, input.emailAddress, 'REGISTRATION', snapshots);
+        }
+        return result;
     }
 
     @Transaction()

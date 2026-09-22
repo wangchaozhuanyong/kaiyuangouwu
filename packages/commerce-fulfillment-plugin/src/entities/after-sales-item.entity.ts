@@ -1,8 +1,9 @@
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
-import { EntityId, Money, OrderLine, VendureEntity } from '@vendure/core';
+import { EntityId, Money, OrderLine, StockLocation, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 
 import { FulfillmentType } from '../types';
+
 import { AfterSalesRequest } from './after-sales-request.entity';
 
 @Entity({ name: 'after_sales_item' })
@@ -30,6 +31,18 @@ export class AfterSalesItem extends VendureEntity {
     @Column({ type: 'varchar', length: 16 })
     fulfillmentType: FulfillmentType;
 
+    @Column({ type: 'int', default: 0 })
+    acceptedReturnQuantity: number;
+
+    @Column({ type: 'int', default: 0 })
+    rejectedReturnQuantity: number;
+
+    @Column({ type: 'varchar', length: 80, nullable: true })
+    returnLotCode: string | null;
+
+    @Column({ type: 'varchar', length: 128, nullable: true })
+    inventoryOperationId: string | null;
+
     @ManyToOne(() => AfterSalesRequest, request => request.items, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'requestId', foreignKeyConstraintName: 'FK_after_sales_item_request' })
     request: AfterSalesRequest;
@@ -43,4 +56,14 @@ export class AfterSalesItem extends VendureEntity {
 
     @EntityId({ nullable: true })
     orderLineId: ID | null;
+
+    @ManyToOne(() => StockLocation, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({
+        name: 'returnStockLocationId',
+        foreignKeyConstraintName: 'FK_after_sales_item_return_location',
+    })
+    returnStockLocation: StockLocation | null;
+
+    @EntityId({ nullable: true })
+    returnStockLocationId: ID | null;
 }

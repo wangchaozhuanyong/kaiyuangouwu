@@ -136,8 +136,8 @@ export function OrderExpenseImportDialog({
                     </div>
 
                     <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-[11px] leading-5 text-blue-900">
-                        支持列：“订单号”、“实际物流成本”、“支付手续费”、“备注”。金额按 {currencyCode}{' '}
-                        主币单位填写，最多 3 位小数。留空不会覆盖原值；没有费用必须明确填 0。
+                        支持列：“订单号”、“实际物流成本”、“支付手续费”、“拒付损失”、“备注”。金额按{' '}
+                        {currencyCode} 主币单位填写，最多 3 位小数。留空不会覆盖原值；没有费用必须明确填 0。
                     </div>
 
                     {error && (
@@ -202,6 +202,7 @@ export function OrderExpenseImportDialog({
                                                 <th className="px-3 py-2">订单号</th>
                                                 <th className="px-3 py-2">实际物流成本</th>
                                                 <th className="px-3 py-2">支付手续费</th>
+                                                <th className="px-3 py-2">拒付损失</th>
                                                 <th className="px-3 py-2">备注</th>
                                             </tr>
                                         </thead>
@@ -221,6 +222,12 @@ export function OrderExpenseImportDialog({
                                                     <td className="px-3 py-2 font-mono">
                                                         {formatPreviewMoney(
                                                             row.paymentFeeMicrounits,
+                                                            currencyCode,
+                                                        )}
+                                                    </td>
+                                                    <td className="px-3 py-2 font-mono">
+                                                        {formatPreviewMoney(
+                                                            row.chargebackMicrounits,
                                                             currencyCode,
                                                         )}
                                                     </td>
@@ -322,7 +329,7 @@ function formatPreviewMoney(value: number | undefined, currencyCode: string): st
 }
 
 function downloadExpenseTemplate(currencyCode: string): void {
-    const content = `\uFEFF订单号,实际物流成本,支付手续费,备注\nT-1001,0,0,${currencyCode}金额示例\n`;
+    const content = `\uFEFF订单号,实际物流成本,支付手续费,拒付损失,备注\nT-1001,0,0,0,${currencyCode}金额示例\n`;
     const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;

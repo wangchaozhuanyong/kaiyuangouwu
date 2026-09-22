@@ -1,4 +1,5 @@
 import { Package, UserRound } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import { checkoutAddress } from '../checkout-address';
 import {
@@ -9,8 +10,9 @@ import {
     LazyOrdersPage,
 } from '../lazy-storefront-pages';
 import { PageSkeleton } from '../route-loading';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { AuthPageBoundary, EmptyState, Subpage } from '../storefront-ui/page-shell';
-import { ActiveCustomer } from '../types';
+import { ActiveCustomer, CustomerAvatarHistoryEntry, DataSubjectRequest, FraudRiskCase } from '../types';
 
 import '../commerce-styles';
 import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
@@ -122,6 +124,11 @@ export function OrderDetailRoutePage() {
                     onReopen={runtime.reopenPendingOrder}
                     onCancelOrder={runtime.cancelAuthorizedOrder}
                     onCreateAfterSales={runtime.createAfterSalesRequest}
+                    onConfirmDelivery={async fulfillmentId => {
+                        await runtime.api.confirmFulfillmentDelivery(fulfillmentId);
+                        await runtime.orderQuery.refetch();
+                        runtime.notify(isZh ? '已确认收货，订单状态已更新' : 'Delivery confirmed');
+                    }}
                     onUnavailable={() => runtime.notify(isZh ? '当前商品不可用' : 'Unavailable')}
                     onNotify={runtime.notify}
                 />
@@ -179,6 +186,119 @@ export function AddressesRoutePage() {
 export function AccountSecurityRoutePage() {
     const runtime = useRuntime();
     const isZh = runtime.language === 'zh';
+    const [avatarHistory, setAvatarHistory] = useState<CustomerAvatarHistoryEntry[]>([]);
+    const [avatarHistoryLoading, setAvatarHistoryLoading] = useState(Boolean(runtime.customer));
+    const [dataSubjectRequests, setDataSubjectRequests] = useState<DataSubjectRequest[]>([]);
+    const [dataSubjectLoading, setDataSubjectLoading] = useState(Boolean(runtime.customer));
+    const [fraudRiskCases, setFraudRiskCases] = useState<FraudRiskCase[]>([]);
+    const [fraudRiskLoading, setFraudRiskLoading] = useState(Boolean(runtime.customer));
+    const refreshAvatarHistory = async () => {
+        if (!runtime.customer) {
+            setAvatarHistory([]);
+            setAvatarHistoryLoading(false);
+            return;
+        }
+        setAvatarHistoryLoading(true);
+        try {
+            setAvatarHistory(await runtime.api.customerAvatarHistory());
+        } catch (error) {
+            runtime.notify(storefrontErrorMessage(error, runtime.language));
+        } finally {
+            setAvatarHistoryLoading(false);
+        }
+    };
+    const refreshDataSubjectRequests = async () => {
+        if (!runtime.customer) {
+            setDataSubjectRequests([]);
+            setDataSubjectLoading(false);
+            return;
+        }
+        setDataSubjectLoading(true);
+        try {
+            setDataSubjectRequests(await runtime.api.dataSubjectRequests());
+        } catch (error) {
+            runtime.notify(storefrontErrorMessage(error, runtime.language));
+        } finally {
+            setDataSubjectLoading(false);
+        }
+    };
+    const refreshFraudRiskCases = async () => {
+        if (!runtime.customer) {
+            setFraudRiskCases([]);
+            setFraudRiskLoading(false);
+            return;
+        }
+        setFraudRiskLoading(true);
+        try {
+            setFraudRiskCases(await runtime.api.fraudRiskCases());
+        } catch (error) {
+            runtime.notify(storefrontErrorMessage(error, runtime.language));
+        } finally {
+            setFraudRiskLoading(false);
+        }
+    };
+    useEffect(() => {
+        const controller = new AbortController();
+        if (!runtime.customer) {
+            setAvatarHistory([]);
+            setAvatarHistoryLoading(false);
+            return () => controller.abort();
+        }
+        setAvatarHistoryLoading(true);
+        void runtime.api
+            .customerAvatarHistory(controller.signal)
+            .then(history => setAvatarHistory(history))
+            .catch(error => {
+                if (!controller.signal.aborted) {
+                    runtime.notify(storefrontErrorMessage(error, runtime.language));
+                }
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setAvatarHistoryLoading(false);
+            });
+        return () => controller.abort();
+    }, [isZh, runtime.api, runtime.customer?.id, runtime.notify]);
+    useEffect(() => {
+        const controller = new AbortController();
+        if (!runtime.customer) {
+            setFraudRiskCases([]);
+            setFraudRiskLoading(false);
+            return () => controller.abort();
+        }
+        setFraudRiskLoading(true);
+        void runtime.api
+            .fraudRiskCases(controller.signal)
+            .then(cases => setFraudRiskCases(cases))
+            .catch(error => {
+                if (!controller.signal.aborted)
+                    runtime.notify(storefrontErrorMessage(error, runtime.language));
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setFraudRiskLoading(false);
+            });
+        return () => controller.abort();
+    }, [isZh, runtime.api, runtime.customer?.id, runtime.notify]);
+    useEffect(() => {
+        const controller = new AbortController();
+        if (!runtime.customer) {
+            setDataSubjectRequests([]);
+            setDataSubjectLoading(false);
+            return () => controller.abort();
+        }
+        setDataSubjectLoading(true);
+        void runtime.api
+            .dataSubjectRequests(controller.signal)
+            .then(requests => setDataSubjectRequests(requests))
+            .catch(error => {
+                if (!controller.signal.aborted) {
+                    runtime.notify(storefrontErrorMessage(error, runtime.language));
+                }
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setDataSubjectLoading(false);
+            });
+        return () => controller.abort();
+    }, [isZh, runtime.api, runtime.customer?.id, runtime.notify]);
     return (
         <RouteGate name="account-security">
             <AuthPageBoundary language={runtime.language} onBack={runtime.goBack}>
@@ -188,12 +308,50 @@ export function AccountSecurityRoutePage() {
                     storefrontName={runtime.storefrontName}
                     commerceMode={runtime.commerceMode}
                     onBack={runtime.goBack}
+                    avatarHistory={avatarHistory}
+                    avatarHistoryLoading={avatarHistoryLoading}
+                    dataSubjectRequests={dataSubjectRequests}
+                    dataSubjectLoading={dataSubjectLoading}
+                    fraudRiskCases={fraudRiskCases}
+                    fraudRiskLoading={fraudRiskLoading}
                     onAvatarChange={async (file: File) => {
                         const avatar = await runtime.api.uploadCustomerAvatar(file);
                         runtime.setCustomer((current: ActiveCustomer | null) =>
                             current ? { ...current, avatar } : current,
                         );
+                        await refreshAvatarHistory();
                         runtime.notify(isZh ? '头像已更新' : 'Profile photo updated');
+                    }}
+                    onAvatarRestore={async retentionId => {
+                        const avatar = await runtime.api.restoreCustomerAvatar(retentionId);
+                        runtime.setCustomer((current: ActiveCustomer | null) =>
+                            current ? { ...current, avatar } : current,
+                        );
+                        await refreshAvatarHistory();
+                        runtime.notify(isZh ? '历史头像已恢复' : 'Previous profile photo restored');
+                    }}
+                    onAvatarRemove={async () => {
+                        await runtime.api.removeCustomerAvatar();
+                        runtime.setCustomer((current: ActiveCustomer | null) =>
+                            current ? { ...current, avatar: null } : current,
+                        );
+                        await refreshAvatarHistory();
+                        runtime.notify(
+                            isZh ? '头像已移入30天恢复区' : 'Profile photo moved to 30-day recovery',
+                        );
+                    }}
+                    onDataExport={password => runtime.api.exportPersonalData(password)}
+                    onRequestAccountClosure={async password => {
+                        await runtime.api.requestAccountClosure(password);
+                        await refreshDataSubjectRequests();
+                    }}
+                    onCancelAccountClosure={async () => {
+                        await runtime.api.cancelAccountClosure();
+                        await refreshDataSubjectRequests();
+                    }}
+                    onAppealFraudRiskCase={async (id, reason) => {
+                        await runtime.api.appealFraudRiskCase(id, reason);
+                        await refreshFraudRiskCases();
                     }}
                     onLogout={() => {
                         void runtime.api.logout().then(() => {

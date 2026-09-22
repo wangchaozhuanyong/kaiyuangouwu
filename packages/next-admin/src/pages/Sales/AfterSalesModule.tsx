@@ -13,12 +13,19 @@ import {
     X,
     XCircle,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
-import { GET_AFTER_SALES_REQUESTS, TRANSITION_AFTER_SALES_REQUEST } from '../../graphql/sales.graphql';
+import { GET_STOCK_LOCATIONS } from '../../graphql/catalog-admin.graphql';
+import {
+    GET_AFTER_SALES_REQUESTS,
+    INSPECT_AFTER_SALES_RETURN,
+    RECEIVE_AFTER_SALES_RETURN,
+    TRANSITION_AFTER_SALES_REQUEST,
+    UPDATE_AFTER_SALES_REPLACEMENT,
+} from '../../graphql/sales.graphql';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -30,15 +37,18 @@ import {
     moneyToMajorInput,
 } from './sales-utils';
 
-type AfterSalesTab = 'ALL' | 'PENDING' | 'APPROVED' | 'COMPLETED' | 'REJECTED';
+type AfterSalesTab = 'ALL' | 'EXCEPTIONS' | 'PENDING' | 'APPROVED' | 'COMPLETED' | 'REJECTED';
 const AFTER_SALES_TABS = {
     all: 'ALL',
+    exceptions: 'EXCEPTIONS',
     pending: 'PENDING',
     approved: 'APPROVED',
     completed: 'COMPLETED',
     rejected: 'REJECTED',
 } as const;
-type AfterSalesState = Exclude<AfterSalesTab, 'ALL'> | 'CANCELLED';
+type AfterSalesState = Exclude<AfterSalesTab, 'ALL' | 'EXCEPTIONS'> | 'CANCELLED';
+type ReturnStatus = 'NOT_REQUIRED' | 'AWAITING_SHIPMENT' | 'IN_TRANSIT' | 'RECEIVED' | 'INSPECTED';
+type ReplacementStatus = 'NOT_REQUIRED' | 'PENDING' | 'SHIPPED' | 'EXCEPTION' | 'DELIVERED';
 
 interface RefundItem {
     id: string;
@@ -53,7 +63,7 @@ interface AfterSalesRequest {
     createdAt: string;
     updatedAt: string;
     code: string;
-    type: 'REFUND_ONLY' | 'RETURN_AND_REFUND';
+    type: 'REFUND_ONLY' | 'RETURN_AND_REFUND' | 'EXCHANGE' | 'RESHIP';
     state: AfterSalesState;
     reason: string;
     description: string;
@@ -61,6 +71,23 @@ interface AfterSalesRequest {
     requestedAmount: number;
     approvedAmount?: number | null;
     resolution?: string | null;
+    returnStatus: ReturnStatus;
+    returnInstructions?: string | null;
+    returnCarrier?: string | null;
+    returnTrackingCode?: string | null;
+    returnShippedAt?: string | null;
+    returnReceivedAt?: string | null;
+    inspectedAt?: string | null;
+    inspectionNote?: string | null;
+    replacementStatus: ReplacementStatus;
+    replacementCarrier?: string | null;
+    replacementTrackingCode?: string | null;
+    replacementProofReference?: string | null;
+    replacementException?: string | null;
+    replacementShippedAt?: string | null;
+    replacementDeliveredAt?: string | null;
+    nextActionDueAt?: string | null;
+    overdue: boolean;
     customerName: string;
     customerEmail: string;
     respondedAt?: string | null;
@@ -91,11 +118,17 @@ interface AfterSalesRequest {
         productName: string;
         sku: string;
         fulfillmentType: string;
+        acceptedReturnQuantity: number;
+        rejectedReturnQuantity: number;
+        returnLotCode?: string | null;
+        inventoryOperationId?: string | null;
+        returnStockLocation?: { id: string; name: string } | null;
     }>;
     events: Array<{
         id: string;
         createdAt: string;
         state: AfterSalesState;
+        eventType: string;
         actorType: 'CUSTOMER' | 'ADMIN' | 'SYSTEM';
         actorLabel: string;
         actorId?: string | null;
@@ -110,6 +143,7 @@ interface AfterSalesData {
 const EMPTY_REQUESTS: AfterSalesRequest[] = [];
 const tabs: Array<{ id: AfterSalesTab; label: string }> = [
     { id: 'ALL', label: '全部工单' },
+    { id: 'EXCEPTIONS', label: '超时/异常' },
     { id: 'PENDING', label: '待审核' },
     { id: 'APPROVED', label: '待退款/归档' },
     { id: 'COMPLETED', label: '已完成' },
@@ -132,6 +166,22 @@ const stateClasses: Record<AfterSalesState, string> = {
 const typeLabels = {
     REFUND_ONLY: '仅退款',
     RETURN_AND_REFUND: '退货退款',
+    EXCHANGE: '换货',
+    RESHIP: '补发',
+};
+const returnStatusLabels: Record<ReturnStatus, string> = {
+    NOT_REQUIRED: '无需退货',
+    AWAITING_SHIPMENT: '等待客户寄回',
+    IN_TRANSIT: '退货运输中',
+    RECEIVED: '仓库已签收',
+    INSPECTED: '质检已完成',
+};
+const replacementStatusLabels: Record<ReplacementStatus, string> = {
+    NOT_REQUIRED: '无需换补发',
+    PENDING: '等待换补发',
+    SHIPPED: '换补发运输中',
+    EXCEPTION: '换补发异常',
+    DELIVERED: '换补发已送达',
 };
 const reasonLabels: Record<string, string> = {
     CHANGED_MIND: '不想要了',
@@ -154,6 +204,17 @@ export function AfterSalesModule() {
     const [resolution, setResolution] = useState('');
     const [approvedAmount, setApprovedAmount] = useState('');
     const [refundId, setRefundId] = useState('');
+    const [returnInstructions, setReturnInstructions] = useState('');
+    const [workflowNote, setWorkflowNote] = useState('');
+    const [workflowCarrier, setWorkflowCarrier] = useState('');
+    const [workflowTrackingCode, setWorkflowTrackingCode] = useState('');
+    const [workflowProof, setWorkflowProof] = useState('');
+    const [inspection, setInspection] = useState<
+        Record<
+            string,
+            { acceptedQuantity: number; rejectedQuantity: number; stockLocationId: string; lotCode: string }
+        >
+    >({});
     const [notification, setNotification] = useState('');
     const [actionError, setActionError] = useState('');
 
@@ -162,7 +223,8 @@ export function AfterSalesModule() {
             options: {
                 skip: page * pageSize,
                 take: pageSize,
-                ...(activeTab === 'ALL' ? {} : { state: activeTab }),
+                ...(activeTab === 'ALL' || activeTab === 'EXCEPTIONS' ? {} : { state: activeTab }),
+                ...(activeTab === 'EXCEPTIONS' ? { exceptionsOnly: true } : {}),
                 ...(searchTerm.trim() ? { search: searchTerm.trim() } : {}),
             },
         },
@@ -172,6 +234,19 @@ export function AfterSalesModule() {
     const [transitionRequest, { loading: transitioning }] = useMutation<{
         transitionAfterSalesRequest: AfterSalesRequest;
     }>(TRANSITION_AFTER_SALES_REQUEST);
+    const [receiveReturn, { loading: receivingReturn }] = useMutation<{
+        receiveAfterSalesReturn: AfterSalesRequest;
+    }>(RECEIVE_AFTER_SALES_RETURN);
+    const [inspectReturn, { loading: inspectingReturn }] = useMutation<{
+        inspectAfterSalesReturn: AfterSalesRequest;
+    }>(INSPECT_AFTER_SALES_RETURN);
+    const [updateReplacement, { loading: updatingReplacement }] = useMutation<{
+        updateAfterSalesReplacement: AfterSalesRequest;
+    }>(UPDATE_AFTER_SALES_REPLACEMENT);
+    const { data: stockLocationData } = useQuery<{
+        stockLocations: { items: Array<{ id: string; name: string }> };
+    }>(GET_STOCK_LOCATIONS, { variables: { options: { take: 200 } } });
+    const workflowBusy = transitioning || receivingReturn || inspectingReturn || updatingReplacement;
 
     const requests = data?.afterSalesRequests.items ?? EMPTY_REQUESTS;
     const totalItems = data?.afterSalesRequests.totalItems ?? 0;
@@ -186,6 +261,11 @@ export function AfterSalesModule() {
                 .filter(refund => refund.state === 'Settled'),
         [selectedRequest],
     );
+    const completionReady = selectedRequest
+        ? (!afterSalesRequiresReturn(selectedRequest.type) || selectedRequest.returnStatus === 'INSPECTED') &&
+          (!afterSalesRequiresReplacement(selectedRequest.type) ||
+              selectedRequest.replacementStatus === 'DELIVERED')
+        : false;
 
     const showNotice = (message: string) => {
         setNotification(message);
@@ -201,6 +281,27 @@ export function AfterSalesModule() {
             .flatMap(payment => payment.refunds)
             .find(refund => refund.state === 'Settled');
         setRefundId(request.refund?.id ?? firstSettledRefund?.id ?? '');
+        setReturnInstructions(request.returnInstructions ?? '');
+        setWorkflowNote('');
+        setWorkflowCarrier(request.replacementCarrier ?? '');
+        setWorkflowTrackingCode(request.replacementTrackingCode ?? '');
+        setWorkflowProof(request.replacementProofReference ?? '');
+        setInspection(
+            Object.fromEntries(
+                request.items.map(item => [
+                    item.id,
+                    {
+                        acceptedQuantity: item.acceptedReturnQuantity || item.quantity,
+                        rejectedQuantity: item.rejectedReturnQuantity,
+                        stockLocationId:
+                            item.returnStockLocation?.id ??
+                            stockLocationData?.stockLocations.items[0]?.id ??
+                            '',
+                        lotCode: item.returnLotCode ?? `RETURN-${request.code}-${item.sku}`.slice(0, 80),
+                    },
+                ]),
+            ),
+        );
         setActionError('');
     };
 
@@ -224,6 +325,13 @@ export function AfterSalesModule() {
                 return;
             }
             input.approvedAmount = amount;
+            if (selectedRequest.type === 'RETURN_AND_REFUND' || selectedRequest.type === 'EXCHANGE') {
+                if (!returnInstructions.trim()) {
+                    setActionError('退货或换货审核通过时必须填写退货地址与寄回说明');
+                    return;
+                }
+                input.returnInstructions = returnInstructions.trim();
+            }
         }
         if (nextState === 'COMPLETED') {
             const mustLinkRefund = (selectedRequest.approvedAmount ?? 0) > 0;
@@ -253,6 +361,127 @@ export function AfterSalesModule() {
             );
         } catch (mutationError) {
             setActionError(toUserFacingError(mutationError, '售后状态更新失败，请稍后重试'));
+        }
+    };
+
+    const applyWorkflowResult = async (updated: AfterSalesRequest | undefined, message: string) => {
+        if (!updated) throw new Error('后端未返回更新后的售后工单');
+        setSelectedRequest(updated);
+        setActionError('');
+        await refetch();
+        showNotice(message);
+    };
+
+    const handleReceiveReturn = async () => {
+        if (!selectedRequest || !workflowNote.trim()) {
+            setActionError('请填写退货签收说明');
+            return;
+        }
+        try {
+            const response = await receiveReturn({
+                variables: {
+                    input: {
+                        id: selectedRequest.id,
+                        note: workflowNote.trim(),
+                        idempotencyKey: operationKey('return-received'),
+                    },
+                },
+            });
+            await applyWorkflowResult(response.data?.receiveAfterSalesReturn, '退货已签收，等待质检');
+        } catch (mutationError) {
+            setActionError(toUserFacingError(mutationError, '退货签收失败'));
+        }
+    };
+
+    const handleInspectReturn = async () => {
+        if (!selectedRequest || !workflowNote.trim()) {
+            setActionError('请填写质检说明');
+            return;
+        }
+        const items = selectedRequest.items.map(item => ({ item, draft: inspection[item.id] }));
+        const invalid = items.find(
+            ({ item, draft }) =>
+                !draft ||
+                draft.acceptedQuantity < 0 ||
+                draft.rejectedQuantity < 0 ||
+                draft.acceptedQuantity + draft.rejectedQuantity !== item.quantity ||
+                (draft.acceptedQuantity > 0 && (!draft.stockLocationId || !draft.lotCode.trim())),
+        );
+        if (invalid) {
+            setActionError(`商品 ${invalid.item.productName} 的验收/拒收数量或入库信息不完整`);
+            return;
+        }
+        try {
+            const response = await inspectReturn({
+                variables: {
+                    input: {
+                        id: selectedRequest.id,
+                        note: workflowNote.trim(),
+                        idempotencyKey: operationKey('return-inspected'),
+                        items: items.map(({ item, draft }) => ({
+                            itemId: item.id,
+                            acceptedQuantity: draft.acceptedQuantity,
+                            rejectedQuantity: draft.rejectedQuantity,
+                            ...(draft.acceptedQuantity > 0
+                                ? {
+                                      stockLocationId: draft.stockLocationId,
+                                      lotCode: draft.lotCode.trim(),
+                                  }
+                                : {}),
+                        })),
+                    },
+                },
+            });
+            await applyWorkflowResult(
+                response.data?.inspectAfterSalesReturn,
+                '退货质检完成，合格数量已审计入库',
+            );
+        } catch (mutationError) {
+            setActionError(toUserFacingError(mutationError, '退货质检入库失败'));
+        }
+    };
+
+    const handleReplacement = async (status: 'SHIPPED' | 'EXCEPTION' | 'DELIVERED') => {
+        if (!selectedRequest || !workflowNote.trim()) {
+            setActionError('请填写换货/补发处理说明');
+            return;
+        }
+        if (status === 'SHIPPED' && (!workflowCarrier.trim() || !workflowTrackingCode.trim())) {
+            setActionError('登记发货时必须填写承运商和运单号');
+            return;
+        }
+        if (status === 'DELIVERED' && !workflowProof.trim()) {
+            setActionError('确认送达时必须填写送达凭证引用');
+            return;
+        }
+        try {
+            const response = await updateReplacement({
+                variables: {
+                    input: {
+                        id: selectedRequest.id,
+                        status,
+                        note: workflowNote.trim(),
+                        idempotencyKey: operationKey(`replacement-${status.toLowerCase()}`),
+                        ...(status === 'SHIPPED'
+                            ? {
+                                  carrier: workflowCarrier.trim(),
+                                  trackingCode: workflowTrackingCode.trim(),
+                              }
+                            : {}),
+                        ...(status === 'DELIVERED' ? { proofReference: workflowProof.trim() } : {}),
+                    },
+                },
+            });
+            await applyWorkflowResult(
+                response.data?.updateAfterSalesReplacement,
+                status === 'SHIPPED'
+                    ? '换货/补发已登记发出'
+                    : status === 'EXCEPTION'
+                      ? '配送异常已进入例外队列'
+                      : '换货/补发已确认送达',
+            );
+        } catch (mutationError) {
+            setActionError(toUserFacingError(mutationError, '换货/补发状态更新失败'));
         }
     };
 
@@ -559,12 +788,12 @@ export function AfterSalesModule() {
             {selectedRequest && (
                 <div
                     className="fixed inset-0 z-50 flex justify-end bg-slate-950/40 backdrop-blur-xs"
-                    onClick={() => !transitioning && setSelectedRequest(null)}
+                    onClick={() => !workflowBusy && setSelectedRequest(null)}
                 >
                     <AccessibleDialogSurface
                         accessibleName="售后工单详情"
                         onRequestClose={() => {
-                            if (!transitioning) setSelectedRequest(null);
+                            if (!workflowBusy) setSelectedRequest(null);
                         }}
                         className="flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl"
                         onClick={event => event.stopPropagation()}
@@ -591,7 +820,7 @@ export function AfterSalesModule() {
                             <button
                                 type="button"
                                 onClick={() => setSelectedRequest(null)}
-                                disabled={transitioning}
+                                disabled={workflowBusy}
                                 className="text-slate-400 hover:text-slate-700"
                                 aria-label="关闭"
                             >
@@ -682,6 +911,253 @@ export function AfterSalesModule() {
                                     ))}
                                 </div>
                             </section>
+                            {selectedRequest.state === 'APPROVED' && (
+                                <section className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/40 p-4 dark:border-violet-800 dark:bg-violet-950/30">
+                                    <h3 className="flex items-center gap-2 text-xs font-semibold text-violet-950 dark:text-violet-100">
+                                        退货与换补发闭环
+                                        <FeatureHelpButton
+                                            topic="sales.after-sales"
+                                            title="退货与换补发闭环"
+                                        />
+                                    </h3>
+                                    <div className="grid gap-2 text-xs sm:grid-cols-2">
+                                        <div className="rounded-lg border border-violet-100 bg-white p-3">
+                                            <span className="text-slate-500">退货状态</span>
+                                            <strong className="mt-1 block text-slate-900">
+                                                {returnStatusLabels[selectedRequest.returnStatus]}
+                                            </strong>
+                                            {selectedRequest.returnTrackingCode && (
+                                                <small className="mt-1 block font-mono text-slate-500">
+                                                    {selectedRequest.returnCarrier} ·{' '}
+                                                    {selectedRequest.returnTrackingCode}
+                                                </small>
+                                            )}
+                                        </div>
+                                        <div className="rounded-lg border border-violet-100 bg-white p-3">
+                                            <span className="text-slate-500">换货/补发状态</span>
+                                            <strong className="mt-1 block text-slate-900">
+                                                {replacementStatusLabels[selectedRequest.replacementStatus]}
+                                            </strong>
+                                            {selectedRequest.replacementTrackingCode && (
+                                                <small className="mt-1 block font-mono text-slate-500">
+                                                    {selectedRequest.replacementCarrier} ·{' '}
+                                                    {selectedRequest.replacementTrackingCode}
+                                                </small>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {selectedRequest.returnInstructions && (
+                                        <div className="whitespace-pre-wrap rounded-lg border border-violet-100 bg-white p-3 text-xs leading-5 text-slate-700">
+                                            {selectedRequest.returnInstructions}
+                                        </div>
+                                    )}
+                                    {selectedRequest.overdue && (
+                                        <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">
+                                            当前节点已超过处理时限，请优先处理并记录原因。
+                                        </div>
+                                    )}
+                                    {['AWAITING_SHIPMENT', 'IN_TRANSIT'].includes(
+                                        selectedRequest.returnStatus,
+                                    ) && (
+                                        <WorkflowTextArea
+                                            value={workflowNote}
+                                            onChange={setWorkflowNote}
+                                            placeholder="填写仓库签收结果、包裹外观和签收人"
+                                        >
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleReceiveReturn()}
+                                                disabled={workflowBusy}
+                                                className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                                            >
+                                                确认退货已签收
+                                            </button>
+                                        </WorkflowTextArea>
+                                    )}
+                                    {selectedRequest.returnStatus === 'RECEIVED' && (
+                                        <div className="space-y-3 rounded-lg border border-violet-100 bg-white p-3">
+                                            {selectedRequest.items.map(item => {
+                                                const draft = inspection[item.id];
+                                                return (
+                                                    <div
+                                                        key={item.id}
+                                                        className="grid gap-2 border-b border-slate-100 pb-3 last:border-0 last:pb-0 sm:grid-cols-2"
+                                                    >
+                                                        <div className="sm:col-span-2 text-xs font-semibold text-slate-900">
+                                                            {item.productName} · 退回 {item.quantity}
+                                                        </div>
+                                                        <label className="text-[11px] text-slate-600">
+                                                            合格入库
+                                                            <input
+                                                                type="number"
+                                                                min={0}
+                                                                max={item.quantity}
+                                                                value={draft?.acceptedQuantity ?? 0}
+                                                                onChange={event =>
+                                                                    setInspection(current => ({
+                                                                        ...current,
+                                                                        [item.id]: {
+                                                                            ...current[item.id],
+                                                                            acceptedQuantity: Number(
+                                                                                event.target.value,
+                                                                            ),
+                                                                        },
+                                                                    }))
+                                                                }
+                                                                className="mt-1 w-full rounded-md border border-slate-300 p-2"
+                                                            />
+                                                        </label>
+                                                        <label className="text-[11px] text-slate-600">
+                                                            拒收/报损
+                                                            <input
+                                                                type="number"
+                                                                min={0}
+                                                                max={item.quantity}
+                                                                value={draft?.rejectedQuantity ?? 0}
+                                                                onChange={event =>
+                                                                    setInspection(current => ({
+                                                                        ...current,
+                                                                        [item.id]: {
+                                                                            ...current[item.id],
+                                                                            rejectedQuantity: Number(
+                                                                                event.target.value,
+                                                                            ),
+                                                                        },
+                                                                    }))
+                                                                }
+                                                                className="mt-1 w-full rounded-md border border-slate-300 p-2"
+                                                            />
+                                                        </label>
+                                                        {(draft?.acceptedQuantity ?? 0) > 0 && (
+                                                            <>
+                                                                <label className="text-[11px] text-slate-600">
+                                                                    入库仓库
+                                                                    <select
+                                                                        value={draft?.stockLocationId ?? ''}
+                                                                        onChange={event =>
+                                                                            setInspection(current => ({
+                                                                                ...current,
+                                                                                [item.id]: {
+                                                                                    ...current[item.id],
+                                                                                    stockLocationId:
+                                                                                        event.target.value,
+                                                                                },
+                                                                            }))
+                                                                        }
+                                                                        className="mt-1 w-full rounded-md border border-slate-300 p-2"
+                                                                    >
+                                                                        <option value="">请选择</option>
+                                                                        {(
+                                                                            stockLocationData?.stockLocations
+                                                                                .items ?? []
+                                                                        ).map(location => (
+                                                                            <option
+                                                                                key={location.id}
+                                                                                value={location.id}
+                                                                            >
+                                                                                {location.name}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                </label>
+                                                                <label className="text-[11px] text-slate-600">
+                                                                    退货批次号
+                                                                    <input
+                                                                        value={draft?.lotCode ?? ''}
+                                                                        onChange={event =>
+                                                                            setInspection(current => ({
+                                                                                ...current,
+                                                                                [item.id]: {
+                                                                                    ...current[item.id],
+                                                                                    lotCode:
+                                                                                        event.target.value,
+                                                                                },
+                                                                            }))
+                                                                        }
+                                                                        className="mt-1 w-full rounded-md border border-slate-300 p-2 font-mono"
+                                                                    />
+                                                                </label>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                            <WorkflowTextArea
+                                                value={workflowNote}
+                                                onChange={setWorkflowNote}
+                                                placeholder="填写质检结论和拒收/报损依据"
+                                            >
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleInspectReturn()}
+                                                    disabled={workflowBusy}
+                                                    className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                                                >
+                                                    提交质检并审计入库
+                                                </button>
+                                            </WorkflowTextArea>
+                                        </div>
+                                    )}
+                                    {selectedRequest.replacementStatus === 'PENDING' &&
+                                        (selectedRequest.type === 'RESHIP' ||
+                                            selectedRequest.returnStatus === 'INSPECTED') && (
+                                            <ReplacementFields
+                                                carrier={workflowCarrier}
+                                                trackingCode={workflowTrackingCode}
+                                                note={workflowNote}
+                                                onCarrierChange={setWorkflowCarrier}
+                                                onTrackingChange={setWorkflowTrackingCode}
+                                                onNoteChange={setWorkflowNote}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleReplacement('SHIPPED')}
+                                                    disabled={workflowBusy}
+                                                    className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                                                >
+                                                    登记换货/补发发出
+                                                </button>
+                                            </ReplacementFields>
+                                        )}
+                                    {['SHIPPED', 'EXCEPTION'].includes(selectedRequest.replacementStatus) && (
+                                        <div className="space-y-2 rounded-lg border border-violet-100 bg-white p-3">
+                                            <WorkflowTextArea
+                                                value={workflowNote}
+                                                onChange={setWorkflowNote}
+                                                placeholder="填写配送进展、异常原因或送达说明"
+                                            >
+                                                {selectedRequest.replacementStatus === 'SHIPPED' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void handleReplacement('EXCEPTION')}
+                                                        disabled={workflowBusy}
+                                                        className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-50"
+                                                    >
+                                                        登记配送异常
+                                                    </button>
+                                                )}
+                                            </WorkflowTextArea>
+                                            <label className="block text-[11px] text-slate-600">
+                                                送达凭证引用
+                                                <input
+                                                    value={workflowProof}
+                                                    onChange={event => setWorkflowProof(event.target.value)}
+                                                    placeholder="签收单、客服确认号或承运商凭证"
+                                                    className="mt-1 w-full rounded-md border border-slate-300 p-2"
+                                                />
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleReplacement('DELIVERED')}
+                                                disabled={workflowBusy}
+                                                className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                                            >
+                                                确认换货/补发已送达
+                                            </button>
+                                        </div>
+                                    )}
+                                </section>
+                            )}
                             {(selectedRequest.state === 'PENDING' ||
                                 selectedRequest.state === 'APPROVED') && (
                                 <section className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
@@ -701,6 +1177,22 @@ export function AfterSalesModule() {
                                     />
                                     {selectedRequest.state === 'PENDING' && (
                                         <>
+                                            {(selectedRequest.type === 'RETURN_AND_REFUND' ||
+                                                selectedRequest.type === 'EXCHANGE') && (
+                                                <>
+                                                    <label className="mt-3 block text-xs font-semibold text-slate-700">
+                                                        退货地址与寄回说明 *
+                                                    </label>
+                                                    <textarea
+                                                        value={returnInstructions}
+                                                        onChange={event =>
+                                                            setReturnInstructions(event.target.value)
+                                                        }
+                                                        rows={3}
+                                                        className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                                    />
+                                                </>
+                                            )}
                                             <label className="mt-3 block text-xs font-semibold text-slate-700">
                                                 通过金额 *
                                             </label>
@@ -813,7 +1305,7 @@ export function AfterSalesModule() {
                             <button
                                 type="button"
                                 onClick={() => setSelectedRequest(null)}
-                                disabled={transitioning}
+                                disabled={workflowBusy}
                                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700"
                             >
                                 关闭
@@ -824,7 +1316,7 @@ export function AfterSalesModule() {
                                         <button
                                             type="button"
                                             onClick={() => handleTransition('REJECTED')}
-                                            disabled={transitioning}
+                                            disabled={workflowBusy}
                                             className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
                                         >
                                             <XCircle className="h-3.5 w-3.5" />
@@ -833,7 +1325,7 @@ export function AfterSalesModule() {
                                         <button
                                             type="button"
                                             onClick={() => handleTransition('APPROVED')}
-                                            disabled={transitioning}
+                                            disabled={workflowBusy}
                                             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                                         >
                                             {transitioning ? (
@@ -849,7 +1341,7 @@ export function AfterSalesModule() {
                                     <button
                                         type="button"
                                         onClick={() => handleTransition('COMPLETED')}
-                                        disabled={transitioning}
+                                        disabled={workflowBusy || !completionReady}
                                         className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                                     >
                                         {transitioning ? (
@@ -857,7 +1349,9 @@ export function AfterSalesModule() {
                                         ) : (
                                             <CircleDollarSign className="h-3.5 w-3.5" />
                                         )}
-                                        确认退款并完成
+                                        {afterSalesRequiresReplacement(selectedRequest.type)
+                                            ? '确认送达并完成'
+                                            : '确认退款并完成'}
                                     </button>
                                 )}
                             </div>
@@ -867,4 +1361,91 @@ export function AfterSalesModule() {
             )}
         </div>
     );
+}
+
+function WorkflowTextArea({
+    value,
+    onChange,
+    placeholder,
+    children,
+}: {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder: string;
+    children: ReactNode;
+}) {
+    return (
+        <div className="space-y-2 rounded-lg border border-violet-100 bg-white p-3">
+            <textarea
+                value={value}
+                onChange={event => onChange(event.target.value)}
+                rows={3}
+                placeholder={placeholder}
+                className="w-full rounded-md border border-slate-300 p-2 text-xs"
+            />
+            <div className="flex flex-wrap gap-2">{children}</div>
+        </div>
+    );
+}
+
+function ReplacementFields({
+    carrier,
+    trackingCode,
+    note,
+    onCarrierChange,
+    onTrackingChange,
+    onNoteChange,
+    children,
+}: {
+    carrier: string;
+    trackingCode: string;
+    note: string;
+    onCarrierChange: (value: string) => void;
+    onTrackingChange: (value: string) => void;
+    onNoteChange: (value: string) => void;
+    children: ReactNode;
+}) {
+    return (
+        <div className="grid gap-2 rounded-lg border border-violet-100 bg-white p-3 sm:grid-cols-2">
+            <label className="text-[11px] text-slate-600">
+                承运商
+                <input
+                    value={carrier}
+                    onChange={event => onCarrierChange(event.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 p-2"
+                />
+            </label>
+            <label className="text-[11px] text-slate-600">
+                运单号
+                <input
+                    value={trackingCode}
+                    onChange={event => onTrackingChange(event.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 p-2 font-mono"
+                />
+            </label>
+            <label className="text-[11px] text-slate-600 sm:col-span-2">
+                发货说明
+                <textarea
+                    value={note}
+                    onChange={event => onNoteChange(event.target.value)}
+                    rows={3}
+                    className="mt-1 w-full rounded-md border border-slate-300 p-2"
+                />
+            </label>
+            <div className="sm:col-span-2">{children}</div>
+        </div>
+    );
+}
+
+function afterSalesRequiresReturn(type: AfterSalesRequest['type']): boolean {
+    return type === 'RETURN_AND_REFUND' || type === 'EXCHANGE';
+}
+
+function afterSalesRequiresReplacement(type: AfterSalesRequest['type']): boolean {
+    return type === 'EXCHANGE' || type === 'RESHIP';
+}
+
+function operationKey(prefix: string): string {
+    const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+    return `${prefix}-${random}`.slice(0, 80);
 }
