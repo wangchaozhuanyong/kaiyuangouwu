@@ -180,6 +180,41 @@ describe('administrator access and governance migration', () => {
         );
     });
 
+    it('backfills a safe single-store staff account as active without forcing a password change', async () => {
+        const { queryRunner, query } = runner(
+            'mysql',
+            1,
+            [
+                {
+                    administratorId: 9,
+                    userId: 19,
+                    roleCode: 'production-media-publisher',
+                    permissions: '["ReadAsset","CreateAsset","UpdateAsset"]',
+                    channelId: 2,
+                },
+            ],
+            [],
+            [],
+            '美宜佳',
+        );
+
+        await new AddAdministratorAccessGovernance1789408800000().up(queryRunner);
+
+        expect(query).toHaveBeenCalledWith(expect.stringContaining("'STAFF', ?, ?, ?"), [
+            9,
+            19,
+            'STORE',
+            'ACTIVE',
+            '2',
+            1,
+            false,
+        ]);
+        expect(query).toHaveBeenCalledWith(
+            expect.stringContaining('INSERT INTO "administrator_permission_audit"'),
+            expect.arrayContaining([1, 9, '2', 'MIGRATION_STORE_STAFF_ACTIVATED']),
+        );
+    });
+
     it('does not promote a legacy administrator on the technical default Channel to store primary', async () => {
         const { queryRunner } = runner(
             'mysql',
