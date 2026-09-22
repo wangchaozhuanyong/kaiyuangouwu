@@ -354,7 +354,7 @@ export const UPDATE_COLLECTION_ASSIGNMENT = gql`
 `;
 
 export const GET_CATALOG_CHANNELS = gql`
-    query GetCatalogChannels($options: ChannelListOptions) {
+    query GetCatalogChannels {
         activeChannel {
             id
             code
@@ -364,19 +364,6 @@ export const GET_CATALOG_CHANNELS = gql`
                 storefrontNameZh
                 storefrontNameEn
             }
-        }
-        channels(options: $options) {
-            items {
-                id
-                code
-                token
-                defaultCurrencyCode
-                customFields {
-                    storefrontNameZh
-                    storefrontNameEn
-                }
-            }
-            totalItems
         }
     }
 `;
@@ -444,6 +431,10 @@ export const GET_ACTIVE_CHANNEL = gql`
             defaultLanguageCode
             currencyCode
             defaultCurrencyCode
+            customFields {
+                storefrontNameZh
+                storefrontNameEn
+            }
         }
     }
 `;

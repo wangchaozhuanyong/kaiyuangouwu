@@ -30,12 +30,21 @@ import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { NextAdminDashboardAlerts, NextAdminDashboardWidgets } from '../../extensions/extension-hosts';
 import { GET_ACTIVE_CHANNEL } from '../../graphql/catalog.graphql';
 import {
-    DASHBOARD_BOOTSTRAP_QUERY,
     DASHBOARD_METRICS_QUERY,
-    type DashboardBootstrapData,
+    DASHBOARD_ORDER_TODO_QUERY,
+    DASHBOARD_PRODUCT_TODO_QUERY,
+    DASHBOARD_RECENT_ORDERS_QUERY,
+    DASHBOARD_REVIEW_TODO_QUERY,
+    DASHBOARD_SEARCH_INDEX_QUERY,
     type DashboardMetricsData,
+    type DashboardOrderTodoData,
+    type DashboardProductTodoData,
+    type DashboardRecentOrdersData,
+    type DashboardReviewTodoData,
+    type DashboardSearchIndexData,
 } from '../../graphql/dashboard.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName, isDefaultChannelCode } from '../../utils/channel-display';
 import {
     compareMetric,
@@ -136,6 +145,7 @@ const metricTotal = (data: DashboardMetricsData | undefined, type: 'OrderCount' 
 
 export function DashboardModule() {
     const navigate = useNavigate();
+    const { hasAnyPermission } = useAdminPermissions();
     const [period, setPeriod] = useState<MetricPeriod>('TODAY');
     const [rangeEnd, setRangeEnd] = useState(() => Date.now());
     const [widgetPreferences, setWidgetPreferences] = useState(loadWidgetPreferences);
@@ -158,27 +168,46 @@ export function DashboardModule() {
     }, [widgetPreferences]);
 
     const channelContext = useQuery<{
-        activeChannel: { code: string; defaultCurrencyCode: string };
+        activeChannel: {
+            code: string;
+            defaultCurrencyCode: string;
+            customFields?: {
+                storefrontNameZh?: string | null;
+                storefrontNameEn?: string | null;
+            } | null;
+        };
     }>(GET_ACTIVE_CHANNEL, { fetchPolicy: 'cache-first' });
     const isPlatformContext = isDefaultChannelCode(channelContext.data?.activeChannel.code ?? '');
     const businessQueryPaused = !channelContext.data || isPlatformContext;
+    const canReadOrders = hasAnyPermission(['ReadOrder']);
+    const canReadProducts = hasAnyPermission(['ReadProduct']);
+    const canReadCatalog = hasAnyPermission(['ReadCatalog']);
+    const canReadSearchIndex = canReadProducts || canReadCatalog;
+    const canCreateProducts = hasAnyPermission(['CreateProduct']);
+    const canOpenAiSettings = hasAnyPermission(['ReadSettings']);
+    const canEditStorefront = hasAnyPermission(['ReadStorefrontContent']);
+    const canOpenStoreSettings = hasAnyPermission([
+        'ReadSettings',
+        'ReadChannel',
+        'ReadSeller',
+        'ReadPaymentMethod',
+        'ReadShippingMethod',
+        'ReadStoreProfile',
+    ]);
+    const hasQuickActions =
+        canCreateProducts || canOpenAiSettings || canEditStorefront || canOpenStoreSettings;
 
-    const dashboard = useQuery<DashboardBootstrapData>(DASHBOARD_BOOTSTRAP_QUERY, {
+    const metrics = useQuery<DashboardMetricsData>(DASHBOARD_METRICS_QUERY, {
         variables: {
             input: {
                 types: ['OrderCount', 'OrderTotal'],
                 refresh: true,
                 ...dateRange,
             },
-            options: {
-                take: 8,
-                sort: { orderPlacedAt: 'DESC', id: 'DESC' },
-                filter: { active: { eq: false } },
-            },
         },
         fetchPolicy: 'cache-first',
         notifyOnNetworkStatusChange: true,
-        skip: businessQueryPaused,
+        skip: businessQueryPaused || !canReadOrders,
     });
     const previousMetrics = useQuery<DashboardMetricsData>(DASHBOARD_METRICS_QUERY, {
         variables: {
@@ -190,11 +219,40 @@ export function DashboardModule() {
         },
         fetchPolicy: 'cache-first',
         notifyOnNetworkStatusChange: true,
-        skip: businessQueryPaused,
+        skip: businessQueryPaused || !canReadOrders,
     });
-    const metrics = dashboard;
-    const todo = dashboard;
-    const recentOrders = dashboard;
+    const orderTodo = useQuery<DashboardOrderTodoData>(DASHBOARD_ORDER_TODO_QUERY, {
+        fetchPolicy: 'cache-first',
+        notifyOnNetworkStatusChange: true,
+        skip: businessQueryPaused || !canReadOrders,
+    });
+    const productTodo = useQuery<DashboardProductTodoData>(DASHBOARD_PRODUCT_TODO_QUERY, {
+        fetchPolicy: 'cache-first',
+        notifyOnNetworkStatusChange: true,
+        skip: businessQueryPaused || !canReadProducts,
+    });
+    const reviewTodo = useQuery<DashboardReviewTodoData>(DASHBOARD_REVIEW_TODO_QUERY, {
+        fetchPolicy: 'cache-first',
+        notifyOnNetworkStatusChange: true,
+        skip: businessQueryPaused || !canReadCatalog,
+    });
+    const recentOrders = useQuery<DashboardRecentOrdersData>(DASHBOARD_RECENT_ORDERS_QUERY, {
+        variables: {
+            options: {
+                take: 8,
+                sort: { orderPlacedAt: 'DESC', id: 'DESC' },
+                filter: { active: { eq: false } },
+            },
+        },
+        fetchPolicy: 'cache-first',
+        notifyOnNetworkStatusChange: true,
+        skip: businessQueryPaused || !canReadOrders,
+    });
+    const searchIndex = useQuery<DashboardSearchIndexData>(DASHBOARD_SEARCH_INDEX_QUERY, {
+        fetchPolicy: 'cache-first',
+        notifyOnNetworkStatusChange: true,
+        skip: businessQueryPaused || !canReadSearchIndex,
+    });
 
     const currencyCode =
         metrics.data?.activeChannel.defaultCurrencyCode ??
@@ -206,12 +264,19 @@ export function DashboardModule() {
     const previousOrderTotal = metricTotal(previousMetrics.data, 'OrderTotal');
     const previousOrderCount = metricTotal(previousMetrics.data, 'OrderCount');
     const previousAverageOrderValue = previousOrderCount > 0 ? previousOrderTotal / previousOrderCount : 0;
-    const autoCardCount = todo.data
-        ? todo.data.autoCardTodoSummary.lowStockSkuCount +
-          todo.data.autoCardTodoSummary.waitingStockDeliveryCount +
-          todo.data.autoCardTodoSummary.manualReviewCount
+    const autoCardCount = productTodo.data
+        ? productTodo.data.autoCardTodoSummary.lowStockSkuCount +
+          productTodo.data.autoCardTodoSummary.waitingStockDeliveryCount +
+          productTodo.data.autoCardTodoSummary.manualReviewCount
         : 0;
-    const isRefreshing = metrics.loading || previousMetrics.loading || todo.loading || recentOrders.loading;
+    const isRefreshing =
+        metrics.loading ||
+        previousMetrics.loading ||
+        orderTodo.loading ||
+        productTodo.loading ||
+        reviewTodo.loading ||
+        recentOrders.loading ||
+        searchIndex.loading;
 
     const refreshAll = () => {
         setRangeEnd(Date.now());
@@ -243,8 +308,21 @@ export function DashboardModule() {
         });
     };
 
+    const allowedWidgets = useMemo(
+        () =>
+            ALL_WIDGETS.filter(widgetId => {
+                if (['METRICS', 'SHIPMENTS', 'AFTER_SALES', 'RECENT_ORDERS'].includes(widgetId)) {
+                    return canReadOrders;
+                }
+                if (widgetId === 'CARD_ALERTS') return canReadProducts;
+                if (widgetId === 'REVIEWS') return canReadCatalog;
+                if (widgetId === 'SEARCH_INDEX') return canReadSearchIndex;
+                return hasQuickActions;
+            }),
+        [canReadCatalog, canReadOrders, canReadProducts, canReadSearchIndex, hasQuickActions],
+    );
     const visibleWidgets = widgetPreferences.order.filter(
-        widgetId => !widgetPreferences.hidden.includes(widgetId),
+        widgetId => allowedWidgets.includes(widgetId) && !widgetPreferences.hidden.includes(widgetId),
     );
 
     if (isPlatformContext) {
@@ -316,7 +394,9 @@ export function DashboardModule() {
                             </h1>
                             <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
                                 当前店铺：
-                                {metrics.data ? getChannelDisplayName(metrics.data.activeChannel) : '读取中'}
+                                {channelContext.data
+                                    ? getChannelDisplayName(channelContext.data.activeChannel)
+                                    : '读取中'}
                             </span>
                         </div>
                         <p className="mt-1 text-xs text-slate-500">订单、履约与售后数据每分钟自动更新</p>
@@ -351,13 +431,15 @@ export function DashboardModule() {
                             <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
                             刷新
                         </button>
-                        <button
-                            type="button"
-                            onClick={() => navigate('/catalog/products/new')}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700"
-                        >
-                            <Plus className="h-4 w-4" /> 发布商品
-                        </button>
+                        {canCreateProducts && (
+                            <button
+                                type="button"
+                                onClick={() => navigate('/catalog/products/new')}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700"
+                            >
+                                <Plus className="h-4 w-4" /> 发布商品
+                            </button>
+                        )}
                     </div>
                 </div>
             </header>
@@ -502,8 +584,8 @@ export function DashboardModule() {
                                     <TodoCard
                                         label="待发货订单"
                                         description="已付款、等待履约"
-                                        count={todo.data?.pendingShipment}
-                                        loading={todo.loading && !todo.data}
+                                        count={orderTodo.data?.pendingShipment}
+                                        loading={orderTodo.loading && !orderTodo.data}
                                         icon={PackageCheck}
                                         onClick={() => navigate('/sales/orders?tab=to-fulfill')}
                                     />
@@ -512,8 +594,8 @@ export function DashboardModule() {
                                     <TodoCard
                                         label="待处理售后"
                                         description="退款与退货申请"
-                                        count={todo.data?.pendingAfterSales.totalItems}
-                                        loading={todo.loading && !todo.data}
+                                        count={orderTodo.data?.pendingAfterSales.totalItems}
+                                        loading={orderTodo.loading && !orderTodo.data}
                                         icon={RotateCcw}
                                         onClick={() => navigate('/sales/after-sales?tab=pending')}
                                     />
@@ -522,12 +604,12 @@ export function DashboardModule() {
                                     <TodoCard
                                         label="卡密发货预警"
                                         description={
-                                            todo.data
-                                                ? `低库存 ${todo.data.autoCardTodoSummary.lowStockSkuCount} · 待补发 ${todo.data.autoCardTodoSummary.waitingStockDeliveryCount} · 异常 ${todo.data.autoCardTodoSummary.manualReviewCount}`
+                                            productTodo.data
+                                                ? `低库存 ${productTodo.data.autoCardTodoSummary.lowStockSkuCount} · 待补发 ${productTodo.data.autoCardTodoSummary.waitingStockDeliveryCount} · 异常 ${productTodo.data.autoCardTodoSummary.manualReviewCount}`
                                                 : '库存、补发与异常'
                                         }
-                                        count={todo.data ? autoCardCount : undefined}
-                                        loading={todo.loading && !todo.data}
+                                        count={productTodo.data ? autoCardCount : undefined}
+                                        loading={productTodo.loading && !productTodo.data}
                                         icon={KeyRound}
                                         onClick={() => navigate('/catalog/card-pool')}
                                     />
@@ -536,8 +618,8 @@ export function DashboardModule() {
                                     <TodoCard
                                         label="待审核评价"
                                         description="等待发布或驳回"
-                                        count={todo.data?.pendingReviews.totalItems}
-                                        loading={todo.loading && !todo.data}
+                                        count={reviewTodo.data?.pendingReviews.totalItems}
+                                        loading={reviewTodo.loading && !reviewTodo.data}
                                         icon={MessageSquareText}
                                         onClick={() => navigate('/sales/reviews')}
                                     />
@@ -722,30 +804,38 @@ export function DashboardModule() {
                                             常用经营入口集中在这里
                                         </p>
                                         <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                                            <QuickAction
-                                                icon={Plus}
-                                                label="发布新商品"
-                                                description="创建 SPU 与 SKU"
-                                                onClick={() => navigate('/catalog/products/new')}
-                                            />
-                                            <QuickAction
-                                                icon={Sparkles}
-                                                label="AI 商品生图"
-                                                description="进入生图任务台"
-                                                onClick={() => navigate('/plugins/ai-settings')}
-                                            />
-                                            <QuickAction
-                                                icon={LayoutTemplate}
-                                                label="装修商城首页"
-                                                description="调整轮播与楼层"
-                                                onClick={() => navigate('/storefront/decoration')}
-                                            />
-                                            <QuickAction
-                                                icon={Settings2}
-                                                label="店铺综合设置"
-                                                description="支付、配送与域名"
-                                                onClick={() => navigate('/settings/store-profile')}
-                                            />
+                                            {canCreateProducts && (
+                                                <QuickAction
+                                                    icon={Plus}
+                                                    label="发布新商品"
+                                                    description="创建 SPU 与 SKU"
+                                                    onClick={() => navigate('/catalog/products/new')}
+                                                />
+                                            )}
+                                            {canOpenAiSettings && (
+                                                <QuickAction
+                                                    icon={Sparkles}
+                                                    label="AI 商品生图"
+                                                    description="进入生图任务台"
+                                                    onClick={() => navigate('/plugins/ai-settings')}
+                                                />
+                                            )}
+                                            {canEditStorefront && (
+                                                <QuickAction
+                                                    icon={LayoutTemplate}
+                                                    label="装修商城首页"
+                                                    description="调整轮播与楼层"
+                                                    onClick={() => navigate('/storefront/decoration')}
+                                                />
+                                            )}
+                                            {canOpenStoreSettings && (
+                                                <QuickAction
+                                                    icon={Settings2}
+                                                    label="店铺综合设置"
+                                                    description="支付、配送与域名"
+                                                    onClick={() => navigate('/settings/store-profile')}
+                                                />
+                                            )}
                                         </div>
                                     </section>
                                 )}
@@ -756,7 +846,7 @@ export function DashboardModule() {
                                         aria-labelledby="search-index-title"
                                     >
                                         <span
-                                            className={`rounded-xl p-3 ${(metrics.data?.pendingSearchIndexUpdates ?? 0) > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}
+                                            className={`rounded-xl p-3 ${(searchIndex.data?.pendingSearchIndexUpdates ?? 0) > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}
                                         >
                                             <Clock3 className="h-5 w-5" />
                                         </span>
@@ -772,15 +862,15 @@ export function DashboardModule() {
                                                 />
                                             </h2>
                                             <p className="mt-1 text-[11px] text-slate-500">
-                                                {(metrics.data?.pendingSearchIndexUpdates ?? 0) > 0
-                                                    ? `${metrics.data?.pendingSearchIndexUpdates} 项变更正在等待后台任务同步`
+                                                {(searchIndex.data?.pendingSearchIndexUpdates ?? 0) > 0
+                                                    ? `${searchIndex.data?.pendingSearchIndexUpdates} 项变更正在等待后台任务同步`
                                                     : '商品搜索索引已经同步完成'}
                                             </p>
                                         </div>
                                         <strong className="font-mono text-xl text-slate-900">
-                                            {metrics.loading && !metrics.data
+                                            {searchIndex.loading && !searchIndex.data
                                                 ? '—'
-                                                : (metrics.data?.pendingSearchIndexUpdates ?? 0)}
+                                                : (searchIndex.data?.pendingSearchIndexUpdates ?? 0)}
                                         </strong>
                                     </section>
                                 )}
@@ -875,7 +965,7 @@ export function DashboardModule() {
                             <section>
                                 <div className="flex items-center justify-between">
                                     <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
-                                        8 个工作台组件
+                                        {allowedWidgets.length} 个可用工作台组件
                                         <FeatureHelpButton topic="dashboard.customizer" title="工作台组件" />
                                     </h3>
                                     <button
@@ -889,31 +979,33 @@ export function DashboardModule() {
                                     </button>
                                 </div>
                                 <div className="mt-3 space-y-2">
-                                    {widgetPreferences.order.map(widgetId => {
-                                        const visible = !widgetPreferences.hidden.includes(widgetId);
-                                        return (
-                                            <button
-                                                key={widgetId}
-                                                type="button"
-                                                onClick={() => toggleWidget(widgetId)}
-                                                className="flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5 text-left hover:bg-slate-50"
-                                            >
-                                                <span className="text-xs font-medium text-slate-700">
-                                                    {WIDGET_LABELS[widgetId]}
-                                                </span>
-                                                <span
-                                                    className={`flex items-center gap-1 text-[11px] font-bold ${visible ? 'text-emerald-700' : 'text-slate-400'}`}
+                                    {widgetPreferences.order
+                                        .filter(widgetId => allowedWidgets.includes(widgetId))
+                                        .map(widgetId => {
+                                            const visible = !widgetPreferences.hidden.includes(widgetId);
+                                            return (
+                                                <button
+                                                    key={widgetId}
+                                                    type="button"
+                                                    onClick={() => toggleWidget(widgetId)}
+                                                    className="flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5 text-left hover:bg-slate-50"
                                                 >
-                                                    {visible ? (
-                                                        <Eye className="h-3.5 w-3.5" />
-                                                    ) : (
-                                                        <EyeOff className="h-3.5 w-3.5" />
-                                                    )}
-                                                    {visible ? '显示' : '隐藏'}
-                                                </span>
-                                            </button>
-                                        );
-                                    })}
+                                                    <span className="text-xs font-medium text-slate-700">
+                                                        {WIDGET_LABELS[widgetId]}
+                                                    </span>
+                                                    <span
+                                                        className={`flex items-center gap-1 text-[11px] font-bold ${visible ? 'text-emerald-700' : 'text-slate-400'}`}
+                                                    >
+                                                        {visible ? (
+                                                            <Eye className="h-3.5 w-3.5" />
+                                                        ) : (
+                                                            <EyeOff className="h-3.5 w-3.5" />
+                                                        )}
+                                                        {visible ? '显示' : '隐藏'}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
                                 </div>
                             </section>
                         </div>

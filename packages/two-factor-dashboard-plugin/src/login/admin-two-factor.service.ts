@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import {
     AdministratorService,
     API_KEY_AUTH_STRATEGY_NAME,
@@ -47,6 +48,12 @@ export interface AdminLoginResult {
     activeChannelToken?: string;
     session?: AuthenticatedSession;
     rememberMe?: boolean;
+}
+
+export function preferredAdminChannelToken(user: Pick<User, 'roles'>): string | undefined {
+    const channels = new Map(user.roles.flatMap(role => role.channels).map(channel => [channel.id, channel]));
+    if (channels.size === 1) return [...channels.values()][0].token;
+    return [...channels.values()].find(channel => channel.code === DEFAULT_CHANNEL_CODE)?.token;
 }
 
 @Injectable()
@@ -248,15 +255,16 @@ export class AdminTwoFactorService {
                 .delete({ id: session.id });
             return { status: 'ERROR', message: '账号安全设置已变更，请重新登录' };
         }
-        const channels = new Map(
-            user.roles.flatMap(role => role.channels).map(channel => [channel.id, channel.token]),
-        );
         this.audit(challenge ? 'two-factor-login' : 'password-login', user.id);
+        const userWithChannelScope = await this.connection.rawConnection.getRepository(User).findOne({
+            where: { id: user.id },
+            relations: { roles: { channels: true } },
+        });
         return {
             status: 'SUCCESS',
             session,
             rememberMe,
-            activeChannelToken: channels.size === 1 ? [...channels.values()][0] : undefined,
+            activeChannelToken: preferredAdminChannelToken(userWithChannelScope ?? user),
         };
     }
 

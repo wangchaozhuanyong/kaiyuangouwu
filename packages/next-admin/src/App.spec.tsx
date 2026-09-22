@@ -2,7 +2,7 @@
 import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/client';
 import { ApolloProvider } from '@apollo/client/react';
 import { GraphQLError } from 'graphql';
-import { act } from 'react';
+import { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -53,7 +53,7 @@ afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
 });
 
-async function renderApp(respond: (name: string) => Record<string, unknown> | Error) {
+async function renderApp(respond: (name: string) => Record<string, unknown> | Error, strictMode = false) {
     const requests = vi.fn();
     const client = new ApolloClient({
         cache: new InMemoryCache(),
@@ -78,12 +78,13 @@ async function renderApp(respond: (name: string) => Record<string, unknown> | Er
         client.stop();
         host.remove();
     });
+    const application = (
+        <ApolloProvider client={client}>
+            <App />
+        </ApolloProvider>
+    );
     await act(async () => {
-        root.render(
-            <ApolloProvider client={client}>
-                <App />
-            </ApolloProvider>,
-        );
+        root.render(strictMode ? <StrictMode>{application}</StrictMode> : application);
     });
     return { host, requests };
 }
@@ -113,6 +114,22 @@ describe('admin bootstrap session recovery', () => {
         },
     );
 
+    it('does not reject a complete authenticated bootstrap because of a recoverable optional-field error', async () => {
+        const { host, requests } = await renderApp(() => ({
+            data: ready,
+            errors: [
+                new GraphQLError('可选平台字段读取失败', {
+                    path: ['channels'],
+                    extensions: { code: 'FORBIDDEN' },
+                }),
+            ],
+        }));
+
+        expect(host.textContent).toContain('已进入管理界面');
+        expect(host.querySelector('[role="alert"]')).toBeNull();
+        expect(requests).not.toHaveBeenCalledWith('GetAdminSession');
+    });
+
     it('recovers a restricted administrator from a stale unauthorized channel selection', async () => {
         let bootstrapAttempts = 0;
         const restrictedMe = {
@@ -139,7 +156,7 @@ describe('admin bootstrap session recovery', () => {
                     merchantInitialPasswordStatus: { mustChangePassword: false },
                 },
             };
-        });
+        }, true);
 
         expect(auth.select).toHaveBeenCalledWith('moyao-token');
         expect(auth.selectedChannelToken).toBe('moyao-token');
@@ -148,21 +165,50 @@ describe('admin bootstrap session recovery', () => {
         expect(requests.mock.calls.filter(([name]) => name === 'GetAdminBootstrap')).toHaveLength(2);
     });
 
-    it('keeps a SuperAdmin on a selected store even when me.channels is stale', async () => {
+    it('enters the initial-password gate after selecting a channel from a complete bootstrap', async () => {
+        auth.selectedChannelToken = '';
+        const { host, requests } = await renderApp(() => ({
+            data: {
+                me: {
+                    ...me,
+                    channels: [
+                        {
+                            id: 'default',
+                            code: '__default_channel__',
+                            token: 'default-token',
+                            permissions: ['SuperAdmin'],
+                        },
+                    ],
+                },
+                merchantInitialPasswordStatus: { mustChangePassword: true },
+            },
+        }));
+
+        expect(auth.select).toHaveBeenCalledWith('default-token');
+        expect(host.textContent).toContain('首次密码修改门禁');
+        expect(host.textContent).not.toContain('正在验证管理员会话');
+        expect(requests.mock.calls.filter(([name]) => name === 'GetAdminBootstrap')).toHaveLength(1);
+    });
+
+    it('keeps an administrator on a selected store when it is present in the personal channel scope', async () => {
         auth.selectedChannelToken = 'moyao-token';
         const { host } = await renderApp(() => ({
             data: {
                 me: {
                     ...me,
-                    channels: [{ id: 'default', code: '__default_channel__', token: 'default-token' }],
-                },
-                activeAdministrator: {
-                    user: { roles: [{ code: '__super_admin_role__' }] },
-                },
-                channels: {
-                    items: [
-                        { id: 'default', code: '__default_channel__', token: 'default-token' },
-                        { id: 'moyao', code: 'moyao-ai', token: 'moyao-token' },
+                    channels: [
+                        {
+                            id: 'default',
+                            code: '__default_channel__',
+                            token: 'default-token',
+                            permissions: ['SuperAdmin'],
+                        },
+                        {
+                            id: 'moyao',
+                            code: 'moyao-ai',
+                            token: 'moyao-token',
+                            permissions: ['SuperAdmin'],
+                        },
                     ],
                 },
                 merchantInitialPasswordStatus: { mustChangePassword: false },

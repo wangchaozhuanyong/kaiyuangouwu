@@ -94,6 +94,7 @@ import { StorefrontPromotionPage } from './entities/storefront-promotion-page.en
 import { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity';
 import { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity';
 import { SystemAnnouncement } from './entities/system-announcement.entity';
+import { fraudRiskOrderProcess } from './fraud-risk-order-process';
 import { FraudRiskService } from './fraud-risk.service';
 import { reconcileFraudRiskCasesTask } from './fraud-risk.tasks';
 import { GovernanceRiskAdminResolver, GovernanceRiskShopResolver } from './governance-risk.resolver';
@@ -413,6 +414,9 @@ import {
             if (!config.promotionOptions.promotionActions.some(candidate => candidate.code === action.code)) {
                 config.promotionOptions.promotionActions.push(action);
             }
+        }
+        if (!config.orderOptions.process.includes(fraudRiskOrderProcess)) {
+            config.orderOptions.process.push(fraudRiskOrderProcess);
         }
         config.schedulerOptions.tasks.push(reconcileStoreCouponsTask);
         config.schedulerOptions.tasks.push(reconcileReferralRewardsTask);

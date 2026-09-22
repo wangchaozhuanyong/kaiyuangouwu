@@ -255,27 +255,29 @@ describe('admin channel request routing', () => {
         expect(localStorage.getItem('vendure-active-channel-token')).toBe('legacy-shared-store');
     });
 
-    it('commits a store switch only after the selected Channel reload succeeds', async () => {
-        const resetStore = vi.spyOn(client, 'resetStore').mockResolvedValueOnce([]);
+    it('commits a store switch only after the selected Channel probe succeeds', async () => {
+        request.mockResolvedValueOnce(
+            Response.json({ data: { activeChannel: { token: 'store-b', __typename: 'Channel' } } }),
+        );
+        const clearStore = vi.spyOn(client, 'clearStore').mockResolvedValueOnce([]);
 
         await switchActiveChannel('store-b');
 
-        expect(resetStore).toHaveBeenCalledTimes(1);
+        expect(request.mock.calls[0][1]?.headers).toMatchObject({ 'vendure-token': 'store-b' });
+        expect(clearStore).toHaveBeenCalledTimes(1);
         expect(getActiveChannelToken()).toBe('store-b');
-        resetStore.mockRestore();
+        clearStore.mockRestore();
     });
 
-    it('restores the previous store when reloading the selected Channel fails', async () => {
-        const resetStore = vi
-            .spyOn(client, 'resetStore')
-            .mockRejectedValueOnce(new Error('forbidden target Channel'))
-            .mockResolvedValueOnce([]);
+    it('keeps the previous store when the selected Channel probe fails', async () => {
+        request.mockResolvedValueOnce(Response.json({ errors: [{ message: 'forbidden target Channel' }] }));
+        const clearStore = vi.spyOn(client, 'clearStore');
 
         await expect(switchActiveChannel('store-b')).rejects.toThrow('forbidden target Channel');
 
-        expect(resetStore).toHaveBeenCalledTimes(2);
+        expect(clearStore).not.toHaveBeenCalled();
         expect(getActiveChannelToken()).toBe('store-a');
-        resetStore.mockRestore();
+        clearStore.mockRestore();
     });
 
     it('clears tab-scoped and legacy shared selections when authentication changes', () => {

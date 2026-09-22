@@ -16,7 +16,15 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
     { prefix: '/settings/system-ops', permissions: ['ReadSystem', 'ReadApiKey'] },
     {
         prefix: '/settings/store-profile',
-        permissions: ['ReadSettings', 'ReadChannel', 'ReadSeller', 'ReadPaymentMethod', 'ReadShippingMethod'],
+        permissions: [
+            'ReadSettings',
+            'ReadChannel',
+            'ReadSeller',
+            'ReadPaymentMethod',
+            'ReadShippingMethod',
+            'ReadStoreProfile',
+            'ReadStoreDomain',
+        ],
     },
     { prefix: '/settings/team', permissions: ['ReadAdministrator'] },
     { prefix: '/catalog/inventory', permissions: ['ReadStockLocation', 'ReadCatalog'] },

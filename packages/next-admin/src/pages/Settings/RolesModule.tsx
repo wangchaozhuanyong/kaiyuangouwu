@@ -58,6 +58,7 @@ export function RolesModule() {
     const isTeamInitializing = !query.error && !query.data;
 
     const roles = query.data?.manageableRoles ?? [];
+    const canManageTeam = ['OWNER', 'ADMIN'].includes(query.data?.myAdministratorAccess.authority ?? '');
     const members =
         query.data?.manageableAdministrators.map(access => ({
             ...access.administrator,
@@ -114,16 +115,18 @@ export function RolesModule() {
                         >
                             <RefreshCw className={`h-4 w-4 ${query.loading ? 'animate-spin' : ''}`} />
                         </button>
-                        <button
-                            type="button"
-                            onClick={() =>
-                                tab === 'MEMBERS' ? setMemberEditor('NEW') : setRoleEditor('NEW')
-                            }
-                            className={primaryButton}
-                        >
-                            <Plus className="h-4 w-4" />
-                            {tab === 'MEMBERS' ? '新增员工' : '新建角色'}
-                        </button>
+                        {canManageTeam && (
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    tab === 'MEMBERS' ? setMemberEditor('NEW') : setRoleEditor('NEW')
+                                }
+                                className={primaryButton}
+                            >
+                                <Plus className="h-4 w-4" />
+                                {tab === 'MEMBERS' ? '新增员工' : '新建角色'}
+                            </button>
+                        )}
                     </div>
                 </div>
             </header>

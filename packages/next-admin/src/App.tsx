@@ -1,6 +1,6 @@
 import { gql } from '@apollo/client';
 import { useQuery } from '@apollo/client/react';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import {
@@ -77,20 +77,7 @@ const GET_ADMIN_BOOTSTRAP = gql`
                 id
                 code
                 token
-            }
-        }
-        activeAdministrator {
-            user {
-                roles {
-                    code
-                }
-            }
-        }
-        channels(options: { take: 100, sort: { code: ASC } }) {
-            items {
-                id
-                code
-                token
+                permissions
             }
         }
         merchantInitialPasswordStatus {
@@ -111,12 +98,8 @@ interface AdminBootstrapData {
     me: {
         id: string;
         identifier: string;
-        channels: Array<{ id: string; code: string; token: string }>;
+        channels: Array<{ id: string; code: string; token: string; permissions: string[] }>;
     } | null;
-    activeAdministrator?: {
-        user: { roles: Array<{ code: string }> };
-    } | null;
-    channels?: { items: Array<{ id: string; code: string; token: string }> };
     merchantInitialPasswordStatus: { mustChangePassword: boolean };
 }
 
@@ -127,6 +110,8 @@ function SessionExpiredRedirect() {
 
 function AuthenticatedShell() {
     const [channelReady, setChannelReady] = useState(() => hasActiveChannelSelection());
+    const [selectedChannelToken, setSelectedChannelToken] = useState(() => getActiveChannelToken());
+    const recoveringChannelTokenRef = useRef<string | null>(null);
     const authQuery = useQuery<AdminBootstrapData>(GET_ADMIN_BOOTSTRAP, {
         fetchPolicy: 'network-only',
         errorPolicy: 'all',
@@ -134,25 +119,27 @@ function AuthenticatedShell() {
     const data = authQuery.data;
     const loading = authQuery.loading;
     const error = authQuery.error;
+    // Apollo may surface a recoverable cache/refetch error together with a complete
+    // authenticated bootstrap. Identity and the initial-password gate are the two
+    // fields required before mounting the permission-aware shell; optional protected
+    // fields are queried again inside AppShell and must not turn a valid login into a
+    // false session failure.
+    const bootstrapIsUsable = Boolean(data?.me && data.merchantInitialPasswordStatus);
+    const blockingError = bootstrapIsUsable ? undefined : error;
     // A protected bootstrap field can fail for either expired authentication or
     // missing permission. Recheck identity without the protected bootstrap fields.
     const sessionQuery = useQuery<{ me: { id: string } | null }>(GET_ADMIN_SESSION, {
-        skip: !error,
+        skip: !blockingError,
         fetchPolicy: 'network-only',
         errorPolicy: 'all',
     });
 
-    const selectedChannelToken = getActiveChannelToken();
-    const isSuperAdmin =
-        data?.activeAdministrator?.user.roles.some(role => role.code === '__super_admin_role__') ?? false;
-    const accessibleChannels = isSuperAdmin
-        ? (data?.channels?.items ?? data?.me?.channels)
-        : data?.me?.channels;
-    const fallbackChannel = accessibleChannels?.[0];
+    const accessibleChannels = data?.me?.channels;
+    const fallbackChannelToken = accessibleChannels?.[0]?.token;
     const selectedChannelIsAccessible = Boolean(
         selectedChannelToken && accessibleChannels?.some(channel => channel.token === selectedChannelToken),
     );
-    const needsChannelRecovery = Boolean(fallbackChannel && !selectedChannelIsAccessible);
+    const needsChannelRecovery = Boolean(fallbackChannelToken && !selectedChannelIsAccessible);
 
     // 会话恢复时先明确选取一个可访问 Channel，再挂载业务页面。
     // 若历史标签页保存了当前管理员无权访问的 Channel，则用 me.channels
@@ -160,17 +147,29 @@ function AuthenticatedShell() {
     /* oxlint-disable react/set-state-in-effect */
     useEffect(() => {
         if (!data?.me) return;
-        if (fallbackChannel && !selectedChannelIsAccessible) {
+        if (fallbackChannelToken && !selectedChannelIsAccessible) {
+            if (recoveringChannelTokenRef.current === fallbackChannelToken) return;
+            recoveringChannelTokenRef.current = fallbackChannelToken;
+            setInitialActiveChannel(fallbackChannelToken);
+            setSelectedChannelToken(fallbackChannelToken);
+            if (bootstrapIsUsable) {
+                recoveringChannelTokenRef.current = null;
+                setChannelReady(true);
+                return;
+            }
             setChannelReady(false);
-            setInitialActiveChannel(fallbackChannel.token);
-            void authQuery.refetch();
+            void authQuery.refetch().finally(() => {
+                if (recoveringChannelTokenRef.current === fallbackChannelToken) {
+                    recoveringChannelTokenRef.current = null;
+                }
+            });
             return;
         }
         setChannelReady(true);
-    }, [authQuery, data?.me, fallbackChannel, selectedChannelIsAccessible]);
+    }, [authQuery, bootstrapIsUsable, data?.me, fallbackChannelToken, selectedChannelIsAccessible]);
     /* oxlint-enable react/set-state-in-effect */
 
-    if (loading || needsChannelRecovery || (error && sessionQuery.loading)) {
+    if (loading || needsChannelRecovery || (blockingError && sessionQuery.loading)) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-medium text-slate-500">
                 正在验证管理员会话...
@@ -179,13 +178,13 @@ function AuthenticatedShell() {
     }
 
     if (
-        (!error && data?.me === null) ||
-        (error && isMissingAdminSession(sessionQuery.data, sessionQuery.error))
+        (!blockingError && data?.me === null) ||
+        (blockingError && isMissingAdminSession(sessionQuery.data, sessionQuery.error))
     ) {
         return <SessionExpiredRedirect />;
     }
 
-    if (error) {
+    if (blockingError) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
                 <section
@@ -194,7 +193,7 @@ function AuthenticatedShell() {
                 >
                     <h1 className="text-base font-bold text-slate-900">管理员会话验证失败</h1>
                     <p className="mt-2 text-xs leading-5 text-rose-600">
-                        {toUserFacingError(error, '暂时无法连接管理服务，请检查网络后重试。')}
+                        {toUserFacingError(blockingError, '暂时无法连接管理服务，请检查网络后重试。')}
                     </p>
                     <button
                         type="button"
@@ -224,7 +223,7 @@ function AuthenticatedShell() {
         return (
             <InitialPasswordChangeModule
                 onCompleted={async () => {
-                    await authQuery.refetch();
+                    clearAuthSession();
                 }}
             />
         );

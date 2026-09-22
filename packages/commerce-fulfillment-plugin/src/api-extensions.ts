@@ -63,7 +63,6 @@ const afterSalesTypes = gql`
         rejectedReturnQuantity: Int!
         returnLotCode: String
         inventoryOperationId: String
-        returnStockLocation: StockLocation
     }
 
     type AfterSalesEvent implements Node {
@@ -682,6 +681,10 @@ export const adminApiExtensions = gql`
     ${manualDeliveryCommonTypes}
     ${manualDeliveryAdminTypes}
     ${fulfillmentDeliveryTypes}
+
+    extend type AfterSalesItem {
+        returnStockLocation: StockLocation
+    }
 
     extend type Order {
         manualDigitalDeliveries: [ManualDigitalOrderDelivery!]!

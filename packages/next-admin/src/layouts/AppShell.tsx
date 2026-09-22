@@ -67,9 +67,11 @@ import {
 } from '../extensions/extension-api';
 import {
     APP_SHELL_BOOTSTRAP_QUERY,
-    APP_SHELL_STORE_CONTEXT_QUERY,
+    APP_SHELL_COMMERCE_CONTEXT_QUERY,
+    APP_SHELL_PROFILE_CONTEXT_QUERY,
     type AppShellBootstrapData,
-    type AppShellStoreContextData,
+    type AppShellCommerceContextData,
+    type AppShellProfileContextData,
 } from '../graphql/auth.graphql';
 import { requestAppNavigation } from '../hooks/use-unsaved-changes-warning';
 import { preloadCommonRoutes, preloadRoute, preloadSettingsRoutes } from '../route-modules';
@@ -229,27 +231,16 @@ export function AppShell() {
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [isChannelSwitching, setIsChannelSwitching] = useState(false);
     const [channelError, setChannelError] = useState('');
-    const loadingAllChannelsRef = useRef(false);
     const appShellQuery = useQuery<AppShellBootstrapData>(APP_SHELL_BOOTSTRAP_QUERY, {
-        variables: { options: { skip: 0, take: 100, sort: { code: 'ASC' } } },
         fetchPolicy: 'cache-first',
-    });
-    const storeContextQuery = useQuery<AppShellStoreContextData>(APP_SHELL_STORE_CONTEXT_QUERY, {
-        fetchPolicy: 'cache-first',
-        errorPolicy: 'ignore',
     });
     const {
         data: channelData,
         error: appShellError,
-        fetchMore: fetchMoreChannels,
         loading: appShellLoading,
         refetch: refetchAppShell,
     } = appShellQuery;
     const activeAdministrator = channelData?.activeAdministrator;
-    const storeLogoUrl = storeContextQuery.data?.myStoreProfile?.logoAsset?.preview;
-    const commerceMode = storeContextQuery.data?.myStoreCommerceMode?.mode ?? 'HYBRID';
-    const showsPhysicalCatalog = commerceMode !== 'DIGITAL_ONLY';
-    const showsDigitalCatalog = commerceMode !== 'PHYSICAL_ONLY';
     const administratorName = activeAdministrator
         ? [activeAdministrator.lastName, activeAdministrator.firstName].filter(Boolean).join('') ||
           activeAdministrator.user.identifier
@@ -263,11 +254,11 @@ export function AppShell() {
     const accessibleChannels = useMemo(
         () =>
             filterAccessibleAdminChannels(
-                channelData?.channels.items ?? [],
+                channelData?.manageableChannels ?? [],
                 channelData?.me?.channels ?? [],
                 isSuperAdmin,
             ),
-        [channelData?.channels.items, channelData?.me?.channels, isSuperAdmin],
+        [channelData?.manageableChannels, channelData?.me?.channels, isSuperAdmin],
     );
     const activePermissions = useMemo(() => {
         const permissions =
@@ -277,6 +268,26 @@ export function AppShell() {
             ? [...permissions, 'SuperAdmin']
             : permissions;
     }, [channelData, isSuperAdmin]);
+    const commerceContextQuery = useQuery<AppShellCommerceContextData>(APP_SHELL_COMMERCE_CONTEXT_QUERY, {
+        fetchPolicy: 'cache-first',
+        errorPolicy: 'ignore',
+        skip:
+            !channelData ||
+            isPlatformContext ||
+            !hasAnyAdminPermission(activePermissions, ['ReadCatalog', 'ReadProduct']),
+    });
+    const profileContextQuery = useQuery<AppShellProfileContextData>(APP_SHELL_PROFILE_CONTEXT_QUERY, {
+        fetchPolicy: 'cache-first',
+        errorPolicy: 'ignore',
+        skip:
+            !channelData ||
+            isPlatformContext ||
+            !hasAnyAdminPermission(activePermissions, ['ReadStoreProfile']),
+    });
+    const storeLogoUrl = profileContextQuery.data?.myStoreProfile?.logoAsset?.preview;
+    const commerceMode = commerceContextQuery.data?.myStoreCommerceMode?.mode ?? 'HYBRID';
+    const showsPhysicalCatalog = commerceMode !== 'DIGITAL_ONLY';
+    const showsDigitalCatalog = commerceMode !== 'PHYSICAL_ONLY';
     const canAccessPath = useCallback(
         (path: string) => {
             if (isPlatformContext && isPlatformBusinessPath(path)) return false;
@@ -293,8 +304,6 @@ export function AppShell() {
     const currentRouteRequiresPermission = currentRoutePermissions.length > 0;
     const canAccessCurrentRoute = canAccessPath(location.pathname);
     const hasPermissionSnapshot = hasAppShellPermissionSnapshot(channelData);
-    const channelsError = appShellError;
-    const channelsLoading = appShellLoading;
     const channelControlsLoading = !channelData && appShellLoading;
     // Apollo 在 fetchMore/refetch 期间也会报 loading。权限快照已存在时不应用后台请求遮住当前页面。
     const profileError = hasPermissionSnapshot ? undefined : appShellError;
@@ -314,44 +323,13 @@ export function AppShell() {
 
     useEffect(() => {
         if (
-            !storeContextQuery.data?.myStoreCommerceMode ||
+            !commerceContextQuery.data?.myStoreCommerceMode ||
             commerceModeAllowsPath(commerceMode, location.pathname)
         ) {
             return;
         }
         void routerNavigate('/catalog/list', { replace: true });
-    }, [storeContextQuery.data?.myStoreCommerceMode, commerceMode, location.pathname, routerNavigate]);
-
-    useEffect(() => {
-        const channels = channelData?.channels;
-        if (!channels || channelsLoading || channelsError || loadingAllChannelsRef.current) return;
-        const loadedCount = channels.items.length;
-        if (loadedCount >= channels.totalItems) return;
-        loadingAllChannelsRef.current = true;
-        void fetchMoreChannels({
-            variables: { options: { skip: loadedCount, take: 100, sort: { code: 'ASC' } } },
-            updateQuery: (previous, { fetchMoreResult }) => ({
-                ...previous,
-                channels: {
-                    ...fetchMoreResult.channels,
-                    items: [
-                        ...new Map(
-                            [...previous.channels.items, ...fetchMoreResult.channels.items].map(channel => [
-                                channel.id,
-                                channel,
-                            ]),
-                        ).values(),
-                    ],
-                },
-            }),
-        })
-            .catch(fetchError => {
-                setChannelError(toUserFacingError(fetchError, '店铺列表未能全部加载'));
-            })
-            .finally(() => {
-                loadingAllChannelsRef.current = false;
-            });
-    }, [channelData, channelsError, channelsLoading, fetchMoreChannels]);
+    }, [commerceContextQuery.data?.myStoreCommerceMode, commerceMode, location.pathname, routerNavigate]);
 
     const [openMenu, setOpenMenu] = useState<string | null>('catalog');
 
