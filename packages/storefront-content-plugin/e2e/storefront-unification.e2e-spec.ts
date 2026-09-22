@@ -50,6 +50,24 @@ const config = mergeConfig(testConfig, {
         ],
     },
     entityOptions: { entityIdStrategy: new AutoIncrementIdStrategy() },
+    customFields: {
+        Channel: [
+            {
+                name: 'storefrontNameZh',
+                type: 'string',
+                nullable: false,
+                defaultValue: '测试店铺',
+                public: true,
+            },
+            {
+                name: 'storefrontNameEn',
+                type: 'string',
+                nullable: false,
+                defaultValue: 'Test store',
+                public: true,
+            },
+        ],
+    },
     plugins: [
         ContentTranslationPlugin,
         StorefrontContentPlugin,
