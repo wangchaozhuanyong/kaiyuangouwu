@@ -45,6 +45,37 @@ Normal deployment, verification, rollback and branch cleanup continue to use
 the existing workflows described in `DEPLOYMENT_RUNBOOK.md`. This operation
 does not promote an application release or change its version marker.
 
+## Configure the fixed offsite persistent-file backup
+
+If release readiness reports that the single production host does not have a
+distinct persistent-file backup destination, first run the read-only plan:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=plan-offsite-file-backup-config
+```
+
+The plan verifies the fixed `files/` S3 prefix has bucket versioning, bucket-owner
+enforcement, full public-access blocking, SSE-S3 defaults, and a bounded current
+and noncurrent lifecycle. It reports only the three non-secret setting names that
+need to change plus a hash of their current values. It never logs the environment
+file or unrelated settings.
+
+After reviewing the exact plan hash, apply it once:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=apply-offsite-file-backup-config-reviewed \
+    -f expected_plan_sha256=<reviewed-plan-sha256>
+```
+
+The write revalidates the plan and S3 policy under the production deployment
+lock, atomically updates only `VENDURE_REQUIRE_OFFSITE_FILE_BACKUP`,
+`VENDURE_FILE_BACKUP_S3_URI`, and `VENDURE_FILE_BACKUP_S3_RETENTION_DAYS`, and
+preserves all unrelated values, ownership, and mode. A changed plan or duplicate
+setting fails closed. This operation does not restart PM2, run a migration, or
+promote a release; the next reviewed release consumes the completed configuration.
+
 ## Clean reviewed deployment caches
 
 If release retention has already preserved only the current runtime and two
