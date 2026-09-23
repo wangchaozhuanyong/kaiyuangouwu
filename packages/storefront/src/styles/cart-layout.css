@@ -132,6 +132,12 @@
     display: none;
 }
 
+.cart-summary-header,
+.cart-summary-breakdown,
+.cart-summary-trust {
+    display: none;
+}
+
 @media (min-width: 1024px) {
     .desktop-store-layout .coupon-label-mobile {
         display: none;

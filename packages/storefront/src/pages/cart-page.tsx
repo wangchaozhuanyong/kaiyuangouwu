@@ -408,6 +408,42 @@ export function CartPage() {
                             )}
                         </div>
                         <aside className={`cart-summary-panel${coupons.length ? ' has-coupons' : ''}`}>
+                            <div className="cart-summary-header">
+                                <h2>{isZh ? '订单结算' : 'Order Summary'}</h2>
+                            </div>
+                            <div className="cart-summary-breakdown">
+                                <div className="summary-row">
+                                    <span>{isZh ? '已选商品' : 'Selected items'}</span>
+                                    <span className="summary-value">
+                                        {isZh
+                                            ? `${cart?.selectedQuantity ?? 0} 件`
+                                            : `${cart?.selectedQuantity ?? 0} item(s)`}
+                                    </span>
+                                </div>
+                                <div className="summary-row">
+                                    <span>{isZh ? '商品总额' : 'Items subtotal'}</span>
+                                    <span className="summary-value">
+                                        {formatMoney(
+                                            amount + (discount || 0),
+                                            order?.currencyCode ?? market.currencyCode,
+                                            locale,
+                                        )}
+                                    </span>
+                                </div>
+                                {discount > 0 && (
+                                    <div className="summary-row discount">
+                                        <span>{isZh ? '优惠抵扣' : 'Discount'}</span>
+                                        <span className="summary-value discount-amount">
+                                            -
+                                            {formatMoney(
+                                                discount,
+                                                order?.currencyCode ?? market.currencyCode,
+                                                locale,
+                                            )}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
                             {coupons.length > 0 && (
                                 <button
                                     className="coupon-row"
@@ -516,6 +552,10 @@ export function CartPage() {
                                     </button>
                                 </div>
                             )}
+                            <div className="cart-summary-trust" aria-hidden="true">
+                                <span>🛡️ {isZh ? '正品保障' : 'Guaranteed Authentic'}</span>
+                                <span>⚡ {isZh ? '极速发货' : 'Fast Delivery'}</span>
+                            </div>
                         </aside>
                     </div>
                     {!locked && (
