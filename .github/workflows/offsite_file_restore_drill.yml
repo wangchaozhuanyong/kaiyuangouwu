@@ -64,6 +64,7 @@ jobs:
                   encoded = base64.b64encode(receipt).decode('ascii')
                   proof_name = f'{sha}-{run_id}.json'
                   command = '\n'.join([
+                      "/bin/bash <<'VENDURE_OFFSITE_PROOF'",
                       'set -Eeuo pipefail',
                       'proof_file="$(mktemp /tmp/vendure-offsite-proof.XXXXXX)"',
                       'trap \'rm -f -- "$proof_file"\' EXIT',
@@ -81,6 +82,7 @@ jobs:
                       'install -o root -g root -m 0644 "$proof_file" /var/lib/vendure-readiness/file-restore-drill.json',
                       f'cmp -s "$proof_file" /var/lib/vendure-readiness/file-restore-drill-runs/{proof_name}',
                       f'printf "OFFSITE_FILE_RESTORE_PROOF_OK sha={sha} run={run_id}\\n"',
+                      'VENDURE_OFFSITE_PROOF',
                   ])
                   parameters = {'commands': [command], 'executionTimeout': ['300']}
                   Path(os.environ['RUNNER_TEMP'], 'offsite-proof-ssm.json').write_text(json.dumps(parameters))
