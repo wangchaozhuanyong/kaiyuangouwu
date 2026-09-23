@@ -95,7 +95,6 @@
     min-height: 46px;
     margin-top: 6px;
     padding-top: 8px;
-    border-top: 1px solid var(--line);
 }
 
 .price-summary .summary-total dd {
@@ -127,9 +126,9 @@
     width: calc(100% - 28px);
     min-height: 42px;
     margin: 0 14px 10px;
-    border: 1px solid var(--line);
+    border: 0;
     border-radius: 7px;
-    background: var(--surface);
+    background: var(--control-surface);
     color: var(--muted);
 }
 
@@ -152,14 +151,11 @@
     grid-template-columns: 22px minmax(0, 1fr);
     align-items: start;
     gap: 10px;
-    border-top: 1px solid #f1d59c;
-    border-bottom: 1px solid #f1d59c;
     background: #fffaf0;
 }
 
 .payment-test-notice.is-production {
     color: #285d48;
-    border-color: #b8ddcd;
     background: #f2fbf7;
 }
 
@@ -170,25 +166,23 @@
 .notification-list {
     margin-top: 9px;
     padding: 0 14px;
-    background: var(--surface);
+    display: grid;
+    gap: 6px;
 }
 
 .notification-list > button {
     width: 100%;
     min-height: 86px;
-    padding: 13px 0;
+    padding: 13px 10px;
     border: 0;
-    border-bottom: 1px solid var(--line);
+    border-radius: var(--radius-sm);
     background: var(--surface);
+    box-shadow: var(--shadow-sm);
     display: grid;
     grid-template-columns: 42px minmax(0, 1fr) 18px;
     align-items: center;
     gap: 11px;
     text-align: left;
-}
-
-.notification-list > button:last-child {
-    border-bottom: 0;
 }
 
 .notification-icon {
@@ -366,7 +360,6 @@
 
 .payment-summary-lines {
     padding: 8px 0;
-    border-bottom: 1px solid var(--line);
 }
 
 .payment-summary-lines > div {
@@ -401,9 +394,9 @@
     min-height: 48px;
     margin-top: 12px;
     padding: 0 16px;
-    border: 1px solid var(--line);
+    border: 0;
     border-radius: 7px;
-    background: var(--surface);
+    background: var(--control-surface);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -412,7 +405,6 @@
 }
 
 .payment-summary > button[type='submit'] {
-    border-color: var(--accent);
     background: var(--accent);
     color: white;
 }
@@ -477,7 +469,6 @@
 
 .order-confirmation-summary {
     padding: 18px;
-    border: 1px solid var(--line);
     border-radius: var(--radius-md);
     background: var(--paper);
 }
@@ -500,7 +491,6 @@
     display: block;
     margin-top: 12px;
     padding-top: 12px;
-    border-top: 1px solid var(--line);
 }
 
 .order-confirmation-actions {
@@ -518,16 +508,15 @@
     gap: 8px;
     min-height: 48px;
     padding: 10px 16px;
-    border: 1px solid var(--line);
+    border: 0;
     border-radius: var(--radius-sm);
-    background: var(--paper);
+    background: var(--control-surface);
     font-weight: var(--font-weight-semibold);
 }
 
 .order-confirmation-actions button.primary-action {
     color: var(--accent-foreground);
     background: var(--accent);
-    border-color: var(--accent);
 }
 
 .icon-data-export {

@@ -16,8 +16,6 @@
 .cart-guest-notice {
     margin-top: 9px;
     padding: 12px;
-    border-top: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
-    border-bottom: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
     background: var(--accent-soft);
     display: grid;
     grid-template-columns: 38px minmax(0, 1fr);
@@ -65,7 +63,7 @@
 .cart-guest-actions button {
     min-height: 44px;
     padding: 0 11px;
-    border: 1px solid var(--accent);
+    border: 0;
     border-radius: 7px;
     font-size: 13px;
     font-weight: var(--font-weight-semibold);
@@ -77,7 +75,7 @@
 }
 
 .cart-guest-actions button:last-child {
-    background: var(--surface);
+    background: var(--control-surface);
     color: var(--accent-ink);
 }
 
@@ -150,7 +148,6 @@
 .cart-group > header {
     min-height: 46px;
     padding: 0 14px;
-    border-bottom: 1px solid var(--skin-divider);
     background: var(--soft);
     display: flex;
     align-items: center;
@@ -175,7 +172,6 @@
 .cart-line-swipe {
     position: relative;
     overflow: hidden;
-    border-bottom: 1px solid var(--line);
     background: color-mix(in srgb, var(--soft) 88%, #d7ddd9);
     touch-action: pan-y;
 }
@@ -401,7 +397,6 @@
 .cart-line-actions > div {
     height: 46px;
     overflow: hidden;
-    border: 1px solid var(--line);
     border-radius: 6px;
     display: flex;
     align-items: center;
@@ -438,7 +433,6 @@
     bottom: calc(var(--bottom-navigation-height) + var(--safe-bottom));
     left: 50%;
     transform: translateX(-50%);
-    border-top: 1px solid var(--line);
     background: color-mix(in srgb, var(--paper) 96%, transparent);
     box-shadow: var(--shadow-md);
     display: flex;

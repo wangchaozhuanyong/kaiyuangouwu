@@ -23,8 +23,8 @@
         position: sticky;
         top: 0;
         z-index: 50;
-        border-bottom: 1px solid var(--line);
         background: var(--paper);
+        box-shadow: var(--skin-header-shadow);
     }
     .desktop-header-inner {
         display: grid;
@@ -174,7 +174,6 @@
         align-items: center;
         gap: 4px;
         padding-left: 16px;
-        border-left: 1px solid var(--line);
     }
     .desktop-header-settings button,
     .desktop-header-settings select,
@@ -235,7 +234,6 @@
         align-items: center;
         gap: 0 24px;
         min-height: 76px;
-        border-bottom: 1px solid var(--line);
     }
     .desktop-local-navigation :is(button, a) {
         display: flex;
@@ -243,7 +241,7 @@
         min-height: 76px;
         padding: 16px 8px;
         border: 0;
-        border-bottom: 2px solid transparent;
+        border-radius: var(--radius-sm);
         background: transparent;
         color: var(--text);
         font-size: 14px;
@@ -258,7 +256,7 @@
     }
     .desktop-local-navigation [aria-pressed='true'],
     .desktop-local-navigation [aria-current='page'] {
-        border-bottom-color: var(--accent);
+        background: var(--accent-soft);
         font-weight: 600;
     }
     .desktop-account-navigation {
@@ -271,7 +269,6 @@
         align-items: center;
         gap: 8px;
         padding-block: 14px;
-        border-bottom: 1px solid var(--line);
     }
     .desktop-subcategories button,
     .desktop-category-retry {
@@ -479,7 +476,7 @@
         box-shadow: none;
     }
     .desktop-store-highlights {
-        border-top: 1px solid var(--line);
+        padding-top: 8px;
     }
     .desktop-store-highlights summary {
         display: flex;
@@ -536,7 +533,6 @@
         margin: 0;
         background: var(--paper);
         color: var(--text);
-        border-bottom: 1px solid var(--line);
     }
     .has-desktop-catalog .product-detail-page > .detail-gallery {
         max-height: 540px;
@@ -647,7 +643,6 @@
     .has-desktop-catalog .account-panel {
         padding: 8px 0 16px;
         border: 0;
-        border-bottom: 1px solid var(--line);
         border-radius: 0;
         box-shadow: none;
     }
@@ -708,9 +703,9 @@
         box-shadow: none;
     }
     .has-desktop-catalog .account-avatar :is(button > span, div > span) {
-        background: transparent;
+        background: var(--control-surface);
         color: var(--text);
-        border: 1px solid var(--text);
+        border: 0;
     }
     .has-desktop-catalog .account-avatar svg {
         width: 36px;
@@ -723,7 +718,6 @@
         align-items: center;
         gap: 24px;
         padding-bottom: 20px;
-        border-bottom: 1px solid var(--line);
     }
     .desktop-account-order-product {
         display: flex;
@@ -765,9 +759,9 @@
     .desktop-outline-button {
         min-height: 38px;
         padding: 8px 22px;
-        border: 1px solid var(--line);
+        border: 0;
         border-radius: 6px;
-        background: var(--paper);
+        background: var(--control-surface);
         color: var(--text);
         cursor: pointer;
     }
@@ -820,7 +814,7 @@
     .has-desktop-catalog .order-list {
         display: flex;
         padding: 28px 0 0;
-        gap: 0;
+        gap: 12px;
     }
     .desktop-order-columns,
     .has-desktop-catalog .order-card {
@@ -844,10 +838,9 @@
         min-width: 0;
         padding: 24px;
         border: 0;
-        border-bottom: 1px solid var(--line);
-        border-radius: 0;
+        border-radius: var(--radius-md);
         background: var(--paper);
-        box-shadow: none;
+        box-shadow: var(--shadow-sm);
     }
     .has-desktop-catalog .order-card-header {
         grid-column: 1 / -1;
@@ -927,7 +920,6 @@
         justify-content: flex-end;
         margin-top: 24px;
         padding-top: 20px;
-        border-top: 1px solid var(--line);
     }
     .has-desktop-catalog .order-total-count {
         margin-right: auto;
@@ -968,13 +960,13 @@
         height: 24px;
     }
     .has-desktop-catalog .account-order-shortcuts > button:not(:first-child) {
-        border-left: 1px solid var(--line);
+        border-left: 0;
     }
     .has-desktop-catalog .account-recent-purchases article > button {
         border-radius: 6px;
         padding-inline: 22px;
-        border-color: var(--line);
-        color: var(--text);
+        background: var(--accent-soft);
+        color: var(--accent-ink);
     }
     .desktop-shortcut-count {
         font-size: 14px;
@@ -1001,7 +993,9 @@
         margin: 0;
     }
     .has-desktop-catalog .orders-page .order-tabs button[aria-pressed='true'] {
-        border-bottom: 2px solid var(--accent);
+        border: 0;
+        background: var(--accent-soft);
+        color: var(--accent-ink);
     }
 
     @media (max-width: 1279px) {

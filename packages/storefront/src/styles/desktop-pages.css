@@ -33,8 +33,8 @@
         padding: 0 14px;
         white-space: nowrap;
         color: var(--accent);
-        border: 1px solid var(--line);
-        background: var(--surface, var(--paper));
+        border: 0;
+        background: var(--control-surface);
         border-radius: var(--skin-control-radius);
     }
 
@@ -366,21 +366,17 @@
     .desktop-product-buying .detail-options button {
         min-height: 40px;
         padding: 10px 18px;
-        background: var(--paper);
-        border: 1px solid var(--line);
+        background: var(--control-surface);
+        border: 0;
         border-radius: var(--skin-control-radius);
         font-size: 14px;
         box-shadow: none;
-        transition:
-            border-color 140ms ease,
-            background-color 140ms ease;
+        transition: background-color 140ms ease;
     }
     .desktop-product-buying .detail-options button:hover {
-        border-color: var(--accent);
-        background: var(--soft);
+        background: var(--control-surface-hover);
     }
     .desktop-product-buying .detail-options button.is-active {
-        border-color: var(--accent);
         color: var(--accent-ink);
         background: var(--accent-soft);
         font-weight: 600;
@@ -410,7 +406,7 @@
     }
     .desktop-product-buying .detail-action-bar > button:nth-child(3) {
         background: var(--accent-soft);
-        border: 1.5px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+        border: 0;
         color: var(--accent-ink);
         font-weight: 700;
         transition:
@@ -422,7 +418,7 @@
     }
     .desktop-product-buying .detail-action-bar > button:nth-child(4) {
         background: var(--accent);
-        border: 1px solid var(--accent);
+        border: 0;
         color: var(--accent-foreground, #fff);
         font-weight: 700;
         box-shadow: var(--accent-shadow);
@@ -555,7 +551,6 @@
         border-radius: var(--skin-card-radius, 12px);
         background: var(--surface);
         box-shadow: var(--skin-card-shadow, 0 4px 20px rgba(0, 0, 0, 0.05));
-        border: 1px solid var(--line);
     }
     .desktop-store-layout .cart-summary-header {
         display: flex;
@@ -563,7 +558,6 @@
         justify-content: space-between;
         margin-bottom: 16px;
         padding-bottom: 12px;
-        border-bottom: 1px solid var(--line);
     }
     .desktop-store-layout .cart-summary-header h2 {
         font-size: 18px;
@@ -596,7 +590,7 @@
         min-height: 48px;
         margin: 0 0 16px;
         padding: 0 14px;
-        border: 1px solid var(--line);
+        border: 0;
         border-radius: var(--skin-control-radius);
         background: var(--soft);
         box-shadow: none;
@@ -604,10 +598,9 @@
         align-items: center;
         justify-content: space-between;
         cursor: pointer;
-        transition: border-color 0.15s ease, background-color 0.15s ease;
+        transition: background-color 0.15s ease;
     }
     .desktop-store-layout .cart-summary-panel > .coupon-row:hover:not(:disabled) {
-        border-color: var(--accent);
         background: var(--control-surface-hover, var(--soft));
     }
     .desktop-store-layout .cart-summary-trust {
@@ -617,13 +610,12 @@
         gap: 16px;
         margin-top: 16px;
         padding-top: 14px;
-        border-top: 1px solid var(--line);
         font-size: 12px;
         color: var(--muted);
     }
     .desktop-store-layout .cart-group {
         background: var(--surface, var(--paper, #fff));
-        border: 1px solid var(--line);
+        border: 0;
         border-radius: var(--skin-card-radius, 12px);
         overflow: hidden;
         margin: 0;
@@ -635,7 +627,6 @@
         justify-content: space-between;
         padding: 14px 24px;
         background: var(--surface, #fff);
-        border-bottom: 1px solid var(--line);
     }
     .desktop-cart-columns,
     .desktop-cart-row {
@@ -650,7 +641,6 @@
         color: var(--muted);
         font-size: 13px;
         font-weight: 500;
-        border-bottom: 1px solid var(--line);
     }
     .desktop-cart-columns > :not(:first-child),
     .desktop-cart-row > :not(:first-child) {
@@ -658,15 +648,12 @@
     }
     .desktop-cart-row {
         min-height: 104px;
-        background: var(--surface, var(--paper));
-        margin: 0;
+        background: var(--module-action-surface);
+        margin: 8px 12px;
         border-top: 0;
-        border-radius: 0;
+        border-radius: var(--radius-sm);
         box-shadow: none;
         font-size: 14px;
-    }
-    .desktop-cart-row + .desktop-cart-row {
-        border-top: 1px solid var(--skin-divider);
     }
     .desktop-cart-product {
         display: flex;
@@ -712,7 +699,7 @@
         place-items: center;
         height: 32px;
         padding: 0;
-        border: 1px solid var(--line);
+        border: 0;
         background: var(--soft);
         color: var(--text);
     }
@@ -726,7 +713,6 @@
     .desktop-cart-quantity > span {
         height: 32px;
         line-height: 30px;
-        border-block: 1px solid var(--line);
     }
     .desktop-cart-quantity .cart-stock-error {
         grid-column: 1 / -1;
@@ -770,7 +756,6 @@
         z-index: 10;
         background: var(--surface, var(--paper));
         padding: 8px 12px;
-        border: 1px solid var(--line);
         border-radius: var(--skin-control-radius);
         box-shadow: var(--skin-card-shadow);
         min-width: 80px;
@@ -789,7 +774,6 @@
         position: static;
         transform: none;
         border: 0;
-        border-top: 1px solid var(--line);
         border-radius: 0;
         background: transparent;
         box-shadow: none;
@@ -829,7 +813,10 @@
         color: var(--accent-foreground, #fff);
         box-shadow: var(--accent-shadow);
         cursor: pointer;
-        transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+        transition:
+            background-color 0.15s ease,
+            transform 0.1s ease,
+            box-shadow 0.15s ease;
     }
     .desktop-store-layout .cart-checkout-bar > button:hover:not(:disabled) {
         background: var(--accent-hover);
@@ -1617,7 +1604,6 @@
         grid-row: 2;
         min-height: 88px;
         padding: 18px 30px;
-        border-top: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
         background: var(--surface-elevated, var(--surface));
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));

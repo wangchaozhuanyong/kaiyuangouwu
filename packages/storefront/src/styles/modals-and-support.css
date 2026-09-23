@@ -159,7 +159,6 @@
     align-items: center;
     justify-content: space-between;
     padding-top: 8px;
-    border-top: 1px dashed #e2e8f0;
 }
 
 .poster-scan-prompt {
@@ -277,10 +276,9 @@
 .support-hours-card {
     min-width: 0;
     overflow: hidden;
-    border: 1px solid var(--line);
     border-radius: 16px;
-    background: #fff;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
     padding: 18px 20px;
     display: flex;
     flex-direction: column;
@@ -368,8 +366,7 @@
     min-width: 0;
     padding: 12px 14px;
     border-radius: 10px;
-    background: #f8fafc;
-    border: 1px solid #f1f5f9;
+    background: var(--module-action-surface);
     color: #475569;
     display: flex;
     align-items: flex-start;
@@ -390,15 +387,12 @@
     margin: 0;
     font-size: 12px;
     line-height: 1.6;
-    color: #64748b;
+    color: var(--text);
 }
 
 .support-channel-list {
-    overflow: hidden;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: var(--paper);
-    box-shadow: var(--shadow-sm);
+    display: grid;
+    gap: 8px;
 }
 
 .support-channel-row {
@@ -406,8 +400,9 @@
     min-height: 76px;
     padding: 11px 11px 11px 13px;
     border: 0;
-    border-top: 1px solid var(--line);
-    background: transparent;
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
     color: var(--text);
     display: grid;
     grid-template-columns: 40px minmax(0, 1fr) auto 18px;
@@ -418,12 +413,8 @@
     cursor: pointer;
 }
 
-.support-channel-row:first-child {
-    border-top: 0;
-}
-
 .support-channel-row:hover:not(:disabled) {
-    background: var(--soft);
+    background: var(--module-action-surface-hover);
 }
 
 .support-channel-row:disabled {
@@ -519,8 +510,8 @@
 .support-channel-empty {
     min-height: 132px;
     padding: 24px;
-    border: 1px dashed var(--line);
     border-radius: 12px;
+    background: var(--surface);
     color: var(--muted);
     display: grid;
     place-items: center;
@@ -545,7 +536,6 @@
     width: min(64vw, 240px);
     aspect-ratio: 1;
     padding: 8px;
-    border: 1px solid var(--line);
     border-radius: 12px;
     background: #fff;
     box-shadow: var(--shadow-sm);
@@ -596,9 +586,9 @@
     min-height: 38px;
     margin-top: 14px;
     padding: 8px 14px;
-    border: 1px solid var(--accent);
+    border: 0;
     border-radius: 9px;
-    background: #fff;
+    background: var(--accent-soft);
     color: var(--accent-ink);
     font-size: 13px;
     font-weight: var(--font-weight-semibold);
@@ -651,7 +641,6 @@
     gap: 12px;
     padding: 14px 16px;
     margin-bottom: 14px;
-    border: 1px solid rgba(13, 148, 136, 0.2);
     border-radius: 14px;
     background: linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%);
     box-shadow: 0 4px 14px rgba(13, 148, 136, 0.05);
@@ -694,24 +683,22 @@
     align-items: center;
     gap: 6px;
     padding: 8px 14px;
-    border: 1px solid #cbd5e1;
+    border: 0;
     border-radius: 9px;
-    background: #ffffff;
-    color: #334155;
+    background: var(--control-surface);
+    color: var(--text);
     font-size: 12.5px;
     font-weight: 600;
     white-space: nowrap;
     cursor: pointer;
     transition:
         background-color 150ms ease,
-        border-color 150ms ease,
         color 150ms ease;
     flex-shrink: 0;
 }
 
 .support-order-banner-copy:hover {
-    background: #f8fafc;
-    border-color: #0d9488;
+    background: var(--control-surface-hover);
     color: #0d9488;
 }
 
@@ -721,10 +708,9 @@
 .support-evaluation-card {
     margin-top: 24px;
     padding: 18px;
-    border: 1px solid var(--line, #e2e8f0);
     border-radius: 16px;
-    background: #ffffff;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
 }
 
 .support-evaluation-header {
@@ -741,7 +727,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    color: #0f172a;
+    color: var(--text);
 }
 
 .support-evaluation-title svg {
@@ -755,7 +741,7 @@
 
 .support-evaluation-header span {
     font-size: 12px;
-    color: #64748b;
+    color: var(--muted);
     margin-left: auto;
     text-align: right;
 }
@@ -814,7 +800,7 @@
 .support-rating-text {
     font-size: 13px;
     font-weight: 600;
-    color: #b45309;
+    color: var(--text);
 }
 
 .support-evaluation-tags {
@@ -824,46 +810,46 @@
 }
 
 .support-tag-btn {
-    border: 1px solid #e2e8f0;
+    border: 0;
     border-radius: 20px;
     padding: 6px 12px;
-    background: #f8fafc;
+    background: var(--control-surface);
     font-size: 12px;
-    color: #475569;
+    color: var(--text);
     cursor: pointer;
     transition:
         background-color 150ms ease,
-        border-color 150ms ease,
         color 150ms ease;
 }
 
 .support-tag-btn:hover {
-    border-color: #cbd5e1;
+    background: var(--control-surface-hover);
 }
 
 .support-tag-btn.is-active {
-    background: #f0fdfa;
-    border-color: #0d9488;
-    color: #0d9488;
+    background: var(--accent-soft);
+    color: var(--accent-ink);
     font-weight: 600;
 }
 
 .support-evaluation-textarea {
     width: 100%;
     padding: 10px 12px;
-    border: 1px solid #cbd5e1;
+    border: 0;
     border-radius: 10px;
     font-size: 13px;
-    color: #0f172a;
-    background: #ffffff;
+    color: var(--text);
+    background: var(--control-surface);
     resize: vertical;
     outline: none;
-    transition: border-color 150ms ease;
+    transition: background-color 150ms ease;
     box-sizing: border-box;
 }
 
 .support-evaluation-textarea:focus {
-    border-color: var(--accent, #0d9488);
+    background: var(--surface);
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
 }
 
 .support-evaluation-submit-btn {
@@ -901,22 +887,22 @@
 
 .support-evaluation-success strong {
     font-size: 14px;
-    color: #0f172a;
+    color: var(--text);
 }
 
 .support-evaluation-success small {
     font-size: 12px;
-    color: #64748b;
+    color: var(--muted);
 }
 
 .support-evaluation-edit-btn {
     margin-top: 8px;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
+    border: 0;
+    background: var(--control-surface);
     border-radius: 8px;
     padding: 6px 14px;
     font-size: 12px;
-    color: #475569;
+    color: var(--text);
     cursor: pointer;
 }
 

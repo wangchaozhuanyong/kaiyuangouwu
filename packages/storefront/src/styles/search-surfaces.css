@@ -4,7 +4,6 @@
     position: sticky;
     z-index: 10;
     top: 0;
-    border-bottom: 1px solid var(--line);
     background: color-mix(in srgb, var(--surface) 98%, transparent);
     backdrop-filter: blur(14px);
     display: grid;
@@ -38,7 +37,7 @@
 .search-header > label {
     height: 40px;
     padding: 0 12px;
-    border: 1px solid var(--line);
+    border: 0;
     border-radius: 9999px;
     background: var(--soft);
     display: grid;
@@ -46,15 +45,14 @@
     align-items: center;
     gap: 8px;
     transition:
-        border-color 160ms ease,
         background 160ms ease,
         box-shadow 160ms ease;
 }
 
 .search-header > label:focus-within {
-    border-color: var(--text);
     background: var(--surface);
-    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
 }
 
 .search-header > label svg {
@@ -152,21 +150,19 @@
 .search-tags button {
     min-height: 44px;
     padding: 0 12px;
-    border: 1px solid var(--line);
+    border: 0;
     border-radius: 9999px;
-    background: var(--paper);
+    background: var(--control-surface);
     color: var(--text);
     font-size: 12.5px;
     font-weight: var(--font-weight-medium);
     transition:
         background-color 140ms ease,
-        border-color 140ms ease,
         color 140ms ease;
 }
 
 .search-tags button:hover {
-    border-color: var(--text);
-    background: var(--soft);
+    background: var(--control-surface-hover);
 }
 
 .popular-searches ol {
@@ -180,7 +176,6 @@
 
 .popular-searches li {
     min-width: 0;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
 }
 
 .popular-searches li button {
@@ -241,7 +236,7 @@
     min-width: 0;
     min-height: 76px;
     padding: 10px 4px;
-    border: 1px solid rgba(0, 0, 0, 0.04);
+    border: 0;
     border-radius: var(--radius-md);
     background: var(--soft);
     color: var(--text);
@@ -286,8 +281,6 @@
 .search-sort {
     height: 42px;
     margin: 0 -12px;
-    border-top: 1px solid var(--line);
-    border-bottom: 1px solid var(--line);
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -299,6 +292,7 @@
 }
 
 .search-sort button.is-active {
+    background: var(--accent-soft);
     color: var(--accent-ink);
     font-weight: 600;
 }
@@ -317,9 +311,9 @@
 .search-load-error button {
     min-width: 64px;
     height: 34px;
-    border: 1px solid var(--line);
+    border: 0;
     border-radius: 7px;
-    background: var(--surface);
+    background: var(--control-surface);
     color: var(--accent);
 }
 

@@ -7,14 +7,13 @@
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     background: var(--surface);
-    border-bottom: 1px solid var(--skin-divider);
     backdrop-filter: none;
 }
 .order-tabs button {
     min-width: 0;
     padding: 0 2px;
     border: 0;
-    border-bottom: 2.5px solid transparent;
+    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--muted);
     font-size: clamp(10.5px, 3.35vw, 14px);
@@ -30,8 +29,8 @@
     color: var(--text);
 }
 .order-tabs button.is-active {
-    border-bottom-color: var(--accent);
-    color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
     font-weight: var(--font-weight-bold);
 }
 @media (min-width: 1024px) {
@@ -49,7 +48,6 @@
     gap: 7px;
     background: var(--surface);
     color: var(--text);
-    border-bottom: 1px solid var(--skin-divider);
 }
 .order-search > svg {
     width: 18px;

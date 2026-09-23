@@ -320,6 +320,28 @@
     font-weight: 650;
     line-height: 1.4;
 }
+.account-page .account-latest-logistics > button {
+    border: 0;
+    background: var(--module-action-surface);
+}
+.account-page .account-latest-logistics > button:hover {
+    background: var(--module-action-surface-hover);
+}
+.account-page .account-recent-purchases > div {
+    display: grid;
+    gap: 2px;
+}
+.account-page .account-recent-purchases > div > article {
+    border: 0;
+}
+.account-page .account-recent-purchases article > button {
+    border: 0;
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+}
+.account-page .account-recent-purchases article > button:hover {
+    background: var(--control-surface-pressed);
+}
 .account-page .account-order-shortcuts {
     margin-top: 6px;
 }
@@ -440,7 +462,6 @@
 .referral-invite-code {
     margin-top: 22px;
     padding-top: 18px;
-    border-top: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .referral-invite-code-label {
     color: var(--muted);

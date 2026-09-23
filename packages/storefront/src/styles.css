@@ -758,7 +758,6 @@ img {
     position: sticky;
     z-index: var(--layer-sticky);
     top: 0;
-    border-bottom: 1px solid var(--skin-divider);
     background: var(--surface);
     /* Surface treatment belongs to the header, not a higher-specificity skin
        selector: desktop compositions and image overlays can opt out normally. */

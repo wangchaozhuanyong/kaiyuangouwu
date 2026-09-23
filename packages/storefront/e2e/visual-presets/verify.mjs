@@ -12,6 +12,7 @@ const baseUrl = process.env.STOREFRONT_VISUAL_BASE_URL || 'http://127.0.0.1:5188
 const requestedPreset = process.env.STOREFRONT_VISUAL_PRESET;
 const requestedRoute = process.env.STOREFRONT_VISUAL_ROUTE;
 const requestedWidth = Number(process.env.STOREFRONT_VISUAL_WIDTH || 0);
+const requestedContent = process.env.STOREFRONT_VISUAL_CONTENT || 'normal';
 const presets = requestedPreset ? [requestedPreset] : ['classic', 'modern-oriental', 'neo-minimalist'];
 const expectedPaletteSignature = {
     classic: { page: '#f1f5f9', surface: '#ffffff', text: '#0f172a', brand: '#3558aa' },
@@ -98,7 +99,7 @@ try {
                 if (url.pathname.includes('shop-api')) {
                     return route.fulfill({
                         contentType: 'application/json',
-                        body: JSON.stringify({ data: fixtureData(preset, signedIn) }),
+                        body: JSON.stringify({ data: fixtureData(preset, signedIn, requestedContent) }),
                     });
                 }
                 if (url.pathname.includes('/storefront-realtime')) {
@@ -534,6 +535,30 @@ try {
                         'border-bottom-width',
                         '0px',
                     );
+                    if (requestedContent === 'dense') {
+                        for (const selector of [
+                            '.account-latest-logistics > button',
+                            '.account-recent-purchases article',
+                            '.account-recent-purchases article > button',
+                        ]) {
+                            await expect(page.locator(selector).first()).toHaveCSS('border-top-width', '0px');
+                        }
+                    }
+                }
+                if (name === 'support' && requestedContent === 'support') {
+                    for (const selector of [
+                        '.support-hours-card',
+                        '.support-hours-note',
+                        '.support-channel-list',
+                        '.support-channel-row',
+                        '.support-evaluation-card',
+                        '.support-tag-btn',
+                        '.support-evaluation-textarea',
+                    ]) {
+                        await expect(page.locator(selector).first()).toHaveCSS('border-top-width', '0px');
+                    }
+                    await page.locator('.support-tag-btn').first().click();
+                    await expect(page.locator('.support-tag-btn').first()).toHaveClass(/is-active/);
                 }
                 if (width < 1024 && name === 'checkout') {
                     await expect(page.locator('.checkout-options > button').first()).toHaveCSS(
@@ -568,6 +593,7 @@ try {
                             'home',
                             'category',
                             'product',
+                            'cart',
                             'checkout',
                             'account',
                             'login',
