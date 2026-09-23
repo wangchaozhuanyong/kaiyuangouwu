@@ -306,6 +306,33 @@ jobs:
                   aws-region: ${{ env.AWS_REGION }}
                   allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
 
+            - name: Read root EBS volume metadata
+              if: ${{ inputs.operation == 'diagnose' }}
+              run: |
+                  set -Eeuo pipefail
+                  instance_file="$RUNNER_TEMP/production-root-instance.json"
+                  if ! aws ec2 describe-instances --region "$AWS_REGION" \
+                    --instance-ids "$INSTANCE_ID" --output json > "$instance_file" 2>/dev/null; then
+                    echo 'PRODUCTION_ROOT_EBS_METADATA_UNAVAILABLE reason=describe-instances-denied'
+                    exit 0
+                  fi
+                  volume_id="$(jq -r '
+                    .Reservations[0].Instances[0] as $instance |
+                    [$instance.BlockDeviceMappings[] | select(.DeviceName == $instance.RootDeviceName) | .Ebs.VolumeId][0] // empty
+                  ' "$instance_file")"
+                  [[ "$volume_id" =~ ^vol-[0-9a-f]+$ ]] || {
+                    echo 'PRODUCTION_ROOT_EBS_METADATA_UNAVAILABLE reason=root-volume-missing'
+                    exit 0
+                  }
+                  volume_file="$RUNNER_TEMP/production-root-volume.json"
+                  if ! aws ec2 describe-volumes --region "$AWS_REGION" \
+                    --volume-ids "$volume_id" --output json > "$volume_file" 2>/dev/null; then
+                    echo 'PRODUCTION_ROOT_EBS_METADATA_UNAVAILABLE reason=describe-volumes-denied'
+                    exit 0
+                  fi
+                  jq -c '.Volumes[0] | {volumeId: .VolumeId, sizeGiB: .Size, type: .VolumeType, state: .State}' "$volume_file" |
+                    sed 's/^/PRODUCTION_ROOT_EBS_METADATA /'
+
             - name: Run the fixed production operation
               id: operation
               env:

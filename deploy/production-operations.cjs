@@ -595,6 +595,7 @@ function diagnose(request) {
     // treating an untracked production path as safe to delete.
     const diskFootprintPaths = {
         repository: '/var/www/kaiyuangouwu',
+        repositoryGit: '/var/www/kaiyuangouwu/.git',
         repositoryPackages: '/var/www/kaiyuangouwu/packages',
         repositoryDevServerDist: '/var/www/kaiyuangouwu/packages/dev-server/dist',
         repositoryStorefrontDist: '/var/www/kaiyuangouwu/packages/storefront/dist',
@@ -604,6 +605,8 @@ function diagnose(request) {
         releases: '/var/www/kaiyuangouwu-releases',
         logs: '/var/log',
         backups: '/var/backups',
+        databaseBackups: '/var/backups/vendure-mysql',
+        fileBackups: '/var/backups/vendure-files',
         systemCache: '/var/cache',
         ubuntuHome: '/home/ubuntu',
     };
@@ -612,6 +615,8 @@ function diagnose(request) {
         sourceSha: request.sourceSha,
         observedAt: new Date().toISOString(),
         disk: readCommand('df', ['-Pk', '/']),
+        rootFilesystem: readCommand('findmnt', ['-no', 'SOURCE,FSTYPE', '/']),
+        rootBlockDevices: readCommand('lsblk', ['-b', '-n', '-o', 'NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE']),
         releaseSize: readCommand('du', ['-skx', '/var/www/kaiyuangouwu-releases']),
         diskFootprintKib: Object.fromEntries(
             Object.entries(diskFootprintPaths).map(([label, directory]) => [
