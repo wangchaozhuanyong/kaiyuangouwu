@@ -1402,6 +1402,9 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 20px;
     }
+    .desktop-store-layout .review-candidate-more {
+        grid-column: 1 / -1;
+    }
     .desktop-store-layout .review-composer {
         max-width: none;
         margin: 0;

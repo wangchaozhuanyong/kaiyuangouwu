@@ -572,6 +572,12 @@ try {
                         .evaluate(element => element.scrollWidth <= element.clientWidth + 1);
                     expect(detailFits, `${preset}/${width}/notifications order reference fits`).toBe(true);
                 }
+                if (name === 'reviews' && requestedContent === 'reviews') {
+                    await expect(page.locator('.review-center-pending > header > span')).toHaveText('14');
+                    await expect(page.locator('.review-candidate-row')).toHaveCount(4);
+                    await expect(page.locator('.review-candidate-row').first().locator('img')).toBeVisible();
+                    await expect(page.locator('.review-candidate-more')).toBeVisible();
+                }
                 if (width < 1024 && name === 'checkout') {
                     await expect(page.locator('.checkout-options > button').first()).toHaveCSS(
                         'border-top-width',
@@ -615,6 +621,7 @@ try {
                             'reviews',
                             'legal',
                             'notifications',
+                            'reviews',
                         ].includes(name)) ||
                     (width === 390 &&
                         [
@@ -641,6 +648,21 @@ try {
                         fullPage: true,
                         animations: 'disabled',
                     });
+                }
+                if (name === 'reviews' && requestedContent === 'reviews') {
+                    await page.locator('.review-candidate-more').click();
+                    await expect(page.locator('.review-candidate-row')).toHaveCount(14);
+                    await page.locator('.review-candidate-row').last().click();
+                    await expect(page.locator('.review-composer')).toBeInViewport();
+                    if (width < 1024) {
+                        const composerTop = await page
+                            .locator('.review-composer')
+                            .evaluate(element => element.getBoundingClientRect().top);
+                        expect(
+                            composerTop,
+                            `${preset}/${width}/reviews composer below header`,
+                        ).toBeGreaterThanOrEqual(52);
+                    }
                 }
                 await page.keyboard.press('Tab');
                 const keyboardFocus = await page.evaluate(() => {

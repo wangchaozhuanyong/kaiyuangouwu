@@ -575,6 +575,53 @@ function aftercareFixture(signedIn) {
     };
 }
 
+function reviewCenterFixture(signedIn) {
+    const base = denseCommerceFixture(signedIn);
+    if (!signedIn) return { ...base, myStorefrontReviewCandidates: [] };
+    const sourceOrders = base.activeCustomer.orders.items;
+    const lines = Array.from({ length: 14 }, (_, index) => {
+        const selectedProduct = base.products.items[index % base.products.items.length];
+        return {
+            ...sourceOrders[0].lines[0],
+            id: `qa-review-line-${index + 1}`,
+            productVariant: {
+                ...selectedProduct.variants[0],
+                name:
+                    index % 3 === 0
+                        ? selectedProduct.name
+                        : `${selectedProduct.name} · ${index % 2 ? '暖沙色' : '深海蓝'}`,
+            },
+        };
+    });
+    const orders = sourceOrders.map((sourceOrder, orderIndex) => ({
+        ...sourceOrder,
+        lines: lines.filter((_, index) => index % sourceOrders.length === orderIndex),
+    }));
+    return {
+        ...base,
+        activeCustomer: {
+            ...base.activeCustomer,
+            orders: { items: orders, totalItems: orders.length },
+        },
+        myStorefrontReviewCandidates: lines.map((line, index) => {
+            const sourceOrder = orders[index % orders.length];
+            return {
+                orderLineId: line.id,
+                orderId: sourceOrder.id,
+                orderCode: sourceOrder.code,
+                orderState: sourceOrder.state,
+                orderPlacedAt: sourceOrder.orderPlacedAt,
+                productId: line.productVariant.product.id,
+                productVariantId: line.productVariant.id,
+                productName: line.productVariant.product.name,
+                variantName: line.productVariant.name,
+                sku: line.productVariant.sku,
+                fulfillmentType: 'physical',
+            };
+        }),
+    };
+}
+
 export function fixtureData(presetId = 'modern-oriental', signedIn = true, content = 'normal') {
     return {
         storefrontVisualPreset: { channelId: 'qa-channel', presetId, revision: 'qa-1' },
@@ -687,5 +734,6 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true, conte
         productReviewSummary: { averageRating: 0, totalReviews: 0 },
         ...(content === 'dense' ? denseCommerceFixture(signedIn) : {}),
         ...(content === 'aftercare' ? aftercareFixture(signedIn) : {}),
+        ...(content === 'reviews' ? reviewCenterFixture(signedIn) : {}),
     };
 }
