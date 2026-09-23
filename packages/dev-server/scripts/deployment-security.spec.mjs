@@ -1028,6 +1028,52 @@ void test('persistent business files have encrypted offsite backup, retention an
     assert.match(restoreTimer, /^Persistent=true$/mu);
 });
 
+void test('disabled on-host restore timer cannot trigger the inherited deployment rollback trap', async () => {
+    const deploymentScript = await readFile(
+        path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'),
+        'utf8',
+    );
+    const timerChecks = deploymentScript
+        .split('\n')
+        .filter(line => line.startsWith('[[') && line.includes('vendure-file-restore-drill.timer'));
+    assert.equal(timerChecks.length, 2);
+
+    const probe = spawnSync(
+        'bash',
+        [
+            '-c',
+            `set -Eeuo pipefail
+trap 'printf "UNEXPECTED_ERR_TRAP\\n" >&2' ERR
+sudo() {
+    case "$*" in
+        '-n systemctl show vendure-file-restore-drill.timer -p UnitFileState --value') printf 'disabled\\n' ;;
+        '-n systemctl show vendure-file-restore-drill.timer -p ActiveState --value') printf 'inactive\\n' ;;
+        '-n systemctl is-enabled vendure-file-restore-drill.timer') printf 'disabled\\n'; return 1 ;;
+        '-n systemctl is-active vendure-file-restore-drill.timer') printf 'inactive\\n'; return 3 ;;
+        *) return 2 ;;
+    esac
+}
+${timerChecks.join('\n')}`,
+        ],
+        { encoding: 'utf8' },
+    );
+    assert.equal(probe.status, 0, probe.stderr);
+    assert.equal(probe.stderr, '');
+});
+
+void test('scheduled health monitor accepts the reviewed off-host restore replacement', async () => {
+    const monitorScript = await readFile(
+        path.join(repositoryRoot, 'deploy/monitor-production-health.sh'),
+        'utf8',
+    );
+    assert.doesNotMatch(
+        monitorScript,
+        /require_recent_systemd_success\s+\\\s*vendure-file-restore-drill\.timer/u,
+    );
+    assert.match(monitorScript, /systemctl show vendure-file-restore-drill\.timer -p UnitFileState --value/u);
+    assert.match(monitorScript, /systemctl show vendure-file-restore-drill\.timer -p ActiveState --value/u);
+});
+
 void test('production swap setup is fixed-size, persistent, and low-swappiness', async () => {
     const script = await readFile(path.join(repositoryRoot, 'deploy/ensure-production-swap.sh'), 'utf8');
 
@@ -1089,7 +1135,7 @@ void test('scheduled production monitor checks memory, processes, and health thr
     assert.match(script, /vendure-mysql-restore-drill\.timer/u);
     assert.match(script, /vendure-mysql-restore-drill\.service/u);
     assert.match(script, /vendure-file-restore-drill\.timer/u);
-    assert.match(script, /vendure-file-restore-drill\.service/u);
+    assert.match(script, /on-host file restore drill timer must stay disabled/u);
     assert.match(script, /ExecMainExitTimestamp/u);
     assert.match(script, /ActiveState/u);
     assert.match(script, /systemd_completion_wait_attempts=46/u);
