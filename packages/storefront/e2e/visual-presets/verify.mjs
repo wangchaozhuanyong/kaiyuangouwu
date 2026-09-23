@@ -797,13 +797,11 @@ try {
 
                 if (name === 'home' && width >= 1024) {
                     const tools = page.locator('.proto-tool-item');
-                    await expect(tools).toHaveCount(3);
-                    await expect(page.getByLabel('下一组快捷入口')).toBeVisible();
+                    await expect(tools).toHaveCount(5);
+                    await expect(page.locator('.proto-tools-count')).toContainText('5 个入口');
+                    await expect(page.locator('.proto-tools-pagination')).toHaveCount(0);
                     await expect(tools.filter({ hasText: '商品分类' })).toBeVisible();
-                    await page.getByLabel('下一组快捷入口').click();
-                    await expect(tools).toHaveCount(2);
                     await expect(tools.filter({ hasText: '优惠中心' })).toBeVisible();
-                    await expect(page.locator('.proto-tools-pagination')).toContainText('2 / 2');
                 }
 
                 if (name === 'home' && width === 1440) {

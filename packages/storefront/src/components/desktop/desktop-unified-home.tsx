@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, MessageCircle, Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { productAvailability } from '../../product-availability';
@@ -81,8 +81,12 @@ export function DesktopUnifiedHome({
                   targetValue: null,
               },
           ];
-    const toolPages = Array.from({ length: Math.ceil(tools.length / 3) }, (_, index) =>
-        tools.slice(index * 3, index * 3 + 3),
+    const toolPages = Array.from({ length: Math.ceil(tools.length / 5) }, (_, index) =>
+        tools.slice(index * 5, index * 5 + 5),
+    );
+    const hasSupportShortcut = tools.some(
+        item =>
+            item.targetType === 'SUPPORT' || (item.targetType === 'PAGE' && item.targetValue === 'support'),
     );
     const activeToolPage = Math.min(toolPage, Math.max(0, toolPages.length - 1));
     const moveToolPage = (direction: -1 | 1) => {
@@ -173,7 +177,7 @@ export function DesktopUnifiedHome({
                                     <span className="proto-tools-title-mark" aria-hidden="true">
                                         <Sparkles />
                                     </span>
-                                    <span>{isZh ? '快捷入口' : 'Quick access'}</span>
+                                    <span>{isZh ? '快捷服务导航' : 'Service shortcuts'}</span>
                                 </span>
                                 {toolPages.length > 1 ? (
                                     <div className="proto-tools-pagination">
@@ -195,7 +199,11 @@ export function DesktopUnifiedHome({
                                             <ChevronRight aria-hidden="true" />
                                         </button>
                                     </div>
-                                ) : null}
+                                ) : (
+                                    <span className="proto-tools-count">
+                                        {isZh ? `${tools.length} 个入口` : `${tools.length} shortcuts`}
+                                    </span>
+                                )}
                             </div>
                             {toolPages[activeToolPage] ? (
                                 <div className="proto-tools-list" key={`tool-page-${activeToolPage}`}>
@@ -233,10 +241,29 @@ export function DesktopUnifiedHome({
                                                     )}
                                                 </span>
                                             </span>
-                                            <ArrowRight className="proto-tool-arrow" aria-hidden="true" />
+                                            <span className="proto-tool-action">
+                                                {isZh ? '前往' : 'Open'}
+                                                <ArrowRight aria-hidden="true" />
+                                            </span>
                                         </button>
                                     ))}
                                 </div>
+                            ) : null}
+                            {!hasSupportShortcut ? (
+                                <button
+                                    type="button"
+                                    className="proto-tools-support"
+                                    onClick={() => onContentTarget('SUPPORT', null)}
+                                >
+                                    <span>
+                                        <MessageCircle aria-hidden="true" />
+                                        {isZh ? '需要帮助？联系客服' : 'Need help? Contact support'}
+                                    </span>
+                                    <span>
+                                        {isZh ? '咨询解答' : 'Get help'}
+                                        <ArrowRight aria-hidden="true" />
+                                    </span>
+                                </button>
                             ) : null}
                         </aside>
                     )}

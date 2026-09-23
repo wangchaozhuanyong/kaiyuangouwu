@@ -963,7 +963,7 @@ describe('HomePage desktop intro layout', () => {
         );
     });
 
-    it('renders only the active desktop shortcut page without changing mobile content', () => {
+    it('shows five desktop shortcuts per page without changing mobile content', () => {
         const overrides: Partial<HomePageProps> = {
             collections: [
                 {
@@ -989,6 +989,7 @@ describe('HomePage desktop intro layout', () => {
                         { label: '自定义服务入口', targetType: 'PAGE', targetValue: 'services' },
                         { label: '第四个快捷入口', targetType: 'PAGE', targetValue: 'coupons' },
                         { label: '第五个快捷入口', targetType: 'PAGE', targetValue: 'support' },
+                        { label: '第六个快捷入口', targetType: 'PAGE', targetValue: 'orders' },
                     ].map((item, position) => ({
                         ...item,
                         targetType: item.targetType as 'COLLECTION' | 'PAGE',
@@ -1006,11 +1007,12 @@ describe('HomePage desktop intro layout', () => {
         expect(desktopMarkup).toContain('主分类快捷入口');
         expect(desktopMarkup).toContain('子分类快捷入口');
         expect(desktopMarkup).toContain('自定义服务入口');
-        expect(desktopMarkup).not.toContain('第四个快捷入口');
-        expect(desktopMarkup).not.toContain('第五个快捷入口');
-        expect(desktopMarkup.match(/preset=storefront-icon-64/g) ?? []).toHaveLength(3);
+        expect(desktopMarkup).toContain('第四个快捷入口');
+        expect(desktopMarkup).toContain('第五个快捷入口');
+        expect(desktopMarkup).not.toContain('第六个快捷入口');
+        expect(desktopMarkup.match(/preset=storefront-icon-64/g) ?? []).toHaveLength(5);
         expect(desktopMarkup).not.toContain('src="/assets/preview/shortcut-0.png"');
-        expect(desktopMarkup).not.toContain('shortcut-3.png');
+        expect(desktopMarkup).not.toContain('shortcut-5.png');
         expect(desktopMarkup).toContain('aria-label="上一组快捷入口"');
         expect(desktopMarkup).toContain('aria-label="下一组快捷入口"');
         expect(desktopMarkup).toContain('proto-tools-title-mark');
@@ -1025,6 +1027,7 @@ describe('HomePage desktop intro layout', () => {
         expect(mobileMarkup).toContain('<b>自定义服务入口</b>');
         expect(mobileMarkup).toContain('<b>第四个快捷入口</b>');
         expect(mobileMarkup).toContain('<b>第五个快捷入口</b>');
+        expect(mobileMarkup).toContain('<b>第六个快捷入口</b>');
     });
 
     it('keeps adjacent hero, trust and shortcuts as independent full-width floors', () => {
