@@ -1,4 +1,10 @@
+import { storeAdministratorPermissions } from '@vendure/store-management-plugin';
 import { MigrationInterface, QueryRunner, Table, TableColumnOptions } from 'typeorm';
+
+const REVIEWED_STORE_ADMINISTRATOR_PERMISSIONS = [
+    'Authenticated',
+    ...storeAdministratorPermissions.map(String),
+];
 
 export class AddAdministratorAccessGovernance1789408800000 implements MigrationInterface {
     async up(queryRunner: QueryRunner): Promise<void> {
@@ -213,11 +219,6 @@ export class AddAdministratorAccessGovernance1789408800000 implements MigrationI
             .join(', ');
         const parameter = (index: number) =>
             queryRunner.connection.options.type === 'postgres' ? `$${index}` : '?';
-        const existingRows = (await queryRunner.query(`SELECT COUNT(*) AS count FROM ${profiles}`)) as Array<{
-            count: number | string;
-        }>;
-        if (Number(existingRows[0]?.count ?? 0) > 0) return;
-
         const owners = (await queryRunner.query(
             `SELECT a.${escape('id')} AS administratorId, a.${escape('userId')} AS userId
              FROM ${administrators} a
@@ -231,28 +232,74 @@ export class AddAdministratorAccessGovernance1789408800000 implements MigrationI
                 `Administrator access migration requires exactly one active SuperAdmin; found ${owners.length}`,
             );
         }
-        await queryRunner.query(
-            [
-                profileInsert,
-                `VALUES (CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ${parameter(1)}, ${parameter(2)},`,
-                `'PLATFORM', 'OWNER', 'ACTIVE', NULL, ${parameter(3)}, ${parameter(4)},`,
-                `'PLATFORM_OWNER', NULL)`,
-            ].join(' '),
-            [owners[0].administratorId, owners[0].userId, owners[0].administratorId, false],
-        );
-
-        if (!(await queryRunner.hasTable('store_administrator_access'))) return;
-        const storeAccounts = (await queryRunner.query(
-            `SELECT a.${escape('id')} AS administratorId, a.${escape('userId')} AS userId, s.${escape('mustChangePassword')} AS mustChangePassword
-             FROM ${legacy} s
-             INNER JOIN ${administrators} a ON a.${escape('id')} = s.${escape('administratorId')}
-             WHERE a.${escape('deletedAt')} IS NULL`,
+        const existingProfiles = (await queryRunner.query(
+            `SELECT ${escape('administratorId')} AS administratorId,
+                    ${escape('userId')} AS userId,
+                    ${escape('scope')} AS scope,
+                    ${escape('authority')} AS authority,
+                    ${escape('status')} AS status,
+                    ${escape('channelId')} AS channelId,
+                    ${escape('platformOwnerSlot')} AS platformOwnerSlot,
+                    ${escape('storePrimarySlot')} AS storePrimarySlot
+             FROM ${profiles}`,
         )) as Array<{
             administratorId: number | string;
             userId: number | string;
-            mustChangePassword: boolean | number;
+            scope: string;
+            authority: string;
+            status: string;
+            channelId: number | string | null;
+            platformOwnerSlot: string | null;
+            storePrimarySlot: string | null;
         }>;
-        const occupiedChannels = new Set<string>();
+        const profilesByAdministrator = new Map(
+            existingProfiles.map(profile => [String(profile.administratorId), profile]),
+        );
+        const ownerProfile = profilesByAdministrator.get(String(owners[0].administratorId));
+        if (ownerProfile) {
+            if (
+                String(ownerProfile.userId) !== String(owners[0].userId) ||
+                ownerProfile.scope !== 'PLATFORM' ||
+                ownerProfile.authority !== 'OWNER' ||
+                ownerProfile.status !== 'ACTIVE' ||
+                ownerProfile.channelId != null ||
+                ownerProfile.platformOwnerSlot !== 'PLATFORM_OWNER' ||
+                ownerProfile.storePrimarySlot != null
+            ) {
+                throw new Error('Existing platform owner access profile is incompatible with migration');
+            }
+        } else {
+            if (existingProfiles.some(profile => profile.platformOwnerSlot === 'PLATFORM_OWNER')) {
+                throw new Error('Existing platform owner slot belongs to a different administrator');
+            }
+            await queryRunner.query(
+                [
+                    profileInsert,
+                    `VALUES (CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ${parameter(1)}, ${parameter(2)},`,
+                    `'PLATFORM', 'OWNER', 'ACTIVE', NULL, ${parameter(3)}, ${parameter(4)},`,
+                    `'PLATFORM_OWNER', NULL)`,
+                ].join(' '),
+                [owners[0].administratorId, owners[0].userId, owners[0].administratorId, false],
+            );
+        }
+
+        const storeAccounts = (await queryRunner.hasTable('store_administrator_access'))
+            ? ((await queryRunner.query(
+                  `SELECT a.${escape('id')} AS administratorId, a.${escape('userId')} AS userId, s.${escape('mustChangePassword')} AS mustChangePassword
+                   FROM ${legacy} s
+                   INNER JOIN ${administrators} a ON a.${escape('id')} = s.${escape('administratorId')}
+                   WHERE a.${escape('deletedAt')} IS NULL`,
+              )) as Array<{
+                  administratorId: number | string;
+                  userId: number | string;
+                  mustChangePassword: boolean | number;
+              }>)
+            : [];
+        const occupiedChannels = new Set(
+            existingProfiles
+                .filter(profile => profile.storePrimarySlot != null)
+                .map(profile => String(profile.storePrimarySlot)),
+        );
         for (const account of storeAccounts) {
             if (String(account.administratorId) === String(owners[0].administratorId)) {
                 throw new Error('Platform owner cannot also be backfilled as a store administrator');
@@ -280,26 +327,74 @@ export class AddAdministratorAccessGovernance1789408800000 implements MigrationI
                 );
             }
             const accountRoles = (await queryRunner.query(
-                `SELECT r.${escape('code')} AS roleCode, r.${escape('permissions')} AS permissions
+                `SELECT r.${escape('id')} AS roleId, r.${escape('code')} AS roleCode, r.${escape('permissions')} AS permissions
                  FROM ${userRoles} ur
                  INNER JOIN ${roles} r ON r.${escape('id')} = ur.${escape('roleId')}
                  WHERE ur.${escape('userId')} = ${parameter(1)}`,
                 [account.userId],
-            )) as Array<{ roleCode: string; permissions: string | string[] | null }>;
+            )) as Array<{
+                roleId: number | string;
+                roleCode: string;
+                permissions: string | string[] | null;
+            }>;
             for (const role of accountRoles) {
+                if (role.roleCode === `${channelRows[0].code}-store-admin`) {
+                    const currentPermissions = parsePermissions(role.permissions);
+                    if (!samePermissions(currentPermissions, REVIEWED_STORE_ADMINISTRATOR_PERMISSIONS)) {
+                        await queryRunner.query(
+                            `UPDATE ${roles} SET ${escape('permissions')} = ${parameter(1)} WHERE ${escape('id')} = ${parameter(2)}`,
+                            [JSON.stringify(REVIEWED_STORE_ADMINISTRATOR_PERMISSIONS), role.roleId],
+                        );
+                        await queryRunner.query(
+                            [
+                                `INSERT INTO ${escape('administrator_permission_audit')} (${auditColumns})`,
+                                `VALUES (CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ${parameter(1)}, ${parameter(2)},`,
+                                `${parameter(3)}, ${parameter(4)}, 'MIGRATION_STORE_PRIMARY_ROLE_NORMALIZED',`,
+                                `'SUCCESS', ${parameter(5)}, ${parameter(6)}, NULL)`,
+                            ].join(' '),
+                            [
+                                owners[0].administratorId,
+                                account.administratorId,
+                                role.roleId,
+                                channels[0].channelId,
+                                JSON.stringify({
+                                    roleCode: role.roleCode,
+                                    permissions: currentPermissions,
+                                }),
+                                JSON.stringify({
+                                    roleCode: role.roleCode,
+                                    permissions: REVIEWED_STORE_ADMINISTRATOR_PERMISSIONS,
+                                }),
+                            ],
+                        );
+                    }
+                    continue;
+                }
                 for (const permission of parsePermissions(role.permissions)) {
-                    if (
-                        isPlatformOnlyPermission(permission) &&
-                        !(
-                            role.roleCode === `${channelRows[0].code}-store-admin` &&
-                            isFixedStoreTeamPermission(permission)
-                        )
-                    ) {
+                    if (isPlatformOnlyPermission(permission)) {
                         throw new Error(
                             `Store administrator ${String(account.administratorId)} has platform-only permission ${permission}`,
                         );
                     }
                 }
+            }
+            const existingProfile = profilesByAdministrator.get(String(account.administratorId));
+            if (existingProfile) {
+                if (
+                    String(existingProfile.userId) !== String(account.userId) ||
+                    existingProfile.scope !== 'STORE' ||
+                    existingProfile.authority !== 'ADMIN' ||
+                    existingProfile.status !== 'ACTIVE' ||
+                    String(existingProfile.channelId) !== channelId ||
+                    existingProfile.platformOwnerSlot != null ||
+                    String(existingProfile.storePrimarySlot) !== channelId
+                ) {
+                    throw new Error(
+                        `Existing store administrator ${String(account.administratorId)} access profile is incompatible with migration`,
+                    );
+                }
+                occupiedChannels.add(channelId);
+                continue;
             }
             if (occupiedChannels.has(channelId)) {
                 throw new Error(`Channel ${channelId} has more than one legacy primary store administrator`);
@@ -533,6 +628,8 @@ function isOwnerOnlyPermission(permission: string): boolean {
     );
 }
 
-function isFixedStoreTeamPermission(permission: string): boolean {
-    return /^(?:Create|Read|Update|Delete)Administrator$/u.test(permission);
+function samePermissions(actual: string[], expected: string[]): boolean {
+    if (actual.length !== expected.length) return false;
+    const actualSet = new Set(actual);
+    return actualSet.size === expected.length && expected.every(permission => actualSet.has(permission));
 }

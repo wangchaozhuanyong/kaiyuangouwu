@@ -31,8 +31,13 @@ readonly release_base_sha="${VENDURE_RELEASE_BASE_SHA:-}"
 readonly release_data_risk="${VENDURE_RELEASE_DATA_RISK:-}"
 readonly release_backup_policy="${VENDURE_RELEASE_BACKUP_POLICY:-}"
 readonly release_affected_checks="${VENDURE_RELEASE_AFFECTED_CHECKS:-}"
+deploy_stage="input-validation"
+deploy_failure_reason=""
+deploy_failure_line=""
 
 fail() {
+    deploy_failure_reason="$1"
+    deploy_failure_line="${BASH_LINENO[0]:-0}"
     printf 'Production deployment failed: %s\n' "$1" >&2
     if [[ "${rollback_needed:-0}" == "1" ]] && declare -F rollback >/dev/null; then
         rollback 1
@@ -392,6 +397,9 @@ cleanup() {
 
 rollback() {
     local status="${1:-$?}"
+    local failed_stage="${deploy_stage:-unknown}"
+    local failed_line="${deploy_failure_line:-${BASH_LINENO[0]:-0}}"
+    local failed_reason="${deploy_failure_reason:-unhandled-command-failure}"
     trap - ERR
 
     if [[ "${rollback_needed}" == "1" ]]; then
@@ -431,6 +439,8 @@ rollback() {
     fi
 
     cleanup
+    printf 'DEPLOY_FAILURE_EVIDENCE stage=%s status=%s line=%s reason=%s\n' \
+        "${failed_stage}" "${status}" "${failed_line}" "${failed_reason}" >&2
     exit "${status}"
 }
 
@@ -440,6 +450,7 @@ trap rollback ERR
 sudo -n install -o root -g root -m 0755 "${swap_controller_source}" "${swap_controller}"
 sudo -n "${swap_controller}"
 node "${memory_guard}" --stage pre-download --check
+deploy_stage="artifact-download"
 printf 'DEPLOY_DOWNLOAD_BEGIN\n'
 aws s3 cp "${artifact_s3_prefix}/${archive_name}" "${archive_path}" --only-show-errors
 aws s3 cp "${artifact_s3_prefix}/${checksum_name}" "${checksum_path}" --only-show-errors
@@ -452,6 +463,7 @@ tar --list --gzip --file "${archive_path}" | awk -v root="${artifact_name}" '
     $0 != root && index($0, root "/") != 1 { bad = 1 }
     END { exit bad }
 ' || fail 'runtime archive contains a path outside its release directory'
+deploy_stage="artifact-verification"
 
 if [[ ! -e "${candidate}" ]]; then
     tar --extract --gzip --same-permissions --no-same-owner \
@@ -569,6 +581,7 @@ if [[ "${reviewed_referral_posters}" != "none" ]]; then
     printf 'REFERRAL_POSTERS_PREFLIGHT_OK scope=%s\n' "${reviewed_referral_posters}"
 fi
 node "${memory_guard}" --stage pre-migration --check
+deploy_stage="migration-readiness"
 set -a
 # shellcheck disable=SC1090
 sudo -n "$(command -v node)" \
@@ -592,6 +605,7 @@ rollback_needed=1
 pm2 stop vendure-worker vendure-api 9>&-
 pm2 save 9>&-
 node "${usdt_guard}" capture "${candidate}" "${usdt_snapshot}"
+deploy_stage="database-backup"
 printf 'DEPLOY_MIGRATION_BEGIN\n'
 # Install the snapshot proof helper together with its callers before the pre-migration backup.
 for backup_tool in \
@@ -647,19 +661,24 @@ printf 'DEPLOY_BACKUP_OK policy=%s action=%s data_risk=%s file=%s age_seconds=%s
     "${release_backup_policy}" "${backup_action}" "${release_data_risk}" "${backup_file}" \
     "${backup_age_seconds}" "${backup_invocation_id}"
 
+deploy_stage="database-migration"
 (
     cd "${candidate}"
     NODE_ENV=production RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \
         node packages/dev-server/dist/run-migrations.js
 )
+deploy_stage="migration-integrity-verification"
 node "${usdt_guard}" verify "${candidate}" "${usdt_snapshot}"
+deploy_stage="server-readiness"
 NODE_ENV=production READINESS_PROCESS_ROLE=server RUN_MIGRATIONS=false RUN_JOB_QUEUE=0 \
     node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"
+deploy_stage="worker-readiness"
 NODE_ENV=production READINESS_PROCESS_ROLE=worker RUN_MIGRATIONS=false RUN_JOB_QUEUE=0 \
     node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"
 
 node "${memory_guard}" --stage pre-switch --check
 rollback_needed=1
+deploy_stage="runtime-switch"
 VENDURE_DEPLOYMENT_ID="${deployment_id}" \
     "${repository}/deploy/switch-production-runtime.sh" "${candidate}" 9>&-
 
