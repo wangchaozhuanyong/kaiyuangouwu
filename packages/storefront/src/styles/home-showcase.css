@@ -1520,7 +1520,7 @@ html[lang='en'] .quick-grid b {
     min-height: 0;
     padding: 2px 2px 5px;
     background: transparent;
-    color: #0f172a;
+    color: var(--text);
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
