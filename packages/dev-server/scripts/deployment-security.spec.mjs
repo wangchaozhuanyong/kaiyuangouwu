@@ -1011,6 +1011,7 @@ void test('persistent business files have encrypted offsite backup, retention an
     assert.match(offhostWorkflow, /restore every offsite file before production switch/u);
     assert.match(offhostWorkflow, /offsite-file-restore-drill\.py/u);
     assert.match(offhostWorkflow, /OFFSITE_FILE_RESTORE_PROOF_OK/u);
+    assert.match(offhostWorkflow, /\/bin\/bash <<'VENDURE_OFFSITE_PROOF'/u);
     assert.match(offhostScript, /restore_stream/u);
     assert.match(offhostScript, /DISK_RESERVE_BYTES/u);
     assert.match(deploymentScript, /DEPLOY_OFFSITE_FILE_RESTORE_OK/u);
