@@ -562,6 +562,9 @@ export function AppShell() {
         setChannelError('');
         try {
             await switchActiveChannel(channelToken);
+            // clearStore does not refetch mounted queries. Refresh the shell's active Channel
+            // before returning to the dashboard so its selector and permissions match page data.
+            await refetchAppShell();
             setTabs([{ path: '/dashboard', href: '/dashboard', label: '工作台' }]);
             completeNavigation('/dashboard', { replace: true });
         } catch (error) {

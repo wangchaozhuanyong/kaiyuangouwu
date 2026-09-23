@@ -1,7 +1,7 @@
 import { gql } from '@apollo/client';
 import { useQuery } from '@apollo/client/react';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
 import {
     clearAuthSession,
@@ -108,6 +108,7 @@ function SessionExpiredRedirect() {
 }
 
 function AuthenticatedShell() {
+    const navigate = useNavigate();
     const [channelReady, setChannelReady] = useState(() => hasActiveChannelSelection());
     const [selectedChannelToken, setSelectedChannelToken] = useState(() => getActiveChannelToken());
     const recoveringChannelTokenRef = useRef<string | null>(null);
@@ -200,6 +201,16 @@ function AuthenticatedShell() {
                         className="mt-5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
                     >
                         重新验证
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            clearAuthSession();
+                            navigate('/login', { replace: true });
+                        }}
+                        className="mt-3 block w-full text-xs font-medium text-blue-700 hover:underline"
+                    >
+                        切换账号登录
                     </button>
                 </section>
             </div>
