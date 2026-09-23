@@ -34,6 +34,7 @@ readonly release_affected_checks="${VENDURE_RELEASE_AFFECTED_CHECKS:-}"
 deploy_stage="input-validation"
 deploy_failure_reason=""
 deploy_failure_line=""
+migration_failure_log=""
 
 fail() {
     deploy_failure_reason="$1"
@@ -393,6 +394,10 @@ cleanup() {
     if [[ "${staging_dir}" == "${releases_dir}/.incoming-${artifact_name}."* ]]; then
         rm -rf -- "${staging_dir}"
     fi
+    if [[ -n "${migration_failure_log:-}" && \
+        "${migration_failure_log}" == /tmp/vendure-migration-output.* ]]; then
+        rm -f -- "${migration_failure_log}"
+    fi
 }
 
 rollback() {
@@ -438,6 +443,11 @@ rollback() {
         printf 'ROLLBACK_DONE\n'
     fi
 
+    if [[ -n "${migration_failure_log:-}" && -s "${migration_failure_log}" ]]; then
+        printf '%s\n' 'MIGRATION_FAILURE_OUTPUT_BEGIN' >&2
+        tail -n 80 "${migration_failure_log}" >&2 || true
+        printf '%s\n' 'MIGRATION_FAILURE_OUTPUT_END' >&2
+    fi
     cleanup
     printf 'DEPLOY_FAILURE_EVIDENCE stage=%s status=%s line=%s reason=%s\n' \
         "${failed_stage}" "${status}" "${failed_line}" "${failed_reason}" >&2
@@ -596,7 +606,8 @@ NODE_ENV=production READINESS_PROCESS_ROLE=migration RUN_MIGRATIONS=true RUN_JOB
     node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"
 readonly usdt_guard="${repository}/deploy/usdt-migration-guard.cjs"
 readonly usdt_snapshot="${releases_dir}/usdt-migration-${deployment_id}.json"
-node "${usdt_guard}" plan "${candidate}"
+readonly migration_plan="$(node "${usdt_guard}" plan "${candidate}")"
+printf '%s\n' "${migration_plan}"
 # Check after staging the verified artifact, while the healthy runtime still serves traffic.
 # Retention must be reviewed separately; do not lower the health threshold or delete releases here.
 check_production_disk_usage
@@ -662,11 +673,35 @@ printf 'DEPLOY_BACKUP_OK policy=%s action=%s data_risk=%s file=%s age_seconds=%s
     "${backup_age_seconds}" "${backup_invocation_id}"
 
 deploy_stage="database-migration"
-(
-    cd "${candidate}"
-    NODE_ENV=production RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \
-        node packages/dev-server/dist/run-migrations.js
-)
+migration_failure_log="$(mktemp /tmp/vendure-migration-output.XXXXXX)"
+migration_status=0
+if grep -Fq '"GuardAdministratorPermissionAudit1789700400000"' <<< "${migration_plan}"; then
+    if NODE_ENV=production RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \
+        node "${repository}/deploy/prepare-mysql-audit-triggers.mjs" run-migrations "${candidate}" \
+            >"${migration_failure_log}" 2>&1; then
+        migration_status=0
+    else
+        migration_status="$?"
+    fi
+else
+    if (
+        cd "${candidate}"
+        NODE_ENV=production RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \
+            node packages/dev-server/dist/run-migrations.js
+    ) >"${migration_failure_log}" 2>&1; then
+        migration_status=0
+    else
+        migration_status="$?"
+    fi
+fi
+cat "${migration_failure_log}"
+if [[ "${migration_status}" != "0" ]]; then
+    deploy_failure_reason="database-migration-command-failed"
+    deploy_failure_line="${LINENO}"
+    false
+fi
+rm -f -- "${migration_failure_log}"
+migration_failure_log=""
 deploy_stage="migration-integrity-verification"
 node "${usdt_guard}" verify "${candidate}" "${usdt_snapshot}"
 deploy_stage="server-readiness"

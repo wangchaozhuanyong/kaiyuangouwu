@@ -5,7 +5,68 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { triggerSql, validateTriggerRows } from '../../../deploy/prepare-mysql-audit-triggers.mjs';
+
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+
+void test('production audit triggers are prepared through the local root socket without broadening the app account', async () => {
+    assert.equal(
+        triggerSql('administrator_permission_audit_no_update', 'UPDATE', 'vendure-production'),
+        [
+            'CREATE TRIGGER IF NOT EXISTS `vendure-production`.`administrator_permission_audit_no_update`',
+            'BEFORE UPDATE ON `vendure-production`.`administrator_permission_audit`',
+            "FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Administrator permission audit is append-only'",
+        ].join(' '),
+    );
+    assert.throws(
+        () => triggerSql('administrator_permission_audit_no_update', 'DELETE', 'vendure-production'),
+        /Unexpected audit trigger/u,
+    );
+    validateTriggerRows([
+        {
+            name: 'administrator_permission_audit_no_delete',
+            timing: 'BEFORE',
+            event: 'DELETE',
+            tableName: 'administrator_permission_audit',
+            statement:
+                "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Administrator permission audit is append-only'",
+        },
+        {
+            name: 'administrator_permission_audit_no_update',
+            timing: 'BEFORE',
+            event: 'UPDATE',
+            tableName: 'administrator_permission_audit',
+            statement:
+                "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Administrator permission audit is append-only'",
+        },
+    ]);
+    assert.throws(
+        () =>
+            validateTriggerRows([
+                {
+                    name: 'administrator_permission_audit_no_delete',
+                    timing: 'AFTER',
+                    event: 'DELETE',
+                    tableName: 'administrator_permission_audit',
+                    statement: 'SELECT 1',
+                },
+            ]),
+        /incomplete|not the reviewed guard/u,
+    );
+
+    const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
+    const helper = await readFile(
+        path.join(repositoryRoot, 'deploy/prepare-mysql-audit-triggers.mjs'),
+        'utf8',
+    );
+    assert.match(script, /GuardAdministratorPermissionAudit1789700400000/u);
+    assert.match(script, /prepare-mysql-audit-triggers\.mjs" run-migrations/u);
+    assert.match(script, /MIGRATION_FAILURE_OUTPUT_BEGIN/u);
+    assert.ok(script.indexOf('MIGRATION_FAILURE_OUTPUT_END') < script.indexOf('DEPLOY_FAILURE_EVIDENCE'));
+    assert.match(helper, /'sudo',[\s\S]*'-n',[\s\S]*'mysql',[\s\S]*'--protocol=socket'/u);
+    assert.doesNotMatch(helper, /GRANT (?:ALL|TRIGGER)|SET GLOBAL/u);
+    assert.doesNotMatch(helper, /DB_PASSWORD.*stdout|stdout.*DB_PASSWORD/u);
+});
 
 void test('checks staged disk usage before stopping the healthy runtime', async () => {
     const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
