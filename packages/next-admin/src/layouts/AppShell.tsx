@@ -96,7 +96,7 @@ import {
     resolveAppShellOpenMenu,
 } from './app-shell-navigation';
 
-const adminBrandIcon = `${import.meta.env.BASE_URL}favicon.png`;
+const adminBrandIcon = `${import.meta.env.BASE_URL}brand-icon-180.png`;
 
 interface OpenTab {
     path: string;

@@ -19,8 +19,12 @@ const inlineScripts = [...indexHtml.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/scri
 if (!indexHtml.includes('/dashboard/assets/')) {
     throw new Error('next-admin production build must load assets from /dashboard/assets/');
 }
-if (!indexHtml.includes('/dashboard/favicon.png')) {
-    throw new Error('next-admin production build must load the favicon from /dashboard/favicon.png');
+if (!indexHtml.includes('/dashboard/brand-icon-180.png')) {
+    throw new Error('next-admin production build must load the compact brand icon');
+}
+const brandIconBytes = (await stat(path.join(distRoot, 'brand-icon-180.png'))).size;
+if (brandIconBytes > 48 * 1024) {
+    throw new Error(`next-admin brand icon exceeds 48 KiB: ${brandIconBytes} bytes`);
 }
 if (javascriptAssets.length === 0) {
     throw new Error('next-admin production build did not emit any JavaScript assets');
