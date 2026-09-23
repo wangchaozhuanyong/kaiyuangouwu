@@ -2545,6 +2545,32 @@
     height: 17px;
 }
 
+@media (min-width: 1024px) {
+    .page.auth-page-login,
+    .page.auth-page-register {
+        grid-template-rows: minmax(auto, 1fr) auto;
+    }
+
+    .auth-page-login .auth-assurance-rail,
+    .auth-page-register .auth-assurance-rail {
+        grid-column: 1 / -1;
+        padding: 20px 32px;
+        border-top: 1px solid var(--line-subtle);
+        background: var(--surface);
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        align-items: center;
+        gap: 16px;
+    }
+
+    .auth-assurance-item {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+}
+
 @media (max-width: 1023px) {
     .page.auth-page-login,
     .page.auth-page-register {
