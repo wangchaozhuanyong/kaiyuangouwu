@@ -35,6 +35,8 @@ test('collector traces product, SKU, asset, category, facet and option ownership
     try {
         database.run(`
             CREATE TABLE channel (id INTEGER, code TEXT);
+            CREATE TABLE \`order\` (id INTEGER, salesChannelId INTEGER);
+            CREATE TABLE order_line (id INTEGER, orderId INTEGER, productVariantId INTEGER);
             CREATE TABLE product (id INTEGER, featuredAssetId INTEGER, deletedAt TEXT);
             CREATE TABLE product_channels_channel (productId INTEGER, channelId INTEGER);
             CREATE TABLE product_variant (id INTEGER, productId INTEGER, sku TEXT, featuredAssetId INTEGER, deletedAt TEXT);
@@ -62,7 +64,11 @@ test('collector traces product, SKU, asset, category, facet and option ownership
             INSERT INTO product VALUES (1, 20, NULL);
             INSERT INTO product_channels_channel VALUES (1, 2);
             INSERT INTO product_variant VALUES (11, 1, 'SKU-11', NULL, NULL);
+            INSERT INTO product_variant VALUES (12, 1, 'OLD-SKU', NULL, '2026-01-01');
             INSERT INTO product_variant_channels_channel VALUES (11, 2);
+            INSERT INTO \`order\` VALUES (100, 1), (101, 2), (102, 1), (103, NULL);
+            INSERT INTO order_line VALUES (1, 100, 11), (2, 101, 11), (3, 101, 11),
+                (4, 102, 12), (5, 103, 11);
             INSERT INTO product_asset VALUES (1, 20);
             INSERT INTO asset VALUES (20);
             INSERT INTO asset_channels_channel VALUES (20, 2);
@@ -92,6 +98,13 @@ test('collector traces product, SKU, asset, category, facet and option ownership
                 statement.free();
                 return exists;
             },
+            columnExists: async (table, column) => {
+                const statement = database.prepare(`PRAGMA table_info(\`${table}\`)`);
+                const columns = [];
+                while (statement.step()) columns.push(statement.getAsObject().name);
+                statement.free();
+                return columns.includes(column);
+            },
             query: async (sql, parameters = []) => {
                 statements.push(sql);
                 const statement = database.prepare(sql);
@@ -120,6 +133,15 @@ test('collector traces product, SKU, asset, category, facet and option ownership
             report.related.options.map(item => item.id),
             ['31'],
         );
+        assert.deepEqual(report.historicalSales, {
+            orderCount: 4,
+            orderLineCount: 5,
+            bySalesChannel: [
+                { channelId: null, channelCode: null, orderCount: 1, orderLineCount: 1 },
+                { channelId: '1', channelCode: '__default_channel__', orderCount: 2, orderLineCount: 2 },
+                { channelId: '2', channelCode: 'moyao-ai', orderCount: 1, orderLineCount: 2 },
+            ],
+        });
         assert.ok(statements.every(sql => /^SELECT\b/u.test(sql.trim())));
 
         database.run('INSERT INTO product_channels_channel VALUES (1, 1)');
@@ -131,6 +153,12 @@ test('collector traces product, SKU, asset, category, facet and option ownership
         const sharedAsset = await collectProductOwnershipPreflight(adapter, '1');
         assert.equal(sharedAsset.editableAsExclusiveStoreProduct, false);
         assert.ok(sharedAsset.blockers.some(item => item.type === 'assets' && item.entityId === '20'));
+
+        database.run('UPDATE `order` SET salesChannelId = 99 WHERE id = 100');
+        await assert.rejects(
+            collectProductOwnershipPreflight(adapter, '1'),
+            /Historical sale has an unknown sales Channel/u,
+        );
     } finally {
         database.close();
     }

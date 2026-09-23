@@ -1179,6 +1179,13 @@ void test('administrator and product readiness audit reports blockers without ex
         editableAsExclusiveStoreProduct: false,
         product: { id: '1', channels: [{ id: '1', code: '__default_channel__' }] },
         related: { variants: [{ id: '7', label: 'PRIVATE-SKU' }] },
+        historicalSales: {
+            orderCount: 2,
+            orderLineCount: 3,
+            bySalesChannel: [
+                { channelId: '1', channelCode: '__default_channel__', orderCount: 2, orderLineCount: 3 },
+            ],
+        },
         blockers: [{ code: 'PRODUCT_WITHOUT_STORE', entityId: '1' }],
     };
     let healthChecks = 0;
@@ -1205,6 +1212,11 @@ void test('administrator and product readiness audit reports blockers without ex
     assert.equal(result.administrator.unmappedCount, 1);
     assert.equal(result.product.editableAsExclusiveStoreProduct, false);
     assert.equal(result.product.relatedCounts.variants, 1);
+    assert.deepEqual(result.product.historicalSales, {
+        orderCount: 2,
+        orderLineCount: 3,
+        bySalesChannel: [{ channelCode: '__default_channel__', orderCount: 2, orderLineCount: 3 }],
+    });
     assert.equal(result.product.blockerCount, 1);
     assert.ok(!JSON.stringify(result).includes('PRIVATE-SKU'));
     assert.ok(!JSON.stringify(result).includes('PRIVATE_ERROR_NOT_FORWARDED'));

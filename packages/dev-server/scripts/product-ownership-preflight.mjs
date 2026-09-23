@@ -32,6 +32,8 @@ const RELATION_TABLES = [
     'product_variant_facet_values_facet_value',
     'collection_product_variants_product_variant',
     'channel',
+    'order',
+    'order_line',
     ...Object.values(ENTITY_TYPES).flatMap(([entity, relation]) => [entity, relation]),
 ];
 
@@ -89,6 +91,42 @@ async function entityRecords(adapter, type, ids, channelCodes) {
             code: channelCodes.get(channelId) ?? null,
         })),
     }));
+}
+
+async function historicalSales(adapter, productId, channelCodes) {
+    if (!(await adapter.columnExists('order', 'salesChannelId'))) {
+        throw new Error('Missing required column: order.salesChannelId');
+    }
+    const rows = await adapter.query(
+        `SELECT sale.salesChannelId AS channelId,
+                COUNT(DISTINCT line.orderId) AS orderCount,
+                COUNT(*) AS orderLineCount
+         FROM \`order_line\` line
+         JOIN \`product_variant\` variant ON variant.id = line.productVariantId
+         JOIN \`order\` sale ON sale.id = line.orderId
+         WHERE variant.productId = ?
+         GROUP BY sale.salesChannelId`,
+        [productId],
+    );
+    const bySalesChannel = rows
+        .map(row => {
+            const channelId = row.channelId == null ? null : String(row.channelId);
+            if (channelId != null && !channelCodes.has(channelId)) {
+                throw new Error('Historical sale has an unknown sales Channel');
+            }
+            return {
+                channelId,
+                channelCode: channelId == null ? null : channelCodes.get(channelId),
+                orderCount: Number(row.orderCount),
+                orderLineCount: Number(row.orderLineCount),
+            };
+        })
+        .sort((a, b) => (a.channelCode ?? '').localeCompare(b.channelCode ?? ''));
+    return {
+        orderCount: bySalesChannel.reduce((total, item) => total + item.orderCount, 0),
+        orderLineCount: bySalesChannel.reduce((total, item) => total + item.orderLineCount, 0),
+        bySalesChannel,
+    };
 }
 
 export function summarizeProductOwnership(productId, records) {
@@ -224,7 +262,7 @@ export async function collectProductOwnershipPreflight(adapter, productId) {
             ]),
         ),
     );
-    return summarizeProductOwnership(productId, {
+    const report = summarizeProductOwnership(productId, {
         product: {
             id: String(productId),
             channels: uniqueIds(productChannels.map(row => row.channelId)).map(id => ({
@@ -234,6 +272,10 @@ export async function collectProductOwnershipPreflight(adapter, productId) {
         },
         related,
     });
+    return {
+        ...report,
+        historicalSales: await historicalSales(adapter, productId, channelCodes),
+    };
 }
 
 async function main() {
