@@ -8,6 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
 const auth = vi.hoisted(() => ({ clear: vi.fn(), selectedChannelToken: 'store-a', select: vi.fn() }));
+const extensionState = vi.hoisted(() => ({
+    routes: [] as Array<{ id: string; path: string; component: () => null }>,
+    load: vi.fn(async () => {}),
+}));
 vi.mock('./apollo', () => ({
     clearAuthSession: auth.clear,
     getActiveChannelToken: () => auth.selectedChannelToken,
@@ -20,9 +24,9 @@ vi.mock('./apollo', () => ({
 vi.mock('./extensions/installed-extensions', () => ({}));
 vi.mock('./extensions/extension-api', () => ({
     getNextAdminExtensionLegacyRoutes: () => [],
-    getNextAdminExtensionRoutes: () => [],
+    getNextAdminExtensionRoutes: () => extensionState.routes,
 }));
-vi.mock('./route-modules', () => ({ routeModuleLoaders: {} }));
+vi.mock('./route-modules', () => ({ routeModuleLoaders: {}, loadInstalledExtensions: extensionState.load }));
 vi.mock('./layouts/AppShell', () => ({ AppShell: () => <main>已进入管理界面</main> }));
 vi.mock('./pages/Auth/LoginModule', () => ({ LoginModule: () => <main>管理员登录入口</main> }));
 vi.mock('./pages/Auth/InitialPasswordChangeModule', () => ({
@@ -47,6 +51,9 @@ beforeEach(() => {
     auth.clear.mockClear();
     auth.select.mockClear();
     auth.selectedChannelToken = 'store-a';
+    extensionState.routes = [];
+    extensionState.load.mockReset();
+    extensionState.load.mockResolvedValue(undefined);
     window.history.replaceState(null, '', '/dashboard');
 });
 afterEach(async () => {
@@ -88,6 +95,31 @@ async function renderApp(respond: (name: string) => Record<string, unknown> | Er
     });
     return { host, requests };
 }
+
+it('keeps a direct extension URL until its routes are registered', async () => {
+    let finishRegistration: (() => void) | undefined;
+    extensionState.load.mockImplementationOnce(
+        () =>
+            new Promise<void>(resolve => {
+                finishRegistration = resolve;
+            }),
+    );
+    window.history.replaceState(null, '', '/settings/usdt-payments');
+    const { host } = await renderApp(() => ({ data: ready }));
+
+    expect(window.location.pathname).toBe('/settings/usdt-payments');
+    expect(host.textContent).toContain('正在加载管理后台');
+
+    extensionState.routes.push({
+        id: 'fixture-usdt-payments',
+        path: '/settings/usdt-payments',
+        component: () => null,
+    });
+    await act(async () => finishRegistration?.());
+
+    expect(window.location.pathname).toBe('/settings/usdt-payments');
+    expect(host.textContent).toContain('已进入管理界面');
+});
 
 // Simulation issue #41: a localized FORBIDDEN is not proof that the session expired.
 describe('admin bootstrap session recovery', () => {

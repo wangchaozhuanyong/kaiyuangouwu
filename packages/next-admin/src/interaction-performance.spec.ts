@@ -20,9 +20,11 @@ describe('admin interaction performance contract', () => {
     it('keeps authenticated extension registration out of the login entry', () => {
         const app = readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
         const shell = readFileSync(path.join(__dirname, 'layouts/AppShell.tsx'), 'utf8');
+        const routeModules = readFileSync(path.join(__dirname, 'route-modules.ts'), 'utf8');
         const vite = readFileSync(path.join(__dirname, '../vite.config.ts'), 'utf8');
 
         expect(app).not.toContain('./extensions/installed-extensions');
+        expect(routeModules).toContain("import('./extensions/installed-extensions')");
         expect(shell).toContain('../extensions/installed-extensions');
         expect(vite).not.toContain("'lucide-icons': ['lucide-react']");
     });
