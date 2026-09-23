@@ -15,6 +15,17 @@ Headless e-commerce framework. Lerna monorepo with fixed versioning.
 - If GitHub starts full CI automatically, let it run in the background. Do not repeatedly poll or rerun it, and do not block an otherwise authorized merge or deployment solely because unrelated full-suite jobs are still running.
 - Report any failed check that is relevant to the changed path. Never describe an unrun or still-running check as passed.
 
+## Product and Interface Design Principles
+
+- Treat each page, modal, or task-focused state as having one visually strongest primary action. Necessary parallel admin operations may remain available, but they must use secondary or tertiary emphasis unless one action is the clear next step.
+- Build container hierarchy primarily with spacing, typography, and semantic surface colors. Reserve borders for controls, selection, keyboard focus, tables, and true reading separation; do not use repeated card outlines as the default layout tool.
+- Product media must use the shared stable aspect-ratio contract. Catalog and product subjects use `contain`; skins may change the surrounding surface and radius, but must not crop the product itself. Only explicit marketing artwork may opt into crop behavior.
+- Motion must explain state, continuity, or feedback. Do not add persistent blur or filter effects, scroll-driven computation, or decorative animation merely to imply premium quality. Prefer bounded `transform` and `opacity` transitions and support reduced-motion preferences.
+- Admin interfaces optimize scanning, comparison, data density, and task throughput. They use the admin design system and must not mechanically inherit storefront skin decoration or merchandising composition.
+- New pages and components must consume existing semantic color, spacing, radius, elevation, typography, motion, and media tokens before introducing a new token. A new token requires a reusable cross-page semantic role; page-local colors, radii, and shadows are not allowed.
+- Build-size and performance budgets are regression ceilings, not allowances or growth targets. New work should stay below the current measured output where practical. Raising a budget requires a documented cause and evidence that removal, reuse, or splitting is insufficient or unsafe.
+- Storefront skin work must also follow `packages/storefront/DESKTOP_SKIN_DESIGN_CONTRACT.md`. If a skin-specific rule conflicts with this repository-wide baseline, the baseline wins unless the exception is explicitly documented.
+
 ## Release execution
 
 - Keep one release ledger: target revision, production component revisions, changed files, required checks, reused evidence, artifact, and acceptance result. Use `scripts/release-evidence.mjs` and `deploy/release-route.mjs`; do not improvise another full test or deployment sequence.

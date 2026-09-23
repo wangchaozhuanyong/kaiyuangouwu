@@ -194,7 +194,7 @@ describe('guest Buy now and auth-page navigation', () => {
                 to: '/forgot-password',
                 search: { returnTo: 'purchase', id: 'selected-variant' },
             });
-            act(() => buttons.find(button => button.textContent === '注册')?.click());
+            act(() => container.querySelector<HTMLButtonElement>('.auth-switch button')?.click());
             expect(navigate).toHaveBeenCalledWith({
                 to: '/register',
                 search: { returnTo: 'purchase', id: 'selected-variant' },
@@ -222,11 +222,7 @@ describe('guest Buy now and auth-page navigation', () => {
                     />,
                 ),
             );
-            act(() =>
-                [...loginContainer.querySelectorAll('button')]
-                    .find(button => button.textContent === '注册')
-                    ?.click(),
-            );
+            act(() => loginContainer.querySelector<HTMLButtonElement>('.auth-switch button')?.click());
             expect(navigate).toHaveBeenLastCalledWith({ to: '/register', search: {}, replace: true });
         } finally {
             act(() => loginRoot.unmount());
@@ -251,11 +247,7 @@ describe('guest Buy now and auth-page navigation', () => {
                     />,
                 ),
             );
-            act(() =>
-                [...registerContainer.querySelectorAll('button')]
-                    .find(button => button.textContent === '登录')
-                    ?.click(),
-            );
+            act(() => registerContainer.querySelector<HTMLButtonElement>('.auth-switch button')?.click());
             expect(navigate).toHaveBeenLastCalledWith({ to: '/login', search: {}, replace: true });
         } finally {
             act(() => registerRoot.unmount());

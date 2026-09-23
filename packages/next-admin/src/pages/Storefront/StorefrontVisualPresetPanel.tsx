@@ -166,7 +166,8 @@ export function StorefrontVisualPresetPanel() {
                 </button>
             </div>
             <p className="mt-2 text-xs text-slate-500">
-                选择仅保存到当前店铺。经典皮肤保持浅色界面，保留品牌身份色作为可读的强调色。
+                一次选择当前店铺的背景、文字、按钮、卡片圆角与阴影；电脑端共用布局，手机端内容不必重复设置。
+                经典皮肤保留品牌身份色，并自动派生可读的界面强调色。
             </p>
             {query.loading && (
                 <p role="status" className="mt-3 text-sm">
@@ -245,7 +246,7 @@ export function StorefrontVisualPresetPanel() {
                 )}
             </div>
             <p className="mt-3 text-xs text-slate-500">
-                电脑端使用统一布局；选择的草稿皮肤只在预览中生效，保存后才影响当前店铺。
+                草稿皮肤仅在真实页面预览中生效；点击保存后，当前店铺客户端才切换到这套视觉规则。
             </p>
             {paletteAudit && (
                 <p

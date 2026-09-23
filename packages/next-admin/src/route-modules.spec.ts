@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { SETTINGS_ROUTE_PRELOAD_TARGETS, getRouteModuleKey } from './route-modules';
+import {
+    SETTINGS_ROUTE_PRELOAD_TARGETS,
+    allowsBackgroundRoutePreload,
+    getRouteModuleKey,
+} from './route-modules';
 
 describe('getRouteModuleKey', () => {
     it('resolves list routes with query parameters', () => {
@@ -21,6 +25,14 @@ describe('getRouteModuleKey', () => {
 
     it('ignores routes without a lazy module', () => {
         expect(getRouteModuleKey('/login')).toBeNull();
+    });
+
+    it('does not compete with the active page on constrained or data-saving connections', () => {
+        expect(allowsBackgroundRoutePreload()).toBe(true);
+        expect(allowsBackgroundRoutePreload({ effectiveType: '4g' })).toBe(true);
+        expect(allowsBackgroundRoutePreload({ effectiveType: '2g' })).toBe(false);
+        expect(allowsBackgroundRoutePreload({ effectiveType: 'slow-2g' })).toBe(false);
+        expect(allowsBackgroundRoutePreload({ effectiveType: '4g', saveData: true })).toBe(false);
     });
 
     it('preloads all settings navigation entries after the app shell starts', () => {

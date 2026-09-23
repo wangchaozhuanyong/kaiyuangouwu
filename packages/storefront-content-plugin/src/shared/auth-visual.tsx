@@ -52,8 +52,7 @@ export function authVisualStyle(content?: AuthVisualData, imageTone?: ImageTone)
             (isLightTone ? '#f8fafc' : 'var(--auth-store-background, var(--skin-background, #f1f5f9))'),
         '--auth-visual-foreground': foreground,
         '--auth-hero-secondary-text': secondaryColor,
-        '--auth-accent': accent ?? (isLightTone ? '#2563eb' : 'var(--accent, #635bff)'),
-        '--auth-button-foreground': accent ? readableColor(accent) : 'var(--accent-foreground, #ffffff)',
+        '--auth-visual-accent': accent ?? (isLightTone ? '#2563eb' : 'var(--accent, #635bff)'),
     } as CSSProperties;
 }
 

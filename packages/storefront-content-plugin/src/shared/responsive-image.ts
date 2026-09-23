@@ -1,4 +1,4 @@
-export type StorefrontImageKind = 'card' | 'detail' | 'hero' | 'thumbnail';
+export type StorefrontImageKind = 'card' | 'detail' | 'hero' | 'icon' | 'thumbnail';
 
 interface ImagePreset {
     name: string;
@@ -37,6 +37,8 @@ const IMAGE_PRESETS: Record<StorefrontImageKind, ImagePresetGroup> = {
         width: 960,
         height: 960,
         presets: [
+            { name: 'storefront-card-square-160', width: 160 },
+            { name: 'storefront-card-square-240', width: 240 },
             { name: 'storefront-card-square-320', width: 320 },
             { name: 'storefront-card-square-640', width: 640 },
             { name: 'storefront-card-square-960', width: 960 },
@@ -69,6 +71,17 @@ const IMAGE_PRESETS: Record<StorefrontImageKind, ImagePresetGroup> = {
         placeholderPreset: 'storefront-placeholder-wide-64',
         quality: 90,
         sizes: '(min-width: 1024px) 850px, calc(100vw - 20px)',
+    },
+    icon: {
+        width: 96,
+        height: 96,
+        presets: [
+            { name: 'storefront-icon-64', width: 64 },
+            { name: 'storefront-icon-96', width: 96 },
+        ],
+        placeholderPreset: 'storefront-placeholder-square-48',
+        quality: 82,
+        sizes: '48px',
     },
     thumbnail: {
         width: 320,

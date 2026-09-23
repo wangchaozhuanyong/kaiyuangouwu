@@ -1,26 +1,26 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
-import { ArrowRight, Search, SlidersHorizontal, Sparkles, WifiOff } from 'lucide-react';
+import { Search, SlidersHorizontal, WifiOff } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
 
 import { ShopApi } from '../api';
 import { matchesCatalogFilters } from '../api/helpers';
 import { catalogInputFromRoute, catalogRouteWithChanges } from '../catalog-route-query';
 import { CategoryClientPluginSlot, clientPluginPlacements } from '../client-plugins/client-plugin-registry';
-import { DesktopCategoryNavigation } from '../components/common/desktop-category-navigation';
+import { CategoryPaginationStatus } from '../components/common/category-pagination-status';
+import {
+    DesktopCategoryNavigation,
+    DesktopSubcategoryNavigation,
+} from '../components/common/desktop-category-navigation';
 import { ProductRow } from '../components/common/product-row';
+import { useCategoryPagination } from '../hooks/useCategoryPagination';
 import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
-import {
-    PUBLIC_QUERY_GC_TIME,
-    PUBLIC_QUERY_STALE_TIME,
-    publicQueryMeta,
-    storefrontQueryKeys,
-} from '../query-client';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { RouteState } from '../storefront-router';
 import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
 import { useStorefront } from '../StorefrontContext';
 import { CollectionSummary, MarketConfig, StorefrontContentBlock, StorefrontLanguage } from '../types';
+
+import '../styles/account-catalog-surfaces.css';
 
 interface DesktopCatalogContext {
     api: ShopApi;
@@ -40,27 +40,22 @@ export function DesktopCatalogPage() {
     const { route, market, language, locale, collections, contentBlocks, navigate } = runtime;
     const isZh = language === 'zh';
     const input = catalogInputFromRoute(route);
-    const query = useInfiniteQuery({
-        queryKey: storefrontQueryKeys.catalog(storefrontQueryKeys.market(market), languageCodeFor(language), {
-            ...input,
-        }),
-        queryFn: ({ pageParam, signal }) =>
-            runtime.api.catalog({ ...input, skip: pageParam, take: 20 }, signal),
-        initialPageParam: 0,
-        getNextPageParam: (lastPage, pages) => {
-            const count = pages.reduce((total, page) => total + page.items.length, 0);
-            return count < lastPage.totalItems ? count : undefined;
-        },
-        staleTime: PUBLIC_QUERY_STALE_TIME,
-        gcTime: PUBLIC_QUERY_GC_TIME,
-        refetchOnMount: false,
-        meta: publicQueryMeta(),
+    const pagination = useCategoryPagination({
+        api: runtime.api,
+        market,
+        languageCode: languageCodeFor(language),
+        language,
+        input,
+        enabled: true,
+        suspended: false,
+        pageSize: 20,
     });
-    const loadedProducts = query.data?.pages.flatMap(page => page.items) ?? [];
+    const query = pagination.query;
+    const loadedProducts = pagination.products;
     // Search-index stock can lag behind live auto-card stock. Use the existing
     // availability rules while keeping pagination offsets based on raw API pages.
     const products = loadedProducts.filter(product => matchesCatalogFilters(product, input));
-    const totalItems = query.data?.pages[0]?.totalItems;
+    const totalItems = query.data ? pagination.totalItems : undefined;
     const displayCount = query.hasNextPage ? totalItems : products.length;
     const countIsPartial = query.hasNextPage && products.length !== loadedProducts.length;
     const error = query.isPaused
@@ -116,71 +111,77 @@ export function DesktopCatalogPage() {
             <h1 className="visually-hidden">{title}</h1>
             <DesktopCategoryNavigation />
             <div className="desktop-catalog-toolbar">
-                <strong className="desktop-catalog-label">
-                    {input.term
-                        ? title
-                        : activeChild?.name || activeCollection?.name || (isZh ? '全部商品' : 'All products')}
-                </strong>
-                <span className="desktop-result-count" role="status">
-                    {query.isPending
-                        ? isZh
-                            ? '加载中…'
-                            : 'Loading…'
-                        : totalItems == null
-                          ? isZh
-                              ? '暂不可用'
-                              : 'Unavailable'
-                          : isZh
-                            ? countIsPartial
-                                ? `已显示 ${products.length} 件商品`
-                                : `${displayCount} 件商品`
-                            : countIsPartial
-                              ? `${products.length} products shown`
-                              : `${displayCount} products`}
-                </span>
-                <nav className="desktop-sort" aria-label={isZh ? '商品排序' : 'Sort products'}>
-                    {(
-                        [
-                            ['recommended', isZh ? '综合' : 'Recommended'],
-                            ['sales', isZh ? '销量' : 'Best sellers'],
-                            ['newest', isZh ? '最新' : 'Newest'],
-                            ['price-asc', isZh ? '价格从低到高' : 'Price: low to high'],
-                            ['price-desc', isZh ? '价格从高到低' : 'Price: high to low'],
-                        ] as const
-                    ).map(([value, label]) => (
-                        <button
-                            key={value}
-                            type="button"
-                            aria-pressed={input.sort === value}
-                            onClick={() => update({ sort: value })}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                </nav>
-                <label className="desktop-stock-filter">
-                    <input
-                        type="checkbox"
-                        checked={input.inStockOnly}
-                        onChange={event => update({ inStockOnly: event.target.checked })}
-                    />
-                    {isZh ? '仅看有货' : 'In stock only'}
-                </label>
-                <button
-                    className={filterOpen ? 'is-active' : undefined}
-                    type="button"
-                    aria-expanded={filterOpen}
-                    aria-controls="desktop-catalog-filters"
-                    onClick={() => setFilterOpen(!filterOpen)}
-                >
-                    <SlidersHorizontal aria-hidden="true" />
-                    {isZh ? '筛选' : 'Filter'}
-                </button>
-                {filtered ? (
-                    <button type="button" onClick={clearFilters}>
-                        {isZh ? '重置' : 'Reset'}
+                <div className="section-heading-inline desktop-catalog-heading">
+                    <strong className="desktop-catalog-label">
+                        {input.term
+                            ? title
+                            : activeChild?.name ||
+                              activeCollection?.name ||
+                              (isZh ? '全部商品' : 'All products')}
+                    </strong>
+                    <span className="desktop-result-count" role="status">
+                        {query.isPending
+                            ? isZh
+                                ? '加载中…'
+                                : 'Loading…'
+                            : totalItems == null
+                              ? isZh
+                                  ? '暂不可用'
+                                  : 'Unavailable'
+                              : isZh
+                                ? countIsPartial
+                                    ? `已显示 ${products.length} 件商品`
+                                    : `${displayCount} 件商品`
+                                : countIsPartial
+                                  ? `${products.length} products shown`
+                                  : `${displayCount} products`}
+                    </span>
+                </div>
+                <div className="desktop-catalog-actions">
+                    <nav className="desktop-sort" aria-label={isZh ? '商品排序' : 'Sort products'}>
+                        {(
+                            [
+                                ['recommended', isZh ? '综合' : 'Recommended'],
+                                ['sales', isZh ? '销量' : 'Best sellers'],
+                                ['newest', isZh ? '最新' : 'Newest'],
+                                ['price-asc', isZh ? '价格从低到高' : 'Price: low to high'],
+                                ['price-desc', isZh ? '价格从高到低' : 'Price: high to low'],
+                            ] as const
+                        ).map(([value, label]) => (
+                            <button
+                                key={value}
+                                type="button"
+                                aria-pressed={input.sort === value}
+                                onClick={() => update({ sort: value })}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </nav>
+                    <label className="desktop-stock-filter">
+                        <input
+                            type="checkbox"
+                            checked={input.inStockOnly}
+                            onChange={event => update({ inStockOnly: event.target.checked })}
+                        />
+                        {isZh ? '仅看有货' : 'In stock only'}
+                    </label>
+                    <button
+                        className={filterOpen ? 'is-active' : undefined}
+                        type="button"
+                        aria-expanded={filterOpen}
+                        aria-controls="desktop-catalog-filters"
+                        onClick={() => setFilterOpen(!filterOpen)}
+                    >
+                        <SlidersHorizontal aria-hidden="true" />
+                        {isZh ? '筛选' : 'Filter'}
                     </button>
-                ) : null}
+                    {filtered ? (
+                        <button type="button" onClick={clearFilters}>
+                            {isZh ? '重置' : 'Reset'}
+                        </button>
+                    ) : null}
+                </div>
             </div>
             {filterOpen ? (
                 <form
@@ -237,89 +238,94 @@ export function DesktopCatalogPage() {
                     </button>
                 </form>
             ) : null}
-            <section
-                className="desktop-catalog-results"
-                aria-label={isZh ? '商品列表' : 'Products'}
-                aria-busy={query.isFetching}
+            <div
+                className={`desktop-catalog-body${activeCollection?.children?.length ? ' has-subcategories' : ''}`}
             >
-                {query.isPending && !error ? (
-                    <ListSkeleton label={isZh ? '正在加载商品' : 'Loading products'} />
-                ) : error && !products.length ? (
-                    <EmptyState
-                        icon={<WifiOff />}
-                        title={isZh ? '商品加载失败' : 'Could not load products'}
-                        detail={error}
-                        action={isZh ? '重试' : 'Retry'}
-                        onAction={() => void query.refetch()}
-                    />
-                ) : products.length ? (
-                    <div className="desktop-product-grid">
-                        {products.map(product => (
-                            <ProductRow
-                                key={product.id}
-                                product={product}
-                                market={market}
-                                locale={locale}
-                                language={language}
-                                layout="catalog"
-                                onOpen={() => navigate({ name: 'product', id: product.id })}
-                            />
-                        ))}
-                    </div>
-                ) : (
-                    <EmptyState
-                        icon={<Search />}
-                        title={
-                            query.hasNextPage
-                                ? isZh
-                                    ? '当前批次没有符合条件的商品'
-                                    : 'No matches in the loaded products'
-                                : isZh
-                                  ? '没有找到商品'
-                                  : 'No products found'
-                        }
-                        detail={
-                            isZh
-                                ? '可以切换分类或调整筛选条件。'
-                                : 'Try another category or adjust your filters.'
-                        }
-                        action={
-                            query.hasNextPage
-                                ? isZh
-                                    ? '继续加载'
-                                    : 'Load more'
-                                : isZh
-                                  ? '查看全部商品'
-                                  : 'View all products'
-                        }
-                        onAction={query.hasNextPage ? () => void query.fetchNextPage() : clearFilters}
-                    />
-                )}
-                {error && products.length ? (
-                    <div className="search-load-error" role="alert">
-                        <span>{error}</span>
-                        <button type="button" onClick={() => void query.fetchNextPage()}>
-                            {isZh ? '重试' : 'Retry'}
-                        </button>
-                    </div>
-                ) : null}
-                {query.hasNextPage ? (
-                    <button
-                        className="load-more-button"
-                        type="button"
-                        disabled={query.isFetchingNextPage}
-                        onClick={() => void query.fetchNextPage()}
-                    >
-                        {query.isFetchingNextPage
-                            ? isZh
-                                ? '加载中…'
-                                : 'Loading…'
-                            : isZh
-                              ? '加载更多商品'
-                              : 'Load more products'}
-                    </button>
-                ) : null}
-            </section>
+                <DesktopSubcategoryNavigation />
+                <section
+                    className="desktop-catalog-results"
+                    ref={pagination.resultsRef}
+                    aria-label={isZh ? '商品列表' : 'Products'}
+                    aria-busy={query.isFetching}
+                >
+                    {query.isPending && !error ? (
+                        <ListSkeleton label={isZh ? '正在加载商品' : 'Loading products'} />
+                    ) : error && !products.length ? (
+                        <EmptyState
+                            icon={<WifiOff />}
+                            title={isZh ? '商品加载失败' : 'Could not load products'}
+                            detail={error}
+                            action={isZh ? '重试' : 'Retry'}
+                            onAction={() => void query.refetch()}
+                        />
+                    ) : products.length ? (
+                        <div className="desktop-product-grid">
+                            {products.map(product => (
+                                <ProductRow
+                                    key={product.id}
+                                    product={product}
+                                    market={market}
+                                    locale={locale}
+                                    language={language}
+                                    layout="catalog"
+                                    onOpen={() => navigate({ name: 'product', id: product.id })}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <EmptyState
+                            icon={<Search />}
+                            title={
+                                query.hasNextPage
+                                    ? isZh
+                                        ? '当前批次没有符合条件的商品'
+                                        : 'No matches in the loaded products'
+                                    : isZh
+                                      ? '没有找到商品'
+                                      : 'No products found'
+                            }
+                            detail={
+                                isZh
+                                    ? '可以切换分类或调整筛选条件。'
+                                    : 'Try another category or adjust your filters.'
+                            }
+                            action={
+                                query.hasNextPage
+                                    ? isZh
+                                        ? '继续加载'
+                                        : 'Load more'
+                                    : isZh
+                                      ? '查看全部商品'
+                                      : 'View all products'
+                            }
+                            onAction={query.hasNextPage ? () => void pagination.loadMore() : clearFilters}
+                        />
+                    )}
+                    {products.length ? (
+                        <CategoryPaginationStatus
+                            sentinelRef={pagination.sentinelRef}
+                            language={language}
+                            state={
+                                !pagination.online || query.isPaused
+                                    ? 'offline'
+                                    : query.isPlaceholderData ||
+                                        (query.isFetching && !query.isFetchingNextPage && !query.isPending)
+                                      ? 'updating'
+                                      : query.isFetchingNextPage
+                                        ? 'loading'
+                                        : query.isError
+                                          ? 'error'
+                                          : !query.hasNextPage
+                                            ? 'done'
+                                            : pagination.automaticSupported
+                                              ? 'idle'
+                                              : 'manual'
+                            }
+                            onContinue={() => void pagination.loadMore()}
+                        />
+                    ) : null}
+                </section>
+            </div>
             <div className="desktop-catalog-extras">
                 {clientPluginPlacements
                     .filter(placement => placement !== 'BUSINESS_SERVICES_MAIN')
@@ -334,35 +340,17 @@ export function DesktopCatalogPage() {
                         />
                     ))}
             </div>
-            <div className="desktop-catalog-endcap">
-                <button
-                    className="desktop-services-link"
-                    type="button"
-                    onClick={() => navigate({ name: 'services' })}
-                >
-                    <span className="desktop-services-icon">
-                        <Sparkles aria-hidden="true" />
-                    </span>
-                    <span className="desktop-services-copy">
-                        <strong>{isZh ? '智能服务' : 'Intelligent services'}</strong>
-                        <small>
-                            {isZh ? '查看店铺提供的服务与工具' : 'Explore services and tools from this store'}
-                        </small>
-                    </span>
-                    <ArrowRight className="desktop-services-arrow" aria-hidden="true" />
-                </button>
-                <footer className="desktop-catalog-footer">
-                    <span>{runtime.storefrontName}</span>
-                    <nav aria-label={isZh ? '店铺政策' : 'Store policies'}>
-                        <button type="button" onClick={() => navigate({ name: 'legal', id: 'privacy' })}>
-                            {isZh ? '隐私政策' : 'Privacy'}
-                        </button>
-                        <button type="button" onClick={() => navigate({ name: 'legal', id: 'terms' })}>
-                            {isZh ? '使用条款' : 'Terms'}
-                        </button>
-                    </nav>
-                </footer>
-            </div>
+            <footer className="desktop-catalog-footer">
+                <span>{runtime.storefrontName}</span>
+                <nav aria-label={isZh ? '店铺政策' : 'Store policies'}>
+                    <button type="button" onClick={() => navigate({ name: 'legal', id: 'privacy' })}>
+                        {isZh ? '隐私政策' : 'Privacy'}
+                    </button>
+                    <button type="button" onClick={() => navigate({ name: 'legal', id: 'terms' })}>
+                        {isZh ? '使用条款' : 'Terms'}
+                    </button>
+                </nav>
+            </footer>
         </main>
     );
 }

@@ -28,7 +28,9 @@ describe('homepage module spacing', () => {
         expect(stylesheet).toMatch(/\.quick-grid button\s*\{[^}]*justify-content:\s*center;/);
         expect(stylesheet).toMatch(/\.quick-grid b\s*\{[^}]*min-height:\s*0;[^}]*margin-top:\s*0;/);
         expect(stylesheet).toMatch(/\.home-dual-showcase\s*\{[^}]*margin:\s*12px;/);
-        expect(stylesheet).toMatch(/\.legal-footer\s*\{[^}]*margin:\s*0 12px;/);
+        expect(stylesheet).toMatch(
+            /\.legal-footer\s*\{[^}]*margin:\s*0 var\(--page-section-inset, var\(--experience-page-gutter-mobile\)\);/,
+        );
         expect(stylesheet).toMatch(
             /html\[lang='en'\] \.quick-grid b\s*\{[^}]*min-height:\s*36px;[^}]*-webkit-line-clamp:\s*3;/,
         );

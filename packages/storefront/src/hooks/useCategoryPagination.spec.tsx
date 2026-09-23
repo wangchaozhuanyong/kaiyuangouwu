@@ -340,6 +340,43 @@ describe('category automatic pagination', () => {
         expect(pagination.products).toHaveLength(24);
     });
 
+    it('uses the requested page size while keeping automatic pagination offsets continuous', async () => {
+        function LargePageHarness() {
+            pagination = useCategoryPagination({
+                api: { catalog },
+                market,
+                languageCode: 'zh_Hans',
+                language: 'zh',
+                input,
+                enabled,
+                suspended,
+                pageSize: 20,
+            });
+            return (
+                <section ref={pagination.resultsRef}>
+                    {pagination.products.map(product => (
+                        <article key={product.id}>{product.id}</article>
+                    ))}
+                    {pagination.products.length > 0 && <div ref={pagination.sentinelRef} />}
+                </section>
+            );
+        }
+        catalog.mockImplementation(args => Promise.resolve(page(args.skip ?? 0, 20, 40)));
+        act(() =>
+            root.render(
+                <QueryClientProvider client={client}>
+                    <LargePageHarness />
+                </QueryClientProvider>,
+            ),
+        );
+        await settle();
+        expect(catalog.mock.calls[0]?.[0]).toMatchObject({ skip: 0, take: 20 });
+        intersect();
+        await settle();
+        expect(catalog.mock.calls[1]?.[0]).toMatchObject({ skip: 20, take: 20 });
+        expect(pagination.products).toHaveLength(40);
+    });
+
     it('does not request disabled, empty or completed catalog pages', async () => {
         enabled = false;
         render();

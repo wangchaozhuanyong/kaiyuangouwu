@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { storefrontVisualPresets } from '../../../../storefront-content-plugin/src/visual-presets';
 import { STOREFRONT_VISUAL_PRESET_QUERY } from '../../graphql/storefront-visual-preset.graphql';
 import { StorefrontVisualPresetPanel } from './StorefrontVisualPresetPanel';
+import { storefrontVisualPreviewDocument } from './storefront-visual-preview';
 
 const mocks = vi.hoisted(() => ({ query: vi.fn(), save: vi.fn(), refetch: vi.fn() }));
 vi.mock('@apollo/client/react', () => ({
@@ -60,6 +61,15 @@ afterEach(() => {
 });
 
 describe('fixed desktop layout skin settings', () => {
+    it('renders the same skin surface tokens in the offline admin sample', () => {
+        const document = storefrontVisualPreviewDocument('neo-minimalist', '测试店铺');
+        expect(document).toContain('--skin-divider:#2a3548');
+        expect(document).toContain('--skin-card-radius:16px');
+        expect(document).toContain('box-shadow:var(--skin-card-shadow)');
+        expect(document).toContain('.preview-hero{padding:36px 28px;background:var(--surface)');
+        expect(document).toContain('background:var(--accent);color:var(--accent-foreground)');
+    });
+
     it('embeds the real storefront home with the unsaved skin only in preview context', () => {
         mocks.query.mockImplementation(document =>
             document === STOREFRONT_VISUAL_PRESET_QUERY
@@ -101,7 +111,7 @@ describe('fixed desktop layout skin settings', () => {
         act(() => root.render(<StorefrontVisualPresetPanel />));
         expect(host.querySelectorAll('input[type="radio"]')).toHaveLength(storefrontVisualPresets.length);
         expect(host.querySelectorAll('input[name="desktopLayout"]')).toHaveLength(0);
-        expect(host.textContent).toContain('电脑端使用统一布局');
+        expect(host.textContent).toContain('电脑端共用布局');
         expect(saveButton().disabled).toBe(true);
     });
 

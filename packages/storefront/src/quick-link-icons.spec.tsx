@@ -32,6 +32,14 @@ describe('quick-link icons', () => {
         expect(markup).not.toContain('<svg');
     });
 
+    it('serves Vendure-managed icons through the compact icon preset', () => {
+        const markup = renderQuickIcon('帮助中心', '/assets/preview/managed-quick-icon.png');
+
+        expect(markup).toContain('preset=storefront-icon-64');
+        expect(markup).toContain('preset=storefront-icon-96');
+        expect(markup).not.toContain('storefront-thumbnail-320');
+    });
+
     it('keeps the generated semantic icon when no managed image is configured', () => {
         const markup = renderQuickIcon('中转站');
 

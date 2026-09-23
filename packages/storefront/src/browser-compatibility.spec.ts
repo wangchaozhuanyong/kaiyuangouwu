@@ -69,7 +69,7 @@ describe('browser compatibility policy', () => {
 
     it('uses the tablet canvas before switching to the desktop shell', () => {
         expect(stylesheet).toMatch(
-            /@media \(min-width:\s*431px\) and \(max-width:\s*1023px\)\s*\{[\s\S]*?:root\s*\{[^}]*--app-width:\s*960px;/u,
+            /@media \(min-width:\s*431px\) and \(max-width:\s*1023px\)\s*\{[\s\S]*?:root\s*\{[^}]*--app-width:\s*100%;/u,
         );
     });
 

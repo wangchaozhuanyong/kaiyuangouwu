@@ -58,7 +58,11 @@ afterEach(() => {
 });
 describe('runtime channel branding', () => {
     it('uses the selected skin palette and restores branding when switching back to classic', () => {
-        document.head.innerHTML = '<style>:root { --bg: #f3f6fb; }</style>';
+        document.head.innerHTML = [
+            '<style>:root { --bg: #f3f6fb; }</style>',
+            '<meta name="theme-color" content="#f1f5f9">',
+            '<meta name="color-scheme" content="light">',
+        ].join('');
         const root = createRoot(host);
         const html = document.documentElement;
         const color = (property: string) => getComputedStyle(html).getPropertyValue(property).trim();
@@ -72,22 +76,26 @@ describe('runtime channel branding', () => {
             const style = document.createElement('style');
             style.textContent = presetStyles;
             document.head.append(style);
-            expect(color('--bg')).toBe('#f6f2ea');
-            expect(color('--accent')).toBe('#922f27');
-            expect(color('--accent-hover')).toBe('#77251f');
-            expect(color('--accent-ink')).toBe('#922f27');
-            expect(color('--accent-foreground')).toBe('#ffffff');
-            expect(color('--store-primary')).toBe('#a63d32');
-            expect(color('--store-background')).toBe('#f6f2ea');
-            expect(color('--auth-store-background')).toBe('#f6f2ea');
-            expect(color('--brand-primary')).toBe('#a63d32');
-            expect(color('--brand-background')).toBe('#f6f2ea');
+            expect(color('--bg')).toBe('#f1ece2');
+            expect(color('--accent')).toBe('#913128');
+            expect(color('--accent-hover')).toBe('#74251f');
+            expect(color('--accent-ink')).toBe('#873027');
+            expect(color('--accent-foreground')).toBe('#fffdf8');
+            expect(color('--store-primary')).toBe('#9f3b30');
+            expect(color('--store-background')).toBe('#f1ece2');
+            expect(color('--auth-store-background')).toBe('#f1ece2');
+            expect(color('--brand-primary')).toBe('#9f3b30');
+            expect(color('--brand-background')).toBe('#f1ece2');
+            expect(color('color-scheme')).toBe('light');
+            expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe(
+                '#f1ece2',
+            );
 
             // A late branding response or another store must not cover the active skin.
             act(() => root.render(<Fixture logo={null} background="#070B14" presetId="modern-oriental" />));
-            expect(color('--bg')).toBe('#f6f2ea');
-            expect(color('--accent')).toBe('#922f27');
-            expect(color('--brand-background')).toBe('#f6f2ea');
+            expect(color('--bg')).toBe('#f1ece2');
+            expect(color('--accent')).toBe('#913128');
+            expect(color('--brand-background')).toBe('#f1ece2');
 
             act(() => root.render(<Fixture logo={null} background="#070B14" />));
             expect(color('--bg')).toBe('#f1f5f9');
@@ -95,6 +103,13 @@ describe('runtime channel branding', () => {
             expect(color('--accent-hover')).toBe('#a9621c');
             expect(color('--store-primary')).toBe('#234567');
             expect(color('--auth-store-background')).toBe('#f1f5f9');
+
+            act(() => root.render(<Fixture logo={null} presetId="neo-minimalist" />));
+            expect(color('color-scheme')).toBe('dark');
+            expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe(
+                '#070b14',
+            );
+            expect(document.querySelector('meta[name="color-scheme"]')?.getAttribute('content')).toBe('dark');
 
             act(() => root.render(<Fixture logo={null} />));
             expect(html.style.getPropertyValue('--bg')).toBe('#f1f5f9');

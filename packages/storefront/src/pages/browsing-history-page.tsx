@@ -49,6 +49,7 @@ export function BrowsingHistoryPage() {
                 action={
                     productIds.length ? (
                         <button
+                            className="account-mobile-header-action"
                             type="button"
                             onClick={onClear}
                             aria-label={isZh ? '清空浏览足迹' : 'Clear browsing history'}
@@ -58,6 +59,25 @@ export function BrowsingHistoryPage() {
                     ) : undefined
                 }
             />
+            {historyProducts.length > 0 && (
+                <div className="desktop-account-workbench-toolbar">
+                    <div>
+                        <h1>{isZh ? '最近浏览' : 'Recently viewed'}</h1>
+                        <p>
+                            {isZh
+                                ? `共 ${historyProducts.length} 件商品`
+                                : `${historyProducts.length} products`}
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClear}
+                        aria-label={isZh ? '清空浏览足迹' : 'Clear browsing history'}
+                    >
+                        <Trash2 aria-hidden="true" />
+                    </button>
+                </div>
+            )}
             {loading && !historyProducts.length ? (
                 <PageSkeleton label={isZh ? '正在加载浏览足迹' : 'Loading browsing history'} />
             ) : historyError ? (
@@ -70,6 +90,7 @@ export function BrowsingHistoryPage() {
                 />
             ) : historyProducts.length ? (
                 <ProductSection
+                    className="account-history-products"
                     title={isZh ? '最近浏览' : 'Recently viewed'}
                     subtitle={
                         isZh ? `共 ${historyProducts.length} 件商品` : `${historyProducts.length} products`

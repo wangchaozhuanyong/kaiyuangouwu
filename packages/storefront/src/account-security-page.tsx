@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import { ChangeEvent, ReactNode, useEffect, useRef, useState } from 'react';
 
+import './styles/account-security.css';
+
 import { SafeImage } from './safe-image';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';

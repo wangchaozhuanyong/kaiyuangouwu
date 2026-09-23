@@ -3,7 +3,8 @@
     "compilerOptions": {
         "lib": ["es2019", "esnext.asynciterable", "dom", "dom.iterable"],
         "paths": {
-            "@vendure/content-translation-plugin": ["../content-translation-plugin/src/index.ts"]
+            "@vendure/content-translation-plugin": ["../content-translation-plugin/src/index.ts"],
+            "@vendure/storefront-content-plugin": ["../storefront-content-plugin/src/index.ts"]
         },
         "jsx": "react-jsx"
     },

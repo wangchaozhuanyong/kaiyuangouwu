@@ -28,6 +28,20 @@ export interface StorefrontSemanticPalette {
     danger: string;
 }
 
+/** Decorative surfaces are deliberately separate from accessible control borders. */
+export interface StorefrontSkinTreatment {
+    divider: string;
+    displayFont: string;
+    cardRadius: string;
+    heroRadius: string;
+    controlRadius: string;
+    mediaRadius: string;
+    cardShadow: string;
+    cardHoverShadow: string;
+    heroShadow: string;
+    headerShadow: string;
+}
+
 export interface StorefrontPaletteAudit {
     passes: boolean;
     checks: Array<{
@@ -194,24 +208,24 @@ function resolveClassicPalette(brand: StorefrontBrandPaletteInput): StorefrontSe
 
 const FIXED_PALETTES: Record<Exclude<StorefrontVisualPresetId, 'classic'>, StorefrontSemanticPalette> = {
     'modern-oriental': {
-        page: '#f6f2ea',
-        surface: '#fffdf8',
-        elevated: '#ffffff',
-        subtle: '#eee7da',
-        text: '#17283a',
-        muted: '#596775',
-        brand: '#a63d32',
-        accent: '#922f27',
-        accentHover: '#77251f',
-        accentSoft: '#f4e5df',
-        accentInk: '#922f27',
-        onAccent: '#ffffff',
-        border: '#8b8174',
-        borderStrong: '#665d52',
-        focus: '#7c2d24',
-        success: '#24613e',
-        warning: '#8a4d0f',
-        danger: '#9d2822',
+        page: '#f1ece2',
+        surface: '#fffaf1',
+        elevated: '#fffdf8',
+        subtle: '#e8dfd0',
+        text: '#1c302d',
+        muted: '#5b645d',
+        brand: '#9f3b30',
+        accent: '#913128',
+        accentHover: '#74251f',
+        accentSoft: '#f1ddd3',
+        accentInk: '#873027',
+        onAccent: '#fffdf8',
+        border: '#807563',
+        borderStrong: '#5f574a',
+        focus: '#873027',
+        success: '#285d46',
+        warning: '#855213',
+        danger: '#942c27',
     },
     'neo-minimalist': {
         page: '#070b14',
@@ -234,6 +248,102 @@ const FIXED_PALETTES: Record<Exclude<StorefrontVisualPresetId, 'classic'>, Store
         danger: '#ff7d86',
     },
 };
+
+const SKIN_TREATMENTS: Record<StorefrontVisualPresetId, StorefrontSkinTreatment> = {
+    classic: {
+        divider: '#e4eaf1',
+        displayFont:
+            "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        cardRadius: '16px',
+        heroRadius: '20px',
+        controlRadius: '10px',
+        mediaRadius: '12px',
+        cardShadow: '0 8px 28px rgba(15, 23, 42, 0.07)',
+        cardHoverShadow: '0 18px 38px rgba(15, 23, 42, 0.12)',
+        heroShadow: '0 18px 48px rgba(15, 23, 42, 0.09)',
+        headerShadow: '0 5px 22px rgba(15, 23, 42, 0.06)',
+    },
+    'modern-oriental': {
+        divider: '#ded2c0',
+        displayFont: "'Songti SC', 'STSong', 'Noto Serif CJK SC', 'SimSun', Georgia, serif",
+        cardRadius: '14px',
+        heroRadius: '18px',
+        controlRadius: '8px',
+        mediaRadius: '10px',
+        cardShadow: '0 10px 28px rgba(67, 48, 27, 0.09)',
+        cardHoverShadow: '0 20px 44px rgba(67, 48, 27, 0.15)',
+        heroShadow: '0 22px 52px rgba(55, 39, 22, 0.13)',
+        headerShadow: '0 6px 24px rgba(55, 39, 22, 0.08)',
+    },
+    'neo-minimalist': {
+        divider: '#2a3548',
+        displayFont:
+            "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        cardRadius: '16px',
+        heroRadius: '20px',
+        controlRadius: '10px',
+        mediaRadius: '12px',
+        cardShadow: '0 10px 28px rgba(0, 0, 0, 0.18)',
+        cardHoverShadow: '0 20px 42px rgba(0, 0, 0, 0.34)',
+        heroShadow: '0 22px 52px rgba(0, 0, 0, 0.24)',
+        headerShadow: '0 5px 24px rgba(0, 0, 0, 0.20)',
+    },
+};
+
+type StorefrontToolTone = 'security' | 'mail' | 'studio' | 'coupon' | 'support';
+
+/** Identity colors for service modules; text and controls still use the semantic palette. */
+const TOOL_ICON_TONES: Record<
+    StorefrontVisualPresetId,
+    Record<StorefrontToolTone, { foreground: string; background: string }>
+> = {
+    classic: {
+        security: { foreground: '#1d4ed8', background: '#dbeafe' },
+        mail: { foreground: '#0f766e', background: '#ccfbf1' },
+        studio: { foreground: '#6d28d9', background: '#ede9fe' },
+        coupon: { foreground: '#92400e', background: '#fef3c7' },
+        support: { foreground: '#b42318', background: '#fee4e2' },
+    },
+    'modern-oriental': {
+        security: { foreground: '#245b66', background: '#dcebea' },
+        mail: { foreground: '#27604b', background: '#deebdf' },
+        studio: { foreground: '#76513a', background: '#eee1d5' },
+        coupon: { foreground: '#855b18', background: '#f2e5c8' },
+        support: { foreground: '#913128', background: '#f1ddd3' },
+    },
+    'neo-minimalist': {
+        security: { foreground: '#93c5fd', background: '#19304f' },
+        mail: { foreground: '#5eead4', background: '#113b3a' },
+        studio: { foreground: '#c4b5fd', background: '#2b2052' },
+        coupon: { foreground: '#fcd34d', background: '#463414' },
+        support: { foreground: '#fda4af', background: '#4c2432' },
+    },
+};
+
+export function resolveStorefrontSkinTreatment(presetId: StorefrontVisualPresetId): StorefrontSkinTreatment {
+    return { ...SKIN_TREATMENTS[presetId] };
+}
+
+export function storefrontSkinCssVariables(presetId: StorefrontVisualPresetId): Record<string, string> {
+    const treatment = resolveStorefrontSkinTreatment(presetId);
+    const variables: Record<string, string> = {
+        '--skin-divider': treatment.divider,
+        '--skin-display-font': treatment.displayFont,
+        '--skin-card-radius': treatment.cardRadius,
+        '--skin-hero-radius': treatment.heroRadius,
+        '--skin-control-radius': treatment.controlRadius,
+        '--skin-media-radius': treatment.mediaRadius,
+        '--skin-card-shadow': treatment.cardShadow,
+        '--skin-card-hover-shadow': treatment.cardHoverShadow,
+        '--skin-hero-shadow': treatment.heroShadow,
+        '--skin-header-shadow': treatment.headerShadow,
+    };
+    for (const [tone, colors] of Object.entries(TOOL_ICON_TONES[presetId])) {
+        variables[`--skin-tool-${tone}-foreground`] = colors.foreground;
+        variables[`--skin-tool-${tone}-background`] = colors.background;
+    }
+    return variables;
+}
 
 export function resolveStorefrontSemanticPalette(
     presetId: StorefrontVisualPresetId,

@@ -294,124 +294,230 @@ export function CartPage() {
                 />
             ) : (
                 <>
-                    <div className="cart-groups">
-                        {!!physical.length && (
-                            <CartGroup
-                                title={isZh ? '普通商品' : 'Physical products'}
-                                hint={isZh ? '配送方式结算时确认' : 'Delivery confirmed at checkout'}
-                                lines={sortPinnedLines(physical)}
-                                market={market}
-                                locale={locale}
-                                language={language}
-                                loading={editingBlocked || (loading && !selectionPending) || locked}
-                                selectionDisabled={editingBlocked || (loading && !selectionPending) || locked}
-                                favoriteProductIds={favoriteProductIds}
-                                pinnedLineIds={pinnedLineIds}
-                                openActionLineId={openActionLineId}
-                                onSelect={onSelect}
-                                onSelectAll={onSelectGroup}
-                                onQuantity={onQuantity}
-                                onRemove={onRemove}
-                                onFavorite={toggleFavoriteLine}
-                                onPin={togglePinnedLine}
-                                onShare={shareCartProduct}
-                                onActionOpenChange={lineId => setOpenActionLineId(lineId)}
-                            />
-                        )}
-                        {!!digital.length && (
-                            <CartGroup
-                                title={isZh ? '数字商品' : 'Digital products'}
-                                hint={
-                                    isZh
-                                        ? '付款后按商品交付方式处理'
-                                        : 'Processed by the selected delivery method after payment'
-                                }
-                                lines={sortPinnedLines(digital)}
-                                market={market}
-                                locale={locale}
-                                language={language}
-                                loading={editingBlocked || (loading && !selectionPending) || locked}
-                                selectionDisabled={editingBlocked || (loading && !selectionPending) || locked}
-                                favoriteProductIds={favoriteProductIds}
-                                pinnedLineIds={pinnedLineIds}
-                                openActionLineId={openActionLineId}
-                                onSelect={onSelect}
-                                onSelectAll={onSelectGroup}
-                                onQuantity={onQuantity}
-                                onRemove={onRemove}
-                                onFavorite={toggleFavoriteLine}
-                                onPin={togglePinnedLine}
-                                onShare={shareCartProduct}
-                                onActionOpenChange={lineId => setOpenActionLineId(lineId)}
-                            />
-                        )}
-                    </div>
-                    <button
-                        className="coupon-row"
-                        type="button"
-                        onClick={() => setCouponOpen(true)}
-                        disabled={!order || loading || locked}
-                    >
-                        <span>
-                            <TicketPercent />
-                            <strong>{isZh ? '优惠信息' : 'Offers'}</strong>
-                        </span>
-                        <span>
-                            <small title={selectedCouponLabel ?? undefined}>
-                                {selectedCouponLabel ??
-                                    (isZh ? '选择已领取优惠券' : 'Choose a claimed coupon')}
-                            </small>
-                            <ChevronRight />
-                        </span>
-                    </button>
-                    {!!invalidLines.length && (
-                        <section className="invalid-cart-lines">
-                            <button
-                                type="button"
-                                onClick={() => setInvalidOpen(open => !open)}
-                                aria-expanded={invalidOpen}
-                            >
-                                <span>
-                                    {isZh
-                                        ? `失效商品 ${invalidLines.length} 件`
-                                        : `${invalidLines.length} unavailable items`}
-                                </span>
-                                <span>
-                                    {invalidOpen ? (isZh ? '收起' : 'Collapse') : isZh ? '展开' : 'Expand'}{' '}
-                                    <ChevronRight />
-                                </span>
-                            </button>
-                            {invalidOpen && (
-                                <div>
-                                    {invalidLines.map(line => (
-                                        <article key={line.id}>
-                                            <div className="image-placeholder">
-                                                <Package />
-                                            </div>
-                                            <span>
-                                                <strong>
-                                                    {line.productVariant?.name ??
-                                                        (isZh ? '商品已失效' : 'Unavailable item')}
-                                                </strong>
-                                                <small>
-                                                    {isZh
-                                                        ? '当前规格暂不可购买'
-                                                        : 'This variant cannot be purchased'}
-                                                </small>
+                    <div className="cart-commerce-layout">
+                        <div className="cart-main-column">
+                            <div className="cart-groups">
+                                {!!physical.length && (
+                                    <CartGroup
+                                        title={isZh ? '普通商品' : 'Physical products'}
+                                        hint={isZh ? '配送方式结算时确认' : 'Delivery confirmed at checkout'}
+                                        lines={sortPinnedLines(physical)}
+                                        market={market}
+                                        locale={locale}
+                                        language={language}
+                                        loading={editingBlocked || (loading && !selectionPending) || locked}
+                                        selectionDisabled={
+                                            editingBlocked || (loading && !selectionPending) || locked
+                                        }
+                                        favoriteProductIds={favoriteProductIds}
+                                        pinnedLineIds={pinnedLineIds}
+                                        openActionLineId={openActionLineId}
+                                        onSelect={onSelect}
+                                        onSelectAll={onSelectGroup}
+                                        onQuantity={onQuantity}
+                                        onRemove={onRemove}
+                                        onFavorite={toggleFavoriteLine}
+                                        onPin={togglePinnedLine}
+                                        onShare={shareCartProduct}
+                                        onActionOpenChange={lineId => setOpenActionLineId(lineId)}
+                                    />
+                                )}
+                                {!!digital.length && (
+                                    <CartGroup
+                                        title={isZh ? '数字商品' : 'Digital products'}
+                                        hint={
+                                            isZh
+                                                ? '付款后按商品交付方式处理'
+                                                : 'Processed by the selected delivery method after payment'
+                                        }
+                                        lines={sortPinnedLines(digital)}
+                                        market={market}
+                                        locale={locale}
+                                        language={language}
+                                        loading={editingBlocked || (loading && !selectionPending) || locked}
+                                        selectionDisabled={
+                                            editingBlocked || (loading && !selectionPending) || locked
+                                        }
+                                        favoriteProductIds={favoriteProductIds}
+                                        pinnedLineIds={pinnedLineIds}
+                                        openActionLineId={openActionLineId}
+                                        onSelect={onSelect}
+                                        onSelectAll={onSelectGroup}
+                                        onQuantity={onQuantity}
+                                        onRemove={onRemove}
+                                        onFavorite={toggleFavoriteLine}
+                                        onPin={togglePinnedLine}
+                                        onShare={shareCartProduct}
+                                        onActionOpenChange={lineId => setOpenActionLineId(lineId)}
+                                    />
+                                )}
+                            </div>
+                            {!!invalidLines.length && (
+                                <section className="invalid-cart-lines">
+                                    <button
+                                        type="button"
+                                        onClick={() => setInvalidOpen(open => !open)}
+                                        aria-expanded={invalidOpen}
+                                    >
+                                        <span>
+                                            {isZh
+                                                ? `失效商品 ${invalidLines.length} 件`
+                                                : `${invalidLines.length} unavailable items`}
+                                        </span>
+                                        <span>
+                                            {invalidOpen
+                                                ? isZh
+                                                    ? '收起'
+                                                    : 'Collapse'
+                                                : isZh
+                                                  ? '展开'
+                                                  : 'Expand'}{' '}
+                                            <ChevronRight />
+                                        </span>
+                                    </button>
+                                    {invalidOpen && (
+                                        <div>
+                                            {invalidLines.map(line => (
+                                                <article key={line.id}>
+                                                    <div className="image-placeholder">
+                                                        <Package />
+                                                    </div>
+                                                    <span>
+                                                        <strong>
+                                                            {line.productVariant?.name ??
+                                                                (isZh ? '商品已失效' : 'Unavailable item')}
+                                                        </strong>
+                                                        <small>
+                                                            {isZh
+                                                                ? '当前规格暂不可购买'
+                                                                : 'This variant cannot be purchased'}
+                                                        </small>
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onRemove(line.id)}
+                                                        disabled={loading || locked}
+                                                    >
+                                                        {isZh ? '删除' : 'Remove'}
+                                                    </button>
+                                                </article>
+                                            ))}
+                                        </div>
+                                    )}
+                                </section>
+                            )}
+                        </div>
+                        <aside className={`cart-summary-panel${coupons.length ? ' has-coupons' : ''}`}>
+                            {coupons.length > 0 && (
+                                <button
+                                    className="coupon-row"
+                                    type="button"
+                                    onClick={() => setCouponOpen(true)}
+                                    disabled={!order || loading || locked}
+                                >
+                                    <span>
+                                        <TicketPercent />
+                                        <strong>
+                                            <span className="coupon-label-mobile">
+                                                {isZh ? '优惠信息' : 'Offers'}
                                             </span>
-                                            <button
-                                                type="button"
-                                                onClick={() => onRemove(line.id)}
-                                                disabled={loading || locked}
+                                            <span className="coupon-label-desktop">
+                                                {isZh ? '优惠券' : 'Coupon'}
+                                            </span>
+                                        </strong>
+                                    </span>
+                                    <span>
+                                        <small title={selectedCouponLabel ?? undefined}>
+                                            {selectedCouponLabel ??
+                                                (isZh ? '选择已领取优惠券' : 'Choose a claimed coupon')}
+                                        </small>
+                                        <ChevronRight />
+                                    </span>
+                                </button>
+                            )}
+                            {isActive && (
+                                <div className="cart-checkout-bar page-action-bar">
+                                    <div>
+                                        <span>
+                                            {isZh ? '合计' : 'Total'}{' '}
+                                            <strong
+                                                aria-live="polite"
+                                                aria-busy={selectionPending || commandUnknown}
                                             >
-                                                {isZh ? '删除' : 'Remove'}
-                                            </button>
-                                        </article>
-                                    ))}
+                                                {selectionPending || commandUnknown
+                                                    ? isZh
+                                                        ? '计算中…'
+                                                        : 'Updating…'
+                                                    : formatMoney(
+                                                          amount,
+                                                          order?.currencyCode ?? market.currencyCode,
+                                                          locale,
+                                                      )}
+                                            </strong>
+                                        </span>
+                                        <small>
+                                            {selectionPending || commandUnknown
+                                                ? isZh
+                                                    ? '正在更新所选商品和优惠'
+                                                    : 'Updating selected items and offers'
+                                                : locked && order
+                                                  ? digitalOnly
+                                                      ? isZh
+                                                          ? '无需配送'
+                                                          : 'No shipping required'
+                                                      : order.shippingWithTax > 0
+                                                        ? isZh
+                                                            ? `已含配送费 ${formatMoney(order.shippingWithTax, order.currencyCode, locale)}`
+                                                            : `Includes ${formatMoney(order.shippingWithTax, order.currencyCode, locale)} delivery`
+                                                        : isZh
+                                                          ? '配送费已确认'
+                                                          : 'Delivery confirmed'
+                                                  : discount
+                                                    ? isZh
+                                                        ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}`
+                                                        : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`
+                                                    : digitalOnly
+                                                      ? isZh
+                                                          ? '无需配送'
+                                                          : 'No shipping required'
+                                                      : isZh
+                                                        ? '不含待计算运费'
+                                                        : 'Shipping not included'}
+                                        </small>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={onCheckout}
+                                        onPointerEnter={() =>
+                                            void preloadStorefrontRouteComponent('checkout')
+                                        }
+                                        onFocus={() => void preloadStorefrontRouteComponent('checkout')}
+                                        onTouchStart={() => void preloadStorefrontRouteComponent('checkout')}
+                                        aria-busy={checkoutPending || undefined}
+                                        disabled={
+                                            loading ||
+                                            checkoutPending ||
+                                            locked ||
+                                            !cart?.selectedQuantity ||
+                                            selectedStockInvalid
+                                        }
+                                    >
+                                        {checkoutPending
+                                            ? isZh
+                                                ? '正在进入结算…'
+                                                : 'Opening checkout…'
+                                            : locked
+                                              ? isZh
+                                                  ? '订单待支付'
+                                                  : 'Payment pending'
+                                              : isZh
+                                                ? `结算（${cart?.selectedQuantity ?? 0}）`
+                                                : `Checkout (${cart?.selectedQuantity ?? 0})`}
+                                    </button>
                                 </div>
                             )}
-                        </section>
-                    )}
+                        </aside>
+                    </div>
                     {!locked && (
                         <ProductSection
                             title={isZh ? '顺手带一件' : 'Complete the order'}
@@ -434,78 +540,6 @@ export function CartPage() {
                 </>
             )}
 
-            {isActive && !!lines.length && (
-                <div className="cart-checkout-bar page-action-bar">
-                    <div>
-                        <span>
-                            {isZh ? '合计' : 'Total'}{' '}
-                            <strong aria-live="polite" aria-busy={selectionPending || commandUnknown}>
-                                {selectionPending || commandUnknown
-                                    ? isZh
-                                        ? '计算中…'
-                                        : 'Updating…'
-                                    : formatMoney(amount, order?.currencyCode ?? market.currencyCode, locale)}
-                            </strong>
-                        </span>
-                        <small>
-                            {selectionPending || commandUnknown
-                                ? isZh
-                                    ? '正在更新所选商品和优惠'
-                                    : 'Updating selected items and offers'
-                                : locked && order
-                                  ? digitalOnly
-                                      ? isZh
-                                          ? '无需配送'
-                                          : 'No shipping required'
-                                      : order.shippingWithTax > 0
-                                        ? isZh
-                                            ? `已含配送费 ${formatMoney(order.shippingWithTax, order.currencyCode, locale)}`
-                                            : `Includes ${formatMoney(order.shippingWithTax, order.currencyCode, locale)} delivery`
-                                        : isZh
-                                          ? '配送费已确认'
-                                          : 'Delivery confirmed'
-                                  : discount
-                                    ? isZh
-                                        ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}`
-                                        : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`
-                                    : digitalOnly
-                                      ? isZh
-                                          ? '无需配送'
-                                          : 'No shipping required'
-                                      : isZh
-                                        ? '不含待计算运费'
-                                        : 'Shipping not included'}
-                        </small>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onCheckout}
-                        onPointerEnter={() => void preloadStorefrontRouteComponent('checkout')}
-                        onFocus={() => void preloadStorefrontRouteComponent('checkout')}
-                        onTouchStart={() => void preloadStorefrontRouteComponent('checkout')}
-                        aria-busy={checkoutPending || undefined}
-                        disabled={
-                            loading ||
-                            checkoutPending ||
-                            locked ||
-                            !cart?.selectedQuantity ||
-                            selectedStockInvalid
-                        }
-                    >
-                        {checkoutPending
-                            ? isZh
-                                ? '正在进入结算…'
-                                : 'Opening checkout…'
-                            : locked
-                              ? isZh
-                                  ? '订单待支付'
-                                  : 'Payment pending'
-                              : isZh
-                                ? `结算（${cart?.selectedQuantity ?? 0}）`
-                                : `Checkout (${cart?.selectedQuantity ?? 0})`}
-                    </button>
-                </div>
-            )}
             {couponOpen && order && (
                 <CouponSheet
                     coupons={coupons}

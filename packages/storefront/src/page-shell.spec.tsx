@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AsyncRouteStatePage, Subpage } from './storefront-ui/page-shell';
+import { readStorefrontStylesheet } from './test-stylesheet';
 
 describe('Subpage surface', () => {
     it('applies a configured page surface color to the entire subpage', () => {
@@ -22,6 +23,20 @@ describe('Subpage surface', () => {
         );
 
         expect(markup).not.toContain('--page-surface');
+    });
+
+    it('lets the desktop account rail replace duplicate subpage titles without hiding real actions', () => {
+        const stylesheet = readStorefrontStylesheet(['./styles/desktop-pages.css']);
+
+        expect(stylesheet).toMatch(
+            /\.desktop-account-layout \.page\.subpage > \.subpage-header:not\(:has\(> span > \*\)\)\s*\{[^}]*display:\s*none;/u,
+        );
+        expect(stylesheet).toMatch(
+            /\.desktop-account-layout \.subpage-header > :is\(button:first-child, strong\)\s*\{[^}]*display:\s*none;/u,
+        );
+        expect(stylesheet).toMatch(
+            /\.desktop-account-layout \.subpage-header > span\s*\{[^}]*margin-left:\s*auto;/u,
+        );
     });
 });
 

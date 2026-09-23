@@ -14,6 +14,17 @@
     --admin-text: #0f172a;
     --admin-text-secondary: #334155;
     --admin-text-muted: #64748b;
+    --admin-radius-control: 0.5rem;
+    --admin-radius-surface: 0.75rem;
+    --admin-radius-dialog: 1rem;
+    --admin-shadow-surface: 0 1px 2px rgb(15 23 42 / 5%), 0 10px 28px rgb(15 23 42 / 5%);
+    --admin-focus: #2563eb;
+    --admin-focus-width: 2px;
+    --admin-focus-offset: 2px;
+    --admin-control-min: 2.75rem;
+    --admin-motion-fast: 120ms;
+    --admin-motion-standard: 180ms;
+    --admin-ease-standard: cubic-bezier(0.2, 0, 0, 1);
 }
 
 :root.dark {
@@ -28,6 +39,8 @@
     --admin-text: #f8fafc;
     --admin-text-secondary: #cbd5e1;
     --admin-text-muted: #94a3b8;
+    --admin-shadow-surface: 0 1px 2px rgb(0 0 0 / 24%), 0 14px 34px rgb(0 0 0 / 20%);
+    --admin-focus: #60a5fa;
 }
 
 @layer base {
@@ -40,6 +53,11 @@
     body {
         background-color: var(--admin-canvas);
         color: var(--admin-text-secondary);
+    }
+
+    #root :where(button, a, input, select, textarea, summary):focus-visible {
+        outline: var(--admin-focus-width) solid var(--admin-focus);
+        outline-offset: var(--admin-focus-offset);
     }
 
     ::selection {
@@ -57,6 +75,21 @@
 
     :root.dark {
         scrollbar-color: #3b4a60 #0b1220;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        html:focus-within {
+            scroll-behavior: auto;
+        }
+
+        #root *,
+        #root *::before,
+        #root *::after {
+            scroll-behavior: auto !important;
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition: none !important;
+        }
     }
 }
 

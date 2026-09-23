@@ -154,13 +154,13 @@ describe('shared auth presentation', () => {
         expect(authVisualStyle(content)).toMatchObject({
             '--auth-visual-background': '#010203',
             '--auth-visual-foreground': '#fefefe',
-            '--auth-accent': '#abcdef',
+            '--auth-visual-accent': '#abcdef',
         });
         expect(
             authVisualStyle({ ...content, backgroundColor: null, textColor: null, settings: {} }),
         ).toMatchObject({
             '--auth-visual-background': 'var(--auth-store-background, var(--skin-background, #f1f5f9))',
-            '--auth-accent': 'var(--accent, #635bff)',
+            '--auth-visual-accent': 'var(--accent, #635bff)',
         });
         expect(authVisualStyle()).toMatchObject({
             '--auth-visual-foreground': 'var(--auth-store-foreground, var(--store-foreground, #0f172a))',

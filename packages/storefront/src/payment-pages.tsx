@@ -28,6 +28,7 @@ import { PageSkeleton } from './route-loading';
 import { storefrontErrorCode, storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
 import { InlineError } from './storefront-ui/page-shell';
+import './styles/checkout-payment-surfaces.css';
 import { TaxSummaryRows } from './tax-summary';
 import {
     ActiveCustomer,

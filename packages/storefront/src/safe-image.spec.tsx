@@ -130,12 +130,12 @@ describe('SafeImage', () => {
 
     it('allows compact components to select a smaller responsive image candidate', () => {
         const markup = renderToStaticMarkup(
-            <SafeImage src="/assets/preview/icon.png" alt="" imageKind="thumbnail" sizes="48px" />,
+            <SafeImage src="/assets/preview/icon.png" alt="" imageKind="icon" sizes="48px" />,
         );
 
         expect(markup).toContain('sizes="48px"');
-        expect(markup).toContain('storefront-thumbnail-160');
-        expect(markup).toContain('storefront-thumbnail-320');
+        expect(markup).toContain('storefront-icon-64');
+        expect(markup).toContain('storefront-icon-96');
     });
 
     it('reuses session decoded status so new image elements mount ready without flash while unseen images wait', async () => {

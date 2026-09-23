@@ -13,6 +13,8 @@ describe('responsiveImageSources', () => {
             sizes: '(min-width: 900px) 300px, calc(50vw - 14px)',
         });
         expect(sources?.webpSrcSet).toContain('preset=storefront-card-square-320');
+        expect(sources?.webpSrcSet).toContain('preset=storefront-card-square-160');
+        expect(sources?.webpSrcSet).toContain('preset=storefront-card-square-240');
         expect(sources?.webpSrcSet).toContain('preset=storefront-card-square-960');
         expect(sources?.webpSrcSet).toContain('format=webp');
         expect(sources?.webpSrcSet).toContain('q=90');
@@ -23,6 +25,16 @@ describe('responsiveImageSources', () => {
         expect(sources?.placeholderSrc).toContain('q=75');
         expect(JSON.stringify(sources)).not.toContain('format=avif');
         expect(JSON.stringify(sources)).not.toContain('format=jpg');
+    });
+
+    it('uses compact derivatives for managed interface icons', () => {
+        const sources = responsiveImageSources('/assets/preview/quick-link.png', 'icon');
+
+        expect(sources).toMatchObject({ width: 96, height: 96, sizes: '48px' });
+        expect(sources?.webpSrcSet).toContain('preset=storefront-icon-64');
+        expect(sources?.webpSrcSet).toContain('preset=storefront-icon-96');
+        expect(sources?.fallbackSrc).toContain('preset=storefront-icon-96');
+        expect(sources?.fallbackSrc).toContain('q=82');
     });
 
     it('keeps external non-Vendure images unchanged and serves the bundled hero as WebP', () => {

@@ -20,6 +20,7 @@ import {
 import {
     resolveStorefrontSemanticPalette,
     semanticPaletteCssVariables,
+    storefrontSkinCssVariables,
 } from '../../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import { normalizeStorefrontVisualPreset } from '../../../../storefront-content-plugin/src/visual-presets';
 import { getActiveChannelToken } from '../../apollo';
@@ -426,9 +427,10 @@ function AuthBlockPreview({
             ? brandingQuery.data?.storefrontPreviewBranding
             : undefined;
     const presetId = normalizeStorefrontVisualPreset(brandingQuery.data?.storefrontVisualPreset.presetId);
-    const paletteVariables = semanticPaletteCssVariables(
-        resolveStorefrontSemanticPalette(presetId, branding),
-    );
+    const paletteVariables = {
+        ...semanticPaletteCssVariables(resolveStorefrontSemanticPalette(presetId, branding)),
+        ...storefrontSkinCssVariables(presetId),
+    };
     const authImageUrl = block.imageAsset?.preview ?? block.imageUrl;
     const authImageTone = useImageTone(authImageUrl);
     const content: AuthVisualData = {
@@ -490,8 +492,8 @@ function AuthBlockPreview({
                             <div
                                 style={{
                                     padding: 32,
-                                    background: '#ffffff',
-                                    color: '#172033',
+                                    background: 'var(--surface)',
+                                    color: 'var(--text)',
                                     display: 'grid',
                                     gap: 16,
                                 }}
@@ -512,16 +514,16 @@ function AuthBlockPreview({
                                             : 'Sign in to manage your account and orders'}
                                     </p>
                                 )}
-                                <div style={{ border: '1px solid #cbd5e1', padding: 12 }}>
+                                <div style={{ border: '1px solid var(--line)', padding: 12 }}>
                                     {isZh ? '电子邮箱' : 'Email address'}
                                 </div>
-                                <div style={{ border: '1px solid #cbd5e1', padding: 12 }}>
+                                <div style={{ border: '1px solid var(--line)', padding: 12 }}>
                                     {isZh ? '密码' : 'Password'}
                                 </div>
                                 <span
                                     style={{
-                                        background: 'var(--auth-accent)',
-                                        color: 'var(--auth-button-foreground)',
+                                        background: 'var(--accent)',
+                                        color: 'var(--accent-foreground)',
                                         padding: 12,
                                         textAlign: 'center',
                                     }}

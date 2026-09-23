@@ -100,7 +100,7 @@ function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'e
 }
 
 describe('business services page', () => {
-    it('uses the active storefront theme for every service-card surface', () => {
+    it('uses theme surfaces and scoped modules for the service page only', () => {
         const stylesheet = readStorefrontStylesheet([
             './styles/visual-presets.css',
             './styles/modals-and-support.css',
@@ -111,17 +111,30 @@ describe('business services page', () => {
             /\.category-client-plugin\s*\{[^}]*background:\s*var\(--paper\);[^}]*color:\s*var\(--text\);/,
         );
         expect(stylesheet).toMatch(
-            /\.business-services-hero\s*\{[^}]*var\(--accent-soft\)[^}]*color:\s*var\(--text\);/,
+            /\.business-services-page \.category-client-plugin-slot\s*\{[^}]*display:\s*grid;/,
         );
+        expect(stylesheet).toMatch(/\.business-services-page \.category-client-plugin\s*\{[^}]*border:\s*0;/);
         expect(stylesheet).not.toMatch(
             /\.category-client-plugin-image-studio\s*\{[^}]*background:\s*var\(--bg\)/,
         );
         expect(stylesheet).toMatch(
-            /\.business-services-hero-icon\s*\{[^}]*background:\s*var\(--accent\);[^}]*color:\s*var\(--accent-foreground/,
+            /\.business-services-page \.category-client-plugin-two-factor\s*\{[^}]*--service-icon-foreground:\s*var\(--skin-tool-security-foreground/,
+        );
+        expect(stylesheet).toMatch(
+            /\.business-services-page \.category-client-plugin-slot\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
+        );
+        expect(stylesheet).toMatch(
+            /@media \(min-width: 1024px\)[\s\S]*?\.business-services-page \.category-client-plugin-slot\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/,
+        );
+        expect(stylesheet).toMatch(
+            /@media \(min-width: 1024px\)[\s\S]*?\.business-services-page \.category-client-plugin\s*\{[^}]*grid-template-columns:\s*48px minmax\(0, 1fr\)/,
+        );
+        expect(stylesheet).toMatch(
+            /@media \(min-width: 1024px\)[\s\S]*?\.business-services-page \.category-client-plugin-icon\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*1 \/ span 2/,
         );
     });
 
-    it('puts enabled tools before assistance on desktop and retains managed copy in the disclosure', () => {
+    it('puts enabled tools before assistance on both layouts and retains managed copy beside the title', () => {
         const block = businessPluginBlock();
         block.settings = { businessServicesCopyVersion: 1 };
         block.title = '后台服务说明';
@@ -134,14 +147,14 @@ describe('business services page', () => {
         });
         const desktop = renderPage([block], 'zh', true);
         expect(desktop.indexOf('2FA 动态码')).toBeLessThan(desktop.indexOf('选购遇到问题？'));
-        expect(desktop).toContain('<details class="desktop-service-description">');
+        expect(desktop).toContain('class="business-services-heading"');
         expect(desktop).toContain('后台服务说明');
         expect(desktop).toContain('后台配置的说明');
         const mobile = renderPage([block]);
-        expect(mobile.indexOf('选购遇到问题？')).toBeLessThan(mobile.indexOf('2FA 动态码'));
+        expect(mobile.indexOf('2FA 动态码')).toBeLessThan(mobile.indexOf('选购遇到问题？'));
         expect(mobile).not.toContain('<details');
     });
-    it('shows the centered default navigation name and an empty state before services are enabled', () => {
+    it('shows the default navigation name and a module empty state before services are enabled', () => {
         const markup = renderPage([]);
 
         expect(markup).toContain('<h1 class="business-services-page-title">智能服务</h1>');
@@ -186,7 +199,7 @@ describe('business services page', () => {
         linkedBlock.targetType = 'URL';
         linkedBlock.targetValue = 'https://example.com/services';
 
-        expect(renderPage([linkedBlock])).toContain('business-services-hero-link');
+        expect(renderPage([linkedBlock])).toContain('business-services-heading-link');
         expect(renderPage([linkedBlock])).toContain('点击前往');
         expect(renderPage([linkedBlock], 'en')).toContain('Open link');
     });
@@ -196,7 +209,7 @@ describe('business services page', () => {
         unmanagedBlock.targetType = 'URL';
         unmanagedBlock.targetValue = 'https://example.com/services';
 
-        expect(renderPage([unmanagedBlock])).not.toContain('business-services-hero-link');
+        expect(renderPage([unmanagedBlock])).not.toContain('business-services-heading-link');
     });
 
     it('keeps the built-in copy until the existing plugin block is saved from the new editor', () => {

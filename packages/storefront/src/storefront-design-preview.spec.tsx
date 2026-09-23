@@ -30,6 +30,8 @@ describe('storefront design preview', () => {
         expect(markup).toContain('value="neo-minimalist"');
         expect(markup).toContain('value="1023"');
         expect(markup).toContain('value="1024"');
+        expect(markup).toContain('value="1920"');
+        expect(markup).toContain('value="2560"');
         expect(markup).toContain('value="dialog"');
         expect(markup).toContain('value="guest"');
         expect(markup).toContain('value="authenticated"');
@@ -114,6 +116,124 @@ describe('storefront design preview', () => {
         expect(host.querySelector<HTMLElement>('.storefront-preview-stage')?.style.backgroundColor).toBe(
             'rgb(241, 245, 249)',
         );
+        await act(async () => {
+            root.unmount();
+            await Promise.resolve();
+        });
+        host.remove();
+    });
+
+    it('reloads the current route with the selected skin encoded in one source of truth', async () => {
+        mocks.storefrontConfig.mockResolvedValue({});
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        await act(async () => {
+            root.render(<StorefrontDesignPreview />);
+            await Promise.resolve();
+        });
+        const skinSelect = host.querySelector('select');
+        const frame = host.querySelector('iframe');
+        if (!skinSelect || !frame) throw new Error('Missing preview controls');
+        const initialSource = frame.getAttribute('src');
+
+        await act(async () => {
+            skinSelect.value = 'modern-oriental';
+            skinSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            await Promise.resolve();
+        });
+
+        expect(frame.getAttribute('src')).not.toBe(initialSource);
+        expect(frame.getAttribute('src')).toContain('storefrontPreviewPreset=modern-oriental');
+        await act(async () => {
+            root.unmount();
+            await Promise.resolve();
+        });
+        host.remove();
+    });
+
+    it('keeps the route selector synchronized with navigation inside the real client frame', async () => {
+        mocks.storefrontConfig.mockResolvedValue({});
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        await act(async () => {
+            root.render(<StorefrontDesignPreview />);
+            await Promise.resolve();
+        });
+        const frame = host.querySelector('iframe');
+        const routeSelect = host.querySelectorAll('select')[1];
+        if (!frame?.contentWindow) throw new Error('Missing preview frame');
+        const initialSource = frame.src;
+        const session = new URL(frame.src).searchParams.get('storefrontPreviewSession');
+        if (!session) throw new Error('Missing preview session');
+
+        await act(async () => {
+            window.dispatchEvent(
+                new MessageEvent('message', {
+                    data: { type: 'storefront-preview-ready', session },
+                    origin: window.location.origin,
+                }),
+            );
+            await Promise.resolve();
+        });
+        await act(async () => {
+            window.dispatchEvent(
+                new MessageEvent('message', {
+                    data: { type: 'storefront-preview-route', route: 'category', session },
+                    origin: window.location.origin,
+                }),
+            );
+            await Promise.resolve();
+        });
+
+        expect(routeSelect.value).toBe('category');
+        expect(host.querySelector('iframe')?.src).toBe(initialSource);
+        expect(new URLSearchParams(window.location.search).get('route')).toBe('category');
+        await act(async () => {
+            root.unmount();
+            await Promise.resolve();
+        });
+        host.remove();
+    });
+
+    it('keeps the shareable preview URL aligned with every selected control', async () => {
+        mocks.storefrontConfig.mockResolvedValue({});
+        window.history.replaceState(
+            {},
+            '',
+            '/__storefront-preview?preset=modern-oriental&route=services&viewport=1440&scenario=disabled&auth=authenticated&language=en',
+        );
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        await act(async () => {
+            root.render(<StorefrontDesignPreview />);
+            await Promise.resolve();
+        });
+
+        const selects = host.querySelectorAll('select');
+        expect(selects[0].value).toBe('modern-oriental');
+        expect(selects[1].value).toBe('services');
+        expect(selects[2].value).toBe('disabled');
+        expect(selects[3].value).toBe('authenticated');
+        expect(selects[4].value).toBe('1440');
+        expect(host.querySelector('iframe')?.title).toBe('modern-oriental services 1440');
+
+        await act(async () => {
+            selects[0].value = 'neo-minimalist';
+            selects[0].dispatchEvent(new Event('change', { bubbles: true }));
+            await Promise.resolve();
+        });
+        expect(new URLSearchParams(window.location.search).get('preset')).toBe('neo-minimalist');
+        await act(async () => {
+            selects[1].value = 'category';
+            selects[1].dispatchEvent(new Event('change', { bubbles: true }));
+            await Promise.resolve();
+        });
+        expect(new URLSearchParams(window.location.search).get('preset')).toBe('neo-minimalist');
+        expect(new URLSearchParams(window.location.search).get('route')).toBe('category');
+
         await act(async () => {
             root.unmount();
             await Promise.resolve();

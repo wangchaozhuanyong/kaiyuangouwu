@@ -6,6 +6,7 @@ import {
     Channel,
     ChannelService,
     ConfigService,
+    EventBus,
     LanguageCode,
     PaymentMethod,
     PaymentMethodService,
@@ -17,6 +18,7 @@ import {
     VendurePlugin,
 } from '@vendure/core';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
+import { StorefrontContentChangedEvent, StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { Like } from 'typeorm';
 
 import { AdministratorAccessInterceptor } from './administrator-access.interceptor';
@@ -178,6 +180,8 @@ import {
     StorefrontBrandingShopResolver,
 } from './storefront-branding.resolver';
 import { StorefrontCatalogAccessInterceptor } from './storefront-catalog-access.interceptor';
+import { StorefrontLcpPreloadController } from './storefront-lcp-preload.controller';
+import { StorefrontLcpPreloadService } from './storefront-lcp-preload.service';
 import { StorefrontPaymentCurrencyInterceptor } from './storefront-payment-currency.interceptor';
 import { StorefrontRegionShopResolver } from './storefront-region.resolver';
 import {
@@ -211,7 +215,7 @@ import {
 } from './usdt/usdt-wallet-configuration.service';
 
 @VendurePlugin({
-    imports: [PluginCommonModule, ContentTranslationPlugin, StorefrontCartPlugin],
+    imports: [PluginCommonModule, ContentTranslationPlugin, StorefrontCartPlugin, StorefrontContentPlugin],
     entities: [
         AdministratorAccessProfile,
         AdministratorPermissionAudit,
@@ -258,7 +262,11 @@ import {
         FraudRiskCaseEvent,
         FraudRiskAppeal,
     ],
-    controllers: [StorefrontPromotionController, StorefrontRealtimeController],
+    controllers: [
+        StorefrontPromotionController,
+        StorefrontRealtimeController,
+        StorefrontLcpPreloadController,
+    ],
     providers: [
         AdministratorAccessService,
         AdministratorPermissionAuditService,
@@ -297,6 +305,7 @@ import {
         ReferralWalletSpendService,
         SystemAnnouncementService,
         StorefrontRealtimeService,
+        StorefrontLcpPreloadService,
         CustomerAvatarService,
         DataConsentService,
         { provide: DATA_CONSENT_SERVICE_TOKEN, useExisting: DataConsentService },
@@ -493,6 +502,8 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
         private readonly requestContextService: RequestContextService,
         private readonly paymentMethodService: PaymentMethodService,
         private readonly channelService: ChannelService,
+        private readonly eventBus: EventBus,
+        private readonly storefrontLcpPreload: StorefrontLcpPreloadService,
         private readonly usdtWalletConfiguration: UsdtWalletConfigurationService,
         private readonly storeUsdtWallets: StoreUsdtWalletService,
     ) {}
@@ -536,6 +547,9 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
     }
 
     async onApplicationBootstrap(): Promise<void> {
+        this.eventBus.ofType(StorefrontContentChangedEvent).subscribe(event => {
+            void this.storefrontLcpPreload.invalidate(event.ctx.channelId);
+        });
         await this.ensureReferralPaymentMethod();
         await this.ensureUsdtPaymentMethod();
         await this.ensurePrimaryStoreAdminPermissions();

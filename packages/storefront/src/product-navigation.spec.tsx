@@ -204,7 +204,7 @@ describe('product image navigation layers', () => {
             expect(markup).not.toContain('/assets/preview/previous-cover.png');
         }
         expect(page).toContain('responsive-picture safe-image-frame detail-description-media');
-        expect(page).toContain('sizes="(min-width: 1024px) 960px, 100vw"');
+        expect(page).toContain('sizes="(min-width: 1024px) 790px, 100vw"');
         expect(gallery).toContain('查看第2张商品图');
         expect(gallery).not.toContain('查看第3张商品图');
         expect(displayProductImage(product)).toBe(cover.preview);
@@ -367,7 +367,8 @@ describe('product image navigation layers', () => {
 
         expect(markup).toContain('已售罄');
         expect(markup).toContain('whitespace-nowrap');
-        expect(markup).toContain('items-center justify-between gap-2');
+        expect(markup).toContain('items-baseline justify-between gap-2');
+        expect(markup).toContain('font-medium leading-[1.2]');
         expect(markup).not.toContain('-webkit-line-clamp:2');
     });
 
@@ -443,34 +444,54 @@ describe('product image navigation layers', () => {
             /html\[data-storefront-preset='modern-oriental'\]\s+\.product-detail-header:not\(\.is-scrolled\)[\s\S]*?box-shadow:\s*none;/,
         );
         expect(stylesheet).toMatch(
-            /html\[data-storefront-preset='modern-oriental'\]\s+\.product-detail-header\.is-scrolled[\s\S]*?background:\s*rgba\(255,\s*253,\s*248,\s*0\.96\);/,
+            // eslint-disable-next-line max-len -- This expression distinguishes the scrolled header state from the transparent state.
+            /html\[data-storefront-preset='modern-oriental'\]\s+\.product-detail-header\.is-scrolled[\s\S]*?background:\s*color-mix\(in srgb, var\(--surface\) 96%, transparent\);/,
         );
         expect(stylesheet).toMatch(
-            /html\[data-storefront-preset='modern-oriental'\]\s+:is\(\s*\.topbar:not\(\.product-detail-header\)/,
+            /html\[data-storefront-preset\]\s+:is\(\s*\.topbar:not\(\.product-detail-header\)/,
         );
     });
 
-    it('keeps the standalone desktop product heading readable instead of inheriting mobile overlay text', () => {
-        const stylesheet = readStorefrontStylesheet([
-            './styles/visual-presets.css',
-            './styles/desktop-commerce.css',
-            './styles/desktop-pages.css',
-        ]);
-        const headerSelector =
-            String.raw`\.desktop-store-layout\s+\.page\.subpage\.product-detail-page\s*>\s*` +
-            String.raw`\.subpage-header\.product-detail-header:not\(\.is-scrolled\)`;
-        const headerRule = stylesheetRule(stylesheet, headerSelector);
-        const headerTextRule = stylesheetRule(stylesheet, `${headerSelector}\\s*>\\s*strong`);
+    it('uses a compact borderless desktop product toolbar instead of a tall mobile-style title band', () => {
+        const stylesheet = readStorefrontStylesheet(['./styles/desktop-pages.css']);
+        const toolbarRule = stylesheetRule(
+            stylesheet,
+            String.raw`\.desktop-store-layout\s+\.desktop-product-toolbar`,
+        );
+        const shareRule = stylesheetRule(
+            stylesheet,
+            String.raw`\.desktop-store-layout\s+\.desktop-product-toolbar-share`,
+        );
 
-        expect(headerRule).toMatch(/background:\s*transparent;/);
-        expect(headerRule).toMatch(/color:\s*var\(--text\);/);
-        expect(headerTextRule).toMatch(/color:\s*var\(--text\);/);
-        expect(headerTextRule).toMatch(/opacity:\s*1;/);
-        expect(headerTextRule).toMatch(/transform:\s*none;/);
+        expect(toolbarRule).toMatch(/min-height:\s*40px;/);
+        expect(toolbarRule).toMatch(/justify-content:\s*space-between;/);
+        expect(shareRule).toMatch(/background:\s*var\(--accent-soft\);/);
     });
 
-    it('keeps desktop description media proportional inside a bounded reading column', () => {
+    it('keeps desktop product buying surfaces on the shared skin geometry contract', () => {
         const stylesheet = readStorefrontStylesheet(['./styles/desktop-pages.css']);
+        const priceRule = stylesheetRule(
+            stylesheet,
+            String.raw`\.desktop-product-buying\s+\.detail-price-line`,
+        );
+        const optionRule = stylesheetRule(
+            stylesheet,
+            String.raw`\.desktop-product-buying\s+\.detail-options\s+button`,
+        );
+
+        expect(priceRule).toMatch(/border-radius:\s*var\(--skin-control-radius\);/);
+        expect(priceRule).toMatch(
+            /background:\s*color-mix\(in srgb, var\(--accent\) 7%, var\(--surface-elevated, var\(--surface\)\)\);/,
+        );
+        expect(optionRule).toMatch(/border-radius:\s*var\(--skin-control-radius\);/);
+    });
+
+    it('keeps desktop description media proportional inside a focused commerce reading column', () => {
+        const stylesheet = readStorefrontStylesheet(['./styles/desktop-pages.css']);
+        const descriptionRule = stylesheetRule(
+            stylesheet,
+            String.raw`\.desktop-store-layout\s+\.detail-description`,
+        );
         const mediaSelector =
             String.raw`\.desktop-store-layout\s+\.detail-description\s*>\s*` +
             String.raw`\.detail-description-media`;
@@ -481,16 +502,23 @@ describe('product image navigation layers', () => {
             String.raw`\.desktop-store-layout\s+\.detail-rich-text\s+img`,
         );
 
-        expect(mediaRule).toMatch(/width:\s*min\(100%,\s*960px\);/);
+        expect(descriptionRule).toMatch(/--detail-reading-width:\s*790px;/);
+        expect(descriptionRule).toMatch(/width:\s*min\(100%,\s*940px\);/);
+        expect(descriptionRule).toMatch(/margin-inline:\s*auto;/);
+        expect(descriptionRule).toMatch(/align-self:\s*center;/);
+        expect(mediaRule).toMatch(/width:\s*min\(100%,\s*var\(--detail-reading-width\)\);/);
         expect(mediaRule).toMatch(/height:\s*auto;/);
         expect(mediaRule).toMatch(/margin:\s*24px auto 0;/);
-        for (const rule of [imageRule, richTextImageRule]) {
-            expect(rule).toMatch(/width:\s*auto;/);
-            expect(rule).toMatch(/max-width:\s*100%;/);
-            expect(rule).toMatch(/height:\s*auto;/);
-            expect(rule).toMatch(/max-height:\s*720px;/);
-            expect(rule).toMatch(/object-fit:\s*contain;/);
-        }
+        expect(imageRule).toMatch(/width:\s*auto;/);
+        expect(imageRule).toMatch(/max-width:\s*100%;/);
+        expect(imageRule).toMatch(/height:\s*auto;/);
+        expect(imageRule).toMatch(/max-height:\s*900px;/);
+        expect(imageRule).toMatch(/object-fit:\s*contain;/);
+        expect(richTextImageRule).toMatch(/width:\s*auto;/);
+        expect(richTextImageRule).toMatch(/max-width:\s*100%;/);
+        expect(richTextImageRule).toMatch(/height:\s*auto;/);
+        expect(richTextImageRule).toMatch(/max-height:\s*900px;/);
+        expect(richTextImageRule).toMatch(/object-fit:\s*contain;/);
     });
 
     it('ensures product-card provides a unified card frame with background, border-radius and shadow', () => {
