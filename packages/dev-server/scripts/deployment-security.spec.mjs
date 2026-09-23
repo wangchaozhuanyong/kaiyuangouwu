@@ -769,6 +769,14 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /retain_release_file/u);
     assert.match(script, /mv -- "\$\{source_path\}" "\$\{destination_path\}"/u);
     assert.match(script, /vendure-mysql-restore-drill\.service/u);
+    assert.match(
+        script,
+        /touch \/var\/backups\/vendure-mysql\/\.backup\.lock \/var\/backups\/vendure-files\/\.backup\.lock/u,
+    );
+    assert.match(
+        script,
+        /chmod 0600 \/var\/backups\/vendure-mysql\/\.backup\.lock \/var\/backups\/vendure-files\/\.backup\.lock/u,
+    );
     assert.match(script, /systemctl enable --now vendure-mysql-restore-drill\.timer/u);
     assert.match(script, /systemctl is-enabled vendure-mysql-restore-drill\.timer/u);
     assert.match(script, /systemctl is-active vendure-mysql-restore-drill\.timer/u);
@@ -894,6 +902,8 @@ void test('MySQL restore drill is isolated, hardened, and scheduled weekly', asy
     assert.match(restoreScript, /backupTables/u);
     assert.match(restoreScript, /backup_tables.*restored_tables/u);
     assert.match(restoreScript, /restore-drill\.json/u);
+    assert.match(restoreScript, /exec 8<"\$\{vendure_backup_dir\}\/\.backup\.lock"/u);
+    assert.doesNotMatch(restoreScript, /exec 8>"\$\{vendure_backup_dir\}\/\.backup\.lock"/u);
     assert.match(service, /^User=root$/mu);
     assert.match(service, /^NoNewPrivileges=true$/mu);
     assert.match(service, /^ProtectSystem=strict$/mu);
@@ -972,6 +982,8 @@ void test('persistent business files have encrypted offsite backup, retention an
     assert.match(restoreScript, /VENDURE_FILE_RECOVERY_RTO_SECONDS/u);
     assert.match(restoreScript, /file-restore-drill\.json/u);
     assert.match(restoreScript, /flock --shared/u);
+    assert.match(restoreScript, /exec 8<"\$\{vendure_backup_dir\}\/\.backup\.lock"/u);
+    assert.doesNotMatch(restoreScript, /exec 8>"\$\{vendure_backup_dir\}\/\.backup\.lock"/u);
     assert.match(backupService, /^ProtectSystem=strict$/mu);
     assert.match(backupService, /^ReadWritePaths=\/var\/backups\/vendure-files$/mu);
     assert.match(restoreService, /^ReadOnlyPaths=\/var\/backups\/vendure-files$/mu);
