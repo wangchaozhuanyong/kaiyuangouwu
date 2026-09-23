@@ -88,6 +88,8 @@ test('USDT deployment checks backup and history while both writers are stopped, 
         'rollback_needed=1',
         script.indexOf('deploy_stage="migration-memory-readiness"'),
     );
+    const workerResumeReady = script.indexOf('worker_paused_early=1');
+    const preDownloadCheck = script.indexOf('node "${memory_guard}" --stage pre-download --check');
     const apiStop = script.indexOf('pm2 stop vendure-api 9>&-', script.indexOf('readonly usdt_guard='));
     const capture = script.indexOf('node "${usdt_guard}" capture');
     const backup = script.indexOf("printf 'DEPLOY_BACKUP_OK");
@@ -96,9 +98,12 @@ test('USDT deployment checks backup and history while both writers are stopped, 
     const start = script.indexOf('"${repository}/deploy/switch-production-runtime.sh" "${candidate}"');
     assert.ok(
         workerStop > 0 &&
+            workerResumeReady > 0 &&
+            workerResumeReady < workerStop &&
+            workerStop < preDownloadCheck &&
+            preDownloadCheck < rollbackReady &&
             rollbackReady > 0 &&
-            rollbackReady < workerStop &&
-            workerStop < memoryCheck &&
+            rollbackReady < memoryCheck &&
             memoryCheck < apiStop &&
             apiStop < capture &&
             capture < backup &&
