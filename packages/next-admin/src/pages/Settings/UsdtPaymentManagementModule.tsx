@@ -383,11 +383,12 @@ export function UsdtPaymentManagementModule() {
                                 detail="USDT 已结算支付可补录链上人工退款证据。"
                             />
                             <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
-                                <table className="min-w-[980px] w-full text-left text-xs">
+                                <table className="min-w-[1060px] w-full text-left text-xs">
                                     <thead className="bg-slate-50 text-slate-500">
                                         <tr>
                                             {[
-                                                '网店 / 订单',
+                                                '网店',
+                                                '订单',
                                                 '支付方式',
                                                 '状态',
                                                 '金额',
@@ -405,13 +406,13 @@ export function UsdtPaymentManagementModule() {
                                     <tbody className="divide-y divide-slate-100">
                                         {(query.data?.storePaymentDetails.items ?? []).map(payment => (
                                             <tr key={`${payment.channelId}:${payment.id}`}>
-                                                <td className="px-3 py-3">
+                                                <td className="whitespace-nowrap px-3 py-3">
                                                     <strong>
                                                         {channelName(payment.channelId, payment.channelCode)}
                                                     </strong>
-                                                    <span className="block text-slate-500">
-                                                        订单 {payment.orderCode}
-                                                    </span>
+                                                </td>
+                                                <td className="whitespace-nowrap px-3 py-3 text-slate-500">
+                                                    {payment.orderCode}
                                                 </td>
                                                 <td
                                                     className="px-3 py-3"
