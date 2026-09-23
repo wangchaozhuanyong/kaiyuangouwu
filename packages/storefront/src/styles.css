@@ -3,6 +3,7 @@
 @import './styles/brand-shell.css';
 @import './styles/skeletons.css';
 @import './styles/traffic-consent.css';
+@import './styles/home-layout-base.css';
 :root {
     --font-ui:
         -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'PingFang SC', 'Hiragino Sans GB',
@@ -1122,44 +1123,6 @@ img {
     letter-spacing: 0.04em;
     line-height: 1.4;
     text-align: center;
-}
-
-.home-intro-grid {
-    display: block;
-}
-
-.homepage-modules {
-    --homepage-module-gap: 12px;
-    --homepage-section-gap: 20px;
-
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: var(--homepage-module-gap);
-    padding-top: 8px;
-}
-
-.homepage-modules > .home-intro-grid {
-    display: contents;
-}
-
-.homepage-module-shell {
-    min-width: 0;
-}
-
-.homepage-module-shell.is-section-start {
-    margin-block-start: calc(var(--homepage-section-gap) - var(--homepage-module-gap));
-}
-
-.homepage-modules > .notice-strip,
-.homepage-modules .home-intro-grid > .hero,
-.homepage-modules .home-intro-grid > .home-trust-bar,
-.homepage-modules .home-intro-grid > .quick-grid,
-.homepage-module-shell > .coupon-hub-section,
-.homepage-module-shell > .home-dual-showcase,
-.homepage-module-shell > .content-section,
-.homepage-module-shell > .empty-state {
-    margin-block: 0;
 }
 
 /* Global Button & Micro-interaction Loading Utilities */
