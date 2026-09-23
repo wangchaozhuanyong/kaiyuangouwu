@@ -10,7 +10,7 @@ import {
     DesktopCategoryNavigation,
     DesktopSubcategoryNavigation,
 } from '../components/common/desktop-category-navigation';
-import { ProductRow } from '../components/common/product-row';
+import { ProductCard } from '../components/common/product-card';
 import { useCategoryPagination } from '../hooks/useCategoryPagination';
 import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
@@ -261,13 +261,12 @@ export function DesktopCatalogPage() {
                     ) : products.length ? (
                         <div className="desktop-product-grid">
                             {products.map(product => (
-                                <ProductRow
+                                <ProductCard
                                     key={product.id}
                                     product={product}
                                     market={market}
                                     locale={locale}
                                     language={language}
-                                    layout="catalog"
                                     onOpen={() => navigate({ name: 'product', id: product.id })}
                                 />
                             ))}

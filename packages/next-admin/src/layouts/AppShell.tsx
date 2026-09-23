@@ -803,7 +803,7 @@ export function AppShell() {
                         to="/dashboard"
                         aria-label="工作台"
                         className={({ isActive }) =>
-                            `h-10 rounded-lg flex items-center transition-all ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} ${isActive ? 'bg-blue-600 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`
+                            `h-10 rounded-lg flex items-center transition-colors ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} ${isActive ? 'bg-blue-600 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`
                         }
                     >
                         <LayoutDashboard className="w-4 h-4 shrink-0" />
@@ -831,7 +831,7 @@ export function AppShell() {
                             aria-label="商品管理"
                             aria-expanded={openMenu === 'catalog'}
                             onClick={() => toggleMenu('catalog')}
-                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-all text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
+                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-colors text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
                         >
                             <Package className="w-4 h-4 shrink-0 text-blue-400" />
                             <span
@@ -910,7 +910,7 @@ export function AppShell() {
                             aria-label="订单与售后"
                             aria-expanded={openMenu === 'sales'}
                             onClick={() => toggleMenu('sales')}
-                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-all text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
+                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-colors text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
                         >
                             <ShoppingBag className="w-4 h-4 shrink-0 text-amber-400" />
                             <span
@@ -964,7 +964,7 @@ export function AppShell() {
                         to="/customers/list"
                         aria-label="客户管理"
                         className={({ isActive }) =>
-                            `h-10 rounded-lg flex items-center transition-all ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} ${isActive ? 'bg-blue-600 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`
+                            `h-10 rounded-lg flex items-center transition-colors ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} ${isActive ? 'bg-blue-600 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`
                         }
                     >
                         <Users className="w-4 h-4 shrink-0 text-violet-400" />
@@ -982,7 +982,7 @@ export function AppShell() {
                             aria-label="营销管理"
                             aria-expanded={openMenu === 'marketing'}
                             onClick={() => toggleMenu('marketing')}
-                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-all text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
+                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-colors text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
                         >
                             <Percent className="w-4 h-4 shrink-0 text-rose-400" />
                             <span
@@ -1033,7 +1033,7 @@ export function AppShell() {
                             aria-label="店铺管理"
                             aria-expanded={openMenu === 'storefront'}
                             onClick={() => toggleMenu('storefront')}
-                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-all text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
+                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-colors text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
                         >
                             <Palette className="w-4 h-4 shrink-0 text-purple-400" />
                             <span
@@ -1084,7 +1084,7 @@ export function AppShell() {
                             aria-label="插件与服务"
                             aria-expanded={openMenu === 'plugins'}
                             onClick={() => toggleMenu('plugins')}
-                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-all text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
+                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-colors text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
                         >
                             <Blocks className="w-4 h-4 shrink-0 text-cyan-400" />
                             <span
@@ -1121,7 +1121,7 @@ export function AppShell() {
                             aria-label="系统与权限"
                             aria-expanded={openMenu === 'settings'}
                             onClick={() => toggleMenu('settings')}
-                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-all text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
+                            className={`w-full h-10 rounded-lg flex items-center cursor-pointer transition-colors text-left ${isSidebarOpen ? 'px-3' : 'justify-center w-12 mx-auto'} text-slate-400 hover:text-white hover:bg-white/5`}
                         >
                             <Settings2 className="w-4 h-4 shrink-0 text-emerald-400" />
                             <span
@@ -1262,7 +1262,7 @@ export function AppShell() {
                                     setIsMoreTabsOpen(false);
                                     setIsUserMenuOpen(current => !current);
                                 }}
-                                className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all"
+                                className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer hover:ring-2 hover:ring-blue-400 transition-colors"
                                 aria-label="打开管理员菜单"
                                 aria-expanded={isUserMenuOpen}
                                 aria-haspopup="menu"
@@ -1398,7 +1398,7 @@ export function AppShell() {
                             return (
                                 <div
                                     key={tab.path}
-                                    className={`inline-flex shrink-0 items-center rounded-md border text-xs transition-all ${isActive ? 'border-blue-200 bg-blue-50 font-bold text-blue-600 shadow-2xs' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+                                    className={`inline-flex shrink-0 items-center rounded-md border text-xs transition-colors ${isActive ? 'border-blue-200 bg-blue-50 font-bold text-blue-600 shadow-2xs' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
                                 >
                                     <NavLink to={tab.href} className="px-3 py-1">
                                         {tab.label}
@@ -1446,7 +1446,7 @@ export function AppShell() {
                     <div className="relative z-20 flex h-full shrink-0 items-center justify-center border-l border-slate-200 bg-white px-3">
                         <button
                             type="button"
-                            className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition-all ${overflowTabs.length ? 'cursor-pointer' : 'cursor-default'} ${isMoreTabsOpen ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600 hover:bg-slate-100'}`}
+                            className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition-colors ${overflowTabs.length ? 'cursor-pointer' : 'cursor-default'} ${isMoreTabsOpen ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600 hover:bg-slate-100'}`}
                             onClick={() => {
                                 if (!overflowTabs.length) return;
                                 setIsUserMenuOpen(false);
@@ -1626,7 +1626,7 @@ export function AppShell() {
             {/* ⌘K 全局搜索弹窗 (Command Palette) */}
             {isCmdKOpen && (
                 <div
-                    className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-start justify-center pt-24"
+                    className="fixed inset-0 bg-slate-900/60 z-50 flex items-start justify-center pt-24"
                     onClick={() => setIsCmdKOpen(false)}
                 >
                     <AccessibleDialogSurface

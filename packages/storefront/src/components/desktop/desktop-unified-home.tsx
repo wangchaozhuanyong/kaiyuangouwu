@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react';
 import { productAvailability } from '../../product-availability';
 import { minimumProductPrice, SafeImage } from '../../storefront-ui/product-display';
 import {
-    CollectionSummary,
     MarketConfig,
     Product,
     StorefrontContentBlock,
@@ -19,7 +18,6 @@ type SortType = 'recommended' | 'price-asc' | 'newest';
 export interface DesktopUnifiedHomeProps {
     products: Product[];
     loading: boolean;
-    collections: CollectionSummary[];
     contentBlocks: StorefrontContentBlock[];
     language: StorefrontLanguage;
     storefrontName: string;
@@ -28,14 +26,12 @@ export interface DesktopUnifiedHomeProps {
     market: MarketConfig;
     locale: string;
     onProductSelect: (productId: string) => void;
-    onCollectionSelect: (collectionId: string) => void;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }
 
 export function DesktopUnifiedHome({
     products,
     loading,
-    collections,
     contentBlocks,
     language,
     storefrontName,
@@ -44,11 +40,9 @@ export function DesktopUnifiedHome({
     market,
     locale,
     onProductSelect,
-    onCollectionSelect,
     onContentTarget,
 }: DesktopUnifiedHomeProps) {
     const isZh = language === 'zh';
-    const [collectionId, setCollectionId] = useState('all');
     const [sort, setSort] = useState<SortType>('recommended');
     const [inStockOnly, setInStockOnly] = useState(false);
     const [toolPage, setToolPage] = useState(0);
@@ -75,8 +69,8 @@ export function DesktopUnifiedHome({
                             ? '查看店铺提供的工具与服务'
                             : 'Explore tools and services',
                   imageUrl: item.iconUrl,
-                  targetType: item.routeName === 'category' ? ('CATEGORY' as const) : ('PAGE' as const),
-                  targetValue: item.routeName === 'category' ? null : 'services',
+                  targetType: 'PAGE' as const,
+                  targetValue: item.routeName,
               })),
               {
                   id: 'storefront-support',
@@ -109,15 +103,8 @@ export function DesktopUnifiedHome({
 
     const visibleProducts = useMemo(() => {
         let result = products.filter(product => {
-            const inCollection =
-                collectionId === 'all' ||
-                product.collections.some(
-                    collection =>
-                        collection.id === collectionId ||
-                        collection.breadcrumbs?.some(crumb => crumb.id === collectionId),
-                );
             const inStock = product.variants.some(variant => !productAvailability(variant).soldOut);
-            return inCollection && (!inStockOnly || inStock);
+            return !inStockOnly || inStock;
         });
         if (sort === 'price-asc') {
             result = [...result].sort(
@@ -128,11 +115,7 @@ export function DesktopUnifiedHome({
             result = [...result].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
         }
         return result;
-    }, [collectionId, inStockOnly, products, sort]);
-
-    const selectCollection = (id: string) => {
-        setCollectionId(id);
-    };
+    }, [inStockOnly, products, sort]);
 
     return (
         <section className="proto-home-container" aria-label={isZh ? '店铺首页' : 'Store home'}>
@@ -154,7 +137,7 @@ export function DesktopUnifiedHome({
                                 onClick={() =>
                                     heroHasTarget && hero
                                         ? onContentTarget(hero.targetType, hero.targetValue)
-                                        : onContentTarget('CATEGORY', null)
+                                        : onContentTarget('PAGE', 'category')
                                 }
                             >
                                 {(heroHasTarget && hero?.ctaLabel?.trim()) ||
@@ -164,7 +147,7 @@ export function DesktopUnifiedHome({
                                 <button
                                     type="button"
                                     className="proto-btn-secondary"
-                                    onClick={() => onContentTarget('CATEGORY', null)}
+                                    onClick={() => onContentTarget('PAGE', 'category')}
                                 >
                                     {isZh ? '查看全部商品' : 'Explore all products'}
                                     <ArrowRight aria-hidden="true" />
@@ -260,75 +243,46 @@ export function DesktopUnifiedHome({
                 </div>
             </div>
 
-            <div className="proto-filter-bar">
-                <div
-                    className="proto-category-pills"
-                    role="group"
-                    aria-label={isZh ? '商品分类' : 'Product categories'}
-                >
-                    <button
-                        type="button"
-                        className={`proto-cat-pill ${collectionId === 'all' ? 'is-active' : ''}`}
-                        onClick={() => selectCollection('all')}
-                    >
-                        {isZh ? '全部商品' : 'All products'}
-                    </button>
-                    {collections.slice(0, 5).map(collection => (
-                        <button
-                            key={collection.id}
-                            type="button"
-                            className={`proto-cat-pill ${collectionId === collection.id ? 'is-active' : ''}`}
-                            onClick={() => selectCollection(collection.id)}
-                            aria-pressed={collectionId === collection.id}
-                        >
-                            {collection.name}
-                        </button>
-                    ))}
-                </div>
-                <div className="proto-sort-controls">
-                    <button
-                        type="button"
-                        className="proto-category-link"
-                        onClick={() =>
-                            collectionId === 'all'
-                                ? onContentTarget('CATEGORY', null)
-                                : onCollectionSelect(collectionId)
-                        }
-                    >
-                        {isZh ? '查看分类' : 'View category'}
-                        <ArrowRight aria-hidden="true" />
-                    </button>
-                    <label>
-                        <span className="sr-only">{isZh ? '排序' : 'Sort'}</span>
-                        <select value={sort} onChange={event => setSort(event.target.value as SortType)}>
-                            <option value="recommended">{isZh ? '综合推荐' : 'Recommended'}</option>
-                            <option value="price-asc">{isZh ? '价格从低到高' : 'Price low to high'}</option>
-                            <option value="newest">{isZh ? '最新上架' : 'Newest'}</option>
-                        </select>
-                    </label>
-                    <label className="proto-stock-toggle">
-                        <input
-                            type="checkbox"
-                            checked={inStockOnly}
-                            onChange={event => setInStockOnly(event.target.checked)}
-                        />
-                        <span>{isZh ? '仅看有货' : 'In stock only'}</span>
-                    </label>
-                </div>
-            </div>
-
             <div className="proto-product-section">
-                <div className="proto-product-heading">
-                    <div>
+                <div className="proto-filter-bar">
+                    <div className="proto-product-heading section-heading-inline">
                         <h2>{isZh ? '精选商品' : 'Featured products'}</h2>
+                        {!loading && products.length > 0 && (
+                            <span className="proto-product-count">
+                                {isZh
+                                    ? `当前展示 ${visibleProducts.length} 件`
+                                    : `${visibleProducts.length} shown`}
+                            </span>
+                        )}
                     </div>
-                    {!loading && products.length > 0 && (
-                        <span className="proto-product-count">
-                            {isZh
-                                ? `当前展示 ${visibleProducts.length} 件`
-                                : `${visibleProducts.length} shown`}
-                        </span>
-                    )}
+                    <div className="proto-sort-controls">
+                        <button
+                            type="button"
+                            className="proto-category-link"
+                            onClick={() => onContentTarget('PAGE', 'category')}
+                        >
+                            {isZh ? '查看分类' : 'View category'}
+                            <ArrowRight aria-hidden="true" />
+                        </button>
+                        <label>
+                            <span className="sr-only">{isZh ? '排序' : 'Sort'}</span>
+                            <select value={sort} onChange={event => setSort(event.target.value as SortType)}>
+                                <option value="recommended">{isZh ? '综合推荐' : 'Recommended'}</option>
+                                <option value="price-asc">
+                                    {isZh ? '价格从低到高' : 'Price low to high'}
+                                </option>
+                                <option value="newest">{isZh ? '最新上架' : 'Newest'}</option>
+                            </select>
+                        </label>
+                        <label className="proto-stock-toggle">
+                            <input
+                                type="checkbox"
+                                checked={inStockOnly}
+                                onChange={event => setInStockOnly(event.target.checked)}
+                            />
+                            <span>{isZh ? '仅看有货' : 'In stock only'}</span>
+                        </label>
+                    </div>
                 </div>
                 {loading ? (
                     <div className="proto-product-grid" aria-label={isZh ? '商品加载中' : 'Loading products'}>
@@ -366,7 +320,6 @@ export function DesktopUnifiedHome({
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setCollectionId('all');
                                     setInStockOnly(false);
                                 }}
                             >

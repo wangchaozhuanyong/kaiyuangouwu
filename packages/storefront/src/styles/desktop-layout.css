@@ -642,14 +642,6 @@
         margin-top: 32px;
     }
 
-    .cart-group,
-    .coupon-row,
-    .invalid-cart-lines {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        overflow: hidden;
-    }
-
     .cart-line {
         min-height: 144px;
         padding: 18px;

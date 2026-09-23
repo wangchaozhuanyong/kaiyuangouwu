@@ -140,11 +140,11 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
         '--hero-title-shadow':
             isLightTone || !titleIsLight
                 ? '0 1px 1px rgba(255, 255, 255, 0.9), 0 2px 8px rgba(0, 0, 0, 0.04)'
-                : '0 2px 10px rgba(0, 0, 0, 0.85), 0 0 20px var(--hero-accent-shadow)',
+                : '0 1px 4px rgba(0, 0, 0, 0.45)',
         '--hero-body-shadow':
             isLightTone || !titleIsLight
                 ? '0 1px 1px rgba(255, 255, 255, 0.85)'
-                : '0 1px 4px rgba(0, 0, 0, 0.85), 0 0 8px rgba(0, 0, 0, 0.4)',
+                : '0 1px 3px rgba(0, 0, 0, 0.4)',
         '--hero-pill-shadow': isLightTone
             ? '0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(255, 255, 255, 0.8)'
             : '0 2px 8px rgba(0, 0, 0, 0.3)',

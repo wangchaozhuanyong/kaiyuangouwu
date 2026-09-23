@@ -46,6 +46,8 @@ describe('quick-link icons', () => {
         expect(markup).toContain('colorful-icon-badge');
         expect(markup).toContain('lucide-cpu');
         expect(markup).not.toContain('<img');
+        expect(markup).not.toContain('style=');
+        expect(markup).toContain('aria-hidden="true"');
     });
 
     it('treats a blank managed image URL as unconfigured', () => {

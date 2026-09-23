@@ -4,12 +4,13 @@
 @source './main.tsx';
 
 :root {
+    --shadow-sm: var(--skin-card-shadow);
     font-family:
         system-ui,
         -apple-system,
         sans-serif;
-    color: #0f172a;
-    background: #fff;
+    color: var(--text);
+    background: var(--surface);
 }
 body {
     margin: 0;
@@ -29,7 +30,7 @@ button:disabled {
     justify-content: space-between;
     gap: 1rem;
     padding: 0.75rem 1rem;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--skin-divider);
 }
 .subpage-header button {
     display: grid;

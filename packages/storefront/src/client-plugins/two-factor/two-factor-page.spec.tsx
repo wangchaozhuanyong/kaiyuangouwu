@@ -230,9 +230,26 @@ describe('TwoFactorPage', () => {
         expect(moreMenu?.textContent).toContain('显示密钥');
         expect(moreMenu?.textContent).toContain('编辑');
         expect(moreMenu?.textContent).toContain('删除');
+
+        act(() => {
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        });
+        expect(accountCard?.querySelector('[role="dialog"]')).toBeNull();
+        expect(moreButton?.getAttribute('aria-expanded')).toBe('false');
+        expect(document.activeElement).toBe(moreButton);
+
+        act(() => moreButton?.click());
+        const editButton = [...(accountCard?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find(
+            button => button.textContent === '编辑',
+        );
+        act(() => editButton?.click());
+        expect(accountCard?.querySelector('[role="dialog"]')).toBeNull();
+        expect(container.querySelector<HTMLInputElement>('.two-factor-account-form input')?.value).toBe(
+            '测试',
+        );
     });
 
-    it('keeps batch import and add account buttons aligned on the right without wrapping', async () => {
+    it('keeps account actions together and right aligned while the header can reflow on narrow screens', async () => {
         storageState.available = true;
         await act(async () => {
             root.render(
@@ -257,11 +274,12 @@ describe('TwoFactorPage', () => {
         expect(headerRow?.className).toContain('flex');
         expect(headerRow?.className).toContain('items-center');
         expect(headerRow?.className).toContain('justify-between');
-        expect(headerRow?.className).not.toContain('flex-wrap');
+        expect(headerRow?.className).toContain('flex-wrap');
 
         const buttonGroup = headerRow?.lastElementChild as HTMLElement;
         expect(buttonGroup?.className).toContain('flex');
         expect(buttonGroup?.className).toContain('shrink-0');
+        expect(buttonGroup?.className).toContain('ml-auto');
         expect(buttonGroup?.className).toContain('items-center');
         expect(buttonGroup?.className).not.toContain('flex-wrap');
 

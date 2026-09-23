@@ -20,7 +20,6 @@ import {
     UserRound,
     WalletCards,
 } from 'lucide-react';
-import type { CSSProperties } from 'react';
 // eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
 import type { RouteState } from '../storefront-router';
 
@@ -36,7 +35,6 @@ import {
     writeCachedReferralProgram,
 } from '../referral-client-feature';
 import { SafeImage } from '../safe-image';
-import { ACCOUNT_RECOMMENDATION_CREST_IMAGE } from '../storefront-images';
 import { AccountPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { orderStateLabel } from '../storefront-ui/order-ui';
@@ -180,6 +178,7 @@ export function AccountPage() {
     const customerName = customer
         ? `${customer.lastName}${customer.firstName}`.trim() || customer.emailAddress
         : '';
+    const accountHeroTone = useImageTone(desktop ? null : accountHeroImageUrl);
 
     if (desktop)
         return (
@@ -204,8 +203,6 @@ export function AccountPage() {
                 navigate={navigateTo}
             />
         );
-
-    const accountHeroTone = useImageTone(accountHeroImageUrl);
 
     return (
         <main
@@ -616,12 +613,7 @@ export function AccountPage() {
             {!desktop && (
                 <ProductSection
                     centerLabel={isZh ? '专属推荐' : 'Just for you'}
-                    className="lg:col-span-full [&_.section-header]:relative [&_.section-header]:grid [&_.section-header]:min-h-[70px] [&_.section-header]:grid-cols-1 [&_.section-header]:place-items-center [&_.section-header]:overflow-hidden [&_.section-header-center-label]:grid [&_.section-header-center-label]:min-h-[70px] [&_.section-header-center-label]:w-full [&_.section-header-center-label]:place-items-center [&_.section-header-center-label]:bg-[image:var(--account-recommendation-image)] [&_.section-header-center-label]:bg-[length:min(100%,330px)_auto] [&_.section-header-center-label]:bg-center [&_.section-header-center-label]:bg-no-repeat [&_.section-header-center-label]:text-[16px] [&_.section-header-center-label]:font-semibold [&_.section-header-center-label]:tracking-[0.16em] [&_.section-header-center-label]:text-[var(--accent-ink)] [&_.section-header-center-label]:[text-indent:0.16em]"
-                    style={
-                        {
-                            '--account-recommendation-image': `url(${JSON.stringify(ACCOUNT_RECOMMENDATION_CREST_IMAGE)})`,
-                        } as CSSProperties
-                    }
+                    className="account-recommendations"
                     products={products.slice(0, 4)}
                     market={market}
                     locale={locale}

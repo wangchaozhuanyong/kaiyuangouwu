@@ -179,7 +179,7 @@ export function ReferralPage() {
                     onAction={() => void overviewQuery.refetch()}
                 />
             ) : (
-                <div className="desktop-referral-content mx-auto grid w-full min-w-0 max-w-5xl overflow-hidden gap-4 px-3 pb-10 pt-3 lg:grid-cols-[1.15fr_0.85fr] lg:px-6">
+                <div className="desktop-referral-content mx-auto grid w-full min-w-0 max-w-5xl grid-cols-1 gap-4 px-3 pb-10 pt-3 lg:grid-cols-[1.15fr_0.85fr] lg:px-6 [&>section]:min-w-0">
                     <section className="referral-invite">
                         <h1 className="referral-invite-title">
                             {isZh ? '邀请好友，获得奖励' : 'Invite friends, earn rewards'}
@@ -233,39 +233,39 @@ export function ReferralPage() {
                             icon={<WalletCards />}
                             label={isZh ? '可用奖励' : 'Available'}
                             value={formatMoney(wallet?.availableBalance ?? 0, market.currencyCode, locale)}
-                            accent="text-emerald-600 bg-emerald-50"
+                            accent="text-[var(--success)] bg-[color-mix(in_srgb,var(--success)_12%,var(--surface))]"
                         />
                         <SummaryCard
                             icon={<Gift />}
                             label={isZh ? '待生效' : 'Pending'}
                             value={formatMoney(wallet?.pendingBalance ?? 0, market.currencyCode, locale)}
-                            accent="text-amber-600 bg-amber-50"
+                            accent="text-[var(--warning-text)] bg-[var(--warning-bg)]"
                         />
                         <SummaryCard
                             icon={<Users />}
                             label={isZh ? '已邀请' : 'Invited'}
                             value={String(overview.invitedCount)}
-                            accent="text-blue-600 bg-blue-50"
+                            accent="text-[var(--accent-ink)] bg-[var(--accent-soft)]"
                         />
                         <SummaryCard
                             icon={<ShoppingBag />}
                             label={isZh ? '已消费好友' : 'Purchased'}
                             value={String(overview.purchasedInviteeCount)}
-                            accent="text-violet-600 bg-violet-50"
+                            accent="text-[var(--text-soft)] bg-[var(--control-surface)]"
                         />
-                        <div className="col-span-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-                            <div className="mb-3 flex items-center justify-between">
-                                <strong className="text-sm font-extrabold text-slate-900">
+                        <div className="col-span-2 rounded-[var(--skin-card-radius)] border-0 bg-[var(--surface)] p-4 text-sm text-[var(--text-soft)] shadow-[var(--skin-card-shadow)]">
+                            <div className="mb-3 flex items-baseline justify-between gap-3">
+                                <strong className="text-sm font-semibold text-[var(--text)]">
                                     {isZh ? '奖励概览' : 'Reward overview'}
                                 </strong>
                                 <RewardInfo isZh={isZh} releaseDelayDays={overview.releaseDelayDays} />
                             </div>
-                            <dl className="m-0 grid grid-cols-2 divide-x divide-slate-200 rounded-xl bg-slate-50 py-3 text-center">
+                            <dl className="m-0 grid grid-cols-2 divide-x divide-[var(--line)] rounded-[var(--skin-control-radius)] bg-[var(--soft)] py-3 text-center">
                                 <div className="min-w-0 px-3">
-                                    <dt className="text-xs font-semibold text-slate-500">
+                                    <dt className="text-xs font-semibold text-[var(--muted)]">
                                         {isZh ? '累计获得' : 'Total earned'}
                                     </dt>
-                                    <dd className="mb-0 mt-1 truncate text-base font-black tabular-nums text-slate-900">
+                                    <dd className="mb-0 mt-1 [overflow-wrap:anywhere] text-base font-semibold tabular-nums text-[var(--text)]">
                                         {formatMoney(
                                             rewardSummary?.grossReward ?? 0,
                                             market.currencyCode,
@@ -274,10 +274,10 @@ export function ReferralPage() {
                                     </dd>
                                 </div>
                                 <div className="min-w-0 px-3">
-                                    <dt className="text-xs font-semibold text-slate-500">
+                                    <dt className="text-xs font-semibold text-[var(--muted)]">
                                         {isZh ? '退款扣回' : 'Refund clawbacks'}
                                     </dt>
-                                    <dd className="mb-0 mt-1 truncate text-base font-black tabular-nums text-red-600">
+                                    <dd className="mb-0 mt-1 [overflow-wrap:anywhere] text-base font-semibold tabular-nums text-[var(--danger)]">
                                         -
                                         {formatMoney(
                                             rewardSummary?.clawedBackReward ?? 0,
@@ -290,35 +290,35 @@ export function ReferralPage() {
                         </div>
                     </section>
 
-                    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-1">
-                        <div className="mb-3 flex items-center justify-between">
-                            <h2 className="m-0 text-lg font-black text-slate-900">
+                    <section className="rounded-[var(--skin-card-radius)] border-0 bg-[var(--surface)] p-4 shadow-[var(--skin-card-shadow)] lg:col-span-1">
+                        <div className="mb-3 flex items-baseline justify-between gap-3">
+                            <h2 className="m-0 text-lg font-semibold text-[var(--text)]">
                                 {isZh ? '邀请记录' : 'Invitees'}
                             </h2>
-                            <span className="text-xs font-bold tabular-nums text-slate-500">
+                            <span className="text-xs font-bold tabular-nums text-[var(--muted)]">
                                 {overview.invitedCount}
                             </span>
                         </div>
                         {overview.invitees.length ? (
                             <>
-                                <div className="divide-y divide-slate-100">
+                                <div className="divide-y divide-[var(--line)]">
                                     {paginatedInvitees.map(invitee => (
                                         <div key={invitee.id} className="flex items-center gap-3 py-3">
-                                            <span className="grid size-10 place-items-center rounded-full bg-amber-50/80 font-bold text-amber-800">
+                                            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--accent-soft)] font-bold text-[var(--accent-ink)]">
                                                 {invitee.displayName.slice(0, 1)}
                                             </span>
                                             <div className="min-w-0 flex-1">
-                                                <strong className="block truncate text-sm text-slate-900">
+                                                <strong className="block truncate text-sm text-[var(--text)]">
                                                     {invitee.displayName}
                                                 </strong>
-                                                <small className="text-slate-500">
+                                                <small className="text-[var(--muted)]">
                                                     {new Intl.DateTimeFormat(locale, {
                                                         dateStyle: 'medium',
                                                     }).format(new Date(invitee.boundAt))}
                                                 </small>
                                             </div>
                                             <span
-                                                className={`rounded-full px-2 py-1 text-[11px] font-bold ${invitee.firstPaidOrderAt ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
+                                                className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-bold ${invitee.firstPaidOrderAt ? 'bg-[color-mix(in_srgb,var(--success)_12%,var(--surface))] text-[var(--success)]' : 'bg-[var(--soft)] text-[var(--muted)]'}`}
                                             >
                                                 {invitee.firstPaidOrderAt
                                                     ? isZh
@@ -340,7 +340,7 @@ export function ReferralPage() {
                                 />
                             </>
                         ) : (
-                            <p className="py-8 text-center text-sm text-slate-500">
+                            <p className="py-8 text-center text-sm text-[var(--muted)]">
                                 {isZh
                                     ? '还没有邀请记录，分享给第一位好友吧'
                                     : 'No invitees yet. Share with your first friend.'}
@@ -348,18 +348,18 @@ export function ReferralPage() {
                         )}
                     </section>
 
-                    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-1">
-                        <div className="mb-3 flex items-center justify-between">
-                            <h2 className="m-0 text-lg font-black text-slate-900">
+                    <section className="rounded-[var(--skin-card-radius)] border-0 bg-[var(--surface)] p-4 shadow-[var(--skin-card-shadow)] lg:col-span-1">
+                        <div className="mb-3 flex items-baseline justify-between gap-3">
+                            <h2 className="m-0 text-lg font-semibold text-[var(--text)]">
                                 {isZh ? '奖励流水' : 'Reward activity'}
                             </h2>
-                            <span className="text-xs font-bold tabular-nums text-slate-500">
+                            <span className="text-xs font-bold tabular-nums text-[var(--muted)]">
                                 {displayLedger.length}
                             </span>
                         </div>
                         {displayLedger.length ? (
                             <>
-                                <div className="divide-y divide-slate-100">
+                                <div className="divide-y divide-[var(--line)]">
                                     {paginatedLedger.map(entry => (
                                         <LedgerRow
                                             key={entry.id}
@@ -378,7 +378,7 @@ export function ReferralPage() {
                                 />
                             </>
                         ) : (
-                            <p className="py-8 text-center text-sm text-slate-500">
+                            <p className="py-8 text-center text-sm text-[var(--muted)]">
                                 {isZh ? '暂无奖励流水' : 'No reward activity yet'}
                             </p>
                         )}
@@ -417,14 +417,16 @@ function SummaryCard({
     accent: string;
 }) {
     return (
-        <div className="flex min-h-32 flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-4 text-center shadow-sm">
-            <span className={`grid size-10 place-items-center rounded-xl ${accent} [&_svg]:size-[18px]`}>
+        <div className="flex min-h-32 flex-col items-center justify-center rounded-[var(--skin-card-radius)] border-0 bg-[var(--surface)] px-3 py-4 text-center shadow-[var(--skin-card-shadow)]">
+            <span
+                className={`grid size-10 shrink-0 place-items-center rounded-[var(--skin-control-radius)] ${accent} [&_svg]:size-[18px]`}
+            >
                 {icon}
             </span>
-            <strong className="mt-3 block w-full truncate text-center text-xl font-black leading-none tabular-nums text-slate-900">
+            <strong className="mt-3 block w-full [overflow-wrap:anywhere] text-center text-xl font-semibold leading-none tabular-nums text-[var(--text)]">
                 {value}
             </strong>
-            <small className="mt-2 block text-center text-xs font-semibold leading-4 text-slate-500">
+            <small className="mt-2 block text-center text-xs font-semibold leading-4 text-[var(--muted)]">
                 {label}
             </small>
         </div>
@@ -435,13 +437,13 @@ function RewardInfo({ isZh, releaseDelayDays }: { isZh: boolean; releaseDelayDay
     return (
         <details className="group relative">
             <summary
-                className="grid size-8 cursor-pointer list-none place-items-center rounded-full border border-slate-200 bg-slate-50 text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden"
+                className="grid size-11 shrink-0 cursor-pointer list-none place-items-center rounded-full border border-[var(--line)] bg-[var(--soft)] text-[var(--muted)] transition-colors hover:bg-[var(--control-surface-hover)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden"
                 aria-label={isZh ? '查看奖励说明' : 'View reward details'}
             >
                 <Info className="size-4" aria-hidden="true" />
             </summary>
             <div
-                className="absolute right-0 z-20 mt-2 w-[min(18rem,calc(100vw-3.5rem))] rounded-xl border border-slate-200 bg-white p-3 text-left text-xs font-medium leading-5 text-slate-600 shadow-[0_14px_36px_-16px_rgba(15,23,42,0.45)]"
+                className="absolute right-0 z-20 mt-2 w-[min(18rem,calc(100vw-3.5rem))] rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] p-3 text-left text-xs font-medium leading-5 text-[var(--text-soft)] shadow-[var(--skin-card-hover-shadow)]"
                 role="note"
             >
                 {isZh
@@ -481,19 +483,19 @@ function LedgerRow({
     return (
         <div className="flex items-center gap-3 py-3">
             <span
-                className={`grid size-9 place-items-center rounded-full ${isPositive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}
+                className={`grid size-9 shrink-0 place-items-center rounded-full ${isPositive ? 'bg-[color-mix(in_srgb,var(--success)_12%,var(--surface))] text-[var(--success)]' : 'bg-[color-mix(in_srgb,var(--danger)_10%,var(--surface))] text-[var(--danger)]'}`}
             >
                 <WalletCards className="size-4" />
             </span>
             <div className="min-w-0 flex-1">
-                <strong className="block truncate text-sm text-slate-900">{label}</strong>
-                <small className="text-slate-500">
+                <strong className="block truncate text-sm text-[var(--text)]">{label}</strong>
+                <small className="text-[var(--muted)]">
                     {new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }).format(
                         new Date(entry.createdAt),
                     )}
                 </small>
             </div>
-            <strong className={isPositive ? 'text-emerald-600' : 'text-slate-900'}>
+            <strong className={isPositive ? 'text-[var(--success)]' : 'text-[var(--text)]'}>
                 {delta > 0 ? '+' : ''}
                 {formatMoney(delta, entry.currencyCode, locale)}
             </strong>
@@ -516,7 +518,7 @@ function ListPagination({
 }) {
     if (totalItems <= 0) return null;
     return (
-        <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] pt-3 text-xs text-[var(--muted)]">
             <span>
                 {isZh
                     ? `共 ${totalItems} 条 · 第 ${currentPage}/${totalPages} 页`
@@ -528,7 +530,7 @@ function ListPagination({
                     disabled={currentPage <= 1}
                     onClick={() => onPageChange(currentPage - 1)}
                     aria-label={isZh ? '上一页' : 'Previous page'}
-                    className="flex h-7 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 font-medium text-[var(--text-soft)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     <ChevronLeft className="size-3.5" aria-hidden="true" />
                     <span>{isZh ? '上一页' : 'Prev'}</span>
@@ -538,7 +540,7 @@ function ListPagination({
                     disabled={currentPage >= totalPages}
                     onClick={() => onPageChange(currentPage + 1)}
                     aria-label={isZh ? '下一页' : 'Next page'}
-                    className="flex h-7 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 font-medium text-[var(--text-soft)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     <span>{isZh ? '下一页' : 'Next'}</span>
                     <ChevronRight className="size-3.5" aria-hidden="true" />

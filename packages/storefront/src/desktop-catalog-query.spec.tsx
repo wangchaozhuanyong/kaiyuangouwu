@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { catalogInputFromRoute, catalogRouteWithChanges } from './catalog-route-query';
+import { ProductCard } from './components/common/product-card';
 import { ProductRow } from './components/common/product-row';
 import { readStorefrontStylesheet } from './test-stylesheet';
 import { MarketConfig, Product } from './types';
@@ -23,7 +24,7 @@ describe('desktop catalog navigation', () => {
         expect(sharedStylesheet).toMatch(
             /\.section-header\.has-end-subtitle\s*\{[^}]*align-items:\s*flex-end;/u,
         );
-        expect(desktopStylesheet).toMatch(/\.proto-product-heading\s*\{[^}]*align-items:\s*baseline;/u);
+        expect(desktopStylesheet).toMatch(/\.section-heading-inline\s*\{[^}]*align-items:\s*baseline;/u);
     });
 
     it('groups catalog heading and controls into one balanced desktop toolbar module', () => {
@@ -31,10 +32,7 @@ describe('desktop catalog navigation', () => {
 
         expect(stylesheet).toMatch(
             // eslint-disable-next-line max-len -- This expression guards the complete desktop toolbar module.
-            /\.desktop-catalog-toolbar\s*\{[^}]*align-items:\s*center;[^}]*min-height:\s*0;[^}]*padding:\s*10px 12px;[^}]*border-radius:\s*var\(--skin-card-radius\);[^}]*background:\s*var\(--surface\);[^}]*box-shadow:\s*var\(--skin-card-shadow\);/u,
-        );
-        expect(stylesheet).toMatch(
-            /\.desktop-catalog-heading\s*\{[^}]*min-height:\s*0;[^}]*align-self:\s*center;/u,
+            /\.desktop-catalog-toolbar\s*\{[^}]*padding:\s*10px 12px;[^}]*border-radius:\s*var\(--skin-card-radius\);[^}]*background:\s*var\(--surface\);[^}]*box-shadow:\s*var\(--skin-card-shadow\);/u,
         );
         expect(stylesheet).toMatch(
             /\.desktop-catalog-actions\s*\{[^}]*margin-left:\s*auto;[^}]*background:\s*var\(--soft\);/u,
@@ -172,12 +170,11 @@ describe('desktop catalog card', () => {
     };
     it('keeps real copy, amount and sold-out state while retaining an accessible details action', () => {
         const html = renderToStaticMarkup(
-            <ProductRow
+            <ProductCard
                 product={product}
                 market={market}
                 locale="zh-CN"
                 language="zh"
-                layout="catalog"
                 onOpen={() => undefined}
             />,
         );
@@ -186,7 +183,7 @@ describe('desktop catalog card', () => {
         expect(html.replace(/<[^>]*>/g, '')).toContain('123.45');
         expect(html).toContain('已售罄');
         expect(html).toContain('aria-label="查看 后台商品名称"');
-        expect(html).toContain('查看详情');
+        expect(html).toContain('product-card-detail-link');
         expect(html).not.toContain('立即购买');
     });
     it('preserves the existing mobile row presentation by default', () => {

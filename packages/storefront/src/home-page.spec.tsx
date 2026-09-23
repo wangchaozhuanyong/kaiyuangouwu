@@ -938,7 +938,10 @@ describe('HomePage desktop intro layout', () => {
         expect(stylesheet).toMatch(
             /\.proto-hero-featured\s*\{[^}]*border-radius:\s*var\(--skin-hero-radius\);/,
         );
-        expect(stylesheet).toMatch(/\.proto-product-grid > \.product-card\s*\{[^}]*border:\s*0;/);
+        expect(stylesheet).not.toContain('.proto-product-grid > .product-card');
+        expect(readStorefrontStylesheet(['./styles/product-card.css'])).toMatch(
+            /\.product-card\s*\{[^}]*border:\s*0;/,
+        );
         expect(stylesheet).toMatch(/\.proto-filter-bar\s*\{[^}]*border:\s*none;/);
         expect(stylesheet).toMatch(
             // eslint-disable-next-line max-len -- The control surface, elevation and border belong to one selector contract.

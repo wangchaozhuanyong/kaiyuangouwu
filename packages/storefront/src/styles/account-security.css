@@ -505,22 +505,22 @@
     padding: 7px 10px;
     border: 1px solid #fecaca;
     border-radius: 9px;
-    color: #991b1b;
-    background: #fff7f7;
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 8%, var(--surface));
     font-size: 12px;
     font-weight: var(--font-weight-semibold);
 }
 
 .security-privacy-message {
     margin: 10px 4px 0;
-    color: #047857;
+    color: var(--success);
     font-size: 12px;
     line-height: 1.55;
 }
 
 .security-privacy-message.is-error,
 .security-privacy-dialog-error {
-    color: #b91c1c;
+    color: var(--danger);
 }
 
 .security-privacy-dialog-backdrop {
