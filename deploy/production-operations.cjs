@@ -9,14 +9,19 @@ const {
     closeSync,
     constants,
     existsSync,
+    fchmodSync,
+    fchownSync,
     fstatSync,
+    fsyncSync,
     lstatSync,
     openSync,
     readdirSync,
     readFileSync,
     realpathSync,
+    renameSync,
     rmSync,
     statSync,
+    writeSync,
 } = require('node:fs');
 const path = require('node:path');
 
@@ -24,6 +29,14 @@ const retention = require('./systemd/vendure-production-release-retention.cjs');
 
 const DEPLOY_LOCK = '/run/lock/vendure-production-deploy.lock';
 const BACKUP_DIRECTORY = '/var/backups/vendure-mysql';
+const PRODUCTION_ENVIRONMENT_FILE = '/var/www/kaiyuangouwu/packages/dev-server/.env';
+const OFFSITE_FILE_BACKUP_URI = 's3://yunqiao-vendure-prod-backup-079740175286-apne1/files';
+const OFFSITE_FILE_BACKUP_RETENTION_DAYS = 30;
+const OFFSITE_FILE_BACKUP_SETTINGS = Object.freeze({
+    VENDURE_REQUIRE_OFFSITE_FILE_BACKUP: 'true',
+    VENDURE_FILE_BACKUP_S3_URI: OFFSITE_FILE_BACKUP_URI,
+    VENDURE_FILE_BACKUP_S3_RETENTION_DAYS: String(OFFSITE_FILE_BACKUP_RETENTION_DAYS),
+});
 const DEPLOYMENT_CACHE_DIRECTORIES = Object.freeze([
     { label: 'repository-node-modules', directory: '/var/www/kaiyuangouwu/node_modules' },
     { label: 'ubuntu-bun-install-cache', directory: '/home/ubuntu/.bun/install/cache' },
@@ -60,6 +73,8 @@ function validateRequest(environment) {
             'retain-reviewed',
             'plan-deployment-cache-cleanup',
             'apply-deployment-cache-cleanup-reviewed',
+            'plan-offsite-file-backup-config',
+            'apply-offsite-file-backup-config-reviewed',
             'plan-two-factor-backup',
             'backup-two-factor-reviewed',
             'verify-two-factor-backup',
@@ -86,6 +101,7 @@ function validateRequest(environment) {
         [
             'retain-reviewed',
             'apply-deployment-cache-cleanup-reviewed',
+            'apply-offsite-file-backup-config-reviewed',
             'backup-two-factor-reviewed',
             'apply-order-sales-ownership-backfill-reviewed',
             'apply-moyao-default-store-migration-reviewed',
@@ -149,6 +165,187 @@ function validateRequest(environment) {
 
 function planDigest(plan, sourceSha) {
     return createHash('sha256').update(JSON.stringify({ sourceSha, plan })).digest('hex');
+}
+
+function parseEnvironmentAssignment(line) {
+    const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/u.exec(line);
+    return match ? { name: match[1], value: match[2].trim() } : null;
+}
+
+function readOffsiteFileBackupSettings(contents) {
+    const settings = {};
+    for (const line of contents.split(/\r?\n/u)) {
+        const assignment = parseEnvironmentAssignment(line);
+        if (!assignment || !Object.hasOwn(OFFSITE_FILE_BACKUP_SETTINGS, assignment.name)) continue;
+        assert.ok(
+            !Object.hasOwn(settings, assignment.name),
+            `Duplicate production setting: ${assignment.name}`,
+        );
+        settings[assignment.name] = assignment.value;
+    }
+    return settings;
+}
+
+function readProtectedEnvironmentFile(environmentFile) {
+    const fileDescriptor = openSync(environmentFile, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+        const metadata = fstatSync(fileDescriptor);
+        assert.ok(metadata.isFile(), 'The production environment must be a regular file');
+        assert.ok(
+            metadata.size > 0 && metadata.size <= 1024 * 1024,
+            'The production environment file size is invalid',
+        );
+        const contents = readFileSync(fileDescriptor, 'utf8');
+        return {
+            contents,
+            metadata,
+            digest: createHash('sha256').update(contents).digest('hex'),
+        };
+    } finally {
+        closeSync(fileDescriptor);
+    }
+}
+
+function verifyOffsiteFileBackupPolicy(
+    uri,
+    retentionDays,
+    guardPath = path.join(__dirname, 'systemd/vendure-backup-s3-guard.py'),
+) {
+    const result = spawnSync('/usr/bin/python3', [guardPath, uri, String(retentionDays)], {
+        encoding: 'utf8',
+        timeout: 120000,
+        maxBuffer: 65536,
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    assert.equal(result.status, 0, 'The fixed S3 file-backup policy verification failed');
+    return true;
+}
+
+function inspectOffsiteFileBackupConfig(
+    sourceSha,
+    { environmentFile = PRODUCTION_ENVIRONMENT_FILE, verifyPolicy = verifyOffsiteFileBackupPolicy } = {},
+) {
+    assert.match(sourceSha, /^[a-f0-9]{40}$/u, 'Invalid operations source SHA');
+    const environment = readProtectedEnvironmentFile(environmentFile);
+    const current = readOffsiteFileBackupSettings(environment.contents);
+    const normalizedCurrent = Object.fromEntries(
+        Object.keys(OFFSITE_FILE_BACKUP_SETTINGS).map(name => [name, current[name] ?? null]),
+    );
+    assert.equal(
+        verifyPolicy(OFFSITE_FILE_BACKUP_URI, OFFSITE_FILE_BACKUP_RETENTION_DAYS),
+        true,
+        'The fixed S3 file-backup policy was not verified',
+    );
+    return {
+        schema: 'vendure-offsite-file-backup-config',
+        sourceSha,
+        destination: OFFSITE_FILE_BACKUP_URI,
+        retentionDays: OFFSITE_FILE_BACKUP_RETENTION_DAYS,
+        policyVerified: true,
+        currentSettingsSha256: createHash('sha256').update(JSON.stringify(normalizedCurrent)).digest('hex'),
+        changes: Object.entries(OFFSITE_FILE_BACKUP_SETTINGS)
+            .filter(([name, value]) => current[name] !== value)
+            .map(([name]) => name),
+    };
+}
+
+function renderOffsiteFileBackupSettings(contents, settings = OFFSITE_FILE_BACKUP_SETTINGS) {
+    readOffsiteFileBackupSettings(contents);
+    const newline = contents.includes('\r\n') ? '\r\n' : '\n';
+    const hadTrailingNewline = contents.endsWith('\n');
+    const lines = contents.split(/\r?\n/u);
+    if (hadTrailingNewline) lines.pop();
+    const replaced = new Set();
+    const updated = lines.map(line => {
+        const assignment = parseEnvironmentAssignment(line);
+        if (!assignment || !Object.hasOwn(settings, assignment.name)) return line;
+        replaced.add(assignment.name);
+        return `${assignment.name}=${settings[assignment.name]}`;
+    });
+    for (const [name, value] of Object.entries(settings)) {
+        if (!replaced.has(name)) updated.push(`${name}=${value}`);
+    }
+    return `${updated.join(newline)}${hadTrailingNewline ? newline : ''}`;
+}
+
+function updateOffsiteFileBackupConfig(environmentFile, settings = OFFSITE_FILE_BACKUP_SETTINGS) {
+    const initial = readProtectedEnvironmentFile(environmentFile);
+    const updatedContents = renderOffsiteFileBackupSettings(initial.contents, settings);
+    if (updatedContents === initial.contents) return false;
+
+    const directory = path.dirname(environmentFile);
+    const temporaryFile = path.join(
+        directory,
+        `.${path.basename(environmentFile)}.offsite-backup-${process.pid}-${randomBytes(8).toString('hex')}`,
+    );
+    let temporaryDescriptor;
+    try {
+        temporaryDescriptor = openSync(
+            temporaryFile,
+            constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+            initial.metadata.mode & 0o777,
+        );
+        const buffer = Buffer.from(updatedContents, 'utf8');
+        let offset = 0;
+        while (offset < buffer.length) {
+            const written = writeSync(temporaryDescriptor, buffer, offset, buffer.length - offset, offset);
+            assert.ok(written > 0, 'The production environment update was incomplete');
+            offset += written;
+        }
+        fchownSync(temporaryDescriptor, initial.metadata.uid, initial.metadata.gid);
+        fchmodSync(temporaryDescriptor, initial.metadata.mode & 0o777);
+        fsyncSync(temporaryDescriptor);
+        closeSync(temporaryDescriptor);
+        temporaryDescriptor = undefined;
+
+        const current = readProtectedEnvironmentFile(environmentFile);
+        assert.equal(current.metadata.dev, initial.metadata.dev, 'Production environment device changed');
+        assert.equal(current.metadata.ino, initial.metadata.ino, 'Production environment file changed');
+        assert.equal(current.digest, initial.digest, 'Production environment contents changed');
+        renameSync(temporaryFile, environmentFile);
+        const directoryDescriptor = openSync(directory, constants.O_RDONLY);
+        try {
+            fsyncSync(directoryDescriptor);
+        } finally {
+            closeSync(directoryDescriptor);
+        }
+        return true;
+    } finally {
+        if (temporaryDescriptor !== undefined) closeSync(temporaryDescriptor);
+        rmSync(temporaryFile, { force: true });
+    }
+}
+
+function applyOffsiteFileBackupConfig(
+    request,
+    {
+        environmentFile = PRODUCTION_ENVIRONMENT_FILE,
+        verifyPolicy = verifyOffsiteFileBackupPolicy,
+        update = updateOffsiteFileBackupConfig,
+    } = {},
+) {
+    assert.equal(
+        request.operation,
+        'apply-offsite-file-backup-config-reviewed',
+        'The reviewed offsite file-backup configuration operation is required',
+    );
+    const inspect = () =>
+        inspectOffsiteFileBackupConfig(request.sourceSha, { environmentFile, verifyPolicy });
+    const plan = inspect();
+    assert.equal(
+        planDigest(plan, request.sourceSha),
+        request.expectedPlanSha256,
+        'Offsite file-backup configuration changed; review a new plan',
+    );
+    assert.deepEqual(inspect(), plan, 'Offsite file-backup configuration changed before apply');
+    const changed = update(environmentFile, OFFSITE_FILE_BACKUP_SETTINGS);
+    const completed = inspect();
+    assert.deepEqual(completed.changes, [], 'Offsite file-backup configuration remains incomplete');
+    return {
+        changed,
+        destination: completed.destination,
+        retentionDays: completed.retentionDays,
+    };
 }
 
 function inspectProductionReleases() {
@@ -1192,6 +1389,24 @@ function runAdministratorProductReadinessAudit(
 
 function runLocked(environment = process.env) {
     const request = validateRequest(environment);
+    if (request.operation === 'plan-offsite-file-backup-config') {
+        const plan = inspectOffsiteFileBackupConfig(request.sourceSha);
+        process.stdout.write(
+            `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: planDigest(plan, request.sourceSha), plan })}\n`,
+        );
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=plan-offsite-file-backup-config\n');
+        return;
+    }
+    if (request.operation === 'apply-offsite-file-backup-config-reviewed') {
+        const result = applyOffsiteFileBackupConfig(request);
+        process.stdout.write(
+            `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: request.expectedPlanSha256, ...result })}\n`,
+        );
+        process.stdout.write(
+            'PRODUCTION_OPERATIONS_COMPLETE operation=apply-offsite-file-backup-config-reviewed\n',
+        );
+        return;
+    }
     if (request.operation === 'plan-deployment-cache-cleanup') {
         const plan = inspectDeploymentCacheCleanup(request.sourceSha);
         process.stdout.write(
@@ -1483,11 +1698,13 @@ if (require.main === module) {
 
 module.exports = {
     applyDeploymentCacheCleanup,
+    applyOffsiteFileBackupConfig,
     frontendRevisionEvidence,
     assertStorefrontInspectionRevision,
     encodeBeforeReport,
     inspectProductionReleases,
     inspectDeploymentCacheCleanup,
+    inspectOffsiteFileBackupConfig,
     inspectRepositoryState,
     planDigest,
     productionHealthSnapshot,
@@ -1498,11 +1715,13 @@ module.exports = {
     runDatabaseBackup,
     runOrderSalesOwnershipBackfill,
     runMoyaoDefaultStoreMigration,
+    readOffsiteFileBackupSettings,
     startVerifiedMysqlBackup,
     validateMigrationAuditOutput,
     validateOrderSalesOwnershipOutput,
     validateMoyaoDefaultStoreMigrationOutput,
     validateStoreAutonomyAuditPayload,
     validateRequest,
+    verifyOffsiteFileBackupPolicy,
     withProductionLock,
 };

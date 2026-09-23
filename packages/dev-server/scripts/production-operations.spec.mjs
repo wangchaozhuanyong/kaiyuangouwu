@@ -68,6 +68,8 @@ void test('release workflow ships the fixed live preflight inputs and migration 
     );
     assert.match(workflow, /workflow_call:/u);
     assert.match(workflow, /preflight-release/u);
+    assert.match(workflow, /plan-offsite-file-backup-config/u);
+    assert.match(workflow, /apply-offsite-file-backup-config-reviewed/u);
     assert.match(workflow, /OPS_EXPECTED_CHANNEL_CODES/u);
     assert.match(workflow, /deploy\/usdt-migration-guard\.cjs/u);
     assert.match(workflow, /packages\/dev-server\/migrations\/index\.ts/u);
@@ -139,6 +141,7 @@ void test('release workflow ships the fixed live preflight inputs and migration 
         ],
         [...commonFiles, 'packages/dev-server/scripts/order-sales-ownership-backfill.mjs'],
         [...commonFiles, 'packages/dev-server/scripts/moyao-default-store-migration.mjs'],
+        [...commonFiles, 'deploy/systemd/vendure-backup-s3-guard.py'],
     ];
     const encodedBytes = bundles.map(files =>
         files.reduce(
@@ -420,6 +423,136 @@ void test('diagnostics are the default; unknown commands and unreviewed retentio
             OPS_OPERATION: 'plan-deployment-cache-cleanup',
         }).operation,
         'plan-deployment-cache-cleanup',
+    );
+});
+
+void test('offsite file-backup configuration plans are read-only and writes require a reviewed hash', () => {
+    assert.equal(
+        operations.validateRequest({
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_OPERATION: 'plan-offsite-file-backup-config',
+        }).operation,
+        'plan-offsite-file-backup-config',
+    );
+    assert.throws(() =>
+        operations.validateRequest({
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_OPERATION: 'plan-offsite-file-backup-config',
+            OPS_EXPECTED_PLAN_SHA256: 'b'.repeat(64),
+        }),
+    );
+    assert.throws(() =>
+        operations.validateRequest({
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_OPERATION: 'apply-offsite-file-backup-config-reviewed',
+        }),
+    );
+    assert.equal(
+        operations.validateRequest({
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_OPERATION: 'apply-offsite-file-backup-config-reviewed',
+            OPS_EXPECTED_PLAN_SHA256: 'b'.repeat(64),
+        }).expectedPlanSha256,
+        'b'.repeat(64),
+    );
+});
+
+void test('reviewed offsite file-backup configuration preserves secrets and file metadata', t => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-offsite-file-backup-config-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const environmentFile = path.join(root, '.env');
+    writeFileSync(
+        environmentFile,
+        [
+            'SECRET_TOKEN=keep-me',
+            'VENDURE_REQUIRE_OFFSITE_FILE_BACKUP=false',
+            'VENDURE_FILE_BACKUP_S3_URI=',
+            '',
+        ].join('\n'),
+        { mode: 0o640 },
+    );
+    chmodSync(environmentFile, 0o640);
+    const before = statSync(environmentFile);
+    const policyChecks = [];
+    const verifyPolicy = (uri, retentionDays) => {
+        policyChecks.push({ uri, retentionDays });
+        return true;
+    };
+    const plan = operations.inspectOffsiteFileBackupConfig(sourceSha, {
+        environmentFile,
+        verifyPolicy,
+    });
+    assert.deepEqual(plan.changes, [
+        'VENDURE_REQUIRE_OFFSITE_FILE_BACKUP',
+        'VENDURE_FILE_BACKUP_S3_URI',
+        'VENDURE_FILE_BACKUP_S3_RETENTION_DAYS',
+    ]);
+    assert.equal(plan.destination, 's3://yunqiao-vendure-prod-backup-079740175286-apne1/files');
+    assert.equal(plan.retentionDays, 30);
+    assert.equal(JSON.stringify(plan).includes('keep-me'), false);
+
+    const request = operations.validateRequest({
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_OPERATION: 'apply-offsite-file-backup-config-reviewed',
+        OPS_EXPECTED_PLAN_SHA256: operations.planDigest(plan, sourceSha),
+    });
+    const result = operations.applyOffsiteFileBackupConfig(request, {
+        environmentFile,
+        verifyPolicy,
+    });
+    assert.equal(result.changed, true);
+    const contents = readFileSync(environmentFile, 'utf8');
+    assert.match(contents, /^SECRET_TOKEN=keep-me$/mu);
+    assert.match(contents, /^VENDURE_REQUIRE_OFFSITE_FILE_BACKUP=true$/mu);
+    assert.match(
+        contents,
+        /^VENDURE_FILE_BACKUP_S3_URI=s3:\/\/yunqiao-vendure-prod-backup-079740175286-apne1\/files$/mu,
+    );
+    assert.match(contents, /^VENDURE_FILE_BACKUP_S3_RETENTION_DAYS=30$/mu);
+    const after = statSync(environmentFile);
+    assert.equal(after.mode % 0o1000, before.mode % 0o1000);
+    assert.equal(after.uid, before.uid);
+    assert.equal(after.gid, before.gid);
+    assert.ok(policyChecks.length >= 4);
+
+    const completedPlan = operations.inspectOffsiteFileBackupConfig(sourceSha, {
+        environmentFile,
+        verifyPolicy,
+    });
+    assert.deepEqual(completedPlan.changes, []);
+    const unchanged = operations.applyOffsiteFileBackupConfig(
+        {
+            ...request,
+            expectedPlanSha256: operations.planDigest(completedPlan, sourceSha),
+        },
+        { environmentFile, verifyPolicy },
+    );
+    assert.equal(unchanged.changed, false);
+});
+
+void test('offsite file-backup configuration rejects duplicate settings and symlinks', t => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-offsite-file-backup-invalid-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const environmentFile = path.join(root, '.env');
+    writeFileSync(
+        environmentFile,
+        'VENDURE_REQUIRE_OFFSITE_FILE_BACKUP=false\nVENDURE_REQUIRE_OFFSITE_FILE_BACKUP=true\n',
+    );
+    assert.throws(
+        () =>
+            operations.inspectOffsiteFileBackupConfig(sourceSha, {
+                environmentFile,
+                verifyPolicy: () => true,
+            }),
+        /Duplicate production setting/u,
+    );
+    const link = path.join(root, '.env-link');
+    symlinkSync(environmentFile, link);
+    assert.throws(() =>
+        operations.inspectOffsiteFileBackupConfig(sourceSha, {
+            environmentFile: link,
+            verifyPolicy: () => true,
+        }),
     );
 });
 
