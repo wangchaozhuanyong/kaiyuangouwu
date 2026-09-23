@@ -22,6 +22,7 @@
 .product-detail-header,
 .topbar.product-detail-header,
 .product-detail-page > .subpage-header {
+    padding-inline: var(--page-section-inset, 16px);
     margin-bottom: -52px;
     border-bottom: 1px solid transparent;
     border-bottom-color: transparent;

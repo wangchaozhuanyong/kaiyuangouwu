@@ -6,6 +6,13 @@ const image =
             '<circle cx="970" cy="260" r="170" fill="#e9dec8"/>' +
             '<path d="M680 600L830 100 1120 610" fill="#b29b74"/></svg>',
     );
+const portraitImage =
+    'data:image/svg+xml,' +
+    encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="700" height="1200">' +
+            '<rect width="700" height="1200" fill="#cabc9c"/>' +
+            '<circle cx="500" cy="310" r="170" fill="#e9dec8"/></svg>',
+    );
 const asset = { id: 'fixture-asset', preview: image };
 const variant = {
     id: 'variant-1',
@@ -623,6 +630,18 @@ function reviewCenterFixture(signedIn) {
 }
 
 export function fixtureData(presetId = 'modern-oriental', signedIn = true, content = 'normal') {
+    const detailProduct =
+        content === 'product-detail'
+            ? {
+                  ...product,
+                  description:
+                      '<p>商品长图与参数应保持完整可读。</p>' +
+                      '<figure><img src="/storefront/default-hero.webp" width="1200" height="700" alt="详情图"></figure>' +
+                      '<table><tbody><tr><td>规格</td><td>长内容需要在卡片内换行，不应撑宽页面</td></tr></tbody></table>',
+                  featuredAsset: { id: 'portrait-asset', preview: portraitImage },
+                  assets: [{ id: 'portrait-asset', preview: portraitImage }],
+              }
+            : product;
     return {
         storefrontVisualPreset: { channelId: 'qa-channel', presetId, revision: 'qa-1' },
         activeChannel: {
@@ -660,10 +679,10 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true, conte
         ],
         activeStorefrontFlashSales: [],
         activeSystemAnnouncements: [],
-        products: { items: [product], totalItems: 1 },
-        product,
+        products: { items: [detailProduct], totalItems: 1 },
+        product: detailProduct,
         collections: { items: [collection], totalItems: 1 },
-        storefrontCatalog: { items: [product], totalItems: 1 },
+        storefrontCatalog: { items: [detailProduct], totalItems: 1 },
         storefrontProductSales: [],
         activeStoreCommerceMode: 'HYBRID',
         storefrontCart: cart,

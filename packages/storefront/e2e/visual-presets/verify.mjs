@@ -93,6 +93,9 @@ try {
             const errors = [];
             let signedIn = true;
             page.on('pageerror', error => errors.push(error.message));
+            if (requestedContent === 'product-detail') {
+                await page.addInitScript(() => localStorage.setItem('storefront-analytics-opt-out:v1', '1'));
+            }
             await page.route('**/*', async route => {
                 const url = new URL(route.request().url());
                 if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.abort();
@@ -491,6 +494,47 @@ try {
                     }
                 }
                 if (width < 1024 && name === 'product') {
+                    const productLayout = await page.evaluate(() => {
+                        const root = document.querySelector('.product-detail-page').getBoundingClientRect();
+                        const sections = [
+                            '.detail-gallery',
+                            '.detail-summary',
+                            '.detail-options',
+                            '.detail-service-bar',
+                            '.detail-review-block',
+                            '.detail-params',
+                            '.detail-description',
+                            '.product-section',
+                        ];
+                        return sections
+                            .map(selector => {
+                                const rect = document
+                                    .querySelector(`.product-detail-page > ${selector}`)
+                                    ?.getBoundingClientRect();
+                                return rect
+                                    ? {
+                                          selector,
+                                          left: rect.left - root.left,
+                                          right: root.right - rect.right,
+                                      }
+                                    : null;
+                            })
+                            .filter(Boolean);
+                    });
+                    expect(
+                        productLayout.length,
+                        `${preset}/${width}/product sections`,
+                    ).toBeGreaterThanOrEqual(7);
+                    for (const section of productLayout) {
+                        expect(
+                            section.left,
+                            `${preset}/${width}/${section.selector} left gutter`,
+                        ).toBeGreaterThanOrEqual(15);
+                        expect(
+                            Math.abs(section.left - section.right),
+                            `${preset}/${width}/${section.selector} balanced gutters`,
+                        ).toBeLessThanOrEqual(1);
+                    }
                     for (const selector of [
                         '.detail-summary',
                         '.detail-options',
@@ -500,6 +544,37 @@ try {
                         '.detail-action-bar',
                     ]) {
                         await expect(page.locator(selector).first()).toHaveCSS('border-top-width', '0px');
+                    }
+                    if (requestedContent === 'product-detail') {
+                        await expect(page.locator('.detail-rich-text td').first()).toHaveCSS(
+                            'border-top-width',
+                            '0px',
+                        );
+                        const image = page.locator('.detail-description-media > img');
+                        await expect(image).toHaveJSProperty('naturalWidth', 700);
+                        const richMedia = await page.evaluate(() => {
+                            const card = document
+                                .querySelector('.detail-description')
+                                .getBoundingClientRect();
+                            const imageRect = document
+                                .querySelector('.detail-description-media > img')
+                                .getBoundingClientRect();
+                            const figure = document
+                                .querySelector('.detail-rich-text figure')
+                                .getBoundingClientRect();
+                            return {
+                                imageLeft: imageRect.left - card.left,
+                                imageRight: card.right - imageRect.right,
+                                imageRatio: imageRect.height / imageRect.width,
+                                figureLeft: figure.left - card.left,
+                                figureRight: card.right - figure.right,
+                            };
+                        });
+                        expect(richMedia.imageLeft).toBeGreaterThanOrEqual(14);
+                        expect(richMedia.imageRight).toBeGreaterThanOrEqual(14);
+                        expect(richMedia.imageRatio).toBeGreaterThan(1.6);
+                        expect(richMedia.figureLeft).toBeGreaterThanOrEqual(14);
+                        expect(richMedia.figureRight).toBeGreaterThanOrEqual(14);
                     }
                 }
                 if (width < 1024 && name === 'cart') {
@@ -623,6 +698,7 @@ try {
                             'notifications',
                             'reviews',
                         ].includes(name)) ||
+                    (requestedContent === 'product-detail' && name === 'product') ||
                     (width === 390 &&
                         [
                             'home',
