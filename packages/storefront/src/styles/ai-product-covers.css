@@ -565,7 +565,7 @@
 }
 
 .product-row-stock.is-sold-out {
-    color: var(--accent);
+    color: var(--availability-unavailable);
 }
 
 .product-row p {
@@ -597,10 +597,6 @@
     white-space: nowrap;
     line-height: 1.2;
     align-self: baseline;
-}
-
-.product-row-stock.is-sold-out {
-    color: #dc2626;
 }
 
 .filter-sheet-content {

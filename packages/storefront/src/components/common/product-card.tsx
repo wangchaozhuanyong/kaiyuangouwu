@@ -52,6 +52,7 @@ export function ProductCard({
                 type="button"
                 onClick={onOpen}
                 aria-label={`${isZh ? '查看' : 'View'} ${product.name}`}
+                title={[product.name, subtitle].filter(Boolean).join(' · ')}
             />
 
             {onFavorite && (
