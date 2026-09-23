@@ -1,7 +1,8 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ComponentType, LazyExoticComponent } from 'react';
 
-export type NextAdminExtensionComponent = LazyExoticComponent<ComponentType> | ComponentType;
+export type NextAdminExtensionComponent<Props = Record<string, never>> =
+    LazyExoticComponent<ComponentType<Props>> | ComponentType<Props>;
 
 export interface NextAdminExtensionNavItem {
     label: string;
@@ -47,7 +48,7 @@ export interface NextAdminPageBlockContext {
 export interface NextAdminPageBlockDefinition {
     id: string;
     pageId: string;
-    component: ComponentType<{ context: NextAdminPageBlockContext }>;
+    component: NextAdminExtensionComponent<{ context: NextAdminPageBlockContext }>;
     order?: number;
     permissions?: string[];
     shouldRender?: (context: NextAdminPageBlockContext) => boolean;
@@ -57,7 +58,7 @@ export interface NextAdminActionDefinition {
     id: string;
     pageId: string;
     label: string;
-    component: ComponentType<{ context: NextAdminPageBlockContext }>;
+    component: NextAdminExtensionComponent<{ context: NextAdminPageBlockContext }>;
     order?: number;
     permissions?: string[];
 }
@@ -65,7 +66,7 @@ export interface NextAdminActionDefinition {
 export interface NextAdminDashboardWidgetDefinition {
     id: string;
     title: string;
-    component: ComponentType;
+    component: NextAdminExtensionComponent;
     description?: string;
     order?: number;
     permissions?: string[];
@@ -73,7 +74,7 @@ export interface NextAdminDashboardWidgetDefinition {
 
 export interface NextAdminDashboardAlertDefinition {
     id: string;
-    component: ComponentType;
+    component: NextAdminExtensionComponent;
     order?: number;
     permissions?: string[];
 }
@@ -92,7 +93,7 @@ export interface NextAdminExtension {
     actions?: NextAdminActionDefinition[];
     dashboardWidgets?: NextAdminDashboardWidgetDefinition[];
     alerts?: NextAdminDashboardAlertDefinition[];
-    customFieldComponents?: Record<string, ComponentType<NextAdminCustomFieldInputProps>>;
+    customFieldComponents?: Record<string, NextAdminExtensionComponent<NextAdminCustomFieldInputProps>>;
 }
 
 const extensions = new Map<string, NextAdminExtension>();

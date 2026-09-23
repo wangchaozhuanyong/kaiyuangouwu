@@ -95,11 +95,10 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
     } else if (!titleIsLight) {
         defaultBodyColor = '#334155';
     } else {
-        defaultBodyColor = isLightTone
-            ? '#334155'
-            : imageTone === 'dark'
-              ? '#f1f5f9'
-              : 'var(--store-foreground, var(--skin-hero-body, #cbd5e1))';
+        // A light title always sits on the dark protective scrim, including the
+        // first render before image-tone sampling completes. Falling back to the
+        // storefront foreground here can produce dark body copy on that scrim.
+        defaultBodyColor = isLightTone ? '#334155' : '#f1f5f9';
     }
 
     return {

@@ -433,7 +433,9 @@ describe('unified storefront Admin API to Shop API', () => {
                         await browserExpect(page.locator('.quick-grid')).toContainText(`店${index}入口7`);
                         await browserExpect(page.locator('.hero')).toHaveCount(index === 1 ? 1 : 0);
                         await browserExpect(page.locator('.homepage-modules')).not.toContainText('分享海报');
-                        await page.locator('.language-button').click();
+                        await page.locator('.locale-preferences-trigger').click();
+                        await page.getByRole('radio', { name: 'English' }).click();
+                        await page.getByRole('button', { name: '保存设置' }).click();
                         await browserExpect(page.locator('.quick-grid')).toContainText(
                             `Store ${index} link 7`,
                         );
@@ -480,7 +482,7 @@ describe('unified storefront Admin API to Shop API', () => {
             await vite.close();
         }
     }, 60_000);
-    it('restores compact auth layouts for MOYAO, Damatong and a blank store', async () => {
+    it('renders configured auth visuals in the responsive login and registration layouts', async () => {
         for (const [index, store] of stores.slice(0, 2).entries()) {
             adminClient.setChannelToken(store.token);
             const asset = await server.app
@@ -575,14 +577,21 @@ describe('unified storefront Admin API to Shop API', () => {
                                         : `${name} title`,
                                 );
                                 const imageLocator = page.locator('.auth-hero img');
-                                await browserExpect
-                                    .poll(() =>
-                                        imageLocator.evaluate(
-                                            (img: HTMLImageElement) =>
-                                                img.complete && img.naturalWidth > 0 && img.clientHeight > 0,
-                                        ),
-                                    )
-                                    .toBe(true);
+                                await browserExpect(imageLocator).toHaveAttribute(
+                                    'src',
+                                    new RegExp(`store-${index}\\.svg`),
+                                );
+                                if (width >= 1024)
+                                    await browserExpect
+                                        .poll(() =>
+                                            imageLocator.evaluate(
+                                                (img: HTMLImageElement) =>
+                                                    img.complete &&
+                                                    img.naturalWidth > 0 &&
+                                                    img.clientHeight > 0,
+                                            ),
+                                        )
+                                        .toBe(true);
                                 await browserExpect(imageLocator).toHaveCSS('object-fit', 'cover');
                                 await browserExpect(imageLocator).toHaveCSS('filter', 'none');
                                 await browserExpect(page.locator('.auth-hero-copy')).toHaveCSS(
@@ -603,29 +612,52 @@ describe('unified storefront Admin API to Shop API', () => {
                                 expect(['none', '']).toContain(overlay.background);
                                 expect(overlay.display).toBe('none');
                                 expect(overlay.color.toLowerCase()).toBe(index === 0 ? '#203346' : '#f6f2ea');
-                                const heroBox = await page.locator('.auth-hero').boundingBox();
-                                const copyBox = await page.locator('.auth-hero-copy').boundingBox();
-                                const formBox = await page.locator('.login-content').boundingBox();
-                                if (!heroBox || !copyBox || !formBox)
-                                    throw new Error('Missing rendered hero, copy or form');
-                                expect(copyBox.x).toBeGreaterThanOrEqual(heroBox.x);
-                                expect(copyBox.x + copyBox.width).toBeLessThanOrEqual(
-                                    heroBox.x + heroBox.width + 1,
-                                );
-                                expect(copyBox.y).toBeGreaterThanOrEqual(heroBox.y);
-                                expect(copyBox.y + copyBox.height).toBeLessThanOrEqual(
-                                    heroBox.y + heroBox.height + 1,
-                                );
                                 if (width < 1024) {
-                                    expect(heroBox.height).toBeGreaterThanOrEqual(210);
-                                    expect(heroBox.height).toBeLessThanOrEqual(230);
-                                    expect(formBox.y).toBeCloseTo(heroBox.y + heroBox.height, 0);
+                                    await browserExpect(page.locator('.auth-hero')).toBeHidden();
+                                    await browserExpect(
+                                        page.locator('.auth-mobile-back-button'),
+                                    ).toBeVisible();
+                                    await browserExpect(page.locator('.auth-form-heading')).toBeVisible();
                                 } else {
+                                    await browserExpect(page.locator('.auth-hero')).toBeVisible();
+                                    await browserExpect(
+                                        page.locator('.auth-mobile-back-button'),
+                                    ).toBeHidden();
+                                    const heroBox = await page.locator('.auth-hero').boundingBox();
+                                    const copyBox = await page.locator('.auth-hero-copy').boundingBox();
+                                    const formBox = await page.locator('.login-content').boundingBox();
+                                    if (!heroBox || !copyBox || !formBox)
+                                        throw new Error('Missing rendered hero, copy or form');
+                                    expect(copyBox.x).toBeGreaterThanOrEqual(heroBox.x);
+                                    expect(copyBox.x + copyBox.width).toBeLessThanOrEqual(
+                                        heroBox.x + heroBox.width + 1,
+                                    );
+                                    expect(copyBox.y).toBeGreaterThanOrEqual(heroBox.y);
+                                    expect(copyBox.y + copyBox.height).toBeLessThanOrEqual(
+                                        heroBox.y + heroBox.height + 1,
+                                    );
                                     expect(formBox.x).toBeGreaterThanOrEqual(heroBox.x + heroBox.width - 1);
                                     expect(formBox.y).toBeCloseTo(heroBox.y, 0);
+                                    const assuranceRail = page.locator('.auth-assurance-rail');
+                                    const railBox = await assuranceRail.boundingBox();
+                                    if (!railBox) throw new Error('Missing desktop assurance rail');
+                                    expect(railBox.height).toBeLessThan(140);
+                                    const itemTops = await assuranceRail
+                                        .locator('.auth-assurance-item')
+                                        .evaluateAll(items =>
+                                            items.map(item => item.getBoundingClientRect().top),
+                                        );
+                                    expect(itemTops).toHaveLength(4);
+                                    expect(Math.max(...itemTops) - Math.min(...itemTops)).toBeLessThan(2);
                                 }
                             } else {
-                                await browserExpect(page.locator('.auth-hero img')).toHaveCount(0);
+                                await browserExpect(page.locator('.auth-hero img')).toHaveAttribute(
+                                    'src',
+                                    new RegExp(`auth-${route}-ai-campaign-v2`),
+                                );
+                                if (width < 1024)
+                                    await browserExpect(page.locator('.auth-hero')).toBeHidden();
+                                else await browserExpect(page.locator('.auth-hero')).toBeVisible();
                                 await browserExpect(page.locator('.auth-page')).not.toContainText('MOYAO');
                             }
                             expect(
@@ -750,7 +782,11 @@ describe('unified storefront Admin API to Shop API', () => {
                         'modern-oriental',
                     );
                     for (const language of ['zh', 'en']) {
-                        if (language === 'en') await page.locator('.language-button').click();
+                        if (language === 'en') {
+                            await page.locator('.locale-preferences-trigger').click();
+                            await page.getByRole('radio', { name: 'English' }).click();
+                            await page.getByRole('button', { name: '保存设置' }).click();
+                        }
                         // Even legacy catalog settings use the sole responsive storefront.
                         await browserExpect(
                             page.locator('.desktop-catalog-main, .desktop-header'),
@@ -1088,8 +1124,8 @@ describe('unified storefront Admin API to Shop API', () => {
             const pageUrl = `http://127.0.0.1:5300/e2e/unification/index.html?channel=${stores[0].token}&name=MOYAO&page=login`;
             const previewUrl = `http://127.0.0.1:5301/e2e/storefront-visual/index.html?stores=${stores.map(store => store.token).join(',')}&preview=auth`;
             for (const [state, background, accent] of [
-                ['explicit', 'rgb(32, 51, 70)', 'rgb(166, 61, 50)'],
-                ['inherited', 'rgb(246, 242, 234)', 'rgb(146, 47, 39)'],
+                ['explicit', 'rgb(32, 51, 70)', 'rgb(145, 49, 40)'],
+                ['inherited', 'rgb(241, 236, 226)', 'rgb(145, 49, 40)'],
                 ['classic', 'rgb(241, 245, 249)', 'rgb(21, 128, 61)'],
             ]) {
                 if (state === 'inherited')
@@ -1117,11 +1153,11 @@ describe('unified storefront Admin API to Shop API', () => {
                 await preview.evaluate(() => document.documentElement.classList.add('dark'));
                 await browserExpect(preview.locator('.store-auth-visual + div')).toHaveCSS(
                     'background-color',
-                    'rgb(255, 255, 255)',
+                    state === 'classic' ? 'rgb(255, 255, 255)' : 'rgb(255, 250, 241)',
                 );
                 await browserExpect(preview.locator('.store-auth-visual + div')).toHaveCSS(
                     'color',
-                    'rgb(23, 32, 51)',
+                    state === 'classic' ? 'rgb(15, 23, 42)' : 'rgb(28, 48, 45)',
                 );
                 await browserExpect(page.locator('html')).toHaveAttribute(
                     'data-storefront-preset',
@@ -1129,6 +1165,14 @@ describe('unified storefront Admin API to Shop API', () => {
                 );
                 await browserExpect(page.locator('.auth-hero')).toHaveCSS('background-color', background);
                 await browserExpect(page.locator('.wide-action')).toHaveCSS('background-color', accent);
+                if (state === 'explicit')
+                    expect(
+                        await page
+                            .locator('.auth-page')
+                            .evaluate(element =>
+                                getComputedStyle(element).getPropertyValue('--auth-visual-accent').trim(),
+                            ),
+                    ).toBe('#a63d32');
                 await browserExpect(preview.locator('.store-auth-visual')).toHaveCSS(
                     'background-color',
                     background,
@@ -1186,13 +1230,14 @@ describe('unified storefront Admin API to Shop API', () => {
             );
             await browserExpect(page.locator('.auth-hero')).toHaveCSS(
                 'background-color',
-                'rgb(246, 242, 234)',
+                'rgb(241, 236, 226)',
             );
             await browserExpect(page.locator('.wide-action')).toHaveCSS(
                 'background-color',
-                'rgb(146, 47, 39)',
+                'rgb(145, 49, 40)',
             );
             await browserExpect(page.locator('.auth-hero-copy h2')).toHaveCount(0);
+            await browserExpect(page.locator('.auth-page')).not.toContainText('MOYAO');
             await page.screenshot({ path: join(output, 'auth-priority-unbranded.png'), fullPage: true });
         } finally {
             const current = (await adminClient.query(readAuth)).storefrontContentBlocks.find(

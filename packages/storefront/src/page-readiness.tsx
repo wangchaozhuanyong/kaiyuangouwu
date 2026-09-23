@@ -175,7 +175,21 @@ export function PageReadinessBoundary(props: PageReadinessProps) {
             if (!stopped && !frame) frame = window.requestAnimationFrame(tick);
         }
         const observer = new MutationObserver(schedule);
-        observer.observe(root, { childList: true, subtree: true, attributes: true });
+        observer.observe(root, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: [
+                'data-page-pending',
+                'data-safe-image',
+                'height',
+                'loading',
+                'sizes',
+                'src',
+                'srcset',
+                'width',
+            ],
+        });
         const handleError = (event: Event) => {
             if (event.target instanceof HTMLImageElement && !event.target.closest('[data-safe-image]')) {
                 failed.set(event.target, imageCandidateIdentity(event.target));

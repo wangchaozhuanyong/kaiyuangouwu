@@ -1,8 +1,8 @@
 @media (min-width: 1024px) {
     :root {
         --app-width: 1440px;
-        --desktop-shell-width: 1256px;
-        --page-inline-gutter: 32px;
+        --desktop-shell-width: var(--experience-content-max);
+        --page-inline-gutter: var(--experience-page-gutter-desktop);
         --page-section-inset: 0px;
     }
 
@@ -33,7 +33,7 @@
     }
 
     html {
-        scrollbar-gutter: stable both-edges;
+        scrollbar-gutter: auto;
     }
 
     html::-webkit-scrollbar,
@@ -71,11 +71,15 @@
         min-width: 0;
         min-height: calc(100dvh - var(--desktop-header-height, 72px));
         margin-inline: auto;
-        border-inline: 1px solid var(--line);
+        border-inline: 0;
         background: var(--bg);
     }
 
-    .desktop-shell-frame:not(.desktop-account-layout) > #storefront-content > :is(.page, .subpage) {
+    /* The shell owns the only desktop horizontal gutter. Route-family roots must
+       fill that shell instead of subtracting the gutter a second time. */
+    .desktop-shell-frame:not(.desktop-account-layout)
+        > #storefront-content
+        > :is(.page, .subpage, .desktop-catalog-main, .desktop-commerce-frame, .mail-query-page) {
         width: 100%;
         max-width: none;
         margin-inline: 0;
@@ -161,11 +165,6 @@
     .category-topbar > .search-trigger {
         width: 100%;
         height: 44px;
-    }
-
-    .business-services-topbar {
-        height: 124px;
-        padding: 72px 32px 0;
     }
 
     .home-topbar > .topbar-actions {
@@ -284,7 +283,7 @@
     }
 
     .product-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
         gap: 28px 20px;
     }
 
@@ -300,9 +299,51 @@
 
     .legal-footer {
         width: 100%;
-        margin: 24px auto 0;
-        padding: 32px 0 40px;
-        border-top: 1px solid var(--line);
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 4px 24px;
+        min-height: 92px;
+        margin: 32px auto 0;
+        padding: 20px 24px;
+        border-top: 0;
+        border-radius: var(--skin-card-radius);
+        background: var(--surface);
+        box-shadow: var(--skin-card-shadow);
+        text-align: left;
+    }
+
+    .legal-footer > strong {
+        grid-column: 1;
+        grid-row: 1;
+        display: block;
+        font-size: 14px;
+    }
+
+    .legal-footer > span {
+        grid-column: 1;
+        grid-row: 2;
+        margin: 0;
+        font-size: 12px;
+    }
+
+    .legal-footer nav {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        justify-content: flex-end;
+        gap: 16px;
+        margin: 0;
+    }
+
+    .legal-footer nav button {
+        min-height: 44px;
+        color: var(--muted);
+        font-size: 13px;
+        text-decoration: none;
+    }
+
+    .legal-footer nav button:hover {
+        color: var(--accent-ink);
     }
 
     .network-banner {
@@ -377,8 +418,9 @@
         min-height: 0;
         padding: 10px var(--page-section-inset);
         border-right: 0;
-        border-bottom: 1px solid var(--line);
-        background: var(--paper);
+        border-bottom: 0;
+        border-radius: var(--skin-card-radius);
+        background: var(--surface);
         flex-direction: row;
         flex-wrap: wrap;
         align-items: center;
@@ -455,8 +497,9 @@
         height: 48px;
         margin: 0;
         border-top: 0;
-        border-bottom: 1px solid var(--line);
-        background: var(--bg);
+        border-bottom: 0;
+        border-radius: var(--skin-card-radius);
+        background: var(--surface);
         grid-template-columns: repeat(5, minmax(72px, max-content));
         justify-content: start;
         gap: 12px;
@@ -473,7 +516,7 @@
     .category-product-list {
         padding: 20px 0 12px;
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
         gap: 28px 20px;
     }
 
@@ -571,7 +614,7 @@
     .cart-page > .shipping-note,
     .cart-page > .inline-error,
     .cart-page > .cart-guest-notice,
-    .cart-page > .cart-groups {
+    .cart-page > .cart-commerce-layout {
         margin-top: 24px;
     }
 
@@ -580,7 +623,7 @@
         border-radius: 8px;
     }
 
-    .cart-page > .cart-groups {
+    .cart-page .cart-groups {
         display: grid;
         gap: 16px;
         padding: 0;
@@ -590,8 +633,8 @@
         grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
-    .cart-page > .coupon-row,
-    .cart-page > .invalid-cart-lines {
+    .cart-summary-panel > .coupon-row,
+    .cart-main-column > .invalid-cart-lines {
         margin-top: 14px;
     }
 
@@ -936,6 +979,6 @@
     .product-grid,
     .product-list,
     .category-product-list {
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     }
 }

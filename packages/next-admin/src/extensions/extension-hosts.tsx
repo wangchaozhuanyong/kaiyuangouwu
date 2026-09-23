@@ -1,4 +1,4 @@
-import { Component, useId, useMemo, useState, type ReactNode } from 'react';
+import { Component, Suspense, useId, useMemo, useState, type ReactNode } from 'react';
 
 import { useAdminPermissions } from '../hooks/use-admin-permissions';
 
@@ -36,6 +36,19 @@ function useExtensionContext(pageId: string, entity?: Record<string, unknown> | 
     return useMemo<NextAdminPageBlockContext>(() => ({ pageId, entity }), [entity, pageId]);
 }
 
+function ExtensionLoadingSurface({ compact = false }: { compact?: boolean }) {
+    return (
+        <div
+            className={
+                compact
+                    ? 'h-9 min-w-24 animate-pulse rounded-lg bg-slate-100'
+                    : 'h-24 animate-pulse rounded-xl bg-slate-100'
+            }
+            aria-hidden="true"
+        />
+    );
+}
+
 export function NextAdminPageBlocks({
     pageId,
     entity,
@@ -59,7 +72,9 @@ export function NextAdminPageBlocks({
                 const Block = block.component;
                 return (
                     <ExtensionBoundary key={block.id} extensionId={block.id}>
-                        <Block context={context} />
+                        <Suspense fallback={<ExtensionLoadingSurface />}>
+                            <Block context={context} />
+                        </Suspense>
                     </ExtensionBoundary>
                 );
             })}
@@ -108,7 +123,9 @@ export function NextAdminActions({
                     const Action = action.component;
                     return (
                         <ExtensionBoundary key={action.id} extensionId={action.id}>
-                            <Action context={context} />
+                            <Suspense fallback={<ExtensionLoadingSurface compact />}>
+                                <Action context={context} />
+                            </Suspense>
                         </ExtensionBoundary>
                     );
                 })}
@@ -127,7 +144,9 @@ export function NextAdminDashboardAlerts() {
                 const Alert = alert.component;
                 return (
                     <ExtensionBoundary key={alert.id} extensionId={alert.id}>
-                        <Alert />
+                        <Suspense fallback={<ExtensionLoadingSurface compact />}>
+                            <Alert />
+                        </Suspense>
                     </ExtensionBoundary>
                 );
             })}
@@ -157,7 +176,9 @@ export function NextAdminDashboardWidgets() {
                             )}
                         </div>
                         <ExtensionBoundary extensionId={widget.id}>
-                            <Widget />
+                            <Suspense fallback={<ExtensionLoadingSurface />}>
+                                <Widget />
+                            </Suspense>
                         </ExtensionBoundary>
                     </section>
                 );

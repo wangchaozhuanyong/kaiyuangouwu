@@ -1,111 +1,49 @@
-/* Opt-in only. The classic preset deliberately has no overrides. */
-html[data-storefront-preset='modern-oriental'] {
-    --skin-background: #f6f2ea;
-    --skin-foreground: #203346;
-    --bg: #f6f2ea;
-    --paper: #fffdf8;
-    --surface: #fffdf8;
-    --soft: #efe9df;
-    --product-media-bg: #f5f1e9;
-    --text: #203346;
-    --muted: #706e68;
-    --line: #ded5c6;
-    --line-subtle: color-mix(in srgb, var(--line) 60%, transparent);
-    --accent: #a63d32;
-    --accent-hover: #8b3027;
-    --accent-ink: #94362b;
-    --accent-foreground: #fffdf8;
-    --accent-soft: #f4e5df;
-    --accent-disabled-bg: #e5d4cb;
-    --accent-disabled-text: #fbf8f5;
-    --accent-shadow: 0 8px 18px rgb(166 61 50 / 18%);
-    --warning-bg: #fdf8ee;
-    --warning-border: #ebd9b5;
-    --warning-text: #8c521a;
-    --oriental-gold: #a58b58;
-    --studio-accent: var(--accent);
-    --studio-accent-hover: var(--accent-hover);
-    --studio-accent-ink: var(--accent-ink);
-    --studio-accent-soft: var(--accent-soft);
-    --studio-line: var(--line);
-    --font-display: 'Songti SC', 'STSong', 'Noto Serif CJK SC', 'SimSun', Georgia, serif;
-    --radius-sm: 6px;
-    --radius-md: 12px;
-    --shadow-sm: 0 2px 6px rgb(62 45 25 / 4%);
-    --shadow-md: 0 8px 24px rgb(62 45 25 / 7%);
-    --account-hero-bg: linear-gradient(135deg, #1c2b3a 0%, #293c4d 100%);
-    /* Tailwind controls share the same semantic palette, including focus states. */
-    --color-blue-50: #faf0eb;
-    --color-blue-100: #f4e5df;
-    --color-blue-200: #e7c7bc;
-    --color-blue-300: #d8a391;
-    --color-blue-400: #c47761;
-    --color-blue-500: #b6503e;
-    --color-blue-600: #a63d32;
-    --color-blue-700: #8b3027;
-    --color-blue-800: #752b25;
-    --color-blue-900: #592520;
-    --color-slate-50: #faf7f0;
-    --color-slate-100: #efe9df;
-    --color-slate-200: #ded5c6;
-    --color-slate-300: #c6bcaa;
-    --color-slate-400: #8a857a;
-    --color-slate-500: #706e68;
-    --color-slate-600: #585951;
-    --color-slate-700: #384551;
-    --color-slate-800: #293c4d;
-    --color-slate-900: #203346;
-    --proto-header-bg: rgba(246, 242, 234, 0.94);
-    --proto-header-border: rgba(32, 51, 70, 0.12);
-    --proto-header-shadow: 0 4px 20px rgba(62, 45, 25, 0.06);
-    --proto-brand-text: #203346;
-    --proto-nav-link: #334155;
-    --proto-nav-link-hover: #a63d32;
-    --proto-search-bg: #fffdf8;
-    --proto-search-border: rgba(32, 51, 70, 0.15);
-    --proto-search-text: #203346;
-    --proto-search-kbd-bg: #efe9df;
-    --proto-login-btn-bg: #203346;
-    --proto-login-btn-text: #fffdf8;
-    --proto-hero-bg: linear-gradient(135deg, #fffdf8 0%, #f3ede2 100%);
-    --proto-hero-border: rgba(166, 61, 50, 0.25);
-    --proto-hero-title: #203346;
-    --proto-hero-desc: #585951;
-    --proto-tools-bg: #fffdf8;
-    --proto-tools-border: rgba(32, 51, 70, 0.12);
-    --proto-tools-title: #203346;
-    --proto-tool-item-bg: #f6f2ea;
-    --proto-tool-item-border: rgba(32, 51, 70, 0.08);
-    --proto-tool-item-hover-bg: #efe9df;
-    --proto-tool-name: #203346;
-    --proto-tool-sub: #706e68;
-    --proto-card-bg: #fffdf8;
-    --proto-card-border: rgba(32, 51, 70, 0.12);
-    --proto-card-hover-bg: #ffffff;
-    --proto-card-hover-border: #a63d32;
-    --proto-card-title: #203346;
-    --proto-card-status: #706e68;
-    --proto-card-specs-bg: #f6f2ea;
-    --proto-card-specs-border: rgba(32, 51, 70, 0.08);
-    --proto-card-specs-text: #334155;
-    --proto-filter-border: rgba(32, 51, 70, 0.12);
-    --proto-pill-color: #706e68;
-    --proto-sort-group-bg: #f6f2ea;
-    --proto-sort-group-border: rgba(32, 51, 70, 0.12);
-    --proto-btn-benchmarks-bg: #f6f2ea;
-    --proto-btn-benchmarks-text: #203346;
-    --proto-btn-benchmarks-border: rgba(32, 51, 70, 0.15);
-    color: var(--text);
-    background: var(--bg);
-    accent-color: var(--accent);
+/* Every preset receives its geometry from the shared skin treatment. Keep the
+   legacy radius aliases mapped to that contract so older mobile and account
+   components cannot drift away from the selected desktop skin. */
+html[data-storefront-preset] {
+    --radius-sm: var(--skin-control-radius, 10px);
+    --radius-md: var(--skin-card-radius, 16px);
+    --skin-background: var(--bg);
+    --skin-foreground: var(--text);
+    --font-display: var(--skin-display-font, var(--font-ui));
+    --line-subtle: color-mix(in srgb, var(--skin-divider) 68%, transparent);
+    --product-media-bg: color-mix(in srgb, var(--soft) 72%, var(--surface));
+    --accent-disabled-bg: color-mix(in srgb, var(--accent) 30%, var(--surface));
+    --accent-disabled-text: var(--muted);
+    --accent-shadow: 0 10px 22px color-mix(in srgb, var(--accent) 22%, transparent);
+    --warning-bg: color-mix(in srgb, var(--warning) 10%, var(--surface));
+    --warning-border: color-mix(in srgb, var(--warning) 34%, var(--surface));
+    --warning-text: var(--warning);
+    --shadow-sm: var(--skin-card-shadow);
+    --shadow-md: var(--skin-hero-shadow);
+    /* Compact controls use tonal elevation instead of a visible outline. These
+       semantic roles resolve from every preset, so mobile and desktop controls
+       keep the same hierarchy when a store changes skin. */
+    --control-surface: color-mix(in srgb, var(--soft) 74%, var(--surface));
+    --control-surface-hover: color-mix(in srgb, var(--accent-soft) 32%, var(--surface));
+    --control-surface-pressed: color-mix(in srgb, var(--accent-soft) 52%, var(--surface));
+    --control-surface-image: none;
+    --control-surface-hover-image: none;
+    --control-surface-pressed-image: none;
+    /* Module actions are interactive rows inside a larger card. They inherit
+       each skin's tonal control hierarchy without becoming nested cards. */
+    --module-action-surface: var(--control-surface);
+    --module-action-surface-hover: var(--control-surface-hover);
+    --control-elevation:
+        inset 0 1px 0 color-mix(in srgb, white 46%, transparent),
+        0 5px 14px color-mix(in srgb, var(--text) 8%, transparent);
+    --control-elevation-hover:
+        inset 0 1px 0 color-mix(in srgb, white 54%, transparent),
+        0 8px 20px color-mix(in srgb, var(--text) 11%, transparent);
 }
 
-html[data-storefront-preset='modern-oriental'] :is(.storefront-app, .page, .auth-page) {
+html[data-storefront-preset] :is(.storefront-app, .page, .auth-page) {
     background: var(--bg);
     color: var(--text);
 }
 
-html[data-storefront-preset='modern-oriental']
+html[data-storefront-preset]
     :is(
         .topbar:not(.product-detail-header),
         .subpage-header:not(.product-detail-header),
@@ -116,10 +54,72 @@ html[data-storefront-preset='modern-oriental']
         .checkout-card,
         .auth-card
     ) {
-    background: var(--paper);
+    background: var(--surface);
     border-color: var(--line);
     box-shadow: var(--shadow-sm);
     color: var(--text);
+}
+
+html[data-storefront-preset] .primary-action,
+html[data-storefront-preset] .auth-page .primary-action {
+    border-color: var(--auth-accent, var(--accent));
+    border-radius: var(--skin-control-radius);
+    background: var(--auth-accent, var(--accent));
+    color: var(--auth-button-foreground, var(--accent-foreground));
+    box-shadow: var(--accent-shadow);
+}
+
+html[data-storefront-preset] .primary-action:hover:not(:disabled),
+html[data-storefront-preset] .auth-page .primary-action:hover:not(:disabled) {
+    border-color: var(--auth-accent-hover, var(--accent-hover));
+    background: var(--auth-accent-hover, var(--accent-hover));
+    color: var(--auth-button-foreground, var(--accent-foreground));
+    box-shadow: var(--accent-shadow);
+}
+
+html[data-storefront-preset] .primary-action:disabled,
+html[data-storefront-preset] .auth-page .primary-action:disabled {
+    border-color: transparent;
+    background: var(--accent-disabled-bg);
+    color: var(--accent-disabled-text);
+    box-shadow: none;
+}
+
+/* Preset selectors contain only visual treatment aliases. The actual palette is
+   resolved once in storefront-semantic-palette.ts and applied by the runtime. */
+html[data-storefront-preset='modern-oriental'] {
+    --oriental-gold: #b08a4a;
+    --oriental-jade: #285d4f;
+    --studio-accent: var(--accent);
+    --studio-accent-hover: var(--accent-hover);
+    --studio-accent-ink: var(--accent-ink);
+    --studio-accent-soft: var(--accent-soft);
+    --studio-line: var(--line);
+    --account-hero-bg: linear-gradient(135deg, #172b29 0%, #294940 100%);
+    /* Tailwind controls share the same semantic palette, including focus states. */
+    --color-blue-50: #faf0eb;
+    --color-blue-100: #f1ddd3;
+    --color-blue-200: #e2bfb3;
+    --color-blue-300: #d09784;
+    --color-blue-400: #bb6c58;
+    --color-blue-500: #a84a3a;
+    --color-blue-600: #913128;
+    --color-blue-700: #74251f;
+    --color-blue-800: #61231e;
+    --color-blue-900: #4d211d;
+    --color-slate-50: #faf6ee;
+    --color-slate-100: #e8dfd0;
+    --color-slate-200: #ded2c0;
+    --color-slate-300: #c3b69f;
+    --color-slate-400: #8a887d;
+    --color-slate-500: #5b645d;
+    --color-slate-600: #4b5852;
+    --color-slate-700: #344b46;
+    --color-slate-800: #29413d;
+    --color-slate-900: #1c302d;
+    color: var(--text);
+    background: var(--bg);
+    accent-color: var(--accent);
 }
 
 html[data-storefront-preset='modern-oriental'] .product-detail-header:not(.is-scrolled),
@@ -135,7 +135,7 @@ html[data-storefront-preset='modern-oriental'] .product-detail-page > .subpage-h
 
 html[data-storefront-preset='modern-oriental'] .product-detail-header.is-scrolled,
 html[data-storefront-preset='modern-oriental'] .product-detail-page > .subpage-header.is-scrolled {
-    background: rgba(255, 253, 248, 0.96);
+    background: color-mix(in srgb, var(--surface) 96%, transparent);
     border-color: var(--line);
     border-bottom-color: var(--line);
     box-shadow: var(--shadow-sm);
@@ -150,7 +150,7 @@ html[data-storefront-preset='modern-oriental']
 }
 
 html[data-storefront-preset='modern-oriental']
-    :is(.section-header-icon-pill, .quick-grid button, .home-trust-bar, .notice-strip) {
+    :is(.section-header-icon-pill, .home-trust-bar, .notice-strip) {
     background: var(--paper);
     border-color: var(--line);
     color: var(--text);
@@ -191,20 +191,6 @@ html[data-storefront-preset='modern-oriental'] .sheet > header {
     }
 }
 
-html[data-storefront-preset='modern-oriental'] .primary-action,
-html[data-storefront-preset='modern-oriental'] .auth-page .primary-action {
-    background: var(--auth-accent, var(--accent));
-    color: var(--auth-button-foreground, var(--paper));
-    border-color: var(--auth-accent, var(--accent));
-    border-radius: var(--radius-sm);
-    box-shadow: var(--shadow-sm);
-}
-
-html[data-storefront-preset='modern-oriental'] .auth-page .primary-action:hover:not(:disabled) {
-    background: var(--auth-accent, var(--accent-hover));
-    box-shadow: var(--shadow-sm);
-}
-
 html[data-storefront-preset='modern-oriental'] .quick-grid .colorful-icon-badge {
     background: var(--soft);
     color: var(--accent);
@@ -236,20 +222,6 @@ html[data-storefront-preset='modern-oriental'] .checkout-page :is(input, select,
 html[data-storefront-preset='modern-oriental'] .checkout-page :is(input, select, textarea):focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-html[data-storefront-preset='modern-oriental']
-    :is(
-        .cart-group,
-        .cart-page > .coupon-row,
-        .cart-page > .invalid-cart-lines,
-        .checkout-section,
-        .checkout-summary,
-        .checkout-assurance,
-        .submit-order-bar
-    ) {
-    background: var(--paper);
-    border-color: var(--line);
 }
 
 html[data-storefront-preset='modern-oriental'] .smart-paste-toggle-btn {
@@ -289,58 +261,38 @@ html[data-storefront-preset='modern-oriental']
    Neo-Minimalist Preset (新锐科技极简)
    ========================================================================== */
 html[data-storefront-preset='neo-minimalist'] {
-    --skin-background: #070b14;
-    --skin-foreground: #f1f5f9;
-    --bg: #070b14;
-    --paper: #0e121c;
-    --surface: #0e121c;
-    --soft: #161c28;
-    --product-media-bg: #0e121c;
-    --text: #f1f5f9;
-    --muted: #94a3b8;
-    --line: rgba(255, 255, 255, 0.08);
-    --line-subtle: rgba(255, 255, 255, 0.04);
-    --accent: #8b5cf6;
-    --accent-hover: #7c3aed;
-    --accent-ink: #a78bfa;
-    --accent-foreground: #ffffff;
-    --accent-soft: rgba(139, 92, 246, 0.15);
-    --accent-disabled-bg: rgba(139, 92, 246, 0.3);
-    --accent-disabled-text: #94a3b8;
-    --accent-shadow: 0 8px 18px rgba(139, 92, 246, 0.25);
-    --warning-bg: #1c1917;
-    --warning-border: #44403c;
-    --warning-text: #fbbf24;
-    --radius-sm: 8px;
-    --radius-md: 14px;
-    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.4);
-    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.6);
     --account-hero-bg: linear-gradient(135deg, #0e121c 0%, #1e1b4b 100%);
+    /* Dark utility controls need an evenly defined silhouette. The shared
+       light-skin inset highlight looked like a broken top border on this
+       preset, so Neo uses layered surfaces, a full perimeter ring and a soft
+       ambient shadow instead. */
+    --control-surface: color-mix(in srgb, var(--surface-elevated) 76%, var(--soft));
+    --control-surface-hover: color-mix(in srgb, var(--surface-elevated) 72%, var(--accent-soft));
+    --control-surface-pressed: color-mix(in srgb, var(--soft) 68%, var(--accent-soft));
+    --control-surface-image: radial-gradient(
+        circle at 88% 8%,
+        color-mix(in srgb, var(--accent) 10%, transparent),
+        transparent 54%
+    );
+    --control-surface-hover-image: radial-gradient(
+        circle at 88% 8%,
+        color-mix(in srgb, var(--accent) 18%, transparent),
+        transparent 58%
+    );
+    --control-surface-pressed-image: radial-gradient(
+        circle at 88% 8%,
+        color-mix(in srgb, var(--accent) 24%, transparent),
+        transparent 62%
+    );
+    --control-elevation:
+        0 0 0 1px color-mix(in srgb, var(--line) 24%, transparent),
+        0 8px 18px color-mix(in srgb, var(--bg) 66%, transparent);
+    --control-elevation-hover:
+        0 0 0 1px color-mix(in srgb, var(--accent) 44%, transparent),
+        0 11px 26px color-mix(in srgb, var(--bg) 74%, transparent);
     color: var(--text);
     background: var(--bg);
     accent-color: var(--accent);
-}
-
-html[data-storefront-preset='neo-minimalist'] :is(.storefront-app, .page, .auth-page) {
-    background: var(--bg);
-    color: var(--text);
-}
-
-html[data-storefront-preset='neo-minimalist']
-    :is(
-        .topbar:not(.product-detail-header),
-        .subpage-header:not(.product-detail-header),
-        .storefront-bottom-nav,
-        .sheet,
-        .product-card,
-        .logistics-card,
-        .checkout-card,
-        .auth-card
-    ) {
-    background: var(--paper);
-    border-color: var(--line);
-    box-shadow: var(--shadow-sm);
-    color: var(--text);
 }
 
 /* Checkout utilities are shared by the mobile and desktop renderers. Keep their
@@ -381,8 +333,10 @@ html[data-storefront-preset] .orders-page .order-search {
     color: var(--text);
 }
 
-html[data-storefront-preset] .orders-page .order-tabs button.is-active {
-    color: var(--accent-ink);
+@media (max-width: 1023px) {
+    html[data-storefront-preset] .orders-page .order-tabs button.is-active {
+        color: var(--accent-ink);
+    }
 }
 
 html[data-storefront-preset] .logistics-page :is(.logistics-stats-grid, .logistics-service-strip) {
@@ -455,49 +409,311 @@ html[data-storefront-preset] .desktop-two-factor-content [data-vault-state] butt
     color: var(--text);
 }
 
-/* ==========================================================================
-   Classic Preset (经典明亮) - Unified Bento Template Tokens
-   ========================================================================== */
-html:not([data-storefront-preset]),
-html[data-storefront-preset='classic'] {
-    --proto-header-bg: rgba(255, 255, 255, 0.94);
-    --proto-header-border: #e2e8f0;
-    --proto-header-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
-    --proto-brand-text: #0f172a;
-    --proto-nav-link: #475569;
-    --proto-nav-link-hover: #0f172a;
-    --proto-search-bg: #f8fafc;
-    --proto-search-border: #e2e8f0;
-    --proto-search-text: #0f172a;
-    --proto-search-kbd-bg: #e2e8f0;
-    --proto-login-btn-bg: #0f172a;
-    --proto-login-btn-text: #ffffff;
-    --proto-hero-bg: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    --proto-hero-border: #e2e8f0;
-    --proto-hero-title: #0f172a;
-    --proto-hero-desc: #475569;
-    --proto-tools-bg: #ffffff;
-    --proto-tools-border: #e2e8f0;
-    --proto-tools-title: #0f172a;
-    --proto-tool-item-bg: #f8fafc;
-    --proto-tool-item-border: #e2e8f0;
-    --proto-tool-item-hover-bg: #f1f5f9;
-    --proto-tool-name: #0f172a;
-    --proto-tool-sub: #64748b;
-    --proto-card-bg: #ffffff;
-    --proto-card-border: #e2e8f0;
-    --proto-card-hover-bg: #ffffff;
-    --proto-card-hover-border: var(--accent);
-    --proto-card-title: #0f172a;
-    --proto-card-status: #64748b;
-    --proto-card-specs-bg: #f8fafc;
-    --proto-card-specs-border: #e2e8f0;
-    --proto-card-specs-text: #475569;
-    --proto-filter-border: #e2e8f0;
-    --proto-pill-color: #64748b;
-    --proto-sort-group-bg: #f1f5f9;
-    --proto-sort-group-border: #e2e8f0;
-    --proto-btn-benchmarks-bg: #f1f5f9;
-    --proto-btn-benchmarks-text: #0f172a;
-    --proto-btn-benchmarks-border: #e2e8f0;
+/* Keep the established phone layouts, but separate decorative regions with
+   surfaces and spacing instead of stacking borders from the base and skin CSS. */
+@media (max-width: 1023px) {
+    html[data-storefront-preset] .topbar,
+    html[data-storefront-preset] .category-navigation-shell {
+        border-bottom: 0;
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .category-navigation-shell,
+    html[data-storefront-preset] .category-navigation-shell > .category-topbar {
+        background: var(--bg);
+        box-shadow: none;
+    }
+
+    html[data-storefront-preset] .storefront-bottom-nav {
+        border-top: 0;
+        box-shadow: 0 -4px 14px color-mix(in srgb, var(--text) 8%, transparent);
+    }
+
+    html[data-storefront-preset] .page > .subpage-header:not(.product-detail-header) {
+        border-bottom: 0;
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .home-page :is(.notice-strip, .home-trust-bar, .quick-grid),
+    html[data-storefront-preset] .home-page .hero {
+        border: 0;
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .home-page .notice-strip {
+        background: color-mix(in srgb, var(--accent-soft) 42%, var(--surface));
+    }
+
+    html[data-storefront-preset] .home-page .quick-grid.is-color-marketplace button,
+    html[data-storefront-preset] .home-page .quick-grid .colorful-icon-img-wrap,
+    html[data-storefront-preset] .home-page .quick-grid .colorful-icon-badge {
+        border: 0;
+    }
+
+    html[data-storefront-preset] .category-page .primary-category-switcher,
+    html[data-storefront-preset] .category-topbar > .search-trigger,
+    html[data-storefront-preset] .category-page .primary-category-image,
+    html[data-storefront-preset] .category-page .primary-categories-all-icon,
+    html[data-storefront-preset] .category-page .primary-categories button.is-active .primary-category-image {
+        border: 0;
+        box-shadow: none;
+    }
+
+    html[data-storefront-preset] .category-page .primary-category-strip {
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .category-topbar > .search-trigger {
+        background: var(--control-surface, var(--soft));
+        box-shadow: var(--control-elevation, var(--shadow-sm));
+    }
+
+    html[data-storefront-preset] .category-page .primary-categories button.is-active .primary-category-image,
+    html[data-storefront-preset] .category-page .primary-categories-all-icon {
+        background: var(--accent-soft);
+    }
+
+    html[data-storefront-preset] .category-page .category-layout {
+        --category-results-surface: var(--bg);
+    }
+
+    html[data-storefront-preset] .category-page .category-results .sort-bar {
+        height: 52px;
+        width: auto;
+        margin: 8px var(--page-section-inset, 16px) 0;
+        padding: 4px 8px;
+        gap: 4px;
+        border: 0;
+        border-radius: var(--skin-card-radius);
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .category-page .sort-bar button {
+        height: 44px;
+        border-radius: var(--radius-sm);
+    }
+
+    html[data-storefront-preset] .category-page .sort-bar button.is-active {
+        background: var(--accent-soft);
+    }
+
+    html[data-storefront-preset] .category-page .sort-bar button::after {
+        display: none;
+    }
+
+    html[data-storefront-preset] .category-page .category-product-list .product-row {
+        min-height: 96px;
+        padding: 0;
+        overflow: hidden;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .category-page .category-product-list .product-row-image {
+        align-self: stretch;
+        height: 100%;
+        min-height: 96px;
+        border: 0;
+        border-radius: 0;
+    }
+
+    html[data-storefront-preset]
+        .category-page
+        .category-product-list
+        .product-row-image
+        :is(.responsive-picture, img, .image-placeholder) {
+        border-radius: 0;
+    }
+
+    html[data-storefront-preset] .category-page .category-product-list .product-row-content {
+        padding: 8px 10px 8px 0;
+    }
+
+    /* Product cards appear in home, recommendations, favorites and discovery.
+       On touch layouts they use surface elevation instead of a dark perimeter,
+       keeping the product artwork as the strongest visual edge. */
+    html[data-storefront-preset] .product-card {
+        border: 0;
+        background: var(--surface);
+        box-shadow: var(--skin-card-shadow, var(--shadow-sm));
+    }
+
+    html[data-storefront-preset] .product-card .product-card-media {
+        background: var(--product-media-bg, var(--soft));
+    }
+
+    html[data-storefront-preset] .search-page .search-header {
+        border-bottom: 0;
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .search-page :is(.search-results, .search-discovery) {
+        background: var(--bg);
+    }
+
+    html[data-storefront-preset] .search-page .search-results > header {
+        min-height: 52px;
+        padding: 8px 10px;
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+    }
+
+    html[data-storefront-preset] .search-page .search-sort {
+        height: 50px;
+        margin: 6px 0 10px;
+        padding: 4px;
+        gap: 4px;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .search-page .search-sort button {
+        border-radius: var(--radius-sm);
+    }
+
+    html[data-storefront-preset] .search-page .search-sort button.is-active {
+        background: var(--accent-soft);
+    }
+
+    html[data-storefront-preset] .search-page .product-list {
+        display: grid;
+        gap: 8px;
+    }
+
+    html[data-storefront-preset] .search-page .product-list .product-row {
+        padding: 10px;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .search-page .search-discovery > .product-section,
+    html[data-storefront-preset] .search-page .search-results > .product-section,
+    html[data-storefront-preset] .search-page .popular-searches li {
+        border: 0;
+    }
+
+    html[data-storefront-preset]
+        .product-detail-page
+        :is(.detail-summary, .detail-options, .detail-description) {
+        border: 0;
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .product-detail-page .detail-service-bar {
+        margin: 9px var(--page-section-inset, 10px) 0;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .product-detail-page .detail-service-bar span + span {
+        border: 0;
+    }
+
+    html[data-storefront-preset] .product-detail-page .detail-block {
+        margin-top: 9px;
+        border-radius: var(--radius-md);
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .product-detail-page .detail-params dl {
+        display: grid;
+        gap: 4px;
+    }
+
+    html[data-storefront-preset] .product-detail-page .detail-params dl > div {
+        padding: 0 10px;
+        border: 0;
+        border-radius: var(--radius-sm);
+        background: var(--soft);
+    }
+
+    html[data-storefront-preset] .product-detail-page .detail-action-bar,
+    html[data-storefront-preset] .cart-page .cart-checkout-bar {
+        border-top: 0;
+    }
+
+    html[data-storefront-preset] .cart-page {
+        --page-surface: var(--bg);
+    }
+
+    html[data-storefront-preset] .cart-page .cart-guest-notice {
+        margin-inline: var(--page-section-inset, 10px);
+        border: 0;
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .account-page .account-section {
+        margin: 10px var(--page-section-inset, 20px) 0;
+        padding: 16px;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .account-page .account-logistics-empty > svg {
+        border: 0;
+    }
+
+    html[data-storefront-preset] .orders-page .order-tabs {
+        height: 54px;
+        padding: 4px 8px;
+        gap: 3px;
+        border: 0;
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .orders-page .order-tabs button {
+        border: 0;
+        border-radius: var(--radius-sm);
+    }
+
+    html[data-storefront-preset] .orders-page .order-tabs button.is-active {
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+    }
+
+    html[data-storefront-preset] .orders-page .order-search {
+        border-bottom: 0;
+        box-shadow: var(--shadow-sm);
+    }
+
+    html[data-storefront-preset] .addresses-page .address-type-tabs {
+        border: 0;
+    }
+
+    html[data-storefront-preset] :is(.purchase-page, .checkout-page) .checkout-options > button {
+        min-height: 52px;
+        margin-block: 4px;
+        padding-inline: 10px;
+        border-top: 0;
+        border-radius: var(--radius-sm);
+        background: var(--soft);
+    }
+
+    html[data-storefront-preset] :is(.purchase-page, .checkout-page) .price-summary .summary-total {
+        margin-top: 8px;
+        padding-inline: 10px;
+        border-top: 0;
+        border-radius: var(--radius-sm);
+        background: var(--accent-soft);
+    }
+
+    html[data-storefront-preset] :is(.purchase-page, .checkout-page) .submit-order-bar {
+        border-top: 0;
+    }
 }

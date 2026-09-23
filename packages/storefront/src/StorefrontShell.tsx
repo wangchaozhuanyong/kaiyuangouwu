@@ -1,7 +1,7 @@
 import { Outlet, lazyRouteComponent } from '@tanstack/react-router';
 import { clsx } from 'clsx';
 import { WifiOff } from 'lucide-react';
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 
 import { BottomNavigation, shouldShowBottomNavigation } from './components/common/bottom-navigation';
 import {
@@ -15,7 +15,7 @@ import { type useStorefrontAppState } from './hooks/useStorefrontAppState';
 import { PageReadinessBoundary } from './page-readiness';
 import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { isBrowsingStorefrontRoute, isPublicStorefrontRoute } from './storefront-access';
-import { routeHref } from './storefront-router';
+import { routeHref, storefrontRouteNames, type RouteName } from './storefront-router';
 import { StorefrontTrafficPreference } from './storefront-ui/storefront-traffic-preference';
 import { StorefrontContext } from './StorefrontContext';
 import { StorefrontUpdatePrompt } from './StorefrontUpdatePrompt';
@@ -41,6 +41,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     const previewParameters = new URLSearchParams(window.location.search);
     const previewEmbedded = previewParameters.get('storefrontPreviewEmbedded') === '1';
     const previewScenario = previewEmbedded ? previewParameters.get('storefrontPreviewScenario') : null;
+    const previewSession = previewEmbedded ? previewParameters.get('storefrontPreviewSession') : null;
     const {
         storefrontContextValue,
         online,
@@ -74,6 +75,35 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
         routeHref(displayedRoute),
     ]);
     const skeletonVariant = pageSkeletonVariantForPathname(routeHref(displayedRoute));
+    const renderedRouteName = protectedRoute && !customer ? 'login' : displayedRoute.name;
+
+    useEffect(() => {
+        if (!previewEmbedded || !previewSession) return;
+        const receivePreviewNavigation = (event: MessageEvent) => {
+            if (event.origin !== window.location.origin) return;
+            if (event.data?.type !== 'storefront-preview-navigate') return;
+            if (event.data.session !== previewSession) return;
+            const nextRoute = event.data.route;
+            if (!storefrontRouteNames.includes(nextRoute as RouteName)) return;
+            const id = typeof event.data.id === 'string' ? event.data.id : undefined;
+            storefrontContextValue.navigate({ name: nextRoute as RouteName, id }, true);
+        };
+        window.addEventListener('message', receivePreviewNavigation);
+        return () => window.removeEventListener('message', receivePreviewNavigation);
+    }, [previewEmbedded, previewSession, storefrontContextValue.navigate]);
+
+    useEffect(() => {
+        if (!previewEmbedded || window.parent === window) return;
+        if (!previewSession) return;
+        window.parent.postMessage(
+            { type: 'storefront-preview-ready', session: previewSession },
+            window.location.origin,
+        );
+        window.parent.postMessage(
+            { type: 'storefront-preview-route', route: renderedRouteName, session: previewSession },
+            window.location.origin,
+        );
+    }, [previewEmbedded, previewSession, renderedRouteName]);
 
     return (
         <StorefrontContext.Provider value={effectiveStorefrontContext}>
@@ -88,10 +118,8 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                     onBack={storefrontContextValue.goBack ?? (() => window.history.back())}
                 >
                     <div
-                        data-route={protectedRoute && !customer ? 'login' : displayedRoute.name}
-                        data-page-family={desktopPageFamily(
-                            protectedRoute && !customer ? 'login' : displayedRoute.name,
-                        )}
+                        data-route={renderedRouteName}
+                        data-page-family={desktopPageFamily(renderedRouteName)}
                         data-preview-embedded={previewEmbedded ? 'true' : undefined}
                         className={`storefront-app${online ? '' : ' is-offline'}${desktop ? ' desktop-store-layout' : ''}`}
                     >
@@ -148,9 +176,13 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                         <Outlet />
                                     )}
                                 </Suspense>
-                                {previewEmbedded && previewScenario && previewScenario !== 'normal' && (
-                                    <PreviewScenarioPanel scenario={previewScenario} isZh={isZh} />
-                                )}
+                                {previewEmbedded &&
+                                    previewScenario &&
+                                    previewScenario !== 'normal' &&
+                                    !(
+                                        displayedRoute.name === 'home' &&
+                                        ['empty', 'loading'].includes(previewScenario)
+                                    ) && <PreviewScenarioPanel scenario={previewScenario} isZh={isZh} />}
                             </div>
                         </div>
                     </div>

@@ -235,7 +235,17 @@ export function AiProductCover({
     );
 }
 
-export function ProductImage({ product }: { product: Product }) {
+export function ProductImage({
+    product,
+    loading = 'lazy',
+    fetchPriority = 'auto',
+    sizes,
+}: {
+    product: Product;
+    loading?: 'eager' | 'lazy';
+    fetchPriority?: 'high' | 'low' | 'auto';
+    sizes?: string;
+}) {
     const image = productImage(product);
 
     if (!image || image.includes('placeholder') || image.includes('default-hero')) {
@@ -249,7 +259,16 @@ export function ProductImage({ product }: { product: Product }) {
         );
     }
 
-    return <SafeImage src={image} alt={product.name} imageKind="card" loading="lazy" />;
+    return (
+        <SafeImage
+            src={image}
+            alt={product.name}
+            imageKind="card"
+            loading={loading}
+            fetchPriority={fetchPriority}
+            sizes={sizes}
+        />
+    );
 }
 
 export function shouldPrefetchMedia(): boolean {
@@ -380,6 +399,31 @@ export function sanitizeProductSubtitle(
     return clean.length > maxLength ? `${clean.slice(0, maxLength)}…` : clean;
 }
 
+export function resolveProductSubtitle(product: Product, maxLength = 26): string | null {
+    const description = sanitizeProductSubtitle(product.description, product.name, maxLength);
+    if (description) return description;
+
+    const parentIds = new Set(
+        product.collections.flatMap(collection => (collection.parentId ? [collection.parentId] : [])),
+    );
+    const leafFirst = [...product.collections].sort(
+        (first, second) => Number(parentIds.has(first.id)) - Number(parentIds.has(second.id)),
+    );
+    for (const collection of leafFirst) {
+        const collectionName = collection.name.replace(/\s+/g, ' ').trim();
+        if (
+            collectionName &&
+            collectionName.toLowerCase() !== product.name.trim().toLowerCase() &&
+            !/^[\d\s.,\-:;/]+$/u.test(collectionName)
+        ) {
+            return collectionName.length > maxLength
+                ? `${collectionName.slice(0, maxLength)}…`
+                : collectionName;
+        }
+    }
+    return null;
+}
+
 export function contentNumberSetting(value: unknown, fallback: number): number {
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
@@ -432,7 +476,7 @@ export function renderColorfulQuickIcon(label: string, index: number, imageUrl?:
                 <SafeImage
                     src={managedImageUrl}
                     alt=""
-                    imageKind="thumbnail"
+                    imageKind="icon"
                     sizes="48px"
                     showFallbackIcon={false}
                 />

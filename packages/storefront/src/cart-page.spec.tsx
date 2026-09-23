@@ -1,4 +1,6 @@
-import { createElement } from 'react';
+// @vitest-environment jsdom
+import { act, createElement } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -11,6 +13,8 @@ vi.mock('@tanstack/react-router', async importOriginal => ({
     ...(await importOriginal<typeof import('@tanstack/react-router')>()),
     useNavigate: () => vi.fn(),
 }));
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const market: MarketConfig = {
     code: 'my-malaysia',
@@ -161,6 +165,8 @@ describe('CartPage guest cart', () => {
         const markup = renderCart({ ...cart, checkoutOrder }, [], [], false, true);
         expect(markup).toContain('MYR 313.81');
         expect(markup).not.toContain('计算中…');
+        expect(markup).toContain('class="cart-summary-panel"');
+        expect(markup).not.toContain('class="coupon-row"');
         expect(markup).toContain('aria-busy="true"');
         expect(markup).toContain('disabled="">正在进入结算…</button>');
     });
@@ -252,14 +258,34 @@ describe('CartPage guest cart', () => {
         expect(markup).toContain('class="section-header-end-subtitle">从当前店铺继续挑选</p>');
     });
 
-    it('keeps the offers row visually separate from the recommendation module', () => {
-        const stylesheet = readStorefrontStylesheet(['./styles/visual-presets.css']);
+    it('uses one responsive cart workspace and keeps the coupon in the checkout summary', () => {
+        const stylesheet = readStorefrontStylesheet([
+            './styles/desktop-pages.css',
+            './styles/visual-presets.css',
+            './styles/control-surfaces.css',
+        ]);
         expect(stylesheet).toMatch(/\.cart-page > \.product-section\s*\{[^}]*margin-top:\s*24px;/u);
-        expect(stylesheet).toMatch(/\.cart-page > \.coupon-row[\s\S]*?width:\s*calc\(100% - 20px\);/u);
-        expect(stylesheet).toMatch(/\.cart-page > \.coupon-row[\s\S]*?margin:\s*10px 10px 0;/u);
-        expect(stylesheet).toMatch(/\.cart-page > \.coupon-row[\s\S]*?border-radius:\s*var\(--radius-md\);/u);
         expect(stylesheet).toMatch(
-            /html\[data-storefront-preset='modern-oriental'\][\s\S]*?\.cart-page > \.coupon-row[\s\S]*?border-color:\s*var\(--line\);/u,
+            /\.desktop-store-layout \.cart-commerce-layout\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 320px;/u,
+        );
+        expect(stylesheet).toMatch(
+            /\.desktop-store-layout \.cart-summary-panel > \.coupon-row\s*\{[^}]*width:\s*100%;/u,
+        );
+        expect(stylesheet).toMatch(
+            /\.desktop-store-layout \.cart-checkout-bar\s*\{[^}]*position:\s*static;[^}]*transform:\s*none;/u,
+        );
+        expect(stylesheet).toMatch(
+            /\.desktop-store-layout \.cart-page > \.cart-topbar\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/u,
+        );
+        expect(stylesheet).toMatch(
+            /\.desktop-store-layout \.cart-summary-panel > \.cart-checkout-bar\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/u,
+        );
+        expect(stylesheet).toMatch(
+            /html\[data-storefront-preset\][\s\S]*?\.cart-summary-panel > \.coupon-row,[\s\S]*?border:\s*0;/u,
+        );
+        expect(stylesheet).toMatch(/\.coupon-label-desktop\s*\{[^}]*display:\s*none;/u);
+        expect(stylesheet).toMatch(
+            /\.desktop-store-layout \.coupon-label-desktop\s*\{[^}]*display:\s*inline;/u,
         );
     });
 
@@ -280,7 +306,9 @@ describe('CartPage guest cart', () => {
         const unselectedMarkup = renderCart(cartWithAutomaticDiscount, [], [coupon()]);
         const couponRowMarkup = unselectedMarkup.match(/<button class="coupon-row"[\s\S]*?<\/button>/)?.[0];
 
+        expect(unselectedMarkup).toContain('class="cart-summary-panel has-coupons"');
         expect(couponRowMarkup).toContain('选择已领取优惠券');
+        expect(couponRowMarkup).toContain('优惠券');
         expect(couponRowMarkup).not.toContain('已优惠');
         expect(couponRowMarkup).not.toContain('新客优惠券');
 
@@ -292,5 +320,48 @@ describe('CartPage guest cart', () => {
 
         expect(selectedMarkup).toContain('title="新客优惠券">新客优惠券</small>');
         expect(selectedMarkup).not.toContain('选择已领取优惠券');
+    });
+
+    it('opens the coupon chooser from the responsive summary control', () => {
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+
+        act(() => {
+            root.render(
+                createElement(
+                    CartPageContext.Provider,
+                    {
+                        value: {
+                            cart: { ...cart, checkoutOrder },
+                            customer: null,
+                            products: [],
+                            market,
+                            locale: market.locale,
+                            language: 'zh' as const,
+                            loading: false,
+                            error: null,
+                            favoriteProductIds: [],
+                            coupons: [coupon()],
+                            ...callbacks,
+                        },
+                    },
+                    createElement(CartPage),
+                ),
+            );
+        });
+
+        const trigger = host.querySelector<HTMLButtonElement>('.cart-summary-panel > .coupon-row');
+        expect(trigger).not.toBeNull();
+        expect(trigger?.disabled).toBe(false);
+
+        act(() => {
+            trigger?.click();
+        });
+
+        expect(document.querySelector('.coupon-selector-sheet')).not.toBeNull();
+
+        act(() => root.unmount());
+        host.remove();
     });
 });

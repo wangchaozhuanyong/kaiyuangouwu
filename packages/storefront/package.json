@@ -6,7 +6,7 @@
     "scripts": {
         "verify:router-toolchain": "node scripts/verify-router-toolchain.mjs",
         "dev": "bun run verify:router-toolchain && vite --host 127.0.0.1",
-        "build": "bun run verify:router-toolchain && tsc --noEmit && vite build && vite build --config vite.two-factor.config.ts",
+        "build": "bun run verify:router-toolchain && tsc --noEmit && vite build && node ./scripts/verify-production-build.mjs && vite build --config vite.two-factor.config.ts",
         "build:two-factor": "bun run verify:router-toolchain && tsc --noEmit && vite build --config vite.two-factor.config.ts",
         "build:carousel-assets": "bun scripts/build-carousel-assets.mjs",
         "preview": "vite preview --host 127.0.0.1",

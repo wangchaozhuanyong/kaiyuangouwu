@@ -5,19 +5,19 @@ export const storefrontVisualPresets = [
     {
         id: 'classic',
         name: '经典',
-        description: '浅色经典界面，保留店铺品牌色作为可读的强调色。',
+        description: '明亮表面与克制阴影，保留店铺品牌色作为可读的强调色。',
         colors: ['#f1f5f9', '#ffffff', '#d33c30', '#0f172a'],
     },
     {
         id: 'modern-oriental',
         name: '新中式',
-        description: '米白底色、墨蓝文字与朱砂强调，共用统一电脑端布局。',
-        colors: ['#f6f2ea', '#fffdf8', '#a63d32', '#203346'],
+        description: '宣纸暖白、墨黛文字、朱砂主操作与克制鎏金，呈现沉静而有层次的东方质感。',
+        colors: ['#f1ece2', '#fffaf1', '#9f3b30', '#1c302d'],
     },
     {
         id: 'neo-minimalist',
         name: '新锐科技极简',
-        description: '深空黑曜石底色、高对比文字与紫色强调，共用统一电脑端布局。',
+        description: '深空底色、高对比文字与紫色按钮，使用统一布局与轻量化表面。',
         colors: ['#070b14', '#0e121c', '#8b5cf6', '#f1f5f9'],
     },
 ] as const;

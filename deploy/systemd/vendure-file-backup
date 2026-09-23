@@ -93,12 +93,103 @@ if ! flock --nonblock 8; then
     exit 1
 fi
 
-readonly backup_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-readonly backup_file="${vendure_backup_dir}/vendure-files-${backup_stamp}.tar.gz"
-readonly backup_partial="${backup_file}.part"
 readonly backup_tool="$(dirname "$(readlink -f "$0")")/vendure-file-backup.py"
 readonly s3_policy_guard="$(dirname "$(readlink -f "$0")")/vendure-backup-s3-guard.py"
 readonly s3_snapshot_tool="$(dirname "$(readlink -f "$0")")/vendure-s3-prefix-snapshot.py"
+if [[ -n "${offsite_backup_uri}" ]]; then
+    command -v aws >/dev/null 2>&1 || {
+        printf 'AWS CLI is required to verify the offsite file backup\n' >&2
+        exit 1
+    }
+    python3 "${s3_policy_guard}" "${offsite_backup_uri}" "${offsite_retention_days}" >/dev/null
+    readonly offsite_prefix="${offsite_backup_uri%/}"
+    readonly bucket_and_prefix="${offsite_prefix#s3://}"
+    readonly bucket="${bucket_and_prefix%%/*}"
+    prefix="${bucket_and_prefix#${bucket}}"
+    prefix="${prefix#/}"
+fi
+
+remote_object_status() {
+    local source="${1}"
+    local name key listing metadata expected_size
+    name="$(basename "${source}")"
+    key="${name}"
+    if [[ -n "${prefix:-}" ]]; then key="${prefix}/${name}"; fi
+    listing="$(aws s3api list-objects-v2 --bucket "${bucket}" --prefix "${key}" --max-keys 2 --output json)"
+    if ! jq -e 'type == "object" and ((.Contents // []) | type == "array")' \
+        <<<"${listing}" >/dev/null; then
+        printf 'Offsite file backup listing is invalid: %s\n' "${key}" >&2
+        return 1
+    fi
+    if ! jq -e --arg key "${key}" '(.Contents // []) | any(.[]; .Key == $key)' \
+        <<<"${listing}" >/dev/null; then
+        printf 'missing\n'
+        return
+    fi
+    metadata="$(aws s3api head-object --bucket "${bucket}" --key "${key}" \
+        --query '{ContentLength:ContentLength,ServerSideEncryption:ServerSideEncryption}' --output json)"
+    expected_size="$(wc -c <"${source}" | tr -d '[:space:]')"
+    if ! jq -e --argjson expected_size "${expected_size}" \
+        '.ContentLength == $expected_size and .ServerSideEncryption == "AES256"' \
+        <<<"${metadata}" >/dev/null; then
+        printf 'Offsite file backup object differs from the verified local file: %s\n' "${key}" >&2
+        return 1
+    fi
+    printf 'present\n'
+}
+
+upload_offsite_backup() {
+    local archive="${1}"
+    local source state key
+    for source in "${archive}" "${archive}.manifest.json" "${archive}.sha256"; do
+        state="$(remote_object_status "${source}")"
+        if [[ "${state}" == "missing" ]]; then
+            key="$(basename "${source}")"
+            if [[ -n "${prefix:-}" ]]; then key="${prefix}/${key}"; fi
+            aws s3 cp "${source}" "s3://${bucket}/${key}" --sse AES256 --only-show-errors
+            [[ "$(remote_object_status "${source}")" == "present" ]]
+        fi
+    done
+}
+
+# A failed upload leaves a complete local archive and checksum. Resume its missing
+# offsite objects instead of capturing another multi-gigabyte backup on the next run.
+if [[ -n "${offsite_backup_uri}" ]]; then
+    latest_checksum="$(find "${vendure_backup_dir}" -maxdepth 1 -type f \
+        -name 'vendure-files-????????T??????Z.tar.gz.sha256' -print | sort -r | sed -n '1p')"
+    if [[ -n "${latest_checksum}" ]]; then
+        latest_checksum="${latest_checksum##*/}"
+        latest_archive="${vendure_backup_dir}/${latest_checksum%.sha256}"
+        for source in "${latest_archive}" "${latest_archive}.manifest.json" \
+            "${vendure_backup_dir}/${latest_checksum}"; do
+            [[ -f "${source}" && ! -L "${source}" ]] || {
+                printf 'Latest persistent file backup is incomplete: %s\n' "$(basename "${source}")" >&2
+                exit 1
+            }
+        done
+        missing_offsite=false
+        for source in "${latest_archive}" "${latest_archive}.manifest.json" \
+            "${vendure_backup_dir}/${latest_checksum}"; do
+            state="$(remote_object_status "${source}")"
+            if [[ "${state}" == "missing" ]]; then
+                missing_offsite=true
+            fi
+        done
+        if [[ "${missing_offsite}" == "true" ]]; then
+            (cd "${vendure_backup_dir}" && sha256sum --check --status "${latest_checksum}")
+            gzip -t "${latest_archive}"
+            python3 "${backup_tool}" verify "${latest_archive}" >/dev/null
+            upload_offsite_backup "${latest_archive}"
+            printf 'Resumed verified persistent file backup: %s offsite=yes encrypted=yes\n' \
+                "${latest_archive}"
+            exit 0
+        fi
+    fi
+fi
+
+readonly backup_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+readonly backup_file="${vendure_backup_dir}/vendure-files-${backup_stamp}.tar.gz"
+readonly backup_partial="${backup_file}.part"
 readonly s3_snapshot_directory="${vendure_backup_dir}/.s3-source-${backup_stamp}"
 if [[ -e "${backup_file}" || -e "${backup_partial}" || -e "${backup_file}.manifest.json" ]]; then
     printf 'Refusing to overwrite an existing file backup with the same timestamp\n' >&2
@@ -116,14 +207,7 @@ preserve_failed_backup() {
 }
 trap preserve_failed_backup EXIT
 
-offsite_policy_checked=false
 if [[ "${customer_image_storage}" == "s3" ]]; then
-    command -v aws >/dev/null 2>&1 || {
-        printf 'AWS CLI is required to snapshot S3 customer images\n' >&2
-        exit 1
-    }
-    python3 "${s3_policy_guard}" "${offsite_backup_uri}" "${offsite_retention_days}" >/dev/null
-    offsite_policy_checked=true
     timeout --kill-after=10s 4h python3 "${s3_snapshot_tool}" \
         capture "${CUSTOMER_AVATAR_S3_BUCKET}" 'avatars/v2/' "${s3_snapshot_directory}/customer-avatars"
     timeout --kill-after=10s 4h python3 "${s3_snapshot_tool}" \
@@ -147,25 +231,7 @@ mv "${backup_partial}" "${backup_file}"
 mv "${backup_file}.sha256.part" "${backup_file}.sha256"
 
 if [[ -n "${offsite_backup_uri}" ]]; then
-    command -v aws >/dev/null 2>&1 || {
-        printf 'AWS CLI is required to upload the offsite file backup\n' >&2
-        exit 1
-    }
-    if [[ "${offsite_policy_checked}" != "true" ]]; then
-        python3 "${s3_policy_guard}" "${offsite_backup_uri}" "${offsite_retention_days}" >/dev/null
-    fi
-    readonly offsite_prefix="${offsite_backup_uri%/}"
-    readonly bucket_and_prefix="${offsite_prefix#s3://}"
-    readonly bucket="${bucket_and_prefix%%/*}"
-    prefix="${bucket_and_prefix#${bucket}}"
-    prefix="${prefix#/}"
-    for source in "${backup_file}" "${backup_file}.manifest.json" "${backup_file}.sha256"; do
-        name="$(basename "${source}")"
-        key="${name}"
-        if [[ -n "${prefix}" ]]; then key="${prefix}/${name}"; fi
-        aws s3 cp "${source}" "s3://${bucket}/${key}" --sse AES256 --only-show-errors
-        [[ "$(aws s3api head-object --bucket "${bucket}" --key "${key}" --query ServerSideEncryption --output text)" == "AES256" ]]
-    done
+    upload_offsite_backup "${backup_file}"
 fi
 preserve_failed_backup
 trap - EXIT

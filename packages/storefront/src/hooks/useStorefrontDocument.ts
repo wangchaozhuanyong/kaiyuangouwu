@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect } from 'react';
 import {
     resolveStorefrontSemanticPalette,
     semanticPaletteCssVariables,
+    storefrontSkinCssVariables,
 } from '../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import { type StorefrontVisualPresetId } from '../../../storefront-content-plugin/src/visual-presets';
 import { productDescriptionText } from '../rich-text';
@@ -24,12 +25,28 @@ export function useStorefrontBrandColors(
             accentColor: config?.brandAccentColor,
             highlightColor: config?.brandHighlightColor,
         });
-        const colors = semanticPaletteCssVariables(palette);
+        const colors = { ...semanticPaletteCssVariables(palette), ...storefrontSkinCssVariables(presetId) };
+        const themeColorMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+        const colorSchemeMeta = document.querySelector<HTMLMetaElement>('meta[name="color-scheme"]');
+        const previousColorScheme = root.style.getPropertyValue('color-scheme');
+        const previousThemeColor = themeColorMeta?.content;
+        const previousMetaColorScheme = colorSchemeMeta?.content;
         for (const [property, value] of Object.entries(colors)) {
             root.style.setProperty(property, value);
         }
+        const colorScheme = presetId === 'neo-minimalist' ? 'dark' : 'light';
+        root.style.setProperty('color-scheme', colorScheme);
+        if (themeColorMeta) themeColorMeta.content = palette.page;
+        if (colorSchemeMeta) colorSchemeMeta.content = colorScheme;
         return () => {
             for (const property of Object.keys(colors)) root.style.removeProperty(property);
+            if (previousColorScheme) root.style.setProperty('color-scheme', previousColorScheme);
+            else root.style.removeProperty('color-scheme');
+            if (themeColorMeta && previousThemeColor !== undefined)
+                themeColorMeta.content = previousThemeColor;
+            if (colorSchemeMeta && previousMetaColorScheme !== undefined) {
+                colorSchemeMeta.content = previousMetaColorScheme;
+            }
         };
     }, [config, presetId]);
 }

@@ -20,7 +20,7 @@ import {
 } from '../../graphql/admin-security.graphql';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
-const adminBrandIcon = `${import.meta.env.BASE_URL}favicon.png`;
+const adminBrandIcon = `${import.meta.env.BASE_URL}brand-icon-180.png`;
 
 export function LoginModule() {
     const navigate = useNavigate();

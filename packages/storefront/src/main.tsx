@@ -14,12 +14,14 @@ import { router } from './router';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 /* eslint-disable import/order -- Load desktop composition after the base layout and selected visual preset. */
 import './styles.css';
+import './styles/subpage-content.css';
 import './styles/desktop-layout.css';
 import './styles/visual-presets.css';
 import './styles/desktop-commerce.css';
 import './styles/desktop-home.css';
 import './styles/desktop-pages.css';
-import './styles/storefront-design-preview.css';
+import './styles/control-surfaces.css';
+import './styles/locale-preferences.css';
 /* eslint-enable import/order */
 
 const rootElement = document.getElementById('root');
@@ -27,6 +29,7 @@ const rootElement = document.getElementById('root');
 if (!rootElement) {
     throw new Error('Storefront root element was not found');
 }
+const appRootElement = rootElement;
 
 try {
     // Restore the cached brand within the CSP-approved module entry, without a
@@ -52,12 +55,22 @@ try {
     // sessionStorage can be disabled without preventing the storefront from starting.
 }
 
-createRoot(rootElement).render(
-    <StrictMode>
-        <QueryClientProvider client={storefrontQueryClient}>
-            <StorefrontErrorBoundary>
-                <RouterProvider router={router} />
-            </StorefrontErrorBoundary>
-        </QueryClientProvider>
-    </StrictMode>,
-);
+async function mountStorefront() {
+    const parameters = new URLSearchParams(window.location.search);
+    if (parameters.get('storefrontPreviewEmbedded') === '1') {
+        const { installStorefrontPreviewRuntime } = await import('./storefront-preview-runtime');
+        installStorefrontPreviewRuntime();
+    }
+
+    createRoot(appRootElement).render(
+        <StrictMode>
+            <QueryClientProvider client={storefrontQueryClient}>
+                <StorefrontErrorBoundary>
+                    <RouterProvider router={router} />
+                </StorefrontErrorBoundary>
+            </QueryClientProvider>
+        </StrictMode>,
+    );
+}
+
+void mountStorefront();

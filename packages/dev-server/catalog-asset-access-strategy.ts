@@ -34,7 +34,7 @@ export function createCatalogImageTransformStrategies(
         ...(!bootstrapBaseSchema ? [new CatalogAssetAccessStrategy()] : []),
         new PresetOnlyStrategy({
             defaultPreset: 'storefront-original-preview',
-            permittedQuality: [75, 90],
+            permittedQuality: [75, 82, 90],
             permittedFormats: ['webp'],
         }),
     ];

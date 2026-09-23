@@ -11,7 +11,7 @@ import {
 import { isStrongAdministratorPassword, PASSWORD_REQUIREMENT } from '../../utils/password';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
-const adminBrandIcon = `${import.meta.env.BASE_URL}favicon.png`;
+const adminBrandIcon = `${import.meta.env.BASE_URL}brand-icon-180.png`;
 
 interface CompleteInitialPasswordChangeVariables {
     password: string;

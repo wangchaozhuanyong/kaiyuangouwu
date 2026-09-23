@@ -62,13 +62,7 @@ export function DesktopAccountPage({
     );
     return (
         <main className="page desktop-account-page" data-page-pending={pending ? 'query' : undefined}>
-            <div className="desktop-account-heading">
-                <h1>{isZh ? '账户概览' : 'Account overview'}</h1>
-                <button onClick={() => navigate({ name: 'home' })} type="button">
-                    {isZh ? '继续逛逛' : 'Continue shopping'}
-                    <ChevronRight />
-                </button>
-            </div>
+            <h1 className="desktop-account-page-title">{isZh ? '账户概览' : 'Account overview'}</h1>
             <section className="desktop-member-summary" aria-label={isZh ? '账户信息' : 'Account details'}>
                 <div className="desktop-member-identity">
                     <span className="desktop-member-avatar">
@@ -95,6 +89,14 @@ export function DesktopAccountPage({
                         </button>
                     </div>
                 </div>
+                <button
+                    className="desktop-account-continue"
+                    onClick={() => navigate({ name: 'home' })}
+                    type="button"
+                >
+                    {isZh ? '继续逛逛' : 'Continue shopping'}
+                    <ChevronRight />
+                </button>
                 <button
                     className="desktop-member-asset"
                     type="button"

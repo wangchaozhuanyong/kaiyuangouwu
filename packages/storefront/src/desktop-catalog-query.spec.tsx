@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { catalogInputFromRoute, catalogRouteWithChanges } from './catalog-route-query';
 import { ProductRow } from './components/common/product-row';
+import { readStorefrontStylesheet } from './test-stylesheet';
 import { MarketConfig, Product } from './types';
 
 vi.mock('@tanstack/react-router', async importOriginal => ({
@@ -11,6 +12,35 @@ vi.mock('@tanstack/react-router', async importOriginal => ({
 }));
 
 describe('desktop catalog navigation', () => {
+    it('baseline-aligns shared heading metadata instead of vertically centering smaller copy', () => {
+        const sharedStylesheet = readStorefrontStylesheet(['./styles/home-showcase.css']);
+        const desktopStylesheet = readStorefrontStylesheet([
+            './styles/desktop-commerce.css',
+            './styles/desktop-home.css',
+        ]);
+
+        expect(sharedStylesheet).toMatch(/\.section-heading-inline\s*\{[^}]*align-items:\s*baseline;/u);
+        expect(sharedStylesheet).toMatch(
+            /\.section-header\.has-end-subtitle\s*\{[^}]*align-items:\s*flex-end;/u,
+        );
+        expect(desktopStylesheet).toMatch(/\.proto-product-heading\s*\{[^}]*align-items:\s*baseline;/u);
+    });
+
+    it('groups catalog heading and controls into one balanced desktop toolbar module', () => {
+        const stylesheet = readStorefrontStylesheet(['./styles/desktop-commerce.css']);
+
+        expect(stylesheet).toMatch(
+            // eslint-disable-next-line max-len -- This expression guards the complete desktop toolbar module.
+            /\.desktop-catalog-toolbar\s*\{[^}]*align-items:\s*center;[^}]*min-height:\s*0;[^}]*padding:\s*10px 12px;[^}]*border-radius:\s*var\(--skin-card-radius\);[^}]*background:\s*var\(--surface\);[^}]*box-shadow:\s*var\(--skin-card-shadow\);/u,
+        );
+        expect(stylesheet).toMatch(
+            /\.desktop-catalog-heading\s*\{[^}]*min-height:\s*0;[^}]*align-self:\s*center;/u,
+        );
+        expect(stylesheet).toMatch(
+            /\.desktop-catalog-actions\s*\{[^}]*margin-left:\s*auto;[^}]*background:\s*var\(--soft\);/u,
+        );
+    });
+
     it('clears remembered category filters and starts home controls from the visible all-products state', () => {
         const remembered = {
             collectionId: 'old-category',

@@ -1,0 +1,270 @@
+.locale-preferences-trigger {
+    min-height: 40px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--skin-control-radius, var(--radius-sm));
+    background-color: var(--control-surface, var(--soft));
+    background-image: var(--control-surface-image, none);
+    color: var(--text);
+    box-shadow: var(--control-elevation, var(--shadow-sm));
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: var(--font-weight-semibold);
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.locale-preferences-trigger:hover {
+    background-color: var(--control-surface-hover, var(--soft));
+    background-image: var(--control-surface-hover-image, none);
+    box-shadow: var(--control-elevation-hover, var(--shadow-sm));
+}
+
+.locale-preferences-trigger > i {
+    width: 1px;
+    height: 13px;
+    background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.locale-preferences-trigger-icon,
+.locale-preferences-trigger-chevron {
+    width: 14px;
+    height: 14px;
+}
+
+.locale-preferences-trigger-chevron {
+    opacity: 0.62;
+    transition: transform 160ms ease;
+}
+
+.locale-preferences-trigger[aria-expanded='true'] .locale-preferences-trigger-chevron {
+    transform: rotate(180deg);
+}
+
+.locale-preferences-sheet {
+    width: min(520px, 100%);
+    max-height: min(86dvh, 650px);
+    background: var(--surface);
+    color: var(--text);
+}
+
+.locale-preferences-sheet > header {
+    border-bottom: 0;
+    background: var(--surface);
+}
+
+.locale-preferences-content {
+    padding: 4px 16px max(18px, var(--safe-bottom));
+    display: grid;
+    gap: 16px;
+}
+
+.locale-preferences-market {
+    min-height: 60px;
+    padding: 10px 14px;
+    border-radius: var(--skin-control-radius, var(--radius-sm));
+    background: color-mix(in srgb, var(--accent-soft) 48%, var(--surface));
+    display: flex;
+    align-items: center;
+    gap: 11px;
+}
+
+.locale-preferences-market > svg {
+    width: 20px;
+    height: 20px;
+    color: var(--accent-ink);
+}
+
+.locale-preferences-market > span {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.locale-preferences-market small {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.locale-preferences-market strong {
+    color: var(--text);
+    font-size: 14px;
+}
+
+.locale-preferences-fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.locale-preferences-fieldset > legend {
+    width: 100%;
+    margin-bottom: 8px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: var(--font-weight-semibold);
+}
+
+.locale-preferences-fieldset > legend svg {
+    width: 16px;
+    height: 16px;
+}
+
+.locale-preferences-language {
+    padding: 4px;
+    border-radius: var(--skin-control-radius, var(--radius-sm));
+    background: var(--soft);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.locale-preferences-language > button,
+.locale-preferences-currencies > button {
+    min-height: 46px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: calc(var(--skin-control-radius, var(--radius-sm)) - 3px);
+    background: transparent;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    text-align: left;
+}
+
+.locale-preferences-language > button:hover,
+.locale-preferences-currencies > button:hover {
+    background: color-mix(in srgb, var(--accent-soft) 40%, var(--surface));
+}
+
+.locale-preferences-language > button.is-selected,
+.locale-preferences-currencies > button.is-selected {
+    background: var(--surface);
+    color: var(--accent-ink);
+    box-shadow: var(--control-elevation, var(--shadow-sm));
+}
+
+.locale-preferences-language svg,
+.locale-preferences-currencies svg {
+    width: 17px;
+    height: 17px;
+    flex: none;
+}
+
+.locale-preferences-currencies {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.locale-preferences-currencies > button {
+    min-height: 54px;
+    background: var(--soft);
+}
+
+.locale-preferences-currencies > button > span {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.locale-preferences-currencies strong {
+    font-size: 14px;
+}
+
+.locale-preferences-currencies small {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.25;
+}
+
+.locale-preferences-save {
+    width: 100%;
+    min-height: 48px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: var(--skin-control-radius, var(--radius-sm));
+    background: var(--accent);
+    color: var(--accent-foreground, #fff);
+    box-shadow: var(--accent-shadow);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: var(--font-weight-bold);
+}
+
+.locale-preferences-save:hover:not(:disabled) {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+}
+
+.locale-preferences-save:disabled {
+    background: var(--accent-disabled-bg);
+    color: var(--accent-disabled-text);
+    box-shadow: none;
+}
+
+.locale-preferences-save .is-spinning {
+    width: 17px;
+    height: 17px;
+    animation: spin-loader 0.75s linear infinite;
+}
+
+@media (min-width: 1024px) {
+    .proto-header-right .locale-preferences-trigger {
+        min-height: 40px;
+        padding-inline: 10px;
+        border-radius: 9px;
+        background: transparent;
+        box-shadow: none;
+        color: var(--proto-nav-link, var(--text));
+        font-size: 13px;
+    }
+
+    .proto-header-right .locale-preferences-trigger:hover {
+        background: var(--control-surface-hover, var(--soft));
+        box-shadow: none;
+    }
+
+    body:has(.desktop-store-layout) .sheet-layer > .locale-preferences-sheet {
+        width: min(520px, 100%);
+    }
+
+    .locale-preferences-content {
+        padding: 8px 24px 24px;
+        gap: 18px;
+    }
+}
+
+@media (max-width: 460px) {
+    .locale-preferences-trigger {
+        min-height: 34px;
+        padding-inline: 9px;
+    }
+
+    .locale-preferences-trigger-icon {
+        display: none;
+    }
+
+    .locale-preferences-currencies {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .locale-preferences-trigger-chevron,
+    .locale-preferences-save {
+        transition: none;
+    }
+}

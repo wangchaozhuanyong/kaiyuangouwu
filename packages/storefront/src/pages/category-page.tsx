@@ -9,7 +9,7 @@ import {
     SlidersHorizontal,
     WifiOff,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 // eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
 import type { RouteState, SortMode } from '../storefront-router';
 
@@ -21,6 +21,7 @@ import { CategoryClientPluginSlot } from '../client-plugins/client-plugin-regist
 import { CategoryPaginationStatus } from '../components/common/category-pagination-status';
 import { ProductRow } from '../components/common/product-row';
 import { useCategoryPagination } from '../hooks/useCategoryPagination';
+import { useScrollDirectionVisibility } from '../hooks/useScrollDirectionVisibility';
 import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
 import { productAvailability } from '../product-availability';
@@ -38,6 +39,8 @@ import {
     StorefrontContentBlock,
     StorefrontLanguage,
 } from '../types';
+
+import '../styles/account-catalog-surfaces.css';
 
 // TODO: Fix internal imports later
 
@@ -113,7 +116,14 @@ export function CategoryPage() {
     const [draftMinimumPrice, setDraftMinimumPrice] = useState(minimumPriceInput);
     const [draftMaximumPrice, setDraftMaximumPrice] = useState(maximumPriceInput);
     const subcatScrollerRef = useRef<HTMLDivElement>(null);
+    const sortBarRef = useRef<HTMLElement>(null);
+    const sortBarHidden = useScrollDirectionVisibility(sortBarRef, {
+        disabled: filterOpen || allCategoriesOpen,
+    });
     const primaryCollections = collections;
+    const primaryCategoryStripStyle = {
+        '--primary-category-visible-slots': Math.min(primaryCollections.length + 1, 4),
+    } as CSSProperties;
     const primary =
         activeCollectionId === 'all'
             ? undefined
@@ -307,7 +317,7 @@ export function CategoryPage() {
                     aria-label={isZh ? '商品分类切换' : 'Category switcher'}
                 >
                     {!allCategoriesOpen ? (
-                        <div className="primary-category-strip">
+                        <div className="primary-category-strip" style={primaryCategoryStripStyle}>
                             <nav
                                 className="primary-categories"
                                 aria-label={isZh ? '一级分类' : 'Main categories'}
@@ -563,7 +573,8 @@ export function CategoryPage() {
                     data-scroll-restoration-id="category-results"
                 >
                     <nav
-                        className="sort-bar sort-bar-five"
+                        ref={sortBarRef}
+                        className={`sort-bar sort-bar-five${sortBarHidden ? ' is-scroll-hidden' : ''}`}
                         aria-label={isZh ? '排序和筛选' : 'Sort and filter'}
                     >
                         <button

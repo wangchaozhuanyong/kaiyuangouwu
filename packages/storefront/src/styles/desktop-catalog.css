@@ -1,8 +1,8 @@
 @media (min-width: 1024px) {
     .storefront-app.has-desktop-catalog {
         --desktop-header-height: 80px;
-        --desktop-content-gutter: 32px;
-        --desktop-shell-width: 1440px;
+        --desktop-content-gutter: var(--experience-page-gutter-desktop);
+        --desktop-shell-width: var(--experience-content-max);
         width: 100%;
         max-width: none;
         background: var(--paper);
@@ -337,7 +337,10 @@
         font-size: 13px;
         font-weight: 500;
         cursor: pointer;
-        transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+        transition:
+            background-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+            border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+            color 0.15s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .desktop-sort button:hover {
         border-color: var(--accent);
@@ -500,7 +503,7 @@
         font-weight: 600;
     }
     .product-catalog-card .product-row-desc {
-        display: none;
+        display: block;
     }
     .product-catalog-card .product-row-badge {
         max-width: 100%;
@@ -700,14 +703,12 @@
         font-size: 22px;
         font-weight: 600;
     }
-    .has-desktop-catalog .cart-topbar,
-    .has-desktop-catalog .business-services-topbar {
+    .has-desktop-catalog .cart-topbar {
         height: 88px;
         padding: 0;
         background: var(--paper);
     }
-    .has-desktop-catalog .cart-topbar .topbar-title,
-    .has-desktop-catalog .business-services-page-title {
+    .has-desktop-catalog .cart-topbar .topbar-title {
         justify-self: start;
         font-size: 26px;
         font-weight: 600;
@@ -715,169 +716,6 @@
         letter-spacing: -0.025em;
     }
 
-    /* Tools lead the services page; assistance and managed descriptions follow. */
-    .has-desktop-catalog .business-services-page {
-        --page-surface: var(--paper);
-        padding: 32px 0 48px;
-    }
-    .has-desktop-catalog .business-services-topbar {
-        position: static;
-        height: 64px;
-        margin: 0 0 28px;
-        border: 0;
-    }
-    .desktop-service-description {
-        margin-top: 28px;
-        color: var(--muted);
-        font-size: 14px;
-    }
-    .desktop-service-description summary {
-        cursor: pointer;
-        padding-block: 12px;
-    }
-    .has-desktop-catalog .business-services-hero {
-        align-items: center;
-        margin: 0 0 24px;
-        padding: 18px 20px;
-        gap: 14px;
-        border: 0;
-        border-radius: 10px;
-        background: var(--soft);
-        color: var(--text);
-        box-shadow: none;
-    }
-    .has-desktop-catalog .business-services-hero-icon {
-        background: transparent;
-        color: var(--accent);
-    }
-    .has-desktop-catalog .business-services-hero h2 {
-        font-size: 16px;
-        font-weight: 600;
-    }
-    .has-desktop-catalog .business-services-hero p {
-        margin-top: 5px;
-        color: var(--muted);
-        font-size: 14px;
-        line-height: 1.6;
-    }
-    .has-desktop-catalog .business-services-page .category-client-plugin-slot {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 20px;
-        padding: 0;
-    }
-    .has-desktop-catalog .business-services-page .category-client-plugin {
-        min-width: 0;
-        min-height: 296px;
-        grid-template-columns: 88px minmax(0, 1fr);
-        grid-template-rows: auto auto;
-        align-items: start;
-        gap: 40px 28px;
-        padding: 36px;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        background: var(--paper);
-        box-shadow: none;
-        transform: none;
-        transition:
-            border-color 160ms ease,
-            background-color 160ms ease;
-    }
-    .has-desktop-catalog .business-services-page .category-client-plugin:hover {
-        border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
-        background: var(--soft);
-    }
-    .has-desktop-catalog .business-services-page .category-client-plugin-icon {
-        width: 88px;
-        height: 88px;
-        border-radius: 10px;
-        background: color-mix(in srgb, var(--accent) 8%, var(--paper));
-    }
-    .has-desktop-catalog .business-services-page .category-client-plugin-icon svg {
-        width: 42px;
-        height: 42px;
-    }
-    .has-desktop-catalog .business-services-page .category-client-plugin-copy {
-        gap: 8px;
-        align-self: center;
-    }
-    .has-desktop-catalog .business-services-page .category-client-plugin-copy strong {
-        font-size: 24px;
-        line-height: 1.4;
-        font-weight: 600;
-    }
-    .has-desktop-catalog .business-services-page .category-client-plugin-copy > span {
-        color: var(--muted);
-        font-size: 14px;
-        line-height: 1.6;
-        white-space: normal;
-        overflow-wrap: anywhere;
-    }
-    .has-desktop-catalog .business-services-page .category-client-plugin-action {
-        grid-column: 1 / -1;
-        justify-self: start;
-        align-self: end;
-        padding: 10px 16px;
-        border-radius: 8px;
-        background: var(--accent);
-        color: #fff;
-        font-size: 14px;
-        line-height: 20px;
-        font-weight: 500;
-    }
-    .has-desktop-catalog .business-services-page .category-client-plugin-support {
-        grid-column: 1 / -1;
-        grid-template-columns: 64px minmax(0, 1fr) auto;
-        grid-template-rows: auto;
-        align-items: center;
-        min-height: 124px;
-        padding: 24px 30px;
-    }
-    .has-desktop-catalog
-        .business-services-page
-        .category-client-plugin-support
-        .category-client-plugin-action {
-        grid-column: 3;
-        align-self: center;
-        background: var(--soft);
-        color: var(--accent);
-    }
-
-    .has-desktop-catalog
-        .business-services-page
-        .category-client-plugin-support
-        .category-client-plugin-icon {
-        width: 64px;
-        height: 64px;
-    }
-    .has-desktop-catalog
-        .business-services-page
-        .category-client-plugin-support
-        .category-client-plugin-copy
-        strong {
-        font-size: 20px;
-    }
-
-    .has-desktop-catalog .business-services-page-title {
-        font-size: 30px;
-    }
-    .has-desktop-catalog .business-services-page .category-client-plugin-action {
-        min-width: 140px;
-        min-height: 48px;
-        display: grid;
-        place-items: center;
-        font-size: 16px;
-    }
-    .has-desktop-catalog .business-services-page .category-client-plugin-copy > span {
-        font-size: 16px;
-    }
-    .has-desktop-catalog
-        .business-services-page
-        .category-client-plugin-support
-        .category-client-plugin-action {
-        min-width: auto;
-        background: transparent;
-    }
     /* Account identity and assets share one row without nested decorative frames. */
     .desktop-page-content > .account-page {
         --page-surface: var(--paper);
@@ -1256,33 +1094,6 @@
         width: calc(100% - 2 * var(--desktop-content-gutter));
         margin-inline: auto;
     }
-    .has-desktop-catalog .legal-footer {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        gap: 24px;
-        min-height: 92px;
-        margin-top: 0;
-        padding: 24px 0;
-        border-top: 1px solid var(--line);
-        background: transparent;
-        text-align: left;
-    }
-    .has-desktop-catalog .legal-footer > strong {
-        display: none;
-    }
-    .has-desktop-catalog .legal-footer > span {
-        order: -1;
-        margin: 0;
-        font-size: 14px;
-    }
-    .has-desktop-catalog .legal-footer nav {
-        margin: 0;
-    }
-    .has-desktop-catalog .legal-footer nav button {
-        font-size: 14px;
-    }
     .has-desktop-catalog .account-panel .section-header-icon-pill {
         display: none;
     }
@@ -1337,7 +1148,7 @@
 
     @media (max-width: 1199px) {
         .storefront-app.has-desktop-catalog {
-            --desktop-content-gutter: 24px;
+            --desktop-content-gutter: var(--experience-page-gutter-tablet);
             --desktop-header-height: 76px;
         }
         .desktop-header-inner {
@@ -1429,17 +1240,10 @@
             grid-template-columns: 60px 110px 130px;
             gap: 12px;
         }
-        .has-desktop-catalog .business-services-page .category-client-plugin {
-            padding: 28px;
-            gap: 28px 20px;
-        }
     }
 
     @media (prefers-reduced-motion: reduce) {
         .desktop-header-link {
-            transition: none;
-        }
-        .has-desktop-catalog .business-services-page .category-client-plugin {
             transition: none;
         }
         .product-catalog-card .product-row-image img {

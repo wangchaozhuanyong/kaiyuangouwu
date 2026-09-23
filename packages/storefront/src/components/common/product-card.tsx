@@ -8,7 +8,7 @@ import {
     prefetchProductAsset,
     PriceDisplay,
     ProductImage,
-    sanitizeProductSubtitle,
+    resolveProductSubtitle,
 } from '../../storefront-ui/product-display';
 import { MarketConfig, Product, StorefrontLanguage } from '../../types';
 
@@ -26,6 +26,8 @@ export function ProductCard({
     favorite,
     onOpen,
     onFavorite,
+    priority = false,
+    imageSizes,
 }: {
     product: Product;
     market: MarketConfig;
@@ -34,12 +36,14 @@ export function ProductCard({
     favorite?: boolean;
     onOpen: () => void;
     onFavorite?: () => void;
+    priority?: boolean;
+    imageSizes?: string;
 }) {
     const isZh = language === 'zh';
     const variant = product.variants[0];
     const availability = productAvailability(variant);
     const stockLabel = productAvailabilityLabel(availability, isZh ? 'zh' : 'en');
-    const subtitle = sanitizeProductSubtitle(product.description, product.name, 26);
+    const subtitle = resolveProductSubtitle(product);
     const smartInfo = buildProductRowSmartInfo(product, language);
 
     return (
@@ -80,7 +84,12 @@ export function ProductCard({
             )}
 
             <div className="product-card-media aspect-square w-full overflow-hidden rounded-t-[inherit] [&_.responsive-picture]:block [&_.responsive-picture]:h-full [&_.responsive-picture]:w-full [&_.image-placeholder]:h-full [&_.image-placeholder]:w-full [&_.image-placeholder]:bg-[var(--product-media-bg)] [&_img]:block [&_img]:h-full [&_img]:w-full [&_img]:object-contain group-hover:[&_img]:scale-[1.03] [&_img]:transition-transform [&_img]:duration-300 [&_img]:ease-out">
-                <ProductImage product={product} />
+                <ProductImage
+                    product={product}
+                    loading={priority ? 'eager' : 'lazy'}
+                    fetchPriority={priority ? 'high' : 'auto'}
+                    sizes={imageSizes}
+                />
             </div>
 
             <strong className="mt-1.5 line-clamp-2 max-w-full overflow-hidden text-ellipsis px-2.5 text-left text-[13px] font-semibold leading-[1.35] text-[var(--text)] min-[1024px]:mt-2.5 min-[1024px]:text-[15px]">
@@ -102,7 +111,7 @@ export function ProductCard({
                 ) : null}
             </div>
 
-            <footer className="mt-auto flex min-h-[34px] items-center justify-between gap-2 px-2.5 pt-2">
+            <footer className="mt-auto flex min-h-[34px] items-baseline justify-between gap-2 px-2.5 pt-2">
                 <div className="min-w-0 [&_b]:text-[16px] [&_b]:font-extrabold [&_b]:leading-[1.2] [&_b]:tracking-[-0.02em] [&_b]:text-[var(--accent)] [&_b]:[font-family:var(--font-numeric)]">
                     <PriceDisplay
                         value={variant ? variant.priceWithTax : 0}
@@ -112,7 +121,7 @@ export function ProductCard({
                 </div>
                 <small
                     className={cn(
-                        'min-w-0 max-w-[52%] shrink overflow-hidden text-ellipsis whitespace-nowrap text-right text-[10.5px] font-medium text-[var(--muted)]',
+                        'min-w-0 max-w-[52%] shrink overflow-hidden text-ellipsis whitespace-nowrap text-right text-[10.5px] font-medium leading-[1.2] text-[var(--muted)]',
                         availability.soldOut && 'text-red-600',
                     )}
                 >

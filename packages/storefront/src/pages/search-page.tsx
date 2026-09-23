@@ -24,6 +24,8 @@ import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
 import { ProductSection } from '../storefront-ui/product-section';
 import { MarketConfig, Product, ProductSearchSort, StorefrontLanguage } from '../types';
 
+import '../styles/search-surfaces.css';
+
 // TODO: Fix internal imports later
 
 export interface SearchPageProps {

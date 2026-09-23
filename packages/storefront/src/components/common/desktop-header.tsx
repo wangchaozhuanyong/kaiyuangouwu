@@ -7,6 +7,7 @@ import { useStorefront } from '../../StorefrontContext';
 import { StorefrontContentBlock } from '../../types';
 
 import { resolveBottomNavigationItems } from './bottom-navigation';
+import { LocalePreferencesSheet, LocalePreferencesTrigger } from './locale-preferences';
 
 function activeNavigationRoute(route: string): string {
     if (route === 'product' || route === 'search') return 'category';
@@ -41,6 +42,7 @@ export function DesktopHeader({
     const context = useStorefront();
     const isZh = context.language === 'zh';
     const [query, setQuery] = useState(context.route.term ?? '');
+    const [preferencesOpen, setPreferencesOpen] = useState(false);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const navigationItems = resolveBottomNavigationItems(navigationBlock, context.language);
     const activeRoute = activeNavigationRoute(context.route.name);
@@ -105,39 +107,19 @@ export function DesktopHeader({
                             value={query}
                             onChange={event => setQuery(event.target.value)}
                         />
-                        <kbd className="proto-search-kbd" aria-hidden="true">
-                            ⌘K
-                        </kbd>
+                        <button type="submit" className="proto-search-submit">
+                            {isZh ? '搜索' : 'Search'}
+                        </button>
                     </form>
                 </div>
 
                 <div className="proto-header-right">
-                    {context.currencySelectorEnabled && context.availableCurrencyCodes.length > 1 ? (
-                        <label className="proto-currency-select">
-                            <span className="sr-only">{isZh ? '选择币种' : 'Choose currency'}</span>
-                            <select
-                                value={context.displayCurrencyCode}
-                                disabled={context.cartLoading}
-                                onChange={event => void context.switchCurrency(event.target.value)}
-                            >
-                                {context.availableCurrencyCodes.map(currencyCode => (
-                                    <option key={currencyCode} value={currencyCode}>
-                                        {currencyCode}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                    ) : (
-                        <span className="proto-currency-label">{context.displayCurrencyCode}</span>
-                    )}
-                    <button
-                        type="button"
-                        className="proto-language-btn"
-                        onClick={context.toggleLanguage}
-                        aria-label={isZh ? '切换到英文' : 'Switch to Chinese'}
-                    >
-                        {isZh ? 'EN' : '中'}
-                    </button>
+                    <LocalePreferencesTrigger
+                        language={context.language}
+                        currencyCode={context.displayCurrencyCode}
+                        expanded={preferencesOpen}
+                        onClick={() => setPreferencesOpen(true)}
+                    />
                     <Link to="/cart" className="proto-cart-link" aria-label={isZh ? '购物车' : 'Cart'}>
                         <ShoppingCart className="proto-cart-icon" aria-hidden="true" />
                         <span className="proto-cart-text">{isZh ? '购物车' : 'Cart'}</span>
@@ -152,6 +134,22 @@ export function DesktopHeader({
                     </Link>
                 </div>
             </div>
+            {preferencesOpen ? (
+                <LocalePreferencesSheet
+                    language={context.language}
+                    currencyCodes={
+                        context.currencySelectorEnabled
+                            ? context.availableCurrencyCodes
+                            : [context.displayCurrencyCode]
+                    }
+                    selectedCurrencyCode={context.displayCurrencyCode}
+                    currencyLoading={context.cartLoading}
+                    marketLabel={context.market.label}
+                    onToggleLanguage={context.toggleLanguage}
+                    onSelectCurrency={context.switchCurrency}
+                    onClose={() => setPreferencesOpen(false)}
+                />
+            ) : null}
         </header>
     );
 }

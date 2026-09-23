@@ -3,10 +3,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CatalogApi } from './api/catalog';
-import { DesktopCategoryNavigation } from './components/common/desktop-category-navigation';
+import {
+    DesktopCategoryNavigation,
+    DesktopSubcategoryNavigation,
+} from './components/common/desktop-category-navigation';
 import { DesktopCatalogPage } from './pages/desktop-catalog-page';
 import { RouteState } from './storefront-router';
 import { StorefrontContext, type StorefrontContextValue } from './StorefrontContext';
+import { readStorefrontStylesheet } from './test-stylesheet';
 import { CollectionSummary } from './types';
 
 const child: CollectionSummary = {
@@ -50,6 +54,23 @@ function renderCategories(route: RouteState, overrides: Record<string, unknown> 
     );
 }
 
+function renderSubcategories(route: RouteState) {
+    return renderToStaticMarkup(
+        <StorefrontContext.Provider
+            value={
+                {
+                    route,
+                    collections,
+                    language: 'zh',
+                    navigate: vi.fn(),
+                } as unknown as StorefrontContextValue
+            }
+        >
+            <DesktopSubcategoryNavigation />
+        </StorefrontContext.Provider>,
+    );
+}
+
 describe('desktop catalog category navigation', () => {
     it.each(['home', 'category', 'search'] as const)('renders managed categories on %s', name => {
         const html = renderCategories({ name });
@@ -66,10 +87,17 @@ describe('desktop catalog category navigation', () => {
     it('selects all products on home and the selected parent and child on category pages', () => {
         expect(renderCategories({ name: 'home' }).match(/aria-pressed="true"/g)).toHaveLength(1);
         const category = renderCategories({ name: 'category', collectionId: 'parent', childId: 'child' });
-        expect(category.match(/aria-pressed="true"/g)).toHaveLength(2);
-        expect(category).toContain('一级分类');
-        expect(category).toContain('二级分类');
-        expect(category).toContain('后台子分类');
+        const subcategories = renderSubcategories({
+            name: 'category',
+            collectionId: 'parent',
+            childId: 'child',
+        });
+        expect(category.match(/aria-pressed="true"/g)).toHaveLength(1);
+        expect(category).not.toContain('一级分类');
+        expect(category).not.toContain('二级分类');
+        expect(subcategories).toContain('后台商品分类');
+        expect(subcategories).toContain('后台子分类');
+        expect(subcategories.match(/aria-pressed="true"/g)).toHaveLength(1);
     });
 
     it('keeps the primary navigation visible in the actual desktop product listing', () => {
@@ -78,7 +106,7 @@ describe('desktop catalog category navigation', () => {
                 <StorefrontContext.Provider
                     value={
                         {
-                            route: { name: 'category' },
+                            route: { name: 'category', collectionId: 'parent', childId: 'all' },
                             collections,
                             language: 'zh',
                             market: { code: 'MY', currencyCode: 'MYR', locale: 'zh-CN' },
@@ -95,9 +123,35 @@ describe('desktop catalog category navigation', () => {
                 </StorefrontContext.Provider>
             </QueryClientProvider>,
         );
-        expect(markup).toContain('一级分类');
         expect(markup).toContain('后台商品分类');
+        expect(markup).not.toContain('一级分类');
+        expect(markup).not.toContain('二级分类');
+        expect(markup).toContain('desktop-subcategory-sidebar');
+        expect(markup).not.toContain('load-more-button');
         expect(markup).toContain('aria-label="店铺政策"');
+        expect(markup).not.toContain('desktop-services-link');
+        expect(markup).not.toContain('查看店铺提供的服务与工具');
+    });
+
+    it('keeps the subcategory list scrollable without showing a native scrollbar', () => {
+        const stylesheet = readStorefrontStylesheet(['./styles/desktop-commerce.css']);
+
+        expect(stylesheet).toMatch(
+            // eslint-disable-next-line max-len -- The full hidden-scrollbar contract belongs to one rule.
+            /\.desktop-subcategory-sidebar nav\s*\{[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior:\s*contain;[^}]*scrollbar-width:\s*none;[^}]*-ms-overflow-style:\s*none;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.desktop-subcategory-sidebar nav::\-webkit-scrollbar\s*\{[^}]*display:\s*none;/,
+        );
+    });
+
+    it('keeps one standalone legal footer without duplicating the services navigation', () => {
+        const stylesheet = readStorefrontStylesheet(['./styles/desktop-commerce.css']);
+
+        expect(stylesheet).toMatch(
+            /\.desktop-catalog-footer\s*\{[^}]*margin-top:\s*36px;[^}]*border-radius:\s*var\(--skin-card-radius\);[^}]*background:\s*var\(--surface\);/,
+        );
+        expect(stylesheet).not.toContain('.desktop-services-link');
     });
 
     it('does not imply a category selection on a service page even when old filters remain', () => {

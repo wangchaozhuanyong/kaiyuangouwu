@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowLeft, CircleCheck, Mail, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
+import './styles/checkout-payment-surfaces.css';
 
 import { smartParseAddressText } from './address-parser';
 import { provinceCodeForValue, provinceDisplayName, provincesForCountry } from './address-region-options';
@@ -349,6 +350,7 @@ export function AddressesPage({
                 onBack={onBack}
                 action={
                     <button
+                        className="account-mobile-header-action"
                         type="button"
                         onClick={() => (effectiveTab === 'email' ? setEmailOpen(true) : startEdit(null))}
                         aria-label={
@@ -374,28 +376,57 @@ export function AddressesPage({
                     </button>
                 }
             />
-            {!selection && commerceMode === 'HYBRID' && (
-                <nav
-                    className="address-type-tabs"
-                    aria-label={isZh ? '收货信息类型' : 'Delivery contact type'}
-                >
+            {!selection && (
+                <div className="address-workbench-toolbar">
+                    {commerceMode === 'HYBRID' && (
+                        <nav
+                            className="address-type-tabs"
+                            aria-label={isZh ? '收货信息类型' : 'Delivery contact type'}
+                        >
+                            <button
+                                type="button"
+                                className={effectiveTab === 'physical' ? 'is-active' : undefined}
+                                onClick={() => setSelectedTab('physical')}
+                            >
+                                <MapPin />
+                                {isZh ? '实际地址' : 'Physical addresses'}
+                            </button>
+                            <button
+                                type="button"
+                                className={effectiveTab === 'email' ? 'is-active' : undefined}
+                                onClick={() => setSelectedTab('email')}
+                            >
+                                <Mail />
+                                {isZh ? '交付邮箱' : 'Delivery emails'}
+                            </button>
+                        </nav>
+                    )}
                     <button
+                        className="desktop-address-add"
                         type="button"
-                        className={effectiveTab === 'physical' ? 'is-active' : undefined}
-                        onClick={() => setSelectedTab('physical')}
+                        onClick={() => (effectiveTab === 'email' ? setEmailOpen(true) : startEdit(null))}
+                        aria-label={
+                            effectiveTab === 'email'
+                                ? isZh
+                                    ? '新增交付邮箱'
+                                    : 'Add delivery email'
+                                : isZh
+                                  ? '新增地址'
+                                  : 'Add address'
+                        }
                     >
-                        <MapPin />
-                        {isZh ? '实际地址' : 'Physical addresses'}
+                        <Plus aria-hidden="true" />
+                        <span>
+                            {effectiveTab === 'email'
+                                ? isZh
+                                    ? '新增邮箱'
+                                    : 'Add email'
+                                : isZh
+                                  ? '新增地址'
+                                  : 'Add address'}
+                        </span>
                     </button>
-                    <button
-                        type="button"
-                        className={effectiveTab === 'email' ? 'is-active' : undefined}
-                        onClick={() => setSelectedTab('email')}
-                    >
-                        <Mail />
-                        {isZh ? '交付邮箱' : 'Delivery emails'}
-                    </button>
-                </nav>
+                </div>
             )}
             {effectiveTab === 'physical' &&
                 (customer.addresses?.length ? (

@@ -12,7 +12,6 @@ import {
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
 import { FeatureHelpProvider } from './components/FeatureHelp';
 import { getNextAdminExtensionLegacyRoutes, getNextAdminExtensionRoutes } from './extensions/extension-api';
-import './extensions/installed-extensions';
 import { InitialPasswordChangeModule } from './pages/Auth/InitialPasswordChangeModule';
 import { LoginModule } from './pages/Auth/LoginModule';
 import { routeModuleLoaders } from './route-modules';

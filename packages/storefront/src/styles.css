@@ -1,9 +1,6 @@
 @import 'tailwindcss';
-@import './styles/account-security.css';
-@import './styles/logistics.css';
 @import './styles/auth-flow.css';
 @import './styles/brand-shell.css';
-@import './styles/account-catalog-surfaces.css';
 @import './styles/skeletons.css';
 @import './styles/traffic-consent.css';
 :root {
@@ -20,6 +17,18 @@
     --line-height-tight: 1.25;
     --line-height-body: 1.5;
     --line-height-relaxed: 1.65;
+    /* Experience foundations stay invariant across skins. Presets may change
+       expression, never layout density, interaction cost or accessibility. */
+    --experience-content-max: 1280px;
+    --experience-page-gutter-mobile: 16px;
+    --experience-page-gutter-tablet: 24px;
+    --experience-page-gutter-desktop: 32px;
+    --experience-control-min: 44px;
+    --experience-focus-width: 2px;
+    --experience-focus-offset: 3px;
+    --experience-motion-fast: 120ms;
+    --experience-motion-standard: 180ms;
+    --experience-ease-standard: cubic-bezier(0.2, 0, 0, 1);
     font-family: var(--font-ui);
     font-weight: 400;
     line-height: var(--line-height-body);
@@ -29,37 +38,54 @@
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     --app-width: 430px;
-    --bg: #f3f6fb;
+    /* Classic is the no-JavaScript fallback. Runtime skin selection replaces
+       these values from the shared semantic palette before first paint. */
+    --bg: #f1f5f9;
     --paper: #ffffff;
     --surface: #ffffff;
-    --soft: #f8fafc;
-    --product-media-bg: #f8fafc;
+    --surface-elevated: #ffffff;
+    --soft: #f2f2f3;
+    --product-media-bg: #f7f7f8;
     --product-media-ratio: 1 / 1;
     --text: #0f172a;
-    --muted: #64748b;
-    --line: #e2e8f0;
-    --line-subtle: #f1f5f9;
-    --accent: #635bff;
-    --accent-hover: #5149e6;
-    --accent-ink: #5149e6;
-    --accent-soft: #eeefff;
+    --muted: #686c76;
+    --line: #83868d;
+    --line-strong: #747883;
+    --line-subtle: #e4eaf1;
+    --accent: #d33c30;
+    --accent-hover: #b53429;
+    --accent-ink: #c8392e;
+    --accent-foreground: #ffffff;
+    --accent-soft: #fbefee;
+    --focus: #d33c30;
     --accent-disabled-bg: #e0e7ff;
     --accent-disabled-text: #ffffff;
     --accent-shadow: 0 8px 18px rgb(99 91 255 / 18%);
     --brand-background: #070b14;
-    --brand-primary: #635bff;
-    --brand-accent: #22d3ee;
-    --brand-highlight: #8b5cf6;
-    --success: #10b981;
-    --warning: #f59e0b;
+    --brand-primary: #d33c30;
+    --brand-accent: #d33c30;
+    --brand-highlight: #b53429;
+    --success: #047857;
+    --warning: #92400e;
     --warning-bg: #fffbeb;
     --warning-border: #fde68a;
     --warning-text: #92400e;
-    --danger: #ef4444;
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.05);
-    --shadow-md: 0 4px 14px -2px rgba(15, 23, 42, 0.08);
+    --danger: #b91c1c;
+    --skin-divider: #e4eaf1;
+    --skin-display-font:
+        -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --skin-card-radius: 16px;
+    --skin-hero-radius: 20px;
+    --skin-control-radius: 10px;
+    --skin-media-radius: 12px;
+    --skin-card-shadow: 0 8px 28px rgba(15, 23, 42, 0.07);
+    --skin-card-hover-shadow: 0 18px 38px rgba(15, 23, 42, 0.12);
+    --skin-hero-shadow: 0 18px 48px rgba(15, 23, 42, 0.09);
+    --skin-header-shadow: 0 5px 22px rgba(15, 23, 42, 0.06);
+    --radius-sm: var(--skin-control-radius);
+    --radius-md: var(--skin-card-radius);
+    --shadow-sm: var(--skin-card-shadow);
+    --shadow-md: var(--skin-hero-shadow);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --bottom-navigation-height: 66px;
     --cart-checkout-bar-height: 66px;
@@ -79,12 +105,17 @@
     box-sizing: border-box;
 }
 
+.storefront-app :where(button, a, input, select, textarea, summary):focus-visible {
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
+}
+
 html {
     min-width: 0;
     min-height: 100%;
     background: var(--bg);
     scrollbar-width: thin;
-    scrollbar-color: #cbd3d0 transparent;
+    scrollbar-color: var(--skin-divider) transparent;
     overflow-x: clip;
 }
 
@@ -107,6 +138,10 @@ body {
 /* iOS Safari and X5 zoom focused controls below 16px. Keep the visual layout
    stable while preserving user-controlled page zoom for accessibility. */
 @media (max-width: 1023px) {
+    .storefront-app {
+        --page-section-inset: var(--experience-page-gutter-mobile);
+    }
+
     input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
     select,
     textarea {
@@ -130,7 +165,7 @@ body {
    canvas instead of inheriting the 430px phone column. */
 @media (min-width: 431px) and (max-width: 1023px) {
     :root {
-        --app-width: 960px;
+        --app-width: 100%;
     }
 }
 
@@ -142,7 +177,7 @@ body::-webkit-scrollbar {
 
 html::-webkit-scrollbar-thumb,
 body::-webkit-scrollbar-thumb {
-    background: #cbd3d0;
+    background: var(--skin-divider);
     border-radius: 9999px;
 }
 
@@ -511,6 +546,19 @@ img {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    html:focus-within {
+        scroll-behavior: auto;
+    }
+
+    .storefront-app *,
+    .storefront-app *::before,
+    .storefront-app *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition: none !important;
+    }
+
     .safe-image,
     .notice-strip span,
     .showcase-card,
@@ -695,7 +743,7 @@ img {
 
 .topbar {
     height: 52px;
-    padding: 4px 10px;
+    padding: 4px var(--page-section-inset, var(--experience-page-gutter-mobile));
     display: grid;
     align-items: center;
     position: sticky;
@@ -756,8 +804,7 @@ img {
 
 .cart-topbar {
     grid-template-columns: 1fr auto;
-    padding-left: 14px;
-    padding-right: 14px;
+    padding-inline: var(--page-section-inset, var(--experience-page-gutter-mobile));
 }
 
 .cart-topbar .topbar-title {

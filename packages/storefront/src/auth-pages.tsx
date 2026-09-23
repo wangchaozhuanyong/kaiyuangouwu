@@ -39,8 +39,15 @@ import {
 import { isReferralClientFeatureEnabled } from './referral-client-feature';
 import { storefrontWebpUrl } from './responsive-image';
 import { storefrontErrorMessage } from './storefront-errors';
+import {
+    AUTH_LOGIN_HERO_FALLBACK_IMAGE,
+    AUTH_LOGIN_HERO_IMAGE,
+    AUTH_REGISTER_HERO_FALLBACK_IMAGE,
+    AUTH_REGISTER_HERO_IMAGE,
+} from './storefront-images';
 import { routeNavigateOptions, RouteState } from './storefront-router';
 import { SafeImage } from './storefront-ui/product-display';
+import './styles/auth-shell.css';
 import {
     StorefrontAuthSettings,
     StorefrontContentBlock,
@@ -196,6 +203,84 @@ function AuthMethodDivider({ language }: { language: StorefrontLanguage }) {
     );
 }
 
+function AuthFormIntro({
+    variant,
+    language,
+    storefrontName,
+}: {
+    variant: 'login' | 'register';
+    language: StorefrontLanguage;
+    storefrontName: string;
+}) {
+    const isZh = language === 'zh';
+    const isLogin = variant === 'login';
+    return (
+        <header className={`auth-form-heading auth-form-heading-${language}`}>
+            <span>{storefrontName}</span>
+            <h1>
+                {isLogin ? (isZh ? '欢迎回来' : 'Welcome back') : isZh ? '创建账户' : 'Create your account'}
+            </h1>
+            <p>
+                {isLogin
+                    ? isZh
+                        ? '登录后查看订单、管理账户并继续使用店铺服务。'
+                        : 'Sign in to view orders, manage your account, and continue using store services.'
+                    : isZh
+                      ? '验证邮箱并完成注册，开始选购商品与使用店铺服务。'
+                      : 'Verify your email and create an account to shop and use store services.'}
+            </p>
+        </header>
+    );
+}
+
+function AuthAssuranceRail({ language }: { language: StorefrontLanguage }) {
+    const isZh = language === 'zh';
+    const items = [
+        {
+            icon: ShieldCheck,
+            title: isZh ? '账户安全' : 'Account security',
+            description: isZh ? '登录信息加密保护' : 'Protected sign-in details',
+        },
+        {
+            icon: ShoppingBag,
+            title: isZh ? '订单可查' : 'Order tracking',
+            description: isZh ? '购买记录集中管理' : 'Purchases in one place',
+        },
+        {
+            icon: Sparkles,
+            title: isZh ? '服务统一' : 'Unified services',
+            description: isZh ? '商品与工具一个账户' : 'One account for store services',
+        },
+        {
+            icon: Headphones,
+            title: isZh ? '客服支持' : 'Customer support',
+            description: isZh ? '遇到问题及时联系' : 'Help when you need it',
+        },
+    ];
+
+    return (
+        <section
+            className="auth-assurance-rail"
+            aria-label={isZh ? '账户服务保障' : 'Account service benefits'}
+        >
+            {items.map(item => {
+                const Icon = item.icon;
+                return (
+                    <div className="auth-assurance-item" key={item.title}>
+                        <span className="auth-assurance-icon" aria-hidden="true">
+                            <Icon />
+                        </span>
+                        <span>
+                            <strong>{item.title}</strong>
+                            <small>{item.description}</small>
+                        </span>
+                    </div>
+                );
+            })}
+        </section>
+    );
+}
+
 function useAuthNavigate(returnTo?: RouteState['returnTo'], returnVariantId?: string) {
     const navigate = useNavigate();
     return (route: AuthRoute, replace = false) => {
@@ -291,16 +376,10 @@ export function LoginPage({
         <AuthLayout
             title={isZh ? '登录' : 'Sign in'}
             heroVariant="login"
+            showDefaultHero
             heroContent={authVisualContent}
             {...{ language, storefrontName, logoUrl, onBack }}
         >
-            <AuthRouteTabs
-                active="login"
-                language={language}
-                onLogin={() => navigateTo({ name: 'login' }, true)}
-                onRegister={() => navigateTo({ name: 'register' }, true)}
-            />
-            <h1 className="visually-hidden">{isZh ? '登录' : 'Sign in'}</h1>
             {autoRegistrationEmail ? (
                 <AuthResult
                     icon={<CircleCheck />}
@@ -328,6 +407,7 @@ export function LoginPage({
                 </AuthResult>
             ) : (
                 <>
+                    <AuthFormIntro variant="login" {...{ language, storefrontName }} />
                     {authSettings.emailPasswordEnabled ? (
                         <form
                             className="auth-account-form"
@@ -391,6 +471,12 @@ export function LoginPage({
                                 : 'No sign-in method is enabled for this store'}
                         </p>
                     ) : null}
+                    <p className="auth-switch">
+                        <span>{isZh ? '还没有账户？' : 'New to this store?'}</span>
+                        <button type="button" onClick={() => navigateTo({ name: 'register' }, true)}>
+                            {isZh ? '立即注册' : 'Create an account'}
+                        </button>
+                    </p>
                 </>
             )}
             {(authSettings.emailAutoRegistrationEnabled || googleAvailable) && (
@@ -571,6 +657,7 @@ export function RegisterPage({
         <AuthLayout
             title={isZh ? '注册' : 'Create account'}
             heroVariant="register"
+            showDefaultHero
             heroContent={authVisualContent}
             {...{ language, storefrontName, logoUrl, onBack }}
         >
@@ -632,13 +719,7 @@ export function RegisterPage({
                 </AuthResult>
             ) : (
                 <>
-                    <AuthRouteTabs
-                        active="register"
-                        language={language}
-                        onLogin={() => navigateTo({ name: 'login' }, true)}
-                        onRegister={() => navigateTo({ name: 'register' }, true)}
-                    />
-                    <h1 className="visually-hidden">{isZh ? '注册' : 'Register'}</h1>
+                    <AuthFormIntro variant="register" {...{ language, storefrontName }} />
                     {authSettings.emailPasswordEnabled ? (
                         <form
                             className="auth-account-form"
@@ -796,6 +877,12 @@ export function RegisterPage({
                                 : 'No registration method is enabled for this store'}
                         </p>
                     ) : null}
+                    <p className="auth-switch">
+                        <span>{isZh ? '已有账户？' : 'Already have an account?'}</span>
+                        <button type="button" onClick={() => navigateTo({ name: 'login' }, true)}>
+                            {isZh ? '立即登录' : 'Sign in'}
+                        </button>
+                    </p>
                     <AuthLegalNotice
                         content={legalContent}
                         language={language}
@@ -1250,6 +1337,7 @@ function AuthLayout({
     storefrontName,
     logoUrl,
     heroContent,
+    showDefaultHero = false,
     onBack,
     children,
 }: {
@@ -1259,6 +1347,7 @@ function AuthLayout({
     storefrontName: string;
     logoUrl?: string | null;
     heroContent?: StorefrontContentBlock;
+    showDefaultHero?: boolean;
     onBack: () => void;
     children: ReactNode;
 }) {
@@ -1266,20 +1355,37 @@ function AuthLayout({
     const heroMessage = authVisualVariant
         ? resolveAuthVisualMessage(heroContent, authVisualVariant, language)
         : null;
-    const heroStyle = authVisualVariant
-        ? ({
-              '--auth-hero-text-color': 'var(--auth-visual-foreground)',
-              '--auth-hero-overlay-color': 'var(--auth-visual-background)',
-              '--auth-hero-accent-color': 'var(--auth-accent)',
-          } as CSSProperties)
-        : undefined;
+    const heroStyle =
+        authVisualVariant && heroContent
+            ? ({
+                  '--auth-hero-text-color': 'var(--auth-visual-foreground)',
+                  '--auth-hero-overlay-color': 'var(--auth-visual-background)',
+                  '--auth-hero-accent-color': 'var(--auth-visual-accent)',
+              } as CSSProperties)
+            : undefined;
     const managedHeroSrc = heroContent?.imageUrl?.trim();
     const heroImageTone = useImageTone(managedHeroSrc);
     const hasManagedHero = Boolean(authVisualVariant && heroContent);
+    const defaultHeroSrc = showDefaultHero
+        ? authVisualVariant === 'login'
+            ? AUTH_LOGIN_HERO_IMAGE
+            : authVisualVariant === 'register'
+              ? AUTH_REGISTER_HERO_IMAGE
+              : null
+        : null;
+    const defaultHeroFallbackSrc = showDefaultHero
+        ? authVisualVariant === 'login'
+            ? AUTH_LOGIN_HERO_FALLBACK_IMAGE
+            : authVisualVariant === 'register'
+              ? AUTH_REGISTER_HERO_FALLBACK_IMAGE
+              : null
+        : null;
+    const heroImageSrc = managedHeroSrc ? authOriginalImageUrl(managedHeroSrc) : defaultHeroSrc;
+    const heroFallbackSrc = managedHeroSrc || defaultHeroFallbackSrc;
 
     return (
         <main
-            className={`page subpage auth-page auth-page-${heroVariant}${hasManagedHero ? ' auth-page-managed' : ''}`}
+            className={`page subpage auth-page auth-page-${heroVariant}${hasManagedHero ? ' auth-page-managed' : ''}${heroImageSrc ? ' auth-page-has-image' : ''}`}
             aria-label={title}
             style={authVisualStyle(heroContent, heroImageTone)}
         >
@@ -1288,12 +1394,12 @@ function AuthLayout({
                 data-image-tone={heroImageTone}
                 style={heroStyle}
             >
-                {managedHeroSrc && (
+                {heroImageSrc && (
                     <SafeImage
-                        src={authOriginalImageUrl(managedHeroSrc)}
-                        fallbackSrc={managedHeroSrc}
+                        src={heroImageSrc}
+                        fallbackSrc={heroFallbackSrc ?? heroImageSrc}
                         imageKind="detail"
-                        sizes="(min-width: 1024px) 640px, 100vw"
+                        sizes="(min-width: 1024px) 640px, 1px"
                         alt=""
                         loading="eager"
                         decoding="async"
@@ -1407,11 +1513,22 @@ function AuthLayout({
                     {!heroMessage && <h2 className="auth-hero-title-fallback">{title}</h2>}
                 </div>
             </section>
+            {authVisualVariant ? (
+                <button
+                    className="auth-mobile-back-button"
+                    type="button"
+                    onClick={onBack}
+                    aria-label={language === 'zh' ? '返回' : 'Back'}
+                >
+                    <ArrowLeft aria-hidden="true" />
+                </button>
+            ) : null}
             <section className="login-content">
                 <div className="auth-form-column">
                     <div className="auth-card-content">{children}</div>
                 </div>
             </section>
+            {authVisualVariant ? <AuthAssuranceRail language={language} /> : null}
         </main>
     );
 }
@@ -1548,34 +1665,6 @@ function SubmitButton({
             {submitting && <span className="auth-button-spinner" aria-hidden="true" />}
             <span>{submitting ? busy : idle}</span>
         </button>
-    );
-}
-
-function AuthRouteTabs({
-    active,
-    language,
-    onLogin,
-    onRegister,
-}: {
-    active: 'login' | 'register';
-    language: StorefrontLanguage;
-    onLogin: () => void;
-    onRegister: () => void;
-}) {
-    const isZh = language === 'zh';
-    return (
-        <nav className="auth-route-tabs" aria-label={isZh ? '账户操作' : 'Account actions'}>
-            <button type="button" aria-current={active === 'login' ? 'page' : undefined} onClick={onLogin}>
-                {isZh ? '登录' : 'Sign in'}
-            </button>
-            <button
-                type="button"
-                aria-current={active === 'register' ? 'page' : undefined}
-                onClick={onRegister}
-            >
-                {isZh ? '注册' : 'Register'}
-            </button>
-        </nav>
     );
 }
 

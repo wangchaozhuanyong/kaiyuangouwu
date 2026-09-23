@@ -5,8 +5,7 @@ import {
     prefetchProductAsset,
     PriceDisplay,
     ProductImage,
-    sanitizeProductSubtitle,
-    trimText,
+    resolveProductSubtitle,
 } from '../../storefront-ui/product-display';
 import { MarketConfig, Product, StorefrontLanguage } from '../../types';
 
@@ -106,7 +105,7 @@ export function ProductRow({
     const variant = product.variants[0];
     const availability = productAvailability(variant);
     const smartInfo = buildProductRowSmartInfo(product, language);
-    const subtitle = sanitizeProductSubtitle(product.description, product.name, 48);
+    const subtitle = resolveProductSubtitle(product, 48);
     return (
         <article
             className={`product-row${layout === 'catalog' ? ' product-catalog-card' : ''}`}

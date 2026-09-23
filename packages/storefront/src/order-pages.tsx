@@ -41,6 +41,8 @@ import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
 import { SafeImage } from './storefront-ui/product-display';
+import './styles/checkout-payment-surfaces.css';
+import './styles/logistics.css';
 import { orderPageStyles, pageClassName } from './tailwind/order-page-styles';
 import { TaxSummaryRows } from './tax-summary';
 import {
@@ -259,9 +261,7 @@ export function OrdersPage({
     return (
         <main className={orderPageClassName('page subpage orders-page')}>
             {desktop ? (
-                <div className="desktop-orders-heading">
-                    <h1>{compactCopy.orders.title}</h1>
-                </div>
+                <h1 className="desktop-orders-heading">{compactCopy.orders.title}</h1>
             ) : (
                 <SubHeader
                     title={compactCopy.orders.title}
