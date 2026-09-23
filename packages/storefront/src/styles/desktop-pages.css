@@ -730,6 +730,8 @@
     }
     .desktop-store-layout .cart-checkout-bar > button {
         width: 100%;
+        min-height: 48px;
+        font-size: 15px;
         border-radius: var(--skin-control-radius);
         box-shadow: var(--accent-shadow);
     }
