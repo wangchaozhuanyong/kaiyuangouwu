@@ -55,6 +55,10 @@
         color: var(--admin-text-secondary);
     }
 
+    :where(table, dl, input[type='number']) {
+        font-variant-numeric: tabular-nums;
+    }
+
     #root :where(button, a, input, select, textarea, summary):focus-visible {
         outline: var(--admin-focus-width) solid var(--admin-focus);
         outline-offset: var(--admin-focus-offset);

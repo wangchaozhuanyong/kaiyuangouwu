@@ -485,125 +485,24 @@ export function renderColorfulQuickIcon(label: string, index: number, imageUrl?:
     }
 
     const cleanLabel = (label || '').toLowerCase();
+    const fallbacks = [LayoutGrid, ShoppingBag, Sparkles, Download, ShieldCheck];
+    const Icon = /代充|充值|topup/.test(cleanLabel)
+        ? Zap
+        : /中转|api|hub|ai/.test(cleanLabel)
+          ? Cpu
+          : /apple|苹果|服务/.test(cleanLabel)
+            ? Smartphone
+            : /海外|账号|global|account/.test(cleanLabel)
+              ? Globe
+              : /保障|售后|质保|support/.test(cleanLabel)
+                ? ShieldCheck
+                : /券|coupon/.test(cleanLabel)
+                  ? TicketPercent
+                  : fallbacks[index % fallbacks.length];
 
-    if (cleanLabel.includes('代充') || cleanLabel.includes('充值') || cleanLabel.includes('topup')) {
-        return (
-            <span
-                className="colorful-icon-badge"
-                style={{ background: 'linear-gradient(135deg, #FF5E62 0%, #FF9966 100%)', color: '#fff' }}
-            >
-                <Zap style={{ width: 22, height: 22, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }} />
-            </span>
-        );
-    }
-    if (
-        cleanLabel.includes('中转') ||
-        cleanLabel.includes('api') ||
-        cleanLabel.includes('hub') ||
-        cleanLabel.includes('ai')
-    ) {
-        return (
-            <span
-                className="colorful-icon-badge"
-                style={{ background: 'linear-gradient(135deg, #2563EB 0%, #06B6D4 100%)', color: '#fff' }}
-            >
-                <Cpu style={{ width: 22, height: 22, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }} />
-            </span>
-        );
-    }
-    if (cleanLabel.includes('apple') || cleanLabel.includes('苹果') || cleanLabel.includes('服务')) {
-        return (
-            <span
-                className="colorful-icon-badge"
-                style={{ background: 'linear-gradient(135deg, #635BFF 0%, #8B5CF6 100%)', color: '#fff' }}
-            >
-                <Smartphone
-                    style={{ width: 22, height: 22, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }}
-                />
-            </span>
-        );
-    }
-    if (
-        cleanLabel.includes('海外') ||
-        cleanLabel.includes('账号') ||
-        cleanLabel.includes('global') ||
-        cleanLabel.includes('account')
-    ) {
-        return (
-            <span
-                className="colorful-icon-badge"
-                style={{ background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)', color: '#fff' }}
-            >
-                <Globe style={{ width: 22, height: 22, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }} />
-            </span>
-        );
-    }
-    if (
-        cleanLabel.includes('保障') ||
-        cleanLabel.includes('售后') ||
-        cleanLabel.includes('质保') ||
-        cleanLabel.includes('support')
-    ) {
-        return (
-            <span
-                className="colorful-icon-badge"
-                style={{ background: 'linear-gradient(135deg, #D97706 0%, #F59E0B 100%)', color: '#fff' }}
-            >
-                <ShieldCheck
-                    style={{ width: 22, height: 22, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }}
-                />
-            </span>
-        );
-    }
-    if (cleanLabel.includes('券') || cleanLabel.includes('coupon')) {
-        return (
-            <span
-                className="colorful-icon-badge"
-                style={{ background: 'linear-gradient(135deg, #DC2626 0%, #F87171 100%)', color: '#fff' }}
-            >
-                <TicketPercent
-                    style={{ width: 22, height: 22, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }}
-                />
-            </span>
-        );
-    }
-
-    const fallbacks = [
-        <span
-            key="1"
-            className="colorful-icon-badge"
-            style={{ background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)', color: '#fff' }}
-        >
-            <LayoutGrid style={{ width: 22, height: 22 }} />
-        </span>,
-        <span
-            key="2"
-            className="colorful-icon-badge"
-            style={{ background: 'linear-gradient(135deg, #EC4899 0%, #F43F5E 100%)', color: '#fff' }}
-        >
-            <ShoppingBag style={{ width: 22, height: 22 }} />
-        </span>,
-        <span
-            key="3"
-            className="colorful-icon-badge"
-            style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #FB923C 100%)', color: '#fff' }}
-        >
-            <Sparkles style={{ width: 22, height: 22 }} />
-        </span>,
-        <span
-            key="4"
-            className="colorful-icon-badge"
-            style={{ background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)', color: '#fff' }}
-        >
-            <Download style={{ width: 22, height: 22 }} />
-        </span>,
-        <span
-            key="5"
-            className="colorful-icon-badge"
-            style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%)', color: '#fff' }}
-        >
-            <ShieldCheck style={{ width: 22, height: 22 }} />
-        </span>,
-    ];
-    return fallbacks[index % fallbacks.length];
+    return (
+        <span className="colorful-icon-badge" aria-hidden="true">
+            <Icon />
+        </span>
+    );
 }

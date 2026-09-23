@@ -21,11 +21,10 @@ function product(overrides: Partial<Product>): Product {
 
 describe('product card subtitle', () => {
     it('uses the shared skin elevation instead of a dark mobile perimeter', () => {
-        const stylesheet = readStorefrontStylesheet(['./styles/visual-presets.css']);
+        const stylesheet = readStorefrontStylesheet(['./styles/product-card.css']);
 
         expect(stylesheet).toMatch(
-            // eslint-disable-next-line max-len -- This expression guards the complete borderless card treatment.
-            /@media \(max-width:\s*1023px\)[\s\S]*?html\[data-storefront-preset\]\s+\.product-card\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--surface\);[^}]*box-shadow:\s*var\(--skin-card-shadow,\s*var\(--shadow-sm\)\);/u,
+            /\.product-card\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--surface\);[^}]*box-shadow:\s*var\(--skin-card-shadow\);/u,
         );
     });
 

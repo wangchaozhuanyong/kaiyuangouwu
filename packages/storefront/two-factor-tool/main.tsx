@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import {
+    resolveStorefrontSemanticPalette,
+    semanticPaletteCssVariables,
+    storefrontSkinCssVariables,
+} from '../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import { TwoFactorPage } from '../src/client-plugins/two-factor/two-factor-page';
 import { ActiveCustomer, StorefrontLanguage } from '../src/types';
 
@@ -78,4 +83,12 @@ function IsolatedVault() {
 }
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing vault root');
+// The isolated document has no storefront shell. Give the shared controls their
+// semantic defaults without changing the cross-origin session protocol.
+for (const [property, value] of Object.entries({
+    ...semanticPaletteCssVariables(resolveStorefrontSemanticPalette('classic')),
+    ...storefrontSkinCssVariables('classic'),
+})) {
+    document.documentElement.style.setProperty(property, value);
+}
 createRoot(root).render(<IsolatedVault />);

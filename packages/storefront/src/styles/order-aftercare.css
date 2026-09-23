@@ -1,0 +1,393 @@
+/* Shared by order details and payment confirmation. Skins supply surfaces and status tokens. */
+.digital-delivery-panel,
+.after-sales-card {
+    min-width: 0;
+    padding: 20px;
+    border-radius: var(--skin-card-radius);
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--skin-card-shadow);
+    overflow-wrap: anywhere;
+}
+
+.digital-delivery-panel {
+    margin-top: 12px;
+}
+.digital-delivery-panel > header {
+    padding-bottom: 16px;
+}
+.digital-delivery-panel > header > div,
+.after-sales-card > header > span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.digital-delivery-panel > header svg,
+.after-sales-card > header svg {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    color: var(--accent-ink);
+}
+.digital-delivery-panel > header small {
+    display: block;
+    margin-top: 6px;
+    color: var(--muted);
+    line-height: 1.6;
+}
+.digital-delivery-panel > div > article {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    padding-block: 16px;
+    border-top: 1px solid var(--line);
+}
+.digital-delivery-panel > div > article:last-child {
+    padding-bottom: 0;
+}
+.digital-delivery-panel article > span,
+.digital-delivery-panel article strong,
+.digital-delivery-panel article small {
+    display: block;
+    min-width: 0;
+}
+.digital-delivery-panel article strong {
+    font-weight: var(--font-weight-semibold);
+    line-height: 1.6;
+}
+.digital-delivery-panel article small {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+}
+.digital-delivery-panel article em {
+    justify-self: start;
+    max-width: 100%;
+    padding: 6px 10px;
+    border-radius: var(--skin-control-radius);
+    background: var(--soft);
+    color: var(--text-soft);
+    font-size: 12px;
+    line-height: 1.6;
+    font-style: normal;
+}
+.digital-delivery-panel article a {
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 10px 16px;
+    border-radius: var(--skin-control-radius);
+    background: var(--accent);
+    color: var(--accent-foreground);
+    text-decoration: none;
+}
+.digital-delivery-panel article a svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+}
+.digital-delivery-panel article a:hover {
+    background: var(--accent-hover);
+}
+
+.after-sales-list {
+    display: grid;
+    align-items: start;
+    gap: 16px;
+    padding: 16px 12px 28px;
+}
+.after-sales-card > header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+}
+.after-sales-card > header small {
+    color: var(--muted);
+    font-size: 12px;
+}
+.after-sales-card > dl {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding-block: 16px;
+    border-block: 1px solid var(--line);
+}
+.after-sales-card > dl > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: 12px;
+}
+.after-sales-card dt {
+    color: var(--muted);
+}
+.after-sales-card dd {
+    margin: 0;
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+}
+.after-sales-order-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-height: 44px;
+    margin-top: 12px;
+    padding: 10px 0;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    text-align: start;
+    overflow-wrap: anywhere;
+}
+.after-sales-order-link span {
+    min-width: 0;
+}
+.after-sales-order-link svg {
+    width: 17px;
+    height: 17px;
+    flex: none;
+}
+.after-sales-items {
+    display: grid;
+    gap: 12px;
+    padding-bottom: 16px;
+}
+.after-sales-items :is(strong, small) {
+    display: block;
+}
+.after-sales-items strong {
+    font-weight: var(--font-weight-semibold);
+    line-height: 1.6;
+}
+.after-sales-items small {
+    margin-top: 4px;
+    color: var(--muted);
+}
+.after-sales-instructions,
+.after-sales-tracking,
+.after-sales-exception {
+    margin: 16px 0 0;
+    padding: 12px;
+    border-radius: var(--skin-control-radius);
+    background: var(--soft);
+    color: var(--text-soft);
+    font-size: 13px;
+    line-height: 1.6;
+}
+.after-sales-instructions p {
+    margin: 6px 0 0;
+    white-space: pre-wrap;
+}
+.after-sales-exception {
+    background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+    color: var(--danger);
+}
+.after-sales-card details {
+    margin-top: 12px;
+}
+.after-sales-card summary {
+    min-height: 44px;
+    padding-block: 12px;
+    cursor: pointer;
+    color: var(--accent-ink);
+}
+.after-sales-card ol {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+}
+.after-sales-card li {
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr);
+    gap: 12px;
+    padding-bottom: 16px;
+}
+.after-sales-card li > span {
+    width: 8px;
+    height: 8px;
+    margin-top: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+.after-sales-card li p {
+    margin: 4px 0;
+    line-height: 1.6;
+}
+.after-sales-card li small {
+    color: var(--muted);
+}
+.after-sales-cancel,
+.after-sales-confirm-delivery,
+.after-sales-return-form button,
+.after-sales-submit-actions button {
+    min-height: 44px;
+    padding: 10px 16px;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
+    font-weight: var(--font-weight-semibold);
+}
+.after-sales-cancel,
+.after-sales-confirm-delivery {
+    margin-top: 12px;
+}
+.after-sales-confirm-delivery {
+    width: 100%;
+}
+.after-sales-confirm-delivery,
+.after-sales-return-form button,
+.after-sales-submit-actions .primary-action {
+    background: var(--accent);
+    color: var(--accent-foreground);
+}
+.after-sales-card button:disabled,
+.after-sales-submit-actions button:disabled {
+    background: var(--accent-disabled-bg);
+    color: var(--accent-disabled-text);
+    cursor: not-allowed;
+}
+.after-sales-return-form {
+    display: grid;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+}
+.after-sales-return-form label,
+.after-sales-field {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+}
+.after-sales-field {
+    margin-top: 16px;
+}
+.after-sales-field > span,
+.after-sales-return-form label > span {
+    font-weight: var(--font-weight-medium);
+}
+.after-sales-field small {
+    color: var(--muted);
+}
+.after-sales-field :is(select, textarea),
+.after-sales-return-form input,
+.after-sales-quantity input {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
+    font: inherit;
+}
+.after-sales-field textarea {
+    min-height: 112px;
+    resize: vertical;
+}
+.after-sales-line-selection {
+    margin: 0 0 16px;
+    padding: 0;
+    border: 0;
+}
+.after-sales-line-selection legend {
+    margin-bottom: 8px;
+    font-weight: var(--font-weight-medium);
+}
+.after-sales-line-selection > div {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-block: 12px;
+    border-bottom: 1px solid var(--line);
+}
+.after-sales-line-selection > div > label:first-child {
+    display: flex;
+    align-items: center;
+    flex: 1 1 160px;
+    min-width: 0;
+    min-height: 44px;
+    gap: 10px;
+}
+.after-sales-line-selection label strong {
+    font-weight: var(--font-weight-medium);
+    overflow-wrap: anywhere;
+}
+.after-sales-line-selection > .inline-notice {
+    padding: 12px;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--warning-bg);
+    color: var(--warning-text);
+    line-height: 1.6;
+    font-size: 12px;
+}
+.after-sales-quantity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.after-sales-quantity input {
+    width: 64px;
+    padding-inline: 6px;
+}
+.after-sales-request-total {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    margin-top: 16px;
+    padding: 12px;
+    border-radius: var(--skin-control-radius);
+    background: var(--soft);
+}
+.after-sales-request-total strong {
+    color: var(--accent-ink);
+}
+.after-sales-request-total small {
+    grid-column: 1 / -1;
+    color: var(--muted);
+    line-height: 1.6;
+}
+.after-sales-sheet > form {
+    padding: 20px 16px calc(20px + var(--safe-bottom));
+}
+.after-sales-submit-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 20px;
+}
+
+@media (min-width: 768px) {
+    .digital-delivery-panel > div > article {
+        grid-template-columns: minmax(0, 1fr) minmax(140px, 30%);
+        gap: 20px;
+    }
+    .digital-delivery-panel article :is(em, a) {
+        justify-self: end;
+    }
+}
+@media (min-width: 1024px) {
+    .digital-delivery-panel {
+        margin-top: 0;
+        padding: 24px;
+    }
+    .after-sales-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+        padding: 24px 0 28px;
+    }
+    .after-sales-card {
+        padding: 24px;
+    }
+}

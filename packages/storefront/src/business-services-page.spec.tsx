@@ -124,13 +124,16 @@ describe('business services page', () => {
             /\.business-services-page \.category-client-plugin-slot\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
         );
         expect(stylesheet).toMatch(
-            /@media \(min-width: 1024px\)[\s\S]*?\.business-services-page \.category-client-plugin-slot\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/,
+            /@media \(min-width: 1024px\)[\s\S]*?\.business-services-page \.category-client-plugin-slot\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;/,
         );
+        const desktopCard = Array.from(
+            stylesheet.matchAll(/\.business-services-page \.category-client-plugin\s*\{([^}]+)\}/g),
+            match => match[1],
+        ).find(block => block.includes('flex: 1 1'));
+        expect(desktopCard).toContain('grid-template-columns: minmax(0, 1fr);');
+        expect(desktopCard).toContain('grid-template-rows: auto 1fr auto;');
         expect(stylesheet).toMatch(
-            /@media \(min-width: 1024px\)[\s\S]*?\.business-services-page \.category-client-plugin\s*\{[^}]*grid-template-columns:\s*48px minmax\(0, 1fr\)/,
-        );
-        expect(stylesheet).toMatch(
-            /@media \(min-width: 1024px\)[\s\S]*?\.business-services-page \.category-client-plugin-icon\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*1 \/ span 2/,
+            /@media \(min-width: 1024px\)[\s\S]*?\.business-services-page \.category-client-plugin-icon\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*1;/,
         );
     });
 

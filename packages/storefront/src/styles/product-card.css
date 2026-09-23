@@ -1,0 +1,189 @@
+/* One card composition for home, catalog, recommendations and favorites.
+   Grid owners choose columns; the card owns media, rhythm and interaction. */
+.product-card {
+    --product-card-inset: 12px;
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    padding-bottom: 12px;
+    border: 0;
+    border-radius: var(--skin-card-radius);
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--skin-card-shadow);
+    transition: transform var(--experience-motion-fast) var(--experience-ease-standard);
+}
+
+.product-card-detail-link {
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    cursor: pointer;
+}
+
+.product-card:focus-within {
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
+}
+
+.product-card-favorite {
+    position: absolute;
+    z-index: 2;
+    top: 6px;
+    right: 6px;
+    display: grid;
+    place-items: center;
+    width: var(--experience-control-min);
+    height: var(--experience-control-min);
+    padding: 0;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--surface-elevated);
+    color: var(--muted);
+    box-shadow: var(--control-elevation);
+    cursor: pointer;
+}
+
+.product-card-favorite:is(:hover, .is-favorite) {
+    color: var(--accent-ink);
+    background: var(--accent-soft);
+}
+
+.product-card-favorite svg {
+    width: 18px;
+    height: 18px;
+}
+
+.product-card-media {
+    width: 100%;
+    aspect-ratio: var(--product-media-ratio);
+    overflow: hidden;
+    border-radius: var(--skin-card-radius) var(--skin-card-radius) 0 0;
+    background: var(--product-media-bg);
+}
+
+.product-card-media :is(.responsive-picture, .image-placeholder, img) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    object-fit: contain;
+}
+
+.product-card-media .image-placeholder {
+    display: grid;
+    background: var(--product-media-bg);
+}
+
+.product-card-name,
+.product-card-subtitle,
+.product-card-meta,
+.product-card > footer {
+    padding-inline: var(--product-card-inset);
+}
+
+.product-card-name {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    margin-top: 10px;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: var(--font-weight-semibold);
+    line-height: 1.4;
+    text-align: left;
+}
+
+.product-card-subtitle {
+    display: block;
+    margin-top: 4px;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.product-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.product-card-delivery {
+    color: var(--accent-ink);
+    font-weight: var(--font-weight-medium);
+}
+
+.product-card > footer {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 12px;
+}
+
+.product-card-price {
+    min-width: 0;
+    font-family: var(--font-numeric);
+    font-variant-numeric: tabular-nums;
+}
+
+.product-card-price .price-lockup {
+    font-size: 18px;
+    font-weight: var(--font-weight-bold);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+}
+
+.product-card-stock {
+    min-width: 0;
+    max-width: 52%;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11px;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.product-card-stock.is-sold-out {
+    color: var(--danger);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .product-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--skin-card-hover-shadow);
+    }
+}
+
+@media (min-width: 1024px) {
+    .product-card {
+        --product-card-inset: 16px;
+        padding-bottom: 16px;
+    }
+
+    .product-card-name {
+        margin-top: 14px;
+        font-size: 15px;
+    }
+
+    .product-card-subtitle {
+        font-size: 13px;
+    }
+}

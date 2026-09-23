@@ -789,7 +789,6 @@ export function HomePage() {
                     loading={
                         previewHomeScenario === 'loading' || (previewHomeScenario !== 'empty' && loading)
                     }
-                    collections={collections}
                     contentBlocks={contentBlocks}
                     language={language}
                     storefrontName={storefrontName}
@@ -798,7 +797,6 @@ export function HomePage() {
                     market={market}
                     locale={locale}
                     onProductSelect={id => navigateTo({ name: 'product', id })}
-                    onCollectionSelect={collectionId => navigateTo({ name: 'category', collectionId })}
                     onContentTarget={onContentTarget}
                 />
             </main>

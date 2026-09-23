@@ -99,7 +99,7 @@ export function AdminFeedbackCenter() {
                     role={item.kind === 'error' ? 'alert' : 'status'}
                     aria-atomic="true"
                     data-admin-feedback-kind={item.kind}
-                    className={`pointer-events-auto flex items-start gap-3 rounded-xl border p-4 shadow-xl backdrop-blur ${feedbackClassName(item.kind)}`}
+                    className={`pointer-events-auto flex items-start gap-3 rounded-xl border p-4 shadow-[var(--admin-shadow-surface)] ${feedbackClassName(item.kind)}`}
                 >
                     <FeedbackIcon kind={item.kind} />
                     <div className="min-w-0 flex-1">
@@ -159,7 +159,8 @@ export function AdminFeedbackCenter() {
                                             action.onSelect();
                                             if (action.dismissOnSelect !== false) dismiss(item.id);
                                         }}
-                                        className="rounded-md border border-current/25 bg-white/60 px-2.5 py-1 text-xs font-semibold hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current dark:bg-black/15 dark:hover:bg-black/25"
+                                        className="rounded-md border border-current/25 bg-white/60 px-2.5 py-1 text-xs font-semibold hover:bg-white
+                                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current dark:bg-black/15 dark:hover:bg-black/25"
                                     >
                                         {action.label}
                                     </button>
@@ -171,7 +172,8 @@ export function AdminFeedbackCenter() {
                         <button
                             type="button"
                             onClick={() => dismiss(item.id)}
-                            className="-mr-1 -mt-1 rounded-md p-1 opacity-60 hover:bg-black/5 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
+                            className="-mr-1 -mt-1 rounded-md p-1 opacity-60 hover:bg-black/5 hover:opacity-100
+                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
                             aria-label="关闭通知"
                         >
                             <X className="h-4 w-4" />

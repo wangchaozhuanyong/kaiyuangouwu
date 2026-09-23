@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useLayoutEffect } from 'react';
+import { useLayoutEffect, useState } from 'react';
 
 import {
     isStorefrontVisualPresetId,
@@ -32,8 +32,11 @@ export function useStorefrontVisualPreset(
     languageCode: string,
     enabled = true,
 ) {
-    const previewPreset =
-        typeof window === 'undefined' ? null : readStorefrontPreviewPreset(window.location.search);
+    // The preview iframe is remounted for a skin switch; internal SPA navigation
+    // must not discard its selected skin when the route drops query parameters.
+    const [previewPreset] = useState(() =>
+        typeof window === 'undefined' ? null : readStorefrontPreviewPreset(window.location.search),
+    );
     const query = useQuery({
         queryKey: [
             ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), languageCode),

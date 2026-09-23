@@ -74,7 +74,7 @@ describe('category navigation labels', () => {
 
 describe('category navigation responsive spacing', () => {
     const stylesheet = readStorefrontStylesheet();
-    const presetStylesheet = readFileSync(new URL('./styles/visual-presets.css', import.meta.url), 'utf8');
+    const presetStylesheet = readFileSync(new URL('./styles/home-showcase.css', import.meta.url), 'utf8');
     const categoryPageSource = readFileSync(new URL('./pages/category-page.tsx', import.meta.url), 'utf8');
 
     it('keeps client plugin spacing symmetric at every insertion point', () => {
@@ -199,7 +199,7 @@ describe('category navigation responsive spacing', () => {
         expect(activeItemRule).toMatch(/box-shadow:\s*1px 0 0 var\(--category-results-surface\);/);
         expect(resultsRule).toMatch(/background:\s*var\(--category-results-surface\);/);
         expect(presetStylesheet).toMatch(
-            /html\[data-storefront-preset\] \.category-page \.category-layout\s*\{[^}]*--category-results-surface:\s*var\(--bg\);/,
+            /\.category-page \.category-layout\s*\{[^}]*--category-results-surface:\s*var\(--bg\);/,
         );
     });
 

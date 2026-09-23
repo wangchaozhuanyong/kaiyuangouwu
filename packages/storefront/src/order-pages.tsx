@@ -43,6 +43,8 @@ import { routeNavigateOptions } from './storefront-router';
 import { SafeImage } from './storefront-ui/product-display';
 import './styles/checkout-payment-surfaces.css';
 import './styles/logistics.css';
+import './styles/order-aftercare.css';
+import './styles/order-navigation.css';
 import { orderPageStyles, pageClassName } from './tailwind/order-page-styles';
 import { TaxSummaryRows } from './tax-summary';
 import {

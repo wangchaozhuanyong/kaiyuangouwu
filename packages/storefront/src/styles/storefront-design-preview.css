@@ -77,7 +77,9 @@
     position: relative;
 }
 
-.storefront-app[data-preview-embedded='true'] #storefront-content > :not(.storefront-preview-scenario) {
+.storefront-app[data-preview-embedded='true']
+    #storefront-content:has(> .storefront-preview-scenario)
+    > :not(.storefront-preview-scenario) {
     pointer-events: none;
 }
 

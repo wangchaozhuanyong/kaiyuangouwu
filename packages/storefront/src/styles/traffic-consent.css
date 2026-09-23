@@ -8,12 +8,11 @@
     max-width: 760px;
     margin-inline: auto;
     padding: 18px;
-    border: 1px solid rgb(148 163 184 / 34%);
-    border-radius: 18px;
-    background: rgb(15 23 42 / 96%);
-    color: #f8fafc;
-    box-shadow: 0 22px 70px rgb(15 23 42 / 35%);
-    backdrop-filter: blur(18px);
+    border: 1px solid var(--skin-divider);
+    border-radius: var(--skin-card-radius);
+    background: var(--surface-elevated);
+    color: var(--text);
+    box-shadow: var(--skin-hero-shadow);
     gap: 18px;
 }
 
@@ -25,13 +24,13 @@
 .traffic-consent-banner p {
     max-width: 520px;
     margin: 5px 0 0;
-    color: #cbd5e1;
+    color: var(--muted);
     font-size: 12px;
     line-height: 1.6;
 }
 
 .traffic-consent-banner a {
-    color: #fff;
+    color: var(--accent-ink);
     text-decoration: underline;
     text-underline-offset: 2px;
 }
@@ -39,7 +38,7 @@
 .traffic-consent-banner [role='alert'] {
     display: block;
     margin-top: 6px;
-    color: #fca5a5;
+    color: var(--danger);
     font-size: 11px;
 }
 
@@ -52,12 +51,12 @@
 
 .traffic-consent-actions button,
 .traffic-preference-button {
-    min-height: 38px;
+    min-height: var(--experience-control-min);
     padding: 0 14px;
-    border: 1px solid rgb(255 255 255 / 28%);
-    border-radius: 999px;
-    background: transparent;
-    color: inherit;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
     font-size: 12px;
     font-weight: 700;
 }
@@ -65,7 +64,7 @@
 .traffic-consent-actions button.is-primary {
     border-color: var(--accent);
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-foreground);
 }
 
 .traffic-preference-button {
@@ -73,14 +72,13 @@
     z-index: var(--layer-sticky);
     bottom: max(10px, env(safe-area-inset-bottom));
     left: max(10px, env(safe-area-inset-left));
-    min-height: 30px;
+    min-height: 36px;
     padding: 0 10px;
     border-color: var(--line);
-    background: rgb(255 255 255 / 92%);
+    background: var(--surface);
     color: var(--muted);
     box-shadow: var(--shadow-sm);
-    backdrop-filter: blur(12px);
-    font-size: 10px;
+    font-size: 11px;
 }
 
 .traffic-preference-error {
@@ -90,10 +88,10 @@
     left: max(10px, env(safe-area-inset-left));
     max-width: min(360px, calc(100vw - 20px));
     padding: 7px 10px;
-    border: 1px solid #fecaca;
-    border-radius: 10px;
-    background: #fff7f7;
-    color: #b91c1c;
+    border: 1px solid var(--skin-divider);
+    border-radius: var(--skin-control-radius);
+    background: var(--surface);
+    color: var(--danger);
     box-shadow: var(--shadow-sm);
     font-size: 11px;
 }

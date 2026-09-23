@@ -1,0 +1,180 @@
+/* One owner for checkout/purchase line geometry; skins only supply semantic colors. */
+.checkout-items article {
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+    min-height: 76px;
+    padding: 8px 0;
+}
+
+.checkout-items article + article {
+    border-top: 1px solid var(--skin-divider);
+}
+
+.checkout-items article > :is(img, picture, .responsive-picture, .image-placeholder) {
+    width: 100%;
+    height: auto;
+    aspect-ratio: var(--product-media-ratio, 1 / 1);
+    border-radius: var(--skin-control-radius);
+    overflow: hidden;
+    background: var(--product-media-bg);
+    object-fit: contain;
+    align-self: start;
+}
+
+.checkout-items article > picture img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.checkout-items article > div {
+    min-width: 0;
+}
+
+.checkout-items article strong {
+    display: block;
+    font-weight: 600;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.checkout-items article em {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    font-style: normal;
+    line-height: 1.5;
+}
+
+.checkout-items article small {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+}
+
+.checkout-line-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px;
+    text-align: right;
+}
+
+.checkout-line-meta b {
+    display: block;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.purchase-page .checkout-items article {
+    grid-template-columns: 88px minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 12px;
+    min-height: 112px;
+    padding: 8px 0 0;
+}
+
+.purchase-page .checkout-items article strong {
+    font-size: 15px;
+}
+
+.purchase-page .checkout-line-meta b {
+    color: var(--accent-ink);
+    font-size: 16px;
+}
+
+.purchase-quantity-control {
+    display: grid;
+    grid-template-columns: 44px 24px 44px;
+    align-items: center;
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
+}
+
+.purchase-quantity-control button {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    color: inherit;
+}
+
+.purchase-quantity-control button:hover:not(:disabled) {
+    background: var(--control-surface-hover);
+}
+
+.purchase-quantity-control button:active:not(:disabled) {
+    background: var(--control-surface-pressed);
+}
+
+.purchase-quantity-control button:disabled {
+    color: var(--muted);
+}
+
+.purchase-quantity-control button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.checkout-items .purchase-quantity-control small {
+    margin: 0;
+    color: var(--text);
+    text-align: center;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 370px) {
+    .purchase-page .checkout-items article {
+        grid-template-columns: 76px minmax(0, 1fr);
+        gap: 9px;
+    }
+
+    .purchase-page .checkout-line-meta {
+        grid-column: 2;
+        flex-direction: row;
+        align-items: center;
+    }
+}
+
+@media (min-width: 1024px) {
+    .checkout-items article,
+    .purchase-page .checkout-items article {
+        grid-template-columns: 76px minmax(0, 1fr) auto;
+        min-height: 104px;
+        gap: 16px;
+        padding: 14px 0;
+    }
+}
+
+@media (max-width: 1023px) {
+    :is(.purchase-page, .checkout-page) .checkout-options > button {
+        min-height: 52px;
+        margin-block: 4px;
+        padding-inline: 10px;
+        border-top: 0;
+        border-radius: var(--radius-sm);
+        background: var(--soft);
+    }
+    :is(.purchase-page, .checkout-page) .price-summary .summary-total {
+        margin-top: 8px;
+        padding-inline: 10px;
+        border-top: 0;
+        border-radius: var(--radius-sm);
+        background: var(--accent-soft);
+    }
+    :is(.purchase-page, .checkout-page) .submit-order-bar {
+        border-top: 0;
+    }
+}

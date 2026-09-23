@@ -261,8 +261,7 @@ describe('CartPage guest cart', () => {
     it('uses one responsive cart workspace and keeps the coupon in the checkout summary', () => {
         const stylesheet = readStorefrontStylesheet([
             './styles/desktop-pages.css',
-            './styles/visual-presets.css',
-            './styles/control-surfaces.css',
+            './styles/cart-layout.css',
         ]);
         expect(stylesheet).toMatch(/\.cart-page > \.product-section\s*\{[^}]*margin-top:\s*24px;/u);
         expect(stylesheet).toMatch(
@@ -275,14 +274,12 @@ describe('CartPage guest cart', () => {
             /\.desktop-store-layout \.cart-checkout-bar\s*\{[^}]*position:\s*static;[^}]*transform:\s*none;/u,
         );
         expect(stylesheet).toMatch(
-            /\.desktop-store-layout \.cart-page > \.cart-topbar\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/u,
+            /\.desktop-store-layout \.cart-topbar\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/u,
         );
         expect(stylesheet).toMatch(
-            /\.desktop-store-layout \.cart-summary-panel > \.cart-checkout-bar\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/u,
+            /\.desktop-store-layout \.cart-checkout-bar\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/u,
         );
-        expect(stylesheet).toMatch(
-            /html\[data-storefront-preset\][\s\S]*?\.cart-summary-panel > \.coupon-row,[\s\S]*?border:\s*0;/u,
-        );
+        expect(stylesheet).toMatch(/\.cart-summary-panel > \.coupon-row,[\s\S]*?border:\s*0;/u);
         expect(stylesheet).toMatch(/\.coupon-label-desktop\s*\{[^}]*display:\s*none;/u);
         expect(stylesheet).toMatch(
             /\.desktop-store-layout \.coupon-label-desktop\s*\{[^}]*display:\s*inline;/u,

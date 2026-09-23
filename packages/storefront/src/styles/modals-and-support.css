@@ -735,7 +735,6 @@
     gap: 8px 12px;
     margin-bottom: 16px;
     padding-bottom: 12px;
-    border-bottom: 1px solid #f1f5f9;
 }
 
 .support-evaluation-title {
@@ -801,7 +800,9 @@
     padding: 2px;
     cursor: pointer;
     color: #cbd5e1;
-    transition: transform 120ms ease, color 120ms ease;
+    transition:
+        transform 120ms ease,
+        color 120ms ease;
 }
 
 .support-star-btn:hover,

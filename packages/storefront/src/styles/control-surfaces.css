@@ -1,7 +1,7 @@
 /* Shared low-chrome treatment for compact utility controls. Text fields keep
    their functional boundary; selects and shell actions use tone and elevation
    so the interface does not become a grid of outlined boxes. */
-html[data-storefront-preset] select:not([multiple]) {
+:where(.storefront-app, .sheet-layer) select:not([multiple]) {
     border: 0;
     border-radius: var(--skin-control-radius, var(--radius-sm));
     background-color: var(--control-surface);
@@ -14,21 +14,21 @@ html[data-storefront-preset] select:not([multiple]) {
         transform var(--experience-motion-fast) var(--experience-ease-standard);
 }
 
-html[data-storefront-preset] select:not([multiple]):hover:not(:disabled) {
+:where(.storefront-app, .sheet-layer) select:not([multiple]):hover:not(:disabled) {
     background-color: var(--control-surface-hover);
     background-image: var(--control-surface-hover-image, none);
     box-shadow: var(--control-elevation-hover);
 }
 
-html[data-storefront-preset] select:not([multiple]):focus,
-html[data-storefront-preset] select:not([multiple]):focus-visible {
+:where(.storefront-app, .sheet-layer) select:not([multiple]):focus,
+:where(.storefront-app, .sheet-layer) select:not([multiple]):focus-visible {
     border-color: transparent;
     outline: var(--experience-focus-width) solid var(--focus, var(--accent));
     outline-offset: var(--experience-focus-offset);
     box-shadow: var(--control-elevation);
 }
 
-html[data-storefront-preset]
+:where(.storefront-app, .sheet-layer)
     :is(
         .topbar-capsule,
         .currency-select:not(.topbar-capsule *),
@@ -45,7 +45,7 @@ html[data-storefront-preset]
     box-shadow: var(--control-elevation);
 }
 
-html[data-storefront-preset]
+:where(.storefront-app, .sheet-layer)
     :is(
         .topbar-capsule,
         .currency-select:not(.topbar-capsule *),
@@ -60,7 +60,7 @@ html[data-storefront-preset]
     box-shadow: var(--control-elevation-hover);
 }
 
-html[data-storefront-preset]
+:where(.storefront-app, .sheet-layer)
     :is(
         .currency-select:not(.topbar-capsule *),
         .language-button:not(.topbar-capsule *),
@@ -73,100 +73,19 @@ html[data-storefront-preset]
     box-shadow: var(--control-elevation);
 }
 
-html[data-storefront-preset] .topbar-capsule-divider {
+:where(.storefront-app, .sheet-layer) .topbar-capsule-divider {
     background: color-mix(in srgb, var(--text) 16%, transparent);
     opacity: 1;
 }
 
-/* Content surfaces follow the same low-chrome contract as controls. Legacy
-   page styles may still provide structural borders, but the selected skin
-   resolves cards through tone, spacing and elevation. Functional boundaries
-   such as fields, quantity steppers, selected options and focus rings are not
-   included here and remain visible. */
-html[data-storefront-preset]
-    :is(
-        .cart-group,
-        .cart-summary-panel > .coupon-row,
-        .cart-main-column > .invalid-cart-lines,
-        .checkout-section,
-        .checkout-assurance,
-        .payment-test-notice,
-        .payment-method-section,
-        .payment-summary,
-        .order-card,
-        .logistics-card,
-        .after-sales-card,
-        .cart-checkout-bar,
-        .submit-order-bar,
-        .order-detail-actions
-    ) {
-    border: 0;
-    border-radius: var(--skin-card-radius);
-    background: var(--surface);
-    box-shadow: var(--skin-card-shadow);
-}
-
-html[data-storefront-preset] .cart-page :is(.cart-group > header, .desktop-cart-columns) {
-    border: 0;
-    background: var(--soft);
-}
-
-html[data-storefront-preset] .cart-page :is(.cart-line-swipe, .desktop-cart-row) {
-    border: 0;
-}
-
-/* Desktop merchandise groups use a tonal shell instead of an outline. The
-   inset rows expose that shell on every side, so light skins keep a readable
-   container silhouette while dark and warm skins inherit the same hierarchy. */
-@media (min-width: 1024px) {
-    html[data-storefront-preset] .desktop-store-layout .cart-page > .cart-topbar {
-        background: transparent;
-        box-shadow: none;
-    }
-
-    html[data-storefront-preset] .desktop-store-layout .cart-page .cart-group {
-        padding-bottom: 10px;
-        background: var(--soft);
-    }
-
-    html[data-storefront-preset]
-        .desktop-store-layout
-        .cart-page
-        :is(.cart-group > header, .desktop-cart-columns) {
-        background: transparent;
-    }
-
-    html[data-storefront-preset] .desktop-store-layout .cart-page .desktop-cart-columns {
-        padding-inline: 34px;
-    }
-
-    html[data-storefront-preset] .desktop-store-layout .cart-page .desktop-cart-row {
-        margin: 8px 10px 0;
-        background: var(--surface);
-        box-shadow: none;
-    }
-
-    html[data-storefront-preset] .desktop-store-layout .cart-summary-panel > .coupon-row {
-        margin-bottom: 18px;
-        background: var(--soft);
-        box-shadow: none;
-    }
-
-    html[data-storefront-preset] .desktop-store-layout .cart-summary-panel > .cart-checkout-bar {
-        border-radius: 0;
-        background: transparent;
-        box-shadow: none;
-    }
-}
-
-html[data-storefront-preset] .desktop-catalog-filters {
+:where(.storefront-app, .sheet-layer) .desktop-catalog-filters {
     border: 0;
     background: var(--surface);
     box-shadow: var(--skin-card-shadow, var(--shadow-sm));
 }
 
-html[data-storefront-preset] select:disabled,
-html[data-storefront-preset]
+:where(.storefront-app, .sheet-layer) select:disabled,
+:where(.storefront-app, .sheet-layer)
     :is(
         .currency-select,
         .language-button,
@@ -179,8 +98,8 @@ html[data-storefront-preset]
 }
 
 @media (prefers-reduced-motion: reduce) {
-    html[data-storefront-preset] select,
-    html[data-storefront-preset]
+    :where(.storefront-app, .sheet-layer) select,
+    :where(.storefront-app, .sheet-layer)
         :is(
             .currency-select,
             .language-button,
@@ -193,31 +112,32 @@ html[data-storefront-preset]
 }
 
 @media (forced-colors: active) {
-    html[data-storefront-preset] select:not([multiple]),
-    html[data-storefront-preset]
+    :where(.storefront-app, .sheet-layer) select:not([multiple]),
+    :where(.storefront-app, .sheet-layer)
         :is(.topbar-capsule, .currency-select, .language-button, .notice-button, .proto-language-btn) {
         border: 1px solid ButtonText;
         box-shadow: none;
     }
+}
 
-    html[data-storefront-preset]
-        :is(
-            .cart-group,
-            .cart-summary-panel > .coupon-row,
-            .cart-main-column > .invalid-cart-lines,
-            .checkout-section,
-            .checkout-assurance,
-            .payment-test-notice,
-            .payment-method-section,
-            .payment-summary,
-            .order-card,
-            .logistics-card,
-            .after-sales-card,
-            .cart-checkout-bar,
-            .submit-order-bar,
-            .order-detail-actions
-        ) {
-        border: 1px solid CanvasText;
-        box-shadow: none;
-    }
+.primary-action {
+    border-color: var(--auth-accent, var(--accent));
+    border-radius: var(--skin-control-radius);
+    background: var(--auth-accent, var(--accent));
+    color: var(--auth-button-foreground, var(--accent-foreground));
+    box-shadow: var(--accent-shadow);
+}
+
+.primary-action:hover:not(:disabled) {
+    border-color: var(--auth-accent-hover, var(--accent-hover));
+    background: var(--auth-accent-hover, var(--accent-hover));
+    color: var(--auth-button-foreground, var(--accent-foreground));
+    box-shadow: var(--accent-shadow);
+}
+
+.primary-action:disabled {
+    border-color: transparent;
+    background: var(--accent-disabled-bg);
+    color: var(--accent-disabled-text);
+    box-shadow: none;
 }

@@ -18,19 +18,6 @@
     body:has(.desktop-store-layout) {
         background: var(--bg);
     }
-    html[data-storefront-preset='neo-minimalist'],
-    html[data-storefront-preset='neo-minimalist'] body,
-    html[data-storefront-preset='neo-minimalist'] body:has(.desktop-store-layout) {
-        background: var(--bg);
-        color: var(--text);
-    }
-    html[data-storefront-preset='neo-minimalist'] .desktop-store-layout {
-        background: var(--bg);
-        color: var(--text);
-    }
-    html[data-storefront-preset='neo-minimalist'] .route-transition {
-        background: var(--bg);
-    }
     .route-transition {
         width: 100vw;
         min-height: 100dvh;
@@ -62,9 +49,7 @@
         position: sticky;
         top: 0;
         z-index: 50;
-        backdrop-filter: blur(20px) saturate(180%);
-        -webkit-backdrop-filter: blur(20px) saturate(180%);
-        background: color-mix(in srgb, var(--paper, #fff) 88%, transparent);
+        background: var(--surface);
         border-bottom: 0;
         box-shadow: var(--skin-header-shadow);
         transition:
@@ -358,13 +343,6 @@
     .desktop-store-layout .subpage-header > strong {
         flex: none;
     }
-    .desktop-store-layout .cart-topbar {
-        height: 72px;
-        padding: 0;
-        background: transparent;
-        box-shadow: none;
-        border-bottom: 0;
-    }
     .desktop-store-layout .business-services-empty {
         background: var(--paper, #fff);
         border: 0;
@@ -383,8 +361,7 @@
     .desktop-store-layout .section-header-icon-pill {
         display: none;
     }
-    .desktop-store-layout .product-grid-card,
-    .desktop-store-layout .product-card {
+    .desktop-store-layout .product-grid-card {
         border: 0;
         border-radius: var(--skin-card-radius);
         box-shadow: var(--skin-card-shadow);
@@ -394,14 +371,9 @@
             transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
             box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .desktop-store-layout :is(.product-grid-card, .product-card):hover {
+    .desktop-store-layout .product-grid-card:hover {
         transform: translateY(-4px);
         box-shadow: var(--skin-card-hover-shadow);
-    }
-    .desktop-store-layout .product-card .product-card-media {
-        border-radius: var(--skin-card-radius) var(--skin-card-radius) 0 0;
-        background: color-mix(in srgb, var(--soft, #f8fafc) 70%, transparent);
-        padding: 0;
     }
     .desktop-store-layout .product-grid-card > strong {
         padding-inline: 14px;
@@ -514,12 +486,12 @@
     }
     .desktop-account-heading h1 {
         font-size: 24px;
-        font-weight: 500;
+        font-weight: 600;
         line-height: 30px;
     }
     .desktop-account-page header h2 {
         font-size: 18px;
-        font-weight: 500;
+        font-weight: 600;
     }
     .desktop-account-page :is(header, .desktop-account-heading) button {
         display: flex;
@@ -578,7 +550,7 @@
     .desktop-member-identity h2 {
         overflow-wrap: anywhere;
         font-size: 22px;
-        font-weight: 500;
+        font-weight: 600;
     }
     .desktop-member-identity button {
         display: flex;
@@ -627,9 +599,9 @@
         background: var(--soft);
     }
     .desktop-member-asset strong {
-        color: var(--accent);
+        color: var(--accent-ink);
         font-size: 26px;
-        font-weight: 500;
+        font-weight: 600;
     }
     .desktop-member-asset span {
         color: var(--muted);
@@ -664,9 +636,9 @@
         border-left: 0;
     }
     .desktop-order-statuses strong {
-        color: var(--accent);
+        color: var(--accent-ink);
         font-size: 22px;
-        font-weight: 500;
+        font-weight: 600;
     }
     .desktop-order-statuses svg {
         width: 14px;
@@ -688,7 +660,7 @@
     }
     .desktop-orders-empty strong {
         font-size: 16px;
-        font-weight: 500;
+        font-weight: 600;
     }
     .desktop-orders-empty p,
     .desktop-delivery-summary p {
@@ -960,7 +932,7 @@
         flex-wrap: wrap;
         align-items: center;
         gap: 12px 20px;
-        min-height: 0;
+        min-height: 68px;
         margin: 18px 0 20px;
         padding: 10px 12px;
         border-radius: var(--skin-card-radius);
@@ -969,8 +941,7 @@
     }
     .desktop-catalog-heading {
         min-width: 180px;
-        min-height: 0;
-        align-self: center;
+        min-height: 40px;
         padding-inline: 10px;
     }
     .desktop-catalog-label {
@@ -1021,10 +992,10 @@
         background: var(--accent-soft);
     }
     .desktop-sort button[aria-pressed='true'] {
-        background: var(--accent);
-        color: var(--accent-foreground);
+        background: var(--surface);
+        color: var(--accent-ink);
         font-weight: 600;
-        box-shadow: 0 2px 8px -1px color-mix(in srgb, var(--accent) 35%, transparent);
+        box-shadow: none;
     }
     .desktop-catalog-actions > button {
         display: flex;
@@ -1107,71 +1078,6 @@
         grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
         gap: 28px 20px;
     }
-    .desktop-product-grid .product-row {
-        position: relative;
-        overflow: hidden;
-        border: 0;
-        background: var(--surface);
-        border-radius: var(--skin-card-radius);
-        box-shadow: var(--skin-card-shadow);
-    }
-    .desktop-product-grid .product-row:hover {
-        transform: translateY(-3px);
-        box-shadow: var(--skin-card-hover-shadow);
-    }
-    .desktop-product-grid .product-row-image {
-        overflow: hidden;
-    }
-    .desktop-product-grid .safe-image-frame {
-        background: var(--soft);
-    }
-    .desktop-product-grid .product-row-content {
-        padding: 14px 14px 16px;
-    }
-    .desktop-product-grid .product-row-name {
-        font-size: 14px;
-        font-weight: 500;
-        line-height: 1.5;
-        min-height: 42px;
-    }
-    .desktop-product-grid .product-row-desc {
-        display: block;
-    }
-    .desktop-product-grid .product-row-badge {
-        padding: 0;
-        border: 0;
-        background: none;
-        color: var(--accent-ink);
-        font-size: 12px;
-    }
-    .desktop-product-grid .product-row-bottom {
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: auto;
-        padding-top: 12px;
-    }
-    .desktop-product-grid .product-row-price {
-        font-size: 19px;
-    }
-    .desktop-product-grid .product-row-stock {
-        font-size: 11px;
-        color: var(--muted);
-    }
-    .desktop-product-grid .product-row-stock.is-sold-out {
-        color: var(--accent);
-    }
-    .product-catalog-action {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        margin: 0 14px 14px;
-        color: var(--muted);
-        font-size: 12px;
-    }
-    .product-catalog-action svg {
-        width: 13px;
-        height: 13px;
-    }
     .desktop-catalog-results > .empty-state {
         min-height: 340px;
         background: var(--paper, #fff);
@@ -1234,9 +1140,6 @@
     .desktop-category-navigation .desktop-subcategories {
         border-top: 0;
     }
-    .desktop-product-grid .product-catalog-action {
-        display: none;
-    }
     .desktop-store-layout .orders-page .order-tabs {
         background: var(--surface);
     }
@@ -1275,6 +1178,8 @@
         grid-row: 1;
         position: static;
         display: flex;
+        flex-wrap: wrap;
+        min-width: 0;
         gap: 8px;
         padding: 8px;
         height: auto;
@@ -1375,6 +1280,7 @@
     .desktop-store-layout .order-product-title {
         font-size: 14px;
         white-space: normal;
+        overflow-wrap: anywhere;
     }
     .desktop-store-layout .order-product-heading {
         grid-template-columns: minmax(0, 1fr);
@@ -1422,10 +1328,10 @@
     .desktop-store-layout .order-total-amount {
         font-size: 19px;
         font-weight: 600;
-        color: var(--accent);
+        color: var(--accent-ink);
     }
     .desktop-store-layout .order-btn {
-        min-height: 38px;
+        min-height: 44px;
         padding-inline: 14px;
         border-radius: var(--skin-control-radius);
         font-size: 14px;
@@ -1446,13 +1352,22 @@
         margin: 0;
     }
     .desktop-orders-end button {
+        min-height: 44px;
         border: 0;
         background: none;
         padding: 10px;
-        color: var(--accent);
+        color: var(--accent-ink);
         cursor: pointer;
     }
     @media (max-width: 1199px) {
+        .desktop-store-layout .orders-page {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .desktop-store-layout .orders-page > .order-search {
+            grid-column: 1;
+            grid-row: 2;
+            margin-top: 12px;
+        }
         .desktop-header-main {
             grid-template-columns: 180px minmax(300px, 1fr) 140px;
             gap: 24px;
