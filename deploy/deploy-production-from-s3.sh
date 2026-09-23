@@ -459,6 +459,20 @@ trap rollback ERR
 
 sudo -n install -o root -g root -m 0755 "${swap_controller_source}" "${swap_controller}"
 sudo -n "${swap_controller}"
+deploy_stage="failed-release-retention"
+failed_release_retention="$(
+    VENDURE_ALLOW_FAILED_RELEASE_PRUNE=1 \
+        node "${repository}/deploy/systemd/vendure-production-release-retention.cjs" \
+        --apply-failed-candidates
+)"
+FAILED_RELEASE_RETENTION="${failed_release_retention}" node -e '
+const result = JSON.parse(process.env.FAILED_RELEASE_RETENTION);
+if (result.mode !== "apply-failed-candidates") throw new Error("unexpected failed release retention mode");
+process.stdout.write(
+    `PRODUCTION_FAILED_RELEASE_RETENTION_OK deletedDirectoryCount=${result.deleteDirectories.length} deletedArchiveCount=${result.deleteArchives.length}\n`,
+);
+'
+check_production_disk_usage
 node "${memory_guard}" --stage pre-download --check
 deploy_stage="artifact-download"
 printf 'DEPLOY_DOWNLOAD_BEGIN\n'

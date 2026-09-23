@@ -177,23 +177,54 @@ function applyRetentionPlan(plan) {
     for (const target of plan.deleteArchives) rmSync(target, { force: false });
 }
 
+function selectFailedCandidatePlan(plan) {
+    const currentRelease = parseReleaseName(path.basename(plan.currentRuntime));
+    assert.ok(currentRelease, 'Current runtime directory name is not a recognized production release');
+    const isNewerThanCurrent = target => {
+        const basename = path.basename(target);
+        const releaseName = basename.endsWith('.tar.gz') ? basename.slice(0, -'.tar.gz'.length) : basename;
+        const release = parseReleaseName(releaseName);
+        assert.ok(release, `Failed release candidate has an invalid name: ${target}`);
+        return compareReleaseOrder(release, currentRelease) > 0;
+    };
+    return {
+        ...plan,
+        deleteDirectories: plan.deleteDirectories.filter(isNewerThanCurrent),
+        deleteArchives: plan.deleteArchives.filter(isNewerThanCurrent),
+    };
+}
+
 function parseArguments(arguments_) {
     let apply = false;
+    let failedCandidatesOnly = false;
     for (const argument of arguments_) {
-        if (argument === '--apply') apply = true;
-        else if (argument === '--dry-run') apply = false;
-        else throw new Error(`Unknown argument: ${argument}`);
+        if (argument === '--apply') {
+            assert.ok(!failedCandidatesOnly, 'Choose only one release retention mode');
+            apply = true;
+        } else if (argument === '--apply-failed-candidates') {
+            assert.ok(!apply, 'Choose only one release retention mode');
+            apply = true;
+            failedCandidatesOnly = true;
+        } else if (argument === '--dry-run') {
+            assert.ok(!apply, 'Choose only one release retention mode');
+        } else throw new Error(`Unknown argument: ${argument}`);
     }
-    return { apply };
+    return { apply, failedCandidatesOnly };
 }
 
 function run({ arguments_ = process.argv.slice(2), environment = process.env, pm2Processes } = {}) {
-    const { apply } = parseArguments(arguments_);
+    const { apply, failedCandidatesOnly } = parseArguments(arguments_);
     if (apply) {
         assert.equal(
-            environment.VENDURE_ALLOW_PRODUCTION_RELEASE_PRUNE,
+            environment[
+                failedCandidatesOnly
+                    ? 'VENDURE_ALLOW_FAILED_RELEASE_PRUNE'
+                    : 'VENDURE_ALLOW_PRODUCTION_RELEASE_PRUNE'
+            ],
             '1',
-            'Production release deletion requires VENDURE_ALLOW_PRODUCTION_RELEASE_PRUNE=1',
+            failedCandidatesOnly
+                ? 'Failed release candidate deletion requires VENDURE_ALLOW_FAILED_RELEASE_PRUNE=1'
+                : 'Production release deletion requires VENDURE_ALLOW_PRODUCTION_RELEASE_PRUNE=1',
         );
     }
     const configuration = {
@@ -203,13 +234,17 @@ function run({ arguments_ = process.argv.slice(2), environment = process.env, pm
         keepCount: environment.VENDURE_RELEASE_RETENTION_COUNT ?? DEFAULT_KEEP_COUNT,
         pm2Processes,
     };
-    const plan = inspectReleaseState(configuration);
+    const selectPlan = plan => (failedCandidatesOnly ? selectFailedCandidatePlan(plan) : plan);
+    const plan = selectPlan(inspectReleaseState(configuration));
     if (apply) {
-        const revalidatedPlan = inspectReleaseState(configuration);
+        const revalidatedPlan = selectPlan(inspectReleaseState(configuration));
         assert.deepEqual(revalidatedPlan, plan, 'Release state changed during retention planning');
         applyRetentionPlan(plan);
     }
-    return { mode: apply ? 'apply' : 'dry-run', ...plan };
+    return {
+        mode: apply ? (failedCandidatesOnly ? 'apply-failed-candidates' : 'apply') : 'dry-run',
+        ...plan,
+    };
 }
 
 if (require.main === module) {
@@ -230,4 +265,5 @@ module.exports = {
     parseArguments,
     parseReleaseName,
     run,
+    selectFailedCandidatePlan,
 };

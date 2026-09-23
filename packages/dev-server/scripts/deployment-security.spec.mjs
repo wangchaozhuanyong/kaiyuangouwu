@@ -68,13 +68,18 @@ void test('production audit triggers are prepared through the local root socket 
     assert.doesNotMatch(helper, /DB_PASSWORD.*stdout|stdout.*DB_PASSWORD/u);
 });
 
-void test('checks staged disk usage before stopping the healthy runtime', async () => {
+void test('prunes abandoned candidates and checks disk before download and runtime stop', async () => {
     const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
     const guard = script.match(/check_production_disk_usage\(\) \{[\s\S]*?\n\}/u)?.[0];
     assert.ok(guard);
-    const call = script.indexOf('\ncheck_production_disk_usage\n');
-    assert.ok(call > script.indexOf('node "${candidate}/verify-runtime.mjs"'));
-    assert.ok(call < script.indexOf('\npm2 stop vendure-worker vendure-api'));
+    const calls = [...script.matchAll(/\ncheck_production_disk_usage\n/gu)].map(match => match.index);
+    assert.equal(calls.length, 2);
+    assert.match(script, /VENDURE_ALLOW_FAILED_RELEASE_PRUNE=1[\s\S]*--apply-failed-candidates/u);
+    assert.match(script, /PRODUCTION_FAILED_RELEASE_RETENTION_OK/u);
+    assert.ok(calls[0] > script.indexOf('--apply-failed-candidates'));
+    assert.ok(calls[0] < script.indexOf('DEPLOY_DOWNLOAD_BEGIN'));
+    assert.ok(calls[1] > script.indexOf('node "${candidate}/verify-runtime.mjs"'));
+    assert.ok(calls[1] < script.indexOf('\npm2 stop vendure-worker vendure-api'));
     const health = await readFile(
         path.join(repositoryRoot, 'deploy/systemd/vendure-production-healthcheck'),
         'utf8',

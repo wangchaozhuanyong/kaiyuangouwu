@@ -130,3 +130,44 @@ void test('requires an explicit production guard before applying deletions', asy
     await assert.rejects(access(path.join(current.releasesDir, releases.oldest)), /ENOENT/u);
     await assert.rejects(access(path.join(current.releasesDir, releases.future)), /ENOENT/u);
 });
+
+void test('automatic cleanup deletes only failed candidates newer than the active runtime', async () => {
+    const current = await fixture();
+    const currentRuntime = path.join(current.releasesDir, releases.current);
+    const environment = {
+        VENDURE_RELEASES_DIR: current.releasesDir,
+        VENDURE_CURRENT_RUNTIME_POINTER: current.currentPointer,
+        VENDURE_RELEASE_RETENTION_COUNT: '3',
+    };
+
+    assert.throws(
+        () =>
+            retention.run({
+                arguments_: ['--apply-failed-candidates'],
+                environment,
+                pm2Processes: pm2Processes(currentRuntime),
+            }),
+        /requires VENDURE_ALLOW_FAILED_RELEASE_PRUNE=1/u,
+    );
+
+    const result = retention.run({
+        arguments_: ['--apply-failed-candidates'],
+        environment: { ...environment, VENDURE_ALLOW_FAILED_RELEASE_PRUNE: '1' },
+        pm2Processes: pm2Processes(currentRuntime),
+    });
+    assert.equal(result.mode, 'apply-failed-candidates');
+    assert.deepEqual(
+        result.deleteDirectories.map(item => path.basename(item)),
+        [releases.future],
+    );
+    assert.deepEqual(
+        result.deleteArchives.map(item => path.basename(item)),
+        [`${releases.future}.tar.gz`],
+    );
+    for (const release of [releases.oldest, releases.previous, releases.rollback, releases.current]) {
+        await access(path.join(current.releasesDir, release));
+        await access(path.join(current.releasesDir, `${release}.tar.gz`));
+    }
+    await assert.rejects(access(path.join(current.releasesDir, releases.future)), /ENOENT/u);
+    await assert.rejects(access(path.join(current.releasesDir, `${releases.future}.tar.gz`)), /ENOENT/u);
+});
