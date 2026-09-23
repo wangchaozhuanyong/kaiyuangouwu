@@ -49,14 +49,26 @@ export function hasTrustedPullRequest(run, repository, api) {
 }
 
 const apiCache = new Map();
+export function requestGitHubApi(
+    endpoint,
+    request = execFileSync,
+    pause = milliseconds => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds),
+) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            return JSON.parse(
+                request('gh', ['api', endpoint], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }),
+            );
+        } catch (error) {
+            const transient = /gh: HTTP (?:429|5\d\d)\b/u.test(String(error?.stderr ?? ''));
+            if (attempt === 1 || !transient) throw error;
+            pause(1000);
+        }
+    }
+    throw new Error('Unreachable GitHub API retry state');
+}
 const gh = endpoint => {
-    if (!apiCache.has(endpoint))
-        apiCache.set(
-            endpoint,
-            JSON.parse(
-                execFileSync('gh', ['api', endpoint], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }),
-            ),
-        );
+    if (!apiCache.has(endpoint)) apiCache.set(endpoint, requestGitHubApi(endpoint));
     return apiCache.get(endpoint);
 };
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();

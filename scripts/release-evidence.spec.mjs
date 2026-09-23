@@ -22,8 +22,54 @@ import {
     findInputCoverage,
     hasTrustedPullRequest,
     isTrustedRun,
+    requestGitHubApi,
     validateExecutedChecks,
 } from './release-evidence.mjs';
+
+test('GitHub evidence reads retry one transient HTTP failure without retrying invalid proof or client errors', () => {
+    const delays = [];
+    let calls = 0;
+    const request = () => {
+        calls++;
+        if (calls === 1) throw Object.assign(new Error('gateway timeout'), { stderr: 'gh: HTTP 504' });
+        return '{"ok":true}';
+    };
+    assert.deepEqual(
+        requestGitHubApi('repos/owner/repo/pulls/7', request, delay => delays.push(delay)),
+        {
+            ok: true,
+        },
+    );
+    assert.equal(calls, 2);
+    assert.deepEqual(delays, [1000]);
+
+    for (const stderr of ['gh: HTTP 403', 'gh: HTTP 404', 'bad JSON']) {
+        let attempts = 0;
+        assert.throws(() =>
+            requestGitHubApi(
+                'repos/owner/repo/pulls/7',
+                () => {
+                    attempts++;
+                    throw Object.assign(new Error('request failed'), { stderr });
+                },
+                () => assert.fail('Client errors must not wait'),
+            ),
+        );
+        assert.equal(attempts, 1);
+    }
+    let transientAttempts = 0;
+    assert.throws(() =>
+        requestGitHubApi(
+            'repos/owner/repo/pulls/7',
+            () => {
+                transientAttempts++;
+                throw Object.assign(new Error('still unavailable'), { stderr: 'gh: HTTP 504' });
+            },
+            delay => assert.equal(delay, 1000),
+        ),
+    );
+    assert.equal(transientAttempts, 2);
+});
 
 test('a previous PR does not cover additional undeployed backend changes', () => {
     const css = 'packages/storefront/src/style.css';
