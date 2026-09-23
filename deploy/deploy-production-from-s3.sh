@@ -189,6 +189,29 @@ fi
 [[ "${release_base_sha}" == "${deployed_sha}" ]] ||
     fail 'the running revision changed after release preflight; start a new release from current main'
 
+# The complete offsite restore is performed by a trusted, isolated release job
+# before this script is allowed to switch the production runtime. Keep its
+# per-run proof separate from the weekly healthcheck receipt.
+[[ "${GITHUB_RUN_ID:-}" =~ ^[0-9]+$ ]] || fail 'release run ID is required for the offsite file restore proof'
+readonly file_restore_proof="/var/lib/vendure-readiness/file-restore-drill-runs/${target_sha}-${GITHUB_RUN_ID}.json"
+sudo -n test -s "${file_restore_proof}" || fail 'the exact release has no complete offsite file restore proof'
+sudo -n jq -e --arg sha "${target_sha}" --arg run "${GITHUB_RUN_ID}" '
+    .source == "offsite" and .method == "offhost-full-restore" and
+    .targetSha == $sha and .runId == $run and
+    (.archiveSha256 | type == "string" and test("^[a-f0-9]{64}$")) and
+    (.backupFile | type == "string" and test("^vendure-files-[0-9]{8}T[0-9]{6}Z[.]tar[.]gz$")) and
+    (.archive.fileCount | type == "number" and . > 0) and
+    (.archive.totalBytes | type == "number" and . > 0) and
+    .rtoSeconds == 14400 and
+    (.durationSeconds | type == "number" and . >= 0 and . <= 14400)
+' "${file_restore_proof}" >/dev/null || fail 'the complete offsite file restore proof is invalid'
+readonly proof_completed_epoch="$(date -u --date="$(sudo -n jq -r .completedAt "${file_restore_proof}")" +%s 2>/dev/null || true)"
+readonly proof_age_seconds="$(( $(date +%s) - ${proof_completed_epoch:-0} ))"
+((proof_age_seconds >= 0 && proof_age_seconds <= 7200)) ||
+    fail 'the complete offsite file restore proof is stale'
+printf 'DEPLOY_OFFSITE_FILE_RESTORE_OK sha=%s run=%s age_seconds=%s\n' \
+    "${target_sha}" "${GITHUB_RUN_ID}" "${proof_age_seconds}"
+
 auth_visual_change=false
 if ! git diff --quiet "${deployed_sha}" "${target_sha}" -- \
     packages/dev-server/scripts/sync-auth-visuals.mjs; then
@@ -976,7 +999,7 @@ sudo -n systemctl enable --now vendure-production-release-retention.path
 sudo -n systemctl enable --now vendure-mysql-restore-drill.timer
 sudo -n systemctl enable --now vendure-file-backup.timer
 sudo -n systemctl enable --now vendure-file-backup-retention.timer
-sudo -n systemctl enable --now vendure-file-restore-drill.timer
+sudo -n systemctl disable --now vendure-file-restore-drill.timer
 if [[ ! -s /var/lib/vendure-readiness/restore-drill.json || \
     "$(sudo -n systemctl show vendure-mysql-restore-drill.service -p Result --value)" != "success" ]]; then
     if ! sudo -n systemctl start vendure-mysql-restore-drill.service; then
@@ -991,13 +1014,6 @@ if ! sudo -n find /var/backups/vendure-files -maxdepth 1 -type f -name 'vendure-
         fail 'the persistent file backup failed'
     fi
 fi
-if [[ ! -s /var/lib/vendure-readiness/file-restore-drill.json || \
-    "$(sudo -n systemctl show vendure-file-restore-drill.service -p Result --value)" != "success" ]]; then
-    if ! sudo -n systemctl start vendure-file-restore-drill.service; then
-        sudo -n journalctl -u vendure-file-restore-drill.service -n 80 --no-pager >&2 || true
-        fail 'the persistent file restore drill failed'
-    fi
-fi
 sudo -n systemctl enable --now vendure-production-healthcheck.timer
 if ! sudo -n systemctl start vendure-production-healthcheck.service; then
     sudo -n journalctl -u vendure-production-healthcheck.service -n 80 --no-pager >&2 || true
@@ -1010,9 +1026,8 @@ fi
 [[ "$(sudo -n systemctl is-active vendure-file-backup.timer)" == "active" ]]
 [[ "$(sudo -n systemctl is-enabled vendure-file-backup-retention.timer)" == "enabled" ]]
 [[ "$(sudo -n systemctl is-active vendure-file-backup-retention.timer)" == "active" ]]
-[[ "$(sudo -n systemctl is-enabled vendure-file-restore-drill.timer)" == "enabled" ]]
-[[ "$(sudo -n systemctl is-active vendure-file-restore-drill.timer)" == "active" ]]
-[[ "$(sudo -n systemctl show vendure-file-restore-drill.service -p Result --value)" == "success" ]]
+[[ "$(sudo -n systemctl is-enabled vendure-file-restore-drill.timer)" == "disabled" ]]
+[[ "$(sudo -n systemctl is-active vendure-file-restore-drill.timer)" == "inactive" ]]
 [[ "$(sudo -n systemctl is-enabled vendure-production-healthcheck.timer)" == "enabled" ]]
 [[ "$(sudo -n systemctl is-active vendure-production-healthcheck.timer)" == "active" ]]
 [[ "$(sudo -n systemctl show vendure-production-healthcheck.service -p Result --value)" == "success" ]]

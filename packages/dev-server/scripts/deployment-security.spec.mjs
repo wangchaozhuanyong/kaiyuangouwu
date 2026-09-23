@@ -137,6 +137,7 @@ void test('reused CI skips do not skip deployment, and skipped deployment cannot
         READY_RESULT: 'success',
         FRONTEND_RESULT: 'skipped',
         BUILD_RESULT: 'success',
+        OFFHOST_RESTORE_RESULT: 'success',
         DEPLOY_RESULT: 'success',
         POSTFLIGHT_RESULT: 'success',
         ACCEPTANCE_RESULT: 'success',
@@ -148,6 +149,7 @@ void test('reused CI skips do not skip deployment, and skipped deployment cannot
         'ROUTE_RESULT',
         'READY_RESULT',
         'BUILD_RESULT',
+        'OFFHOST_RESTORE_RESULT',
         'DEPLOY_RESULT',
         'POSTFLIGHT_RESULT',
         'ACCEPTANCE_RESULT',
@@ -845,10 +847,13 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     );
 
     assert.ok(
-        releaseWorkflow.indexOf('needs: preflight') < releaseWorkflow.indexOf('needs: build'),
-        'release must run preflight, build and deploy in order',
+        releaseWorkflow.indexOf('needs: preflight') <
+            releaseWorkflow.indexOf('needs: [build, offhost_file_restore]'),
+        'release must finish preflight, build, and full offsite restore before deployment',
     );
     assert.match(releaseWorkflow, /uses: \.\/\.github\/workflows\/build_production_runtime\.yml/u);
+    assert.match(releaseWorkflow, /uses: \.\/\.github\/workflows\/offsite_file_restore_drill\.yml/u);
+    assert.match(releaseWorkflow, /needs\.offhost_file_restore\.result == 'success'/u);
     assert.match(releaseWorkflow, /uses: \.\/\.github\/workflows\/deploy_production_runtime\.yml/u);
     assert.match(cleanupWorkflow, /\.github\/workflows\/production_release\.yml/u);
     assert.match(cleanupWorkflow, /\.event == "workflow_dispatch" or \.event == "push"/u);
@@ -994,6 +999,25 @@ void test('persistent business files have encrypted offsite backup, retention an
     assert.match(restoreScript, /flock --shared/u);
     assert.match(restoreScript, /exec 8<"\$\{vendure_backup_dir\}\/\.backup\.lock"/u);
     assert.doesNotMatch(restoreScript, /exec 8>"\$\{vendure_backup_dir\}\/\.backup\.lock"/u);
+    const offhostWorkflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/offsite_file_restore_drill.yml'),
+        'utf8',
+    );
+    const offhostScript = await readFile(
+        path.join(repositoryRoot, 'deploy/offsite-file-restore-drill.py'),
+        'utf8',
+    );
+    assert.match(offhostWorkflow, /schedule:/u);
+    assert.match(offhostWorkflow, /restore every offsite file before production switch/u);
+    assert.match(offhostWorkflow, /offsite-file-restore-drill\.py/u);
+    assert.match(offhostWorkflow, /OFFSITE_FILE_RESTORE_PROOF_OK/u);
+    assert.match(offhostScript, /restore_stream/u);
+    assert.match(offhostScript, /DISK_RESERVE_BYTES/u);
+    assert.match(deploymentScript, /DEPLOY_OFFSITE_FILE_RESTORE_OK/u);
+    assert.match(deploymentScript, /sudo -n test -s "\$\{file_restore_proof\}"/u);
+    assert.match(deploymentScript, /sudo -n jq -e --arg sha/u);
+    assert.match(deploymentScript, /systemctl disable --now vendure-file-restore-drill\.timer/u);
+    assert.doesNotMatch(deploymentScript, /systemctl start vendure-file-restore-drill\.service/u);
     assert.match(backupService, /^ProtectSystem=strict$/mu);
     assert.match(backupService, /^ReadWritePaths=\/var\/backups\/vendure-files$/mu);
     assert.match(restoreService, /^ReadOnlyPaths=\/var\/backups\/vendure-files$/mu);

@@ -9,10 +9,13 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from unittest import mock
+import importlib.util
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "vendure-file-backup.py"
 SERVICE_SCRIPT = SCRIPT.with_name("vendure-file-backup")
+OFFHOST_SCRIPT = SCRIPT.parents[1] / "offsite-file-restore-drill.py"
 
 
 class FileBackupTest(unittest.TestCase):
@@ -74,6 +77,40 @@ class FileBackupTest(unittest.TestCase):
         )
         self.assertEqual((restored / "private-files/delivery.zip").stat().st_mode & 0o777, 0o600)
 
+    def test_streamed_full_restore_checks_every_file_and_compressed_digest(self):
+        captured = self.capture()
+        manifest = Path(str(self.archive) + ".manifest.json")
+        digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "restore-stream", str(self.root / "streamed"), str(manifest), digest],
+            input=self.archive.read_bytes(), capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual(json.loads(result.stdout), captured)
+        self.assertEqual((self.root / "streamed/public-assets/nested/image.webp").read_bytes(), b"public-image")
+        self.assertEqual((self.root / "streamed/private-files/delivery.zip").read_bytes(), b"private-delivery")
+
+    def test_streamed_restore_rejects_changed_archive_and_manifest(self):
+        self.capture()
+        manifest = Path(str(self.archive) + ".manifest.json")
+        digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        bad_digest = subprocess.run(
+            [sys.executable, str(SCRIPT), "restore-stream", str(self.root / "changed"), str(manifest), "0" * 64],
+            input=self.archive.read_bytes(), capture_output=True,
+        )
+        self.assertNotEqual(bad_digest.returncode, 0)
+        self.assertIn(b"SHA-256 does not match", bad_digest.stderr)
+        changed_manifest = self.root / "changed-manifest.json"
+        data = json.loads(manifest.read_text())
+        data["files"][0]["sha256"] = "0" * 64
+        changed_manifest.write_text(json.dumps(data))
+        bad_manifest = subprocess.run(
+            [sys.executable, str(SCRIPT), "restore-stream", str(self.root / "changed-manifest"), str(changed_manifest), digest],
+            input=self.archive.read_bytes(), capture_output=True,
+        )
+        self.assertNotEqual(bad_manifest.returncode, 0)
+        self.assertIn(b"digest does not match", bad_manifest.stderr)
+
     def test_rejects_symlinks_and_overlapping_roots(self):
         (self.assets / "unsafe-link").symlink_to(self.private / "delivery.zip")
         result = self.run_script(
@@ -107,6 +144,76 @@ class FileBackupTest(unittest.TestCase):
                 target.add(path, path.relative_to(extract).as_posix(), recursive=False)
         result = self.run_script("verify", tampered, success=False)
         self.assertIn("does not match", result.stderr)
+
+
+class OffhostFileRestoreTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.files = self.root / "files"
+        self.files.mkdir()
+        (self.files / "customer.txt").write_text("complete offsite restore")
+        self.archive = self.root / "vendure-files-20260923T091826Z.tar.gz"
+        subprocess.run(
+            [sys.executable, str(SCRIPT), "capture", str(self.archive), f"public-assets={self.files}"],
+            check=True, capture_output=True,
+        )
+        self.manifest = Path(str(self.archive) + ".manifest.json")
+        self.checksum = Path(str(self.archive) + ".sha256")
+        self.checksum.write_text(
+            f"{hashlib.sha256(self.archive.read_bytes()).hexdigest()}  {self.archive.name}\n"
+            f"{hashlib.sha256(self.manifest.read_bytes()).hexdigest()}  {self.archive.name}.manifest.json\n"
+        )
+        spec = importlib.util.spec_from_file_location("offhost_file_restore", OFFHOST_SCRIPT)
+        self.tool = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.tool)
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def run_drill(self):
+        archive = self.archive
+        manifest = self.manifest
+        checksum = self.checksum
+
+        def copy_sidecar(command, **kwargs):
+            source = manifest if command[3].endswith(".manifest.json") else checksum
+            Path(command[4]).write_bytes(source.read_bytes())
+            return subprocess.CompletedProcess(command, 0)
+
+        class Download:
+            def __init__(self):
+                self.stdout = archive.open("rb")
+
+            def wait(self):
+                return 0
+
+            def kill(self):
+                self.stdout.close()
+
+        listing = json.dumps({"Contents": [{
+            "Key": "files/" + archive.name + ".sha256",
+            "LastModified": "2026-09-23T09:18:26Z",
+        }]})
+        receipt = self.root / "receipt.json"
+        with mock.patch.object(self.tool, "aws", return_value=listing), \
+             mock.patch.object(self.tool.subprocess, "run", side_effect=copy_sidecar), \
+             mock.patch.object(self.tool.subprocess, "Popen", side_effect=lambda *args, **kwargs: Download()):
+            self.tool.run("backup-test", "files/", "a" * 40, "123", receipt)
+        return json.loads(receipt.read_text())
+
+    def test_full_offhost_drill_produces_exact_release_receipt(self):
+        receipt = self.run_drill()
+        self.assertEqual(receipt["source"], "offsite")
+        self.assertEqual(receipt["method"], "offhost-full-restore")
+        self.assertEqual(receipt["archive"]["fileCount"], 1)
+        self.assertEqual(receipt["targetSha"], "a" * 40)
+        self.assertEqual(receipt["runId"], "123")
+
+    def test_offhost_drill_rejects_mismatched_manifest_checksum(self):
+        self.manifest.write_bytes(self.manifest.read_bytes() + b"tampered")
+        with self.assertRaisesRegex(ValueError, "manifest checksum does not match"):
+            self.run_drill()
 
 
 class FileBackupServiceResumeTest(unittest.TestCase):

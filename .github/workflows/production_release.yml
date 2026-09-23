@@ -244,10 +244,21 @@ jobs:
             actions: read
             contents: read
 
+    offhost_file_restore:
+        name: prove complete offsite file restore before switching production
+        needs: [preflight, route, ready]
+        if: always() && !cancelled() && needs.preflight.result == 'success' && needs.route.result == 'success' && needs.ready.result == 'success' && needs.route.outputs.lane == 'runtime'
+        uses: ./.github/workflows/offsite_file_restore_drill.yml
+        with:
+            target_sha: ${{ inputs.target_sha || github.sha }}
+        permissions:
+            contents: read
+            id-token: write
+
     deploy:
         name: deploy the verified runtime
-        needs: build
-        if: always() && !cancelled() && needs.build.result == 'success'
+        needs: [build, offhost_file_restore]
+        if: always() && !cancelled() && needs.build.result == 'success' && needs.offhost_file_restore.result == 'success'
         uses: ./.github/workflows/deploy_production_runtime.yml
         with:
             target_sha: ${{ inputs.target_sha || github.sha }}
@@ -317,7 +328,7 @@ jobs:
 
     complete:
         name: require completed deployment and acceptance
-        needs: [route, ready, frontend, build, deploy, postflight, acceptance]
+        needs: [route, ready, frontend, build, offhost_file_restore, deploy, postflight, acceptance]
         if: always() && !cancelled()
         runs-on: ubuntu-24.04
         timeout-minutes: 5
@@ -330,6 +341,7 @@ jobs:
                   READY_RESULT: ${{ needs.ready.result }}
                   FRONTEND_RESULT: ${{ needs.frontend.result }}
                   BUILD_RESULT: ${{ needs.build.result }}
+                  OFFHOST_RESTORE_RESULT: ${{ needs.offhost_file_restore.result }}
                   DEPLOY_RESULT: ${{ needs.deploy.result }}
                   POSTFLIGHT_RESULT: ${{ needs.postflight.result }}
                   ACCEPTANCE_RESULT: ${{ needs.acceptance.result }}
@@ -340,7 +352,7 @@ jobs:
                   }
                   case "$RELEASE_LANE" in
                     runtime)
-                      [[ "$BUILD_RESULT" == success && "$DEPLOY_RESULT" == success && "$POSTFLIGHT_RESULT" == success && "$ACCEPTANCE_RESULT" == success ]] || {
+                      [[ "$BUILD_RESULT" == success && "$OFFHOST_RESTORE_RESULT" == success && "$DEPLOY_RESULT" == success && "$POSTFLIGHT_RESULT" == success && "$ACCEPTANCE_RESULT" == success ]] || {
                         echo 'Runtime deployment or acceptance did not complete' >&2; exit 1;
                       }
                       ;;
@@ -353,7 +365,7 @@ jobs:
     recovery:
         name: explain release failure and bounded recovery
         needs:
-            [lock, preflight, route, checks, ready, frontend, build, deploy, postflight, acceptance, complete]
+            [lock, preflight, route, checks, ready, frontend, build, offhost_file_restore, deploy, postflight, acceptance, complete]
         if: always() && contains(needs.*.result, 'failure')
         runs-on: ubuntu-24.04
         permissions:
