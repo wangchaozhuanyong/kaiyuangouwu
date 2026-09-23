@@ -116,3 +116,4 @@ export const SETTINGS_ROUTE_PRELOAD_TARGETS = [
 export function preloadSettingsRoutes() {
     SETTINGS_ROUTE_PRELOAD_TARGETS.forEach(preloadRoute);
 }
+export const loadInstalledExtensions = () => import('./extensions/installed-extensions');
