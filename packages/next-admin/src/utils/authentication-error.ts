@@ -38,9 +38,12 @@ export function isAuthenticationRequiredError(error: unknown): boolean {
 
 // This result must come from the dedicated, unaliased Admin API `me` query.
 // That resolver reports FORBIDDEN for anonymous sessions and non-admin identities.
-export function isMissingAdminSession(data: { me: { id: string } | null } | undefined, error: unknown) {
-    if (data?.me !== null) return false;
-    if (!error) return true;
+export function isMissingAdminSession(
+    data: { me: { id: string } | null } | null | undefined,
+    error: unknown,
+) {
+    if (data?.me) return false;
+    if (!error) return data?.me === null;
     return (
         CombinedGraphQLErrors.is(error) &&
         error.errors.length > 0 &&

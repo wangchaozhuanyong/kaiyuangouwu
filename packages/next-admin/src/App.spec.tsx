@@ -146,6 +146,20 @@ describe('admin bootstrap session recovery', () => {
         },
     );
 
+    it('lets a verified but underprivileged administrator switch accounts explicitly', async () => {
+        const { host } = await renderApp(name =>
+            name === 'GetAdminBootstrap' ? denied('你当前无权执行此操作') : { data: { me: { id: me.id } } },
+        );
+        expect(auth.clear).not.toHaveBeenCalled();
+        const switchAccount = [...host.querySelectorAll('button')].find(
+            button => button.textContent === '切换账号登录',
+        );
+        await act(async () => switchAccount?.click());
+        expect(auth.clear).toHaveBeenCalledOnce();
+        expect(window.location.pathname).toBe('/login');
+        expect(host.textContent).toContain('管理员登录入口');
+    });
+
     it('does not reject a complete authenticated bootstrap because of a recoverable optional-field error', async () => {
         const { host, requests } = await renderApp(() => ({
             data: ready,
@@ -258,6 +272,24 @@ describe('admin bootstrap session recovery', () => {
                 ? denied('你当前无权执行此操作')
                 : {
                       data: { me: null },
+                      errors: [
+                          new GraphQLError('你当前无权执行此操作', {
+                              path: ['me'],
+                              extensions: { code: 'FORBIDDEN' },
+                          }),
+                      ],
+                  },
+        );
+        expect(host.textContent).toContain('管理员登录入口');
+        expect(auth.clear).toHaveBeenCalledOnce();
+    });
+
+    it('redirects when Apollo omits identity data but the dedicated me query is forbidden', async () => {
+        const { host } = await renderApp(name =>
+            name === 'GetAdminBootstrap'
+                ? denied('你当前无权执行此操作')
+                : {
+                      data: null,
                       errors: [
                           new GraphQLError('你当前无权执行此操作', {
                               path: ['me'],
