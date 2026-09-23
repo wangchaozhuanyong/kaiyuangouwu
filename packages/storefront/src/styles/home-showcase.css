@@ -3464,6 +3464,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 .business-services-page .category-client-plugin-action {
     grid-column: 2;
     grid-row: 2;
+    justify-self: end;
     margin-top: 4px;
     padding: 0;
     border: 0;
