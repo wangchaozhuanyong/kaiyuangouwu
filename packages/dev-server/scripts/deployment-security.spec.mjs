@@ -764,6 +764,11 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(workflow, /production-acceptance-/u);
     // SSM returns only the start of long output; keep the final committed receipt within its limit.
     assert.match(workflow, /2>&1 \| tail -c 12000/u);
+    assert.match(script, /deploy_stage="database-migration"/u);
+    assert.ok(
+        script.indexOf('ROLLBACK_DONE') < script.indexOf('DEPLOY_FAILURE_EVIDENCE'),
+        'failure evidence must remain at the end of noisy rollback output',
+    );
 
     assert.ok(
         releaseWorkflow.indexOf('needs: preflight') < releaseWorkflow.indexOf('needs: build'),
