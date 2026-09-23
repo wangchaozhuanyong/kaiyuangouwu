@@ -627,6 +627,15 @@ if [[ "${reviewed_referral_posters}" != "none" ]]; then
     cd "${repository}"
     printf 'REFERRAL_POSTERS_PREFLIGHT_OK scope=%s\n' "${reviewed_referral_posters}"
 fi
+# Check disk after staging the verified artifact, while both writers still run.
+# Retention must be reviewed separately; do not delete releases here.
+check_production_disk_usage
+# The worker is stopped for the migration below. Pause it before checking
+# migration headroom so the guard measures the memory available to that phase.
+# Keep the API serving until readiness and the migration plan have passed.
+deploy_stage="migration-memory-readiness"
+rollback_needed=1
+pm2 stop vendure-worker 9>&-
 node "${memory_guard}" --stage pre-migration --check
 deploy_stage="migration-readiness"
 set -a
@@ -645,12 +654,8 @@ readonly usdt_guard="${repository}/deploy/usdt-migration-guard.cjs"
 readonly usdt_snapshot="${releases_dir}/usdt-migration-${deployment_id}.json"
 readonly migration_plan="$(node "${usdt_guard}" plan "${candidate}")"
 printf '%s\n' "${migration_plan}"
-# Check after staging the verified artifact, while the healthy runtime still serves traffic.
-# Retention must be reviewed separately; do not lower the health threshold or delete releases here.
-check_production_disk_usage
 # Both writers must be stopped before either phase; a normal rolling restart is unsafe.
-rollback_needed=1
-pm2 stop vendure-worker vendure-api 9>&-
+pm2 stop vendure-api 9>&-
 pm2 save 9>&-
 node "${usdt_guard}" capture "${candidate}" "${usdt_snapshot}"
 deploy_stage="database-backup"
