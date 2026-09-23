@@ -1461,7 +1461,7 @@
 }
 
 .auth-input-shell:has(.auth-field-icon) input {
-    padding-left: 48px;
+    padding-left: 44px;
 }
 
 .auth-field-icon {
