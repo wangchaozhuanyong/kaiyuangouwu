@@ -2,7 +2,7 @@
 import type { ShopApi } from '../api';
 import type { StorefrontTrafficConsent } from '../storefront-traffic';
 import type { StorefrontLanguage } from '../types';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
     setStorefrontTrafficConsent,
@@ -22,6 +22,7 @@ export function StorefrontTrafficPreference({
     const [preference, setPreference] = useState<StorefrontTrafficConsent>(storefrontTrafficConsent);
     const [busy, setBusy] = useState(false);
     const [failed, setFailed] = useState(false);
+    const pending = useRef(false);
     useEffect(() => {
         const refresh = () => setPreference(storefrontTrafficConsent());
         window.addEventListener('storage', refresh);
@@ -31,13 +32,23 @@ export function StorefrontTrafficPreference({
             window.removeEventListener(TRAFFIC_PREFERENCE_EVENT, refresh);
         };
     }, []);
+    useEffect(() => {
+        if (!failed) return;
+        const timeout = window.setTimeout(() => setFailed(false), 5000);
+        return () => window.clearTimeout(timeout);
+    }, [failed]);
 
     const choose = async (granted: boolean) => {
-        if (busy) return;
+        if (pending.current) return;
+        pending.current = true;
         setBusy(true);
         setFailed(false);
         if (!granted) {
-            setStorefrontTrafficConsent(false);
+            try {
+                setStorefrontTrafficConsent(false);
+            } catch {
+                // An unavailable browser store must not block the necessary-only choice.
+            }
             setPreference('denied');
         }
         try {
@@ -49,8 +60,16 @@ export function StorefrontTrafficPreference({
             setStorefrontTrafficConsent(granted);
             setPreference(granted ? 'granted' : 'denied');
         } catch {
-            setFailed(true);
+            // A failed grant cannot enable analytics; close the banner in the safe state.
+            try {
+                setStorefrontTrafficConsent(false);
+            } catch {
+                // Unknown consent also keeps analytics disabled when storage is unavailable.
+            }
+            setPreference('denied');
+            setFailed(granted);
         } finally {
+            pending.current = false;
             setBusy(false);
         }
     };
@@ -69,13 +88,6 @@ export function StorefrontTrafficPreference({
                               'first-party page views and pseudonymous metrics, and can be withdrawn anytime.'}{' '}
                         <a href="#/legal?id=privacy">{isZh ? '查看隐私政策' : 'View privacy policy'}</a>
                     </p>
-                    {failed && (
-                        <span role="alert">
-                            {isZh
-                                ? '偏好保存失败，统计仍保持关闭。'
-                                : 'Saving failed. Analytics remains off.'}
-                        </span>
-                    )}
                 </div>
                 <div className="traffic-consent-actions">
                     <button type="button" disabled={busy} onClick={() => void choose(false)}>
@@ -100,23 +112,21 @@ export function StorefrontTrafficPreference({
                 type="button"
                 className="traffic-preference-button"
                 disabled={busy}
+                aria-live="polite"
                 onClick={() => void choose(preference !== 'granted')}
             >
-                {preference === 'granted'
+                {failed
                     ? isZh
-                        ? '访问统计：已允许 · 撤回'
-                        : 'Analytics allowed · Withdraw'
-                    : isZh
-                      ? '访问统计：已关闭 · 允许'
-                      : 'Analytics off · Allow'}
+                        ? '访问统计：未开启 · 重试'
+                        : 'Analytics not enabled · Retry'
+                    : preference === 'granted'
+                      ? isZh
+                          ? '访问统计：已允许 · 撤回'
+                          : 'Analytics allowed · Withdraw'
+                      : isZh
+                        ? '访问统计：已关闭 · 允许'
+                        : 'Analytics off · Allow'}
             </button>
-            {failed && (
-                <span className="traffic-preference-error" role="alert">
-                    {isZh
-                        ? '偏好证据暂未写入，统计保持关闭。'
-                        : 'Preference evidence was not saved. Analytics stays off.'}
-                </span>
-            )}
         </>
     );
 }
