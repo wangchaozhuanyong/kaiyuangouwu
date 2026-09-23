@@ -133,6 +133,9 @@
 }
 
 @media (min-width: 1024px) {
+    .desktop-store-layout .coupon-label-mobile {
+        display: none;
+    }
     .desktop-store-layout .coupon-label-desktop {
         display: inline;
     }
