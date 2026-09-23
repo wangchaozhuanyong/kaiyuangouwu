@@ -20,7 +20,6 @@
     /* Experience foundations stay invariant across skins. Presets may change
        expression, never layout density, interaction cost or accessibility. */
     --experience-content-max: 1280px;
-    --experience-reading-max: 72ch;
     --experience-page-gutter-mobile: 16px;
     --experience-page-gutter-tablet: 24px;
     --experience-page-gutter-desktop: 32px;
@@ -29,9 +28,7 @@
     --experience-focus-offset: 3px;
     --experience-motion-fast: 120ms;
     --experience-motion-standard: 180ms;
-    --experience-motion-emphasized: 240ms;
     --experience-ease-standard: cubic-bezier(0.2, 0, 0, 1);
-    --experience-ease-emphasized: cubic-bezier(0.2, 0, 0, 1.2);
     font-family: var(--font-ui);
     font-weight: 400;
     line-height: var(--line-height-body);
