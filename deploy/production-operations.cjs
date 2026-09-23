@@ -591,12 +591,34 @@ function inspectRepositoryState(sourceSha, readGit = readRepositoryGit) {
 }
 
 function diagnose(request) {
+    // Fixed paths only: report sizes without enumerating customer files or
+    // treating an untracked production path as safe to delete.
+    const diskFootprintPaths = {
+        repository: '/var/www/kaiyuangouwu',
+        repositoryPackages: '/var/www/kaiyuangouwu/packages',
+        repositoryDevServerDist: '/var/www/kaiyuangouwu/packages/dev-server/dist',
+        repositoryStorefrontDist: '/var/www/kaiyuangouwu/packages/storefront/dist',
+        repositoryAdminDist: '/var/www/kaiyuangouwu/packages/next-admin/dist',
+        repositoryAdminUiDist: '/var/www/kaiyuangouwu/admin-ui/dist',
+        repositoryWorkspaceCache: '/var/www/kaiyuangouwu/.cache',
+        releases: '/var/www/kaiyuangouwu-releases',
+        logs: '/var/log',
+        backups: '/var/backups',
+        systemCache: '/var/cache',
+        ubuntuHome: '/home/ubuntu',
+    };
     const result = {
         operation: request.operation,
         sourceSha: request.sourceSha,
         observedAt: new Date().toISOString(),
         disk: readCommand('df', ['-Pk', '/']),
         releaseSize: readCommand('du', ['-skx', '/var/www/kaiyuangouwu-releases']),
+        diskFootprintKib: Object.fromEntries(
+            Object.entries(diskFootprintPaths).map(([label, directory]) => [
+                label,
+                existsSync(directory) ? readCommand('du', ['-skx', directory]) : { status: 'absent' },
+            ]),
+        ),
         repositorySha: readCommand('sudo', [
             '-n',
             '-H',
