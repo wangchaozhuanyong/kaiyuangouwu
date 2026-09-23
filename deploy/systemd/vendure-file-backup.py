@@ -293,6 +293,82 @@ def restore(archive_path: Path, target: Path) -> dict[str, object]:
     return summary(manifest)
 
 
+def restore_stream(source: BinaryIO, target: Path, manifest_path: Path, expected_sha256: str) -> dict[str, object]:
+    """Restore every member while reading a compressed archive only once from stdin."""
+    if not re.fullmatch(r"[a-f0-9]{64}", expected_sha256):
+        raise ValueError("Archive SHA-256 is invalid")
+    if target.exists() and any(target.iterdir()):
+        raise ValueError("Restore target must be empty")
+    manifest = json.loads(manifest_path.read_bytes())
+    if not isinstance(manifest, dict) or manifest.get("version") != MANIFEST_VERSION:
+        raise ValueError("External manifest version is unsupported")
+    directories, files = validate_manifest(manifest)
+    if (
+        manifest.get("fileCount") != len(files)
+        or manifest.get("directoryCount") != len(directories)
+        or manifest.get("totalBytes") != sum(int(item.get("size", -1)) for item in files)
+    ):
+        raise ValueError("External manifest totals are inconsistent")
+    expected_directories = {"data/" + str(item["path"]): item for item in directories}
+    expected_files = {"data/" + str(item["path"]): item for item in files}
+    expected_names = {*expected_directories, *expected_files, MANIFEST_NAME}
+    if len(expected_names) != len(directories) + len(files) + 1:
+        raise ValueError("External manifest contains duplicate archive entries")
+
+    target.mkdir(mode=0o700, parents=True, exist_ok=True)
+    reader = HashingReader(source)
+    seen: set[str] = set()
+    internal_manifest: object = None
+    with tarfile.open(fileobj=reader, mode="r|gz") as archive:
+        for member in archive:
+            name = member.name.rstrip("/")
+            path = PurePosixPath(name)
+            if path.is_absolute() or ".." in path.parts or name in seen or name not in expected_names:
+                raise ValueError("Archive contains an unsafe, duplicate, or unexpected path")
+            seen.add(name)
+            if name == MANIFEST_NAME:
+                if not member.isfile():
+                    raise ValueError("Archive manifest is not a regular file")
+                embedded = archive.extractfile(member)
+                if embedded is None:
+                    raise ValueError("Archive manifest cannot be read")
+                internal_manifest = json.load(embedded)
+                continue
+            destination = target.joinpath(*PurePosixPath(name.removeprefix("data/")).parts)
+            if name in expected_directories:
+                if not member.isdir():
+                    raise ValueError(f"Archive directory changed type: {name}")
+                destination.mkdir(mode=0o700, parents=True, exist_ok=True)
+                continue
+            item = expected_files[name]
+            if not member.isfile() or member.size != item.get("size") or not destination.parent.is_dir():
+                raise ValueError(f"Archive file metadata does not match: {name}")
+            embedded = archive.extractfile(member)
+            if embedded is None:
+                raise ValueError(f"Archive file cannot be restored: {name}")
+            digest = hashlib.sha256()
+            with destination.open("xb") as output:
+                for chunk in iter(lambda: embedded.read(1024 * 1024), b""):
+                    output.write(chunk)
+                    digest.update(chunk)
+            if digest.hexdigest() != item.get("sha256"):
+                raise ValueError(f"Restored file digest does not match: {name}")
+            os.chmod(destination, int(item.get("mode", 0o600)))
+            mtime_ns = int(item.get("mtimeNs", 0))
+            if mtime_ns > 0:
+                os.utime(destination, ns=(mtime_ns, mtime_ns))
+    for chunk in iter(lambda: reader.read(1024 * 1024), b""):
+        pass
+    if reader.digest.hexdigest() != expected_sha256:
+        raise ValueError("Compressed archive SHA-256 does not match")
+    if seen != expected_names or canonical_json(internal_manifest) != canonical_json(manifest):
+        raise ValueError("Restored archive does not match its complete manifest")
+    for name, item in sorted(expected_directories.items(), key=lambda entry: len(PurePosixPath(entry[0]).parts), reverse=True):
+        destination = target.joinpath(*PurePosixPath(name.removeprefix("data/")).parts)
+        os.chmod(destination, int(item.get("mode", 0o700)))
+    return summary(manifest)
+
+
 def summary(manifest: dict[str, object]) -> dict[str, object]:
     return {
         "version": manifest.get("version"),
@@ -315,12 +391,18 @@ def main() -> None:
     restore_parser = subparsers.add_parser("restore")
     restore_parser.add_argument("archive", type=Path)
     restore_parser.add_argument("target", type=Path)
+    stream_parser = subparsers.add_parser("restore-stream")
+    stream_parser.add_argument("target", type=Path)
+    stream_parser.add_argument("manifest", type=Path)
+    stream_parser.add_argument("sha256")
     arguments = parser.parse_args()
     try:
         if arguments.command == "capture":
             result = capture(arguments.archive, arguments.roots)
         elif arguments.command == "verify":
             result = verify(arguments.archive)
+        elif arguments.command == "restore-stream":
+            result = restore_stream(sys.stdin.buffer, arguments.target, arguments.manifest, arguments.sha256)
         else:
             result = restore(arguments.archive, arguments.target)
     except Exception:

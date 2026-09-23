@@ -1,0 +1,118 @@
+name: Complete Offsite File Restore Drill
+
+on:
+    workflow_call:
+        inputs:
+            target_sha:
+                required: true
+                type: string
+    schedule:
+        - cron: '0 22 * * 0'
+
+permissions:
+    contents: read
+    id-token: write
+
+jobs:
+    restore:
+        name: restore every offsite file before production switch
+        runs-on: ubuntu-24.04
+        timeout-minutes: 75
+        env:
+            AWS_REGION: ap-northeast-1
+            AWS_ACCOUNT_ID: '079740175286'
+            AWS_ROLE_ARN: arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy
+            INSTANCE_ID: i-041a146558e432cbf
+            BACKUP_BUCKET: yunqiao-vendure-prod-backup-079740175286-apne1
+            TARGET_SHA: ${{ inputs.target_sha || github.sha }}
+        steps:
+            - name: Check out the locked source
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+              with:
+                  ref: ${{ inputs.target_sha || github.sha }}
+                  persist-credentials: false
+
+            - name: Configure short-lived AWS credentials
+              uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+              with:
+                  role-to-assume: ${{ env.AWS_ROLE_ARN }}
+                  role-session-name: vendure-file-restore-${{ github.run_id }}
+                  aws-region: ${{ env.AWS_REGION }}
+                  allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+
+            - name: Restore and verify every file from the offsite archive
+              run: |
+                  set -Eeuo pipefail
+                  python3 deploy/offsite-file-restore-drill.py \
+                    --bucket "$BACKUP_BUCKET" --prefix files/ \
+                    --target-sha "$TARGET_SHA" --run-id "$GITHUB_RUN_ID" \
+                    --receipt "$RUNNER_TEMP/file-restore-drill.json"
+
+            - name: Install the exact proof on production through Systems Manager
+              run: |
+                  set -Eeuo pipefail
+                  python3 - <<'PY'
+                  import base64
+                  import json
+                  import os
+                  from pathlib import Path
+                  import shlex
+
+                  receipt = Path(os.environ['RUNNER_TEMP'], 'file-restore-drill.json').read_bytes()
+                  sha = os.environ['TARGET_SHA']
+                  run_id = os.environ['GITHUB_RUN_ID']
+                  encoded = base64.b64encode(receipt).decode('ascii')
+                  proof_name = f'{sha}-{run_id}.json'
+                  command = '\n'.join([
+                      'set -Eeuo pipefail',
+                      'proof_file="$(mktemp /tmp/vendure-offsite-proof.XXXXXX)"',
+                      'trap \'rm -f -- "$proof_file"\' EXIT',
+                      f"printf '%s' {shlex.quote(encoded)} | base64 -d > \"$proof_file\"",
+                      f"jq -e --arg sha {shlex.quote(sha)} --arg run {shlex.quote(run_id)} '"
+                      '.source == "offsite" and .method == "offhost-full-restore" and '
+                      '.targetSha == $sha and .runId == $run and '
+                      '(.archiveSha256 | test("^[a-f0-9]{64}$")) and '
+                      '(.archive.fileCount | type == "number" and . > 0) and '
+                      '(.archive.totalBytes | type == "number" and . > 0) and '
+                      '.rtoSeconds == 14400 and .durationSeconds <= .rtoSeconds'
+                      "' \"$proof_file\" >/dev/null",
+                      'install -d -o root -g root -m 0700 /var/lib/vendure-readiness/file-restore-drill-runs',
+                      f'install -o root -g root -m 0644 "$proof_file" /var/lib/vendure-readiness/file-restore-drill-runs/{proof_name}',
+                      'install -o root -g root -m 0644 "$proof_file" /var/lib/vendure-readiness/file-restore-drill.json',
+                      f'cmp -s "$proof_file" /var/lib/vendure-readiness/file-restore-drill-runs/{proof_name}',
+                      f'printf "OFFSITE_FILE_RESTORE_PROOF_OK sha={sha} run={run_id}\\n"',
+                  ])
+                  parameters = {'commands': [command], 'executionTimeout': ['300']}
+                  Path(os.environ['RUNNER_TEMP'], 'offsite-proof-ssm.json').write_text(json.dumps(parameters))
+                  PY
+                  command_id="$(aws ssm send-command \
+                    --document-name AWS-RunShellScript --instance-ids "$INSTANCE_ID" \
+                    --comment "Full offsite file restore proof $TARGET_SHA" \
+                    --parameters "file://$RUNNER_TEMP/offsite-proof-ssm.json" \
+                    --query 'Command.CommandId' --output text)"
+                  test -n "$command_id"
+                  for attempt in $(seq 1 60); do
+                    status="$(aws ssm get-command-invocation --command-id "$command_id" \
+                      --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || true)"
+                    case "$status" in
+                      Success) break ;;
+                      Failed|Cancelled|TimedOut|Cancelling) break ;;
+                    esac
+                    sleep 5
+                  done
+                  aws ssm get-command-invocation --command-id "$command_id" \
+                    --instance-id "$INSTANCE_ID" --output json > "$RUNNER_TEMP/offsite-proof-result.json"
+                  jq -e '.Status == "Success" and (.StandardOutputContent | contains("OFFSITE_FILE_RESTORE_PROOF_OK"))' \
+                    "$RUNNER_TEMP/offsite-proof-result.json" >/dev/null || {
+                      jq '{Status, ResponseCode, StandardErrorContent}' "$RUNNER_TEMP/offsite-proof-result.json"
+                      exit 1
+                    }
+                  echo "Verified complete offsite file restore for $TARGET_SHA in run $GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+
+            - name: Preserve the full-restore receipt
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+              with:
+                  name: offsite-file-restore-${{ github.run_id }}
+                  path: ${{ runner.temp }}/file-restore-drill.json
+                  if-no-files-found: error
+                  retention-days: 30

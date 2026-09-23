@@ -105,6 +105,15 @@ check_restore_evidence() {
         failures+=("${failure_prefix}-rto-failed")
     elif [[ "${offsite_required}" == "true" && "${source}" != "offsite" ]]; then
         failures+=("${failure_prefix}-offsite-unverified")
+    elif [[ "${failure_prefix}" == "file-restore-drill" ]] && ! jq -e '
+        .method == "offhost-full-restore" and
+        (.archiveSha256 | type == "string" and test("^[a-f0-9]{64}$")) and
+        (.archive.fileCount | type == "number" and . > 0) and
+        (.archive.totalBytes | type == "number" and . > 0) and
+        (.targetSha | type == "string" and test("^[a-f0-9]{40}$")) and
+        (.runId | type == "string" and test("^[0-9]+$"))
+    ' "${evidence}" >/dev/null; then
+        failures+=("${failure_prefix}-full-restore-unverified")
     fi
 }
 
