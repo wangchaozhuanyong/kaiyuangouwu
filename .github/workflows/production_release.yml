@@ -217,6 +217,8 @@ jobs:
             target_sha: ${{ inputs.target_sha || github.sha }}
             components: ${{ needs.route.outputs.components }}
             ci_run_id: ${{ needs.route.outputs.ci_run_id || github.run_id }}
+            storefront_sha: ${{ needs.preflight.outputs.storefront_sha }}
+            admin_sha: ${{ needs.preflight.outputs.admin_sha }}
         permissions:
             contents: read
             actions: read
