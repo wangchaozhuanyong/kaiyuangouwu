@@ -274,7 +274,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
                 ? { missing: checkRequirements(plan, packageInventory()), reused: [] }
                 : await findInputCoverage({ repository, targetSha: git('rev-parse', target), plan });
         const execution = missingPlan(plan, coverage.missing);
-        execution.reusedChecks = coverage.reused;
         if (process.env.GITHUB_STEP_SUMMARY)
             appendFileSync(
                 process.env.GITHUB_STEP_SUMMARY,
