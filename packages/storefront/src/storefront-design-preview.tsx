@@ -17,12 +17,15 @@ import { routePath, storefrontRouteNames, type RouteName } from './storefront-ro
 
 import './styles/storefront-design-preview.css';
 
-type PreviewScenario = 'normal' | 'empty' | 'loading' | 'error' | 'disabled' | 'dialog';
+type PreviewScenario =
+    'normal' | 'dense' | 'aftercare' | 'empty' | 'loading' | 'error' | 'disabled' | 'dialog';
 type PreviewViewport = 390 | 1023 | 1024 | 1440 | 1920 | 2560;
 type PreviewAuth = 'guest' | 'authenticated';
 
 const scenarios: Array<{ value: PreviewScenario; label: string }> = [
     { value: 'normal', label: '正常数据' },
+    { value: 'dense', label: '长内容与多数据（本地样本）' },
+    { value: 'aftercare', label: '交付与售后（本地样本）' },
     { value: 'empty', label: '空数据' },
     { value: 'loading', label: '加载中' },
     { value: 'error', label: '错误' },
@@ -48,6 +51,13 @@ function previewRouteUrl(
         storefrontPreviewSession: session,
     });
     if (route === 'product' && productId) parameters.set('id', productId);
+    // The embedded runtime serves this read-only sample; never query a real customer order.
+    if (route === 'order-detail') parameters.set('id', 'order-1');
+    if (route === 'order-confirmation' && scenario === 'aftercare') {
+        parameters.set('id', 'LOCALQADIGITALORDER20260923NOTAREALORDER');
+        parameters.set('token', 'local-preview-only');
+    }
+    if (route === 'orders' && scenario === 'aftercare') parameters.set('tab', 'service');
     if (route === 'legal') parameters.set('id', 'privacy');
     return `${routePath(route)}?${parameters.toString()}`;
 }
@@ -284,11 +294,20 @@ export function StorefrontDesignPreview() {
                                 productPreview.id,
                             );
                             frameSource.current = nextSource;
-                            if (frameReady && frame && route !== 'product' && nextRoute !== 'product') {
+                            if (
+                                frameReady &&
+                                frame &&
+                                !['product', 'order-confirmation'].includes(route) &&
+                                !['product', 'order-confirmation'].includes(nextRoute)
+                            ) {
                                 frame.contentWindow?.postMessage(
                                     {
                                         type: 'storefront-preview-navigate',
                                         route: nextRoute,
+                                        tab:
+                                            nextRoute === 'orders' && scenario === 'aftercare'
+                                                ? 'service'
+                                                : undefined,
                                         session: previewSession,
                                     },
                                     window.location.origin,

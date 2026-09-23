@@ -15,7 +15,9 @@ export function installStorefrontPreviewRuntime(): void {
 
     const preset = parameters.get('storefrontPreviewPreset') ?? 'classic';
     const signedIn = parameters.get('storefrontPreviewAuth') === 'authenticated';
-    const data = fixtureData(preset, signedIn);
+    const scenario = parameters.get('storefrontPreviewScenario');
+    const content = scenario === 'dense' || scenario === 'aftercare' ? scenario : 'normal';
+    const data = fixtureData(preset, signedIn, content);
     const nativeFetch = window.fetch.bind(window);
 
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -27,7 +29,7 @@ export function installStorefrontPreviewRuntime(): void {
             });
         }
         if (url.origin === window.location.origin && url.pathname.includes('/storefront-realtime')) {
-            return new Response('', { status: 204 });
+            return new Response(null, { status: 204 });
         }
         return nativeFetch(input, init);
     };

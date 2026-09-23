@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { act, useContext } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { StorefrontContext } from './StorefrontContext';
 import { StorefrontShell } from './StorefrontShell';
 
 const viewport = vi.hoisted(() => ({ desktop: false }));
@@ -18,7 +19,14 @@ vi.mock('./components/common/desktop-account-navigation', () => ({
     isDesktopAccountRoute: () => true,
 }));
 vi.mock('@tanstack/react-router', () => ({
-    Outlet: () => <div>PAGE_CONTENT</div>,
+    Outlet: () => {
+        const context = useContext(StorefrontContext);
+        return (
+            <div>
+                PAGE_CONTENT <span data-testid="address-count">{context?.customer?.addresses?.length}</span>
+            </div>
+        );
+    },
     lazyRouteComponent: () => () => <div>SIGN_IN_FORM</div>,
 }));
 vi.mock('./components/common/bottom-navigation', () => ({
@@ -63,6 +71,30 @@ describe('catalog rendering boundary', () => {
         expect(element.textContent).toContain('CATALOG_SKELETON');
         expect(element.textContent).not.toContain('CHECKING_ACCOUNT');
         expect(element.textContent).not.toContain('PAGE_CONTENT');
+    });
+    it('shows populated preview customer data', () => {
+        window.history.replaceState(
+            null,
+            '',
+            '/addresses?storefrontPreviewEmbedded=1&storefrontPreviewAuth=authenticated&storefrontPreviewScenario=dense',
+        );
+        render({
+            displayedRoute: { name: 'addresses' },
+            customer: { id: 'qa-customer', addresses: [{ id: 'qa-address' }] },
+        });
+        expect(element.querySelector('[data-testid="address-count"]')?.textContent).toBe('1');
+    });
+    it('keeps guest preview anonymous even if a customer session exists', () => {
+        window.history.replaceState(
+            null,
+            '',
+            '/addresses?storefrontPreviewEmbedded=1&storefrontPreviewAuth=guest',
+        );
+        render({
+            displayedRoute: { name: 'addresses' },
+            customer: { id: 'qa-customer', addresses: [{ id: 'qa-address' }] },
+        });
+        expect(element.textContent).toContain('SIGN_IN_FORM');
     });
     it('renders the product for an anonymous direct product URL', () => {
         render({ displayedRoute: { name: 'product', id: '1' } });
@@ -153,6 +185,6 @@ describe('catalog rendering boundary', () => {
                 }),
             );
         });
-        expect(navigate).toHaveBeenCalledWith({ name: 'account', id: undefined }, true);
+        expect(navigate).toHaveBeenCalledWith({ name: 'account', id: undefined, tab: undefined }, true);
     });
 });
