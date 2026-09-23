@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/require-await -- QueryRunner mocks preserve async database APIs. */
+import { storeAdministratorPermissions } from '@vendure/store-management-plugin';
 import { QueryRunner, Table } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -11,11 +12,14 @@ function runner(
     storeAccounts: Array<Record<string, unknown>> = [],
     storeRoleRows: Array<Record<string, unknown>> = [],
     channelCode = '__default_channel__',
+    existingProfiles: Array<Record<string, unknown>> = [],
+    legacyTablePresent = true,
 ) {
     const tables: Table[] = [];
     const query = vi.fn(async (sql: string) => {
         if (sql.includes('COUNT(*)')) return [{ count: 0 }];
         if (sql.includes('NOT EXISTS')) return unmappedRows;
+        if (sql.includes('FROM "administrator_access_profile"')) return existingProfiles;
         if (sql.includes('SELECT DISTINCT') && sql.includes('role_channels_channel')) {
             return [{ channelId: 1 }];
         }
@@ -31,7 +35,7 @@ function runner(
         }
         if (sql.includes('FROM "store_administrator_access" s')) return storeAccounts;
         if (sql.includes('AS roleCode') && sql.includes('FROM "user_roles_role" ur')) {
-            return storeRoleRows;
+            return storeRoleRows.map((row, index) => ({ roleId: index + 100, ...row }));
         }
         if (sql.includes('__super_admin_role__') || (sql.includes('INNER JOIN') && sql.includes('role'))) {
             return Array.from({ length: ownerCount }, (_, index) => ({
@@ -47,7 +51,7 @@ function runner(
             options: { type: databaseType },
             driver: { escape: (name: string) => `"${name}"` },
         },
-        hasTable: vi.fn(async (name: string) => name === 'store_administrator_access'),
+        hasTable: vi.fn(async (name: string) => name === 'store_administrator_access' && legacyTablePresent),
         createTable: vi.fn(async (table: Table) => tables.push(table)),
         query,
     } as unknown as QueryRunner;
@@ -239,7 +243,7 @@ describe('administrator access and governance migration', () => {
         );
     });
 
-    it('allows only the fixed store primary role to retain core team-management permissions', async () => {
+    it('normalizes the fixed store primary role but rejects platform permissions on another role', async () => {
         const account = [{ administratorId: 7, userId: 17, mustChangePassword: true }];
         const accepted = runner(
             'mysql',
@@ -258,11 +262,92 @@ describe('administrator access and governance migration', () => {
             1,
             [],
             account,
-            [{ roleCode: 'store-a-store-admin', permissions: 'CreateAdministrator,CreateApiKey' }],
+            [{ roleCode: 'unsafe-store-role', permissions: 'CreateApiKey' }],
             'store-a',
         );
         await expect(
             new AddAdministratorAccessGovernance1789408800000().up(rejected.queryRunner),
         ).rejects.toThrow('platform-only permission CreateApiKey');
+    });
+
+    it('resumes a partial MySQL migration and replaces the fixed store role with the reviewed policy', async () => {
+        const existingOwner = {
+            administratorId: 1,
+            userId: 10,
+            scope: 'PLATFORM',
+            authority: 'OWNER',
+            status: 'ACTIVE',
+            channelId: null,
+            platformOwnerSlot: 'PLATFORM_OWNER',
+            storePrimarySlot: null,
+        };
+        const { queryRunner, query } = runner(
+            'mysql',
+            1,
+            [],
+            [{ administratorId: 7, userId: 17, mustChangePassword: false }],
+            [
+                {
+                    roleCode: 'store-a-store-admin',
+                    permissions: ['ReadProduct', 'CreateApiKey', 'UpdateGlobalSettings'],
+                },
+            ],
+            'store-a',
+            [existingOwner],
+        );
+
+        await new AddAdministratorAccessGovernance1789408800000().up(queryRunner);
+
+        expect(query).toHaveBeenCalledWith(expect.stringContaining('UPDATE "role" SET "permissions"'), [
+            JSON.stringify(['Authenticated', ...storeAdministratorPermissions.map(String)]),
+            100,
+        ]);
+        expect(query).toHaveBeenCalledWith(
+            expect.stringContaining('MIGRATION_STORE_PRIMARY_ROLE_NORMALIZED'),
+            expect.arrayContaining([1, 7, 100, 1]),
+        );
+        expect(
+            query.mock.calls.filter(([sql]) => String(sql).includes("'PLATFORM', 'OWNER', 'ACTIVE'")),
+        ).toHaveLength(0);
+        expect(query).toHaveBeenCalledWith(expect.stringContaining("'STORE', 'ADMIN', 'ACTIVE'"), [
+            7,
+            17,
+            1,
+            false,
+            '1',
+        ]);
+    });
+
+    it('still maps non-legacy administrators when the legacy access table is absent', async () => {
+        const { queryRunner, query } = runner(
+            'mysql',
+            1,
+            [
+                {
+                    administratorId: 9,
+                    userId: 19,
+                    roleCode: 'store-media-editor',
+                    permissions: ['ReadAsset', 'UpdateAsset'],
+                    channelId: 2,
+                },
+            ],
+            [],
+            [],
+            '美宜佳',
+            [],
+            false,
+        );
+
+        await new AddAdministratorAccessGovernance1789408800000().up(queryRunner);
+
+        expect(query).toHaveBeenCalledWith(expect.stringContaining("'STAFF', ?, ?, ?"), [
+            9,
+            19,
+            'STORE',
+            'ACTIVE',
+            '2',
+            1,
+            false,
+        ]);
     });
 });
