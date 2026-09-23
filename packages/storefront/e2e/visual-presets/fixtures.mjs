@@ -59,6 +59,9 @@ const collection = {
 const order = {
     id: 'order-1',
     code: 'QA0001',
+    createdAt: '2026-01-15T08:00:00.000Z',
+    updatedAt: '2026-01-15T08:00:00.000Z',
+    orderPlacedAt: null,
     state: 'AddingItems',
     totalQuantity: 1,
     subTotalWithTax: 2990,
@@ -109,6 +112,9 @@ const customer = {
     phoneNumber: null,
     addresses: [],
     orders: { items: [], totalItems: 0 },
+    pending: { totalItems: 0 },
+    shipping: { totalItems: 0 },
+    receiving: { totalItems: 0 },
 };
 const block = {
     id: 'hero-1',
@@ -238,7 +244,304 @@ const quotaWindow = {
     remaining: 10,
     windowEndsAt: '2030-01-01T00:00:00Z',
 };
-export function fixtureData(presetId = 'modern-oriental', signedIn = true) {
+// Deliberately synthetic, read-only content for wrapping and populated-layout acceptance.
+// Construct fresh objects so selecting this profile cannot mutate the normal preview.
+function denseCommerceFixture(signedIn) {
+    const names = [
+        '本地布局验收 · 山岚随行保温杯礼盒套装（含杯套与替换密封圈）',
+        'Local layout sample · Everyday insulated travel flask with carrying sleeve and replacement seals',
+        '本地布局验收 · 茶具旅行收纳组合 / MidnightForestLimitedEditionCollection2026',
+    ];
+    const products = names.map((name, index) => {
+        const id = `product-${index + 1}`;
+        const itemVariant = {
+            ...variant,
+            id: `variant-${index + 1}`,
+            name,
+            sku: `QA-LAYOUT-${index + 1}`,
+            priceWithTax: 2990 + index * 1000,
+            product: { id, name, featuredAsset: asset },
+        };
+        return { ...product, id, name, slug: `qa-layout-${index + 1}`, variants: [itemVariant] };
+    });
+    const lines = products.map((item, index) => ({
+        ...order.lines[0],
+        id: `line-${index + 1}`,
+        quantity: index + 1,
+        productVariant: item.variants[0],
+        proratedUnitPriceWithTax: item.variants[0].priceWithTax,
+        linePriceWithTax: item.variants[0].priceWithTax * (index + 1),
+    }));
+    const total = lines.reduce((sum, line) => sum + line.linePriceWithTax, 0);
+    const checkoutOrder = { ...order, lines, totalQuantity: 6, subTotalWithTax: total, totalWithTax: total };
+    const orders = ['Shipped', 'PaymentSettled', 'Delivered', 'ArrangingPayment'].map((state, index) => ({
+        ...checkoutOrder,
+        id: `order-${index + 1}`,
+        code: `LOCALQA20260923LONGORDERREFERENCE00000${index + 1}`,
+        state,
+        orderPlacedAt: order.createdAt,
+        fulfillments: ['Shipped', 'Delivered'].includes(state)
+            ? [
+                  {
+                      id: `qa-fulfillment-${index + 1}`,
+                      state,
+                      method: 'Local layout sample · Standard tracked delivery / 本地配送样本',
+                      trackingCode: `LOCALQATRACKINGREFERENCE20260923000000${index + 1}`,
+                      createdAt: order.createdAt,
+                      updatedAt: order.updatedAt,
+                  },
+              ]
+            : [],
+    }));
+    const addresses = [1, 2, 3].map(index => ({
+        id: `qa-address-${index}`,
+        fullName: `本地验收收件人 ${index} / Layout sample recipient`,
+        phoneNumber: null,
+        streetLine1: '本地布局验收地址 · 长地址用于检查完整展示及换行，不是真实收货地址',
+        streetLine2: 'Local preview only · Building A, reception desk on the mezzanine floor',
+        city: 'Kuala Lumpur',
+        province: 'Kuala Lumpur',
+        postalCode: '00000',
+        country: { code: 'MY', name: 'Malaysia' },
+        defaultShippingAddress: index === 1,
+        defaultBillingAddress: index === 1,
+    }));
+    return {
+        products: { items: products, totalItems: products.length },
+        product: products[0],
+        storefrontCatalog: { items: products, totalItems: products.length },
+        storefrontCart: {
+            ...cart,
+            totalQuantity: 6,
+            selectedQuantity: 6,
+            selectedLineCount: lines.length,
+            lines: lines.map(line => ({
+                id: `cart-${line.id}`,
+                quantity: line.quantity,
+                selected: true,
+                available: true,
+                productVariant: line.productVariant,
+            })),
+            checkoutOrder,
+        },
+        activeCustomer: signedIn
+            ? {
+                  ...customer,
+                  addresses,
+                  orders: { items: orders, totalItems: orders.length },
+                  pending: { totalItems: 1 },
+                  shipping: { totalItems: 1 },
+                  receiving: { totalItems: 1 },
+              }
+            : null,
+        order: signedIn ? orders[0] : null,
+    };
+}
+
+function aftercareFixture(signedIn) {
+    const base = denseCommerceFixture(signedIn);
+    const digitalLines = ['file_download', 'file_download', 'auto_card', 'manual_service'].map(
+        (mode, index) => ({
+            ...order.lines[0],
+            id: `qa-digital-line-${index}`,
+            productVariant: {
+                ...variant,
+                id: `qa-digital-variant-${index}`,
+                name: `本地交付验收 ${index + 1} · DigitalLayoutSampleWithLongProductReference20260923（非真实商品）`,
+                customFields: { fulfillmentType: 'digital', digitalDeliveryMode: mode },
+            },
+            customFields: {
+                fulfillmentTypeSnapshot: 'digital',
+                digitalDeliveryModeSnapshot: mode,
+                refundPolicySnapshot: 'MERCHANT_REVIEW',
+            },
+        }),
+    );
+    const sampleOrder = {
+        ...order,
+        code: 'LOCALQADIGITALORDER20260923NOTAREALORDER',
+        state: 'PaymentSettled',
+        orderPlacedAt: order.createdAt,
+        lines: digitalLines,
+        totalQuantity: 4,
+        subTotalWithTax: 11960,
+        totalWithTax: 11960,
+        checkoutFulfillment: {
+            fulfillmentType: 'DIGITAL',
+            containsPhysicalProducts: false,
+            containsDigitalProducts: true,
+            requiresShippingAddress: false,
+            requiresShippingMethod: false,
+        },
+        digitalDeliveries: ['READY', 'FILE_MISSING'].map((status, index) => ({
+            orderLineId: digitalLines[index].id,
+            sku: `QA-DOWNLOAD-${index}`,
+            name: digitalLines[index].productVariant.name,
+            status,
+            // A harmless local fragment, never a signed URL or a real download.
+            downloadUrl: status === 'READY' ? '#local-qa-download-not-a-file' : null,
+        })),
+        autoCardDeliveries: ['WAITING_STOCK', 'SENT'].map((state, index) => ({
+            id: `qa-auto-${index}`,
+            orderLineId: digitalLines[2].id,
+            state,
+            productName: digitalLines[2].productVariant.name,
+            sku: 'QA-AUTO',
+            quantity: 1,
+            attemptCount: 0,
+            createdAt: order.createdAt,
+            updatedAt: order.updatedAt,
+        })),
+        manualDigitalDeliveries: ['WAITING_PROCESSING', 'EMAIL_FAILED', 'SENT'].map((state, index) => ({
+            id: `qa-manual-${index}`,
+            orderLineId: digitalLines[3].id,
+            state,
+            productName: digitalLines[3].productVariant.name,
+            sku: 'QA-MANUAL',
+            quantity: 1,
+            attemptCount: 0,
+            expectedAt: order.createdAt,
+            overdue: index === 0,
+        })),
+    };
+    const afterSales = ['PENDING', 'APPROVED', 'APPROVED', 'COMPLETED'].map((state, index) => ({
+        id: `qa-return-${index}`,
+        code: `LOCALQAAFTERSALESREFERENCE202609230000${index}`,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+        state,
+        type: index === 2 ? 'EXCHANGE' : 'RETURN_AND_REFUND',
+        reason: 'NOT_AS_DESCRIBED',
+        description: '本地售后布局样本，不是真实申请。',
+        currencyCode: 'MYR',
+        requestedAmount: 2990,
+        returnStatus: index === 1 ? 'AWAITING_SHIPMENT' : index === 3 ? 'RECEIVED' : 'NOT_REQUIRED',
+        returnInstructions:
+            index === 1
+                ? '本地验收说明：请核对商品和包装后填写承运商与退货单号。Local preview only; do not send any parcel.'
+                : null,
+        replacementStatus: index === 2 ? 'EXCEPTION' : 'NOT_REQUIRED',
+        replacementCarrier: index === 2 ? '本地承运商样本' : null,
+        replacementTrackingCode: index === 2 ? 'LOCALQAREPLACEMENTTRACKINGREFERENCE202609230000001' : null,
+        replacementException: index === 2 ? '本地异常状态样本：地址需要确认，等待配送信息更新。' : null,
+        overdue: false,
+        order: { id: 'order-1', code: sampleOrder.code, state: 'PaymentSettled' },
+        items: [
+            {
+                id: `qa-return-item-${index}`,
+                orderLineId: 'line-1',
+                quantity: 1,
+                unitPriceWithTax: 2990,
+                lineAmountWithTax: 2990,
+                productName: base.product.name,
+                sku: 'QA-RETURN',
+                fulfillmentType: 'physical',
+                acceptedReturnQuantity: 0,
+                rejectedReturnQuantity: 0,
+            },
+        ],
+        events: [0, 1].map(event => ({
+            id: `qa-event-${index}-${event}`,
+            createdAt: order.createdAt,
+            state,
+            eventType: 'STATUS_CHANGED',
+            actorType: 'SYSTEM',
+            actorLabel: '本地验收',
+            note: '本地时间线样本 · This is a local layout sample, not a real service record.',
+        })),
+    }));
+    const reviews = ['APPROVED', 'PENDING', 'REJECTED'].map((state, index) => ({
+        id: `qa-review-${index}`,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+        state,
+        rating: 4 - index,
+        title: '本地评价排版样本（不是顾客评价）',
+        body: '本地长内容验收 · LocalReviewReferenceWithNoSpaces20260923ToVerifyWrapping\n这段文字仅用于检查换行和阅读间距，不应作为真实购买反馈。',
+        productName: base.products.items[index].name,
+        productId: base.products.items[index].id,
+        customerName: '本地验收样本',
+        sku: `QA-REVIEW-${index}`,
+        verifiedPurchase: true,
+        merchantResponse:
+            index === 0
+                ? '本地回复排版样本。LocalStoreResponseReferenceWithNoSpaces20260923ForLayoutAcceptanceOnly'
+                : null,
+    }));
+    return {
+        ...base,
+        order: signedIn ? sampleOrder : null,
+        storefrontOrderByConfirmationToken: signedIn ? sampleOrder : null,
+        activeCustomer: signedIn
+            ? {
+                  ...base.activeCustomer,
+                  orders: { items: [sampleOrder], totalItems: 1 },
+                  pending: { totalItems: 0 },
+                  shipping: { totalItems: 0 },
+                  receiving: { totalItems: 0 },
+              }
+            : null,
+        myAfterSalesRequests: signedIn ? afterSales : [],
+        myStorefrontReviews: signedIn ? reviews : [],
+        referralProgram: {
+            channelId: 'qa-channel',
+            enabled: true,
+            rewardRate: 5,
+            maxRewardPerOrder: null,
+            releaseDelayDays: 7,
+            currencyCode: 'MYR',
+            minimumOrderAmount: 0,
+            allowBalanceSpend: false,
+            attributionWindowDays: 30,
+            defaultPosterTemplate: '',
+            posterTemplates: [],
+        },
+        myReferralOverview: signedIn
+            ? {
+                  enabled: true,
+                  rewardRate: 5,
+                  releaseDelayDays: 7,
+                  inviteCode: 'LOCALQAONLY20260923',
+                  wallets: [
+                      {
+                          id: 'qa-wallet',
+                          createdAt: order.createdAt,
+                          updatedAt: order.updatedAt,
+                          currencyCode: 'MYR',
+                          availableBalance: 12500,
+                          pendingBalance: 2990,
+                          reservedBalance: 0,
+                      },
+                  ],
+                  invitedCount: 12,
+                  purchasedInviteeCount: 6,
+                  rewardSummaries: [{ currencyCode: 'MYR', grossReward: 15490, clawedBackReward: 0 }],
+                  invitees: Array.from({ length: 12 }, (_, index) => ({
+                      id: `qa-invitee-${index}`,
+                      displayName: `本地邀请样本 ${index + 1} · LocalLayoutSampleLongDisplayName`,
+                      boundAt: order.createdAt,
+                      firstPaidOrderAt: index < 6 ? order.createdAt : null,
+                  })),
+                  ledger: Array.from({ length: 12 }, (_, index) => ({
+                      id: `qa-ledger-${index}`,
+                      createdAt: order.createdAt,
+                      eventType: index % 2 ? 'REWARD_RELEASED' : 'REWARD_PENDING',
+                      currencyCode: 'MYR',
+                      availableDelta: 1250,
+                      pendingDelta: 0,
+                      reservedDelta: 0,
+                      availableAfter: 12500,
+                      pendingAfter: 2990,
+                      reservedAfter: 0,
+                      actorType: 'SYSTEM',
+                      note: '本地奖励流水样本，不是真实收益。',
+                  })),
+              }
+            : null,
+    };
+}
+
+export function fixtureData(presetId = 'modern-oriental', signedIn = true, content = 'normal') {
     return {
         storefrontVisualPreset: { channelId: 'qa-channel', presetId, revision: 'qa-1' },
         activeChannel: {
@@ -279,15 +582,37 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true) {
         activeStoreCommerceMode: 'HYBRID',
         storefrontCart: cart,
         activeCustomer: signedIn ? customer : null,
+        order: signedIn ? order : null,
+        myStorefrontReviews: [],
+        myStorefrontReviewCandidates: signedIn
+            ? [
+                  {
+                      orderLineId: 'qa-review-line',
+                      orderId: 'qa-review-order',
+                      orderCode: 'QA-REVIEW-01',
+                      orderState: 'PaymentSettled',
+                      orderPlacedAt: '2026-01-15T08:00:00.000Z',
+                      productId: product.id,
+                      productVariantId: variant.id,
+                      productName: product.name,
+                      variantName: variant.name,
+                      sku: variant.sku,
+                      fulfillmentType: 'physical',
+                  },
+              ]
+            : [],
+        myAfterSalesRequests: [],
         myCustomerAvatar: null,
         activeStorefrontCoupons: [],
-        myStoreCoupons: [],
-        myStoreCouponUsageRecords: [],
+        myStorefrontCoupons: [],
+        myStorefrontCouponUsageRecords: [],
+        myStorefrontCouponsPage: { items: [], totalItems: 0 },
+        myStorefrontCouponUsageRecordsPage: { items: [], totalItems: 0 },
         myDeliveryEmails: [],
         eligibleShippingMethods: [],
         eligiblePaymentMethods: [],
         myReferralOverview: null,
-        storefrontReferralProgram: null,
+        referralProgram: null,
         imageStudioConfig: {
             enabled: true,
             promptOptimizationEnabled: true,
@@ -321,5 +646,7 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true) {
         myImageGenerationJobs: { items: [], totalItems: 0 },
         productReviews: { items: [], totalItems: 0 },
         productReviewSummary: { averageRating: 0, totalReviews: 0 },
+        ...(content === 'dense' ? denseCommerceFixture(signedIn) : {}),
+        ...(content === 'aftercare' ? aftercareFixture(signedIn) : {}),
     };
 }
