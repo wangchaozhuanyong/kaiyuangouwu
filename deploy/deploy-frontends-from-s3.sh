@@ -22,7 +22,14 @@ readonly backend_sha="$(cat /var/www/kaiyuangouwu-releases/current-sha)"
 [[ "$(git rev-parse HEAD)" == "$backend_sha" ]] || fail 'Server source differs from active runtime'
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || fail 'Server has tracked source changes'
 git merge-base --is-ancestor "$backend_sha" "$target_sha"
-git diff --no-renames --name-only -z "$backend_sha" "$target_sha" -- | node deploy/frontend-release.mjs scope "$components"
+read_frontend_sha() {
+    node -e 'const fs=require("node:fs");const sha=JSON.parse(fs.readFileSync(process.argv[1],"utf8")).sourceSha;if(!/^[a-f0-9]{40}$/.test(sha))process.exit(1);process.stdout.write(sha)' "$1"
+}
+readonly storefront_sha="$(read_frontend_sha /var/www/kaiyuangouwu-storefront-current/frontend-release.json)"
+readonly admin_sha="$(read_frontend_sha /var/www/kaiyuangouwu-next-admin-current/frontend-release.json)"
+git diff --no-renames --name-only -z "$backend_sha" "$target_sha" -- | \
+    STOREFRONT_SHA="$storefront_sha" ADMIN_SHA="$admin_sha" TARGET_SHA="$target_sha" \
+    node deploy/frontend-release.mjs scope "$components"
 # A full release installs both pointers and the Nginx routing before static releases are possible.
 IFS=',' read -r -a apps <<< "$components"
 for app in "${apps[@]}"; do

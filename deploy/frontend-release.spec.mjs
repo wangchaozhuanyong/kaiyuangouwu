@@ -24,7 +24,7 @@ import { activateFrontends, assertFrontendScope, verifyFrontend } from './fronte
 
 const sha = value => createHash('sha256').update(value).digest('hex');
 function fixture(t) {
-    const root = mkdtempSync(join(tmpdir(), 'frontend-release-'));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'frontend-release-')));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const releases = ['storefront', 'next-admin'].map(component => {
         const old = join(root, component + '-old');
@@ -61,14 +61,38 @@ test('a missing second candidate rolls back the first switch', async t => {
     );
     for (const release of releases) assert.equal(realpathSync(release.pointer), release.old);
 });
-test('all cumulative frontend changes must be present in the deployment transaction', () => {
+test('the deployment transaction includes exactly the frontends changed since their active revisions', () => {
     const files = ['packages/storefront/src/index.css', 'packages/next-admin/src/index.css'];
-    assert.throws(() => assertFrontendScope(files, ['storefront']));
-    assert.doesNotThrow(() => assertFrontendScope(files, ['next-admin', 'storefront']));
-    assert.throws(() =>
-        assertFrontendScope([...files, 'packages/core/src/auth.ts'], ['next-admin', 'storefront']),
+    const revisions = {
+        storefrontSha: 'a'.repeat(40),
+        adminSha: 'b'.repeat(40),
+        targetSha: 'c'.repeat(40),
+    };
+    assert.throws(() => assertFrontendScope(files, ['storefront'], revisions, () => true));
+    assert.doesNotThrow(() =>
+        assertFrontendScope(files, ['next-admin', 'storefront'], revisions, () => true),
     );
-    assert.throws(() => assertFrontendScope(['packages/storefront/two-factor-tool/main.ts'], ['storefront']));
+    const onlyStorefrontChanged = (_source, _target, component) => component === 'storefront';
+    assert.doesNotThrow(() => assertFrontendScope(files, ['storefront'], revisions, onlyStorefrontChanged));
+    assert.throws(() =>
+        assertFrontendScope(files, ['next-admin', 'storefront'], revisions, onlyStorefrontChanged),
+    );
+    assert.throws(() =>
+        assertFrontendScope(
+            [...files, 'packages/core/src/auth.ts'],
+            ['next-admin', 'storefront'],
+            revisions,
+            () => true,
+        ),
+    );
+    assert.throws(() =>
+        assertFrontendScope(
+            ['packages/storefront/two-factor-tool/main.ts'],
+            ['storefront'],
+            revisions,
+            () => true,
+        ),
+    );
 });
 test('public admin acceptance checks entry, marker, and real asset response types', async t => {
     const { releases } = fixture(t);

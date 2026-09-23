@@ -52,9 +52,30 @@ test('cumulative backend changes and explicit managed writes cannot use a static
 });
 test('independent admin release requires bootstrap and includes both changed frontends', () => {
     const plan = classifyChanges(['packages/storefront/src/index.css', 'packages/next-admin/src/index.css']);
-    const input = { plan, baseSha: old, targetSha: target, storefrontSha: old, adminSha: old };
+    const input = {
+        plan,
+        baseSha: old,
+        targetSha: target,
+        storefrontSha: old,
+        adminSha: old,
+        changedSince: () => true,
+    };
     assert.equal(selectReleaseRoute({ ...input, adminSha: 'unknown' }).lane, 'runtime');
     assert.deepEqual(selectReleaseRoute(input).components, ['next-admin', 'storefront']);
+});
+
+test('a later storefront release does not redeploy an unchanged active admin', () => {
+    const plan = classifyChanges(['packages/storefront/src/index.css', 'packages/next-admin/src/index.css']);
+    const route = selectReleaseRoute({
+        plan,
+        baseSha: old,
+        targetSha: target,
+        storefrontSha: old,
+        adminSha: 'c'.repeat(40),
+        changedSince: (_source, _target, component) => component === 'storefront',
+    });
+    assert.equal(route.lane, 'frontend');
+    assert.deepEqual(route.components, ['storefront']);
 });
 
 test('an active backend with drifted frontend pointers cannot trigger an empty-diff release loop', () => {

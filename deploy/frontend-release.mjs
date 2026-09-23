@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -12,13 +13,40 @@ export const FRONTEND_POINTERS = {
     storefront: '/var/www/kaiyuangouwu-storefront-current',
     'next-admin': '/var/www/kaiyuangouwu-next-admin-current',
 };
-export function assertFrontendScope(paths, components) {
+export function frontendChangedSinceObserved(observedSha, targetSha, component) {
+    return Boolean(
+        execFileSync(
+            'git',
+            ['diff', '--no-renames', '--name-only', observedSha, targetSha, '--', `packages/${component}/`],
+            { encoding: 'utf8' },
+        ).trim(),
+    );
+}
+export function pendingFrontendComponents(
+    plan,
+    { storefrontSha, adminSha, targetSha },
+    changedSince = frontendChangedSinceObserved,
+) {
+    assert.match(targetSha, /^[a-f0-9]{40}$/u);
+    const observed = { storefront: storefrontSha, 'next-admin': adminSha };
+    return plan.frontends.filter(component => {
+        const sourceSha = observed[component];
+        assert.match(sourceSha, /^[a-f0-9]{40}$/u, `Unknown active ${component} revision`);
+        return sourceSha !== targetSha && changedSince(sourceSha, targetSha, component);
+    });
+}
+export function assertFrontendScope(
+    paths,
+    components,
+    revisions,
+    changedSince = frontendChangedSinceObserved,
+) {
     const plan = classifyChanges(paths);
     assert.equal(plan.lane, 'frontend', 'The cumulative production diff requires a full runtime release');
     assert.deepEqual(
         [...components].sort(),
-        plan.frontends,
-        'All changed frontends must be deployed together',
+        pendingFrontendComponents(plan, revisions, changedSince),
+        'Deploy exactly the frontends changed since their active revisions',
     );
     return plan;
 }
@@ -112,7 +140,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     assert.ok(components.length > 0 && components.every(component => STATIC_APPS.includes(component)));
     assert.equal(new Set(components).size, components.length);
     if (command === 'scope')
-        assertFrontendScope(readFileSync(0, 'utf8').split('\0').filter(Boolean), components);
+        assertFrontendScope(readFileSync(0, 'utf8').split('\0').filter(Boolean), components, {
+            storefrontSha: process.env.STOREFRONT_SHA,
+            adminSha: process.env.ADMIN_SHA,
+            targetSha: process.env.TARGET_SHA,
+        });
     else if (command === 'activate') {
         const releases = components.map(component => ({
             candidate: resolve(directory, component),

@@ -14,6 +14,12 @@ on:
             ci_run_id:
                 required: true
                 type: string
+            storefront_sha:
+                required: true
+                type: string
+            admin_sha:
+                required: true
+                type: string
 permissions:
     contents: read
     actions: read
@@ -28,6 +34,8 @@ jobs:
             BASE_SHA: ${{ inputs.base_sha }}
             COMPONENTS: ${{ inputs.components }}
             CI_RUN_ID: ${{ inputs.ci_run_id }}
+            STOREFRONT_SHA: ${{ inputs.storefront_sha }}
+            ADMIN_SHA: ${{ inputs.admin_sha }}
             GH_TOKEN: ${{ github.token }}
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd

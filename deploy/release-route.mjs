@@ -4,7 +4,17 @@ import { pathToFileURL } from 'node:url';
 
 import { classifyChanges, inspection } from '../scripts/ci-impact.mjs';
 
-export function selectReleaseRoute({ plan, baseSha, targetSha, storefrontSha, adminSha, managed = false }) {
+import { frontendChangedSinceObserved, pendingFrontendComponents } from './frontend-release.mjs';
+
+export function selectReleaseRoute({
+    plan,
+    baseSha,
+    targetSha,
+    storefrontSha,
+    adminSha,
+    managed = false,
+    changedSince = frontendChangedSinceObserved,
+}) {
     for (const sha of [baseSha, targetSha]) assert.match(sha, /^[a-f0-9]{40}$/u);
     if (managed)
         return {
@@ -28,13 +38,19 @@ export function selectReleaseRoute({ plan, baseSha, targetSha, storefrontSha, ad
                 reasons: ['A full release must initialize missing frontend pointers.'],
             };
         }
-        if (plan.frontends.every(component => observed[component] === targetSha)) {
+        const components = pendingFrontendComponents(
+            plan,
+            { storefrontSha, adminSha, targetSha },
+            changedSince,
+        );
+        if (!components.length) {
             return {
                 lane: 'none',
                 components: [],
-                reasons: ['The affected frontend versions are already active.'],
+                reasons: ['Affected frontend content already matches the active component revisions.'],
             };
         }
+        return { lane: 'frontend', components, reasons: plan.reasons };
     }
     if (baseSha === targetSha && (storefrontSha !== targetSha || adminSha !== targetSha)) {
         throw new Error(
