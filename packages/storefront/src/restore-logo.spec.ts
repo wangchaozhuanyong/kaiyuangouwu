@@ -7,6 +7,7 @@ describe('early logo restoration under production CSP', () => {
     it('keeps logo restoration in the app entry instead of a parser-blocking request', () => {
         const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
         const entry = readFileSync(new URL('./main.tsx', import.meta.url), 'utf8');
+        expect(html).toContain('<link rel="icon" href="/apple-touch-icon.png" type="image/png" />');
         expect(html).not.toContain('<script src="/storefront/restore-logo.js"></script>');
         expect(entry).toContain("sessionStorage.getItem('__storefront_logo_url__')");
         expect(html).not.toMatch(/<script>\s*\(function/);
