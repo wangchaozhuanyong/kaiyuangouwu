@@ -227,7 +227,7 @@ export const GET_SALES_ORDERS = gql`
             totalItems
         }
         physicalFulfillmentTodoCount
-        fulfillmentDeliveryExceptions(options: { exceptionsOnly: true, take: 1 }) {
+        fulfillmentDeliveryExceptions(options: { take: 1 }) {
             totalItems
         }
     }
