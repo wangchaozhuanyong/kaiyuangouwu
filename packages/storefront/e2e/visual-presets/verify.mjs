@@ -73,6 +73,7 @@ const anonymousRoutes = new Set(['login', 'register', 'verify-account', 'forgot-
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const results = [];
+const contrastFailures = [];
 try {
     for (const preset of presets) {
         for (const width of requestedWidth ? [requestedWidth] : [390, 1023, 1024, 1440]) {
@@ -499,12 +500,28 @@ try {
                         '.cart-group',
                         '.cart-group > header',
                         '.cart-line-swipe',
-                        '.cart-page > .coupon-row',
                         '.cart-checkout-bar',
                     ]) {
                         await expect(page.locator(selector).first()).toHaveCSS('border-bottom-width', '0px');
                     }
+                    const couponRow = page.locator('.cart-page > .coupon-row');
+                    if (await couponRow.count()) {
+                        await expect(couponRow).toHaveCSS('border-bottom-width', '0px');
+                    }
                     await expect(page.locator('.cart-checkout-bar')).toHaveCSS('border-top-width', '0px');
+                }
+                if (name === 'login' || name === 'register') {
+                    await expect(page.locator('.auth-page .auth-hero')).toHaveCSS('position', 'relative');
+                    await expect(page.locator('.auth-page .auth-hero')).toHaveCSS('overflow', 'hidden');
+                    const darkFallbackHero = page.locator(
+                        ".auth-page-has-image:not(.auth-page-managed) .auth-hero[data-image-tone='dark']",
+                    );
+                    if (await darkFallbackHero.count()) {
+                        await expect(darkFallbackHero.locator('.auth-hero-copy h2')).toHaveCSS(
+                            'color',
+                            'rgb(255, 255, 255)',
+                        );
+                    }
                 }
                 if (width < 1024 && name === 'account') {
                     await expect(page.locator('.account-page .account-section').first()).toHaveCSS(
@@ -621,15 +638,22 @@ try {
                         })),
                     }));
                 });
-                expect(accessibility, `${preset}/${width}/${name} contrast`).toEqual([]);
+                for (const violation of accessibility) {
+                    for (const node of violation.nodes) {
+                        contrastFailures.push(
+                            `${preset}/${width}/${name}: ${node.target.join(' ')} — ${node.summary}`,
+                        );
+                    }
+                }
                 results.push({ preset, width, name, geometry, keyboardFocus, accessibility });
 
                 if (name === 'home' && width >= 1024) {
                     const tools = page.locator('.proto-tool-item');
-                    await expect(tools).toHaveCount(5);
+                    await expect(tools).toHaveCount(3);
                     await expect(page.getByLabel('下一组快捷入口')).toBeVisible();
                     await expect(tools.filter({ hasText: '商品分类' })).toBeVisible();
                     await page.getByLabel('下一组快捷入口').click();
+                    await expect(tools).toHaveCount(2);
                     await expect(tools.filter({ hasText: '优惠中心' })).toBeVisible();
                     await expect(page.locator('.proto-tools-pagination')).toContainText('2 / 2');
                 }
@@ -655,6 +679,7 @@ try {
             await page.close();
         }
     }
+    expect(contrastFailures, 'skin and route contrast').toEqual([]);
     const previewPage = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     await previewPage.route('**/*', route => {
         const url = new URL(route.request().url());

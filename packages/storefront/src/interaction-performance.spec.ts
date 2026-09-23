@@ -69,6 +69,9 @@ describe('shared interaction performance contract', () => {
     it('loads page-family styles with lazy route groups instead of the critical entry', () => {
         const entry = readFileSync(path.join(__dirname, 'main.tsx'), 'utf8');
         const baseStyles = readFileSync(path.join(__dirname, 'styles.css'), 'utf8');
+        const authPages = readFileSync(path.join(__dirname, 'auth-pages.tsx'), 'utf8');
+        const authStyles = readFileSync(path.join(stylesDirectory, 'auth-shell.css'), 'utf8');
+        const logisticsStyles = readFileSync(path.join(stylesDirectory, 'logistics.css'), 'utf8');
         const routeStyles = {
             account: readFileSync(path.join(__dirname, 'route-pages/account-route-pages.tsx'), 'utf8'),
             auth: readFileSync(path.join(__dirname, 'route-pages/auth-route-pages.tsx'), 'utf8'),
@@ -84,6 +87,10 @@ describe('shared interaction performance contract', () => {
         expect(baseStyles).not.toContain('account-catalog-surfaces.css');
         expect(baseStyles).not.toContain('account-security.css');
         expect(baseStyles).not.toContain('logistics.css');
+        expect(baseStyles).not.toContain('auth-shell.css');
+        expect(authPages).toContain("import './styles/auth-shell.css'");
+        expect(authStyles).toContain('.auth-page {');
+        expect(logisticsStyles).not.toContain('.auth-page {');
         expect(entry).not.toContain('storefront-design-preview.css');
         expect(routeStyles.account).toContain('../styles/account-catalog-surfaces.css');
         expect(routeStyles.catalog).not.toContain('../styles/account-catalog-surfaces.css');

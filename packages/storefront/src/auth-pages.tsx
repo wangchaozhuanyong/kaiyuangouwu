@@ -47,6 +47,7 @@ import {
 } from './storefront-images';
 import { routeNavigateOptions, RouteState } from './storefront-router';
 import { SafeImage } from './storefront-ui/product-display';
+import './styles/auth-shell.css';
 import {
     StorefrontAuthSettings,
     StorefrontContentBlock,
@@ -1354,13 +1355,14 @@ function AuthLayout({
     const heroMessage = authVisualVariant
         ? resolveAuthVisualMessage(heroContent, authVisualVariant, language)
         : null;
-    const heroStyle = authVisualVariant
-        ? ({
-              '--auth-hero-text-color': 'var(--auth-visual-foreground)',
-              '--auth-hero-overlay-color': 'var(--auth-visual-background)',
-              '--auth-hero-accent-color': 'var(--auth-visual-accent)',
-          } as CSSProperties)
-        : undefined;
+    const heroStyle =
+        authVisualVariant && heroContent
+            ? ({
+                  '--auth-hero-text-color': 'var(--auth-visual-foreground)',
+                  '--auth-hero-overlay-color': 'var(--auth-visual-background)',
+                  '--auth-hero-accent-color': 'var(--auth-visual-accent)',
+              } as CSSProperties)
+            : undefined;
     const managedHeroSrc = heroContent?.imageUrl?.trim();
     const heroImageTone = useImageTone(managedHeroSrc);
     const hasManagedHero = Boolean(authVisualVariant && heroContent);
@@ -1383,7 +1385,7 @@ function AuthLayout({
 
     return (
         <main
-            className={`page subpage auth-page auth-page-${heroVariant}${hasManagedHero ? ' auth-page-managed' : ''}`}
+            className={`page subpage auth-page auth-page-${heroVariant}${hasManagedHero ? ' auth-page-managed' : ''}${heroImageSrc ? ' auth-page-has-image' : ''}`}
             aria-label={title}
             style={authVisualStyle(heroContent, heroImageTone)}
         >

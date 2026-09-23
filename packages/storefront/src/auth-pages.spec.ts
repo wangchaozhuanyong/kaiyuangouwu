@@ -139,6 +139,8 @@ describe('auth password visibility controls', () => {
         );
 
         expect(markup).toContain('auth-login-ai-campaign-v2-480.webp');
+        expect(markup).toContain('auth-page-has-image');
+        expect(markup).not.toContain('--auth-hero-text-color:var(--auth-visual-foreground)');
         expect(markup).not.toContain('auth-register-ai-campaign-v2');
         expect(markup).toContain('登录账号');
         expect(markup).not.toContain('购买记录与状态清晰可查');
@@ -169,6 +171,7 @@ describe('auth password visibility controls', () => {
         const markup = renderToStaticMarkup(createElement(RegisterPage, authPageProps));
 
         expect(markup).toContain('auth-register-ai-campaign-v2-480.webp');
+        expect(markup).toContain('auth-page-has-image');
         expect(markup).not.toContain('auth-login-ai-campaign-v2');
         expect(markup).toContain('创建账号');
         expect(markup).not.toContain('验证邮箱即可开始使用');

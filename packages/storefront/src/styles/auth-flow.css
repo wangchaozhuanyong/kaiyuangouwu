@@ -2649,40 +2649,45 @@
     }
 }
 
-/* Account-only entry pages have no public marketing artwork. */
-.auth-page:not(.auth-page-managed) .auth-brand-lockup strong {
-    color: var(--auth-visual-foreground);
+/* Text-only entry uses the skin surface and text; image heroes retain image-tone contrast. */
+.auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-hero {
+    --auth-hero-text-color: var(--text);
+    background: var(--soft);
+}
+
+.auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-brand-lockup strong {
+    color: var(--text);
     text-shadow: none;
 }
 
-.auth-page:not(.auth-page-managed) .auth-brand-lockup small {
+.auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-brand-lockup small {
     border-left-color: var(--line);
     color: var(--text);
 }
 
 @media (min-width: 1024px) {
-    .auth-page:not(.auth-page-managed) .auth-hero-message {
+    .auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-hero-message {
         justify-content: center;
         gap: 28px;
     }
 
-    .auth-page:not(.auth-page-managed) .auth-hero-copy {
+    .auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-hero-copy {
         align-self: auto;
         margin: 0;
     }
 
-    .auth-page:not(.auth-page-managed) .auth-hero-copy h2 {
-        color: var(--auth-visual-foreground);
+    .auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-hero-copy h2 {
+        color: var(--text);
         text-shadow: none;
     }
 
-    .auth-page:not(.auth-page-managed) .auth-hero-title-fallback {
-        color: var(--auth-visual-foreground);
+    .auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-hero-title-fallback {
+        color: var(--text);
         text-shadow: none;
     }
 
-    .auth-page:not(.auth-page-managed) .auth-hero-copy p {
-        color: var(--auth-visual-foreground);
+    .auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-hero-copy p {
+        color: var(--text);
     }
 }
 
@@ -2691,17 +2696,17 @@
         display: none;
     }
 
-    .auth-page:not(.auth-page-managed) .auth-hero {
+    .auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-hero {
         height: 188px;
         min-height: 188px;
-        background: var(--auth-visual-background);
+        background: var(--soft);
     }
 
-    .auth-page:not(.auth-page-managed) .auth-hero::after {
+    .auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-hero::after {
         display: none;
     }
 
-    .auth-page:not(.auth-page-managed) .auth-hero-message {
+    .auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-hero-message {
         padding: 62px 20px 20px;
         display: flex;
         flex-direction: column;
@@ -2710,11 +2715,11 @@
         text-align: center;
     }
 
-    .auth-page:not(.auth-page-managed) .auth-hero-kicker {
+    .auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-hero-kicker {
         justify-content: center;
     }
 
-    .auth-page:not(.auth-page-managed) .auth-hero-copy {
+    .auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-hero-copy {
         margin: 0;
         justify-items: center;
     }
