@@ -88,10 +88,10 @@ require_recent_systemd_success \
     vendure-mysql-restore-drill.timer \
     vendure-mysql-restore-drill.service \
     "${restore_drill_maximum_age_seconds}"
-require_recent_systemd_success \
-    vendure-file-restore-drill.timer \
-    vendure-file-restore-drill.service \
-    "${restore_drill_maximum_age_seconds}"
+[[ "$(systemctl show vendure-file-restore-drill.timer -p UnitFileState --value)" == "disabled" ]] ||
+    fail 'on-host file restore drill timer must stay disabled'
+[[ "$(systemctl show vendure-file-restore-drill.timer -p ActiveState --value)" == "inactive" ]] ||
+    fail 'on-host file restore drill timer must stay inactive'
 
 node "${memory_guard}" --stage scheduled-monitor --check
 curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/dev/null
