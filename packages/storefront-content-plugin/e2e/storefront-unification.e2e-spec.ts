@@ -1228,12 +1228,15 @@ describe('unified storefront Admin API to Shop API', () => {
                 'data-storefront-preset',
                 'modern-oriental',
             );
-            await browserExpect(page.locator('.auth-hero')).toHaveCSS('background-color', 'rgb(6, 27, 68)');
+            await browserExpect(page.locator('.auth-hero')).toHaveCSS(
+                'background-color',
+                'rgb(241, 236, 226)',
+            );
             await browserExpect(page.locator('.wide-action')).toHaveCSS(
                 'background-color',
                 'rgb(145, 49, 40)',
             );
-            await browserExpect(page.locator('.auth-hero-copy h2')).toHaveText('登录账号');
+            await browserExpect(page.locator('.auth-hero-copy h2')).toHaveCount(0);
             await browserExpect(page.locator('.auth-page')).not.toContainText('MOYAO');
             await page.screenshot({ path: join(output, 'auth-priority-unbranded.png'), fullPage: true });
         } finally {
