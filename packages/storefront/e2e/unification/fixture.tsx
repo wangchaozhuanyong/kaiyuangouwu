@@ -12,6 +12,8 @@ import { StorefrontContext, type StorefrontContextValue } from '../../src/Storef
 import '../../src/styles.css';
 import '../../src/styles/desktop-layout.css';
 import '../../src/styles/visual-presets.css';
+// Auth's desktop composition lives here in the production entry too.
+import '../../src/styles/desktop-pages.css';
 import { StorefrontContentBlock, StorefrontContentSettings } from '../../src/types';
 import { useStorefrontVisualPreset } from '../../src/use-storefront-visual-preset';
 
@@ -112,17 +114,21 @@ function Fixture() {
                 >
                     中文 / English
                 </button>
-                <AuthPage
-                    api={api}
-                    language={language}
-                    storefrontName={storefrontName}
-                    logoUrl={null}
-                    onBack={() => undefined}
-                    onSuccess={() => Promise.resolve()}
-                    authVisualContent={blocks.find(
-                        block => block.type === (page === 'login' ? 'AUTH_LOGIN' : 'AUTH_REGISTER'),
-                    )}
-                />
+                <div className={`storefront-app${window.innerWidth >= 1024 ? ' desktop-store-layout' : ''}`}>
+                    <div id="storefront-content">
+                        <AuthPage
+                            api={api}
+                            language={language}
+                            storefrontName={storefrontName}
+                            logoUrl={null}
+                            onBack={() => undefined}
+                            onSuccess={() => Promise.resolve()}
+                            authVisualContent={blocks.find(
+                                block => block.type === (page === 'login' ? 'AUTH_LOGIN' : 'AUTH_REGISTER'),
+                            )}
+                        />
+                    </div>
+                </div>
             </>
         );
     }
