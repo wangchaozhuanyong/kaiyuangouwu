@@ -53,7 +53,11 @@ cleanup_restore_drill() {
 trap cleanup_restore_drill EXIT
 
 install -d -m 0700 "${vendure_backup_dir}" "${vendure_evidence_dir}"
-exec 8>"${vendure_backup_dir}/.backup.lock"
+if [[ ! -f "${vendure_backup_dir}/.backup.lock" ]]; then
+    printf 'The MySQL backup lock is missing: %s\n' "${vendure_backup_dir}/.backup.lock" >&2
+    exit 1
+fi
+exec 8<"${vendure_backup_dir}/.backup.lock"
 flock --shared 8
 readonly started_epoch="$(date +%s)"
 drill_directory="$(mktemp -d "${vendure_evidence_dir}/mysql-restore-drill.XXXXXX")"

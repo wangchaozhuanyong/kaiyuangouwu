@@ -931,7 +931,10 @@ for file_backup_unit in \
     sudo -n install -o root -g root -m 0644 \
         "${repository}/deploy/systemd/${file_backup_unit}" "/etc/systemd/system/${file_backup_unit}"
 done
-sudo -n install -d -o root -g root -m 0700 /var/backups/vendure-files /var/lib/vendure-readiness
+sudo -n install -d -o root -g root -m 0700 \
+    /var/backups/vendure-mysql /var/backups/vendure-files /var/lib/vendure-readiness
+sudo -n touch /var/backups/vendure-mysql/.backup.lock /var/backups/vendure-files/.backup.lock
+sudo -n chmod 0600 /var/backups/vendure-mysql/.backup.lock /var/backups/vendure-files/.backup.lock
 sudo -n install -o root -g root -m 0755 \
     "${repository}/deploy/systemd/vendure-mysql-restore-drill" \
     /usr/local/sbin/vendure-mysql-restore-drill
