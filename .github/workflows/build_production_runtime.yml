@@ -368,7 +368,14 @@ jobs:
                   bun run check-angular-versions
 
             - name: Confirm source remained clean
-              run: test -z "$(git status --porcelain)"
+              run: |
+                  SOURCE_STATUS="$(git status --porcelain)"
+                  if [[ -n "$SOURCE_STATUS" ]]; then
+                    echo '::error::Production build changed tracked or untracked source files'
+                    printf '%s\n' "$SOURCE_STATUS"
+                    git diff --stat
+                    exit 1
+                  fi
 
             - name: Build and verify production runtime
               env:
