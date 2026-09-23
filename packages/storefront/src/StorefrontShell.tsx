@@ -1,7 +1,7 @@
 import { Outlet, lazyRouteComponent } from '@tanstack/react-router';
 import { clsx } from 'clsx';
 import { WifiOff } from 'lucide-react';
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 
 import { BottomNavigation, shouldShowBottomNavigation } from './components/common/bottom-navigation';
 import {
@@ -38,7 +38,8 @@ const PREVIEW_CUSTOMER: ActiveCustomer = {
 
 export function StorefrontShell({ state }: StorefrontShellProps) {
     const desktop = useDesktopViewport();
-    const previewParameters = new URLSearchParams(window.location.search);
+    // Preview identity belongs to this iframe document, not a changing route query string.
+    const [previewParameters] = useState(() => new URLSearchParams(window.location.search));
     const previewEmbedded = previewParameters.get('storefrontPreviewEmbedded') === '1';
     const previewScenario = previewEmbedded ? previewParameters.get('storefrontPreviewScenario') : null;
     const previewSession = previewEmbedded ? previewParameters.get('storefrontPreviewSession') : null;

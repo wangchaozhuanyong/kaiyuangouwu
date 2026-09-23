@@ -1,4 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -214,15 +216,13 @@ describe('OrdersPage route query', () => {
 });
 
 describe('LogisticsPage delivery overview', () => {
+    const logisticsCss = readFileSync(path.join(__dirname, 'styles/logistics.css'), 'utf8');
     it('keeps the four delivery filters in one aligned icon-label row', () => {
-        expect(orderPageStyles['logistics-stats-grid']).toContain(
-            '[grid-template-columns:repeat(4,_minmax(0,_1fr))]',
-        );
-        expect(orderPageStyles['logistics-stat-card']).toContain('[display:flex]');
-        expect(orderPageStyles['logistics-stat-card']).toContain('[align-items:center]');
-        expect(orderPageStyles['stat-card-top']).toContain('[position:relative]');
-        expect(orderPageStyles['stat-card-count']).toContain('[position:absolute]');
-        expect(orderPageStyles['stat-card-label']).toContain('[white-space:nowrap]');
+        expect(logisticsCss).toContain('grid-template-columns: repeat(4, minmax(0, 1fr))');
+        expect(logisticsCss).toMatch(/\.logistics-stat-card \{[^}]*display: flex;/);
+        expect(logisticsCss).toMatch(/\.stat-card-top \{[^}]*position: relative;/);
+        expect(logisticsCss).toMatch(/\.stat-card-count \{[^}]*position: absolute;/);
+        expect(logisticsCss).toMatch(/\.stat-card-label \{[^}]*overflow-wrap: anywhere;/);
     });
 
     it('renders product, carrier and tracking details from cached physical orders', () => {
@@ -254,13 +254,12 @@ describe('LogisticsPage delivery overview', () => {
     });
 
     it('ensures logistics-card and its header maintain proper grid alignment and surface frame', () => {
-        expect(orderPageStyles['logistics-card']).toContain('[background:var(--paper,_white)]');
-        expect(orderPageStyles['logistics-card']).toContain('[border:1px_solid_var(--line)]');
-        expect(orderPageStyles['logistics-card']).toContain('[border-radius:12px]');
-        expect(orderPageStyles['logistics-card-header']).toContain(
-            '[grid-template-columns:34px_minmax(0,_1fr)_auto]',
-        );
-        expect(orderPageStyles['logistics-status-text']).toContain('[min-width:0]');
+        expect(orderPageStyles['logistics-card']).toBeUndefined();
+        expect(logisticsCss).toMatch(/\.logistics-card \{[^}]*background: var\(--surface\);/);
+        expect(logisticsCss).toMatch(/\.logistics-card \{[^}]*border-radius: var\(--skin-card-radius\);/);
+        expect(logisticsCss).toContain('grid-template-columns: 34px minmax(0, 1fr)');
+        expect(logisticsCss).toMatch(/\.logistics-status-text \{[^}]*min-width: 0;/);
+        expect(logisticsCss).toMatch(/\.waybill-copy-btn,[^}]*min-height: 44px;/);
     });
 });
 

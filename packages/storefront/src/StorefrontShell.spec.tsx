@@ -37,6 +37,7 @@ describe('catalog rendering boundary', () => {
     let element: HTMLDivElement;
     let root: ReturnType<typeof createRoot>;
     beforeEach(() => {
+        window.history.replaceState(null, '', '/');
         viewport.desktop = false;
         element = document.createElement('div');
         root = createRoot(element);
@@ -128,5 +129,30 @@ describe('catalog rendering boundary', () => {
         expect(element.textContent).toContain('PAGE_CONTENT');
         expect(element.textContent).toContain('CATALOG_NAVIGATION');
         expect(element.textContent).not.toContain('CHECKING_ACCOUNT');
+    });
+
+    it('keeps the preview navigation bridge after an internal route drops query parameters', () => {
+        window.history.replaceState(
+            null,
+            '',
+            '/?storefrontPreviewEmbedded=1&storefrontPreviewAuth=authenticated&storefrontPreviewSession=fixture-session',
+        );
+        const navigate = vi.fn();
+        render({ storefrontContextValue: { navigate } });
+        window.history.replaceState(null, '', '/checkout');
+        render({ storefrontContextValue: { navigate }, displayedRoute: { name: 'checkout' } });
+        act(() => {
+            window.dispatchEvent(
+                new MessageEvent('message', {
+                    origin: window.location.origin,
+                    data: {
+                        type: 'storefront-preview-navigate',
+                        route: 'account',
+                        session: 'fixture-session',
+                    },
+                }),
+            );
+        });
+        expect(navigate).toHaveBeenCalledWith({ name: 'account', id: undefined }, true);
     });
 });

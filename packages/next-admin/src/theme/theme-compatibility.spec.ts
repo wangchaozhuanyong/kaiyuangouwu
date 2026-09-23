@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { extname, join } from 'node:path';
+import { extname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 const sourceRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -39,20 +40,49 @@ function hasCompatibilitySelector(className: string): boolean {
     return new RegExp(`\\.${escapedClassName}(?=[\\s,:)>])`).test(normalizedStylesheet);
 }
 
+// Read complete literals, not physical lines: formatting a className over two
+// lines must not hide its dark variant, nor let a neighbouring element provide it.
+function sourceStyleLiterals(content: string, path: string) {
+    const source = ts.createSourceFile(path, content, ts.ScriptTarget.Latest, true);
+    const literals: Array<{ text: string; line: number }> = [];
+    function visit(node: ts.Node) {
+        if (ts.isStringLiteral(node) || ts.isTemplateLiteralToken(node)) {
+            literals.push({
+                text: node.text,
+                line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+            });
+        }
+        ts.forEachChild(node, visit);
+    }
+    visit(source);
+    return literals;
+}
+
 describe('legacy light utility dark-theme compatibility', () => {
+    it('keeps multiline style literals together without merging neighbouring elements', () => {
+        const literals = sourceStyleLiterals(
+            '<><button className="bg-white/60\n dark:bg-black/15" /><span className="bg-white/60" /></>',
+            'fixture.tsx',
+        );
+        expect(literals).toEqual([
+            { text: 'bg-white/60\n dark:bg-black/15', line: 1 },
+            { text: 'bg-white/60', line: 2 },
+        ]);
+    });
+
     it('maps every light surface and dark text utility used by the admin source', () => {
         const usages = new Map<string, string[]>();
 
         for (const path of listSourceFiles(sourceRoot)) {
-            const relativePath = path.slice(sourceRoot.length + 1);
-            const lines = readFileSync(path, 'utf8').split('\n');
+            const relativePath = relative(sourceRoot, path);
+            const literals = sourceStyleLiterals(readFileSync(path, 'utf8'), path);
 
-            lines.forEach((line, index) => {
-                const hasExplicitDarkSurface = /\bdark:bg-/.test(line);
-                const hasExplicitDarkText = /\bdark:text-/.test(line);
+            literals.forEach(({ text, line }) => {
+                const hasExplicitDarkSurface = /\bdark:bg-/.test(text);
+                const hasExplicitDarkText = /\bdark:text-/.test(text);
                 const classNames = [
-                    ...(line.match(lightSurfaceClassPattern) ?? []),
-                    ...(line.match(darkTextClassPattern) ?? []),
+                    ...(text.match(lightSurfaceClassPattern) ?? []),
+                    ...(text.match(darkTextClassPattern) ?? []),
                 ];
 
                 for (const className of classNames) {
@@ -63,7 +93,7 @@ describe('legacy light utility dark-theme compatibility', () => {
                         continue;
                     }
                     const locations = usages.get(className) ?? [];
-                    locations.push(`${relativePath}:${index + 1}`);
+                    locations.push(`${relativePath}:${line}`);
                     usages.set(className, locations);
                 }
             });
@@ -90,7 +120,7 @@ describe('legacy light utility dark-theme compatibility', () => {
         const unmappedArbitrary: string[] = [];
 
         for (const path of listSourceFiles(sourceRoot)) {
-            const relativePath = path.slice(sourceRoot.length + 1);
+            const relativePath = relative(sourceRoot, path);
             const content = readFileSync(path, 'utf8');
             const matches = content.match(arbitraryBgPattern);
             if (matches) {

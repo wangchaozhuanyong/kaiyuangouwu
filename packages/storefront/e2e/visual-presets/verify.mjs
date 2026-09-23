@@ -365,11 +365,13 @@ try {
                     await expect(cards).toHaveCount(5);
                     await expect(cards.first()).toContainText('2FA 动态码');
                     await expect(cards.last()).toContainText('选购遇到问题？');
-                    const grid = await slot.evaluate(element => {
-                        const style = getComputedStyle(element);
-                        return style.gridTemplateColumns.split(' ').filter(Boolean).length;
-                    });
-                    expect(grid, `${preset}/${width}/services module columns`).toBe(width >= 1024 ? 3 : 1);
+                    const moduleLayout = await slot.evaluate(element => ({
+                        display: getComputedStyle(element).display,
+                        cards: Array.from(element.querySelectorAll('.category-client-plugin'), card => {
+                            const rect = card.getBoundingClientRect();
+                            return { left: rect.left, top: rect.top };
+                        }),
+                    }));
                     await expect(cards.first()).toHaveCSS('border-top-width', '0px');
                     const firstCardBox = await cards.first().boundingBox();
                     expect(
@@ -377,11 +379,15 @@ try {
                         `${preset}/${width}/services touch target`,
                     ).toBeGreaterThanOrEqual(44);
                     if (width >= 1024) {
-                        await expect(slot.locator('.category-client-plugin-support')).toHaveCSS(
-                            'grid-column-start',
-                            'span 2',
-                        );
+                        expect(moduleLayout.display, `${preset}/${width}/services layout`).toBe('flex');
+                        expect(moduleLayout.cards[0].top).toBeCloseTo(moduleLayout.cards[1].top, 0);
+                        expect(moduleLayout.cards[1].top).toBeCloseTo(moduleLayout.cards[2].top, 0);
+                        expect(moduleLayout.cards[0].left).toBeLessThan(moduleLayout.cards[1].left);
+                        expect(moduleLayout.cards[1].left).toBeLessThan(moduleLayout.cards[2].left);
+                        expect(moduleLayout.cards[3].top).toBeGreaterThan(moduleLayout.cards[0].top);
+                        expect(moduleLayout.cards[3].top).toBeCloseTo(moduleLayout.cards[4].top, 0);
                     } else {
+                        expect(moduleLayout.display, `${preset}/${width}/services layout`).toBe('grid');
                         const firstCard = cards.first();
                         const icon = firstCard.locator('.category-client-plugin-icon');
                         const title = firstCard.locator('.category-client-plugin-copy');
@@ -567,6 +573,8 @@ try {
                             'login',
                             'services',
                             'image-studio',
+                            'two-factor',
+                            'reviews',
                             'legal',
                         ].includes(name)) ||
                     (width === 390 &&
@@ -583,6 +591,8 @@ try {
                             'login',
                             'services',
                             'support',
+                            'two-factor',
+                            'reviews',
                             'legal',
                         ].includes(name))
                 ) {

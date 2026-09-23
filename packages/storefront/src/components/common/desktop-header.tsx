@@ -44,7 +44,9 @@ export function DesktopHeader({
     const [query, setQuery] = useState(context.route.term ?? '');
     const [preferencesOpen, setPreferencesOpen] = useState(false);
     const searchInputRef = useRef<HTMLInputElement>(null);
-    const navigationItems = resolveBottomNavigationItems(navigationBlock, context.language);
+    const navigationItems = resolveBottomNavigationItems(navigationBlock, context.language).filter(
+        item => item.routeName !== 'cart',
+    );
     const activeRoute = activeNavigationRoute(context.route.name);
 
     useEffect(() => setQuery(context.route.term ?? ''), [context.route.term]);

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowLeft, CircleCheck, Mail, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
+import './styles/address-surfaces.css';
 import './styles/checkout-payment-surfaces.css';
 
 import { smartParseAddressText } from './address-parser';
@@ -350,7 +351,7 @@ export function AddressesPage({
                 onBack={onBack}
                 action={
                     <button
-                        className="account-mobile-header-action"
+                        className={selection ? undefined : 'account-mobile-header-action'}
                         type="button"
                         onClick={() => (effectiveTab === 'email' ? setEmailOpen(true) : startEdit(null))}
                         aria-label={

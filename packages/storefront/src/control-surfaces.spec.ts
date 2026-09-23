@@ -10,8 +10,10 @@ describe('shared control surfaces', () => {
             /html\[data-storefront-preset\]\s*\{[^}]*--control-surface:[^;]+;[^}]*--control-elevation:/,
         );
         expect(stylesheet).toMatch(
-            // eslint-disable-next-line max-len -- The two semantic surface aliases must remain in the same preset rule.
-            /html\[data-storefront-preset\]\s*\{[^}]*--module-action-surface:\s*var\(--control-surface\);[^}]*--module-action-surface-hover:\s*var\(--control-surface-hover\);/,
+            new RegExp(
+                String.raw`html\[data-storefront-preset\]\s*\{[^}]*--module-action-surface:\s*var\(--control-surface\);` +
+                    String.raw`[^}]*--module-action-surface-hover:\s*var\(--control-surface-hover\);`,
+            ),
         );
     });
 
@@ -38,8 +40,10 @@ describe('shared control surfaces', () => {
         const stylesheet = readStorefrontStylesheet(['./styles/control-surfaces.css']);
 
         expect(stylesheet).toMatch(
-            // eslint-disable-next-line max-len -- This is the complete shared select treatment contract.
-            /html\[data-storefront-preset\] select:not\(\[multiple\]\)\s*\{[^}]*border:\s*0;[^}]*background-color:\s*var\(--control-surface\);[^}]*box-shadow:\s*var\(--control-elevation\);/,
+            new RegExp(
+                String.raw`:where\(\.storefront-app, \.sheet-layer\) select:not\(\[multiple\]\)\s*\{[^}]*border:\s*0;` +
+                    String.raw`[^}]*background-color:\s*var\(--control-surface\);[^}]*box-shadow:\s*var\(--control-elevation\);`,
+            ),
         );
         expect(stylesheet).toContain('.currency-select:not(.topbar-capsule *)');
         expect(stylesheet).toContain('.proto-language-btn');
@@ -56,38 +60,15 @@ describe('shared control surfaces', () => {
         expect(stylesheet).toMatch(/@media \(forced-colors: active\)/);
     });
 
-    it('removes decorative frames from shared commerce surfaces across every skin and viewport', () => {
-        const stylesheet = readStorefrontStylesheet(['./styles/control-surfaces.css']);
-
-        expect(stylesheet).toMatch(
-            // eslint-disable-next-line max-len -- Keeping all framed commerce surfaces together prevents partial regressions.
-            /html\[data-storefront-preset\][\s\S]*?:is\([\s\S]*?\.cart-group,[\s\S]*?\.checkout-section,[\s\S]*?\.order-card,[\s\S]*?\.logistics-card,[\s\S]*?\.cart-checkout-bar,[\s\S]*?\)\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--surface\);[^}]*box-shadow:\s*var\(--skin-card-shadow\);/u,
-        );
-        expect(stylesheet).toMatch(
-            /\.cart-page :is\(\.cart-group > header, \.desktop-cart-columns\)\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--soft\);/u,
-        );
-        expect(stylesheet).toMatch(
-            /\.cart-page :is\(\.cart-line-swipe, \.desktop-cart-row\)\s*\{[^}]*border:\s*0;/u,
-        );
-        expect(stylesheet).toMatch(
-            /@media \(min-width: 1024px\)[\s\S]*?\.desktop-store-layout \.cart-page \.cart-group\s*\{[^}]*padding-bottom:\s*10px;[^}]*background:\s*var\(--soft\);/u,
-        );
-        expect(stylesheet).toMatch(
-            /\.desktop-store-layout \.cart-page \.desktop-cart-row\s*\{[^}]*margin:\s*8px 10px 0;[^}]*background:\s*var\(--surface\);[^}]*box-shadow:\s*none;/u,
-        );
-        expect(stylesheet).toMatch(
-            /@media \(forced-colors: active\)[\s\S]*?\.cart-group,[\s\S]*?border:\s*1px solid CanvasText;/u,
-        );
-    });
-
-    it('gives Neo controls an even silhouette instead of a one-sided inset highlight', () => {
+    it('keeps every skin on the same tonal controls without decorative glow or gradients', () => {
         const stylesheet = readStorefrontStylesheet(['./styles/visual-presets.css']);
         const neoBlock = stylesheet.match(
             /html\[data-storefront-preset='neo-minimalist'\]\s*\{([\s\S]*?)\n\}/,
         )?.[1];
 
-        expect(neoBlock).toContain('--control-surface-image: radial-gradient(');
-        expect(neoBlock).toMatch(/--control-elevation:\s*\n\s*0 0 0 1px/);
-        expect(neoBlock).not.toContain('inset 0 1px');
+        expect(neoBlock).not.toContain('--control-surface');
+        expect(neoBlock).not.toContain('--control-elevation');
+        expect(stylesheet).toContain('--control-elevation: none;');
+        expect(stylesheet).toContain('--control-surface-image: none;');
     });
 });

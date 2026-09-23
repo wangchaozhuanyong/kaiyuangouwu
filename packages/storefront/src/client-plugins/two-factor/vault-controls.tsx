@@ -16,9 +16,13 @@ export function VaultControls({
     const [backup, setBackup] = useState<string>();
     const [error, setError] = useState(false);
     const text = (zh: string, en: string) => (isZh ? zh : en);
-    const inputClass = 'min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm';
-    const buttonClass =
-        'min-h-11 rounded-xl border border-slate-300 px-3 text-sm font-bold disabled:opacity-50';
+    const inputClass =
+        'min-h-11 w-full rounded-[var(--skin-control-radius,10px)] border border-[var(--line)] bg-[var(--surface)] px-3 text-sm';
+    const buttonClass = [
+        'min-h-11 rounded-[var(--skin-control-radius,10px)] border-0 bg-[var(--control-surface,var(--soft))] px-3 text-sm font-bold text-[var(--text)]',
+        'transition-colors hover:bg-[var(--control-surface-hover,var(--accent-soft))] disabled:opacity-50',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]',
+    ].join(' ');
     const exportBackup = () => {
         try {
             const serialized = vault.backup();
@@ -35,7 +39,7 @@ export function VaultControls({
     };
     return (
         <div
-            className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4"
+            className="two-factor-vault mb-6"
             data-vault-state={vault.unlocked ? 'unlocked' : vault.exists ? 'locked' : 'temporary'}
         >
             <strong>
@@ -45,7 +49,7 @@ export function VaultControls({
                       ? text('已保存的账号已锁定', 'Saved accounts locked')
                       : text('当前为临时模式', 'Temporary mode')}
             </strong>
-            <p className="my-2 text-sm text-slate-600">
+            <p className="mb-3 mt-2 text-sm leading-6 text-[var(--muted)]">
                 {vault.unlocked
                     ? text(
                           '已启用本地加密保护。闲置 5 分钟、离开页面或退出登录后将自动锁定；离开设备前也可点击“立即上锁”。',
@@ -62,7 +66,7 @@ export function VaultControls({
                         )}
             </p>
             {vault.legacy && (
-                <p className="text-sm text-amber-800" role="status">
+                <p className="text-sm text-[var(--warning)]" role="status">
                     {text(
                         '发现旧版未加密数据。设置口令后会一并迁移；验证成功前保留旧数据。请先关闭其他打开此工具的页面。',
                         'Legacy plaintext was found. Close other tool tabs, then set a passphrase. Old data stays until migration is verified.',
@@ -121,7 +125,7 @@ export function VaultControls({
                         });
                     }}
                 >
-                    <p className="m-0 text-xs text-slate-600">
+                    <p className="m-0 text-xs text-[var(--muted)]">
                         {text(
                             '使用至少 12 个字符的独立口令，不要使用商城登录密码。忘记口令无法解密，商城不能代为重置。加密备份只能用原口令恢复到同一商城账号。',
                             'Use a separate 12+ character passphrase. It cannot be reset. Backups need the original passphrase and store account.',
@@ -206,7 +210,7 @@ export function VaultControls({
                     )}
                 </form>
             ) : (
-                <p className="text-sm text-amber-800">
+                <p className="text-sm text-[var(--warning)]">
                     {text(
                         '此浏览器不支持安全保存，仍可临时使用。旧数据不会被删除。',
                         'Secure saving is unavailable in this browser. Temporary use remains available; existing data is preserved.',
@@ -214,7 +218,7 @@ export function VaultControls({
                 </p>
             )}
             {(error || vault.error) && (
-                <p role="alert" className="text-sm text-red-700">
+                <p role="alert" className="text-sm text-[var(--danger)]">
                     {text(
                         '操作未完成。请检查口令、备份或浏览器存储；原有数据未被主动清空。',
                         'Operation did not complete. Check the passphrase, backup or browser storage; existing data was not cleared.',

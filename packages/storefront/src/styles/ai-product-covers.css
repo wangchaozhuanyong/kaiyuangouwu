@@ -1003,8 +1003,8 @@
 .coupon-center-tabs {
     margin: 12px 14px 0;
     padding: 4px;
-    border: 1px solid var(--line);
-    border-radius: 12px;
+    border: 0;
+    border-radius: var(--skin-card-radius);
     background: var(--surface);
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1016,7 +1016,7 @@
     min-height: 48px;
     padding: 6px 4px;
     border: 0;
-    border-radius: 9px;
+    border-radius: var(--skin-control-radius);
     background: transparent;
     color: var(--muted);
     display: flex;
@@ -1043,22 +1043,22 @@
 }
 
 .coupon-activity-card {
-    --coupon-accent: #d33c30;
-    --coupon-surface: #fff1f0;
-    --coupon-border: #efaaa4;
+    --coupon-accent: var(--accent-ink);
+    --coupon-surface: var(--surface);
+    --coupon-border: var(--line-subtle);
     overflow: hidden;
     border: 1px solid var(--coupon-border);
-    border-radius: 12px;
-    background: #fffdfb;
+    border-radius: var(--skin-card-radius);
+    background: var(--coupon-surface);
     color: var(--coupon-accent);
-    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+    box-shadow: var(--skin-card-shadow);
     transition:
         transform 180ms ease,
         opacity 180ms ease;
 }
 
 .coupon-activity-card.is-claimed {
-    opacity: 0.76;
+    opacity: 1;
     box-shadow: none;
 }
 
@@ -1066,8 +1066,8 @@
     min-height: 146px;
     padding: 14px 16px 18px;
     border-radius: 0 0 50% 50% / 0 0 11px 11px;
-    background: var(--coupon-accent);
-    color: #ffffff;
+    background: var(--accent-soft);
+    color: var(--coupon-accent);
     display: flex;
     flex-direction: column;
 }
@@ -1082,7 +1082,7 @@
 
 .coupon-activity-tag {
     padding: 5px 10px;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid var(--coupon-border);
     border-radius: 999px;
     color: inherit;
     font-size: 11px;
@@ -1094,10 +1094,10 @@
     min-width: 88px;
     min-height: 34px;
     padding: 0 11px;
-    border: 1.5px solid rgba(255, 255, 255, 0.92);
+    border: 1px solid currentColor;
     border-radius: 999px;
     background: transparent;
-    color: #ffffff;
+    color: inherit;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1168,7 +1168,7 @@
     max-width: 100%;
     margin: 9px auto 0;
     overflow: hidden;
-    color: rgba(255, 255, 255, 0.94);
+    color: var(--text);
     font-size: 12px;
     line-height: 1.35;
     text-overflow: ellipsis;
@@ -1223,6 +1223,8 @@
     border: 0;
     border-radius: 999px;
     background: transparent;
+    color: var(--coupon-accent);
+    box-shadow: none;
 }
 
 .coupon-center-ticket .coupon-btn-text-wrap {
@@ -1238,7 +1240,7 @@
     grid-column: 2;
     grid-row: 3;
     align-self: start;
-    color: #64748b;
+    color: var(--muted);
     font-size: 9.5px;
     line-height: 1.2;
     text-overflow: ellipsis;
@@ -1249,8 +1251,8 @@
     min-height: 32px;
     padding: 5px 7px;
     border-radius: 999px;
-    background: rgba(100, 116, 139, 0.12);
-    color: #52615c;
+    background: var(--soft);
+    color: var(--muted);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1268,7 +1270,7 @@
 .coupon-center-instructions {
     margin: 0;
     padding: 12px 14px 14px;
-    background: #fffdfb;
+    background: var(--surface);
 }
 
 .coupon-center-instructions dl {
@@ -1279,7 +1281,7 @@
 .coupon-center-instructions dl > div {
     min-height: 36px;
     padding: 8px 0;
-    border-bottom: 1px solid #edf0f3;
+    border-bottom: 1px solid var(--line-subtle);
     display: grid;
     grid-template-columns: 72px minmax(0, 1fr);
     align-items: center;
@@ -1294,7 +1296,7 @@
 }
 
 .coupon-center-instructions dt {
-    color: #0f172a;
+    color: var(--text);
     display: flex;
     align-items: center;
     gap: 5px;
@@ -1339,7 +1341,6 @@
     margin-top: 18px;
     padding: 0 2px;
     border: 0;
-    border-top: 1px solid var(--line);
     background: transparent;
     color: var(--accent-ink);
     display: flex;
@@ -1363,9 +1364,11 @@
 .review-center-section,
 .review-composer {
     margin: 12px 14px 0;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: white;
+    border: 0;
+    border-radius: var(--skin-card-radius);
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--skin-card-shadow);
 }
 
 .review-center-loading {
@@ -1375,8 +1378,8 @@
 .review-center-loading span,
 .product-review-loading span {
     height: 70px;
-    border-radius: 8px;
-    background: linear-gradient(90deg, #f1f3f2 25%, #fafbfa 50%, #f1f3f2 75%);
+    border-radius: var(--skin-control-radius);
+    background: linear-gradient(90deg, var(--soft) 25%, var(--surface) 50%, var(--soft) 75%);
     background-size: 200% 100%;
     display: block;
     animation: shimmer 1.4s infinite;
@@ -1389,7 +1392,6 @@
 .review-center-section > header {
     min-height: 50px;
     padding: 0 14px;
-    border-bottom: 1px solid var(--line);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1412,7 +1414,6 @@
     min-height: 76px;
     padding: 12px 14px;
     border: 0;
-    border-bottom: 1px solid var(--line);
     background: transparent;
     display: grid;
     grid-template-columns: 38px minmax(0, 1fr) auto;
@@ -1421,17 +1422,13 @@
     text-align: left;
 }
 
-.review-candidate-list > button:last-child {
-    border-bottom: 0;
-}
-
 .review-candidate-list > button > svg {
     width: 38px;
     height: 38px;
     padding: 8px;
-    border-radius: 8px;
+    border-radius: var(--skin-control-radius);
     background: var(--soft);
-    color: var(--accent);
+    color: var(--accent-ink);
 }
 
 .review-candidate-list strong,
@@ -1447,7 +1444,7 @@
 }
 
 .review-candidate-list > button > span:last-child {
-    color: var(--accent);
+    color: var(--accent-ink);
     display: flex;
     align-items: center;
     gap: 3px;
@@ -1474,7 +1471,6 @@
 
 .review-composer > header {
     padding-bottom: 14px;
-    border-bottom: 1px solid var(--line);
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -1518,19 +1514,19 @@
 }
 
 .review-rating-input button {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     padding: 8px;
     border: 1px solid var(--line);
-    border-radius: 8px;
-    background: white;
-    color: #c7ccc9;
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--muted);
 }
 
 .review-rating-input button.is-active {
-    border-color: #efb33e;
-    background: #fff8e7;
-    color: #d99613;
+    border-color: var(--warning-border);
+    background: var(--warning-bg);
+    color: var(--warning-text);
 }
 
 .review-rating-input svg {
@@ -1549,8 +1545,9 @@
     width: 100%;
     padding: 10px 12px;
     border: 1px solid var(--line);
-    border-radius: 8px;
-    background: white;
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
     font: inherit;
     transition:
         border-color 180ms ease,
@@ -1561,9 +1558,9 @@
 .review-composer input:focus-visible,
 .review-composer textarea:focus,
 .review-composer textarea:focus-visible {
-    outline: 0 !important;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
+    border-color: var(--focus);
 }
 
 .review-composer textarea {
@@ -1575,25 +1572,22 @@
     min-height: 46px;
     margin-top: 16px;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--skin-control-radius);
     background: var(--accent);
-    color: white;
+    color: var(--accent-foreground);
     font-weight: var(--font-weight-semibold);
 }
 
 .review-submit:disabled {
-    opacity: 0.55;
+    background: var(--accent-disabled-bg);
+    color: var(--accent-disabled-text);
 }
 
 .my-review-list article,
 .product-review-list article {
+    min-width: 0;
+    overflow-wrap: anywhere;
     padding: 15px 14px;
-    border-bottom: 1px solid var(--line);
-}
-
-.my-review-list article:last-child,
-.product-review-list article:last-child {
-    border-bottom: 0;
 }
 
 .my-review-list article > header,
@@ -1605,6 +1599,8 @@
 }
 
 .my-review-list article > header button {
+    min-width: 0;
+    min-height: 44px;
     padding: 0;
     border: 0;
     background: transparent;
@@ -1635,20 +1631,21 @@
 }
 
 .review-state {
+    flex: none;
     padding: 4px 8px;
-    border-radius: 12px;
+    border-radius: var(--skin-control-radius);
     background: var(--soft);
     color: var(--muted);
     font-size: 11px;
 }
 
 .review-state.is-approved {
-    background: #eaf7f0;
-    color: #27704d;
+    background: color-mix(in srgb, var(--success) 12%, var(--surface));
+    color: var(--success);
 }
 
 .review-state.is-rejected {
-    background: #fff0ee;
+    background: color-mix(in srgb, var(--danger) 10%, var(--surface));
     color: var(--danger);
 }
 
@@ -1661,11 +1658,11 @@
 .review-stars svg {
     width: 15px;
     height: 15px;
-    color: #d2d6d4;
+    color: var(--muted);
 }
 
 .review-stars svg.is-active {
-    color: #e1a21f;
+    color: var(--accent-ink);
     fill: currentColor;
 }
 
@@ -1674,7 +1671,7 @@
     margin: 12px 0 0;
     padding: 10px 12px;
     border: 0;
-    border-radius: 7px;
+    border-radius: var(--skin-control-radius);
     background: var(--soft);
     color: var(--text-soft);
     font-size: 13px;
@@ -1734,18 +1731,6 @@
 
 .product-review-retry svg {
     width: 17px;
-}
-
-.primary-action:hover:not(:disabled) {
-    background: var(--accent-hover);
-    color: var(--accent-foreground);
-    box-shadow: var(--accent-shadow);
-}
-
-.primary-action:disabled {
-    background: var(--accent-disabled-bg);
-    color: var(--accent-disabled-text);
-    box-shadow: none;
 }
 
 @media (min-width: 1024px) {

@@ -128,19 +128,26 @@ describe('referral page reward summary', () => {
     it('places the invite count on the title row and removes the privacy subtitle', () => {
         const markup = renderReferralPage();
 
-        expect(markup).toMatch(
-            /邀请记录<\/h2><span class="text-xs font-bold tabular-nums text-slate-500">2<\/span>/,
-        );
+        expect(markup).toMatch(/邀请记录<\/h2><span[^>]*>2<\/span>/);
         expect(markup).not.toContain('只展示脱敏信息，保护好友隐私');
     });
 
     it('places the ledger count on the title row and removes the activity subtitle', () => {
         const markup = renderReferralPage();
 
-        expect(markup).toMatch(
-            /奖励流水<\/h2><span class="text-xs font-bold tabular-nums text-slate-500">0<\/span>/,
-        );
+        expect(markup).toMatch(/奖励流水<\/h2><span[^>]*>0<\/span>/);
         expect(markup).not.toContain('奖励、生效、退款扣回与消费抵扣全程留痕');
+    });
+
+    it('consumes semantic skin surfaces without fixed light cards or clipped reward totals', () => {
+        const markup = renderReferralPage();
+        expect(markup).toContain('bg-[var(--surface)]');
+        expect(markup).toContain('rounded-[var(--skin-card-radius)]');
+        expect(markup).toContain('[overflow-wrap:anywhere]');
+        expect(markup).not.toContain('bg-white');
+        expect(markup).not.toContain('text-slate-900');
+        expect(markup).not.toContain('w-full truncate');
+        expect(markup).toContain('grid-cols-1');
     });
 
     it('paginates invitees list with previous and next buttons', () => {

@@ -29,6 +29,7 @@ import { storefrontErrorCode, storefrontErrorMessage } from './storefront-errors
 import { routeNavigateOptions } from './storefront-router';
 import { InlineError } from './storefront-ui/page-shell';
 import './styles/checkout-payment-surfaces.css';
+import './styles/order-aftercare.css';
 import { TaxSummaryRows } from './tax-summary';
 import {
     ActiveCustomer,

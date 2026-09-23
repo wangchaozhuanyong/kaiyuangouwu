@@ -334,3 +334,55 @@
     padding-left: 12px;
     border-top: 8px solid var(--bg);
 }
+
+@media (max-width: 1023px) {
+    .search-page .search-header {
+        border-bottom: 0;
+        box-shadow: var(--shadow-sm);
+    }
+    .search-page :is(.search-results, .search-discovery) {
+        background: var(--bg);
+    }
+    .search-page .search-results > header {
+        min-height: 52px;
+        padding: 8px 10px;
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+    }
+    .search-page .search-sort {
+        height: 50px;
+        margin: 6px 0 10px;
+        padding: 4px;
+        gap: 4px;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+    }
+    .search-page .search-sort button {
+        border-radius: var(--radius-sm);
+    }
+    .search-page .search-sort button.is-active {
+        background: var(--accent-soft);
+    }
+    .search-page .product-list {
+        display: grid;
+        gap: 8px;
+    }
+    .search-page .product-list .product-row {
+        padding: 10px;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+    }
+    .search-page .search-discovery > .product-section {
+        border: 0;
+    }
+    .search-page .search-results > .product-section {
+        border: 0;
+    }
+    .search-page .popular-searches li {
+        border: 0;
+    }
+}

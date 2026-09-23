@@ -144,10 +144,13 @@ describe('product image navigation layers', () => {
             />,
         );
 
-        expect(markup).toContain('aspect-square');
+        expect(markup).toContain('product-card-media');
         expect(markup).not.toContain('min-[900px]:aspect-[4/3]');
         expect(markup).not.toContain('min-[900px]:p-3');
-        expect(markup).toContain('[&amp;_img]:object-contain');
+        const styles = readStorefrontStylesheet(['./styles/product-card.css']);
+        expect(styles).toContain('aspect-ratio: var(--product-media-ratio);');
+        expect(styles).toContain('object-fit: contain;');
+        expect(styles).not.toMatch(/\.product-card-media[^}]*scale\(/);
     });
 
     it('renders the same cover in cards, rows, detail, sharing and metadata when the gallery starts elsewhere', () => {
@@ -258,7 +261,7 @@ describe('product image navigation layers', () => {
             />,
         );
 
-        expect(markup).toContain('text-[var(--accent-ink)]');
+        expect(markup).toContain('product-card-delivery');
         expect(markup).not.toContain('bg-[var(--accent-soft)]');
         expect(markup).toContain('实物商品 · 需要配送');
     });
@@ -303,8 +306,8 @@ describe('product image navigation layers', () => {
         );
 
         expect(markup).toContain('product-card-detail-link');
-        expect(markup).toContain('z-10');
-        expect(markup).toContain('z-20');
+        expect(markup).toContain('product-card-favorite');
+        expect(markup).toContain('aria-label="收藏 ChatGPT Plus 成品号"');
         expect(markup).toContain('ai-product-cover');
         expect(markup).toContain('库存 10');
         expect(markup).not.toContain('加入购物车');
@@ -366,10 +369,9 @@ describe('product image navigation layers', () => {
         );
 
         expect(markup).toContain('已售罄');
-        expect(markup).toContain('whitespace-nowrap');
-        expect(markup).toContain('items-baseline justify-between gap-2');
-        expect(markup).toContain('font-medium leading-[1.2]');
-        expect(markup).not.toContain('-webkit-line-clamp:2');
+        expect(markup).toContain('product-card-stock is-sold-out');
+        expect(markup).toContain('product-card-subtitle');
+        expect(markup).toContain('product-card-name');
     });
 
     it('does not use the internal SKU as customer-facing fallback copy', () => {
@@ -431,25 +433,16 @@ describe('product image navigation layers', () => {
         );
     });
 
-    it('ensures modern oriental preset preserves transparent product detail header when unscrolled and tints on scroll', () => {
+    it('uses the same detail header state rules for every skin', () => {
         const stylesheet = readStorefrontStylesheet(['./styles/visual-presets.css']);
 
-        expect(stylesheet).toMatch(
-            /html\[data-storefront-preset='modern-oriental'\]\s+\.product-detail-header:not\(\.is-scrolled\)[\s\S]*?background:\s*transparent;/,
+        expect(stylesheet).not.toMatch(
+            /html\[data-storefront-preset='modern-oriental'\]\s+\.product-detail-header/,
         );
-        expect(stylesheet).toMatch(
-            /html\[data-storefront-preset='modern-oriental'\]\s+\.product-detail-header:not\(\.is-scrolled\)[\s\S]*?border-color:\s*transparent;/,
-        );
-        expect(stylesheet).toMatch(
-            /html\[data-storefront-preset='modern-oriental'\]\s+\.product-detail-header:not\(\.is-scrolled\)[\s\S]*?box-shadow:\s*none;/,
-        );
-        expect(stylesheet).toMatch(
-            // eslint-disable-next-line max-len -- This expression distinguishes the scrolled header state from the transparent state.
-            /html\[data-storefront-preset='modern-oriental'\]\s+\.product-detail-header\.is-scrolled[\s\S]*?background:\s*color-mix\(in srgb, var\(--surface\) 96%, transparent\);/,
-        );
-        expect(stylesheet).toMatch(
+        expect(stylesheet).not.toMatch(
             /html\[data-storefront-preset\]\s+:is\(\s*\.topbar:not\(\.product-detail-header\)/,
         );
+        expect(stylesheet).toMatch(/\.topbar\s*\{[^}]*background:\s*var\(--surface\);/);
     });
 
     it('uses a compact borderless desktop product toolbar instead of a tall mobile-style title band', () => {
@@ -533,9 +526,9 @@ describe('product image navigation layers', () => {
         );
         expect(markup).toContain('product-card');
 
-        const stylesheet = readStorefrontStylesheet();
-        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*background:\s*var\(--paper/);
-        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*border-radius:\s*var\(--radius-md/);
-        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*box-shadow:\s*var\(--shadow-sm/);
+        const stylesheet = readStorefrontStylesheet(['./styles/product-card.css']);
+        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*background:\s*var\(--surface\);/);
+        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*border-radius:\s*var\(--skin-card-radius\);/);
+        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*box-shadow:\s*var\(--skin-card-shadow\);/);
     });
 });

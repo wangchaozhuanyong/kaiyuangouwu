@@ -51,6 +51,7 @@ export interface StorefrontPaletteAudit {
             | 'muted'
             | 'page-muted'
             | 'button'
+            | 'button-hover'
             | 'emphasis'
             | 'page-emphasis'
             | 'border'
@@ -236,7 +237,7 @@ const FIXED_PALETTES: Record<Exclude<StorefrontVisualPresetId, 'classic'>, Store
         muted: '#a9b6c8',
         brand: '#8b5cf6',
         accent: '#7645e5',
-        accentHover: '#875cf0',
+        accentHover: '#8054e5',
         accentSoft: '#251b3b',
         accentInk: '#c4b5fd',
         onAccent: '#ffffff',
@@ -258,10 +259,10 @@ const SKIN_TREATMENTS: Record<StorefrontVisualPresetId, StorefrontSkinTreatment>
         heroRadius: '20px',
         controlRadius: '10px',
         mediaRadius: '12px',
-        cardShadow: '0 8px 28px rgba(15, 23, 42, 0.07)',
-        cardHoverShadow: '0 18px 38px rgba(15, 23, 42, 0.12)',
-        heroShadow: '0 18px 48px rgba(15, 23, 42, 0.09)',
-        headerShadow: '0 5px 22px rgba(15, 23, 42, 0.06)',
+        cardShadow: '0 2px 10px rgba(15, 23, 42, 0.04)',
+        cardHoverShadow: '0 6px 18px rgba(15, 23, 42, 0.08)',
+        heroShadow: '0 6px 24px rgba(15, 23, 42, 0.06)',
+        headerShadow: '0 2px 10px rgba(15, 23, 42, 0.04)',
     },
     'modern-oriental': {
         divider: '#ded2c0',
@@ -270,10 +271,10 @@ const SKIN_TREATMENTS: Record<StorefrontVisualPresetId, StorefrontSkinTreatment>
         heroRadius: '18px',
         controlRadius: '8px',
         mediaRadius: '10px',
-        cardShadow: '0 10px 28px rgba(67, 48, 27, 0.09)',
-        cardHoverShadow: '0 20px 44px rgba(67, 48, 27, 0.15)',
-        heroShadow: '0 22px 52px rgba(55, 39, 22, 0.13)',
-        headerShadow: '0 6px 24px rgba(55, 39, 22, 0.08)',
+        cardShadow: '0 2px 12px rgba(67, 48, 27, 0.045)',
+        cardHoverShadow: '0 6px 20px rgba(67, 48, 27, 0.085)',
+        heroShadow: '0 8px 28px rgba(55, 39, 22, 0.07)',
+        headerShadow: '0 2px 12px rgba(55, 39, 22, 0.045)',
     },
     'neo-minimalist': {
         divider: '#2a3548',
@@ -283,10 +284,10 @@ const SKIN_TREATMENTS: Record<StorefrontVisualPresetId, StorefrontSkinTreatment>
         heroRadius: '20px',
         controlRadius: '10px',
         mediaRadius: '12px',
-        cardShadow: '0 10px 28px rgba(0, 0, 0, 0.18)',
-        cardHoverShadow: '0 20px 42px rgba(0, 0, 0, 0.34)',
-        heroShadow: '0 22px 52px rgba(0, 0, 0, 0.24)',
-        headerShadow: '0 5px 24px rgba(0, 0, 0, 0.20)',
+        cardShadow: '0 2px 12px rgba(0, 0, 0, 0.14)',
+        cardHoverShadow: '0 8px 24px rgba(0, 0, 0, 0.24)',
+        heroShadow: '0 8px 28px rgba(0, 0, 0, 0.2)',
+        headerShadow: '0 2px 12px rgba(0, 0, 0, 0.16)',
     },
 };
 
@@ -392,6 +393,7 @@ export function auditStorefrontSemanticPalette(palette: StorefrontSemanticPalett
         ['muted', palette.muted, palette.surface, 4.5],
         ['page-muted', palette.muted, palette.page, 4.5],
         ['button', palette.onAccent, palette.accent, 4.5],
+        ['button-hover', palette.onAccent, palette.accentHover, 4.5],
         ['emphasis', palette.accentInk, palette.accentSoft, 4.5],
         ['page-emphasis', palette.accentInk, palette.page, 4.5],
         ['border', palette.border, palette.surface, 3],

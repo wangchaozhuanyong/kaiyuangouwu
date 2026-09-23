@@ -207,6 +207,7 @@ export function ReviewCenterPage({
                             </div>
                         ) : (
                             <ReviewEmptyState
+                                compact
                                 icon={<MessageSquare />}
                                 title={isZh ? '还没有评价' : 'No reviews yet'}
                                 detail={
@@ -447,15 +448,17 @@ function ReviewEmptyState({
     detail,
     action,
     onAction,
+    compact = false,
 }: {
     icon: React.ReactNode;
     title: string;
     detail: string;
     action: string;
     onAction: () => void;
+    compact?: boolean;
 }) {
     return (
-        <section className="empty-state">
+        <section className={compact ? 'empty-state is-compact' : 'empty-state'}>
             <span>{icon}</span>
             <strong>{title}</strong>
             <small>{detail}</small>

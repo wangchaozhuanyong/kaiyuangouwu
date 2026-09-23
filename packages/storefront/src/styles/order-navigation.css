@@ -1,0 +1,108 @@
+.order-tabs {
+    height: 46px;
+    padding: 0 8px;
+    position: sticky;
+    z-index: 9;
+    top: 52px;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    background: var(--surface);
+    border-bottom: 1px solid var(--skin-divider);
+    backdrop-filter: none;
+}
+.order-tabs button {
+    min-width: 0;
+    padding: 0 2px;
+    border: 0;
+    border-bottom: 2.5px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    font-size: clamp(10.5px, 3.35vw, 14px);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        color var(--experience-motion-fast) var(--experience-ease-standard),
+        background-color var(--experience-motion-fast) var(--experience-ease-standard);
+}
+.order-tabs button:hover {
+    color: var(--text);
+}
+.order-tabs button.is-active {
+    border-bottom-color: var(--accent);
+    color: var(--accent);
+    font-weight: var(--font-weight-bold);
+}
+@media (min-width: 1024px) {
+    .order-tabs {
+        height: 56px;
+        top: 72px;
+    }
+}
+.order-search {
+    min-height: 52px;
+    padding: 7px 10px;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 7px;
+    background: var(--surface);
+    color: var(--text);
+    border-bottom: 1px solid var(--skin-divider);
+}
+.order-search > svg {
+    width: 18px;
+    color: var(--muted);
+}
+.order-search input {
+    min-width: 0;
+    height: 38px;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+}
+.order-search button {
+    min-width: 38px;
+    height: 38px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+}
+.order-search button svg {
+    width: 17px;
+}
+@media (max-width: 1023px) {
+    .orders-page .order-tabs button.is-active {
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+    }
+    .orders-page .order-tabs {
+        height: 54px;
+        padding: 4px 8px;
+        gap: 3px;
+        border: 0;
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+    }
+    .orders-page .order-tabs button {
+        border: 0;
+        border-radius: var(--radius-sm);
+    }
+    .orders-page .order-search {
+        border-bottom: 0;
+        box-shadow: var(--shadow-sm);
+    }
+}
+.order-search button[type='submit'] {
+    background: var(--accent);
+    color: var(--accent-foreground);
+}
+@media (prefers-reduced-motion: reduce) {
+    .order-tabs button {
+        transition: none;
+    }
+}

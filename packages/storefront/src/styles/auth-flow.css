@@ -599,12 +599,10 @@
     width: min(calc(100% - 24px), 420px);
     min-height: 72px;
     transform: translateX(-50%);
-    border: 1px solid rgba(226, 232, 240, 0.92);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow:
-        0 18px 42px rgba(51, 65, 85, 0.18),
-        0 2px 8px rgba(51, 65, 85, 0.08);
+    border: 1px solid var(--skin-divider);
+    border-radius: var(--skin-card-radius);
+    background: var(--surface-elevated);
+    box-shadow: var(--shadow-md);
     color: var(--text);
     display: flex;
     align-items: center;
@@ -612,7 +610,6 @@
     gap: 12px;
     padding: 12px;
     overflow: hidden;
-    backdrop-filter: blur(18px) saturate(1.1);
     animation: toast-in 180ms ease-out;
 }
 
@@ -653,9 +650,9 @@
     min-height: 44px;
     flex: 0 0 auto;
     border: 0;
-    border-radius: 10px;
+    border-radius: var(--skin-control-radius);
     background: var(--accent);
-    color: #ffffff;
+    color: var(--accent-foreground);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -666,7 +663,6 @@
     font-weight: var(--font-weight-bold);
     line-height: 1;
     cursor: pointer;
-    box-shadow: 0 5px 14px rgba(211, 60, 48, 0.22);
 }
 
 .storefront-update-prompt button:hover {
@@ -679,8 +675,8 @@
 }
 
 .storefront-update-prompt button:focus-visible {
-    outline: 3px solid rgba(211, 60, 48, 0.24);
-    outline-offset: 3px;
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
 }
 
 .storefront-update-prompt svg {
@@ -716,10 +712,11 @@
     z-index: 1;
     overflow-y: auto;
     border-radius: 16px 16px 0 0;
-    background: white;
-    box-shadow: 0 -12px 35px rgba(28, 35, 32, 0.2);
     animation: sheet-in 220ms ease-out;
     padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-sm);
 }
 
 .sheet:focus {
@@ -732,11 +729,10 @@
     position: sticky;
     z-index: 2;
     top: 0;
-    border-bottom: 1px solid var(--line);
-    background: white;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    background: var(--surface);
 }
 
 .sheet > header strong {
@@ -1488,9 +1484,6 @@
 .auth-page .wide-action {
     min-height: 48px;
     margin-top: 4px;
-    border-radius: 9px;
-    background: linear-gradient(135deg, #1b72f0 0%, #155bd3 100%);
-    box-shadow: 0 12px 26px rgb(23 105 232 / 20%);
     font-size: 15px;
 }
 
@@ -1504,7 +1497,6 @@
 }
 
 .auth-page .wide-action:disabled {
-    background: #9fbce7;
 }
 
 .auth-inline-link {
@@ -2425,7 +2417,6 @@
     .auth-page .auth-hero-message-brand-only {
         padding-left: 104px;
     }
-
 }
 
 @media (min-width: 1024px) {
@@ -2545,32 +2536,6 @@
     height: 17px;
 }
 
-@media (min-width: 1024px) {
-    .page.auth-page-login,
-    .page.auth-page-register {
-        grid-template-rows: minmax(auto, 1fr) auto;
-    }
-
-    .auth-page-login .auth-assurance-rail,
-    .auth-page-register .auth-assurance-rail {
-        grid-column: 1 / -1;
-        padding: 20px 32px;
-        border-top: 1px solid var(--line-subtle);
-        background: var(--surface);
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        align-items: center;
-        gap: 16px;
-    }
-
-    .auth-assurance-item {
-        min-width: 0;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-}
-
 @media (max-width: 1023px) {
     .page.auth-page-login,
     .page.auth-page-register {
@@ -2675,14 +2640,16 @@
     }
 }
 
-/* Text-only entry uses the skin surface and text; image heroes retain image-tone contrast. */
+/* Account-only entry pages have no public marketing artwork. */
 .auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-hero {
+    --auth-hero-overlay-color: var(--soft);
     --auth-hero-text-color: var(--text);
+    --auth-hero-secondary-text: var(--text);
     background: var(--soft);
 }
 
-.auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-brand-lockup strong {
-    color: var(--text);
+.auth-page:not(.auth-page-managed) .auth-brand-lockup strong {
+    color: var(--auth-hero-text-color);
     text-shadow: none;
 }
 
@@ -2725,7 +2692,6 @@
     .auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-hero {
         height: 188px;
         min-height: 188px;
-        background: var(--soft);
     }
 
     .auth-page:not(.auth-page-managed):not(.auth-page-has-image) .auth-hero::after {
