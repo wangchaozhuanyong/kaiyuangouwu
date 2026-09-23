@@ -29,6 +29,18 @@ function isOwnerOnlyPermission(permission) {
     );
 }
 
+function isPlatformOnlyPermission(permission) {
+    return (
+        permission === 'SuperAdmin' ||
+        permission === 'ManagePlatformTeam' ||
+        permission === 'ReviewStoreGovernance' ||
+        /(?:ApiKey|System|GlobalSettings|Administrator|Role|Seller|Settings|TaxCategory|TaxRate)$/u.test(
+            permission,
+        ) ||
+        /^(?:Create|Update|Delete)(?:Channel|PaymentMethod)$/u.test(permission)
+    );
+}
+
 export function summarizeAdministratorAccess(rows, legacyRows = [], profileRows = [], channelRows = []) {
     const accounts = new Map();
     for (const row of rows) {
@@ -138,13 +150,41 @@ export function summarizeAdministratorAccess(rows, legacyRows = [], profileRows 
         })
         .sort((a, b) => a.administratorId.localeCompare(b.administratorId));
     const stagedIds = new Set(stagedPlatformAdministrators.map(row => row.administratorId));
+    const stagedStoreStaff = [...accounts.values()]
+        .filter(
+            account =>
+                !profiles.has(account.administratorId) &&
+                !owners.some(owner => owner.administratorId === account.administratorId) &&
+                !knownPrimaryIds.has(account.administratorId) &&
+                !stagedIds.has(account.administratorId) &&
+                account.channels.size === 1,
+        )
+        .map(account => {
+            const [[channelId, channelCode]] = account.channels.entries();
+            const valid =
+                Boolean(channelCode) &&
+                channelCode !== '__default_channel__' &&
+                ![...account.permissions].some(isPlatformOnlyPermission);
+            return {
+                administratorId: account.administratorId,
+                roleCodes: [...account.roles].sort(),
+                channelId,
+                channelCode,
+                valid,
+            };
+        })
+        .sort((a, b) => a.administratorId.localeCompare(b.administratorId));
+    const stagedStoreStaffIds = new Set(
+        stagedStoreStaff.filter(row => row.valid).map(row => row.administratorId),
+    );
     const unmapped = [...accounts.values()]
         .filter(
             account =>
                 !profiles.has(account.administratorId) &&
                 !owners.some(owner => owner.administratorId === account.administratorId) &&
                 !knownPrimaryIds.has(account.administratorId) &&
-                !stagedIds.has(account.administratorId),
+                !stagedIds.has(account.administratorId) &&
+                !stagedStoreStaffIds.has(account.administratorId),
         )
         .map(account => ({
             administratorId: account.administratorId,
@@ -164,6 +204,7 @@ export function summarizeAdministratorAccess(rows, legacyRows = [], profileRows 
         existingProfileCount: profiles.size,
         legacyPrimaries,
         stagedPlatformAdministrators,
+        stagedStoreStaff,
         unmapped,
         blockers,
     };

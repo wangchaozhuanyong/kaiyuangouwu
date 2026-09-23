@@ -381,6 +381,16 @@ void test('repository and production workflows use the fail-closed retrying audi
             'u',
         ),
     );
+    assert.match(
+        repositoryWorkflow,
+        new RegExp(
+            'Build storefront integration acceptance harness[\\s\\S]+' +
+                "needs\\.detect-changes\\.outputs\\.storefrontIntegration == 'true'[\\s\\S]+" +
+                'bun run --cwd packages/testing build[\\s\\S]+' +
+                'Install browser for storefront configuration acceptance',
+            'u',
+        ),
+    );
     assert.doesNotMatch(repositoryWorkflow, /if: needs\.detect-changes\.outputs\.e2e == 'true'/u);
     for (const database of ['mysql', 'sqljs', 'postgres', 'mariadb']) {
         assert.ok(
@@ -393,6 +403,10 @@ void test('repository and production workflows use the fail-closed retrying audi
         /node packages\/dev-server\/scripts\/production-runtime-audit\.mjs[\s\\]+--audit-level high[\s\\]+--evidence-output/u,
     );
     assert.match(productionWorkflow, /--audit-report "\$BUN_AUDIT_REPORT"/u);
+    assert.match(
+        productionWorkflow,
+        /Production build changed tracked or untracked source files[\s\S]+printf '%s\\n' "\$SOURCE_STATUS"[\s\S]+git diff --stat/u,
+    );
     assert.doesNotMatch(repositoryWorkflow, /run: bun audit/u);
     assert.doesNotMatch(productionWorkflow, /bun audit --json/u);
 });

@@ -329,6 +329,9 @@ jobs:
             - name: Operations dashboard regression tests
               if: needs.detect-changes.outputs.full == 'true' || contains(fromJSON(needs.detect-changes.outputs.packages), 'operations-dashboard-plugin')
               run: bun run --cwd packages/operations-dashboard-plugin test
+            - name: Build storefront integration acceptance harness
+              if: needs.detect-changes.outputs.storefrontIntegration == 'true'
+              run: bun run --cwd packages/testing build
             - name: Install browser for storefront configuration acceptance
               if: needs.detect-changes.outputs.storefrontIntegration == 'true'
               run: bunx playwright install --with-deps chromium

@@ -250,8 +250,18 @@ export function missingPlan(plan, missing) {
     const frontends = plan.frontends.filter(name => ids.has(`frontend:${name}`));
     const flag = name => ids.has(name);
     const lintFiles = missing.filter(check => check.kind === 'quality').map(check => check.file);
+    // Transport only inputs that the missing checks will execute. Historical coverage may
+    // contain hundreds of already-validated files; carrying those paths (or reuse metadata)
+    // through one CI_PLAN environment variable can exceed Linux MAX_ARG_STRLEN before a job
+    // process starts. Frontend checks still need their exact related-test inputs, while all
+    // other jobs are fully described by packages, flags and lintFiles.
+    const files = unique(
+        missing.filter(check => check.kind === 'frontend').flatMap(check => check.files ?? []),
+    );
     return {
         ...plan,
+        files,
+        changedPackages: unique([...packages, ...frontends]),
         full: plan.full,
         packages,
         frontends,

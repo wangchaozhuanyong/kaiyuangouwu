@@ -47,7 +47,13 @@ test('preflight fails closed on multiple owners, shared store primary, and unmap
                 channelId: 1,
                 channelCode: '__default_channel__',
             },
-            { administratorId: 4, roleCode: 'store-staff', channelId: 2, channelCode: 'moyao-ai' },
+            {
+                administratorId: 4,
+                roleCode: 'store-staff',
+                permissions: '["CreateAdministrator"]',
+                channelId: 2,
+                channelCode: 'moyao-ai',
+            },
         ],
         [{ administratorId: 2 }],
     );
@@ -60,6 +66,35 @@ test('preflight fails closed on multiple owners, shared store primary, and unmap
         report.unmapped.map(item => item.administratorId),
         ['4'],
     );
+});
+
+test('preflight accepts a safe single-store staff account for active migration backfill', () => {
+    const report = summarizeAdministratorAccess(
+        [
+            owner,
+            primary,
+            {
+                administratorId: 4,
+                roleCode: 'production-media-publisher',
+                permissions: '["ReadAsset","CreateAsset","UpdateAsset"]',
+                channelId: 3,
+                channelCode: '美宜佳',
+            },
+        ],
+        [{ administratorId: 2 }],
+    );
+
+    assert.equal(report.readyForStagedMigration, true);
+    assert.deepEqual(report.unmapped, []);
+    assert.deepEqual(report.stagedStoreStaff, [
+        {
+            administratorId: '4',
+            roleCodes: ['production-media-publisher'],
+            channelId: '3',
+            channelCode: '美宜佳',
+            valid: true,
+        },
+    ]);
 });
 
 test('preflight accepts only a reviewed migration-compatible staged platform administrator', () => {
