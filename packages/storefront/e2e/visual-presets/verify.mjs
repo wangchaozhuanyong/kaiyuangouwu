@@ -560,6 +560,18 @@ try {
                     await page.locator('.support-tag-btn').first().click();
                     await expect(page.locator('.support-tag-btn').first()).toHaveClass(/is-active/);
                 }
+                if (name === 'notifications' && requestedContent === 'dense') {
+                    const notificationList = page.locator('.notification-list');
+                    const firstNotification = notificationList.locator(':scope > button').first();
+                    await expect(firstNotification).toBeVisible();
+                    await expect(notificationList).toHaveCSS('display', 'grid');
+                    await expect(firstNotification).toHaveCSS('display', 'grid');
+                    await expect(firstNotification.locator('.notification-icon')).toHaveCSS('width', '42px');
+                    const detailFits = await firstNotification
+                        .locator('small')
+                        .evaluate(element => element.scrollWidth <= element.clientWidth + 1);
+                    expect(detailFits, `${preset}/${width}/notifications order reference fits`).toBe(true);
+                }
                 if (width < 1024 && name === 'checkout') {
                     await expect(page.locator('.checkout-options > button').first()).toHaveCSS(
                         'border-top-width',
@@ -602,6 +614,7 @@ try {
                             'two-factor',
                             'reviews',
                             'legal',
+                            'notifications',
                         ].includes(name)) ||
                     (width === 390 &&
                         [
@@ -620,6 +633,7 @@ try {
                             'two-factor',
                             'reviews',
                             'legal',
+                            'notifications',
                         ].includes(name))
                 ) {
                     await page.screenshot({
