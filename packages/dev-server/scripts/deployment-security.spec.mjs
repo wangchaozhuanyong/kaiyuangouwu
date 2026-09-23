@@ -79,7 +79,7 @@ void test('prunes abandoned candidates and checks disk before download and runti
     assert.ok(calls[0] > script.indexOf('--apply-failed-candidates'));
     assert.ok(calls[0] < script.indexOf('DEPLOY_DOWNLOAD_BEGIN'));
     assert.ok(calls[1] > script.indexOf('node "${candidate}/verify-runtime.mjs"'));
-    assert.ok(calls[1] < script.indexOf('\npm2 stop vendure-worker vendure-api'));
+    assert.ok(calls[1] < script.indexOf('\npm2 stop vendure-worker 9>&-'));
     const health = await readFile(
         path.join(repositoryRoot, 'deploy/systemd/vendure-production-healthcheck'),
         'utf8',

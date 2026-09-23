@@ -82,18 +82,25 @@ test('USDT deployment checks backup and history while both writers are stopped, 
         new URL('../../../deploy/deploy-production-from-s3.sh', import.meta.url),
         'utf8',
     );
-    const stop = script.indexOf(
-        'pm2 stop vendure-worker vendure-api 9>&-',
-        script.indexOf('readonly usdt_guard='),
+    const workerStop = script.indexOf('pm2 stop vendure-worker 9>&-');
+    const memoryCheck = script.indexOf('node "${memory_guard}" --stage pre-migration --check');
+    const rollbackReady = script.indexOf(
+        'rollback_needed=1',
+        script.indexOf('deploy_stage="migration-memory-readiness"'),
     );
+    const apiStop = script.indexOf('pm2 stop vendure-api 9>&-', script.indexOf('readonly usdt_guard='));
     const capture = script.indexOf('node "${usdt_guard}" capture');
     const backup = script.indexOf("printf 'DEPLOY_BACKUP_OK");
     const migrate = script.indexOf('node packages/dev-server/dist/run-migrations.js');
     const verify = script.indexOf('node "${usdt_guard}" verify');
     const start = script.indexOf('"${repository}/deploy/switch-production-runtime.sh" "${candidate}"');
     assert.ok(
-        stop > 0 &&
-            stop < capture &&
+        workerStop > 0 &&
+            rollbackReady > 0 &&
+            rollbackReady < workerStop &&
+            workerStop < memoryCheck &&
+            memoryCheck < apiStop &&
+            apiStop < capture &&
             capture < backup &&
             backup < migrate &&
             migrate < verify &&
