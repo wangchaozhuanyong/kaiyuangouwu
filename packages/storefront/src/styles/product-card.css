@@ -106,14 +106,16 @@
 }
 
 .product-card-subtitle {
-    display: block;
+    display: -webkit-box;
     margin-top: 4px;
+    min-height: 3em;
     overflow: hidden;
     color: var(--muted);
     font-size: 12px;
     line-height: 1.5;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 
 .product-card-meta {

@@ -2180,14 +2180,15 @@ html[lang='en'] .quick-grid b {
 }
 
 .flash-sale-name {
-    min-height: 1.35em;
+    min-height: 2.7em;
     margin: 6px 2px 0;
     display: -webkit-box;
     overflow: hidden;
     font-size: 12px;
     line-height: 1.35;
+    overflow-wrap: anywhere;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
+    -webkit-line-clamp: 2;
 }
 
 .flash-sale-card > small {
