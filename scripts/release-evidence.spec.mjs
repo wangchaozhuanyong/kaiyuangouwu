@@ -276,7 +276,36 @@ test('without target proof only missing control and file checks run; business an
     assert.equal(execution.full, false);
     assert.equal(execution.controls, true);
     assert.deepEqual(execution.lintFiles, ['deploy/systemd/backup.py']);
+    assert.deepEqual(execution.files, []);
+    assert.deepEqual(execution.changedPackages, []);
     assert.equal(result.anchor, undefined);
+});
+test('missing plan transports only files consumed by missing checks', () => {
+    const cumulative = classifyChanges(
+        [
+            'packages/core/src/service.ts',
+            'packages/storefront/src/a.ts',
+            'packages/storefront/src/b.ts',
+            'deploy/systemd/backup.py',
+        ],
+        inputInventory,
+    );
+    const required = checkRequirements(cumulative, inputInventory);
+    const execution = missingPlan(cumulative, [
+        required.find(check => check.id === 'frontend:storefront'),
+        required.find(check => check.id === 'quality:deploy/systemd/backup.py'),
+        required.find(check => check.id === 'controls'),
+    ]);
+
+    assert.deepEqual(execution.files, ['packages/storefront/src/a.ts', 'packages/storefront/src/b.ts']);
+    assert.deepEqual(execution.lintFiles, ['deploy/systemd/backup.py']);
+    assert.deepEqual(execution.packages, []);
+    assert.deepEqual(execution.frontends, ['storefront']);
+    assert.deepEqual(execution.changedPackages, ['storefront']);
+    assert.deepEqual(
+        checkRequirements(execution, inputInventory).map(check => check.id),
+        ['frontend:storefront', 'controls', 'quality:deploy/systemd/backup.py'],
+    );
 });
 test('shared dependency, lockfile, test commands, global environment and deleted source invalidate affected checks', () => {
     const check = checkRequirements(
