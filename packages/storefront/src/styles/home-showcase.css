@@ -2067,10 +2067,10 @@ html[lang='en'] .quick-grid b {
     min-height: 34px;
     margin: -4px 2px 10px;
     padding: 6px 10px;
-    border: 1px solid #fed7aa;
+    border: 1px solid color-mix(in srgb, var(--warning) 28%, var(--line));
     border-radius: 8px;
-    background: linear-gradient(90deg, #fff7ed, #fff);
-    color: #c2410c;
+    background: var(--surface);
+    color: var(--warning);
     display: flex;
     align-items: center;
     gap: 6px;
@@ -2150,7 +2150,7 @@ html[lang='en'] .quick-grid b {
     aspect-ratio: 1 / 1;
     position: relative;
     overflow: hidden;
-    border: 1px solid rgba(234, 88, 12, 0.1);
+    border: 1px solid color-mix(in srgb, var(--warning) 10%, transparent);
     border-radius: 10px;
     background: var(--product-media-bg);
     display: block;
@@ -2171,12 +2171,12 @@ html[lang='en'] .quick-grid b {
     top: 6px;
     left: 6px;
     border-radius: 4px;
-    background: #ea580c;
-    color: white;
+    background: var(--warning);
+    color: var(--surface);
     font-size: 10px;
     font-style: normal;
     font-weight: 700;
-    box-shadow: 0 2px 7px rgba(194, 65, 12, 0.24);
+    box-shadow: 0 2px 7px color-mix(in srgb, var(--warning) 24%, transparent);
 }
 
 .flash-sale-name {
@@ -2211,7 +2211,7 @@ html[lang='en'] .quick-grid b {
 }
 
 .flash-sale-price b {
-    color: #ea580c;
+    color: var(--warning);
     font-family: var(--font-numeric);
     font-size: 15px;
     font-weight: 800;
@@ -3073,10 +3073,6 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     .home-page .hero {
         border: 0;
         box-shadow: var(--shadow-sm);
-    }
-
-    .home-page .notice-strip {
-        background: color-mix(in srgb, var(--accent-soft) 42%, var(--surface));
     }
 
     .home-page .quick-grid.is-color-marketplace button {
