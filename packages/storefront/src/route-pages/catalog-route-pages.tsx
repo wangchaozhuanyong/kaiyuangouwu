@@ -204,7 +204,7 @@ export function ProductRoutePage() {
 export function SearchRoutePage() {
     const runtime = useRuntime();
     const desktop = useDesktopLayout();
-    if (desktop) return <DesktopCatalogPage />;
+    if (desktop && runtime.route.term?.trim()) return <DesktopCatalogPage />;
     return (
         <SearchPageContext.Provider
             value={{

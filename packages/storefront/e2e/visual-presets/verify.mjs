@@ -795,6 +795,13 @@ try {
                 }
                 results.push({ preset, width, name, geometry, keyboardFocus, accessibility });
 
+                if (name === 'category' && width >= 1024) {
+                    await page.locator('.proto-search-open').click();
+                    await expect(page).toHaveURL(/\/search$/);
+                    await expect(page.locator('.search-page .search-discovery')).toBeVisible();
+                    await expect(page.locator('.search-page .search-header input')).toBeFocused();
+                }
+
                 if (name === 'home' && width >= 1024) {
                     const tools = page.locator('.proto-tool-item');
                     await expect(tools).toHaveCount(5);

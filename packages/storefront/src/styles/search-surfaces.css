@@ -1,3 +1,7 @@
+.search-desktop-intro {
+    display: none;
+}
+
 .search-header {
     height: 56px;
     padding: 6px 10px;
@@ -378,5 +382,130 @@
     }
     .search-page .popular-searches li {
         border: 0;
+    }
+}
+
+@media (min-width: 1024px) {
+    .desktop-store-layout .search-page {
+        padding-top: 36px;
+    }
+
+    .search-page .search-desktop-intro {
+        display: block;
+        margin-bottom: 24px;
+    }
+
+    .search-desktop-intro > span {
+        color: var(--accent-ink);
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .search-desktop-intro h2 {
+        margin: 8px 0 6px;
+        color: var(--text);
+        font-family: var(--skin-display-font, var(--font-ui));
+        font-size: clamp(28px, 3vw, 38px);
+        line-height: 1.2;
+    }
+
+    .search-desktop-intro p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+    }
+
+    .search-page .search-header {
+        position: static;
+        height: auto;
+        min-height: 80px;
+        padding: 16px;
+        gap: 14px;
+        border-radius: var(--skin-card-radius);
+        background: var(--surface);
+        box-shadow: var(--skin-card-shadow);
+        backdrop-filter: none;
+    }
+
+    .search-page .search-header > button:first-child {
+        border-radius: var(--skin-control-radius);
+        background: var(--control-surface);
+    }
+
+    .search-page .search-header > button:last-child {
+        min-width: 88px;
+        min-height: 48px;
+        border-radius: var(--skin-control-radius);
+        background: var(--accent);
+        color: var(--accent-foreground);
+    }
+
+    .search-page .search-header > label {
+        height: 48px;
+        border-radius: var(--skin-control-radius);
+        background: var(--control-surface);
+    }
+
+    .search-page .search-header input {
+        height: 46px;
+        font-size: 15px;
+    }
+
+    .search-page .search-discovery {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-content: start;
+        gap: 20px;
+        min-height: 0;
+        padding: 24px 0 0;
+        background: transparent;
+    }
+
+    .search-page .search-discovery > section {
+        min-width: 0;
+        margin: 0;
+        padding: 22px 24px;
+        border: 0;
+        border-radius: var(--skin-card-radius);
+        background: var(--surface);
+        box-shadow: var(--skin-card-shadow);
+    }
+
+    .search-page .search-discovery > section:first-child,
+    .search-page .search-discovery > .product-section {
+        grid-column: 1 / -1;
+    }
+
+    .search-page .search-discovery > .product-section {
+        padding: 4px 0 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .search-page .search-discovery section > header strong {
+        font-size: 16px;
+    }
+
+    .search-page .popular-searches ol {
+        gap: 8px;
+    }
+
+    .search-page .popular-searches li button {
+        min-height: 48px;
+        padding: 0 10px;
+        border-radius: var(--skin-control-radius);
+        background: var(--module-action-surface);
+    }
+
+    .search-page .discovery-grid button {
+        min-height: 94px;
+        border-radius: var(--skin-control-radius);
+        background: var(--module-action-surface);
+        box-shadow: none;
+    }
+
+    .search-page .search-discovery .product-grid {
+        grid-template-columns: repeat(2, minmax(0, 220px));
+        gap: 16px;
     }
 }
