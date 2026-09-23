@@ -922,6 +922,10 @@ void test('MySQL restore drill is isolated, hardened, and scheduled weekly', asy
 });
 
 void test('persistent business files have encrypted offsite backup, retention and full restore drills', async () => {
+    const deploymentScript = await readFile(
+        path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'),
+        'utf8',
+    );
     const backupScript = await readFile(
         path.join(repositoryRoot, 'deploy/systemd/vendure-file-backup'),
         'utf8',
@@ -964,6 +968,7 @@ void test('persistent business files have encrypted offsite backup, retention an
     }
     assert.match(backupScript, /--sse AES256/u);
     assert.match(backupScript, /head-object/u);
+    assert.match(deploymentScript, /systemctl show vendure-file-backup\.service -p Result --value/u);
     assert.match(backupScript, /vendure-backup-s3-guard\.py/u);
     assert.match(backupScript, /vendure-s3-prefix-snapshot\.py/u);
     assert.match(backupScript, /CUSTOMER_AVATAR_S3_BUCKET/u);

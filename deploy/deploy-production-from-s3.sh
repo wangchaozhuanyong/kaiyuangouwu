@@ -984,7 +984,8 @@ if [[ ! -s /var/lib/vendure-readiness/restore-drill.json || \
         fail 'the MySQL restore drill failed'
     fi
 fi
-if ! sudo -n find /var/backups/vendure-files -maxdepth 1 -type f -name 'vendure-files-*.tar.gz.sha256' -print -quit | grep -q .; then
+if ! sudo -n find /var/backups/vendure-files -maxdepth 1 -type f -name 'vendure-files-*.tar.gz.sha256' -print -quit | grep -q . || \
+    [[ "$(sudo -n systemctl show vendure-file-backup.service -p Result --value)" != "success" ]]; then
     if ! sudo -n systemctl start vendure-file-backup.service; then
         sudo -n journalctl -u vendure-file-backup.service -n 80 --no-pager >&2 || true
         fail 'the persistent file backup failed'
