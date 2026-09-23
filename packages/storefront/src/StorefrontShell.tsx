@@ -59,7 +59,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     } = state;
     const customer = previewEmbedded
         ? previewParameters.get('storefrontPreviewAuth') === 'authenticated'
-            ? PREVIEW_CUSTOMER
+            ? (sessionCustomer ?? PREVIEW_CUSTOMER)
             : null
         : sessionCustomer;
     const effectiveStorefrontContext =
@@ -87,7 +87,8 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
             const nextRoute = event.data.route;
             if (!storefrontRouteNames.includes(nextRoute as RouteName)) return;
             const id = typeof event.data.id === 'string' ? event.data.id : undefined;
-            storefrontContextValue.navigate({ name: nextRoute as RouteName, id }, true);
+            const tab = nextRoute === 'orders' && event.data.tab === 'service' ? 'service' : undefined;
+            storefrontContextValue.navigate({ name: nextRoute as RouteName, id, tab }, true);
         };
         window.addEventListener('message', receivePreviewNavigation);
         return () => window.removeEventListener('message', receivePreviewNavigation);
@@ -179,7 +180,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                 </Suspense>
                                 {previewEmbedded &&
                                     previewScenario &&
-                                    previewScenario !== 'normal' &&
+                                    !['normal', 'dense', 'aftercare'].includes(previewScenario) &&
                                     !(
                                         displayedRoute.name === 'home' &&
                                         ['empty', 'loading'].includes(previewScenario)

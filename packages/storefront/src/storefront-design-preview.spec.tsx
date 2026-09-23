@@ -33,8 +33,31 @@ describe('storefront design preview', () => {
         expect(markup).toContain('value="1920"');
         expect(markup).toContain('value="2560"');
         expect(markup).toContain('value="dialog"');
+        expect(markup).toContain('value="dense"');
+        expect(markup).toContain('value="aftercare"');
         expect(markup).toContain('value="guest"');
         expect(markup).toContain('value="authenticated"');
+    });
+
+    it('opens populated read-only order and aftercare samples', () => {
+        window.history.replaceState({}, '', '/__storefront-preview?route=order-detail&auth=authenticated');
+        expect(renderToStaticMarkup(<StorefrontDesignPreview />)).toContain('id=order-1');
+
+        window.history.replaceState(
+            {},
+            '',
+            '/__storefront-preview?route=orders&scenario=aftercare&auth=authenticated',
+        );
+        expect(renderToStaticMarkup(<StorefrontDesignPreview />)).toContain('tab=service');
+
+        window.history.replaceState(
+            {},
+            '',
+            '/__storefront-preview?route=order-confirmation&scenario=aftercare&auth=authenticated',
+        );
+        const confirmation = renderToStaticMarkup(<StorefrontDesignPreview />);
+        expect(confirmation).toContain('token=local-preview-only');
+        expect(confirmation).toContain('id=LOCALQADIGITALORDER20260923NOTAREALORDER');
     });
 
     it('uses a real in-stock store product instead of a fixed demo id', async () => {
