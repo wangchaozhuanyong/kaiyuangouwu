@@ -40,7 +40,8 @@ fail() {
     deploy_failure_reason="$1"
     deploy_failure_line="${BASH_LINENO[0]:-0}"
     printf 'Production deployment failed: %s\n' "$1" >&2
-    if [[ "${rollback_needed:-0}" == "1" ]] && declare -F rollback >/dev/null; then
+    if [[ "${rollback_needed:-0}" == "1" || "${worker_paused_early:-0}" == "1" ]] &&
+        declare -F rollback >/dev/null; then
         rollback 1
     fi
     exit 1
@@ -385,6 +386,7 @@ readonly swap_controller_source="${repository}/deploy/ensure-production-swap.sh"
 readonly swap_controller="/usr/local/sbin/vendure-production-swap"
 
 rollback_needed=0
+worker_paused_early=0
 nginx_changed=0
 pointer_changed=0
 storefront_pointer_changed=0
@@ -464,6 +466,14 @@ rollback() {
             sudo -n nginx -t && sudo -n systemctl reload nginx || true
         fi
         printf 'ROLLBACK_DONE\n'
+    elif [[ "${worker_paused_early}" == "1" ]]; then
+        worker_paused_early=0
+        if pm2 restart vendure-worker 9>&-; then
+            pm2 save 9>&- || true
+            printf 'EARLY_WORKER_RESUME_DONE\n'
+        else
+            printf 'WORKER_RESUME_FAILED\n' >&2
+        fi
     fi
 
     if [[ -n "${migration_failure_log:-}" && -s "${migration_failure_log}" ]]; then
@@ -496,6 +506,12 @@ process.stdout.write(
 );
 '
 check_production_disk_usage
+deploy_stage="pre-download-memory-readiness"
+# Free the same worker memory used by later migration before the first memory
+# guard. Keep the API serving while the artifact is downloaded and verified.
+# An early failure resumes only the worker; migration failures use full rollback.
+worker_paused_early=1
+pm2 stop vendure-worker 9>&-
 node "${memory_guard}" --stage pre-download --check
 deploy_stage="artifact-download"
 printf 'DEPLOY_DOWNLOAD_BEGIN\n'
@@ -627,15 +643,14 @@ if [[ "${reviewed_referral_posters}" != "none" ]]; then
     cd "${repository}"
     printf 'REFERRAL_POSTERS_PREFLIGHT_OK scope=%s\n' "${reviewed_referral_posters}"
 fi
-# Check disk after staging the verified artifact, while both writers still run.
+# Check disk after staging the verified artifact, while the API still runs.
 # Retention must be reviewed separately; do not delete releases here.
 check_production_disk_usage
-# The worker is stopped for the migration below. Pause it before checking
-# migration headroom so the guard measures the memory available to that phase.
-# Keep the API serving until readiness and the migration plan have passed.
+# The worker was paused before the first memory check. Keep the API serving
+# until readiness and the migration plan have passed.
 deploy_stage="migration-memory-readiness"
 rollback_needed=1
-pm2 stop vendure-worker 9>&-
+worker_paused_early=0
 node "${memory_guard}" --stage pre-migration --check
 deploy_stage="migration-readiness"
 set -a

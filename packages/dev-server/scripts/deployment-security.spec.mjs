@@ -68,7 +68,7 @@ void test('production audit triggers are prepared through the local root socket 
     assert.doesNotMatch(helper, /DB_PASSWORD.*stdout|stdout.*DB_PASSWORD/u);
 });
 
-void test('prunes abandoned candidates and checks disk before download and runtime stop', async () => {
+void test('prunes abandoned candidates and checks disk before worker pause and download', async () => {
     const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
     const guard = script.match(/check_production_disk_usage\(\) \{[\s\S]*?\n\}/u)?.[0];
     assert.ok(guard);
@@ -78,8 +78,8 @@ void test('prunes abandoned candidates and checks disk before download and runti
     assert.match(script, /PRODUCTION_FAILED_RELEASE_RETENTION_OK/u);
     assert.ok(calls[0] > script.indexOf('--apply-failed-candidates'));
     assert.ok(calls[0] < script.indexOf('DEPLOY_DOWNLOAD_BEGIN'));
+    assert.ok(calls[0] < script.indexOf('\npm2 stop vendure-worker 9>&-'));
     assert.ok(calls[1] > script.indexOf('node "${candidate}/verify-runtime.mjs"'));
-    assert.ok(calls[1] < script.indexOf('\npm2 stop vendure-worker 9>&-'));
     const health = await readFile(
         path.join(repositoryRoot, 'deploy/systemd/vendure-production-healthcheck'),
         'utf8',
@@ -112,6 +112,35 @@ void test('prunes abandoned candidates and checks disk before download and runti
         if (passes) assert.match(result.stdout, /DEPLOY_DISK_OK/u);
         else assert.doesNotMatch(result.stdout, /DEPLOY_DISK_OK/u);
     }
+});
+
+void test('a failure before migration resumes the existing worker without switching runtime', async () => {
+    const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
+    const rollback = script.match(/\nrollback\(\) \{[\s\S]*?\n\}\n\ntrap cleanup EXIT/u)?.[0];
+    assert.ok(rollback);
+    const result = spawnSync(
+        'bash',
+        [
+            '-c',
+            `set -Eeuo pipefail
+rollback_needed=0
+worker_paused_early=1
+deploy_stage=pre-download-memory-readiness
+deploy_failure_reason=memory-guard-failed
+deploy_failure_line=500
+migration_failure_log=
+cleanup() { :; }
+pm2() { printf 'PM2:%s\\n' "$*"; }
+${rollback}
+rollback 19`,
+        ],
+        { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 19);
+    assert.match(result.stdout, /PM2:restart vendure-worker/u);
+    assert.match(result.stdout, /PM2:save/u);
+    assert.match(result.stdout, /EARLY_WORKER_RESUME_DONE/u);
+    assert.doesNotMatch(result.stdout, /ROLLBACK_BEGIN|PRODUCTION_API_READY/u);
 });
 
 void test('reused CI skips do not skip deployment, and skipped deployment cannot pass the release', async () => {
@@ -770,6 +799,14 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /vendure-production-swap/u);
     assert.match(script, /sudo -n "\$\{swap_controller\}"/u);
     assert.match(script, /node "\$\{memory_guard\}" --stage pre-download --check/u);
+    assert.ok(
+        script.indexOf('pm2 stop vendure-worker 9>&-') <
+            script.indexOf('node "${memory_guard}" --stage pre-download --check'),
+    );
+    assert.match(
+        script,
+        /elif \[\[ "\$\{worker_paused_early\}" == "1" \]\]; then[\s\S]*pm2 restart vendure-worker/u,
+    );
     assert.match(script, /node "\$\{memory_guard\}" --stage pre-migration --check/u);
     assert.match(script, /node "\$\{memory_guard\}" --stage pre-switch --check/u);
     assert.match(script, /node "\$\{memory_guard\}" --stage post-switch --report/u);
