@@ -403,6 +403,10 @@ void test('repository and production workflows use the fail-closed retrying audi
         /node packages\/dev-server\/scripts\/production-runtime-audit\.mjs[\s\\]+--audit-level high[\s\\]+--evidence-output/u,
     );
     assert.match(productionWorkflow, /--audit-report "\$BUN_AUDIT_REPORT"/u);
+    assert.match(
+        productionWorkflow,
+        /Production build changed tracked or untracked source files[\s\S]+printf '%s\\n' "\$SOURCE_STATUS"[\s\S]+git diff --stat/u,
+    );
     assert.doesNotMatch(repositoryWorkflow, /run: bun audit/u);
     assert.doesNotMatch(productionWorkflow, /bun audit --json/u);
 });
