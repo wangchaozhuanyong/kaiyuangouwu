@@ -399,9 +399,19 @@ export function sanitizeProductSubtitle(
     return clean.length > maxLength ? `${clean.slice(0, maxLength)}…` : clean;
 }
 
-export function resolveProductSubtitle(product: Product, maxLength = 26): string | null {
+export function resolveProductSubtitle(
+    product: Product,
+    maxLength = 26,
+    preferCompleteClause = false,
+): string | null {
     const description = sanitizeProductSubtitle(product.description, product.name, maxLength);
-    if (description) return description;
+    if (description) {
+        if (preferCompleteClause) {
+            const clause = description.match(/^(.{8,24}?)[，,。；;！？!?]/u)?.[1];
+            if (clause) return clause;
+        }
+        return description;
+    }
 
     const parentIds = new Set(
         product.collections.flatMap(collection => (collection.parentId ? [collection.parentId] : [])),
