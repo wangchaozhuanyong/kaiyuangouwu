@@ -852,6 +852,35 @@ img {
     place-items: center;
 }
 
+@media (max-width: 1023px) {
+    .home-topbar > .topbar-actions > :is(.locale-preferences-trigger, .notice-button) {
+        height: var(--experience-control-min);
+        min-height: var(--experience-control-min);
+        border: 0;
+        border-radius: var(--skin-control-radius, var(--radius-sm));
+        background-color: var(--control-surface, var(--soft));
+        background-image: var(--control-surface-image, none);
+        box-shadow: var(--control-elevation, none);
+    }
+
+    .home-topbar > .topbar-actions > :is(.locale-preferences-trigger, .notice-button):hover:not(:disabled) {
+        background-color: var(--control-surface-hover, var(--soft));
+        background-image: var(--control-surface-hover-image, none);
+        box-shadow: var(--control-elevation-hover, none);
+    }
+
+    .home-topbar > .topbar-actions > :is(.locale-preferences-trigger, .notice-button):active:not(:disabled) {
+        background-color: var(--control-surface-pressed, var(--soft));
+        background-image: var(--control-surface-pressed-image, none);
+        box-shadow: var(--control-elevation, none);
+    }
+
+    .home-topbar > .topbar-actions > .notice-button {
+        width: var(--experience-control-min);
+        flex: none;
+    }
+}
+
 .search-trigger {
     min-width: 0;
     height: 40px;

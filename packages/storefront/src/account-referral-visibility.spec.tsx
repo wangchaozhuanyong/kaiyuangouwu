@@ -131,6 +131,11 @@ function renderAccount(
                     favoriteProductCount: 0,
                     announcementCount: 0,
                     couponCount: 0,
+                    displayCurrencyCode: market.currencyCode,
+                    availableCurrencyCodes: [market.currencyCode],
+                    currencyLoading: false,
+                    onToggleLanguage: vi.fn(),
+                    onCurrencyChange: vi.fn(),
                     onContentTarget: vi.fn(),
                     onLogout: vi.fn(),
                 }}
@@ -144,20 +149,27 @@ function renderAccount(
 }
 
 describe('account referral visibility', () => {
-    it('changes the account asset row to four entries when referral is enabled', () => {
+    it('shows real referral balance in the three-column mobile account card when enabled', () => {
         const markup = renderAccount(true);
 
-        expect(markup).toContain('grid-cols-4');
-        expect(markup).toContain('邀请返利');
+        expect(markup).toContain('account-mobile-header');
+        expect(markup).toContain('locale-preferences-trigger');
+        expect(markup).toContain('我的订单中心');
+        expect(markup).toContain('返利余额');
         expect(markup).toContain('¥8.8');
+        expect(markup.match(/class="account-hero-asset"/g)).toHaveLength(3);
         expect(markup).not.toContain('data-page-pending="query"');
     });
 
-    it('keeps three entries and hides referral when the program is disabled', () => {
+    it('keeps the shared mobile header off the desktop account layout', () => {
+        expect(renderAccount(true, null, { desktop: true })).not.toContain('account-mobile-header');
+    });
+
+    it('uses favorites instead of a nonexistent balance when referral is disabled', () => {
         const markup = renderAccount(false);
 
-        expect(markup).toContain('grid-cols-3');
-        expect(markup).not.toContain('邀请返利');
+        expect(markup).toContain('我的收藏');
+        expect(markup).not.toContain('返利余额');
     });
 
     it('renders managed account artwork as an image tracked by the shared readiness boundary', () => {

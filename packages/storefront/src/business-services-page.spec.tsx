@@ -88,6 +88,15 @@ function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'e
             value={{
                 contentBlocks,
                 language,
+                storefrontName: '测试商城',
+                logoUrl: null,
+                marketLabel: '马来西亚',
+                displayCurrencyCode: 'MYR',
+                availableCurrencyCodes: ['MYR'],
+                currencyLoading: false,
+                onToggleLanguage: vi.fn(),
+                onCurrencyChange: vi.fn(),
+                onNotifications: vi.fn(),
                 onNavigate: () => undefined,
                 onContentTarget: vi.fn(),
             }}
@@ -155,12 +164,18 @@ describe('business services page', () => {
         expect(desktop).toContain('后台配置的说明');
         const mobile = renderPage([block]);
         expect(mobile.indexOf('2FA 动态码')).toBeLessThan(mobile.indexOf('选购遇到问题？'));
+        expect(mobile).toContain('business-services-mobile-header');
+        expect(mobile).toContain('locale-preferences-trigger');
+        expect(mobile).toContain('<h1 class="business-services-page-title">后台服务说明</h1>');
         expect(mobile).not.toContain('<details');
     });
     it('shows the default navigation name and a module empty state before services are enabled', () => {
         const markup = renderPage([]);
 
-        expect(markup).toContain('<h1 class="business-services-page-title">智能服务</h1>');
+        expect(markup).toContain('<h1 class="business-services-page-title">发现更多商业能力</h1>');
+        expect(renderPage([], 'zh', true)).toContain(
+            '<h1 class="business-services-page-title">智能服务</h1>',
+        );
         expect(markup).not.toContain('business-services-title-icon');
         expect(markup).toContain('商业服务正在陆续开放');
     });
@@ -168,7 +183,8 @@ describe('business services page', () => {
     it('keeps the page title synchronized with the configured bottom navigation label', () => {
         const markup = renderPage([navigationBlock('AI 智能服务')]);
 
-        expect(markup).toContain('<h1 class="business-services-page-title">AI 智能服务</h1>');
+        expect(markup).toContain('<strong>AI 智能服务</strong>');
+        expect(markup).toContain('business-services-heading-kicker">AI 智能服务</span>');
     });
 
     it('renders enabled plugins in the business-services main position', () => {
@@ -203,8 +219,8 @@ describe('business services page', () => {
         linkedBlock.targetValue = 'https://example.com/services';
 
         expect(renderPage([linkedBlock])).toContain('business-services-heading-link');
-        expect(renderPage([linkedBlock])).toContain('点击前往');
-        expect(renderPage([linkedBlock], 'en')).toContain('Open link');
+        expect(renderPage([linkedBlock])).toContain('直通服务');
+        expect(renderPage([linkedBlock], 'en')).toContain('Open service');
     });
 
     it('does not render the jump action without a managed URL target', () => {

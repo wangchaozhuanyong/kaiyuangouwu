@@ -5,15 +5,12 @@ import {
     Bell,
     ChevronRight,
     CircleCheck,
-    ClipboardList,
-    Gift,
     Headphones,
     Heart,
     MapPin,
     Megaphone,
     Package,
     RotateCcw,
-    Settings,
     Store,
     TicketPercent,
     Truck,
@@ -25,6 +22,7 @@ import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import accountRefractionImage from '../assets/ui/account-refraction.webp';
+import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { useDesktopLayout } from '../desktop-layout';
 import { useImageTone } from '../hero-theme';
 import { compactUiCopy, languageCodeFor } from '../i18n';
@@ -66,6 +64,11 @@ export interface AccountPageProps {
     favoriteProductCount: number;
     announcementCount: number;
     couponCount: number;
+    displayCurrencyCode?: string;
+    availableCurrencyCodes?: string[];
+    currencyLoading?: boolean;
+    onToggleLanguage?: () => void;
+    onCurrencyChange?: (currencyCode: string) => void | Promise<void>;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
     onLogout: () => void;
 }
@@ -90,6 +93,11 @@ export function AccountPage() {
         favoriteProductCount,
         announcementCount,
         couponCount,
+        displayCurrencyCode,
+        availableCurrencyCodes,
+        currencyLoading,
+        onToggleLanguage,
+        onCurrencyChange,
         onContentTarget,
         onLogout,
     } = AccountPageContext.useValue();
@@ -209,32 +217,40 @@ export function AccountPage() {
             className="page account-page lg:grid lg:content-start lg:gap-4 lg:pb-8 lg:pt-[88px]"
             data-page-pending={pagePending ? 'query' : undefined}
         >
+            {!desktop && (
+                <MobilePageHeader
+                    className="account-mobile-header"
+                    title={isZh ? '个人中心' : 'My account'}
+                    storefrontName={storefrontName}
+                    logoUrl={logoUrl}
+                    language={language}
+                    marketLabel={market.label}
+                    displayCurrencyCode={displayCurrencyCode ?? market.currencyCode}
+                    availableCurrencyCodes={availableCurrencyCodes ?? []}
+                    currencyLoading={currencyLoading ?? false}
+                    onToggleLanguage={onToggleLanguage}
+                    onCurrencyChange={onCurrencyChange}
+                    onNotifications={() => navigateTo({ name: 'notifications' })}
+                />
+            )}
             <section
                 className={`account-hero lg:col-span-full ${accountHeroImageUrl ? 'has-custom-background' : ''}`}
                 data-image-tone={accountHeroTone}
                 aria-labelledby={customer ? undefined : 'guest-account-title'}
             >
-                <SafeImage
-                    src={accountHeroImageUrl || accountRefractionImage}
-                    fallbackSrc={accountRefractionImage}
-                    placeholderSrc={accountRefractionImage}
-                    frameClassName="account-hero-art"
-                    imageKind="hero"
-                    sizes="100vw"
-                    alt=""
-                />
+                {accountHeroImageUrl && (
+                    <SafeImage
+                        src={accountHeroImageUrl}
+                        fallbackSrc={accountRefractionImage}
+                        placeholderSrc={accountRefractionImage}
+                        frameClassName="account-hero-art"
+                        imageKind="hero"
+                        sizes="100vw"
+                        alt=""
+                    />
+                )}
                 {customer ? (
                     <div className="account-hero-content">
-                        <button
-                            className="account-hero-settings"
-                            type="button"
-                            title={isZh ? '账户与安全' : 'Account and security'}
-                            aria-label={isZh ? '账户与安全' : 'Account and security'}
-                            onClick={() => navigateTo({ name: 'account-security' })}
-                        >
-                            <Settings aria-hidden="true" />
-                        </button>
-
                         <div className="account-hero-identity">
                             <div className="account-hero-avatar-wrap">
                                 <button
@@ -277,76 +293,65 @@ export function AccountPage() {
                         </div>
 
                         <div
-                            className={`account-hero-assets grid ${referralEnabled ? 'grid-cols-4' : 'grid-cols-3'}`}
+                            className="account-hero-assets"
                             role="group"
                             aria-label={isZh ? '账户快捷入口' : 'Account shortcuts'}
                         >
-                            <button
-                                type="button"
-                                className="account-hero-asset"
-                                onClick={() => navigateTo({ name: 'favorites' })}
-                            >
-                                <span className="account-hero-asset-icon">
-                                    <Heart aria-hidden="true" />
-                                </span>
-                                <span className="sr-only">{favoriteProductCount} </span>
-                                <span className="account-hero-asset-label">
-                                    {isZh ? '我的收藏' : 'Favorites'}
-                                </span>
-                            </button>
-
-                            <button
-                                type="button"
-                                className="account-hero-asset"
-                                onClick={() => navigateTo({ name: 'coupons' })}
-                            >
-                                <span className="account-hero-asset-icon">
-                                    <TicketPercent aria-hidden="true" />
-                                    {couponCount > 0 && <span className="account-hero-unread" />}
-                                </span>
-                                <span className="sr-only">{couponCount} </span>
-                                <span className="account-hero-asset-label">
-                                    {isZh ? '优惠券' : 'Coupons'}
-                                </span>
-                            </button>
-
-                            <button
-                                type="button"
-                                className="account-hero-asset"
-                                onClick={() => navigateTo({ name: 'announcements' })}
-                            >
-                                <span className="account-hero-asset-icon">
-                                    <Megaphone aria-hidden="true" />
-                                </span>
-                                <span className="sr-only">{announcementCount} </span>
-                                <span className="account-hero-asset-label">
-                                    {isZh ? '网站公告' : 'Notices'}
-                                </span>
-                            </button>
-
-                            {referralEnabled && (
+                            {referralEnabled ? (
                                 <button
                                     type="button"
                                     className="account-hero-asset"
                                     onClick={() => navigateTo({ name: 'referral' })}
                                 >
-                                    <span className="account-hero-asset-icon">
-                                        <Gift aria-hidden="true" />
-                                    </span>
-                                    <span className="sr-only">
-                                        {referralOverviewQuery.isLoading
-                                            ? '…'
+                                    <strong className="account-hero-asset-value">
+                                        {referralOverviewQuery.isLoading ||
+                                        referralOverviewQuery.isError ||
+                                        !referralWallet
+                                            ? '—'
                                             : formatMoney(
-                                                  referralWallet?.availableBalance ?? 0,
+                                                  referralWallet.availableBalance,
                                                   market.currencyCode,
                                                   locale,
                                               )}
-                                    </span>
+                                    </strong>
                                     <span className="account-hero-asset-label">
-                                        {isZh ? '邀请返利' : 'Referral'}
+                                        {isZh ? '返利余额' : 'Referral balance'}
+                                    </span>
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    className="account-hero-asset"
+                                    onClick={() => navigateTo({ name: 'favorites' })}
+                                >
+                                    <strong className="account-hero-asset-value">
+                                        {favoriteProductCount}
+                                    </strong>
+                                    <span className="account-hero-asset-label">
+                                        {isZh ? '我的收藏' : 'Favorites'}
                                     </span>
                                 </button>
                             )}
+                            <button
+                                type="button"
+                                className="account-hero-asset"
+                                onClick={() => navigateTo({ name: 'coupons' })}
+                            >
+                                <strong className="account-hero-asset-value">{couponCount}</strong>
+                                <span className="account-hero-asset-label">
+                                    {isZh ? '有效优惠券' : 'Coupons'}
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                className="account-hero-asset"
+                                onClick={() => navigateTo({ name: 'announcements' })}
+                            >
+                                <strong className="account-hero-asset-value">{announcementCount}</strong>
+                                <span className="account-hero-asset-label">
+                                    {isZh ? '网站公告' : 'Notices'}
+                                </span>
+                            </button>
                         </div>
                     </div>
                 ) : (
@@ -392,12 +397,10 @@ export function AccountPage() {
                 )}
             </section>
 
-            <section
-                className={`account-orders ${accountSectionClass} ${compactSectionHeaderClass} [&_nav]:mt-1 [&_nav]:grid [&_nav]:grid-cols-5 [&_nav]:gap-0.5 [&_nav>button]:flex [&_nav>button]:min-h-[52px] [&_nav>button]:min-w-0 [&_nav>button]:flex-col [&_nav>button]:items-center [&_nav>button]:justify-center [&_nav>button]:gap-1 [&_nav>button]:rounded-lg [&_nav>button]:border-0 [&_nav>button]:bg-transparent [&_nav>button]:px-0.5 [&_nav>button]:py-1 hover:[&_nav>button]:bg-[var(--soft)] [&_nav>button>span]:relative [&_nav>button>span]:grid [&_nav>button>span]:size-[26px] [&_nav>button>span]:place-items-center [&_nav>button>span]:text-slate-800 [&_nav>button>span_svg]:size-5 [&_nav>button>span_svg]:stroke-[1.8] [&_nav>button>span_b]:absolute [&_nav>button>span_b]:-right-2 [&_nav>button>span_b]:-top-1 [&_nav>button>span_b]:grid [&_nav>button>span_b]:h-4 [&_nav>button>span_b]:min-w-4 [&_nav>button>span_b]:place-items-center [&_nav>button>span_b]:rounded-full [&_nav>button>span_b]:border-2 [&_nav>button>span_b]:border-white [&_nav>button>span_b]:bg-[var(--danger)] [&_nav>button>span_b]:px-1 [&_nav>button>span_b]:text-[10px] [&_nav>button>span_b]:font-semibold [&_nav>button>span_b]:leading-3 [&_nav>button>span_b]:text-white [&_nav>button_small]:max-w-full [&_nav>button_small]:whitespace-nowrap [&_nav>button_small]:text-[10.5px] [&_nav>button_small]:font-medium [&_nav>button_small]:tracking-[-0.01em] [&_nav>button_small]:text-[var(--text)] min-[371px]:[&_nav>button_small]:text-xs [&_nav>button:nth-child(1)>span_svg]:text-amber-500 [&_nav>button:nth-child(2)>span_svg]:text-sky-600 [&_nav>button:nth-child(3)>span_svg]:text-indigo-600 [&_nav>button:nth-child(4)>span_svg]:text-rose-600 [&_nav>button:nth-child(5)>span_svg]:text-teal-600`}
-            >
+            <section className={`account-orders ${accountSectionClass}`}>
                 <SectionHeader
-                    title={compactCopy.orders.title}
-                    action={compactCopy.orders.viewAll}
+                    title={isZh ? '我的订单中心' : 'My orders'}
+                    action={isZh ? '全部订单' : 'View all'}
                     onAction={() => navigateTo({ name: 'orders', tab: 'all' })}
                 />
                 <nav className="account-order-shortcuts">
@@ -424,17 +427,17 @@ export function AccountPage() {
                     />
                     <AccountShortcut
                         inlineCount={desktop}
-                        icon={<RotateCcw />}
-                        label={compactCopy.orders.returns}
-                        count={desktop && !afterSalesQuery.data ? undefined : activeAfterSalesCount}
-                        onClick={() => navigateTo({ name: 'orders', tab: 'service' })}
+                        icon={<CircleCheck />}
+                        label={isZh ? '评价' : 'Reviews'}
+                        count={undefined}
+                        onClick={() => navigateTo({ name: 'reviews' })}
                     />
                     <AccountShortcut
                         inlineCount={desktop}
-                        icon={<ClipboardList />}
-                        label={compactCopy.orders.all}
-                        count={desktop ? customer?.orders.totalItems : 0}
-                        onClick={() => navigateTo({ name: 'orders', tab: 'all' })}
+                        icon={<RotateCcw />}
+                        label={isZh ? '退换/售后' : 'Returns'}
+                        count={desktop && !afterSalesQuery.data ? undefined : activeAfterSalesCount}
+                        onClick={() => navigateTo({ name: 'orders', tab: 'service' })}
                     />
                 </nav>
             </section>

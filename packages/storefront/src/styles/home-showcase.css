@@ -3479,6 +3479,89 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     content: ' →';
 }
 
+@media (max-width: 1023px) {
+    .business-services-page {
+        --page-section-inset: 18px;
+        padding-inline: var(--page-section-inset);
+    }
+
+    .business-services-page .business-services-mobile-header {
+        margin-inline: calc(-1 * var(--page-section-inset));
+    }
+
+    .business-services-page .business-services-heading {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        min-height: 96px;
+        margin: 10px 0 14px;
+        padding: 14px 16px;
+        border: 1px solid var(--skin-divider);
+        border-radius: var(--skin-card-radius);
+        background: var(--surface);
+        box-shadow: none;
+    }
+
+    .business-services-page .business-services-heading-copy {
+        min-width: 0;
+    }
+
+    .business-services-page .business-services-heading-kicker {
+        margin-bottom: 3px;
+        font-size: 11px;
+        line-height: 1.3;
+    }
+
+    .business-services-page .business-services-page-title {
+        font-size: 20px;
+        line-height: 1.2;
+    }
+
+    .business-services-page .business-services-heading p {
+        margin-top: 4px;
+        font-size: 12px;
+        line-height: 1.35;
+    }
+
+    .business-services-page .business-services-heading-link {
+        grid-column: 2;
+        grid-row: 1;
+        justify-self: end;
+        align-self: center;
+        gap: 4px;
+        min-height: 44px;
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+
+    .business-services-page .category-client-plugin-slot {
+        gap: 10px;
+        margin: 0;
+    }
+
+    .business-services-page .category-client-plugin,
+    .business-services-page .category-client-plugin-support {
+        grid-template-columns: 44px minmax(0, 1fr);
+        min-height: 96px;
+        gap: 4px 12px;
+        padding: 14px;
+        border: 1px solid var(--skin-divider);
+        border-radius: var(--skin-card-radius);
+        box-shadow: none;
+    }
+
+    .business-services-page .category-client-plugin:hover {
+        border-color: var(--skin-divider);
+        background: var(--surface-elevated, var(--surface));
+        box-shadow: var(--skin-card-hover-shadow, var(--shadow-sm));
+    }
+
+    .business-services-page .category-client-plugin-action {
+        margin-top: 2px;
+    }
+}
+
 @media (min-width: 1024px) {
     .desktop-store-layout .business-services-page {
         padding: 32px 0 64px;
