@@ -48,19 +48,33 @@ export function DesktopHeader({
         item => item.routeName !== 'cart',
     );
     const activeRoute = activeNavigationRoute(context.route.name);
+    const searchResultsOpen = context.route.name === 'search' && !!context.route.term?.trim();
+    const openSearch = () => {
+        if (context.route.name === 'search' && !context.route.term?.trim()) {
+            document.querySelector<HTMLInputElement>('.search-page .search-header input')?.focus();
+            return;
+        }
+        context.navigate({ name: 'search' });
+    };
 
     useEffect(() => setQuery(context.route.term ?? ''), [context.route.term]);
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
                 event.preventDefault();
-                searchInputRef.current?.focus();
-                searchInputRef.current?.select();
+                if (searchInputRef.current) {
+                    searchInputRef.current.focus();
+                    searchInputRef.current.select();
+                } else if (context.route.name === 'search') {
+                    document.querySelector<HTMLInputElement>('.search-page .search-header input')?.focus();
+                } else {
+                    context.navigate({ name: 'search' });
+                }
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, []);
+    }, [context.navigate, context.route.name]);
 
     return (
         <header className="proto-desktop-header">
@@ -89,30 +103,48 @@ export function DesktopHeader({
                 </div>
 
                 <div className="proto-header-search">
-                    <form
-                        className="proto-search-form"
-                        role="search"
-                        action="/search"
-                        onSubmit={event => {
-                            event.preventDefault();
-                            if (query.trim()) context.navigate({ name: 'search', term: query.trim() });
-                        }}
-                    >
-                        <Search className="proto-search-icon" aria-hidden="true" />
-                        <input
-                            ref={searchInputRef}
-                            className="proto-search-input"
-                            aria-label={isZh ? '搜索商品或服务' : 'Search products or services'}
-                            placeholder={isZh ? '搜索商品或服务' : 'Search products or services'}
-                            name="term"
-                            type="search"
-                            value={query}
-                            onChange={event => setQuery(event.target.value)}
-                        />
-                        <button type="submit" className="proto-search-submit">
-                            {isZh ? '搜索' : 'Search'}
+                    {searchResultsOpen ? (
+                        <form
+                            className="proto-search-form"
+                            role="search"
+                            action="/search"
+                            autoComplete="off"
+                            onSubmit={event => {
+                                event.preventDefault();
+                                const next = query.trim();
+                                context.navigate(next ? { name: 'search', term: next } : { name: 'search' });
+                            }}
+                        >
+                            <Search className="proto-search-icon" aria-hidden="true" />
+                            <input
+                                ref={searchInputRef}
+                                className="proto-search-input"
+                                aria-label={isZh ? '搜索商品' : 'Search products'}
+                                placeholder={isZh ? '搜索商品' : 'Search products'}
+                                name="term"
+                                type="search"
+                                autoComplete="off"
+                                value={query}
+                                onChange={event => setQuery(event.target.value)}
+                            />
+                            <button type="submit" className="proto-search-submit">
+                                {isZh ? '搜索' : 'Search'}
+                            </button>
+                        </form>
+                    ) : (
+                        <button
+                            type="button"
+                            className="proto-search-open"
+                            aria-label={isZh ? '打开商品搜索' : 'Open product search'}
+                            onClick={openSearch}
+                        >
+                            <Search aria-hidden="true" />
+                            <span>{isZh ? '搜索商品、分类' : 'Search products and categories'}</span>
+                            <span className="proto-search-open-action" aria-hidden="true">
+                                {isZh ? '搜索' : 'Search'}
+                            </span>
                         </button>
-                    </form>
+                    )}
                 </div>
 
                 <div className="proto-header-right">

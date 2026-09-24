@@ -106,6 +106,27 @@ The write revalidates the full plan under the production deployment lock,
 removes only those reviewed cache directories, and reruns the production health
 check. Any source, runtime, cache-size or candidate change requires a new plan.
 
+## Audit one product before changing store ownership
+
+Use the fixed read-only audit for a specific product and the exact running runtime:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=audit-administrator-product-readiness \
+    -f source_sha=<latest-main-sha> \
+    -f expected_runtime_sha=<running-runtime-sha> \
+    -f product_id=<reviewed-product-id>
+```
+
+The product report counts related entities and historical orders by their
+`order.salesChannelId`, including orders for deleted variants. It reports only
+Channel codes and aggregate order and order-line counts; it does not publish
+order IDs, customer details, SKU labels, or credentials. A null sales owner is
+reported separately. This evidence identifies historical dependencies but is
+not an ownership migration plan or permission to detach a Channel. Review any
+default-Channel, other-store, or unresolved sale before preparing a separate
+scoped migration.
+
 ## Backfill historical order sales ownership
 
 The store-isolation audit can identify legacy orders whose immutable

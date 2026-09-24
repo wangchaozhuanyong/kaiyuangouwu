@@ -6,6 +6,13 @@ const image =
             '<circle cx="970" cy="260" r="170" fill="#e9dec8"/>' +
             '<path d="M680 600L830 100 1120 610" fill="#b29b74"/></svg>',
     );
+const portraitImage =
+    'data:image/svg+xml,' +
+    encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="700" height="1200">' +
+            '<rect width="700" height="1200" fill="#cabc9c"/>' +
+            '<circle cx="500" cy="310" r="170" fill="#e9dec8"/></svg>',
+    );
 const asset = { id: 'fixture-asset', preview: image };
 const variant = {
     id: 'variant-1',
@@ -212,6 +219,40 @@ const servicesBlock = {
         },
         label: pluginCode,
         description: '',
+    })),
+};
+const supportBlock = {
+    id: 'qa-support',
+    code: 'storefront-support',
+    type: 'SUPPORT',
+    enabled: true,
+    position: 10_002,
+    startsAt: null,
+    endsAt: null,
+    imageUrl: null,
+    backgroundColor: null,
+    textColor: null,
+    targetType: 'NONE',
+    targetValue: null,
+    settings: { serviceDaysZh: '每日', serviceStartTime: '10:00', serviceEndTime: '20:00' },
+    title: '客服与帮助',
+    subtitle: '',
+    body: '咨询订单或售后时，请准备订单号与问题说明。',
+    ctaLabel: '',
+    items: [
+        ['WECHAT', '微信客服', image, null],
+        ['WHATSAPP', 'WhatsApp 客服', null, 'https://example.invalid/whatsapp'],
+        ['TELEGRAM', 'Telegram 客服', null, 'https://example.invalid/telegram'],
+    ].map(([supportChannel, label, imageUrl, targetValue], position) => ({
+        id: `qa-support-${position}`,
+        enabled: true,
+        position,
+        imageUrl,
+        targetType: targetValue ? 'URL' : 'NONE',
+        targetValue,
+        settings: { supportChannel },
+        label,
+        description: '本地视觉验收样本',
     })),
 };
 const model = {
@@ -541,7 +582,66 @@ function aftercareFixture(signedIn) {
     };
 }
 
+function reviewCenterFixture(signedIn) {
+    const base = denseCommerceFixture(signedIn);
+    if (!signedIn) return { ...base, myStorefrontReviewCandidates: [] };
+    const sourceOrders = base.activeCustomer.orders.items;
+    const lines = Array.from({ length: 14 }, (_, index) => {
+        const selectedProduct = base.products.items[index % base.products.items.length];
+        return {
+            ...sourceOrders[0].lines[0],
+            id: `qa-review-line-${index + 1}`,
+            productVariant: {
+                ...selectedProduct.variants[0],
+                name:
+                    index % 3 === 0
+                        ? selectedProduct.name
+                        : `${selectedProduct.name} · ${index % 2 ? '暖沙色' : '深海蓝'}`,
+            },
+        };
+    });
+    const orders = sourceOrders.map((sourceOrder, orderIndex) => ({
+        ...sourceOrder,
+        lines: lines.filter((_, index) => index % sourceOrders.length === orderIndex),
+    }));
+    return {
+        ...base,
+        activeCustomer: {
+            ...base.activeCustomer,
+            orders: { items: orders, totalItems: orders.length },
+        },
+        myStorefrontReviewCandidates: lines.map((line, index) => {
+            const sourceOrder = orders[index % orders.length];
+            return {
+                orderLineId: line.id,
+                orderId: sourceOrder.id,
+                orderCode: sourceOrder.code,
+                orderState: sourceOrder.state,
+                orderPlacedAt: sourceOrder.orderPlacedAt,
+                productId: line.productVariant.product.id,
+                productVariantId: line.productVariant.id,
+                productName: line.productVariant.product.name,
+                variantName: line.productVariant.name,
+                sku: line.productVariant.sku,
+                fulfillmentType: 'physical',
+            };
+        }),
+    };
+}
+
 export function fixtureData(presetId = 'modern-oriental', signedIn = true, content = 'normal') {
+    const detailProduct =
+        content === 'product-detail'
+            ? {
+                  ...product,
+                  description:
+                      '<p>商品长图与参数应保持完整可读。</p>' +
+                      '<figure><img src="/storefront/default-hero.webp" width="1200" height="700" alt="详情图"></figure>' +
+                      '<table><tbody><tr><td>规格</td><td>长内容需要在卡片内换行，不应撑宽页面</td></tr></tbody></table>',
+                  featuredAsset: { id: 'portrait-asset', preview: portraitImage },
+                  assets: [{ id: 'portrait-asset', preview: portraitImage }],
+              }
+            : product;
     return {
         storefrontVisualPreset: { channelId: 'qa-channel', presetId, revision: 'qa-1' },
         activeChannel: {
@@ -571,13 +671,18 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true, conte
             heroAutoplayIntervalSeconds: 5,
             configuredBlockTypes: ['HERO', 'AUTH_LOGIN', 'AUTH_REGISTER'],
         },
-        storefrontContent: [block, quickLinksBlock, servicesBlock],
+        storefrontContent: [
+            block,
+            quickLinksBlock,
+            servicesBlock,
+            ...(content === 'support' ? [supportBlock] : []),
+        ],
         activeStorefrontFlashSales: [],
         activeSystemAnnouncements: [],
-        products: { items: [product], totalItems: 1 },
-        product,
+        products: { items: [detailProduct], totalItems: 1 },
+        product: detailProduct,
         collections: { items: [collection], totalItems: 1 },
-        storefrontCatalog: { items: [product], totalItems: 1 },
+        storefrontCatalog: { items: [detailProduct], totalItems: 1 },
         storefrontProductSales: [],
         activeStoreCommerceMode: 'HYBRID',
         storefrontCart: cart,
@@ -648,5 +753,6 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true, conte
         productReviewSummary: { averageRating: 0, totalReviews: 0 },
         ...(content === 'dense' ? denseCommerceFixture(signedIn) : {}),
         ...(content === 'aftercare' ? aftercareFixture(signedIn) : {}),
+        ...(content === 'reviews' ? reviewCenterFixture(signedIn) : {}),
     };
 }

@@ -2,6 +2,8 @@ import { ExternalLink, Puzzle } from 'lucide-react';
 
 import { ClientPluginSlot, resolveClientPlugins } from '../client-plugins/client-plugin-registry';
 import { resolveBottomNavigationItems } from '../components/common/bottom-navigation';
+import { MobilePageHeader } from '../components/common/mobile-page-header';
+import { useDesktopLayout } from '../desktop-layout';
 import { BusinessServicesPageContext } from '../storefront-page-contexts';
 import { type RouteState } from '../storefront-router';
 import {
@@ -16,13 +18,37 @@ const BUSINESS_SERVICES_COPY_VERSION = 1;
 export interface BusinessServicesPageProps {
     contentBlocks: StorefrontContentBlock[];
     language: StorefrontLanguage;
+    storefrontName: string;
+    logoUrl: string | null;
+    marketLabel: string;
+    displayCurrencyCode: string;
+    availableCurrencyCodes: string[];
+    currencyLoading: boolean;
+    onToggleLanguage: () => void;
+    onCurrencyChange: (currencyCode: string) => void | Promise<void>;
+    onNotifications: () => void;
     onNavigate: (route: RouteState) => void;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }
 
 export function BusinessServicesPage() {
-    const { contentBlocks, language, onNavigate, onContentTarget } = BusinessServicesPageContext.useValue();
+    const {
+        contentBlocks,
+        language,
+        storefrontName,
+        logoUrl,
+        marketLabel,
+        displayCurrencyCode,
+        availableCurrencyCodes,
+        currencyLoading,
+        onToggleLanguage,
+        onCurrencyChange,
+        onNotifications,
+        onNavigate,
+        onContentTarget,
+    } = BusinessServicesPageContext.useValue();
     const isZh = language === 'zh';
+    const desktop = useDesktopLayout();
     const clientPluginBlock = contentBlocks.find(
         block => block.type === 'CLIENT_PLUGINS' && block.code === CLIENT_PLUGIN_BLOCK_CODE,
     );
@@ -35,6 +61,7 @@ export function BusinessServicesPage() {
     const heroTitle =
         (hasManagedCopy ? clientPluginBlock?.title.trim() : '') ||
         (isZh ? '发现更多商业能力' : 'Discover more business capabilities');
+    const heroKicker = (hasManagedCopy ? clientPluginBlock?.subtitle.trim() : '') || pageTitle;
     const heroDescription =
         (hasManagedCopy ? clientPluginBlock?.body.trim() : '') ||
         (isZh
@@ -48,10 +75,28 @@ export function BusinessServicesPage() {
 
     return (
         <main className="page business-services-page">
+            {!desktop && (
+                <MobilePageHeader
+                    className="business-services-mobile-header"
+                    title={pageTitle}
+                    storefrontName={storefrontName}
+                    logoUrl={logoUrl}
+                    language={language}
+                    marketLabel={marketLabel}
+                    displayCurrencyCode={displayCurrencyCode}
+                    availableCurrencyCodes={availableCurrencyCodes}
+                    currencyLoading={currencyLoading}
+                    onToggleLanguage={onToggleLanguage}
+                    onCurrencyChange={onCurrencyChange}
+                    onNotifications={onNotifications}
+                />
+            )}
             <header className="business-services-heading">
                 <div className="business-services-heading-copy">
-                    <span className="business-services-heading-kicker">{heroTitle}</span>
-                    <h1 className="business-services-page-title">{pageTitle}</h1>
+                    <span className="business-services-heading-kicker">
+                        {desktop ? heroTitle : heroKicker}
+                    </span>
+                    <h1 className="business-services-page-title">{desktop ? pageTitle : heroTitle}</h1>
                     <p>{heroDescription}</p>
                 </div>
                 {heroLinkTarget ? (
@@ -60,7 +105,7 @@ export function BusinessServicesPage() {
                         className="business-services-heading-link"
                         onClick={() => onContentTarget('URL', heroLinkTarget)}
                     >
-                        {isZh ? '点击前往' : 'Open link'}
+                        {isZh ? (desktop ? '点击前往' : '直通服务') : desktop ? 'Open link' : 'Open service'}
                         <ExternalLink aria-hidden="true" />
                     </button>
                 ) : null}

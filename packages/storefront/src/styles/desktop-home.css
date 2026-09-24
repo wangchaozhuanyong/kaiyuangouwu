@@ -233,7 +233,7 @@
         display: grid;
         place-items: center;
         padding: 0;
-        border: 1px solid rgba(255, 255, 255, 0.65);
+        border: 0;
         border-radius: 9999px;
         background: rgba(255, 255, 255, 0.85);
         backdrop-filter: blur(12px);
@@ -275,7 +275,6 @@
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
         color: #ffffff;
-        border: 1px solid rgba(255, 255, 255, 0.15);
         font-variant-numeric: tabular-nums;
         font-size: 12px;
     }
@@ -321,7 +320,6 @@
     .desktop-store-layout .home-page .notice-strip {
         min-height: 40px;
         padding: 8px 18px;
-        border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
         border-radius: 9999px;
         background: color-mix(in srgb, var(--accent) 4%, var(--paper, #fff));
         box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.03);
@@ -409,18 +407,15 @@
         height: 106px;
         grid-template-columns: minmax(0, 1fr) 108px;
         border-radius: var(--skin-card-radius);
-        border: 1px solid var(--coupon-border);
         background: var(--coupon-surface);
         box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.04);
         transition:
             background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-            border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
             box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
             transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .desktop-store-layout .home-page .coupon-ticket-card:hover {
         transform: translateY(-2px);
-        border-color: var(--coupon-accent, var(--accent));
         box-shadow: 0 8px 20px -4px color-mix(in srgb, var(--coupon-accent, var(--accent)) 18%, transparent);
     }
     .desktop-store-layout .home-page .coupon-ticket-main {
@@ -763,6 +758,50 @@
         flex: 1;
         max-width: 520px;
     }
+    .proto-search-open {
+        display: grid;
+        grid-template-columns: 14px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        min-height: var(--experience-control-min);
+        padding: 0 0 0 12px;
+        border: 1px solid var(--proto-search-border);
+        border-radius: var(--skin-control-radius);
+        background: var(--proto-search-bg);
+        color: var(--muted);
+        font: inherit;
+        font-size: 14px;
+        text-align: left;
+        cursor: text;
+    }
+    .proto-search-open > svg {
+        width: 14px;
+        height: 14px;
+    }
+    .proto-search-open > span:nth-child(2) {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .proto-search-open-action {
+        display: grid;
+        place-items: center;
+        align-self: stretch;
+        min-width: 68px;
+        padding: 0 16px;
+        border-radius: 0 var(--skin-control-radius) var(--skin-control-radius) 0;
+        background: var(--control-surface);
+        color: var(--accent-ink);
+        font-weight: 700;
+    }
+    .proto-search-open:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+    }
+    .proto-search-open:hover {
+        background: var(--control-surface-hover);
+    }
     .proto-search-form {
         position: relative;
         display: flex;
@@ -809,7 +848,7 @@
         height: var(--experience-control-min);
         margin-left: -1px;
         padding: 0 16px;
-        border: 1px solid var(--line);
+        border: 0;
         border-radius: 0 var(--skin-control-radius) var(--skin-control-radius) 0;
         background: var(--control-surface);
         color: var(--accent-ink);
@@ -969,7 +1008,7 @@
     }
     .proto-hero-grid {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 320px;
+        grid-template-columns: minmax(0, 1fr) minmax(360px, 400px);
         gap: 24px;
         align-items: stretch;
         width: 100%;
@@ -1121,10 +1160,10 @@
     .proto-hero-featured.has-media .proto-btn-secondary {
         color: #fff;
     }
-    /* Right Tools Box */
+    /* Right shortcuts directory */
     .proto-hero-tools {
         border-radius: var(--skin-hero-radius);
-        padding: 20px;
+        padding: 14px;
         background: var(--proto-tools-bg, rgba(15, 23, 42, 0.65));
         border: 0;
         box-shadow: var(--skin-card-shadow);
@@ -1137,14 +1176,34 @@
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-        margin-bottom: 18px;
+        margin-bottom: 10px;
     }
     .proto-tools-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
         margin-right: auto;
-        font-size: 15px;
+        font-size: 13px;
         font-weight: 700;
         color: var(--proto-tools-title, #e2e8f0);
         text-align: left;
+    }
+    .proto-tools-title-mark,
+    .proto-tools-title-mark svg {
+        display: block;
+        width: 17px;
+        height: 17px;
+        color: var(--accent-ink);
+    }
+    .proto-tools-count {
+        flex: none;
+        padding: 4px 7px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+        font-size: 10px;
+        font-weight: 700;
+        white-space: nowrap;
     }
     .proto-tools-pagination {
         margin-left: auto;
@@ -1188,16 +1247,15 @@
     .proto-tools-list {
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 7px;
         flex: 1;
     }
     .proto-tool-item {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        min-height: 62px;
-        flex: 1;
-        padding: 11px 14px;
+        min-height: 52px;
+        padding: 8px 10px;
         border-radius: var(--skin-card-radius);
         background: var(--proto-tool-item-bg, rgba(255, 255, 255, 0.04));
         border: 0;
@@ -1212,10 +1270,16 @@
         background: var(--proto-tool-item-hover-bg, rgba(255, 255, 255, 0.08));
         transform: translateX(2px);
     }
+    .proto-tool-item:first-child {
+        background: color-mix(in srgb, var(--accent) 8%, var(--proto-tool-item-bg));
+    }
+    .proto-tool-item:first-child:hover {
+        background: color-mix(in srgb, var(--accent) 14%, var(--proto-tool-item-bg));
+    }
     .proto-tool-left {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 9px;
         text-align: left;
         min-width: 0;
     }
@@ -1251,7 +1315,7 @@
         object-fit: contain;
     }
     .proto-tool-name {
-        font-size: 14px;
+        font-size: 12px;
         font-weight: 650;
         color: var(--proto-tool-name, #ffffff);
     }
@@ -1260,15 +1324,68 @@
         overflow: hidden;
         -webkit-box-orient: vertical;
         -webkit-line-clamp: 2;
-        font-size: 12px;
-        color: var(--proto-tool-sub, #94a3b8);
-        line-height: 1.4;
+        font-size: 10px;
+        color: color-mix(in srgb, var(--proto-tool-sub) 80%, var(--text));
+        line-height: 1.35;
     }
-    .proto-tool-arrow {
+    .proto-tool-action {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
         flex: none;
-        width: 16px;
-        height: 16px;
-        color: var(--muted);
+        padding: 4px 6px;
+        border-radius: 6px;
+        background: var(--surface-elevated);
+        color: var(--accent-ink);
+        font-size: 10px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .proto-tool-action svg {
+        width: 11px;
+        height: 11px;
+    }
+    .proto-tool-item:first-child .proto-tool-action {
+        background: var(--accent);
+        color: var(--accent-foreground);
+    }
+    .proto-tools-support {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        min-height: 30px;
+        margin-top: 8px;
+        padding: 4px 2px;
+        border: 0;
+        background: transparent;
+        color: var(--proto-tool-sub);
+        font: inherit;
+        font-size: 10px;
+        cursor: pointer;
+    }
+    .proto-tools-support > span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .proto-tools-support > span:last-child {
+        color: var(--accent-ink);
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .proto-tools-support svg {
+        width: 13px;
+        height: 13px;
+    }
+    .proto-tools-support:hover {
+        color: var(--accent-ink);
+    }
+    .proto-tools-support:focus-visible,
+    .proto-tool-item:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
     }
     .proto-tools-footer {
         display: flex;
@@ -1401,7 +1518,7 @@
 
     @media (max-width: 1180px) {
         .proto-hero-grid {
-            grid-template-columns: minmax(0, 1fr) 280px;
+            grid-template-columns: minmax(0, 1fr) 340px;
         }
         .proto-hero-featured {
             padding: 28px 24px;

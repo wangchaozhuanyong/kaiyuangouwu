@@ -183,7 +183,6 @@
     gap: 12px;
     margin: 0 14px;
     padding: 14px 0;
-    border-block: 1px solid var(--skin-divider);
 }
 
 .logistics-product {
@@ -384,7 +383,6 @@
     gap: 12px;
     margin: 0 14px;
     padding: 14px 0;
-    border-top: 1px solid var(--skin-divider);
 }
 
 .logistics-order-code {
@@ -660,7 +658,6 @@
 .logistics-sheet-support {
     margin-top: 8px;
     padding-top: 12px;
-    border-top: 1px solid var(--line-subtle);
 }
 
 .logistics-support-btn {

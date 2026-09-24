@@ -527,7 +527,9 @@ describe('product image navigation layers', () => {
         expect(markup).toContain('product-card');
 
         const stylesheet = readStorefrontStylesheet(['./styles/product-card.css']);
-        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*background:\s*var\(--surface\);/);
+        expect(stylesheet).toMatch(
+            /\.product-card\s*\{[^}]*background:\s*var\(--product-card-surface,\s*var\(--surface\)\);/,
+        );
         expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*border-radius:\s*var\(--skin-card-radius\);/);
         expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*box-shadow:\s*var\(--skin-card-shadow\);/);
     });

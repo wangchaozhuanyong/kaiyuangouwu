@@ -1,6 +1,14 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ChevronRight, MessageSquare, Package, RefreshCw, Star } from 'lucide-react';
-import { FormEvent, useState } from 'react';
+import {
+    CheckCircle2,
+    ChevronDown,
+    ChevronRight,
+    MessageSquare,
+    Package,
+    RefreshCw,
+    Star,
+} from 'lucide-react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
 import { languageCodeFor } from './i18n';
@@ -13,6 +21,7 @@ import {
 } from './query-client';
 import { storefrontErrorMessage } from './storefront-errors';
 import { SubHeader } from './storefront-ui/page-shell';
+import { SafeImage } from './storefront-ui/product-display';
 import {
     ActiveCustomer,
     MarketConfig,
@@ -21,6 +30,15 @@ import {
     StorefrontReviewCandidate,
     SubmitStorefrontReviewInput,
 } from './types';
+
+function reviewVariantLabel(candidate: StorefrontReviewCandidate): string {
+    const productName = candidate.productName.trim();
+    const variantName = candidate.variantName.trim();
+    if (variantName === productName) return '';
+    if (!variantName.startsWith(productName)) return variantName;
+    const suffix = variantName.slice(productName.length);
+    return /^[\s·•/|，,、-]/u.test(suffix) ? suffix.replace(/^[\s·•/|，,、-]+/u, '').trim() : variantName;
+}
 
 export function ReviewCenterPage({
     api,
@@ -70,6 +88,25 @@ export function ReviewCenterPage({
     const reviews = reviewsQuery.data ?? [];
     const candidates = candidatesQuery.data ?? [];
     const [selected, setSelected] = useState<StorefrontReviewCandidate | null>(null);
+    const [showAllCandidates, setShowAllCandidates] = useState(false);
+    const composerRef = useRef<HTMLFormElement>(null);
+    const candidateImages = new Map(
+        customer?.orders.items.flatMap(order =>
+            order.lines.map(
+                line =>
+                    [
+                        line.id,
+                        line.productVariant.featuredAsset?.preview ??
+                            line.productVariant.product.featuredAsset?.preview ??
+                            null,
+                    ] as const,
+            ),
+        ) ?? [],
+    );
+    const visibleCandidates = showAllCandidates ? candidates : candidates.slice(0, 4);
+    useEffect(() => {
+        if (selected) composerRef.current?.scrollIntoView({ block: 'start' });
+    }, [selected]);
     const submit = async (input: SubmitStorefrontReviewInput) => {
         await api.submitReview(input);
         await Promise.all([
@@ -132,36 +169,93 @@ export function ReviewCenterPage({
                 <>
                     {selected && (
                         <ReviewComposer
+                            key={selected.orderLineId}
+                            formRef={composerRef}
                             candidate={selected}
                             language={language}
                             onCancel={() => setSelected(null)}
                             onSubmit={submit}
                         />
                     )}
-                    <section className="review-center-section">
+                    <section className="review-center-section review-center-pending">
                         <header>
-                            <strong>{isZh ? '待评价' : 'Ready to review'}</strong>
+                            <div>
+                                <strong>{isZh ? '待评价商品' : 'Ready to review'}</strong>
+                                <small>
+                                    {isZh
+                                        ? '选择一件商品，分享你的真实体验'
+                                        : 'Choose an item and share your experience'}
+                                </small>
+                            </div>
                             <span>{candidates.length}</span>
                         </header>
                         {candidates.length ? (
-                            <div className="review-candidate-list">
-                                {candidates.map(candidate => (
+                            <div className="review-candidate-list" id="review-candidate-list">
+                                {visibleCandidates.map(candidate => {
+                                    const imageUrl = candidateImages.get(candidate.orderLineId);
+                                    const variantLabel = reviewVariantLabel(candidate);
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={candidate.orderLineId}
+                                            className="review-candidate-row"
+                                            aria-expanded={selected?.orderLineId === candidate.orderLineId}
+                                            aria-controls={
+                                                selected?.orderLineId === candidate.orderLineId
+                                                    ? 'review-composer'
+                                                    : undefined
+                                            }
+                                            onClick={() => setSelected(candidate)}
+                                        >
+                                            <span className="review-candidate-image">
+                                                {imageUrl ? (
+                                                    <SafeImage
+                                                        src={imageUrl}
+                                                        alt=""
+                                                        imageKind="thumbnail"
+                                                        loading="lazy"
+                                                        decoding="async"
+                                                    />
+                                                ) : (
+                                                    <Package aria-hidden="true" />
+                                                )}
+                                            </span>
+                                            <span className="review-candidate-copy">
+                                                <strong>{candidate.productName}</strong>
+                                                {variantLabel && <small>{variantLabel}</small>}
+                                                <small
+                                                    className="review-candidate-order"
+                                                    title={candidate.orderCode}
+                                                >
+                                                    {isZh ? '订单 ' : 'Order '}
+                                                    {candidate.orderCode}
+                                                </small>
+                                            </span>
+                                            <span className="review-candidate-action">
+                                                {isZh ? '写评价' : 'Review'}
+                                                <ChevronRight aria-hidden="true" />
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                                {candidates.length > 4 && (
                                     <button
                                         type="button"
-                                        key={candidate.orderLineId}
-                                        onClick={() => setSelected(candidate)}
+                                        className="review-candidate-more"
+                                        aria-expanded={showAllCandidates}
+                                        aria-controls="review-candidate-list"
+                                        onClick={() => setShowAllCandidates(value => !value)}
                                     >
-                                        <Package aria-hidden="true" />
-                                        <span>
-                                            <strong>{candidate.productName}</strong>
-                                            <small>{candidate.variantName}</small>
-                                        </span>
-                                        <span>
-                                            {isZh ? '去评价' : 'Review'}
-                                            <ChevronRight aria-hidden="true" />
-                                        </span>
+                                        {showAllCandidates
+                                            ? isZh
+                                                ? '收起列表'
+                                                : 'Show fewer'
+                                            : isZh
+                                              ? `查看其余 ${candidates.length - 4} 件商品`
+                                              : `Show ${candidates.length - 4} more items`}
+                                        <ChevronDown aria-hidden="true" />
                                     </button>
-                                ))}
+                                )}
                             </div>
                         ) : (
                             <p className="review-center-hint">
@@ -173,7 +267,14 @@ export function ReviewCenterPage({
                     </section>
                     <section className="review-center-section">
                         <header>
-                            <strong>{isZh ? '我的评价' : 'My reviews'}</strong>
+                            <div>
+                                <strong>{isZh ? '我的评价' : 'My reviews'}</strong>
+                                <small>
+                                    {isZh
+                                        ? '查看已提交的评价与审核状态'
+                                        : 'View submitted reviews and status'}
+                                </small>
+                            </div>
                             <span>{reviews.length}</span>
                         </header>
                         {reviews.length ? (
@@ -205,6 +306,12 @@ export function ReviewCenterPage({
                                     </article>
                                 ))}
                             </div>
+                        ) : candidates.length ? (
+                            <p className="review-center-hint">
+                                {isZh
+                                    ? '还没有提交评价。选择上方商品，写下第一条使用体验。'
+                                    : 'No submitted reviews yet. Choose an item above to write your first one.'}
+                            </p>
                         ) : (
                             <ReviewEmptyState
                                 compact
@@ -317,11 +424,13 @@ export function ProductReviewsSection({
 }
 
 function ReviewComposer({
+    formRef,
     candidate,
     language,
     onCancel,
     onSubmit,
 }: {
+    formRef: React.RefObject<HTMLFormElement | null>;
     candidate: StorefrontReviewCandidate;
     language: StorefrontLanguage;
     onCancel: () => void;
@@ -359,11 +468,16 @@ function ReviewComposer({
         }
     };
     return (
-        <form className="review-composer" onSubmit={event => void submit(event)}>
+        <form
+            id="review-composer"
+            ref={formRef}
+            className="review-composer"
+            onSubmit={event => void submit(event)}
+        >
             <header>
                 <span>
                     <strong>{candidate.productName}</strong>
-                    <small>{candidate.variantName}</small>
+                    {reviewVariantLabel(candidate) && <small>{reviewVariantLabel(candidate)}</small>}
                 </span>
                 <button type="button" onClick={onCancel} disabled={submitting}>
                     {isZh ? '取消' : 'Cancel'}

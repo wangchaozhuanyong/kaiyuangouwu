@@ -126,7 +126,6 @@
 
     .cart-checkout-bar {
         bottom: 24px;
-        border: 1px solid var(--line);
         border-radius: 8px;
     }
 
@@ -243,7 +242,6 @@
         width: 100%;
         margin-top: 0;
         padding: 18px 20px;
-        border: 1px solid var(--line);
     }
 
     .homepage-module-shell > .home-dual-showcase {
@@ -619,7 +617,6 @@
     }
 
     .cart-page > .cart-guest-notice {
-        border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
         border-radius: 8px;
     }
 
@@ -656,7 +653,6 @@
 
     .detail-action-bar {
         bottom: 24px;
-        border: 1px solid var(--line);
         border-radius: 8px;
         box-shadow: 0 16px 45px rgba(31, 43, 38, 0.12);
     }
@@ -710,7 +706,6 @@
     .payment-summary {
         margin-top: 0;
         padding: 24px;
-        border: 1px solid var(--line);
         border-radius: 8px;
     }
 
@@ -730,7 +725,6 @@
 
     .address-card {
         margin-top: 0;
-        border: 1px solid var(--line);
         border-radius: 8px;
     }
 
@@ -754,7 +748,6 @@
         overflow: hidden;
         display: grid;
         grid-template-columns: minmax(420px, 0.86fr) minmax(520px, 1.14fr);
-        border: 1px solid var(--line);
         border-radius: 28px;
         background: var(--surface);
         box-shadow:

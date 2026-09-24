@@ -1361,6 +1361,24 @@ function runAdministratorProductReadinessAudit(
         assert.ok(product.related && typeof product.related === 'object' && !Array.isArray(product.related));
         assert.ok(Object.values(product.related).every(items => Array.isArray(items)));
         assert.ok(Array.isArray(product.blockers));
+        const history = product.historicalSales;
+        assert.ok(history && typeof history === 'object' && !Array.isArray(history));
+        assert.ok(Number.isSafeInteger(history.orderCount) && history.orderCount >= 0);
+        assert.ok(Number.isSafeInteger(history.orderLineCount) && history.orderLineCount >= 0);
+        assert.ok(Array.isArray(history.bySalesChannel));
+        for (const group of history.bySalesChannel) {
+            assert.ok(group.channelCode === null || typeof group.channelCode === 'string');
+            assert.ok(Number.isSafeInteger(group.orderCount) && group.orderCount >= 0);
+            assert.ok(Number.isSafeInteger(group.orderLineCount) && group.orderLineCount >= 0);
+        }
+        assert.equal(
+            history.bySalesChannel.reduce((count, group) => count + group.orderCount, 0),
+            history.orderCount,
+        );
+        assert.equal(
+            history.bySalesChannel.reduce((count, group) => count + group.orderLineCount, 0),
+            history.orderLineCount,
+        );
         reports = { administrator, product };
     } catch (error) {
         auditError = error;
@@ -1407,6 +1425,15 @@ function runAdministratorProductReadinessAudit(
             editableAsExclusiveStoreProduct: product.editableAsExclusiveStoreProduct,
             channels: product.product.channels,
             relatedCounts,
+            historicalSales: {
+                orderCount: product.historicalSales.orderCount,
+                orderLineCount: product.historicalSales.orderLineCount,
+                bySalesChannel: product.historicalSales.bySalesChannel.map(group => ({
+                    channelCode: group.channelCode,
+                    orderCount: group.orderCount,
+                    orderLineCount: group.orderLineCount,
+                })),
+            },
             blockerCount: product.blockers.length,
             blockers: product.blockers.slice(0, 50),
             detailsTruncated: product.blockers.length > 50,

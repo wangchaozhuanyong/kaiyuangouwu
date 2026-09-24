@@ -674,8 +674,8 @@
         min-width: 114px;
         height: 38px;
         padding: 0 18px;
-        border: 1px solid var(--accent);
-        background: var(--paper, #fff);
+        border: 0;
+        background: var(--accent-soft);
         color: var(--accent-ink);
         font-size: 13px;
         border-radius: var(--skin-control-radius);

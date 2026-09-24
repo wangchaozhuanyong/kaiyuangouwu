@@ -292,6 +292,18 @@ test('rejects HTML fallback responses masquerading as successful CSS', async t =
     );
 });
 
+test('rejects a 200 storefront response with an embedded SSI error document', async t => {
+    const fixture = await startFixtureServer({
+        extraEntryScript:
+            '<html><head><title>504 Gateway Time-out</title></head><body><h1>504 Gateway Time-out</h1></body></html>',
+    });
+    t.after(fixture.close);
+    await assert.rejects(
+        verifyStorefrontAssets({ storefrontUrl: fixture.origin }),
+        /Storefront HTML contains an embedded error document/u,
+    );
+});
+
 test('verifies scripts outside assets and deduplicates modulepreload references', async () => {
     const paths = [];
     const html =

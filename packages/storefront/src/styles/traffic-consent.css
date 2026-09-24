@@ -35,13 +35,6 @@
     text-underline-offset: 2px;
 }
 
-.traffic-consent-banner [role='alert'] {
-    display: block;
-    margin-top: 6px;
-    color: var(--danger);
-    font-size: 11px;
-}
-
 .traffic-consent-actions {
     display: flex;
     flex: 0 0 auto;
@@ -81,21 +74,6 @@
     font-size: 11px;
 }
 
-.traffic-preference-error {
-    position: fixed;
-    z-index: var(--layer-sticky);
-    bottom: max(48px, calc(env(safe-area-inset-bottom) + 48px));
-    left: max(10px, env(safe-area-inset-left));
-    max-width: min(360px, calc(100vw - 20px));
-    padding: 7px 10px;
-    border: 1px solid var(--skin-divider);
-    border-radius: var(--skin-control-radius);
-    background: var(--surface);
-    color: var(--danger);
-    box-shadow: var(--shadow-sm);
-    font-size: 11px;
-}
-
 @media (max-width: 640px) {
     .traffic-consent-banner {
         flex-direction: column;
@@ -107,9 +85,5 @@
 
     .traffic-preference-button {
         bottom: calc(var(--bottom-navigation-height) + env(safe-area-inset-bottom) + 8px);
-    }
-
-    .traffic-preference-error {
-        bottom: calc(var(--bottom-navigation-height) + env(safe-area-inset-bottom) + 46px);
     }
 }

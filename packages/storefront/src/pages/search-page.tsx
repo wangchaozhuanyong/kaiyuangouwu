@@ -139,6 +139,15 @@ export function SearchPage() {
             data-page-pending={term && (searching || searchQuery.isPlaceholderData) ? 'query' : undefined}
         >
             <h1 className="visually-hidden">{isZh ? '搜索商品' : 'Search products'}</h1>
+            <div className="search-desktop-intro">
+                <span>{isZh ? '站内探索' : 'Explore the store'}</span>
+                <h2>{isZh ? '想找什么？' : 'What are you looking for?'}</h2>
+                <p>
+                    {isZh
+                        ? '输入商品关键词，或从下方常用入口开始浏览。'
+                        : 'Search for a product or start with a shortcut below.'}
+                </p>
+            </div>
             <header className="search-header">
                 <button type="button" onClick={goBack} aria-label={isZh ? '返回' : 'Back'}>
                     <ArrowLeft />
@@ -148,6 +157,7 @@ export function SearchPage() {
                     <input
                         autoFocus
                         type="search"
+                        autoComplete="off"
                         value={query}
                         onChange={event => setQuery(event.target.value)}
                         onKeyDown={event => {

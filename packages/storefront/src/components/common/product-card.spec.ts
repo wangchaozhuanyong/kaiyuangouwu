@@ -24,8 +24,10 @@ describe('product card subtitle', () => {
         const stylesheet = readStorefrontStylesheet(['./styles/product-card.css']);
 
         expect(stylesheet).toMatch(
-            /\.product-card\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--surface\);[^}]*box-shadow:\s*var\(--skin-card-shadow\);/u,
+            /\.product-card\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--product-card-surface, var\(--surface\)\);[^}]*box-shadow:\s*var\(--skin-card-shadow\);/u,
         );
+        expect(stylesheet).toContain('aspect-ratio: var(--product-media-ratio);');
+        expect(stylesheet).toContain('color: var(--availability-unavailable);');
     });
 
     it('prefers a meaningful product description', () => {
@@ -37,6 +39,15 @@ describe('product card subtitle', () => {
                 }),
             ),
         ).toBe('大马通专注华人生活服务');
+    });
+
+    it('uses an existing complete short clause for narrow product cards', () => {
+        const item = product({
+            description: '按照官方Api价格为基础计算，1人民币可以购买1元美金的Token额度。',
+        });
+
+        expect(resolveProductSubtitle(item, 26, true)).toBe('按照官方Api价格为基础计算');
+        expect(resolveProductSubtitle(item, 48)).toContain('1人民币可以购买');
     });
 
     it('falls back to the most specific collection when the description is unavailable', () => {

@@ -12,6 +12,7 @@ const baseUrl = process.env.STOREFRONT_VISUAL_BASE_URL || 'http://127.0.0.1:5188
 const requestedPreset = process.env.STOREFRONT_VISUAL_PRESET;
 const requestedRoute = process.env.STOREFRONT_VISUAL_ROUTE;
 const requestedWidth = Number(process.env.STOREFRONT_VISUAL_WIDTH || 0);
+const requestedContent = process.env.STOREFRONT_VISUAL_CONTENT || 'normal';
 const presets = requestedPreset ? [requestedPreset] : ['classic', 'modern-oriental', 'neo-minimalist'];
 const expectedPaletteSignature = {
     classic: { page: '#f1f5f9', surface: '#ffffff', text: '#0f172a', brand: '#3558aa' },
@@ -74,6 +75,26 @@ await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const results = [];
 const contrastFailures = [];
+
+function opaqueRgb(value) {
+    const match = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/u.exec(value);
+    if (!match || (match[4] != null && Number(match[4]) !== 1)) {
+        throw new Error(`Expected an opaque RGB control color, received ${value}`);
+    }
+    return match.slice(1, 4).map(Number);
+}
+
+function textContrast(foreground, background) {
+    const luminance = value => {
+        const channels = opaqueRgb(value).map(channel => {
+            const normalized = channel / 255;
+            return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+    return (values[0] + 0.05) / (values[1] + 0.05);
+}
 try {
     for (const preset of presets) {
         for (const width of requestedWidth ? [requestedWidth] : [390, 1023, 1024, 1440]) {
@@ -92,13 +113,16 @@ try {
             const errors = [];
             let signedIn = true;
             page.on('pageerror', error => errors.push(error.message));
+            if (requestedContent === 'product-detail') {
+                await page.addInitScript(() => localStorage.setItem('storefront-analytics-opt-out:v1', '1'));
+            }
             await page.route('**/*', async route => {
                 const url = new URL(route.request().url());
                 if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.abort();
                 if (url.pathname.includes('shop-api')) {
                     return route.fulfill({
                         contentType: 'application/json',
-                        body: JSON.stringify({ data: fixtureData(preset, signedIn) }),
+                        body: JSON.stringify({ data: fixtureData(preset, signedIn, requestedContent) }),
                     });
                 }
                 if (url.pathname.includes('/storefront-realtime')) {
@@ -490,6 +514,47 @@ try {
                     }
                 }
                 if (width < 1024 && name === 'product') {
+                    const productLayout = await page.evaluate(() => {
+                        const root = document.querySelector('.product-detail-page').getBoundingClientRect();
+                        const sections = [
+                            '.detail-gallery',
+                            '.detail-summary',
+                            '.detail-options',
+                            '.detail-service-bar',
+                            '.detail-review-block',
+                            '.detail-params',
+                            '.detail-description',
+                            '.product-section',
+                        ];
+                        return sections
+                            .map(selector => {
+                                const rect = document
+                                    .querySelector(`.product-detail-page > ${selector}`)
+                                    ?.getBoundingClientRect();
+                                return rect
+                                    ? {
+                                          selector,
+                                          left: rect.left - root.left,
+                                          right: root.right - rect.right,
+                                      }
+                                    : null;
+                            })
+                            .filter(Boolean);
+                    });
+                    expect(
+                        productLayout.length,
+                        `${preset}/${width}/product sections`,
+                    ).toBeGreaterThanOrEqual(7);
+                    for (const section of productLayout) {
+                        expect(
+                            section.left,
+                            `${preset}/${width}/${section.selector} left gutter`,
+                        ).toBeGreaterThanOrEqual(15);
+                        expect(
+                            Math.abs(section.left - section.right),
+                            `${preset}/${width}/${section.selector} balanced gutters`,
+                        ).toBeLessThanOrEqual(1);
+                    }
                     for (const selector of [
                         '.detail-summary',
                         '.detail-options',
@@ -499,6 +564,37 @@ try {
                         '.detail-action-bar',
                     ]) {
                         await expect(page.locator(selector).first()).toHaveCSS('border-top-width', '0px');
+                    }
+                    if (requestedContent === 'product-detail') {
+                        await expect(page.locator('.detail-rich-text td').first()).toHaveCSS(
+                            'border-top-width',
+                            '0px',
+                        );
+                        const image = page.locator('.detail-description-media > img');
+                        await expect(image).toHaveJSProperty('naturalWidth', 700);
+                        const richMedia = await page.evaluate(() => {
+                            const card = document
+                                .querySelector('.detail-description')
+                                .getBoundingClientRect();
+                            const imageRect = document
+                                .querySelector('.detail-description-media > img')
+                                .getBoundingClientRect();
+                            const figure = document
+                                .querySelector('.detail-rich-text figure')
+                                .getBoundingClientRect();
+                            return {
+                                imageLeft: imageRect.left - card.left,
+                                imageRight: card.right - imageRect.right,
+                                imageRatio: imageRect.height / imageRect.width,
+                                figureLeft: figure.left - card.left,
+                                figureRight: card.right - figure.right,
+                            };
+                        });
+                        expect(richMedia.imageLeft).toBeGreaterThanOrEqual(14);
+                        expect(richMedia.imageRight).toBeGreaterThanOrEqual(14);
+                        expect(richMedia.imageRatio).toBeGreaterThan(1.6);
+                        expect(richMedia.figureLeft).toBeGreaterThanOrEqual(14);
+                        expect(richMedia.figureRight).toBeGreaterThanOrEqual(14);
                     }
                 }
                 if (width < 1024 && name === 'cart') {
@@ -534,6 +630,48 @@ try {
                         'border-bottom-width',
                         '0px',
                     );
+                    if (requestedContent === 'dense') {
+                        for (const selector of [
+                            '.account-latest-logistics > button',
+                            '.account-recent-purchases article',
+                            '.account-recent-purchases article > button',
+                        ]) {
+                            await expect(page.locator(selector).first()).toHaveCSS('border-top-width', '0px');
+                        }
+                    }
+                }
+                if (name === 'support' && requestedContent === 'support') {
+                    for (const selector of [
+                        '.support-hours-card',
+                        '.support-hours-note',
+                        '.support-channel-list',
+                        '.support-channel-row',
+                        '.support-evaluation-card',
+                        '.support-tag-btn',
+                        '.support-evaluation-textarea',
+                    ]) {
+                        await expect(page.locator(selector).first()).toHaveCSS('border-top-width', '0px');
+                    }
+                    await page.locator('.support-tag-btn').first().click();
+                    await expect(page.locator('.support-tag-btn').first()).toHaveClass(/is-active/);
+                }
+                if (name === 'notifications' && requestedContent === 'dense') {
+                    const notificationList = page.locator('.notification-list');
+                    const firstNotification = notificationList.locator(':scope > button').first();
+                    await expect(firstNotification).toBeVisible();
+                    await expect(notificationList).toHaveCSS('display', 'grid');
+                    await expect(firstNotification).toHaveCSS('display', 'grid');
+                    await expect(firstNotification.locator('.notification-icon')).toHaveCSS('width', '42px');
+                    const detailFits = await firstNotification
+                        .locator('small')
+                        .evaluate(element => element.scrollWidth <= element.clientWidth + 1);
+                    expect(detailFits, `${preset}/${width}/notifications order reference fits`).toBe(true);
+                }
+                if (name === 'reviews' && requestedContent === 'reviews') {
+                    await expect(page.locator('.review-center-pending > header > span')).toHaveText('14');
+                    await expect(page.locator('.review-candidate-row')).toHaveCount(4);
+                    await expect(page.locator('.review-candidate-row').first().locator('img')).toBeVisible();
+                    await expect(page.locator('.review-candidate-more')).toBeVisible();
                 }
                 if (width < 1024 && name === 'checkout') {
                     await expect(page.locator('.checkout-options > button').first()).toHaveCSS(
@@ -568,6 +706,7 @@ try {
                             'home',
                             'category',
                             'product',
+                            'cart',
                             'checkout',
                             'account',
                             'login',
@@ -576,7 +715,10 @@ try {
                             'two-factor',
                             'reviews',
                             'legal',
+                            'notifications',
+                            'reviews',
                         ].includes(name)) ||
+                    (requestedContent === 'product-detail' && name === 'product') ||
                     (width === 390 &&
                         [
                             'home',
@@ -594,6 +736,7 @@ try {
                             'two-factor',
                             'reviews',
                             'legal',
+                            'notifications',
                         ].includes(name))
                 ) {
                     await page.screenshot({
@@ -601,6 +744,21 @@ try {
                         fullPage: true,
                         animations: 'disabled',
                     });
+                }
+                if (name === 'reviews' && requestedContent === 'reviews') {
+                    await page.locator('.review-candidate-more').click();
+                    await expect(page.locator('.review-candidate-row')).toHaveCount(14);
+                    await page.locator('.review-candidate-row').last().click();
+                    await expect(page.locator('.review-composer')).toBeInViewport();
+                    if (width < 1024) {
+                        const composerTop = await page
+                            .locator('.review-composer')
+                            .evaluate(element => element.getBoundingClientRect().top);
+                        expect(
+                            composerTop,
+                            `${preset}/${width}/reviews composer below header`,
+                        ).toBeGreaterThanOrEqual(52);
+                    }
                 }
                 await page.keyboard.press('Tab');
                 const keyboardFocus = await page.evaluate(() => {
@@ -655,17 +813,57 @@ try {
                         );
                     }
                 }
-                results.push({ preset, width, name, geometry, keyboardFocus, accessibility });
+                let primaryContrast;
+                if (name === 'home' && (width === 390 || width === 1440)) {
+                    const primary = page.locator(width >= 1024 ? '.proto-btn-upgrade' : '.hero-rich-cta-btn');
+                    await expect(primary, `${preset}/${width} home primary action`).toBeVisible();
+                    await page.mouse.move(0, 0);
+                    primaryContrast = {};
+                    for (const state of ['default', 'hover']) {
+                        if (state === 'hover') await primary.hover();
+                        const colors = await primary.evaluate(element => {
+                            const style = getComputedStyle(element);
+                            return {
+                                foreground: style.color,
+                                background: style.backgroundColor,
+                                backgroundImage: style.backgroundImage,
+                            };
+                        });
+                        expect(
+                            colors.backgroundImage,
+                            `${preset}/${width} home primary ${state} solid surface`,
+                        ).toBe('none');
+                        primaryContrast[state] = textContrast(colors.foreground, colors.background);
+                        expect(
+                            primaryContrast[state],
+                            `${preset}/${width} home primary ${state} text contrast`,
+                        ).toBeGreaterThanOrEqual(4.5);
+                    }
+                }
+                results.push({
+                    preset,
+                    width,
+                    name,
+                    geometry,
+                    keyboardFocus,
+                    accessibility,
+                    primaryContrast,
+                });
+
+                if (name === 'category' && width >= 1024) {
+                    await page.locator('.proto-search-open').click();
+                    await expect(page).toHaveURL(/\/search$/);
+                    await expect(page.locator('.search-page .search-discovery')).toBeVisible();
+                    await expect(page.locator('.search-page .search-header input')).toBeFocused();
+                }
 
                 if (name === 'home' && width >= 1024) {
                     const tools = page.locator('.proto-tool-item');
-                    await expect(tools).toHaveCount(3);
-                    await expect(page.getByLabel('下一组快捷入口')).toBeVisible();
+                    await expect(tools).toHaveCount(5);
+                    await expect(page.locator('.proto-tools-count')).toContainText('5 个入口');
+                    await expect(page.locator('.proto-tools-pagination')).toHaveCount(0);
                     await expect(tools.filter({ hasText: '商品分类' })).toBeVisible();
-                    await page.getByLabel('下一组快捷入口').click();
-                    await expect(tools).toHaveCount(2);
                     await expect(tools.filter({ hasText: '优惠中心' })).toBeVisible();
-                    await expect(page.locator('.proto-tools-pagination')).toContainText('2 / 2');
                 }
 
                 if (name === 'home' && width === 1440) {

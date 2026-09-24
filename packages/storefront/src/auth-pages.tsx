@@ -12,6 +12,8 @@ import {
     ShieldCheck,
     ShoppingBag,
     Sparkles,
+    Ticket,
+    UserRound,
     Zap,
 } from 'lucide-react';
 import { CSSProperties, FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
@@ -419,6 +421,7 @@ export function LoginPage({
                                 label={isZh ? '电子邮箱' : 'Email address'}
                                 type="email"
                                 autoComplete="email"
+                                icon={<Mail />}
                                 showLabel={false}
                             />
                             <Field
@@ -426,6 +429,7 @@ export function LoginPage({
                                 label={isZh ? '密码' : 'Password'}
                                 type="password"
                                 autoComplete="current-password"
+                                icon={<LockKeyhole />}
                                 revealPassword
                                 language={language}
                                 showLabel={false}
@@ -731,6 +735,7 @@ export function RegisterPage({
                                     name="fullName"
                                     label={isZh ? '姓名' : 'Full name'}
                                     autoComplete="name"
+                                    icon={<UserRound />}
                                     showLabel={false}
                                 />
                             ) : null}
@@ -739,6 +744,7 @@ export function RegisterPage({
                                 label={isZh ? '电子邮箱' : 'Email address'}
                                 type="email"
                                 autoComplete="email"
+                                icon={<Mail />}
                                 showLabel={false}
                             />
                             {!quickRegistration ? (
@@ -748,6 +754,7 @@ export function RegisterPage({
                                         label={isZh ? '密码' : 'Password'}
                                         type="password"
                                         autoComplete="new-password"
+                                        icon={<LockKeyhole />}
                                         minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
                                         maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
                                         revealPassword
@@ -759,6 +766,7 @@ export function RegisterPage({
                                         label={isZh ? '确认密码' : 'Confirm password'}
                                         type="password"
                                         autoComplete="new-password"
+                                        icon={<LockKeyhole />}
                                         minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
                                         maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
                                         revealPassword
@@ -784,6 +792,7 @@ export function RegisterPage({
                                         name="inviteCode"
                                         label={isZh ? '邀请码（选填）' : 'Invitation code (optional)'}
                                         autoComplete="off"
+                                        icon={<Ticket />}
                                         maxLength={12}
                                         required={false}
                                         showLabel={false}

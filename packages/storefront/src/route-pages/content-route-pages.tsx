@@ -34,6 +34,15 @@ export function ServicesRoutePage() {
             value={{
                 contentBlocks: runtime.contentBlocks,
                 language: runtime.language,
+                storefrontName: runtime.storefrontName,
+                logoUrl: runtime.logoUrl,
+                marketLabel: runtime.market.label,
+                displayCurrencyCode: runtime.displayCurrencyCode,
+                availableCurrencyCodes: runtime.currencySelectorEnabled ? runtime.availableCurrencyCodes : [],
+                currencyLoading: runtime.cartLoading,
+                onToggleLanguage: runtime.toggleLanguage,
+                onCurrencyChange: runtime.switchCurrency,
+                onNotifications: () => runtime.navigate({ name: 'notifications' }),
                 onNavigate: runtime.navigate,
                 onContentTarget: runtime.openContentTarget,
             }}

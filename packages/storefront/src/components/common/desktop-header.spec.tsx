@@ -22,17 +22,14 @@ describe('desktop header search', () => {
     const switchCurrency = vi.fn();
     const toggleLanguage = vi.fn();
 
-    beforeEach(() => {
-        host = document.createElement('div');
-        document.body.append(host);
-        root = createRoot(host);
+    function renderHeader(route: { name: 'home' } | { name: 'search'; term?: string }) {
         act(() => {
             root.render(
                 <StorefrontContext.Provider
                     value={
                         {
                             language: 'zh',
-                            route: { name: 'home' },
+                            route,
                             navigate,
                             storefrontName: '大马通',
                             logoUrl: null,
@@ -51,6 +48,13 @@ describe('desktop header search', () => {
                 </StorefrontContext.Provider>,
             );
         });
+    }
+
+    beforeEach(() => {
+        host = document.createElement('div');
+        document.body.append(host);
+        root = createRoot(host);
+        renderHeader({ name: 'home' });
     });
 
     afterEach(() => {
@@ -61,7 +65,26 @@ describe('desktop header search', () => {
         toggleLanguage.mockReset();
     });
 
-    it('submits the trimmed query from the visible search button', () => {
+    it('opens the dedicated search page when the header search is clicked', () => {
+        const trigger = host.querySelector<HTMLButtonElement>('.proto-search-open');
+        expect(trigger?.textContent).toContain('搜索商品、分类');
+        expect(host.querySelector('.proto-search-input')).toBeNull();
+
+        act(() => trigger?.click());
+
+        expect(navigate).toHaveBeenCalledWith({ name: 'search' });
+    });
+
+    it('opens the dedicated search page with the keyboard shortcut', () => {
+        act(() => {
+            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }));
+        });
+
+        expect(navigate).toHaveBeenCalledWith({ name: 'search' });
+    });
+
+    it('submits a trimmed query from the search results header', () => {
+        renderHeader({ name: 'search', term: 'gemini' });
         const input = host.querySelector<HTMLInputElement>('.proto-search-input');
         const button = host.querySelector<HTMLButtonElement>('.proto-search-submit');
         expect(button?.textContent).toBe('搜索');

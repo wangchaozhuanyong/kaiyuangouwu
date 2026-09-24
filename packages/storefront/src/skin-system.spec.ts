@@ -90,7 +90,7 @@ describe('storefront skin system', () => {
         );
     });
 
-    it('keeps cart surfaces in their component owner and desktop merchandise rows flat', () => {
+    it('keeps cart surfaces in their component owner and desktop merchandise rows borderless', () => {
         const layout = stylesheet('./styles/desktop-layout.css');
         const skin = stylesheet('./styles/visual-presets.css').split('@media (max-width: 1023px)')[0];
         expect(layout).not.toMatch(/\.cart-group\s*[,\{]/);
@@ -98,9 +98,14 @@ describe('storefront skin system', () => {
         expect(stylesheet('./styles/cart-layout.css')).toMatch(
             /\.cart-group\s*\{[^}]*border-radius:\s*var\(--radius-md\);[^}]*border:\s*0;/,
         );
-        expect(stylesheet('./styles/desktop-pages.css')).toMatch(
-            /\.desktop-cart-row\s*\{[^}]*margin:\s*0;[^}]*border-radius:\s*0;[^}]*box-shadow:\s*none;/,
-        );
+        const desktopRow =
+            [...stylesheet('./styles/desktop-pages.css').matchAll(/\.desktop-cart-row\s*\{([^}]*)\}/g)]
+                .map(match => match[1])
+                .find(rule => rule.includes('background: var(--module-action-surface);')) ?? '';
+        expect(desktopRow).toContain('background: var(--module-action-surface);');
+        expect(desktopRow).toContain('border-top: 0;');
+        expect(desktopRow).toContain('border-radius: var(--radius-sm);');
+        expect(desktopRow).toContain('box-shadow: none;');
     });
 
     it('owns populated logistics surfaces in one semantic component stylesheet', () => {
@@ -301,7 +306,7 @@ describe('storefront skin system', () => {
             '.section-header',
             '.review-center-section > header',
             '.review-composer > header',
-            '.review-candidate-list > button',
+            '.review-candidate-row',
             '.my-review-list article',
             '.product-review-list article',
             '.coupon-center-cart-link',

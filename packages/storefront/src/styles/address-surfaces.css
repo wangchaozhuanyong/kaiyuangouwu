@@ -9,7 +9,6 @@
     gap: 4px;
     margin: 14px 14px 0;
     padding: 4px;
-    border: 1px solid var(--line);
     border-radius: 10px;
     background: var(--soft);
 }
@@ -84,7 +83,6 @@
 
 .address-card footer {
     padding-top: 10px;
-    border-top: 1px solid var(--skin-divider);
     display: flex;
     align-items: center;
     justify-content: space-between;

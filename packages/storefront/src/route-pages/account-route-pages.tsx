@@ -55,6 +55,13 @@ export function AccountRoutePage() {
                     couponCount: runtime.myCoupons.filter((coupon: { status: string }) =>
                         ['AVAILABLE', 'RETURNED', 'LOCKED'].includes(coupon.status),
                     ).length,
+                    displayCurrencyCode: runtime.displayCurrencyCode,
+                    availableCurrencyCodes: runtime.currencySelectorEnabled
+                        ? runtime.availableCurrencyCodes
+                        : [],
+                    currencyLoading: runtime.cartLoading,
+                    onToggleLanguage: runtime.toggleLanguage,
+                    onCurrencyChange: runtime.switchCurrency,
                     onContentTarget: runtime.openContentTarget,
                     onLogout: () => {
                         void runtime.api.logout().then(() => {
