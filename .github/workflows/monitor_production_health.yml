@@ -62,7 +62,7 @@ jobs:
                   metadata_token=$(curl --max-time 2 -fsS -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' http://169.254.169.254/latest/api/token 2>/dev/null || true)
                   if [ -n "$metadata_token" ]; then
                     instance_type=$(curl --max-time 2 -fsS -H "X-aws-ec2-metadata-token: $metadata_token" http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || true)
-                    if [[ "$instance_type" =~ ^[a-z0-9.]+$ ]]; then
+                    if [ -n "$instance_type" ]; then
                       printf 'INSTANCE_MEMORY type=%s\n' "$instance_type"
                     fi
                   fi
