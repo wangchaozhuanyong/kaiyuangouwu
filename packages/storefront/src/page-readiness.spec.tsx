@@ -191,7 +191,7 @@ describe('progressive page readiness', () => {
         expect(phase()).toBe('ready');
     });
 
-    it('keeps one deadline and a stable timeout across late member resolution until retry', async () => {
+    it('keeps one deadline across late member resolution and clears the timeout when data arrives', async () => {
         render(<span data-page-pending="query" />, true, 'guest', true, 'account');
         await advance(9000);
         render(<span data-page-pending="query" />, true, 'member', true, 'account');
@@ -199,11 +199,23 @@ describe('progressive page readiness', () => {
         expect(phase()).toBe('error');
         render(<h1>Member content</h1>, false, 'resolved-member', true, 'account');
         await advance(500);
-        expect(phase()).toBe('error');
+        expect(phase()).toBe('ready');
         expect(host.querySelector('[role=status]')).toBeNull();
-        act(() => host.querySelector<HTMLButtonElement>('.page-readiness-error button')?.click());
+        expect(host.querySelector('[role=alert]')).toBeNull();
+    });
+
+    it('recovers when a timed-out route module finishes after navigation settles', async () => {
+        render(<span data-page-pending="module" />, true, 'services');
+        await advance(10100);
+        expect(phase()).toBe('error');
+        render(<span data-page-pending="module" />, false, 'services');
+        await advance();
+        expect(phase()).toBe('error');
+        render(<h1>Services</h1>, false, 'services');
+        await advance();
         await advance();
         expect(phase()).toBe('ready');
+        expect(host.querySelector('[role=alert]')).toBeNull();
     });
 
     it('gives a new navigation its own deadline while retaining an already visible indicator', async () => {
