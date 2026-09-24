@@ -37,7 +37,7 @@ export function ProductCard({
     const variant = product.variants[0];
     const availability = productAvailability(variant);
     const stockLabel = productAvailabilityLabel(availability, isZh ? 'zh' : 'en');
-    const subtitle = resolveProductSubtitle(product);
+    const subtitle = resolveProductSubtitle(product, 26, true);
     const smartInfo = buildProductRowSmartInfo(product, language);
 
     return (
@@ -52,6 +52,7 @@ export function ProductCard({
                 type="button"
                 onClick={onOpen}
                 aria-label={`${isZh ? '查看' : 'View'} ${product.name}`}
+                title={[product.name, subtitle].filter(Boolean).join(' · ')}
             />
 
             {onFavorite && (

@@ -11,10 +11,12 @@
     padding-bottom: 12px;
     border: 0;
     border-radius: var(--skin-card-radius);
-    background: var(--surface);
+    background: var(--product-card-surface, var(--surface));
     color: var(--text);
     box-shadow: var(--skin-card-shadow);
-    transition: transform var(--experience-motion-fast) var(--experience-ease-standard);
+    transition:
+        transform var(--experience-motion-fast) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard);
 }
 
 .product-card-detail-link {
@@ -99,18 +101,21 @@
     font-size: 13px;
     font-weight: var(--font-weight-semibold);
     line-height: 1.4;
+    overflow-wrap: anywhere;
     text-align: left;
 }
 
 .product-card-subtitle {
-    display: block;
+    display: -webkit-box;
     margin-top: 4px;
+    min-height: 3em;
     overflow: hidden;
     color: var(--muted);
     font-size: 12px;
     line-height: 1.5;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 
 .product-card-meta {
@@ -162,13 +167,19 @@
 }
 
 .product-card-stock.is-sold-out {
-    color: var(--danger);
+    color: var(--availability-unavailable);
 }
 
 @media (hover: hover) and (pointer: fine) {
     .product-card:hover {
         transform: translateY(-2px);
         box-shadow: var(--skin-card-hover-shadow);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .product-card {
+        transition: none;
     }
 }
 

@@ -28,6 +28,8 @@ html[data-storefront-preset] {
        each skin's tonal control hierarchy without becoming nested cards. */
     --module-action-surface: var(--control-surface);
     --module-action-surface-hover: var(--control-surface-hover);
+    --product-card-surface: var(--surface);
+    --availability-unavailable: var(--danger);
     --control-elevation: none;
     --control-elevation-hover: none;
 }
@@ -42,4 +44,7 @@ html[data-storefront-preset='modern-oriental'] {
 }
 html[data-storefront-preset='neo-minimalist'] {
     --account-hero-bg: linear-gradient(135deg, #0e121c 0%, #1e1b4b 100%);
+    --product-card-surface: var(--surface-elevated);
+    --availability-unavailable: var(--muted);
+    --module-action-surface-hover: color-mix(in srgb, var(--accent) 10%, var(--surface-elevated));
 }

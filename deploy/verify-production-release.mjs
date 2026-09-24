@@ -111,6 +111,13 @@ export async function verifyStorefrontAssets({
         expectStatus(response, 200, 'Direct storefront');
         html = await response.text();
     }
+    // An SSI subrequest can leave the outer response at 200 while embedding
+    // an upstream error document in <head>. Asset checks alone miss that.
+    for (const tag of ['html', 'head', 'body']) {
+        if ([...html.matchAll(new RegExp(`<${tag}\\b`, 'giu'))].length > 1) {
+            throw new Error('Storefront HTML contains an embedded error document');
+        }
+    }
     // Retain the existing requirement for an actual application build asset.
     extractStorefrontAssetUrl(html, storefront);
     const urls = extractStorefrontAssetUrls(html, storefront);

@@ -75,6 +75,26 @@ await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const results = [];
 const contrastFailures = [];
+
+function opaqueRgb(value) {
+    const match = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/u.exec(value);
+    if (!match || (match[4] != null && Number(match[4]) !== 1)) {
+        throw new Error(`Expected an opaque RGB control color, received ${value}`);
+    }
+    return match.slice(1, 4).map(Number);
+}
+
+function textContrast(foreground, background) {
+    const luminance = value => {
+        const channels = opaqueRgb(value).map(channel => {
+            const normalized = channel / 255;
+            return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+    return (values[0] + 0.05) / (values[1] + 0.05);
+}
 try {
     for (const preset of presets) {
         for (const width of requestedWidth ? [requestedWidth] : [390, 1023, 1024, 1440]) {
@@ -793,7 +813,42 @@ try {
                         );
                     }
                 }
-                results.push({ preset, width, name, geometry, keyboardFocus, accessibility });
+                let primaryContrast;
+                if (name === 'home' && (width === 390 || width === 1440)) {
+                    const primary = page.locator(width >= 1024 ? '.proto-btn-upgrade' : '.hero-rich-cta-btn');
+                    await expect(primary, `${preset}/${width} home primary action`).toBeVisible();
+                    await page.mouse.move(0, 0);
+                    primaryContrast = {};
+                    for (const state of ['default', 'hover']) {
+                        if (state === 'hover') await primary.hover();
+                        const colors = await primary.evaluate(element => {
+                            const style = getComputedStyle(element);
+                            return {
+                                foreground: style.color,
+                                background: style.backgroundColor,
+                                backgroundImage: style.backgroundImage,
+                            };
+                        });
+                        expect(
+                            colors.backgroundImage,
+                            `${preset}/${width} home primary ${state} solid surface`,
+                        ).toBe('none');
+                        primaryContrast[state] = textContrast(colors.foreground, colors.background);
+                        expect(
+                            primaryContrast[state],
+                            `${preset}/${width} home primary ${state} text contrast`,
+                        ).toBeGreaterThanOrEqual(4.5);
+                    }
+                }
+                results.push({
+                    preset,
+                    width,
+                    name,
+                    geometry,
+                    keyboardFocus,
+                    accessibility,
+                    primaryContrast,
+                });
 
                 if (name === 'category' && width >= 1024) {
                     await page.locator('.proto-search-open').click();
