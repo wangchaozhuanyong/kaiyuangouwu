@@ -58,7 +58,14 @@ jobs:
                   set -eu
                   awk '/^(MemTotal|MemAvailable|SwapTotal|SwapFree|AnonPages|Shmem|SReclaimable|SUnreclaim|Slab):/ {printf "MEMORY_DIAG %s %s_kib\n", $1, $2}' /proc/meminfo
                   ps -eo comm=,rss= --sort=-rss | awk 'NR <= 15 {printf "PROCESS_MEMORY rank=%d name=%s rss_mib=%.1f\n", NR, $1, $2 / 1024}'
-                  sudo -n -H -u ubuntu pm2 jlist | node -e 'let input="";process.stdin.on("data",chunk=>input+=chunk);process.stdin.on("end",()=>{for(const entry of JSON.parse(input)){if(["vendure-api","vendure-worker"].includes(entry.name)){console.log(`PM2_MEMORY name=${entry.name} pid=${entry.pid} rss_mib=${((entry.monit?.memory??0)/1048576).toFixed(1)} restarts=${entry.pm2_env?.restart_time??0}`)}}})'
+                  sudo -n -H -u ubuntu pm2 jlist | node -e 'const fs=require("fs");let input="";process.stdin.on("data",chunk=>input+=chunk);process.stdin.on("end",()=>{for(const entry of JSON.parse(input)){if(["vendure-api","vendure-worker"].includes(entry.name)){const status=fs.readFileSync(`/proc/${entry.pid}/status`,"utf8");const mib=key=>{const match=status.match(new RegExp(`^${key}:\\s+(\\d+) kB$`,"m"));return match?(Number(match[1])/1024).toFixed(1):"unavailable"};console.log(`PM2_MEMORY name=${entry.name} pid=${entry.pid} sampled_mib=${((entry.monit?.memory??0)/1048576).toFixed(1)} resident_mib=${mib("VmRSS")} swapped_mib=${mib("VmSwap")} restarts=${entry.pm2_env?.restart_time??0}`)}}})'
+                  metadata_token=$(curl --max-time 2 -fsS -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' http://169.254.169.254/latest/api/token 2>/dev/null || true)
+                  if [ -n "$metadata_token" ]; then
+                    instance_type=$(curl --max-time 2 -fsS -H "X-aws-ec2-metadata-token: $metadata_token" http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || true)
+                    if [[ "$instance_type" =~ ^[a-z0-9.]+$ ]]; then
+                      printf 'INSTANCE_MEMORY type=%s\n' "$instance_type"
+                    fi
+                  fi
                   REMOTE_COMMAND
                   )
                   jq -n --arg command "$remote_command" \
