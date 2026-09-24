@@ -15,6 +15,11 @@ on:
                 required: false
                 default: false
                 type: boolean
+            audit_memory_processes:
+                description: Report masked memory breakdown and process usage without changing the host
+                required: false
+                default: false
+                type: boolean
 
 permissions:
     contents: read
@@ -43,6 +48,59 @@ jobs:
                   role-session-name: vendure-health-monitor-${{ github.run_id }}
                   aws-region: ${{ env.AWS_REGION }}
                   allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+
+            - name: Audit masked production memory consumers
+              if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_memory_processes }}
+              shell: bash
+              run: |
+                  set -Eeuo pipefail
+                  remote_command=$(cat <<'REMOTE_COMMAND'
+                  set -eu
+                  awk '/^(MemTotal|MemAvailable|SwapTotal|SwapFree|AnonPages|Shmem|SReclaimable|SUnreclaim|Slab):/ {printf "MEMORY_DIAG %s %s_kib\n", $1, $2}' /proc/meminfo
+                  ps -eo comm=,rss= --sort=-rss | awk 'NR <= 15 {printf "PROCESS_MEMORY rank=%d name=%s rss_mib=%.1f\n", NR, $1, $2 / 1024}'
+                  sudo -n -H -u ubuntu pm2 jlist | node -e 'let input="";process.stdin.on("data",chunk=>input+=chunk);process.stdin.on("end",()=>{for(const entry of JSON.parse(input)){if(["vendure-api","vendure-worker"].includes(entry.name)){console.log(`PM2_MEMORY name=${entry.name} pid=${entry.pid} rss_mib=${((entry.monit?.memory??0)/1048576).toFixed(1)} restarts=${entry.pm2_env?.restart_time??0}`)}}})'
+                  REMOTE_COMMAND
+                  )
+                  jq -n --arg command "$remote_command" \
+                    '{commands: [$command], executionTimeout: ["120"]}' > "$RUNNER_TEMP/memory-audit-ssm-parameters.json"
+                  command_id="$(aws ssm send-command \
+                    --region "$AWS_REGION" \
+                    --document-name AWS-RunShellScript \
+                    --instance-ids "$INSTANCE_ID" \
+                    --comment 'Audit masked Vendure host memory consumers' \
+                    --parameters "file://$RUNNER_TEMP/memory-audit-ssm-parameters.json" \
+                    --timeout-seconds 120 \
+                    --query 'Command.CommandId' \
+                    --output text)"
+                  test -n "$command_id"
+                  status=Pending
+                  for attempt in $(seq 1 24); do
+                    status="$(aws ssm get-command-invocation \
+                      --region "$AWS_REGION" \
+                      --command-id "$command_id" \
+                      --instance-id "$INSTANCE_ID" \
+                      --query Status \
+                      --output text 2>/dev/null || true)"
+                    case "$status" in
+                      Success|Failed|Cancelled|TimedOut|Cancelling) break ;;
+                    esac
+                    sleep 5
+                  done
+                  aws ssm get-command-invocation \
+                    --region "$AWS_REGION" \
+                    --command-id "$command_id" \
+                    --instance-id "$INSTANCE_ID" \
+                    --query '{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}' \
+                    --output json | tee "$RUNNER_TEMP/memory-audit.json"
+                  test "$status" = Success
+                  {
+                    echo '## Masked production memory audit'
+                    echo
+                    echo "- SSM command: \`$command_id\`"
+                    echo '```text'
+                    jq -r '.Output' "$RUNNER_TEMP/memory-audit.json"
+                    echo '```'
+                  } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Check out the audited revision
               if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_payment_config }}
