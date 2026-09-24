@@ -10,6 +10,15 @@ export const PAGE_DATA_TIMEOUT_MS = 10_000;
 export const PAGE_MEDIA_TIMEOUT_MS = 3_000;
 export const PAGE_LOADING_DELAY_MS = 200;
 
+function hasPendingPageData(root: HTMLElement, pending: boolean): boolean {
+    return (
+        pending ||
+        Array.from(root.querySelectorAll('[data-page-pending]')).some(
+            node => node.getAttribute('data-page-pending') !== 'data' || isFirstViewportElement(node, root),
+        )
+    );
+}
+
 interface PageReadinessProps {
     navigationKey?: string;
     requestKey?: string;
@@ -104,13 +113,7 @@ export function PageReadinessBoundary(props: PageReadinessProps) {
             if (stopped) return;
             window.clearTimeout(deadlineTimer);
             const now = performance.now();
-            const queryOrModulePending =
-                current.current.pending ||
-                Array.from(root.querySelectorAll('[data-page-pending]')).some(
-                    node =>
-                        node.getAttribute('data-page-pending') !== 'data' ||
-                        isFirstViewportElement(node, root),
-                );
+            const queryOrModulePending = hasPendingPageData(root, current.current.pending);
             if (!current.current.online && queryOrModulePending) {
                 finish('error');
                 return;
@@ -214,6 +217,29 @@ export function PageReadinessBoundary(props: PageReadinessProps) {
     }, [attempt, navigationKey, requestKey]);
 
     useLayoutEffect(() => wake.current(), [pending, online]);
+
+    useLayoutEffect(() => {
+        // A slow query or route module can finish after the timeout warning appears.
+        // Resume readiness checks when its actual pending marker clears.
+        if (phase !== 'error' || !online) return;
+        const root = stage.current;
+        if (!root) return;
+        let recovering = false;
+        const recoverWhenDataArrives = () => {
+            if (recovering || hasPendingPageData(root, current.current.pending)) return;
+            recovering = true;
+            setAttempt(value => value + 1);
+        };
+        const observer = new MutationObserver(recoverWhenDataArrives);
+        observer.observe(root, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['data-page-pending'],
+        });
+        recoverWhenDataArrives();
+        return () => observer.disconnect();
+    }, [phase, online, pending, navigationKey, requestKey]);
 
     return (
         <div
