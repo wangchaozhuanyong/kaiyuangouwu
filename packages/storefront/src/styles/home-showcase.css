@@ -3546,13 +3546,13 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         min-height: 96px;
         gap: 4px 12px;
         padding: 14px;
-        border: 1px solid var(--skin-divider);
+        border: 0;
         border-radius: var(--skin-card-radius);
         box-shadow: none;
     }
 
     .business-services-page .category-client-plugin:hover {
-        border-color: var(--skin-divider);
+        border: 0;
         background: var(--surface-elevated, var(--surface));
         box-shadow: var(--skin-card-hover-shadow, var(--shadow-sm));
     }
