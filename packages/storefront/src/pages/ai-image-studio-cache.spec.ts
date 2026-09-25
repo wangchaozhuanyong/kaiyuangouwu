@@ -173,4 +173,41 @@ describe('ai-image-studio-cache', () => {
         await preloadImageStudioData(mockApi, mockCustomer, mockMarket);
         expect(imageStudioConfig).toHaveBeenCalledTimes(1);
     });
+
+    it('preloads another customer while the first account is still waiting', async () => {
+        let finishFirst: (config: ImageStudioConfig) => void = () => undefined;
+        const firstConfig = new Promise<ImageStudioConfig>(resolve => {
+            finishFirst = resolve;
+        });
+        const firstApi = { imageStudioConfig: vi.fn(() => firstConfig) } as unknown as ShopApi;
+        const secondApi = {
+            imageStudioConfig: vi.fn().mockResolvedValue(mockConfig),
+            imageStudioWallet: vi.fn().mockResolvedValue({ availableBalance: 4000, currencyCode: 'MYR' }),
+            imagePromptQuotaStatus: vi.fn().mockResolvedValue(null),
+            imageModelQuotaStatus: vi.fn().mockResolvedValue([]),
+        } as unknown as ShopApi;
+        const secondCustomer = { ...mockCustomer, id: 'customer-456' };
+
+        const firstPreload = preloadImageStudioData(firstApi, mockCustomer, mockMarket);
+        const secondPreload = preloadImageStudioData(secondApi, secondCustomer, mockMarket);
+        await secondPreload;
+        expect(getStudioCachedData('MY', secondCustomer.id)?.balance).toBe(4000);
+        expect(getStudioCachedData('MY', mockCustomer.id)).toBeNull();
+
+        finishFirst(mockConfig);
+        await firstPreload;
+    });
+
+    it('does not restore a prior session preload after the cache is cleared', async () => {
+        let finish: (config: ImageStudioConfig) => void = () => undefined;
+        const config = new Promise<ImageStudioConfig>(resolve => {
+            finish = resolve;
+        });
+        const api = { imageStudioConfig: vi.fn(() => config) } as unknown as ShopApi;
+        const preload = preloadImageStudioData(api, mockCustomer, mockMarket);
+        clearStudioCache();
+        finish(mockConfig);
+        await preload;
+        expect(getStudioCachedData('MY', mockCustomer.id)).toBeNull();
+    });
 });

@@ -208,6 +208,8 @@ const baseProps: HomePageProps = {
     contentError: '',
     loading: false,
     error: null,
+    catalogLoading: false,
+    catalogError: null,
     market,
     locale: market.locale,
     language: 'zh' as const,
@@ -340,7 +342,8 @@ describe('HomePage hero carousel', () => {
         expect(markup).toContain('class="hero');
         expect(markup).toContain('aria-roledescription="轮播"');
         expect(markup).toContain('class="hero-rich-image-link"');
-        expect(markup).toContain('class="hero-rich-overlay-shade"');
+        expect(markup).not.toContain('class="hero-rich-overlay-shade"');
+        expect(markup).toContain('class="hero-rich-copy-surface"');
         expect(markup).toContain('aria-label="查看推荐内容：后台配置的首页轮播"');
         expect(markup).toContain(heroBlock.title);
     });
@@ -383,7 +386,8 @@ describe('HomePage hero carousel', () => {
             ],
         });
 
-        expect(markup).toContain('--hero-overlay-color:#312E81');
+        expect(markup).toContain('--hero-copy-background:#312E81');
+        expect(markup).toContain('--hero-copy-foreground:#FFFFFF');
         expect(markup).toContain('--hero-title-color:#FFFFFF');
         expect(markup).toContain('--hero-body-color:#E0F2FE');
         expect(markup).toContain('--hero-accent-color:#22D3EE');
@@ -530,11 +534,14 @@ describe('HomePage account-aware coupon campaigns', () => {
         expect(markup).toContain('coupon-hub-section');
     });
 
-    it('shows retry instead of silently treating a campaign query failure as no offers', () => {
-        const markup = renderHome({
-            contentBlocks: [couponBlock],
-            couponCampaignsError: '优惠活动读取失败',
-        });
+    it.each([false, true])('shows campaign errors and retry on desktop=%s', desktop => {
+        const markup = renderHome(
+            {
+                contentBlocks: [couponBlock],
+                couponCampaignsError: '优惠活动读取失败',
+            },
+            desktop,
+        );
 
         expect(markup).toContain('优惠活动读取失败');
         expect(markup).toContain('重试');
@@ -567,12 +574,15 @@ describe('HomePage flash-sale product count', () => {
         })),
     };
 
-    it('shows every active item when the homepage block has no explicit display limit', () => {
-        const markup = renderHome({ contentBlocks: [flashSaleBlock], flashSales: [flashSale] });
+    it.each([false, true])(
+        'shows all active items on desktop=%s when the managed module has no display limit',
+        desktop => {
+            const markup = renderHome({ contentBlocks: [flashSaleBlock], flashSales: [flashSale] }, desktop);
 
-        expect(markup.match(/class="flash-sale-card"/g) ?? []).toHaveLength(9);
-        expect(markup).toContain('秒杀商品 9');
-    });
+            expect(markup.match(/class="flash-sale-card"/g) ?? []).toHaveLength(9);
+            expect(markup).toContain('秒杀商品 9');
+        },
+    );
 
     it('preloads the visible carousel images and uses compact thumbnail derivatives', () => {
         const items = flashSale.items.slice(0, 5).map((item, index) => ({
@@ -898,27 +908,26 @@ describe('HomePage desktop intro layout', () => {
         items: [],
     };
 
-    it('uses real navigation fallbacks when managed shortcuts are empty', () => {
+    it('does not invent shortcuts when the managed module has no entries', () => {
         const desktopMarkup = renderHome({ contentBlocks: [quickLinksBlock] }, true);
         const mobileMarkup = renderHome({ contentBlocks: [quickLinksBlock] });
 
-        expect(desktopMarkup).toContain('proto-hero-tools');
-        expect(desktopMarkup).toContain('帮助中心');
+        expect(desktopMarkup).not.toContain('class="quick-grid');
         expect(desktopMarkup).not.toContain('快捷入口将从后台装修内容中读取');
         expect(mobileMarkup).toBe(renderHome({ contentBlocks: [] }));
     });
 
     it('never promotes the first product into the desktop hero and respects managed hero copy', () => {
         const fallbackMarkup = renderHome({ storefrontTagline: '在马生活，好物相伴' }, true);
-        expect(fallbackMarkup).toContain('<h1 class="proto-flagship-title">在马生活，好物相伴</h1>');
+        expect(fallbackMarkup).toContain('在马生活，好物相伴');
+        expect(fallbackMarkup).not.toContain('aria-roledescription="轮播"');
         expect(fallbackMarkup).not.toContain('<h1 class="proto-flagship-title">不应自动进入轮播的商品</h1>');
         expect(fallbackMarkup).not.toContain('发现好物');
 
         const managedMarkup = renderHome({ contentBlocks: [heroBlock] }, true);
-        expect(managedMarkup).toContain('<h1 class="proto-flagship-title">后台配置的首页轮播</h1>');
+        expect(managedMarkup).toContain('后台配置的首页轮播');
         expect(managedMarkup).toContain('只显示后台配置的内容');
-        expect(managedMarkup).toContain('浏览商品');
-        expect(managedMarkup).not.toContain('查看活动');
+        expect(managedMarkup).toContain('只显示后台配置的内容');
     });
 
     it('renders distinct desktop loading and empty states without altering the mobile layout', () => {
@@ -926,11 +935,38 @@ describe('HomePage desktop intro layout', () => {
         const emptyMarkup = renderHome({ products: [] }, true);
         const mobileMarkup = renderHome({ products: [] });
 
-        expect(loadingMarkup).toContain('aria-label="商品加载中"');
-        expect(loadingMarkup.match(/proto-product-skeleton/g)).toHaveLength(4);
-        expect(emptyMarkup).toContain('当前店铺暂无上架商品');
+        expect(loadingMarkup).toContain('aria-label="正在加载首页"');
+        expect(loadingMarkup).toContain('data-page-pending="query"');
+        expect(emptyMarkup).toContain('暂无在售商品');
         expect(emptyMarkup).not.toContain('proto-product-skeleton');
         expect(mobileMarkup).not.toContain('proto-home-container');
+    });
+
+    it('shows the configured hero while the catalog still loads on desktop and mobile', () => {
+        for (const desktop of [true, false]) {
+            const markup = renderHome(
+                { contentBlocks: [heroBlock], products: [], catalogLoading: true },
+                desktop,
+            );
+            expect(markup).toContain('/assets/hero.jpg');
+            expect(markup).toContain('aria-label="正在加载商品"');
+            expect(markup).not.toContain('暂无在售商品');
+            expect(markup).not.toContain('data-page-pending="query"');
+        }
+    });
+
+    it('keeps the hero and offers retry when only the catalog fails', () => {
+        for (const desktop of [true, false]) {
+            const markup = renderHome(
+                { contentBlocks: [heroBlock], products: [], catalogError: '网络连接中断' },
+                desktop,
+            );
+            expect(markup).toContain('/assets/hero.jpg');
+            expect(markup).toContain('商品暂时无法加载');
+            expect(markup).toContain('网络连接中断');
+            expect(markup).toContain('重试');
+            expect(markup).not.toContain('暂无在售商品');
+        }
     });
 
     it('uses skin surface roles for desktop cards instead of repeating control outlines', () => {
@@ -949,18 +985,16 @@ describe('HomePage desktop intro layout', () => {
         );
     });
 
-    it('uses the managed hero image as a full-bleed backdrop with readable overlaid copy', () => {
+    it('shows the complete managed hero image above its readable copy', () => {
         const stylesheet = readStorefrontStylesheet(['./styles/desktop-home.css']);
 
         expect(stylesheet).toMatch(
-            /\.proto-featured-media-frame\s*\{[^}]*inset:\s*0;[^}]*width:\s*100%;[^}]*height:\s*100%;/,
+            /\.proto-featured-media-frame\s*\{[^}]*order:\s*-1;[^}]*width:\s*100%;[^}]*height:\s*auto;/,
         );
         expect(stylesheet).toMatch(
-            /\.proto-featured-media-frame \.proto-featured-media\s*\{[^}]*object-fit:\s*cover;[^}]*object-position:\s*center;/,
+            /\.proto-featured-media-frame \.proto-featured-media\s*\{[^}]*object-fit:\s*contain;[^}]*object-position:\s*center;/,
         );
-        expect(stylesheet).toMatch(
-            /\.proto-hero-featured\.has-media::after\s*\{[^}]*background:\s*linear-gradient\(/,
-        );
+        expect(stylesheet).toMatch(/\.proto-hero-featured\.has-media::after\s*\{[^}]*content:\s*none;/);
     });
 
     it('shows five desktop shortcuts per page without changing mobile content', () => {
@@ -1010,16 +1044,20 @@ describe('HomePage desktop intro layout', () => {
         expect(desktopMarkup).toContain('第四个快捷入口');
         expect(desktopMarkup).toContain('第五个快捷入口');
         expect(desktopMarkup).not.toContain('第六个快捷入口');
-        expect(desktopMarkup.match(/preset=storefront-icon-64/g) ?? []).toHaveLength(5);
+        expect(
+            (desktopMarkup.match(/<img\b[^>]*>/g) ?? []).filter(image =>
+                image.includes('preset=storefront-icon-64'),
+            ),
+        ).toHaveLength(5);
         expect(desktopMarkup).not.toContain('src="/assets/preview/shortcut-0.png"');
         expect(desktopMarkup).not.toContain('shortcut-5.png');
         expect(desktopMarkup).toContain('aria-label="上一组快捷入口"');
         expect(desktopMarkup).toContain('aria-label="下一组快捷入口"');
-        expect(desktopMarkup).toContain('proto-tools-title-mark');
-        expect(desktopMarkup).toContain('proto-tools-page-status');
+        expect(desktopMarkup).toContain('data-section-kind="services"');
+        expect(desktopMarkup).toContain('desktop-quick-pagination');
         expect(desktopMarkup).toContain('1 / 2');
-        expect(desktopMarkup.indexOf('proto-tools-title')).toBeLessThan(
-            desktopMarkup.indexOf('proto-tools-pagination'),
+        expect(desktopMarkup.indexOf('data-section-kind="services"')).toBeLessThan(
+            desktopMarkup.indexOf('desktop-quick-pagination'),
         );
         const mobileMarkup = renderHome(overrides);
         expect(mobileMarkup).toContain('<b>主分类快捷入口</b>');
@@ -1081,6 +1119,26 @@ describe('HomePage desktop intro layout', () => {
 });
 
 describe('HomePage notices', () => {
+    it('rotates only the five newest announcements from the last thirty days', () => {
+        const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+        const announcements = [35, 4, 2, 7, 1, 3, 5].map(days => ({
+            id: String(days),
+            createdAt: daysAgo(days),
+            title: `公告 ${days}`,
+            content: '有效公告内容',
+            linkUrl: null,
+            startsAt: null,
+            endsAt: null,
+        }));
+        expect(buildHomeNoticeItems(announcements, undefined, 'zh').map(item => item.id)).toEqual([
+            'system-1',
+            'system-2',
+            'system-3',
+            'system-4',
+            'system-5',
+        ]);
+    });
+
     it('does not rotate a single system announcement into the legacy notice placeholder', () => {
         const noticeBlock: StorefrontContentBlock = {
             ...heroBlock,

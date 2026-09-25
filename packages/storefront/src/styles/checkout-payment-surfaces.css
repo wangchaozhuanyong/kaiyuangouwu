@@ -58,6 +58,104 @@
     margin: 0;
 }
 
+.checkout-address-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.checkout-address-heading h2,
+.checkout-section-title h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.checkout-address-heading h2 {
+    margin: 0;
+}
+
+.checkout-address-heading h2 svg,
+.checkout-section-title h2 svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 auto;
+    color: var(--accent-ink);
+}
+
+.checkout-address-heading > button {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 7px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.checkout-address-heading > button:hover:not(:disabled) {
+    background: var(--control-surface-hover);
+}
+
+.checkout-address-heading > button:focus-visible,
+.price-summary-coupon button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.checkout-address-heading > button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.price-summary-coupon dd {
+    min-width: 0;
+    max-width: 65%;
+}
+
+.price-summary-coupon button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    max-width: 100%;
+    min-height: 36px;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: transparent;
+    color: var(--accent-ink);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.price-summary-coupon button:hover:not(:disabled) {
+    background: var(--accent-soft);
+}
+
+.price-summary-coupon button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.price-summary-coupon button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.price-summary-coupon button svg {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+}
+
 .price-summary > div {
     min-height: 34px;
     display: flex;

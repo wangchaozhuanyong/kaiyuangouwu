@@ -77,6 +77,26 @@ describe('desktop catalog category navigation', () => {
         expect(html).toContain('aria-label="商品分类"');
         expect(html).toContain('后台商品分类');
     });
+
+    it('uses the same managed category image on desktop as mobile, ahead of a product fallback', () => {
+        const managedCollection: CollectionSummary = {
+            ...collections[0],
+            featuredAsset: { id: 'managed-category', preview: 'https://example.test/category.png' },
+        };
+        const product = {
+            id: 'product',
+            collections: [{ id: managedCollection.id, parentId: managedCollection.parentId }],
+            featuredAsset: { id: 'product-image', preview: 'https://example.test/product.png' },
+            assets: [],
+        };
+        const html = renderCategories(
+            { name: 'category', collectionId: managedCollection.id },
+            { collections: [managedCollection], products: [product] },
+        );
+        expect(html).toContain('https://example.test/category.png');
+        expect(html).not.toContain('https://example.test/product.png');
+        expect(html).toContain('desktop-category-icon');
+    });
     it.each(['services', 'cart', 'account', 'orders', 'product'] as const)(
         'does not reserve catalog navigation on %s',
         name => {

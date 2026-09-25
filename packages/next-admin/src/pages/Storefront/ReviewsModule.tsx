@@ -35,6 +35,8 @@ interface StorefrontReviewItem {
     title: string;
     body: string;
     customerName: string;
+    anonymous: boolean;
+    customerId?: string | null;
     productName: string;
     sku: string;
     merchantResponse?: string | null;
@@ -520,7 +522,10 @@ export function ReviewsModule() {
                                     {selectedReview.body}
                                 </p>
                                 <div className="mt-3 text-[10px] text-slate-400">
-                                    {selectedReview.customerName} · {formatDateTime(selectedReview.createdAt)}
+                                    {selectedReview.customerName} · 客户 ID {selectedReview.customerId ?? '—'}
+                                    {selectedReview.anonymous ? ' · 前台匿名展示' : ''}
+                                    {' · '}
+                                    {formatDateTime(selectedReview.createdAt)}
                                 </div>
                             </div>
                             {selectedReview.state === 'PENDING' ? (

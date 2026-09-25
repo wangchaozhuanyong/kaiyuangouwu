@@ -63,7 +63,6 @@ describe('cached referral feature refresh', () => {
                                         logoUrl: null,
                                         accountHeroImageUrl: null,
                                         favoriteProductCount: 0,
-                                        announcementCount: 0,
                                         couponCount: 0,
                                         onContentTarget: vi.fn(),
                                         onLogout: vi.fn(),

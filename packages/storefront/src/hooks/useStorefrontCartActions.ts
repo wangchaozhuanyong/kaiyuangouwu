@@ -82,12 +82,13 @@ export function useStorefrontCartActions({
     );
 
     const addToCart = useCallback(
-        async (variant: ProductVariant) => {
+        async (variant: ProductVariant, quantity = 1) => {
+            if (!Number.isSafeInteger(quantity) || quantity < 1) return null;
             const current = cartController.getSnapshot().cart ?? cart;
             const existing = current?.lines.find(line => line.productVariant?.id === variant.id);
             const stockError = quantityStockMessage(
                 existing?.productVariant ?? variant,
-                (existing?.quantity ?? 0) + 1,
+                (existing?.quantity ?? 0) + quantity,
                 isZh ? 'zh' : 'en',
             );
             if (stockError) {
@@ -97,7 +98,7 @@ export function useStorefrontCartActions({
                 return null;
             }
             setAddingVariantId(variant.id);
-            const updated = await mutateCart(revision => api.addItem(variant.id, revision));
+            const updated = await mutateCart(revision => api.addItem(variant.id, revision, quantity));
             setAddingVariantId(null);
             if (updated) {
                 notify(isZh ? '已加入购物车' : 'Added to cart');
@@ -108,15 +109,9 @@ export function useStorefrontCartActions({
     );
 
     const startDirectPurchase = useCallback(
-        async (variant: ProductVariant) => {
-            const existing = (cartController.getSnapshot().cart ?? cart)?.lines.find(
-                line => line.productVariant?.id === variant.id,
-            );
-            const stockError = quantityStockMessage(
-                existing?.productVariant ?? variant,
-                (existing?.quantity ?? 0) + 1,
-                isZh ? 'zh' : 'en',
-            );
+        async (variant: ProductVariant, quantity = 1) => {
+            if (!Number.isSafeInteger(quantity) || quantity < 1) return;
+            const stockError = quantityStockMessage(variant, quantity, isZh ? 'zh' : 'en');
             if (stockError) {
                 const message = `${variant.name}：${stockError}`;
                 setCartError(message);
@@ -124,7 +119,7 @@ export function useStorefrontCartActions({
                 return;
             }
             if (!customer) {
-                navigate({ name: 'login', returnTo: 'purchase', id: variant.id });
+                navigate({ name: 'login', returnTo: 'purchase', id: variant.id, quantity });
                 return;
             }
             setAddingVariantId(variant.id);
@@ -133,7 +128,7 @@ export function useStorefrontCartActions({
             try {
                 void preloadStorefrontRouteComponent('purchase');
                 const result = await cartController.execute({
-                    buyNow: { productVariantId: variant.id, quantity: 1 },
+                    buyNow: { productVariantId: variant.id, quantity },
                 });
                 const session = result.session;
                 if (!session)

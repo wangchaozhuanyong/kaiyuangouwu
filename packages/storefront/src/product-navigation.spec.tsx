@@ -7,7 +7,7 @@ import { buildProductRowSmartInfo, ProductRow } from './components/common/produc
 import { ProductDetailPage } from './pages/product-detail-page';
 import { SharePosterModal } from './share-poster-modal';
 import { ProductDetailPageContext } from './storefront-page-contexts';
-import { productImage as displayProductImage } from './storefront-ui/product-display';
+import { productImage as displayProductImage, formatMoney } from './storefront-ui/product-display';
 import { ProductGallery } from './storefront-ui/product-gallery';
 import { productImage as metadataProductImage } from './storefront-utils';
 import { readStorefrontStylesheet } from './test-stylesheet';
@@ -63,6 +63,64 @@ const digitalProduct: Product = {
 };
 
 describe('product image navigation layers', () => {
+    it('shows distinct prices and stock for variants with the same name', () => {
+        const product: Product = {
+            ...digitalProduct,
+            variants: [
+                { ...digitalProduct.variants[0], id: 'available', priceWithTax: 1800 },
+                {
+                    ...digitalProduct.variants[0],
+                    id: 'sold-out',
+                    priceWithTax: 18500,
+                    autoCardAvailableStock: 0,
+                },
+            ],
+        };
+        const markup = renderToStaticMarkup(
+            <ProductDetailPageContext.Provider
+                value={{
+                    product,
+                    market,
+                    locale: market.locale,
+                    language: 'zh',
+                    products: [],
+                    flashSaleItems: [
+                        {
+                            productId: product.id,
+                            productVariantId: 'available',
+                            productName: product.name,
+                            variantName: product.variants[0].name,
+                            originalPrice: 1800,
+                            salePrice: 1600,
+                            currencyCode: 'MYR',
+                            imageUrl: null,
+                        },
+                    ],
+                    couponCampaigns: [],
+                    customerCoupons: [],
+                    storefrontName: 'Store',
+                    cartQuantity: 0,
+                    api: {} as import('./api').ShopApi,
+                    logoUrl: null,
+                    favorite: false,
+                    onAdd: vi.fn(),
+                    onBuyNow: vi.fn(),
+                    onFavorite: vi.fn(),
+                    onNotify: vi.fn(),
+                    addingVariantId: null,
+                }}
+            >
+                <ProductDetailPage />
+            </ProductDetailPageContext.Provider>,
+        );
+        expect(markup).toContain('detail-variant-grid');
+        expect(markup).toContain(formatMoney(1600, 'MYR', market.locale));
+        expect(markup).toContain(formatMoney(18500, 'MYR', market.locale));
+        expect(markup).toContain('库存 10');
+        expect(markup).toContain('已售罄');
+        expect(markup).toContain('detail-variant-choice is-active" aria-pressed="true"');
+    });
+
     it.each(['parent', 'child', 'grandchild', 'unrelated'])(
         'shows a category coupon price only for a product in the selected %s category tree',
         collectionId => {
@@ -252,9 +310,15 @@ describe('product image navigation layers', () => {
             />,
         );
 
-        for (const markup of [card, row, gallery, page, poster]) {
+        for (const markup of [card, row, poster]) {
             expect(markup).toContain('/assets/preview/current-cover.png');
             expect(markup).not.toContain('/assets/preview/previous-cover.png');
+        }
+        for (const markup of [gallery, page]) {
+            const mainImage = markup.match(/<section class="detail-gallery">[\s\S]*?<\/section>/)?.[0];
+            expect(mainImage).toContain('/assets/preview/current-cover.png');
+            expect(mainImage).not.toContain('/assets/preview/previous-cover.png');
+            expect(markup).toContain('/assets/preview/previous-cover.png');
         }
         expect(page).toContain('responsive-picture safe-image-frame detail-description-media');
         expect(page).toContain('sizes="(min-width: 1024px) 790px, 100vw"');

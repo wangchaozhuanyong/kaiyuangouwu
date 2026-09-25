@@ -21,6 +21,7 @@ import {
     TransactionalConnection,
 } from '@vendure/core';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
+import { StorefrontContentBlock, StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { createTestEnvironment, SimpleGraphQLClient } from '@vendure/testing';
 import fs from 'fs/promises';
 import gql from 'graphql-tag';
@@ -53,6 +54,7 @@ const couponPaymentHandler = new PaymentMethodHandler({
         metadata: {},
     }),
     settlePayment: () => ({ success: true }),
+    // @ts-expect-error Core accepts false at runtime to leave the refund Pending in this race fixture.
     createRefund: (_ctx, _input, amount) =>
         deferRefunds
             ? false
@@ -78,6 +80,7 @@ const config = mergeConfig(testConfig(), {
     paymentOptions: { paymentMethodHandlers: [couponPaymentHandler] },
     plugins: [
         StorefrontCartPlugin,
+        StorefrontContentPlugin,
         ContentTranslationPlugin.init({ provider: translationProvider }),
         StoreManagementPlugin.init({
             enabled: false,
@@ -87,6 +90,12 @@ const config = mergeConfig(testConfig(), {
 });
 
 const { server, adminClient, shopClient } = createTestEnvironment(config);
+
+function configuredEntityIdStrategy() {
+    const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+    if (!strategy) throw new Error('Entity ID strategy is missing from the test configuration');
+    return strategy;
+}
 
 const CREATE_PRODUCT = gql`
     mutation CouponE2ECreateProduct($input: CreateProductInput!) {
@@ -110,6 +119,7 @@ const CREATE_COUPON = gql`
         createStoreCouponCampaign(input: $input) {
             id
             couponCode
+            appearanceTheme
             perCustomerClaimLimit
             returnOnFullRefund
         }
@@ -118,7 +128,10 @@ const CREATE_COUPON = gql`
 
 const REGISTER = gql`
     mutation CouponE2ERegister($input: RegisterCustomerInput!) {
-        registerCustomerWithReferral(input: $input) {
+        registerCustomerWithReferral(
+            input: $input
+            consent: { termsAccepted: true, privacyAcknowledged: true, locale: "zh" }
+        ) {
             __typename
             ... on Success {
                 success
@@ -143,6 +156,7 @@ const ACTIVE_COUPONS = gql`
     query CouponE2EActiveCampaigns {
         activeStorefrontCoupons {
             id
+            appearanceTheme
             claimed
             claimable
             remainingIssueCount
@@ -156,6 +170,7 @@ const COUPON_FIELDS = gql`
     fragment CouponE2ECustomerCoupon on StoreCustomerCoupon {
         id
         campaignId
+        appearanceTheme
         status
         lockedOrderId
         usedOrderId
@@ -405,8 +420,23 @@ describe('coupon lifecycle closed loop', () => {
             },
             customerCount: 0,
         });
+        await server.app.get(TransactionalConnection).rawConnection.synchronize();
         await adminClient.asSuperAdmin();
         const paymentContext = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+        const legalBlocks = server.app
+            .get(TransactionalConnection)
+            .getRepository(paymentContext, StorefrontContentBlock);
+        for (const code of ['terms', 'privacy']) {
+            await legalBlocks.save(
+                new StorefrontContentBlock({
+                    channelId: paymentContext.channelId,
+                    code,
+                    type: 'LEGAL',
+                    enabled: true,
+                    translations: [],
+                }),
+            );
+        }
         const existingUsdt = await server.app
             .get(TransactionalConnection)
             .getRepository(paymentContext, PaymentMethod)
@@ -471,6 +501,7 @@ describe('coupon lifecycle closed loop', () => {
             input: {
                 name: '满100减10测试券',
                 kind: 'ORDER_FIXED',
+                appearanceTheme: 'blue',
                 minimumSpend: 10_000,
                 discountAmount: 1_000,
                 issueLimit: 10,
@@ -483,6 +514,7 @@ describe('coupon lifecycle closed loop', () => {
         campaignId = createdCampaign.createStoreCouponCampaign.id;
         couponCode = createdCampaign.createStoreCouponCampaign.couponCode;
         expect(createdCampaign.createStoreCouponCampaign).toMatchObject({
+            appearanceTheme: 'blue',
             perCustomerClaimLimit: 1,
             returnOnFullRefund: true,
         });
@@ -548,6 +580,7 @@ describe('coupon lifecycle closed loop', () => {
     it('claims once, requires explicit application, redeems only after payment and preserves refund history', async () => {
         const activeBeforeClaim = await shopClient.query(ACTIVE_COUPONS);
         expect(campaign(activeBeforeClaim)).toMatchObject({
+            appearanceTheme: 'blue',
             claimed: false,
             claimable: true,
             collectionIds: [],
@@ -557,6 +590,7 @@ describe('coupon lifecycle closed loop', () => {
         const claimed = await shopClient.query(CLAIM, { campaignId });
         const coupon = claimed.claimStorefrontCoupon;
         expect(coupon).toMatchObject({ campaignId, status: 'AVAILABLE', usable: true });
+        expect(coupon.appearanceTheme).toBe('blue');
         expect((await shopClient.query(USAGE_RECORDS)).myStorefrontCouponUsageRecords).toEqual([]);
         const claimedLedger = await adminClient.query(COUPON_LEDGER, {
             options: { take: 20, campaignId, eventType: 'CLAIMED' },
@@ -1238,7 +1272,7 @@ describe('coupon lifecycle closed loop', () => {
         await auditCustomer('repair');
         const coupon = await auditClaim({ name: 'Audit historical repair', issueLimit: 1 });
         const connection = server.app.get(TransactionalConnection);
-        const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        const strategy = configuredEntityIdStrategy();
         const couponId = strategy.decodeId(coupon.id);
         const promotionId = strategy.decodeId(coupon.campaignId);
         const claimed = new Date(Math.floor((Date.now() - 2 * 86_400_000) / 1000) * 1000);
@@ -1319,7 +1353,7 @@ describe('coupon lifecycle closed loop', () => {
         await auditCustomer('closure-pages');
         const coupon = await auditClaim({ name: 'Closure pages', issueLimit: 1000 });
         const connection = server.app.get(TransactionalConnection);
-        const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        const strategy = configuredEntityIdStrategy();
         const repository = connection.rawConnection.getRepository(CustomerCoupon);
         const original = await repository.findOneByOrFail({ id: strategy.decodeId(coupon.id) });
         const history = Array.from({ length: 205 }, () =>
@@ -1420,7 +1454,7 @@ describe('coupon lifecycle closed loop', () => {
         const after = (await shopClient.query(AUDIT_ORDER)).activeOrder;
         expect(after.couponCodes).toEqual([]);
         expect(after.totalWithTax).toBeGreaterThan(before.totalWithTax);
-        const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        const strategy = configuredEntityIdStrategy();
         const allocation = await server.app
             .get(TransactionalConnection)
             .rawConnection.getRepository(CouponOrderAllocation)
@@ -1438,7 +1472,15 @@ describe('coupon lifecycle closed loop', () => {
             await prepareOrderForPayment();
             const order = (await shopClient.query(AUDIT_ORDER)).activeOrder;
             const connection = server.app.get(TransactionalConnection);
-            const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+            const strategy = configuredEntityIdStrategy();
+            // This case isolates coupon expiry at payment time. Configure the order
+            // directly because the separate USDT selector requires live rate setup.
+            const paymentContext = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+            await server.app
+                .get(OrderService)
+                .updateCustomFields(paymentContext, strategy.decodeId(order.id), {
+                    paymentCurrencyCode: 'USDT',
+                });
             const repository = connection.rawConnection.getRepository(CustomerCoupon);
             const stored = await repository.findOneByOrFail({ id: strategy.decodeId(coupon.id) });
             const expiresAt = Math.floor(Date.now() / 1000) * 1000 - 10_000;
@@ -1537,7 +1579,7 @@ describe('coupon lifecycle closed loop', () => {
         expect(result.removeCouponCode.couponCodes).toEqual([]);
         expect(result.removeCouponCode.totalWithTax).toBeGreaterThan(before.totalWithTax);
         const connection = server.app.get(TransactionalConnection);
-        const id = server.app.get(ConfigService).entityOptions.entityIdStrategy.decodeId(coupon.id);
+        const id = configuredEntityIdStrategy().decodeId(coupon.id);
         const fresh = await connection.rawConnection.getRepository(CustomerCoupon).findOneByOrFail({ id });
         expect(fresh.status).toBe('AVAILABLE');
         expect(fresh.lockedOrderId).toBeNull();
@@ -1629,7 +1671,7 @@ describe('coupon lifecycle closed loop', () => {
         await shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id });
         await prepareOrderForPayment();
         const connection = server.app.get(TransactionalConnection);
-        const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        const strategy = configuredEntityIdStrategy();
         const original = couponPaymentHandler.createPayment.bind(couponPaymentHandler);
         const spy = vi
             .spyOn(couponPaymentHandler, 'createPayment')
@@ -1673,7 +1715,7 @@ describe('coupon lifecycle closed loop', () => {
         const coupon = await auditClaim({ name: 'Closure repair' });
         await shopClient.query(ADD_ITEM, { productVariantId });
         await shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id });
-        const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        const strategy = configuredEntityIdStrategy();
         const repository = server.app
             .get(TransactionalConnection)
             .rawConnection.getRepository(CustomerCoupon);
@@ -1731,7 +1773,7 @@ describe('coupon lifecycle closed loop', () => {
     it('processes expiry and repair previews beyond a full maintenance batch', async () => {
         await auditCustomer('closure-maintenance-pages');
         const coupon = await auditClaim({ name: 'Closure maintenance pages', issueLimit: 1000 });
-        const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        const strategy = configuredEntityIdStrategy();
         const repository = server.app
             .get(TransactionalConnection)
             .rawConnection.getRepository(CustomerCoupon);
@@ -1770,7 +1812,10 @@ describe('coupon lifecycle closed loop', () => {
         const coupon = await auditClaim({ name: 'Closure missed refund' });
         const paid = await auditPay(coupon.id);
         const lifecycle = server.app.get(StoreCouponLifecycleService);
-        const skipped = vi.spyOn(lifecycle, 'handleSettledRefund').mockResolvedValueOnce(undefined);
+        const refundHook = lifecycle as unknown as {
+            handleSettledRefund: (...args: unknown[]) => Promise<void>;
+        };
+        const skipped = vi.spyOn(refundHook, 'handleSettledRefund').mockResolvedValueOnce(undefined);
         try {
             await auditRefund(paid);
         } finally {
@@ -1828,8 +1873,12 @@ describe('coupon lifecycle closed loop', () => {
             ).createStoreCouponCampaign;
             const lifecycle = server.app.get(StoreCouponLifecycleService);
             const campaigns = server.app.get(StorePromotionCampaignService);
-            const originalLock = lifecycle.lockRow.bind(lifecycle);
-            const originalCampaignLock = campaigns.lockOwnedCampaign.bind(campaigns);
+            const lifecycleLock = lifecycle as unknown as { lockRow: (...args: any[]) => Promise<any> };
+            const campaignLock = campaigns as unknown as {
+                lockOwnedCampaign: (...args: any[]) => Promise<any>;
+            };
+            const originalLock = lifecycleLock.lockRow.bind(lifecycle);
+            const originalCampaignLock = campaignLock.lockOwnedCampaign.bind(campaigns);
             let reached!: () => void;
             let release!: () => void;
             const locked = new Promise<void>(resolve => {
@@ -1838,7 +1887,7 @@ describe('coupon lifecycle closed loop', () => {
             const queued = new Promise<void>(resolve => {
                 release = resolve;
             });
-            const claimSpy = vi.spyOn(lifecycle, 'lockRow').mockImplementation(async (...args: any[]) => {
+            const claimSpy = vi.spyOn(lifecycleLock, 'lockRow').mockImplementation(async (...args: any[]) => {
                 const result = await originalLock(...args);
                 if (args[1] === StoreCouponCampaignConfig) {
                     reached();
@@ -1847,7 +1896,7 @@ describe('coupon lifecycle closed loop', () => {
                 return result;
             });
             const mutationSpy = vi
-                .spyOn(campaigns, 'lockOwnedCampaign')
+                .spyOn(campaignLock, 'lockOwnedCampaign')
                 .mockImplementation((...args: any[]) => {
                     release();
                     return originalCampaignLock(...args);
@@ -1884,7 +1933,7 @@ describe('coupon lifecycle closed loop', () => {
         await shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id });
         await prepareOrderForPayment();
         const connection = server.app.get(TransactionalConnection);
-        const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        const strategy = configuredEntityIdStrategy();
         await connection.rawConnection.getRepository(CustomerCoupon).update(strategy.decodeId(coupon.id), {
             validUntil: new Date(Date.now() - 1000),
         });
@@ -1933,9 +1982,10 @@ describe('coupon lifecycle closed loop', () => {
                 })
             ).createStoreCouponCampaign;
             const lifecycle = server.app.get(StoreCouponLifecycleService);
-            const original = lifecycle.lockRow.bind(lifecycle);
+            const lifecycleLock = lifecycle as unknown as { lockRow: (...args: any[]) => Promise<any> };
+            const original = lifecycleLock.lockRow.bind(lifecycle);
             const gate = twoPartyGate();
-            const spy = vi.spyOn(lifecycle, 'lockRow').mockImplementation(async (...args: any[]) => {
+            const spy = vi.spyOn(lifecycleLock, 'lockRow').mockImplementation(async (...args: any[]) => {
                 if (args[1] === StoreCouponCampaignConfig) await gate();
                 return original(...args);
             });
@@ -1948,7 +1998,7 @@ describe('coupon lifecycle closed loop', () => {
                 ]);
                 expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
                 const connection = server.app.get(TransactionalConnection);
-                const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+                const strategy = configuredEntityIdStrategy();
                 expect(
                     await connection.rawConnection.getRepository(CustomerCoupon).countBy({
                         promotionId: strategy.decodeId(created.id),
@@ -2015,7 +2065,7 @@ describe('coupon lifecycle closed loop', () => {
                     refunds.push(result);
                 }
                 const connection = server.app.get(TransactionalConnection);
-                const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+                const strategy = configuredEntityIdStrategy();
                 const ids = new Set(refunds.map(refund => String(strategy.decodeId(refund.id))));
                 const original = connection.getEntityOrThrow.bind(connection);
                 const gate = twoPartyGate();
@@ -2074,7 +2124,8 @@ describe('coupon lifecycle closed loop', () => {
             await auditCustomer('closure-revoke-race');
             const coupon = await auditClaim({ name: 'Closure revoke race' });
             const lifecycle = server.app.get(StoreCouponLifecycleService);
-            const original = lifecycle.revokeCoupon.bind(lifecycle);
+            const revokeHook = lifecycle as unknown as { revokeCoupon: (...args: any[]) => Promise<any> };
+            const original = revokeHook.revokeCoupon.bind(lifecycle);
             let reached!: () => void;
             let resume!: () => void;
             const paused = new Promise<void>(resolve => {
@@ -2083,7 +2134,7 @@ describe('coupon lifecycle closed loop', () => {
             const released = new Promise<void>(resolve => {
                 resume = resolve;
             });
-            const spy = vi.spyOn(lifecycle, 'revokeCoupon').mockImplementation(async (...args: any[]) => {
+            const spy = vi.spyOn(revokeHook, 'revokeCoupon').mockImplementation(async (...args: any[]) => {
                 reached();
                 await released;
                 return original(...args);
@@ -2126,7 +2177,7 @@ describe('coupon lifecycle closed loop', () => {
             const refunded = await auditRefund(paid);
             const connection = server.app.get(TransactionalConnection);
             const contexts = server.app.get(RequestContextService);
-            const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+            const strategy = configuredEntityIdStrategy();
             const refund = await connection.rawConnection
                 .getRepository(Refund)
                 .findOneByOrFail({ id: strategy.decodeId(refunded.id) });

@@ -44,6 +44,14 @@ import {
 } from './customer-operations.resolver';
 import { CustomerOperationsService } from './customer-operations.service';
 import { reconcileCustomerOperationsTask } from './customer-operations.tasks';
+import { CustomerProductActivityShopResolver } from './customer-product-activity.resolver';
+import { CustomerProductActivityService } from './customer-product-activity.service';
+import {
+    CustomerServiceFeedbackAdminResolver,
+    CustomerServiceFeedbackFieldsResolver,
+    CustomerServiceFeedbackShopResolver,
+} from './customer-service-feedback.resolver';
+import { CustomerServiceFeedbackService } from './customer-service-feedback.service';
 import { DataConsentAdminResolver, DataConsentShopResolver } from './data-consent.resolver';
 import { DATA_CONSENT_SERVICE_TOKEN, DataConsentService } from './data-consent.service';
 import { DataRetentionAdminResolver } from './data-retention.resolver';
@@ -60,6 +68,8 @@ import { CustomerCoupon } from './entities/customer-coupon.entity';
 import { CustomerFollowUpEvent } from './entities/customer-follow-up-event.entity';
 import { CustomerFollowUp } from './entities/customer-follow-up.entity';
 import { CustomerOperationsProfile } from './entities/customer-operations-profile.entity';
+import { CustomerProductActivity } from './entities/customer-product-activity.entity';
+import { CustomerServiceFeedback } from './entities/customer-service-feedback.entity';
 import { DataConsentRecord } from './entities/data-consent-record.entity';
 import { DataRetentionRecord } from './entities/data-retention-record.entity';
 import { DataSubjectRequest } from './entities/data-subject-request.entity';
@@ -252,6 +262,8 @@ import {
         DataRetentionRecord,
         DataConsentRecord,
         CustomerOperationsProfile,
+        CustomerServiceFeedback,
+        CustomerProductActivity,
         CustomerFollowUp,
         CustomerFollowUpEvent,
         GovernedConfigVersion,
@@ -312,6 +324,8 @@ import {
         DataSubjectService,
         DataRetentionService,
         CustomerOperationsService,
+        CustomerServiceFeedbackService,
+        CustomerProductActivityService,
         GovernanceService,
         FraudRiskService,
         {
@@ -463,6 +477,8 @@ import {
             DataSubjectAdminResolver,
             DataConsentAdminResolver,
             CustomerOperationsAdminResolver,
+            CustomerServiceFeedbackAdminResolver,
+            CustomerServiceFeedbackFieldsResolver,
             CustomerOperationsProfileResolver,
             CustomerFollowUpResolver,
             GovernanceRiskAdminResolver,
@@ -474,6 +490,9 @@ import {
             StorefrontBrandingShopResolver,
             StorefrontRegionShopResolver,
             CustomerAvatarShopResolver,
+            CustomerServiceFeedbackShopResolver,
+            CustomerProductActivityShopResolver,
+            CustomerServiceFeedbackFieldsResolver,
             DataConsentShopResolver,
             DataSubjectShopResolver,
             StoreCurrencySettingsShopResolver,

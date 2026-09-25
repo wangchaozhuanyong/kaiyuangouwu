@@ -340,6 +340,12 @@ describe('storefront coupons', () => {
             'blue',
             'emerald',
         ]);
+        expect(
+            couponCardsFromCampaigns([{ ...campaigns[0], appearanceTheme: 'blue' }], 'zh', 'MYR')[0].theme,
+        ).toBe('blue');
+        expect(
+            couponCardFromCustomerCoupon(customerCoupon({ appearanceTheme: 'emerald' }), 'zh', 'CNY').theme,
+        ).toBe('emerald');
     });
 
     it('never makes an already-claimed campaign claimable in the ticket UI', () => {
@@ -417,6 +423,7 @@ describe('storefront coupons', () => {
                 campaignId: 'campaign-1',
                 campaignName: '新客满减',
                 campaignKind: 'ORDER_FIXED',
+                appearanceTheme: 'gold',
                 status: 'AVAILABLE',
                 minimumSpend: 10_000,
                 discountAmount: 2_000,
@@ -455,6 +462,7 @@ describe('storefront coupons', () => {
                 campaignId: 'campaign-1',
                 campaignName: '退款返券活动',
                 campaignKind: 'ORDER_FIXED',
+                appearanceTheme: 'gold',
                 status: 'REFUNDED',
                 currencyCode: 'CNY',
                 minimumSpend: 10_000,
@@ -469,6 +477,6 @@ describe('storefront coupons', () => {
             'zh',
         );
 
-        expect(card).toMatchObject({ title: '退款返券活动', value: '10', claimable: false });
+        expect(card).toMatchObject({ title: '退款返券活动', value: '10', theme: 'gold', claimable: false });
     });
 });

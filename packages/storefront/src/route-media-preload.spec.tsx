@@ -21,7 +21,7 @@ describe('navigation image hints', () => {
 
     it('requests the exact candidate set and size that the auth image renders', () => {
         const content = block('AUTH_LOGIN', '/assets/preview/login.jpg?preset=storefront-hero-960');
-        preloadRouteMedia({ name: 'login' }, [content], []);
+        preloadRouteMedia({ name: 'login' }, [content], [], true);
         const [url, options] = vi.mocked(preload).mock.calls[0];
         const host = document.createElement('div');
         host.innerHTML = renderToStaticMarkup(
@@ -29,13 +29,21 @@ describe('navigation image hints', () => {
                 src={authOriginalImageUrl(content.imageUrl ?? '')}
                 alt=""
                 imageKind="detail"
-                sizes="(min-width: 1024px) 640px, 100vw"
+                sizes="(min-width: 1024px) 640px, 1px"
             />,
         );
         const image = host.querySelector('img');
         expect(image?.getAttribute('src')).toBe(url);
         expect(image?.getAttribute('srcset')).toBe(options?.imageSrcSet);
         expect(image?.getAttribute('sizes')).toBe(options?.imageSizes);
+    });
+
+    it('does not preload authentication artwork hidden by the mobile layout', () => {
+        const content = block('AUTH_LOGIN', '/assets/preview/login.jpg');
+        preloadRouteMedia({ name: 'login' }, [content], [], false);
+        preloadRouteMedia({ name: 'register' }, [block('AUTH_REGISTER', content.imageUrl ?? '')], [], false);
+        preloadRouteMedia({ name: 'forgot-password' }, [content], [], false);
+        expect(preload).not.toHaveBeenCalled();
     });
 
     it('prepares only the first usable home slide, leaving later slides out of the route barrier', () => {
@@ -52,7 +60,7 @@ describe('navigation image hints', () => {
         expect(vi.mocked(preload).mock.calls[0][0]).toContain('first.jpg');
     });
 
-    it('prepares the first product when a home page has no managed hero', () => {
+    it('does not preload an arbitrary catalog product when no home hero is configured', () => {
         preloadRouteMedia(
             { name: 'home' },
             [],
@@ -71,12 +79,7 @@ describe('navigation image hints', () => {
             ],
         );
 
-        expect(preload).toHaveBeenCalledOnce();
-        expect(vi.mocked(preload).mock.calls[0][0]).toContain('first-product.jpg');
-        expect(vi.mocked(preload).mock.calls[0][1]).toMatchObject({
-            fetchPriority: 'high',
-            imageSizes: '(min-width: 1280px) 202px, (min-width: 1024px) 18vw, calc(50vw - 24px)',
-        });
+        expect(preload).not.toHaveBeenCalled();
     });
 
     it('does not speculate about missing products or unrelated route media', () => {

@@ -22,7 +22,7 @@ import {
     authOriginalImageUrl,
     authVisualStyle,
 } from '../../storefront-content-plugin/src/shared/auth-visual';
-import { useImageTone } from '../../storefront-content-plugin/src/shared/image-tone';
+import { useImageTextContrast } from '../../storefront-content-plugin/src/shared/image-tone';
 
 import { ShopApi, ShopApiError } from './api';
 import {
@@ -31,6 +31,7 @@ import {
     validateAccountPassword,
 } from './auth-validation';
 import { resolveAuthVisualMessage } from './auth-visual';
+import { useDesktopLayout } from './desktop-layout';
 import { GoogleAuthButton } from './google-auth-button';
 import {
     attributionWithinWindow,
@@ -147,6 +148,7 @@ export function verificationErrorMessage(error: unknown, language: StorefrontLan
 interface AuthPageBaseProps {
     returnTo?: RouteState['returnTo'];
     returnVariantId?: string;
+    returnQuantity?: number;
     api: ShopApi;
     language: StorefrontLanguage;
     storefrontName: string;
@@ -283,7 +285,11 @@ function AuthAssuranceRail({ language }: { language: StorefrontLanguage }) {
     );
 }
 
-function useAuthNavigate(returnTo?: RouteState['returnTo'], returnVariantId?: string) {
+function useAuthNavigate(
+    returnTo?: RouteState['returnTo'],
+    returnVariantId?: string,
+    returnQuantity?: number,
+) {
     const navigate = useNavigate();
     return (route: AuthRoute, replace = false) => {
         const routeState: RouteState = { ...route };
@@ -291,6 +297,7 @@ function useAuthNavigate(returnTo?: RouteState['returnTo'], returnVariantId?: st
             routeState.returnTo = returnTo;
             if (returnTo === 'purchase' && returnVariantId) {
                 routeState.id = returnVariantId;
+                routeState.quantity = returnQuantity;
             }
         }
         const options = routeNavigateOptions(routeState);
@@ -301,6 +308,7 @@ function useAuthNavigate(returnTo?: RouteState['returnTo'], returnVariantId?: st
 export function LoginPage({
     returnTo,
     returnVariantId,
+    returnQuantity,
     api,
     language,
     storefrontName,
@@ -312,7 +320,7 @@ export function LoginPage({
     onSuccess,
     onContentTarget,
 }: AuthPageBaseProps & AuthLegalProps & AuthCompletionProps & AuthVisualProps & AuthMethodsProps) {
-    const navigateTo = useAuthNavigate(returnTo, returnVariantId);
+    const navigateTo = useAuthNavigate(returnTo, returnVariantId, returnQuantity);
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
@@ -500,6 +508,7 @@ export function LoginPage({
 export function RegisterPage({
     returnTo,
     returnVariantId,
+    returnQuantity,
     api,
     language,
     storefrontName,
@@ -511,7 +520,7 @@ export function RegisterPage({
     onSuccess,
     onContentTarget,
 }: AuthPageBaseProps & AuthLegalProps & AuthVisualProps & AuthMethodsProps & Partial<AuthCompletionProps>) {
-    const navigateTo = useAuthNavigate(returnTo, returnVariantId);
+    const navigateTo = useAuthNavigate(returnTo, returnVariantId, returnQuantity);
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     const [registeredEmail, setRegisteredEmail] = useState('');
@@ -906,6 +915,7 @@ export function RegisterPage({
 export function VerifyAccountPage({
     returnTo,
     returnVariantId,
+    returnQuantity,
     api,
     language,
     storefrontName,
@@ -921,6 +931,7 @@ export function VerifyAccountPage({
                 ...route,
                 returnTo,
                 id: returnTo === 'purchase' ? returnVariantId : undefined,
+                quantity: returnTo === 'purchase' ? returnQuantity : undefined,
             }) as never,
         );
     const isZh = language === 'zh';
@@ -1120,6 +1131,7 @@ export function VerifyAccountPage({
 export function ForgotPasswordPage({
     returnTo,
     returnVariantId,
+    returnQuantity,
     api,
     language,
     storefrontName,
@@ -1134,6 +1146,7 @@ export function ForgotPasswordPage({
                 ...route,
                 returnTo,
                 id: returnTo === 'purchase' ? returnVariantId : undefined,
+                quantity: returnTo === 'purchase' ? returnQuantity : undefined,
             }) as never,
         );
     const isZh = language === 'zh';
@@ -1224,6 +1237,7 @@ export function ForgotPasswordPage({
 export function ResetPasswordPage({
     returnTo,
     returnVariantId,
+    returnQuantity,
     api,
     language,
     storefrontName,
@@ -1239,6 +1253,7 @@ export function ResetPasswordPage({
                 ...route,
                 returnTo,
                 id: returnTo === 'purchase' ? returnVariantId : undefined,
+                quantity: returnTo === 'purchase' ? returnQuantity : undefined,
             }) as never,
         );
     const isZh = language === 'zh';
@@ -1360,6 +1375,7 @@ function AuthLayout({
     onBack: () => void;
     children: ReactNode;
 }) {
+    const desktop = useDesktopLayout();
     const authVisualVariant = heroVariant === 'login' || heroVariant === 'register' ? heroVariant : null;
     const heroMessage = authVisualVariant
         ? resolveAuthVisualMessage(heroContent, authVisualVariant, language)
@@ -1373,7 +1389,8 @@ function AuthLayout({
               } as CSSProperties)
             : undefined;
     const managedHeroSrc = heroContent?.imageUrl?.trim();
-    const heroImageTone = useImageTone(managedHeroSrc);
+    const heroImageContrast = useImageTextContrast(managedHeroSrc);
+    const heroImageTone = heroImageContrast.tone;
     const hasManagedHero = Boolean(authVisualVariant && heroContent);
     const defaultHeroSrc = showDefaultHero
         ? authVisualVariant === 'login'
@@ -1401,9 +1418,10 @@ function AuthLayout({
             <section
                 className={`auth-hero auth-hero-${heroVariant}${hasManagedHero ? ' auth-hero-managed' : ''}`}
                 data-image-tone={heroImageTone}
+                data-image-contrast={heroImageContrast.needsBacking ? 'backed' : 'direct'}
                 style={heroStyle}
             >
-                {heroImageSrc && (
+                {heroImageSrc && (!authVisualVariant || desktop) && (
                     <SafeImage
                         src={heroImageSrc}
                         fallbackSrc={heroFallbackSrc ?? heroImageSrc}
@@ -1413,6 +1431,7 @@ function AuthLayout({
                         loading="eager"
                         decoding="async"
                         fetchPriority="high"
+                        onImageReady={heroImageContrast.onImageLoad}
                     />
                 )}
                 <div className="auth-hero-header">

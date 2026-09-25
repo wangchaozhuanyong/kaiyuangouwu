@@ -130,7 +130,7 @@ export class AssetServer {
                     try {
                         const parameters = await this.getImageTransformParameters(req);
                         const image = await transformImage(file, parameters);
-                        let imageBuffer = await image.toBuffer();
+                        let imageBuffer: Buffer = await image.toBuffer();
                         const cachedFileName = this.getFileNameFromParameters(req.path, parameters);
                         if (!req.query.cache || req.query.cache === 'true') {
                             await this.assetStorageStrategy.writeFileFromBuffer(cachedFileName, imageBuffer);

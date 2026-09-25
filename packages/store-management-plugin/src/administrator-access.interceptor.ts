@@ -8,7 +8,7 @@ import {
     parseContext,
     UserInputError,
 } from '@vendure/core';
-import { lastValueFrom } from 'rxjs';
+import { catchError } from 'rxjs';
 
 import { AdministratorAccessService } from './administrator-access.service';
 import { AdministratorPermissionAuditService } from './administrator-permission-audit.service';
@@ -118,21 +118,21 @@ export class AdministratorAccessInterceptor implements NestInterceptor {
             return next.handle();
         }
         const args = GqlExecutionContext.create(context).getArgs<Record<string, unknown>>();
-        try {
-            return await lastValueFrom(next.handle());
-        } catch (error) {
-            // The transactional resolver has already rolled back. Persist the failed attempt
-            // on the original, non-transactional context without recording free-text input.
-            await this.audit.record(requestContext, {
-                action: parsed.info.fieldName.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(),
-                channelId: profile.channelId,
-                targetAdministratorId: targetAdministratorId(parsed.info.fieldName, args),
-                targetRoleId: targetRoleId(parsed.info.fieldName, args),
-                result: 'FAILED',
-                failureReason: safeFailureReason(error),
-            });
-            throw error;
-        }
+        return next.handle().pipe(
+            catchError(async error => {
+                // The transactional resolver has already rolled back. Persist the failed attempt
+                // on the original, non-transactional context without recording free-text input.
+                await this.audit.record(requestContext, {
+                    action: parsed.info.fieldName.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(),
+                    channelId: profile.channelId,
+                    targetAdministratorId: targetAdministratorId(parsed.info.fieldName, args),
+                    targetRoleId: targetRoleId(parsed.info.fieldName, args),
+                    result: 'FAILED',
+                    failureReason: safeFailureReason(error),
+                });
+                throw error;
+            }),
+        );
     }
 }
 

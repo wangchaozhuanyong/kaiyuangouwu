@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
@@ -50,25 +51,32 @@ describe('recent notification chronology', () => {
         const host = document.createElement('div');
         document.body.append(host);
         const root = createRoot(host);
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
         try {
             act(() =>
                 root.render(
-                    <NotificationsPageContext.Provider
-                        value={
-                            {
-                                api: {},
-                                customer: {
-                                    id: '27',
-                                    orders: { items: [order('ORDER-NEW', '2026-09-14T00:00:00Z')] },
-                                },
-                                market: { code: 'sim', defaultLanguageCode: 'zh_Hans', currencyCode: 'CNY' },
-                                language: 'zh',
-                                locale: 'zh-CN',
-                            } as never
-                        }
-                    >
-                        <NotificationsPage />
-                    </NotificationsPageContext.Provider>,
+                    <QueryClientProvider client={client}>
+                        <NotificationsPageContext.Provider
+                            value={
+                                {
+                                    api: {},
+                                    customer: {
+                                        id: '27',
+                                        orders: { items: [order('ORDER-NEW', '2026-09-14T00:00:00Z')] },
+                                    },
+                                    market: {
+                                        code: 'sim',
+                                        defaultLanguageCode: 'zh_Hans',
+                                        currencyCode: 'CNY',
+                                    },
+                                    language: 'zh',
+                                    locale: 'zh-CN',
+                                } as never
+                            }
+                        >
+                            <NotificationsPage />
+                        </NotificationsPageContext.Provider>
+                    </QueryClientProvider>,
                 ),
             );
             const buttons = host.querySelectorAll('.notification-list button');
@@ -90,6 +98,7 @@ describe('recent notification chronology', () => {
             );
         } finally {
             act(() => root.unmount());
+            client.clear();
             host.remove();
         }
     });

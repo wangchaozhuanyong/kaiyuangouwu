@@ -129,6 +129,15 @@ type ReferenceUploadItem = {
 };
 
 export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
+    return (
+        <AiImageStudioPageContent
+            key={JSON.stringify([props.market.code, props.customer?.id ?? null])}
+            {...props}
+        />
+    );
+}
+
+function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
     const { api, customer, market, displayCurrencyCode, language, onBack, onSignIn, onNotify } = props;
     const isZh = language === 'zh';
     const initialCached = getStudioCachedData(market.code, customer?.id);

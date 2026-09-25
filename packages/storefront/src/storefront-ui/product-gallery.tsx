@@ -34,42 +34,65 @@ function GalleryImages({
     };
 
     return (
-        <section className="detail-gallery">
-            {assets[activeImage] ? (
-                <SafeImage
-                    src={assets[activeImage].preview}
-                    alt={`${productName} ${activeImage + 1}`}
-                    imageKind="detail"
-                    loading="eager"
-                    fetchPriority="high"
-                    onLoad={prefetchAdjacentGalleryImages}
-                />
-            ) : (
-                <div className="image-placeholder" aria-hidden="true">
-                    <Package />
-                </div>
-            )}
+        <div className="detail-gallery-shell">
+            <section className="detail-gallery">
+                {assets[activeImage] ? (
+                    <SafeImage
+                        src={assets[activeImage].preview}
+                        alt={`${productName} ${activeImage + 1}`}
+                        imageKind="detail"
+                        loading="eager"
+                        fetchPriority="high"
+                        onLoad={prefetchAdjacentGalleryImages}
+                    />
+                ) : (
+                    <div className="image-placeholder" aria-hidden="true">
+                        <Package />
+                    </div>
+                )}
+                {assets.length > 1 && (
+                    <div className="gallery-dots">
+                        {assets.map((asset, index) => (
+                            <button
+                                type="button"
+                                key={asset.id}
+                                className={index === activeImage ? 'is-active' : undefined}
+                                onClick={() => setActiveImage(index)}
+                                aria-label={
+                                    isZh ? `查看第${index + 1}张商品图` : `View product image ${index + 1}`
+                                }
+                                aria-current={index === activeImage}
+                            />
+                        ))}
+                    </div>
+                )}
+                {!!assets.length && (
+                    <span className="gallery-count">
+                        {activeImage + 1} / {assets.length}
+                    </span>
+                )}
+            </section>
             {assets.length > 1 && (
-                <div className="gallery-dots">
+                <div
+                    className="detail-gallery-thumbnails"
+                    aria-label={isZh ? '商品图片缩略图' : 'Product image thumbnails'}
+                >
                     {assets.map((asset, index) => (
                         <button
-                            type="button"
                             key={asset.id}
+                            type="button"
                             className={index === activeImage ? 'is-active' : undefined}
-                            onClick={() => setActiveImage(index)}
+                            aria-current={index === activeImage}
                             aria-label={
                                 isZh ? `查看第${index + 1}张商品图` : `View product image ${index + 1}`
                             }
-                            aria-current={index === activeImage}
-                        />
+                            onClick={() => setActiveImage(index)}
+                        >
+                            <SafeImage src={asset.preview} alt="" imageKind="thumbnail" loading="lazy" />
+                        </button>
                     ))}
                 </div>
             )}
-            {!!assets.length && (
-                <span className="gallery-count">
-                    {activeImage + 1} / {assets.length}
-                </span>
-            )}
-        </section>
+        </div>
     );
 }

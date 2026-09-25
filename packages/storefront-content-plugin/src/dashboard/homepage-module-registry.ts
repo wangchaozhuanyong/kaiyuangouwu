@@ -1,3 +1,5 @@
+/* eslint-disable import/order -- The Prettier import organizer places type imports after runtime imports. */
+import { isNonHomepageContent } from '../content-purpose';
 import type { ContentBlock, ContentBlockType } from './storefront-content.graphql';
 
 import {
@@ -6,6 +8,7 @@ import {
     type FixedHomepageModuleType,
 } from '../homepage-module-definitions';
 export { fixedHomepageModuleTypes, type FixedHomepageModuleType } from '../homepage-module-definitions';
+/* eslint-enable import/order */
 
 export interface HomepageModuleDescriptor {
     type: FixedHomepageModuleType;
@@ -182,7 +185,7 @@ export function homepageLayoutEntries(blocks: ContentBlock[]): HomepageLayoutEnt
         } satisfies HomepageLayoutEntry;
     });
     const customEntries = blocks
-        .filter(block => block.type === 'CUSTOM')
+        .filter(block => block.type === 'CUSTOM' && !isNonHomepageContent(block))
         .map(
             block =>
                 ({

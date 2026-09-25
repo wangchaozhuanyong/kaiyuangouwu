@@ -8,7 +8,8 @@ import type { StorefrontLanguage } from '../../types';
 import './mail-query.css';
 
 const STORAGE_KEY = 'icloud_relay_recent_queries';
-const LEGACY_STORAGE_KEY = 'icloud_recent_queries';
+const storageKeyForIdentity = (marketCode: string, customerId?: string | null) =>
+    `${STORAGE_KEY}:${encodeURIComponent(marketCode)}:${customerId ? `customer:${encodeURIComponent(customerId)}` : 'guest'}`;
 
 export interface RecentQueryRecord {
     code: string;
@@ -28,9 +29,9 @@ export function cleanCode(str: string): string {
         .replace(/[^A-Z0-9-]/g, '');
 }
 
-function loadRecentQueries(): RecentQueryRecord[] {
+function loadRecentQueries(storageKey: string): RecentQueryRecord[] {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
+        const raw = localStorage.getItem(storageKey);
         if (!raw) return [];
         const parsed = JSON.parse(raw);
         return Array.isArray(parsed) ? parsed : [];
@@ -40,9 +41,9 @@ function loadRecentQueries(): RecentQueryRecord[] {
     }
 }
 
-function saveRecentQueries(records: RecentQueryRecord[]): void {
+function saveRecentQueries(storageKey: string, records: RecentQueryRecord[]): void {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(records.slice(0, 6)));
+        localStorage.setItem(storageKey, JSON.stringify(records.slice(0, 6)));
     } catch (e) {
         void e;
     }
@@ -74,6 +75,8 @@ interface ToastState {
 
 export interface MailQueryPageProps {
     api: ShopApi;
+    marketCode: string;
+    customerId?: string | null;
     brandingName?: string;
     language?: StorefrontLanguage;
     onBack?: () => void;
@@ -84,6 +87,8 @@ export interface MailQueryPageProps {
 
 export function MailQueryPage({
     api,
+    marketCode,
+    customerId,
     brandingName,
     language = 'zh',
     onBack,
@@ -92,13 +97,16 @@ export function MailQueryPage({
 }: Readonly<MailQueryPageProps>) {
     const isZh = language === 'zh';
     const storeName = brandingName?.trim() || '大马通';
+    const storageKey = storageKeyForIdentity(marketCode, customerId);
 
     const [inputCode, setInputCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [shakeInput, setShakeInput] = useState(false);
     const [toast, setToast] = useState<ToastState | null>(null);
-    const [recentQueries, setRecentQueries] = useState<RecentQueryRecord[]>(loadRecentQueries);
+    const [recentQueries, setRecentQueries] = useState<RecentQueryRecord[]>(() =>
+        loadRecentQueries(storageKey),
+    );
 
     const [result, setResult] = useState<IcloudQueryResult | null>(null);
     const [currentQueryCode, setCurrentQueryCode] = useState('');
@@ -234,7 +242,7 @@ export function MailQueryPage({
                 };
                 setRecentQueries(prev => {
                     const next = [newRecord, ...prev.filter(item => item.code !== code)].slice(0, 6);
-                    saveRecentQueries(next);
+                    saveRecentQueries(storageKey, next);
                     return next;
                 });
             } catch (err: unknown) {
@@ -253,7 +261,7 @@ export function MailQueryPage({
                 }
             }
         },
-        [api, isZh, showToast],
+        [api, isZh, showToast, storageKey],
     );
 
     const handleRefresh = useCallback(async () => {
@@ -390,24 +398,26 @@ export function MailQueryPage({
         });
     }, []);
 
-    const handleDeleteRecent = useCallback((e: React.MouseEvent, code: string) => {
-        e.stopPropagation();
-        setRecentQueries(prev => {
-            const next = prev.filter(item => item.code !== code);
-            saveRecentQueries(next);
-            return next;
-        });
-    }, []);
+    const handleDeleteRecent = useCallback(
+        (e: React.MouseEvent, code: string) => {
+            e.stopPropagation();
+            setRecentQueries(prev => {
+                const next = prev.filter(item => item.code !== code);
+                saveRecentQueries(storageKey, next);
+                return next;
+            });
+        },
+        [storageKey],
+    );
 
     const handleClearAllHistory = useCallback(() => {
         try {
-            localStorage.removeItem(STORAGE_KEY);
-            localStorage.removeItem(LEGACY_STORAGE_KEY);
+            localStorage.removeItem(storageKey);
         } catch (e) {
             void e;
         }
         setRecentQueries([]);
-    }, []);
+    }, [storageKey]);
 
     const handleBackToQueryForm = useCallback(() => {
         if (countdownTimerRef.current) {

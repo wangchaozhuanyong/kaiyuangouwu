@@ -71,7 +71,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { normalizedHeroThemePreset } from '../content-visuals';
+import { heroThemeStyle } from '../shared/hero-theme';
+import { readableStorefrontForeground, storefrontContrastRatio } from '../shared/storefront-semantic-palette';
 
 import { CompactAssetControl, EditorField as Field } from './compact-editor';
 import { applyCoreCategoryDefaults, dualCardTemplateId, dualCardTemplates } from './dual-card-templates';
@@ -123,7 +124,7 @@ const targetTypes: ContentTargetType[] = [
 type ContentImageGuidance = 'hero' | 'banner' | 'contentCard' | 'icon';
 
 const DEFAULT_BRIGHT_HERO_THEME = {
-    overlayColor: '#FFF7F5',
+    copyBackground: '#FFF7F5',
     titleColor: '#451A1A',
     secondaryTextColor: '#6F3841',
     accentColor: '#D33C30',
@@ -192,9 +193,9 @@ const zhCopy = {
     backgroundColor: '背景色',
     textColor: '文字色',
     heroTheme: '轮播文字与配色',
-    heroThemeHint: '颜色只作用于网页文字、遮罩和按钮，不会写进轮播图片。',
+    heroThemeHint: '图片完整展示；底色、文字和按钮颜色只作用于图片下方的文案区。',
     heroThemePreset: '应用通用亮色主题',
-    heroOverlayColor: '左侧遮罩色',
+    heroCopyBackgroundColor: '文案区底色',
     heroTitleColor: '标题颜色',
     heroSecondaryTextColor: '说明文字颜色',
     heroAccentColor: '强调色',
@@ -342,10 +343,9 @@ const enCopy: typeof zhCopy = {
     backgroundColor: 'Background',
     textColor: 'Text color',
     heroTheme: 'Carousel copy and colors',
-    heroThemeHint:
-        'Colors affect HTML copy, the overlay and the button; they are never baked into the image.',
+    heroThemeHint: 'The full image remains visible; colors apply to the copy surface and button below it.',
     heroThemePreset: 'Apply neutral bright theme',
-    heroOverlayColor: 'Left overlay color',
+    heroCopyBackgroundColor: 'Copy surface color',
     heroTitleColor: 'Title color',
     heroSecondaryTextColor: 'Supporting text color',
     heroAccentColor: 'Accent color',
@@ -1806,7 +1806,7 @@ function HeroThemeSettings({
     const applyBrightTheme = () =>
         onChange({
             ...draft,
-            backgroundColor: DEFAULT_BRIGHT_HERO_THEME.overlayColor,
+            backgroundColor: DEFAULT_BRIGHT_HERO_THEME.copyBackground,
             textColor: DEFAULT_BRIGHT_HERO_THEME.titleColor,
             settings: {
                 ...settings,
@@ -1838,10 +1838,10 @@ function HeroThemeSettings({
                 aria-hidden="true"
             />
             <div className="grid gap-3 @xl/editor-form:grid-cols-2 @2xl/editor-form:grid-cols-3">
-                <Field compact label={text.heroOverlayColor}>
+                <Field compact label={text.heroCopyBackgroundColor}>
                     <ColorInput
                         value={draft.backgroundColor}
-                        ariaLabel={text.heroOverlayColor}
+                        ariaLabel={text.heroCopyBackgroundColor}
                         onChange={value => onChange({ ...draft, backgroundColor: value })}
                     />
                 </Field>
@@ -2692,56 +2692,37 @@ function HeroEditorPreview({
     isZh: boolean;
 }>) {
     const settings = draft.settings ?? {};
-    const overlayColor = heroSettingColor(draft.backgroundColor, DEFAULT_BRIGHT_HERO_THEME.overlayColor);
-    const titleColor = heroSettingColor(draft.textColor, DEFAULT_BRIGHT_HERO_THEME.titleColor);
-    const bodyColor = heroSettingColor(
-        settings.secondaryTextColor,
-        DEFAULT_BRIGHT_HERO_THEME.secondaryTextColor,
-    );
+    const copyBackground = heroSettingColor(draft.backgroundColor, '#ffffff');
+    const configuredTitleColor = heroSettingColor(draft.textColor, '#182536');
+    const titleColor =
+        storefrontContrastRatio(configuredTitleColor, copyBackground) >= 4.5
+            ? configuredTitleColor
+            : readableStorefrontForeground(copyBackground);
+    const configuredBodyColor = heroSettingColor(settings.secondaryTextColor, titleColor);
+    const bodyColor =
+        storefrontContrastRatio(configuredBodyColor, copyBackground) >= 4.5
+            ? configuredBodyColor
+            : titleColor;
     const accentColor = heroSettingColor(settings.accentColor, DEFAULT_BRIGHT_HERO_THEME.accentColor);
-    const accentSecondaryColor = heroSettingColor(
-        settings.accentSecondaryColor,
-        DEFAULT_BRIGHT_HERO_THEME.accentSecondaryColor,
-    );
-    const buttonTextColor = heroSettingColor(
-        settings.buttonTextColor,
-        DEFAULT_BRIGHT_HERO_THEME.buttonTextColor,
-    );
-    const showImageOverlay = normalizedHeroThemePreset(settings.themePreset) !== 'bright';
-    const imageBackground = draft.imageUrl
-        ? `url("${draft.imageUrl.replace(/"/g, '%22')}") center / cover no-repeat`
-        : 'linear-gradient(135deg, #f4fbff 0%, #67e8f9 43%, #818cf8 72%, #c084fc 100%)';
-    const overlayStrong = heroColorWithAlpha(overlayColor, 0.92);
-    const overlayMedium = heroColorWithAlpha(overlayColor, 0.76);
-
+    const buttonTheme = heroThemeStyle(draft);
     return (
         <div className="overflow-hidden rounded-lg border bg-white shadow-sm">
-            <div className="relative aspect-[16/9] overflow-hidden" style={{ background: imageBackground }}>
-                {!draft.imageUrl ? (
-                    <div
-                        className="absolute right-4 top-1/2 size-20 -translate-y-1/2 rounded-full border-[10px] shadow-[0_0_28px_rgba(255,255,255,0.9)]"
-                        style={{
-                            borderColor: heroColorWithAlpha(accentColor, 0.7),
-                            backgroundColor: heroColorWithAlpha('#ffffff', 0.45),
-                        }}
-                        aria-hidden="true"
-                    />
-                ) : null}
-                {showImageOverlay ? (
-                    <div
-                        className="absolute inset-0"
-                        style={{
-                            background: `linear-gradient(90deg, ${overlayStrong} 0%, ${overlayMedium} 48%, transparent 100%)`,
-                        }}
-                    />
-                ) : null}
-                <div className="absolute inset-0 flex w-[68%] flex-col justify-between p-3">
+            {draft.imageUrl ? (
+                <img className="block h-auto w-full object-contain" src={draft.imageUrl} alt="" />
+            ) : (
+                <div
+                    className="aspect-[16/9] bg-gradient-to-r from-rose-50 via-sky-100 to-violet-200"
+                    aria-hidden="true"
+                />
+            )}
+            <div className="p-3" style={{ backgroundColor: copyBackground, color: titleColor }}>
+                <div className="flex flex-col gap-2">
                     <span
                         className="self-start rounded-full border px-2 py-0.5 text-[7px] font-semibold"
                         style={{
                             borderColor: heroColorWithAlpha(accentColor, 0.55),
-                            backgroundColor: heroColorWithAlpha(accentColor, 0.18),
-                            color: accentColor,
+                            backgroundColor: heroColorWithAlpha(accentColor, 0.12),
+                            color: titleColor,
                         }}
                     >
                         {translation?.subtitle || (isZh ? '轮播副标题' : 'Carousel subtitle')}
@@ -2769,8 +2750,8 @@ function HeroEditorPreview({
                                         className="rounded border px-1.5 py-0.5 text-[6px]"
                                         style={{
                                             borderColor: heroColorWithAlpha(accentColor, 0.35),
-                                            backgroundColor: heroColorWithAlpha(overlayColor, 0.58),
-                                            color: bodyColor,
+                                            backgroundColor: heroColorWithAlpha(titleColor, 0.08),
+                                            color: titleColor,
                                         }}
                                     >
                                         {itemTranslation.label}
@@ -2783,8 +2764,14 @@ function HeroEditorPreview({
                         <span
                             className="self-start rounded-md px-2 py-1 text-[7px] font-bold"
                             style={{
-                                background: `linear-gradient(135deg, ${accentColor}, ${accentSecondaryColor})`,
-                                color: buttonTextColor,
+                                background:
+                                    buttonTheme['--hero-button-background'] === 'var(--accent)'
+                                        ? accentColor
+                                        : buttonTheme['--hero-button-background'],
+                                color:
+                                    buttonTheme['--hero-button-foreground'] === 'var(--accent-foreground)'
+                                        ? '#ffffff'
+                                        : buttonTheme['--hero-button-foreground'],
                             }}
                         >
                             {translation.ctaLabel}
@@ -2794,8 +2781,8 @@ function HeroEditorPreview({
             </div>
             <p className="px-3 py-2 text-[10px] leading-4 text-muted-foreground">
                 {isZh
-                    ? '预览展示网页文字与配色；轮播图片本身不包含文字。'
-                    : 'Preview of HTML copy and colors; the image itself remains text-free.'}
+                    ? '图片完整显示，文案区使用独立底色。文字对比不足时自动改用可读颜色。'
+                    : 'The full image stays visible. Copy uses a separate surface and readable colors.'}
             </p>
         </div>
     );
@@ -3576,7 +3563,7 @@ function newHeroBlock(position: number, slideNumber: number): ContentBlock {
         ...newBlock(position, 'HERO'),
         internalName: `首页轮播图 ${slideNumber}`,
         enabled: false,
-        backgroundColor: DEFAULT_BRIGHT_HERO_THEME.overlayColor,
+        backgroundColor: DEFAULT_BRIGHT_HERO_THEME.copyBackground,
         textColor: DEFAULT_BRIGHT_HERO_THEME.titleColor,
         targetType: 'NONE',
         targetValue: null,

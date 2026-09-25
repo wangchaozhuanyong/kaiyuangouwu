@@ -412,7 +412,9 @@ describe('storefront skin system', () => {
         expect(pages).toMatch(/\.cart-summary-panel\s*\{[^}]*position:\s*sticky;/);
         expect(pages).toContain('.desktop-account-workbench-toolbar');
         expect(pages).toContain('.address-workbench-toolbar');
-        expect(pages).toContain('.addresses-page:has(.address-workbench-toolbar) > .subpage-header');
+        expect(pages).toMatch(
+            /\.desktop-store-layout\s+\.desktop-account-layout\s+\.addresses-page:has\(\.address-workbench-toolbar\)\s+> \.subpage-header/,
+        );
         expect(pages).not.toContain('.addresses-page > .subpage-header');
         const addresses = stylesheet('./addresses-page.tsx');
         expect(addresses).toContain("className={selection ? undefined : 'account-mobile-header-action'}");

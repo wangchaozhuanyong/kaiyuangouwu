@@ -2,7 +2,9 @@ import { lazyRouteComponent } from '@tanstack/react-router';
 import { ShoppingBag } from 'lucide-react';
 
 import { useDesktopLayout } from '../desktop-layout';
+import { offlineLoadError } from '../loading-state';
 import { PageSkeleton } from '../route-loading';
+import { storefrontErrorMessage } from '../storefront-errors';
 import {
     CategoryPageContext,
     HomePageContext,
@@ -29,6 +31,23 @@ const SearchPage = lazyRouteComponent(() => import('../pages/search-page'), 'Sea
 
 export function HomeRoutePage() {
     const runtime = useRuntime();
+    const { language, configQuery, contentQuery, productsQuery } = runtime;
+    const contentError =
+        contentQuery.data === undefined
+            ? contentQuery.isPaused
+                ? offlineLoadError(language)
+                : contentQuery.error
+                  ? storefrontErrorMessage(contentQuery.error, language)
+                  : ''
+            : '';
+    const catalogError =
+        productsQuery.data === undefined
+            ? productsQuery.isPaused
+                ? offlineLoadError(language)
+                : productsQuery.error
+                  ? storefrontErrorMessage(productsQuery.error, language)
+                  : null
+            : null;
     return (
         <HomePageContext.Provider
             value={{
@@ -45,9 +64,15 @@ export function HomeRoutePage() {
                 systemAnnouncements: runtime.systemAnnouncements,
                 bestSellerProducts: runtime.bestSellerProducts,
                 recommendationProducts: runtime.recommendationProducts,
-                contentError: runtime.contentError,
-                loading: runtime.loading,
-                error: runtime.error,
+                contentError,
+                // The home hero depends on content, not the product catalog.
+                loading: contentQuery.isPending && !contentQuery.isPaused,
+                error:
+                    configQuery.isError && configQuery.data === undefined
+                        ? storefrontErrorMessage(configQuery.error, language)
+                        : null,
+                catalogLoading: productsQuery.isPending && !productsQuery.isPaused,
+                catalogError,
                 market: runtime.market,
                 locale: runtime.locale,
                 language: runtime.language,
@@ -190,8 +215,10 @@ export function ProductRoutePage() {
                 customerCoupons: runtime.myCoupons,
                 addingVariantId: runtime.addingVariantId,
                 favorite: runtime.favoriteProductIds.includes(product.id),
-                onAdd: (variant: ProductVariant) => void runtime.addToCart(variant),
-                onBuyNow: (variant: ProductVariant) => void runtime.startDirectPurchase(variant),
+                onAdd: (variant: ProductVariant, quantity: number) =>
+                    void runtime.addToCart(variant, quantity),
+                onBuyNow: (variant: ProductVariant, quantity: number) =>
+                    void runtime.startDirectPurchase(variant, quantity),
                 onFavorite: () => runtime.toggleFavoriteProduct(product.id),
                 onNotify: runtime.notify,
             }}
@@ -203,21 +230,21 @@ export function ProductRoutePage() {
 
 export function SearchRoutePage() {
     const runtime = useRuntime();
-    const desktop = useDesktopLayout();
-    if (desktop && runtime.route.term?.trim()) return <DesktopCatalogPage />;
     return (
         <SearchPageContext.Provider
             value={{
                 api: runtime.api,
                 products: runtime.products,
+                collections: runtime.collections,
                 market: runtime.market,
                 locale: runtime.locale,
                 language: runtime.language,
                 storefrontCode: runtime.storefrontCode,
+                customerId: runtime.customer?.id,
                 initialQuery: runtime.route.term ?? '',
             }}
         >
-            <SearchPage />
+            <SearchPage key={JSON.stringify([runtime.storefrontCode, runtime.customer?.id ?? null])} />
         </SearchPageContext.Provider>
     );
 }

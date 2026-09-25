@@ -54,8 +54,14 @@ describe('storefront coupon coordination', () => {
             await Promise.resolve();
         });
     }
+    async function remount() {
+        act(() => root.unmount());
+        root = createRoot(document.createElement('div'));
+        await render();
+    }
     beforeEach(() => {
         vi.resetAllMocks();
+        sessionStorage.clear();
         api.claimCoupon.mockResolvedValue(coupon);
         api.myCoupons.mockResolvedValue([coupon]);
         api.applyBestCustomerCoupon.mockResolvedValue(null);
@@ -92,6 +98,7 @@ describe('storefront coupon coordination', () => {
     afterEach(() => {
         act(() => root.unmount());
         client.clear();
+        sessionStorage.clear();
     });
 
     it('does not claim for a guest and routes to sign in', async () => {
@@ -143,6 +150,32 @@ describe('storefront coupon coordination', () => {
         await render();
         expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(1);
         expect(api.removeCustomerCoupon).toHaveBeenCalledWith(coupon.id);
+    });
+
+    it('keeps manual removal after refresh and permits auto selection for a new checkout', async () => {
+        await render();
+        expect(await value.removeCoupon(coupon.id)).toBeNull();
+        options.route = { name: 'cart' };
+        await remount();
+        expect(api.applyBestCustomerCoupon).not.toHaveBeenCalled();
+
+        if (!options.cart) throw new Error('Missing cart fixture');
+        options.cart = {
+            ...options.cart,
+            id: 'cart-b',
+            checkoutOrder: { ...options.cart.checkoutOrder, id: 'order-b' } as Order,
+        };
+        await render();
+        expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not persist a failed manual removal as a coupon choice', async () => {
+        api.removeCustomerCoupon.mockRejectedValueOnce(new Error('Temporary failure'));
+        await render();
+        expect(await value.removeCoupon(coupon.id)).toBeTruthy();
+        options.route = { name: 'cart' };
+        await remount();
+        expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(1);
     });
 
     it('waits for pending cart commands before applying the best coupon', async () => {

@@ -253,9 +253,7 @@ describe('store management API extensions', () => {
     });
 
     it('exposes customer avatar access only through the Shop API', () => {
-        const query = shopApiExtensions.definitions.find(
-            definition => definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Query',
-        );
+        const query = queryExtension(shopApiExtensions);
         const mutation = mutationExtension(shopApiExtensions);
 
         expect(query?.kind).toBe(Kind.OBJECT_TYPE_EXTENSION);

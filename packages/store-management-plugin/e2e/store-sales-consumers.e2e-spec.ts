@@ -65,6 +65,9 @@ beforeAll(async () => {
         defaultLanguageCode: LanguageCode.en,
         currencyCode: CurrencyCode.GBP,
         pricesIncludeTax: true,
+        // This fixture has no zones; empty IDs keep the ChannelService's original unassigned behavior.
+        defaultShippingZoneId: '',
+        defaultTaxZoneId: '',
     });
     b = await contexts.create({ apiType: 'admin', channelOrToken: 'sales_consumer_b' });
     customer = await connection.getRepository(a, Customer).findOneOrFail({ where: {}, relations: ['user'] });

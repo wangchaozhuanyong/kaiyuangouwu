@@ -2,7 +2,7 @@ import { ArrowRight, ChevronLeft, ChevronRight, MessageCircle, Sparkles } from '
 import { useMemo, useState } from 'react';
 
 import { productAvailability } from '../../product-availability';
-import { minimumProductPrice, SafeImage } from '../../storefront-ui/product-display';
+import { minimumProductPrice, renderColorfulQuickIcon, SafeImage } from '../../storefront-ui/product-display';
 import {
     MarketConfig,
     Product,
@@ -207,7 +207,7 @@ export function DesktopUnifiedHome({
                             </div>
                             {toolPages[activeToolPage] ? (
                                 <div className="proto-tools-list" key={`tool-page-${activeToolPage}`}>
-                                    {toolPages[activeToolPage].map(item => (
+                                    {toolPages[activeToolPage].map((item, index) => (
                                         <button
                                             key={item.id}
                                             type="button"
@@ -215,22 +215,10 @@ export function DesktopUnifiedHome({
                                             onClick={() => onContentTarget(item.targetType, item.targetValue)}
                                         >
                                             <span className="proto-tool-left">
-                                                {item.imageUrl ? (
-                                                    <SafeImage
-                                                        frameClassName="proto-tool-image-frame"
-                                                        className="proto-tool-image"
-                                                        src={item.imageUrl}
-                                                        alt=""
-                                                        imageKind="icon"
-                                                        sizes="32px"
-                                                        loading="lazy"
-                                                        showFallbackIcon={false}
-                                                    />
-                                                ) : (
-                                                    <Sparkles
-                                                        className="proto-tool-emoji"
-                                                        aria-hidden="true"
-                                                    />
+                                                {renderColorfulQuickIcon(
+                                                    item.label,
+                                                    activeToolPage * 5 + index,
+                                                    item.imageUrl,
                                                 )}
                                                 <span>
                                                     <span className="proto-tool-name">{item.label}</span>

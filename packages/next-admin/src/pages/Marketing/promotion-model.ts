@@ -1,5 +1,6 @@
 import {
     PromotionProductRecord,
+    StoreCouponAppearanceTheme,
     StoreCouponKind,
     StoreCouponRecord,
     StoreFlashSaleRecord,
@@ -22,6 +23,7 @@ export type CouponVisibility = 'CURRENT' | 'ACTIVE' | 'ENDED' | 'ARCHIVED' | 'AL
 export interface CouponDraft {
     name: string;
     kind: StoreCouponKind;
+    appearanceTheme: StoreCouponAppearanceTheme | null;
     minimumSpend: string;
     discountValue: string;
     startsAt: string;
@@ -72,6 +74,7 @@ export function newCouponDraft(): CouponDraft {
     return {
         name: '',
         kind: 'ORDER_FIXED',
+        appearanceTheme: null,
         minimumSpend: '0',
         discountValue: '1',
         startsAt: range.start,

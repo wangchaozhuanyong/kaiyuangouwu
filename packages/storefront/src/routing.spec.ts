@@ -31,6 +31,12 @@ describe('storefront routing', () => {
             const href = routeHref({ name: 'login', returnTo, id: 'variant-42' });
             expect(routeFromHash(`#${href}`)).toMatchObject({ name: 'login', returnTo, id: 'variant-42' });
         }
+        expect(
+            routeFromHash(`#${routeHref({ name: 'login', returnTo: 'purchase', id: 'v', quantity: 3 })}`),
+        ).toMatchObject({ name: 'login', returnTo: 'purchase', id: 'v', quantity: 3 });
+        for (const quantity of ['0', '-1', '1.5', 'Infinity', '9007199254740992']) {
+            expect(routeFromRouterLocation('/login', { quantity }).quantity).toBeUndefined();
+        }
         for (const returnTo of [
             'https://example.com',
             '//example.com',

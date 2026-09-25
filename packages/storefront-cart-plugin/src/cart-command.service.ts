@@ -99,21 +99,21 @@ export class CartCommandService {
         return result;
     }
 
-    async legacy<T>(ctx: RequestContext, work: () => Promise<T>): Promise<T> {
+    async legacy<T>(ctx: RequestContext, work: (orderCtx: RequestContext) => Promise<T>): Promise<T> {
         const type = this.connection.rawConnection.options.type;
         await this.connection.startTransaction(
             ctx,
             ['sqlite', 'better-sqlite3', 'sqljs'].includes(type) ? undefined : 'READ COMMITTED',
         );
         if (!(await this.carts.hasCart(ctx))) {
-            const nativeResult = await work();
+            const nativeResult = await work(ctx);
             await this.connection.commitOpenTransaction(ctx);
             return nativeResult;
         }
         const result = await this.coordinate(ctx, async cart => {
             if (cart.state !== 'OPEN') throw new UserInputError('Checkout is locked.');
             await this.carts.syncActiveOrderSession(ctx, cart);
-            const value = await work();
+            const value = await work(contextForCartOrder(ctx, cart));
             if (!isFailure(value)) await this.carts.acceptOrderChange(ctx, cart);
             return value;
         });
@@ -137,7 +137,7 @@ export class CartCommandService {
                 }
                 const replayedShippingPreparation =
                     receipt.status === 'APPLIED' && input.prepareShipping
-                        ? await this.shippingPreparationSnapshot(ctx, cart)
+                        ? await this.shippingPreparationSnapshot(contextForCartOrder(ctx, cart), cart)
                         : undefined;
                 return this.result(
                     ctx,
@@ -177,7 +177,7 @@ export class CartCommandService {
                 try {
                     const [name, value] = operations[0];
                     await this.carts.syncActiveOrderSession(ctx, cart);
-                    const outcome = await this.apply(ctx, name, value, cart);
+                    const outcome = await this.apply(contextForCartOrder(ctx, cart), name, value, cart);
                     if (isFailure(outcome)) {
                         error =
                             outcome instanceof CartProjectionError
@@ -401,6 +401,12 @@ interface OrderChange {
     shippingAddress?: CreateAddressInput;
     shippingMethodId?: ID;
     customer?: CreateCustomerInput;
+}
+function contextForCartOrder(ctx: RequestContext, cart: StorefrontCart): RequestContext {
+    const currencyCode = cart.checkoutOrder?.currencyCode;
+    return currencyCode && ctx.currencyCode !== currencyCode
+        ? ctx.copy({ channel: ctx.channel, currencyCode })
+        : ctx;
 }
 function invalid(): CommandFailure {
     return { errorCode: 'INVALID_CART_COMMAND', message: 'Unsupported cart operation.' };

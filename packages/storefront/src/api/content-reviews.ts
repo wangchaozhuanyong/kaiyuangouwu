@@ -1,7 +1,11 @@
 import type {
+    AfterSalesEvidence,
     AfterSalesRequest,
     ConfirmAfterSalesReplacementInput,
     CreateAfterSalesRequestInput,
+    CustomerProductActivity,
+    CustomerServiceFeedback,
+    StoreNotificationReference,
     StorefrontAuthSettings,
     StorefrontConfig,
     StorefrontContentResponse,
@@ -11,6 +15,7 @@ import type {
     StorefrontReviewCandidate,
     StorefrontReviewList,
     SubmitAfterSalesReturnShipmentInput,
+    SubmitCustomerServiceFeedbackInput,
     SubmitStorefrontReviewInput,
 } from '../types';
 import type { StorefrontContentQueryResult } from './helpers';
@@ -35,6 +40,157 @@ const defaultAuthSettings: StorefrontAuthSettings = {
 };
 
 export class ContentReviewsApi extends BaseDomainApi {
+    async myCustomerProductActivity(signal?: AbortSignal): Promise<CustomerProductActivity> {
+        const result = await this.request<{ myCustomerProductActivity: CustomerProductActivity }>(
+            `query MyCustomerProductActivity {
+                myCustomerProductActivity { favoriteProductIds recentProductVisits { productId visitedAt } }
+            }`,
+            undefined,
+            signal,
+        );
+        return result.myCustomerProductActivity;
+    }
+
+    async setFavoriteProduct(productId: string, favorite: boolean): Promise<CustomerProductActivity> {
+        const result = await this.request<{ setMyFavoriteProduct: CustomerProductActivity }>(
+            `mutation SetMyFavoriteProduct($productId: ID!, $favorite: Boolean!) {
+                setMyFavoriteProduct(productId: $productId, favorite: $favorite) {
+                    favoriteProductIds recentProductVisits { productId visitedAt }
+                }
+            }`,
+            { productId, favorite },
+        );
+        return result.setMyFavoriteProduct;
+    }
+
+    async removeFavoriteProducts(productIds: string[]): Promise<CustomerProductActivity> {
+        const result = await this.request<{ removeMyFavoriteProducts: CustomerProductActivity }>(
+            `mutation RemoveMyFavoriteProducts($productIds: [ID!]!) {
+                removeMyFavoriteProducts(productIds: $productIds) {
+                    favoriteProductIds recentProductVisits { productId visitedAt }
+                }
+            }`,
+            { productIds },
+        );
+        return result.removeMyFavoriteProducts;
+    }
+
+    async clearFavoriteProducts(): Promise<CustomerProductActivity> {
+        const result = await this.request<{ clearMyFavoriteProducts: CustomerProductActivity }>(
+            `mutation ClearMyFavoriteProducts {
+                clearMyFavoriteProducts { favoriteProductIds recentProductVisits { productId visitedAt } }
+            }`,
+        );
+        return result.clearMyFavoriteProducts;
+    }
+
+    async recordProductVisit(productId: string): Promise<CustomerProductActivity> {
+        const result = await this.request<{ recordMyProductVisit: CustomerProductActivity }>(
+            `mutation RecordMyProductVisit($productId: ID!) {
+                recordMyProductVisit(productId: $productId) {
+                    favoriteProductIds recentProductVisits { productId visitedAt }
+                }
+            }`,
+            { productId },
+        );
+        return result.recordMyProductVisit;
+    }
+
+    async clearProductVisits(): Promise<CustomerProductActivity> {
+        const result = await this.request<{ clearMyProductVisits: CustomerProductActivity }>(
+            `mutation ClearMyProductVisits {
+                clearMyProductVisits { favoriteProductIds recentProductVisits { productId visitedAt } }
+            }`,
+        );
+        return result.clearMyProductVisits;
+    }
+
+    async myCustomerServiceFeedback(
+        orderCode?: string,
+        signal?: AbortSignal,
+    ): Promise<CustomerServiceFeedback | null> {
+        const result = await this.request<{ myCustomerServiceFeedback: CustomerServiceFeedback | null }>(
+            `query MyCustomerServiceFeedback($orderCode: String) {
+                myCustomerServiceFeedback(orderCode: $orderCode) {
+                    id orderCode rating tags comment createdAt updatedAt
+                }
+            }`,
+            { orderCode: orderCode ?? null },
+            signal,
+        );
+        return result.myCustomerServiceFeedback;
+    }
+
+    async submitCustomerServiceFeedback(
+        input: SubmitCustomerServiceFeedbackInput,
+    ): Promise<CustomerServiceFeedback> {
+        const result = await this.request<{ submitMyCustomerServiceFeedback: CustomerServiceFeedback }>(
+            `mutation SubmitMyCustomerServiceFeedback($input: SubmitCustomerServiceFeedbackInput!) {
+                submitMyCustomerServiceFeedback(input: $input) {
+                    id orderCode rating tags comment createdAt updatedAt
+                }
+            }`,
+            { input },
+        );
+        return result.submitMyCustomerServiceFeedback;
+    }
+
+    async notificationReadKeys(
+        references: StoreNotificationReference[],
+        signal?: AbortSignal,
+    ): Promise<string[]> {
+        const result = await this.request<{ myStoreNotificationReadKeys: string[] }>(
+            `query MyStoreNotificationReadKeys($references: [StoreNotificationReferenceInput!]!) {
+                myStoreNotificationReadKeys(references: $references)
+            }`,
+            { references },
+            signal,
+        );
+        return result.myStoreNotificationReadKeys;
+    }
+
+    async markNotificationsRead(references: StoreNotificationReference[]): Promise<string[]> {
+        const result = await this.request<{ markMyStoreNotificationsRead: string[] }>(
+            `mutation MarkMyStoreNotificationsRead($references: [StoreNotificationReferenceInput!]!) {
+                markMyStoreNotificationsRead(references: $references)
+            }`,
+            { references },
+        );
+        return result.markMyStoreNotificationsRead;
+    }
+
+    async uploadAfterSalesEvidence(orderId: string, file: File): Promise<AfterSalesEvidence> {
+        const result = await this.upload<{ uploadAfterSalesEvidence: AfterSalesEvidence }>(
+            `mutation UploadAfterSalesEvidence($orderId: ID!, $file: Upload!) {
+                uploadAfterSalesEvidence(orderId: $orderId, file: $file) {
+                    id createdAt mimeType byteSize available previewUrl expiresAt
+                }
+            }`,
+            { orderId },
+            file,
+            '凭证上传超时，请刷新凭证列表确认上传结果',
+        );
+        return result.uploadAfterSalesEvidence;
+    }
+
+    async afterSalesEvidenceDrafts(orderId: string): Promise<AfterSalesEvidence[]> {
+        const result = await this.request<{ myAfterSalesEvidenceDrafts: AfterSalesEvidence[] }>(
+            `query MyAfterSalesEvidenceDrafts($orderId: ID!) {
+                myAfterSalesEvidenceDrafts(orderId: $orderId) { id createdAt mimeType byteSize available previewUrl expiresAt }
+            }`,
+            { orderId },
+        );
+        return result.myAfterSalesEvidenceDrafts;
+    }
+
+    async removeAfterSalesEvidenceDraft(id: string): Promise<boolean> {
+        const result = await this.request<{ removeMyAfterSalesEvidenceDraft: boolean }>(
+            `mutation RemoveMyAfterSalesEvidenceDraft($id: ID!) { removeMyAfterSalesEvidenceDraft(id: $id) }`,
+            { id },
+        );
+        return result.removeMyAfterSalesEvidenceDraft;
+    }
+
     async storefrontVisualPreset(signal?: AbortSignal): Promise<StorefrontVisualPresetConfig> {
         type PresetResponse = {
             activeChannel: { id: string };
@@ -211,10 +367,7 @@ export class ContentReviewsApi extends BaseDomainApi {
     }
 
     async storefrontContent(signal?: AbortSignal): Promise<StorefrontContentResponse> {
-        let result: StorefrontContentQueryResult;
-        try {
-            result = await this.request<StorefrontContentQueryResult>(
-                `
+        const modernQuery = (announcementCreatedAt: boolean) => `
             query StorefrontContent {
                 storefrontContentSettings {
                     heroAutoplayIntervalSeconds
@@ -244,6 +397,7 @@ export class ContentReviewsApi extends BaseDomainApi {
                 }
                 activeSystemAnnouncements {
                     id
+                    ${announcementCreatedAt ? 'createdAt' : ''}
                     title
                     content
                     linkUrl
@@ -261,6 +415,7 @@ export class ContentReviewsApi extends BaseDomainApi {
                     startsAt
                     endsAt
                     imageUrl
+                    imageAsset { width height }
                     backgroundColor
                     textColor
                     targetType
@@ -283,16 +438,28 @@ export class ContentReviewsApi extends BaseDomainApi {
                     }
                 }
             }
-        `,
-                undefined,
-                signal,
-            );
-        } catch (error) {
-            if (!isSupportedContentSchemaFallback(error, 'content')) {
-                throw error;
-            }
-            result = await this.request<StorefrontContentQueryResult>(
-                `
+        `;
+        const result = await (async (): Promise<StorefrontContentQueryResult> => {
+            try {
+                return await this.request<StorefrontContentQueryResult>(modernQuery(true), undefined, signal);
+            } catch (error) {
+                let fallbackError: unknown = error;
+                if (isSupportedContentSchemaFallback(error, 'announcementsCreatedAt')) {
+                    try {
+                        return await this.request<StorefrontContentQueryResult>(
+                            modernQuery(false),
+                            undefined,
+                            signal,
+                        );
+                    } catch (retryError) {
+                        fallbackError = retryError;
+                    }
+                }
+                if (!isSupportedContentSchemaFallback(fallbackError, 'content')) {
+                    throw fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError));
+                }
+                return this.request<StorefrontContentQueryResult>(
+                    `
                 query StorefrontContentLegacy {
                     storefrontContentSettings {
                         heroAutoplayIntervalSeconds
@@ -327,10 +494,11 @@ export class ContentReviewsApi extends BaseDomainApi {
                     }
                 }
             `,
-                undefined,
-                signal,
-            );
-        }
+                    undefined,
+                    signal,
+                );
+            }
+        })();
         return {
             blocks: result.storefrontContent,
             flashSales: result.activeStorefrontFlashSales ?? [],
@@ -353,6 +521,7 @@ export class ContentReviewsApi extends BaseDomainApi {
                         id
                         name
                         kind
+                        appearanceTheme
                         startsAt
                         endsAt
                         claimStartsAt

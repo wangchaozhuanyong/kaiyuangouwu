@@ -3,6 +3,29 @@ import { describe, expect, it, vi } from 'vitest';
 import { SystemAnnouncementService } from './system-announcement.service';
 
 describe('SystemAnnouncementService', () => {
+    it('exposes persisted creation time for the recent homepage notice selector', async () => {
+        const createdAt = new Date('2026-09-24T08:00:00.000Z');
+        const repository = repositoryHarness([
+            {
+                id: 'recent',
+                createdAt,
+                titleZh: '配送通知',
+                titleEn: 'Delivery notice',
+                contentZh: '配送安排已更新',
+                contentEn: 'Delivery arrangements have changed',
+                linkUrl: null,
+                startsAt: null,
+                endsAt: null,
+            },
+        ]);
+        const result = await serviceWith(repository).findActive({
+            languageCode: 'zh_Hans',
+            channelId: 'channel-1',
+        } as any);
+        expect(result[0]?.createdAt).toEqual(createdAt);
+        expect(repository.queryBuilder.orderBy).toHaveBeenCalledWith('announcement.createdAt', 'DESC');
+    });
+
     it('normalizes and saves a scheduled announcement', async () => {
         const repository = repositoryHarness();
         const service = serviceWith(repository);
@@ -165,21 +188,23 @@ function serviceWith(
     translationStates: Array<{ fieldPath: string; locked: boolean }> = [],
 ) {
     const translations = {
-        prepareLocalizedFields: vi.fn(async fields =>
-            fields.map((field: any) => {
-                const locked = field.manualLock ?? Boolean(field.targetText?.trim());
-                return {
-                    path: field.path,
-                    sourceText: field.sourceText,
-                    translatedText: locked ? field.targetText?.trim() : `translated-${field.path}`,
-                    status: locked ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',
-                    origin: locked ? 'MANUAL' : 'AUTO',
-                    locked,
-                };
-            }),
+        prepareLocalizedFields: vi.fn(fields =>
+            Promise.resolve(
+                fields.map((field: any) => {
+                    const locked = field.manualLock ?? Boolean(field.targetText?.trim());
+                    return {
+                        path: field.path,
+                        sourceText: field.sourceText,
+                        translatedText: locked ? field.targetText?.trim() : `translated-${field.path}`,
+                        status: locked ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',
+                        origin: locked ? 'MANUAL' : 'AUTO',
+                        locked,
+                    };
+                }),
+            ),
         ),
-        recordPreparedFields: vi.fn(async () => undefined),
-        findStates: vi.fn(async () => translationStates),
+        recordPreparedFields: vi.fn(() => Promise.resolve(undefined)),
+        findStates: vi.fn(() => Promise.resolve(translationStates)),
     };
     return new SystemAnnouncementService(
         {
@@ -199,7 +224,7 @@ function repositoryHarness(activeAnnouncements: any[] = []) {
         orderBy: vi.fn(),
         addOrderBy: vi.fn(),
         take: vi.fn(),
-        getMany: vi.fn(async () => activeAnnouncements),
+        getMany: vi.fn(() => Promise.resolve(activeAnnouncements)),
     };
     for (const method of [
         'leftJoin',
@@ -216,9 +241,9 @@ function repositoryHarness(activeAnnouncements: any[] = []) {
         queryBuilder,
         createQueryBuilder: vi.fn(() => queryBuilder),
         create: vi.fn(value => value),
-        save: vi.fn(async value => value),
-        find: vi.fn(async () => activeAnnouncements),
-        findOne: vi.fn(async (): Promise<any> => null),
+        save: vi.fn(value => Promise.resolve(value)),
+        find: vi.fn(() => Promise.resolve(activeAnnouncements)),
+        findOne: vi.fn((): Promise<any> => Promise.resolve(null)),
         remove: vi.fn(),
     };
 }

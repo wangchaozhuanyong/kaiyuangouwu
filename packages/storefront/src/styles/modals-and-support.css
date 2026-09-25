@@ -120,7 +120,7 @@
 .poster-image-box img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .poster-image-fallback {
@@ -254,6 +254,62 @@
     width: min(100%, calc(54dvh * 9 / 16));
 }
 
+.referral-poster-dialog {
+    background: var(--surface);
+    color: var(--text);
+}
+
+.referral-poster-close,
+.referral-poster-copy,
+.referral-poster-template-button {
+    background: var(--control-surface, var(--soft));
+    color: var(--text);
+    border: 1px solid transparent;
+    transition:
+        background-color var(--experience-motion-standard) var(--experience-ease-standard),
+        color var(--experience-motion-standard) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard);
+}
+
+.referral-poster-close:hover,
+.referral-poster-copy:hover,
+.referral-poster-template-button:hover {
+    background: var(--control-surface-hover, var(--accent-soft));
+}
+
+.referral-poster-template-button[data-active='true'] {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+    box-shadow: var(--accent-shadow);
+}
+
+.referral-poster-placeholder {
+    background: linear-gradient(145deg, var(--brand-background), var(--accent));
+    color: var(--accent-foreground);
+}
+
+.referral-poster-save {
+    background: var(--accent);
+    color: var(--accent-foreground);
+    transition:
+        background-color var(--experience-motion-standard) var(--experience-ease-standard),
+        box-shadow var(--experience-motion-standard) var(--experience-ease-standard);
+}
+
+.referral-poster-save:hover:not(:disabled) {
+    background: var(--accent-hover);
+    box-shadow: var(--accent-shadow);
+}
+
+.referral-poster-close:focus-visible,
+.referral-poster-copy:focus-visible,
+.referral-poster-template-button:focus-visible,
+.referral-poster-save:focus-visible {
+    outline: var(--experience-focus-width) solid var(--focus, var(--accent));
+    outline-offset: var(--experience-focus-offset);
+}
+
 /* ==========================================================================
    客服中心：品牌双色服务时间条与直达渠道
    ========================================================================== */
@@ -263,6 +319,10 @@
     padding: 16px 14px var(--subpage-end-gap);
     display: grid;
     gap: 14px;
+}
+
+.support-desktop-hero {
+    display: none;
 }
 
 .support-page-intro {
@@ -702,6 +762,84 @@
     color: #0d9488;
 }
 
+.support-faq-card {
+    min-width: 0;
+    padding: 18px 20px;
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+}
+
+.support-faq-card h2 {
+    margin: 0 0 12px;
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.support-faq-list {
+    display: grid;
+    gap: 8px;
+}
+
+.support-faq-item {
+    border-radius: 12px;
+    background: var(--control-surface, var(--surface));
+}
+
+.support-faq-item summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 13px 14px;
+    border-radius: 12px;
+    color: var(--text);
+    cursor: pointer;
+    font-weight: 600;
+    list-style: none;
+    transition: background-color 160ms ease;
+}
+
+.support-faq-item summary::-webkit-details-marker {
+    display: none;
+}
+
+.support-faq-item summary:hover {
+    background: var(--accent-soft);
+}
+
+.support-faq-item summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.support-faq-item summary svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    transition: transform 160ms ease;
+}
+
+.support-faq-item[open] summary svg {
+    transform: rotate(90deg);
+}
+
+.support-faq-item p {
+    margin: 0;
+    padding: 0 14px 14px;
+    color: var(--muted);
+    line-height: 1.65;
+    white-space: pre-line;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .support-faq-item summary,
+    .support-faq-item summary svg {
+        transition: none;
+    }
+}
+
 /* ==========================================================================
    Customer Service Evaluation Card
    ========================================================================== */
@@ -711,6 +849,15 @@
     border-radius: 16px;
     background: var(--surface);
     box-shadow: var(--shadow-sm);
+}
+
+.support-evaluation-error {
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #fef2f2;
+    color: #991b1b;
+    font-size: 13px;
 }
 
 .support-evaluation-header {

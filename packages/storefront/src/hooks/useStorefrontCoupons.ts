@@ -28,6 +28,23 @@ interface StorefrontCouponOptions extends StorefrontQueryContext {
     setCartError: (error: string | null) => void;
 }
 
+function suppressedCouponScope(marketCode: string): string | null {
+    try {
+        return sessionStorage.getItem(`storefront:coupon-auto-selection-suppressed:${marketCode}`);
+    } catch {
+        return null;
+    }
+}
+
+function rememberSuppressedCouponScope(marketCode: string, scope: string): void {
+    if (!scope) return;
+    try {
+        sessionStorage.setItem(`storefront:coupon-auto-selection-suppressed:${marketCode}`, scope);
+    } catch {
+        // Keep the in-memory choice when browser storage is unavailable.
+    }
+}
+
 export function useStorefrontCoupons({
     api,
     market,
@@ -64,15 +81,18 @@ export function useStorefrontCoupons({
 
     const applyCoupon = useCallback(
         async (customerCouponId: string): Promise<string | null> => {
+            const previousSuppression = couponAutoSelectionSuppressedRef.current;
             couponAutoSelectionSuppressedRef.current = couponAutoSelectionScope;
             setCartLoading(true);
             setCartError(null);
             try {
                 await api.applyCustomerCoupon(customerCouponId);
+                rememberSuppressedCouponScope(market.code, couponAutoSelectionScope);
                 await Promise.all([queryClient.invalidateQueries({ queryKey: customerCouponQueryKey })]);
                 notify(isZh ? '优惠券已使用' : 'Coupon applied');
                 return null;
             } catch (requestError) {
+                couponAutoSelectionSuppressedRef.current = previousSuppression;
                 return requestError instanceof Error
                     ? storefrontErrorMessage(requestError, language)
                     : text.loadError;
@@ -85,6 +105,7 @@ export function useStorefrontCoupons({
             couponAutoSelectionScope,
             customerCouponQueryKey,
             isZh,
+            market.code,
             notify,
             queryClient,
             refreshCart,
@@ -115,6 +136,7 @@ export function useStorefrontCoupons({
                     );
                 }
                 await Promise.all([
+                    queryClient.invalidateQueries({ queryKey: customerCouponQueryKey }),
                     queryClient.invalidateQueries({ queryKey: couponCampaignsQueryKey }),
                     queryClient.invalidateQueries({
                         queryKey: storefrontQueryKeys.customerCouponUsageRecords(
@@ -167,15 +189,18 @@ export function useStorefrontCoupons({
 
     const removeCoupon = useCallback(
         async (customerCouponId: string): Promise<string | null> => {
+            const previousSuppression = couponAutoSelectionSuppressedRef.current;
             couponAutoSelectionSuppressedRef.current = couponAutoSelectionScope;
             setCartLoading(true);
             setCartError(null);
             try {
                 await api.removeCustomerCoupon(customerCouponId);
+                rememberSuppressedCouponScope(market.code, couponAutoSelectionScope);
                 await Promise.all([queryClient.invalidateQueries({ queryKey: customerCouponQueryKey })]);
                 notify(isZh ? '已取消使用优惠券' : 'Coupon unapplied');
                 return null;
             } catch (requestError) {
+                couponAutoSelectionSuppressedRef.current = previousSuppression;
                 return requestError instanceof Error
                     ? storefrontErrorMessage(requestError, language)
                     : text.loadError;
@@ -188,6 +213,7 @@ export function useStorefrontCoupons({
             couponAutoSelectionScope,
             customerCouponQueryKey,
             isZh,
+            market.code,
             notify,
             queryClient,
             refreshCart,
@@ -207,6 +233,7 @@ export function useStorefrontCoupons({
             !couponAutoSelectionScope ||
             !couponAutoSelectionAttemptKey ||
             couponAutoSelectionSuppressedRef.current === couponAutoSelectionScope ||
+            suppressedCouponScope(market.code) === couponAutoSelectionScope ||
             couponAutoSelectionAttemptRef.current === couponAutoSelectionAttemptKey ||
             myCoupons.some(coupon => coupon.lockedOrderId === order.id) ||
             !myCoupons.some(coupon => coupon.usable)
@@ -246,6 +273,7 @@ export function useStorefrontCoupons({
         customerCouponQueryKey,
         customerCouponsQuery.isPending,
         isZh,
+        market.code,
         myCoupons,
         notify,
         queryClient,

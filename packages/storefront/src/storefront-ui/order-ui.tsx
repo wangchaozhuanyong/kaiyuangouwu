@@ -169,5 +169,6 @@ export function orderStatesForTab(tab: OrderTab): string[] | undefined {
     if (tab === 'pending') return ['AddingItems', 'ArrangingPayment'];
     if (tab === 'shipping') return ['PaymentAuthorized', 'PaymentSettled'];
     if (tab === 'receiving') return ['Shipped', 'PartiallyShipped'];
+    if (tab === 'completed') return ['Delivered'];
     return undefined;
 }

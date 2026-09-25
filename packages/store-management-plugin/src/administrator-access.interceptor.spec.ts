@@ -1,5 +1,5 @@
 import { API_KEY_AUTH_STRATEGY_NAME, UserInputError } from '@vendure/core';
-import { of } from 'rxjs';
+import { from, lastValueFrom } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
@@ -49,9 +49,14 @@ function invoke(
         current: vi.fn().mockResolvedValue(profile),
     };
     const audit = { record: vi.fn().mockResolvedValue(undefined) };
-    const next = { handle: vi.fn(() => of(value)) };
+    const next = { handle: vi.fn(() => from(value)) };
     const interceptor = new AdministratorAccessInterceptor(access as never, audit as never);
-    return { run: () => interceptor.intercept(context, next), access, audit, next };
+    return {
+        run: async () => lastValueFrom(await interceptor.intercept(context, next)),
+        access,
+        audit,
+        next,
+    };
 }
 
 describe('administrator access failure audit', () => {

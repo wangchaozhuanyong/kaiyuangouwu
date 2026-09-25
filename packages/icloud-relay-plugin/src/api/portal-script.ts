@@ -13,6 +13,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 
     const API_ENDPOINT = '/shop-api';
     const STORAGE_KEY = 'icloud_relay_recent_queries';
+    let activeStoreStorageKey = null;
     let currentQueryCode = '';
     let allMails = [];
     let virtualEmailsList = [];
@@ -55,6 +56,8 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
             const data = json.data;
             if (!res.ok || json.errors || !data?.activeChannel?.id ||
                 String(data.storefrontVisualPreset?.channelId) !== String(data.activeChannel.id)) return;
+            activeStoreStorageKey = STORAGE_KEY + ':' + encodeURIComponent(String(data.activeChannel.id));
+            renderRecentQueries();
             const preset = data.storefrontVisualPreset.presetId;
             document.documentElement.setAttribute('data-storefront-preset',
                 preset === 'modern-oriental' ? preset : 'classic');
@@ -777,21 +780,24 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 
     // ====== LocalStorage Recent Queries ======
     function getRecentQueries() {
+        if (!activeStoreStorageKey) return [];
         try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            return raw ? JSON.parse(raw) : [];
+            const raw = localStorage.getItem(activeStoreStorageKey);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
         } catch (e) {
             return [];
         }
     }
 
     function saveRecentQuery(record) {
+        if (!activeStoreStorageKey) return;
         try {
             let list = getRecentQueries();
             list = list.filter(item => item.code !== record.code);
             list.unshift(record);
             if (list.length > 6) list = list.slice(0, 6);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+            localStorage.setItem(activeStoreStorageKey, JSON.stringify(list));
         } catch (e) {}
     }
 
@@ -834,17 +840,19 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 
     window.deleteRecentQuery = function(e, code) {
         if (e) e.stopPropagation();
+        if (!activeStoreStorageKey) return;
         try {
             let list = getRecentQueries();
             list = list.filter(item => item.code !== code);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+            localStorage.setItem(activeStoreStorageKey, JSON.stringify(list));
             renderRecentQueries();
         } catch (err) {}
     };
 
     window.clearAllHistory = function() {
+        if (!activeStoreStorageKey) return;
         try {
-            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(activeStoreStorageKey);
             renderRecentQueries();
         } catch (err) {}
     };

@@ -12,8 +12,6 @@ const routePreloaders = {
     cart: () => import('./route-pages/cart-route-page').then(module => module.preloadCartRoutePage()),
     account: () =>
         import('./route-pages/account-route-pages').then(module => module.preloadAccountRoutePage()),
-    announcements: () =>
-        import('./route-pages/account-route-pages').then(module => module.preloadAnnouncementsRoutePage()),
     favorites: () =>
         import('./route-pages/account-route-pages').then(module => module.preloadFavoritesRoutePage()),
     history: () =>

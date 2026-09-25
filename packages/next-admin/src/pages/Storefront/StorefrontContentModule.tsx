@@ -31,17 +31,20 @@ import {
     SAVE_STOREFRONT_PROMOTION_DRAFT_MUTATION,
     STOREFRONT_CONTENT_QUERY,
     STOREFRONT_PROMOTION_PAGE_QUERY,
+    SYSTEM_ANNOUNCEMENT_CHANNELS_QUERY,
     SYSTEM_ANNOUNCEMENTS_QUERY,
     UPDATE_STOREFRONT_BLOCK_MUTATION,
     UPDATE_SYSTEM_ANNOUNCEMENT_MUTATION,
     type StorefrontContentBlock,
     type StorefrontContentResult,
     type StorefrontPromotionRecord,
+    type SystemAnnouncementChannel,
     type SystemAnnouncementRecord,
 } from '../../graphql/storefront.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { getChannelDisplayName, isDefaultChannelCode } from '../../utils/channel-display';
 import { omitUnchangedEnglish } from '../../utils/english-edit-intent';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
@@ -243,7 +246,7 @@ export function StorefrontContentModule() {
                             active={tab === 'ANNOUNCEMENTS'}
                             onClick={() => setTab('ANNOUNCEMENTS')}
                             icon={Megaphone}
-                            label="系统公告"
+                            label="首页公告"
                         />
                     )}
                     <TabButton
@@ -293,15 +296,15 @@ export function StorefrontContentModule() {
                         />
                     ))}
                 {tab === 'ANNOUNCEMENTS' && !canManageAnnouncements && (
-                    <p role="status">当前角色没有系统公告管理权限。</p>
+                    <p role="status">当前角色没有首页公告管理权限。</p>
                 )}
                 {tab === 'ANNOUNCEMENTS' &&
                     canManageAnnouncements &&
                     (announcements.loading && !announcements.data ? (
-                        <LoadingState label="正在读取系统公告…" />
+                        <LoadingState label="正在读取首页公告…" />
                     ) : announcements.error ? (
                         <ErrorState
-                            message={toUserFacingError(announcements.error, '系统公告读取失败')}
+                            message={toUserFacingError(announcements.error, '首页公告读取失败')}
                             onRetry={() => void announcements.refetch()}
                         />
                     ) : (
@@ -347,6 +350,7 @@ export function StorefrontContentModule() {
                 <AnnouncementEditor
                     key={activeAnnouncementEditor === 'NEW' ? 'new' : activeAnnouncementEditor.id}
                     value={activeAnnouncementEditor === 'NEW' ? null : activeAnnouncementEditor}
+                    activeChannel={content.data?.activeChannel ?? null}
                     onClose={closeAnnouncementEditor}
                     onSaved={async message => {
                         closeAnnouncementEditor();
@@ -358,8 +362,8 @@ export function StorefrontContentModule() {
             )}
             {deletingAnnouncement && (
                 <ConfirmDialog
-                    title="删除系统公告"
-                    description={`确认删除《${deletingAnnouncement.titleZh}》？已打开公告页的买家刷新后将无法再查看。`}
+                    title="删除首页公告"
+                    description={`确认删除《${deletingAnnouncement.titleZh}》？刷新首页后，这条公告将不再显示。`}
                     pending={deleteAnnouncementState.loading}
                     onClose={() => setDeletingAnnouncement(null)}
                     onConfirm={() => void confirmDeleteAnnouncement()}
@@ -494,11 +498,12 @@ function AnnouncementList({
             <div className="flex items-center justify-between border-b border-slate-100 p-4">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        全站系统公告
-                        <FeatureHelpButton topic="storefront.announcements" title="全站系统公告" />
+                        首页公告
+                        <FeatureHelpButton topic="storefront.announcements" title="首页公告" />
                     </h2>
                     <p className="mt-1 text-[11px] text-slate-400">
-                        优先级数字越大越靠前，可设定自动上线和下线时间
+                        此处列出全部店铺的系统公告，后台按优先级排序；首页按上线时间（未设置则按创建时间）展示近
+                        30 天内的有效公告，与手动公告合计最多 5 条。
                     </p>
                 </div>
                 <button
@@ -527,6 +532,15 @@ function AnnouncementList({
                                     </span>
                                     <span className="rounded bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-700">
                                         优先级 {item.priority}
+                                    </span>
+                                    <span className="rounded bg-violet-50 px-2 py-0.5 text-[9px] font-bold text-violet-700">
+                                        {item.targetMode === 'ALL'
+                                            ? '全部店铺'
+                                            : item.channels.length
+                                              ? item.channels
+                                                    .map(channel => getChannelDisplayName(channel, 'zh_Hans'))
+                                                    .join('、')
+                                              : '指定店铺未找到'}
                                     </span>
                                 </div>
                                 <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-500">
@@ -561,8 +575,8 @@ function AnnouncementList({
             ) : (
                 <EmptyState
                     icon={Megaphone}
-                    title="还没有系统公告"
-                    detail="新建后将按排期和优先级向买家展示。"
+                    title="还没有首页公告"
+                    detail="新建后须符合上线排期；首页只显示近 30 天内的有效公告。"
                     action="新建公告"
                     onAction={onCreate}
                 />
@@ -587,15 +601,39 @@ interface AnnouncementDraft {
 
 function AnnouncementEditor({
     value,
+    activeChannel,
     onClose,
     onSaved,
     onError,
 }: {
     value: SystemAnnouncementRecord | null;
+    activeChannel: SystemAnnouncementChannel | null;
     onClose: () => void;
     onSaved: (message: string) => Promise<void>;
     onError: (error: unknown) => void;
 }) {
+    const channels = useQuery<{ channels: { items: SystemAnnouncementChannel[] } }>(
+        SYSTEM_ANNOUNCEMENT_CHANNELS_QUERY,
+        { fetchPolicy: 'cache-and-network' },
+    );
+    const [allChannels, setAllChannels] = useState(value?.targetMode === 'ALL');
+    const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>(
+        () =>
+            value?.channels.map(channel => channel.id) ??
+            (activeChannel && !isDefaultChannelCode(activeChannel.code) ? [activeChannel.id] : []),
+    );
+    const availableChannels = Array.from(
+        new Map(
+            [activeChannel, ...(value?.channels ?? []), ...(channels.data?.channels.items ?? [])]
+                .filter((channel): channel is SystemAnnouncementChannel => Boolean(channel))
+                .filter(
+                    channel =>
+                        !isDefaultChannelCode(channel.code) ||
+                        value?.channels.some(selected => selected.id === channel.id),
+                )
+                .map(channel => [channel.id, channel]),
+        ).values(),
+    );
     const [draft, setDraft] = useState<AnnouncementDraft>(() => ({
         enabled: value?.enabled ?? true,
         priority: String(value?.priority ?? 0),
@@ -615,10 +653,14 @@ function AnnouncementEditor({
     }));
     const [create, createState] = useMutation(CREATE_SYSTEM_ANNOUNCEMENT_MUTATION);
     const [update, updateState] = useMutation(UPDATE_SYSTEM_ANNOUNCEMENT_MUTATION);
-    const validation = announcementDraftError(draft);
+    const validation =
+        (!allChannels && selectedChannelIds.length === 0 ? '请至少选择一个目标店铺' : null) ??
+        announcementDraftError(draft);
     const submit = async () => {
         if (createState.loading || updateState.loading || validation) return;
         const input = {
+            targetMode: allChannels ? 'ALL' : selectedChannelIds.length === 1 ? 'SINGLE' : 'MULTIPLE',
+            channelIds: allChannels ? [] : selectedChannelIds,
             enabled: draft.enabled,
             priority: Number.parseInt(draft.priority, 10) || 0,
             titleZh: draft.titleZh.trim(),
@@ -649,11 +691,73 @@ function AnnouncementEditor({
     const pending = createState.loading || updateState.loading;
     return (
         <Modal
-            title={value ? '编辑系统公告' : '新建系统公告'}
+            title={value ? '编辑首页公告' : '新建首页公告'}
             description="中文是源内容；英文默认自动翻译，需要人工定稿时再锁定"
             onClose={onClose}
         >
             <div className="grid gap-4 sm:grid-cols-2">
+                <fieldset className="rounded-lg border border-slate-200 p-3 sm:col-span-2">
+                    <legend className="px-1 text-xs font-bold text-slate-700">公告展示范围 *</legend>
+                    <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-700">
+                        <label className="flex items-center gap-2">
+                            <input
+                                type="radio"
+                                name="announcement-scope"
+                                checked={!allChannels}
+                                onChange={() => setAllChannels(false)}
+                            />
+                            指定店铺
+                        </label>
+                        <label className="flex items-center gap-2">
+                            <input
+                                type="radio"
+                                name="announcement-scope"
+                                checked={allChannels}
+                                onChange={() => setAllChannels(true)}
+                            />
+                            全部店铺
+                        </label>
+                    </div>
+                    {!allChannels && (
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            {availableChannels.map(channel => (
+                                <label
+                                    key={channel.id}
+                                    className="flex items-center gap-2 text-xs text-slate-700"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedChannelIds.includes(channel.id)}
+                                        onChange={event =>
+                                            setSelectedChannelIds(current =>
+                                                event.target.checked
+                                                    ? [...current, channel.id]
+                                                    : current.filter(id => id !== channel.id),
+                                            )
+                                        }
+                                    />
+                                    {getChannelDisplayName(channel, 'zh_Hans')}
+                                </label>
+                            ))}
+                        </div>
+                    )}
+                    {channels.error && !allChannels && (
+                        <p className="mt-2 text-xs text-amber-700">
+                            店铺列表读取失败，仅能选择当前或已保存的店铺。
+                        </p>
+                    )}
+                    {!value && !allChannels && activeChannel && !isDefaultChannelCode(activeChannel.code) && (
+                        <p className="mt-2 text-[11px] text-slate-500">
+                            新公告默认只展示在当前店铺：
+                            {getChannelDisplayName(activeChannel, 'zh_Hans')}。
+                        </p>
+                    )}
+                    {!value && !allChannels && activeChannel && isDefaultChannelCode(activeChannel.code) && (
+                        <p className="mt-2 text-[11px] text-amber-700">
+                            当前是平台管理频道，请手动选择经营店铺。
+                        </p>
+                    )}
+                </fieldset>
                 <Field label="中文标题 *">
                     <input
                         value={draft.titleZh}
@@ -735,14 +839,19 @@ function AnnouncementEditor({
                         </p>
                     </div>
                 </div>
-                <Field label="优先级">
-                    <input
-                        type="number"
-                        value={draft.priority}
-                        onChange={event => setDraft({ ...draft, priority: event.target.value })}
-                        className={inputClass}
-                    />
-                </Field>
+                <div>
+                    <Field label="优先级">
+                        <input
+                            type="number"
+                            value={draft.priority}
+                            onChange={event => setDraft({ ...draft, priority: event.target.value })}
+                            className={inputClass}
+                        />
+                    </Field>
+                    <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                        首页主要按上线时间排序，调高优先级不能保证置顶。
+                    </p>
+                </div>
                 <Field label="跳转网址">
                     <input
                         value={draft.linkUrl}
@@ -1157,6 +1266,7 @@ function Message({
     const success = kind === 'success';
     return (
         <div
+            role={success ? 'status' : 'alert'}
             className={`flex items-center gap-2 rounded-xl border p-3 text-xs ${success ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-800'}`}
         >
             {success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}

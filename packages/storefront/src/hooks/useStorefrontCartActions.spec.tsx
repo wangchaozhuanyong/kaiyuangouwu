@@ -36,7 +36,7 @@ describe('storefront cart action boundaries', () => {
         errorCode: null,
         message: null,
     };
-    const api = { cart: vi.fn() };
+    const api = { cart: vi.fn(), addItem: vi.fn() };
     function Harness() {
         value = useStorefrontCartActions(options);
         return null;
@@ -51,6 +51,7 @@ describe('storefront cart action boundaries', () => {
         vi.spyOn(controller, 'getSnapshot').mockReturnValue({ ...controller.getSnapshot(), cart });
         vi.spyOn(controller, 'recoverPending').mockResolvedValue(undefined);
         api.cart.mockResolvedValue(cart);
+        api.addItem.mockResolvedValue(cart);
         options = {
             api: api as unknown as ShopApi,
             cart: { ...cart, revision: 1 },
@@ -103,18 +104,44 @@ describe('storefront cart action boundaries', () => {
         },
     );
 
+    it('checks the requested quantity against cart stock before sending one add command', async () => {
+        const productVariant = {
+            id: 'variant-a',
+            name: 'Test product',
+            saleableStockLevel: 4,
+            customFields: { fulfillmentType: 'physical' },
+        } as ProductVariant;
+        vi.mocked(controller.getSnapshot).mockReturnValue({
+            ...controller.getSnapshot(),
+            cart: {
+                ...cart,
+                lines: [{ id: 'line-a', quantity: 2, selected: true, available: true, productVariant }],
+            },
+        });
+        render();
+        expect(await value.addToCart(productVariant, 3)).toBeNull();
+        expect(api.addItem).not.toHaveBeenCalled();
+        await value.addToCart(productVariant, 2);
+        expect(api.addItem).toHaveBeenCalledOnce();
+        expect(api.addItem).toHaveBeenCalledWith('variant-a', 7, 2);
+    });
+
     it('sends guests to login with the selected variant without creating a checkout', async () => {
         options.customer = null;
         const execute = vi.spyOn(controller, 'execute');
         render();
-        await value.startDirectPurchase({
-            id: 'selected-variant',
-            customFields: { fulfillmentType: 'physical' },
-        } as ProductVariant);
+        await value.startDirectPurchase(
+            {
+                id: 'selected-variant',
+                customFields: { fulfillmentType: 'physical' },
+            } as ProductVariant,
+            3,
+        );
         expect(options.navigate).toHaveBeenCalledWith({
             name: 'login',
             returnTo: 'purchase',
             id: 'selected-variant',
+            quantity: 3,
         });
         expect(execute).not.toHaveBeenCalled();
         expect(options.setCartLoading).not.toHaveBeenCalled();
@@ -165,11 +192,14 @@ describe('storefront cart action boundaries', () => {
             .spyOn(controller, 'execute')
             .mockResolvedValue({ ...acknowledgement, cart, session });
         render();
-        await value.startDirectPurchase({
-            id: 'variant-a',
-            customFields: { fulfillmentType: 'physical' },
-        } as ProductVariant);
-        expect(execute).toHaveBeenCalledWith({ buyNow: { productVariantId: 'variant-a', quantity: 1 } });
+        await value.startDirectPurchase(
+            {
+                id: 'variant-a',
+                customFields: { fulfillmentType: 'physical' },
+            } as ProductVariant,
+            3,
+        );
+        expect(execute).toHaveBeenCalledWith({ buyNow: { productVariantId: 'variant-a', quantity: 3 } });
         expect(options.setCheckoutOrder).toHaveBeenCalledWith(order);
         expect(options.navigate).toHaveBeenCalledWith({ name: 'purchase' });
         expect(vi.mocked(options.setCheckoutOrder).mock.invocationCallOrder[0]).toBeLessThan(

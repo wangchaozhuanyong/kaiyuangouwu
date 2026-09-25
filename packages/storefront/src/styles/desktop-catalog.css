@@ -260,8 +260,8 @@
         font-weight: 600;
     }
     .desktop-account-navigation {
-        width: calc(100% - 2 * var(--desktop-content-gutter));
-        margin-inline: auto;
+        width: 100%;
+        margin: 0;
     }
     .desktop-subcategories {
         display: flex;
@@ -534,7 +534,7 @@
         background: var(--paper);
         color: var(--text);
     }
-    .has-desktop-catalog .product-detail-page > .detail-gallery {
+    .has-desktop-catalog .product-detail-page > .detail-gallery-shell .detail-gallery {
         max-height: 540px;
         aspect-ratio: 1;
     }

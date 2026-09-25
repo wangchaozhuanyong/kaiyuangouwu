@@ -159,7 +159,7 @@ describe('shared auth presentation', () => {
         expect(
             authVisualStyle({ ...content, backgroundColor: null, textColor: null, settings: {} }),
         ).toMatchObject({
-            '--auth-visual-background': 'var(--auth-store-background, var(--skin-background, #f1f5f9))',
+            '--auth-visual-background': 'var(--surface, var(--auth-store-background, #f1f5f9))',
             '--auth-visual-accent': 'var(--accent, #635bff)',
         });
         expect(authVisualStyle()).toMatchObject({

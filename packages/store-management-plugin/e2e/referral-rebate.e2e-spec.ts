@@ -1,18 +1,27 @@
-import { LanguageCode } from '@vendure/common/lib/generated-types';
+import { CurrencyCode, LanguageCode } from '@vendure/common/lib/generated-types';
 import {
     ContentTranslationPlugin,
     type ContentTranslationProvider,
 } from '@vendure/content-translation-plugin';
-import { mergeConfig, PaymentMethodHandler } from '@vendure/core';
+import {
+    ChannelService,
+    Customer,
+    mergeConfig,
+    PaymentMethodHandler,
+    RequestContextService,
+    Role,
+    TransactionalConnection,
+} from '@vendure/core';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
+import { StorefrontContentBlock, StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { createTestEnvironment } from '@vendure/testing';
 import gql from 'graphql-tag';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
-import { createScopedAdminFixture } from '../../../e2e-common/scoped-admin-fixture';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
+import { StoreProfile } from '../src/entities/store-profile.entity';
 import { referralPosterCopy } from '../src/referral/referral-poster-presets';
 import { StoreManagementPlugin } from '../src/store-management.plugin';
 
@@ -37,10 +46,11 @@ const externalPaymentHandler = new PaymentMethodHandler({
 const passthroughTranslationProvider: ContentTranslationProvider = {
     name: 'referral-e2e-passthrough',
     isConfigured: () => true,
-    translate: request => ({
-        provider: 'referral-e2e-passthrough',
-        translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
-    }),
+    translate: request =>
+        Promise.resolve({
+            provider: 'referral-e2e-passthrough',
+            translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
+        }),
 };
 
 const config = mergeConfig(testConfig(), {
@@ -48,6 +58,7 @@ const config = mergeConfig(testConfig(), {
     paymentOptions: { paymentMethodHandlers: [externalPaymentHandler] },
     plugins: [
         StorefrontCartPlugin,
+        StorefrontContentPlugin,
         ContentTranslationPlugin.init({
             provider: passthroughTranslationProvider,
         }),
@@ -92,7 +103,12 @@ const REGISTER = gql`
         $inviteCode: String
         $source: String
     ) {
-        registerCustomerWithReferral(input: $input, inviteCode: $inviteCode, source: $source) {
+        registerCustomerWithReferral(
+            input: $input
+            consent: { termsAccepted: true, privacyAcknowledged: true, locale: "zh" }
+            inviteCode: $inviteCode
+            source: $source
+        ) {
             __typename
             ... on Success {
                 success
@@ -129,6 +145,12 @@ const OVERVIEW = gql`
                 reservedDelta
             }
         }
+    }
+`;
+
+const VALIDATE_INVITE = gql`
+    query ReferralValidateInviteE2E($code: String!) {
+        validateReferralInviteCode(code: $code)
     }
 `;
 
@@ -182,71 +204,56 @@ const ORDER_FIELDS = gql`
     }
 `;
 
-const ADD_ITEM = gql`
+const READ_CART = gql`
     ${ORDER_FIELDS}
-    mutation ReferralAddItemE2E($productVariantId: ID!) {
-        addItemToOrder(productVariantId: $productVariantId, quantity: 1) {
-            __typename
-            ...ReferralOrderFieldsE2E
-            ... on ErrorResult {
-                errorCode
-                message
-            }
-        }
-    }
-`;
-
-const SET_ADDRESS = gql`
-    ${ORDER_FIELDS}
-    mutation ReferralSetAddressE2E {
-        setOrderShippingAddress(
-            input: {
-                fullName: "Referral Test"
-                streetLine1: "100 Test Street"
-                city: "Los Angeles"
-                province: "California"
-                postalCode: "90001"
-                countryCode: "US"
-                phoneNumber: "10000000000"
-            }
-        ) {
-            ...ReferralOrderFieldsE2E
-        }
-    }
-`;
-
-const ELIGIBLE_SHIPPING = gql`
-    query ReferralEligibleShippingE2E {
-        eligibleShippingMethods {
+    query ReferralReadCartE2E {
+        storefrontCart {
             id
-        }
-    }
-`;
-
-const SET_SHIPPING = gql`
-    ${ORDER_FIELDS}
-    mutation ReferralSetShippingE2E($id: [ID!]!) {
-        setOrderShippingMethod(shippingMethodId: $id) {
-            __typename
-            ...ReferralOrderFieldsE2E
-            ... on ErrorResult {
-                errorCode
-                message
+            revision
+            checkoutOrder {
+                ...ReferralOrderFieldsE2E
             }
         }
     }
 `;
 
-const TRANSITION = gql`
+const CART_COMMAND = gql`
     ${ORDER_FIELDS}
-    mutation ReferralTransitionOrderE2E {
-        transitionOrderToState(state: "ArrangingPayment") {
-            __typename
-            ...ReferralOrderFieldsE2E
-            ... on ErrorResult {
-                errorCode
-                message
+    mutation ReferralCartCommandE2E($input: StorefrontCartCommandInput!) {
+        applyStorefrontCartCommand(input: $input) {
+            status
+            errorCode
+            message
+            cart {
+                id
+                revision
+                checkoutOrder {
+                    ...ReferralOrderFieldsE2E
+                }
             }
+        }
+    }
+`;
+
+const RISK_CASES = gql`
+    query ReferralRiskCasesE2E {
+        fraudRiskCases {
+            items {
+                id
+                orderId
+                status
+                caseCode
+            }
+        }
+    }
+`;
+
+const RELEASE_RISK_CASE = gql`
+    mutation ReferralReleaseRiskCaseE2E($input: ReviewFraudRiskCaseInput!) {
+        reviewFraudRiskCase(input: $input) {
+            id
+            status
+            caseCode
         }
     }
 `;
@@ -366,8 +373,10 @@ const RECORD_VISIT = gql`
     }
 `;
 
-const recordTrafficVisit = (visitorId: string) =>
-    shopClient.query(RECORD_VISIT, { visitorId, eventId: randomUUID() });
+const recordTrafficVisit = async (visitorId: string) => {
+    const result = await shopClient.query(RECORD_VISIT, { visitorId, eventId: randomUUID() });
+    expect(result.recordStorefrontPageView.recorded).toBe(true);
+};
 
 const FIND_CUSTOMER = gql`
     query ReferralFindCustomerE2E($email: String!) {
@@ -433,11 +442,26 @@ describe('referral rebate closed loop', () => {
             customerCount: 0,
         });
         shopClient.setRequestHeader('user-agent', 'Mozilla/5.0 Referral E2E Browser');
+        shopClient.setRequestHeader('cookie', 'storefront_analytics_consent=granted');
         await adminClient.asSuperAdmin();
-        adminClient.setRequestHeader(
-            'x-vendure-sensitive-action-password',
-            config.authOptions.superadminCredentials.password,
-        );
+        const superadminCredentials = config.authOptions.superadminCredentials;
+        if (!superadminCredentials) throw new Error('Superadmin credentials are required for this test');
+        adminClient.setRequestHeader('x-vendure-sensitive-action-password', superadminCredentials.password);
+        const ctx = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+        const legalBlocks = server.app
+            .get(TransactionalConnection)
+            .getRepository(ctx, StorefrontContentBlock);
+        for (const code of ['terms', 'privacy']) {
+            await legalBlocks.save(
+                new StorefrontContentBlock({
+                    channelId: ctx.channelId,
+                    code,
+                    type: 'LEGAL',
+                    enabled: true,
+                    translations: [],
+                }),
+            );
+        }
         const productResult = await adminClient.query(CREATE_PRODUCT, {
             input: {
                 enabled: true,
@@ -478,7 +502,7 @@ describe('referral rebate closed loop', () => {
         { code: 'referral-other', permissions: ['ReadCustomer'], read: false, write: false },
         { code: 'referral-none', permissions: [], read: false, write: false },
     ])('enforces the real Admin API role $code', async role => {
-        const credentials = await createScopedAdminFixture(adminClient, role.code, role.permissions);
+        const credentials = await createReferralAdminFixture(role.code, role.permissions);
         const original = (await adminClient.query(PROGRAM)).referralProgram;
         const settings = (
             await adminClient.query(gql`
@@ -762,6 +786,138 @@ describe('referral rebate closed loop', () => {
             });
         },
     );
+
+    it("keeps one customer's referral overview separate across two stores", async () => {
+        shopClient.setChannelToken(null);
+        await shopClient.asUserWithCredentials('inviter@example.com', 'ReferralPass123!');
+        const primaryOverview = (await shopClient.query(OVERVIEW)).myReferralOverview;
+        expect(primaryOverview.invitedCount).toBeGreaterThan(0);
+        expect(primaryOverview.ledger.length).toBeGreaterThan(0);
+
+        const channelState = await adminClient.query(gql`
+            query ReferralIsolationChannel {
+                activeChannel {
+                    token
+                    defaultTaxZone {
+                        id
+                    }
+                    defaultShippingZone {
+                        id
+                    }
+                }
+            }
+        `);
+        const primary = channelState.activeChannel;
+        const token = 'referral-overview-isolation-fixture';
+        const created = await adminClient.query(
+            gql`
+                mutation ReferralIsolationCreateChannel($input: CreateChannelInput!) {
+                    createChannel(input: $input) {
+                        ... on Channel {
+                            id
+                            token
+                        }
+                        ... on ErrorResult {
+                            message
+                        }
+                    }
+                }
+            `,
+            {
+                input: {
+                    code: token,
+                    token,
+                    defaultLanguageCode: LanguageCode.en,
+                    defaultCurrencyCode: CurrencyCode.CNY,
+                    pricesIncludeTax: false,
+                    defaultTaxZoneId: primary.defaultTaxZone.id,
+                    defaultShippingZoneId: primary.defaultShippingZone.id,
+                },
+            },
+        );
+        expect(created.createChannel, JSON.stringify(created.createChannel)).toHaveProperty('id');
+        const context = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+        const foreignContext = await server.app.get(RequestContextService).create({
+            apiType: 'admin',
+            channelOrToken: token,
+        });
+        const connection = server.app.get(TransactionalConnection);
+        const customer = await connection.getRepository(context, Customer).findOneOrFail({
+            where: { emailAddress: 'inviter@example.com' },
+            relations: ['user', 'user.roles', 'user.roles.channels'],
+        });
+        await server.app
+            .get(ChannelService)
+            .assignToChannels(context, Customer, customer.id, [foreignContext.channelId]);
+        await connection.getRepository(foreignContext, StoreProfile).save(
+            new StoreProfile({
+                channelId: foreignContext.channelId,
+                status: 'ACTIVE',
+                descriptionZh: '',
+                descriptionEn: '',
+            }),
+        );
+        for (const role of customer.user?.roles ?? []) {
+            if (role.channels.some(channel => String(channel.id) === String(foreignContext.channelId)))
+                continue;
+            await connection.rawConnection
+                .getRepository(Role)
+                .createQueryBuilder()
+                .relation(Role, 'channels')
+                .of(role.id)
+                .add(foreignContext.channelId);
+        }
+
+        adminClient.setChannelToken(token);
+        try {
+            const foreignProgram = (await adminClient.query(PROGRAM)).referralProgram;
+            expect(foreignProgram.enabled).toBe(false);
+            await adminClient.query(UPDATE_PROGRAM, {
+                input: {
+                    expectedUpdatedAt: foreignProgram.updatedAt,
+                    enabled: true,
+                    rewardRate: 10,
+                    releaseDelayDays: 0,
+                    minimumOrderAmount: 0,
+                    maxRewardPerOrder: null,
+                    allowBalanceSpend: true,
+                    attributionWindowDays: 30,
+                    defaultPosterTemplate: 'BRAND_MINIMAL',
+                },
+            });
+        } finally {
+            adminClient.setChannelToken(primary.token);
+        }
+
+        try {
+            shopClient.setChannelToken(token);
+            await shopClient.asUserWithCredentials('inviter@example.com', 'ReferralPass123!');
+            const foreignOverview = (await shopClient.query(OVERVIEW)).myReferralOverview;
+            expect(foreignOverview).toMatchObject({
+                invitedCount: 0,
+                purchasedInviteeCount: 0,
+                wallets: [],
+                invitees: [],
+                ledger: [],
+            });
+            expect(
+                (await shopClient.query(VALIDATE_INVITE, { code: primaryOverview.inviteCode }))
+                    .validateReferralInviteCode,
+            ).toBe(false);
+        } finally {
+            shopClient.setChannelToken(primary.token);
+            await shopClient.asUserWithCredentials('inviter@example.com', 'ReferralPass123!');
+        }
+        const restored = (await shopClient.query(OVERVIEW)).myReferralOverview;
+        expect(restored.inviteCode).toBe(primaryOverview.inviteCode);
+        expect(restored.invitedCount).toBe(primaryOverview.invitedCount);
+        expect(restored.ledger).toEqual(primaryOverview.ledger);
+        expect(
+            (await shopClient.query(VALIDATE_INVITE, { code: primaryOverview.inviteCode }))
+                .validateReferralInviteCode,
+        ).toBe(true);
+    }, 30_000);
+
     it('preserves poster copy, keeps defaults enabled and persists an explicit all-hidden configuration', async () => {
         const posterProgram = gql`
             query PosterProgramRegression {
@@ -1027,6 +1183,60 @@ describe('referral rebate closed loop', () => {
     }, 30_000);
 });
 
+async function createReferralAdminFixture(code: string, permissions: string[]) {
+    await adminClient.asSuperAdmin();
+    const { createManagedRole } = await adminClient.query(
+        gql`
+            mutation ($input: CreateManagedRoleInput!) {
+                createManagedRole(input: $input) {
+                    id
+                }
+            }
+        `,
+        {
+            input: {
+                code,
+                description: 'Isolated referral permission fixture',
+                scope: 'PLATFORM',
+                permissions: permissions.length ? permissions : ['ReadCatalog'],
+            },
+        },
+    );
+    const emailAddress = `${code}@example.test`;
+    const initialPassword = 'ReferralInitial123!';
+    const password = 'ReferralFixture456!';
+    await adminClient.query(
+        gql`
+            mutation ($input: CreateManagedAdministratorInput!) {
+                createManagedAdministrator(input: $input) {
+                    id
+                }
+            }
+        `,
+        {
+            input: {
+                firstName: 'Referral',
+                lastName: 'Fixture',
+                emailAddress,
+                password: initialPassword,
+                roleIds: [createManagedRole.id],
+                scope: 'PLATFORM',
+                authority: 'STAFF',
+            },
+        },
+    );
+    await adminClient.asUserWithCredentials(emailAddress, initialPassword);
+    await adminClient.query(gql`
+        mutation {
+            completeInitialPasswordChange(password: "ReferralFixture456!") {
+                mustChangePassword
+            }
+        }
+    `);
+    await adminClient.asSuperAdmin();
+    return { emailAddress, password };
+}
+
 async function register(emailAddress: string, inviteCode?: string, source?: string): Promise<void> {
     const result = await shopClient.query(REGISTER, {
         input: {
@@ -1044,18 +1254,63 @@ async function register(emailAddress: string, inviteCode?: string, source?: stri
 async function createOrderAtPayment(): Promise<any> {
     const variants = await adminClient.query(FIRST_VARIANT);
     const productVariantId = variants.products.items[0].variants[0].id;
-    const added = await shopClient.query(ADD_ITEM, { productVariantId });
-    assertSuccess(added.addItemToOrder);
-    await shopClient.query(SET_ADDRESS);
-    const shipping = await shopClient.query(ELIGIBLE_SHIPPING);
-    const shippingResult = await shopClient.query(SET_SHIPPING, {
-        id: [shipping.eligibleShippingMethods[0].id],
+    const command = async (change: Record<string, unknown>) => {
+        const cart = (await shopClient.query(READ_CART)).storefrontCart;
+        return (
+            await shopClient.query(CART_COMMAND, {
+                input: {
+                    cartId: cart.id,
+                    expectedRevision: cart.revision,
+                    commandId: randomUUID(),
+                    ...change,
+                },
+            })
+        ).applyStorefrontCartCommand;
+    };
+    const apply = async (change: Record<string, unknown>) => {
+        const result = await command(change);
+        expect(result.status, result.message ?? result.errorCode).toBe('APPLIED');
+        return result.cart;
+    };
+    await apply({ changes: { add: [{ productVariantId, quantity: 1 }] } });
+    await apply({ beginCheckout: true });
+    await apply({
+        prepareShipping: {
+            shippingAddress: {
+                fullName: 'Referral Test',
+                streetLine1: '100 Test Street',
+                city: 'Los Angeles',
+                province: 'California',
+                postalCode: '90001',
+                countryCode: 'US',
+                phoneNumber: '10000000000',
+            },
+        },
     });
-    assertSuccess(shippingResult.setOrderShippingMethod);
-    const transitioned = await shopClient.query(TRANSITION);
-    assertSuccess(transitioned.transitionOrderToState);
-    expect(transitioned.transitionOrderToState.state).toBe('ArrangingPayment');
-    return transitioned.transitionOrderToState;
+    let prepared = await command({ preparePayment: true });
+    if (prepared.status === 'REJECTED' && /FR-[A-F0-9]{12}/.test(prepared.message ?? '')) {
+        const current = (await shopClient.query(READ_CART)).storefrontCart;
+        const cases = (await adminClient.query(RISK_CASES)).fraudRiskCases.items;
+        const riskCase = cases.find(
+            (item: { orderId: string; caseCode: string }) =>
+                item.orderId === current.checkoutOrder.id && prepared.message.includes(item.caseCode),
+        );
+        expect(riskCase?.status).toBe('OPEN');
+        const reviewed = await adminClient.query(RELEASE_RISK_CASE, {
+            input: {
+                id: riskCase.id,
+                action: 'RELEASE',
+                reason: 'Synthetic referral order reviewed in isolated E2E',
+                idempotencyKey: randomUUID(),
+            },
+        });
+        expect(reviewed.reviewFraudRiskCase.status).toBe('APPROVED');
+        prepared = await command({ preparePayment: true });
+    }
+    expect(prepared.status, prepared.message ?? prepared.errorCode).toBe('APPLIED');
+    const order = prepared.cart.checkoutOrder;
+    expect(order.state).toBe('ArrangingPayment');
+    return order;
 }
 
 async function createAndPayOrder(): Promise<any> {

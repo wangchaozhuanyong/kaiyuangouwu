@@ -32,6 +32,40 @@ function legalBlock(overrides: Partial<StorefrontContentBlock> = {}): Storefront
 }
 
 describe('resolveManagedLegalDocument', () => {
+    it('resolves both documents from the new shared legal block targets', () => {
+        const block = legalBlock({
+            code: 'storefront-legal-test',
+            body: '',
+            items: [
+                {
+                    id: 'privacy',
+                    enabled: true,
+                    position: 0,
+                    imageUrl: null,
+                    targetType: 'PAGE',
+                    targetValue: '/legal?id=privacy',
+                    label: 'Privacy policy',
+                    description: 'Privacy paragraph one.\nPrivacy paragraph two.',
+                },
+                {
+                    id: 'terms',
+                    enabled: true,
+                    position: 1,
+                    imageUrl: null,
+                    targetType: 'PAGE',
+                    targetValue: '/legal?id=terms',
+                    label: 'Terms of use',
+                    description: 'Terms paragraph.',
+                },
+            ],
+        });
+
+        expect(resolveManagedLegalDocument([block], 'privacy', 'Privacy')?.body).toBe(
+            'Privacy paragraph one.\nPrivacy paragraph two.',
+        );
+        expect(resolveManagedLegalDocument([block], 'terms', 'Terms')?.body).toBe('Terms paragraph.');
+    });
+
     it('uses the matching managed item for each legal route', () => {
         const block = legalBlock({
             items: [

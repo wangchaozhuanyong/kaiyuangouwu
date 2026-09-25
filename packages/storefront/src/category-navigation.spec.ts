@@ -139,7 +139,7 @@ describe('category navigation responsive spacing', () => {
         expect(categoryPageSource).toContain('<svg viewBox="0 0 40 40" fill="none">');
         expect(categoryPageSource).not.toContain('allCategoriesGoldIcon');
         expect(stylesheet).toMatch(
-            /\.primary-categories-all-icon\s*\{[^}]*border:\s*1px solid color-mix\([^}]*color:\s*var\(--accent\);/,
+            /\.category-page \.primary-categories-all-icon\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--accent-soft\);/,
         );
         expect(stylesheet).toMatch(
             /\.category-page \.primary-category-strip\s*\{[^}]*margin:\s*4px var\(--page-section-inset, 16px\) 8px;[^}]*gap:\s*0;/,
@@ -288,7 +288,7 @@ describe('category navigation responsive spacing', () => {
 
     it('keeps the active category image inside the navigation row', () => {
         expect(stylesheet).toMatch(
-            /\.primary-categories button\.is-active \.primary-category-image\s*\{[^}]*box-shadow:\s*inset 0 0 0 1px var\(--accent\);[^}]*transform:\s*none;/,
+            /\.primary-categories button\.is-active \.primary-category-image\s*\{[^}]*box-shadow:\s*none;[^}]*background:\s*var\(--accent-soft\);/,
         );
         expect(stylesheet).not.toMatch(
             /\.primary-categories button\.is-active \.primary-category-image\s*\{[^}]*transform:\s*translateY\(-/,

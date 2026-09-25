@@ -3,6 +3,18 @@ import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { configureDefaultOrderProcess, LanguageCode, PluginCommonModule, VendurePlugin } from '@vendure/core';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 
+import {
+    AFTER_SALES_EVIDENCE_STORAGE,
+    AfterSalesEvidenceStorageOptions,
+    AfterSalesEvidenceStorageService,
+} from './after-sales-evidence-storage.service';
+import { AfterSalesEvidenceController } from './after-sales-evidence.controller';
+import {
+    AfterSalesEvidenceFieldResolver,
+    AfterSalesEvidenceShopResolver,
+} from './after-sales-evidence.resolver';
+import { AfterSalesEvidenceService } from './after-sales-evidence.service';
+import { purgeAfterSalesEvidenceTask } from './after-sales-evidence.tasks';
 import { AfterSalesAdminResolver, AfterSalesShopResolver } from './after-sales.resolver';
 import { AfterSalesService } from './after-sales.service';
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
@@ -34,6 +46,7 @@ import { DigitalDeliveryController } from './digital-delivery.controller';
 import { DigitalDeliveryService } from './digital-delivery.service';
 import { digitalFulfillmentHandler } from './digital-fulfillment-handler';
 import { AfterSalesEvent } from './entities/after-sales-event.entity';
+import { AfterSalesEvidence } from './entities/after-sales-evidence.entity';
 import { AfterSalesItem } from './entities/after-sales-item.entity';
 import { AfterSalesRequest } from './entities/after-sales-request.entity';
 import { AutoCardConfig } from './entities/auto-card-config.entity';
@@ -47,6 +60,7 @@ import { ManualDigitalDeliveryEvent } from './entities/manual-digital-delivery-e
 import { ManualDigitalDelivery } from './entities/manual-digital-delivery.entity';
 import { PackagingUnpackEvent } from './entities/packaging-unpack-event.entity';
 import { ProductPackagingRule } from './entities/product-packaging-rule.entity';
+import { StoreNotificationRead } from './entities/store-notification-read.entity';
 import { fulfillmentDeliveryProcess } from './fulfillment-delivery.process';
 import {
     FulfillmentDeliveryAdminResolver,
@@ -73,11 +87,14 @@ import { PackagingStockLocationStrategy } from './packaging-stock-location-strat
 import { PhysicalOnlyStockAllocationStrategy } from './physical-only-stock-allocation-strategy';
 import { ProductPackagingAdminResolver, ProductPackagingProductResolver } from './product-packaging.resolver';
 import { ProductPackagingService } from './product-packaging.service';
+import { StoreNotificationReadResolver } from './store-notification-read.resolver';
+import { StoreNotificationReadService } from './store-notification-read.service';
 import './types';
 
 @VendurePlugin({
     imports: [PluginCommonModule, ContentTranslationPlugin, StorefrontCartPlugin, CatalogManagementPlugin],
     entities: [
+        AfterSalesEvidence,
         AfterSalesRequest,
         AfterSalesItem,
         AfterSalesEvent,
@@ -92,12 +109,19 @@ import './types';
         CustomerDeliveryEmail,
         FulfillmentDeliveryRecord,
         FulfillmentDeliveryEvent,
+        StoreNotificationRead,
     ],
-    controllers: [DigitalDeliveryController],
+    controllers: [DigitalDeliveryController, AfterSalesEvidenceController],
     providers: [
         ControlledTestPaymentConfigService,
         CartDeliveryCommandAdapter,
         AfterSalesService,
+        AfterSalesEvidenceService,
+        AfterSalesEvidenceStorageService,
+        {
+            provide: AFTER_SALES_EVIDENCE_STORAGE,
+            useFactory: () => CommerceFulfillmentPlugin.evidenceStorage,
+        },
         AutoCardCipherService,
         AutoCardService,
         AutoCardEmailResultService,
@@ -114,11 +138,13 @@ import './types';
         ManualDigitalDeliveryEmailResultService,
         CustomerDeliveryEmailService,
         FulfillmentDeliveryService,
+        StoreNotificationReadService,
     ],
     adminApiExtensions: {
         schema: adminApiExtensions,
         resolvers: [
             AfterSalesAdminResolver,
+            AfterSalesEvidenceFieldResolver,
             OrderOperationsAdminResolver,
             ...autoCardAdminResolvers,
             CommerceModeAdminResolver,
@@ -137,6 +163,8 @@ import './types';
             OrderConfirmationResolver,
             CustomerOrderCancellationResolver,
             AfterSalesShopResolver,
+            AfterSalesEvidenceShopResolver,
+            AfterSalesEvidenceFieldResolver,
             ...autoCardShopResolvers,
             CommerceModeShopResolver,
             ProductPackagingProductResolver,
@@ -144,6 +172,7 @@ import './types';
             CustomerDeliveryEmailShopResolver,
             FulfillmentDeliveryShopResolver,
             FulfillmentDeliveryFieldResolver,
+            StoreNotificationReadResolver,
         ],
     },
     configuration: config => {
@@ -445,6 +474,7 @@ import './types';
         }
         config.schedulerOptions.tasks.push(reconcileAutoCardDeliveriesTask);
         config.schedulerOptions.tasks.push(reconcileManualDigitalDeliveriesTask);
+        config.schedulerOptions.tasks.push(purgeAfterSalesEvidenceTask);
         config.schedulerOptions.tasks.push(reconcileFulfillmentDeliveriesTask);
         return config;
     },
@@ -452,9 +482,14 @@ import './types';
 })
 export class CommerceFulfillmentPlugin {
     static testPaymentsEnabled = false;
+    static evidenceStorage: AfterSalesEvidenceStorageOptions = {};
 
-    static init(options: { testPaymentsEnabled?: boolean }) {
+    static init(options: {
+        testPaymentsEnabled?: boolean;
+        evidenceStorage?: AfterSalesEvidenceStorageOptions;
+    }) {
         this.testPaymentsEnabled = options.testPaymentsEnabled === true;
+        this.evidenceStorage = options.evidenceStorage ?? {};
         return CommerceFulfillmentPlugin;
     }
 }

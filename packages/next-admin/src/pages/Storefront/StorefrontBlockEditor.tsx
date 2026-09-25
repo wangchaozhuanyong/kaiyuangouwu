@@ -43,6 +43,7 @@ import {
 } from './storefront-editor-model';
 import { ItemEditor } from './storefront-item-editor';
 import { TargetValueInput } from './storefront-target-input';
+import { SupportFaqEditor } from './SupportFaqEditor';
 
 export function StorefrontBlockEditor({
     value,
@@ -321,27 +322,25 @@ export function StorefrontBlockEditor({
                                 </h3>
                                 {isSupport && (
                                     <p className="mt-1 text-[11px] text-slate-400">
-                                        客服页当前仅使用背景色；二维码请在下方微信客服渠道中上传
+                                        页首配图用于电脑端客服页面；微信二维码请在下方客服渠道中上传
                                     </p>
                                 )}
                                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                                    {!isSupport && (
-                                        <div className="sm:col-span-2">
-                                            <AssetPicker
-                                                label="主图素材"
-                                                value={draft.imageAsset}
-                                                fallbackUrl={draft.imageUrl}
-                                                onChange={asset =>
-                                                    setDraft({
-                                                        ...draft,
-                                                        imageAsset: asset,
-                                                        imageAssetId: asset?.id ?? null,
-                                                        imageUrl: asset?.preview ?? null,
-                                                    })
-                                                }
-                                            />
-                                        </div>
-                                    )}
+                                    <div className="sm:col-span-2">
+                                        <AssetPicker
+                                            label={isSupport ? '电脑端客服页首配图' : '主图素材'}
+                                            value={draft.imageAsset}
+                                            fallbackUrl={draft.imageUrl}
+                                            onChange={asset =>
+                                                setDraft({
+                                                    ...draft,
+                                                    imageAsset: asset,
+                                                    imageAssetId: asset?.id ?? null,
+                                                    imageUrl: asset?.preview ?? null,
+                                                })
+                                            }
+                                        />
+                                    </div>
                                     {['QUICK_LINKS', 'TRUST_BAR', 'CATEGORY_AD'].includes(draft.type) && (
                                         <Field label="卡片样式">
                                             <select
@@ -686,6 +685,14 @@ export function StorefrontBlockEditor({
                                         </div>
                                     )}
                                 </section>
+                            )}
+
+                            {isSupport && (
+                                <SupportFaqEditor
+                                    settings={draft.settings}
+                                    language={language}
+                                    onChange={supportFaqs => updateSettings({ supportFaqs })}
+                                />
                             )}
 
                             {moduleUsesItems(draft.type) && (

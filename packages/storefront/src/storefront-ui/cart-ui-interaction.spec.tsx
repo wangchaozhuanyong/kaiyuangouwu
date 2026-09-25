@@ -57,21 +57,23 @@ describe('CouponSheet interactions', () => {
         vi.clearAllMocks();
     });
 
-    it('applies the selected coupon and closes only after the request succeeds', async () => {
+    it.each([false, true])('applies a coupon and closes after success in desktop=%s', async desktop => {
         const onApply = vi.fn().mockResolvedValue(null);
         const onClose = vi.fn();
         await act(async () => {
             root.render(
-                <CouponSheet
-                    coupons={[coupon]}
-                    orderId="order-1"
-                    language="zh"
-                    loading={false}
-                    onApply={onApply}
-                    onRemove={vi.fn().mockResolvedValue(null)}
-                    onBrowseCoupons={vi.fn()}
-                    onClose={onClose}
-                />,
+                <DesktopLayoutContext.Provider value={desktop}>
+                    <CouponSheet
+                        coupons={[coupon]}
+                        orderId="order-1"
+                        language="zh"
+                        loading={false}
+                        onApply={onApply}
+                        onRemove={vi.fn().mockResolvedValue(null)}
+                        onBrowseCoupons={vi.fn()}
+                        onClose={onClose}
+                    />
+                </DesktopLayoutContext.Provider>,
             );
             await Promise.resolve();
         });
@@ -87,6 +89,49 @@ describe('CouponSheet interactions', () => {
         expect(onApply).toHaveBeenCalledWith(coupon.id);
         expect(onClose).toHaveBeenCalledOnce();
     });
+    it.each([false, true])(
+        'keeps unavailable coupons disabled and a failed removal open in desktop=%s',
+        async desktop => {
+            const onApply = vi.fn().mockResolvedValue(null);
+            const onRemove = vi.fn().mockResolvedValue('订单状态变化，请刷新');
+            const onClose = vi.fn();
+            await act(async () => {
+                root.render(
+                    <DesktopLayoutContext.Provider value={desktop}>
+                        <CouponSheet
+                            coupons={[
+                                { ...coupon, usable: false, status: 'EXPIRED' },
+                                { ...coupon, id: 'locked', lockedOrderId: 'order-1', usable: false },
+                            ]}
+                            orderId="order-1"
+                            currencyCode="MYR"
+                            language="zh"
+                            loading={false}
+                            onApply={onApply}
+                            onRemove={onRemove}
+                            onClose={onClose}
+                            onBrowseCoupons={vi.fn()}
+                        />
+                    </DesktopLayoutContext.Provider>,
+                );
+                await Promise.resolve();
+            });
+            const buttons = [...document.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')];
+            expect(buttons).toHaveLength(2);
+            expect(buttons[0].disabled).toBe(true);
+            expect(buttons[1].disabled).toBe(false);
+            expect(buttons[1].getAttribute('aria-pressed')).toBe('true');
+            await act(async () => {
+                buttons[0].click();
+                buttons[1].click();
+                await Promise.resolve();
+            });
+            expect(onApply).not.toHaveBeenCalled();
+            expect(onRemove).toHaveBeenCalledWith('locked');
+            expect(onClose).not.toHaveBeenCalled();
+            expect(document.body.textContent).toContain('订单状态变化，请刷新');
+        },
+    );
     it.each([false, true])('preserves stock recovery and selection rules in desktop=%s', async desktop => {
         const onQuantity = vi.fn();
         const onSelect = vi.fn();

@@ -35,7 +35,7 @@ export function StorefrontFixture() {
         <main className="p-6">
             <h1 className="text-lg font-bold">采集联调测试页</h1>
             <p className="my-4">仅连接临时测试数据库，不代表线上数据。当前页面：{route}</p>
-            <StorefrontTrafficPreference language="zh" />
+            <StorefrontTrafficPreference api={api} language="zh" />
             <div className="flex gap-4">
                 <button onClick={() => navigate('/product/one')}>打开商品页</button>
                 <button onClick={() => navigate('/')}>返回首页</button>

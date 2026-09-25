@@ -87,7 +87,10 @@ export function MailQueryRoutePage() {
     const runtime = useRuntime();
     return (
         <MailQueryPage
+            key={JSON.stringify([runtime.market.code, runtime.customer?.id ?? null])}
             api={runtime.api}
+            marketCode={runtime.market.code}
+            customerId={runtime.customer?.id}
             brandingName={runtime.storefrontName}
             language={runtime.language}
             onBack={runtime.goBack}
@@ -151,11 +154,14 @@ export function SupportRoutePage() {
     return (
         <SupportPageContext.Provider
             value={{
+                api: runtime.api,
+                customer: runtime.customer,
                 content: runtime.supportContent,
                 language: runtime.language,
                 orderCode: runtime.route.orderCode,
                 focus: runtime.route.focus,
                 onNotify: runtime.notify,
+                onSignIn: () => runtime.navigate({ name: 'login' }),
             }}
         >
             <SupportPage />

@@ -5,6 +5,7 @@ import { isUsableEnglishTranslation } from '@vendure/common/lib/translation-vali
 import { ContentTranslationService } from '@vendure/content-translation-plugin';
 import {
     Asset,
+    Collection,
     EntityNotFoundError,
     EventBus,
     RequestContext,
@@ -38,6 +39,13 @@ import {
     createContentPublicationChecker,
     isAccountContentBlockType,
 } from './content-publication';
+import {
+    DESKTOP_CATEGORY_BANNER_DEFAULT,
+    DESKTOP_CATEGORY_BANNER_PREFIX,
+    DESKTOP_CATEGORY_BANNER_PURPOSE,
+    desktopCategoryBannerCode,
+    parseDesktopCategoryBannerSettings,
+} from './desktop-category-banner';
 import { StorefrontContentBlockTranslation } from './entities/storefront-content-block-translation.entity';
 import { StorefrontContentBlock } from './entities/storefront-content-block.entity';
 import { StorefrontContentItemTranslation } from './entities/storefront-content-item-translation.entity';
@@ -181,6 +189,7 @@ export class StorefrontContentService {
         }
         this.validateAuthVisual(normalized, input.items ?? []);
         this.validateAccountHero(normalized, input.items ?? []);
+        await this.validateDesktopCategoryBanner(ctx, normalized, input.items ?? []);
         await this.assertUniqueCode(ctx, normalized.code);
         const image = await this.resolveImage(ctx, normalized.imageAssetId, normalized.imageUrl, '区块图片');
         this.assertEnabledHeroHasImage(normalized.type, normalized.enabled, image);
@@ -293,6 +302,7 @@ export class StorefrontContentService {
                     translations: [],
                 })),
         );
+        await this.validateDesktopCategoryBanner(ctx, next, input.items ?? block.items);
         await this.assertUniqueCode(ctx, next.code, block.id);
         const requestedImageUrl =
             input.imageAssetId === null && input.imageUrl === undefined ? null : next.imageUrl;
@@ -315,6 +325,9 @@ export class StorefrontContentService {
             targetType: next.targetType,
             targetValue: next.targetValue,
             settings: next.settings,
+            // Every accepted edit advances the editor version, including translation/item-only
+            // changes and databases whose automatic timestamps have only second precision.
+            updatedAt: new Date(Math.max(Date.now(), block.updatedAt.getTime() + 1)),
         });
         await this.connection.getRepository(ctx, StorefrontContentBlock).save(block);
         if (input.translations) {
@@ -974,6 +987,44 @@ export class StorefrontContentService {
         if (items.length) {
             throw new UserInputError('个人中心头图不支持配置子项');
         }
+    }
+
+    private async validateDesktopCategoryBanner(
+        ctx: RequestContext,
+        input: ReturnType<StorefrontContentService['validateBlockInput']>,
+        items: unknown[],
+    ): Promise<void> {
+        const purpose = input.settings?.purpose;
+        const reservedCode = input.code.startsWith(DESKTOP_CATEGORY_BANNER_PREFIX);
+        if (!reservedCode && purpose !== DESKTOP_CATEGORY_BANNER_PURPOSE) return;
+        const settings = parseDesktopCategoryBannerSettings(input);
+        if (!settings || !reservedCode || input.code !== desktopCategoryBannerCode(settings.categoryId)) {
+            throw new UserInputError('电脑端分类横幅设置不正确');
+        }
+        if (
+            input.targetType !== 'NONE' ||
+            input.targetValue ||
+            input.startsAt ||
+            input.endsAt ||
+            items.length
+        ) {
+            throw new UserInputError('电脑端分类横幅只能配置图片和展示方式');
+        }
+        if (settings.mode === 'image' && !input.imageAssetId && !input.imageUrl) {
+            throw new UserInputError('请选择横幅图片');
+        }
+        if (settings.mode === 'text' && (input.imageAssetId || input.imageUrl)) {
+            throw new UserInputError('文字横幅不能保留图片');
+        }
+        if (settings.categoryId === DESKTOP_CATEGORY_BANNER_DEFAULT) return;
+        const collection = await this.connection.getRepository(ctx, Collection).findOne({
+            where: {
+                id: settings.categoryId,
+                channels: { id: ctx.channelId },
+                isRoot: false,
+            },
+        });
+        if (!collection) throw new UserInputError('当前店铺不存在这个分类');
     }
 
     private validateNavigationItems(inputs: StorefrontContentItemInput[]): void {

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react';
 
+import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { useDesktopLayout } from '../desktop-layout';
 import {
     cartLineCanSelect,
@@ -22,6 +23,7 @@ import {
     quantityStockMessage,
     variantCanIncreaseQuantity,
 } from '../product-availability';
+import { couponCardFromCustomerCoupon } from '../storefront-coupons';
 import { routeHref } from '../storefront-router';
 import { MarketConfig, StoreCustomerCoupon, StorefrontCart, StorefrontLanguage } from '../types';
 
@@ -631,6 +633,7 @@ export function SwipeableCartLine({
 export function CouponSheet({
     coupons,
     orderId,
+    currencyCode,
     language,
     loading,
     onApply,
@@ -640,6 +643,7 @@ export function CouponSheet({
 }: {
     coupons: StoreCustomerCoupon[];
     orderId: string;
+    currencyCode?: string;
     language: StorefrontLanguage;
     loading: boolean;
     onApply: (customerCouponId: string) => Promise<string | null>;
@@ -648,6 +652,7 @@ export function CouponSheet({
     onClose: () => void;
 }) {
     const isZh = language === 'zh';
+    const desktop = useDesktopLayout();
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const choose = async (coupon: StoreCustomerCoupon) => {
@@ -679,21 +684,43 @@ export function CouponSheet({
                             const applied = coupon.lockedOrderId === orderId;
                             const selectable = applied || coupon.usable;
                             const actionLabel = couponSheetActionLabel(coupon, applied, language);
+                            const action = (
+                                <button
+                                    type="button"
+                                    onClick={() => void choose(coupon)}
+                                    disabled={loading || submitting || !selectable}
+                                    aria-pressed={applied}
+                                    aria-label={`${actionLabel}: ${coupon.campaignName}`}
+                                >
+                                    {actionLabel}
+                                </button>
+                            );
+                            if (desktop)
+                                return (
+                                    <DesktopCouponTicket
+                                        key={coupon.id}
+                                        card={couponCardFromCustomerCoupon(
+                                            coupon,
+                                            language,
+                                            coupon.currencyCode || currencyCode || '',
+                                        )}
+                                        selected={applied}
+                                        unavailable={!selectable}
+                                        action={action}
+                                        meta={
+                                            coupon.validUntil
+                                                ? `${isZh ? '有效期至' : 'Valid until'} ${new Date(coupon.validUntil).toLocaleDateString(isZh ? 'zh-CN' : 'en-MY')}`
+                                                : undefined
+                                        }
+                                    />
+                                );
                             return (
                                 <div key={coupon.id}>
                                     <span>
                                         <TicketPercent />
                                         {coupon.campaignName}
                                     </span>
-                                    <button
-                                        type="button"
-                                        onClick={() => void choose(coupon)}
-                                        disabled={loading || submitting || !selectable}
-                                        aria-pressed={applied}
-                                        aria-label={`${actionLabel}: ${coupon.campaignName}`}
-                                    >
-                                        {actionLabel}
-                                    </button>
+                                    {action}
                                 </div>
                             );
                         })}

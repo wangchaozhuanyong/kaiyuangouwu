@@ -17,6 +17,7 @@ import { MerchantInitialPasswordService } from '../merchant-initial-password.ser
 import {
     CreateStoreCouponCampaignInput,
     CreateStoreFlashSaleInput,
+    StoreCouponAppearanceTheme,
     StoreCouponLedgerEntryListOptions,
 } from '../types';
 
@@ -117,6 +118,19 @@ export class StorePromotionCampaignAdminResolver {
         @Args('input') input: CreateStoreCouponCampaignInput,
     ) {
         return this.campaignService.createCoupon(ctx, input);
+    }
+
+    @Transaction('manual')
+    @Mutation()
+    @Allow(Permission.UpdatePromotion)
+    setStoreCouponAppearance(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: ID,
+        @Args('theme') theme?: StoreCouponAppearanceTheme | null,
+    ) {
+        return this.cartCommands.runTransaction(ctx, () =>
+            this.campaignService.setCouponAppearance(ctx, id, theme),
+        );
     }
 
     @Transaction()
@@ -293,21 +307,21 @@ export class StorePromotionCampaignShopResolver {
     @Mutation()
     @Allow(Permission.Authenticated)
     applyStorefrontCoupon(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
-        return this.cartCommands.legacy(ctx, () => this.lifecycleService.apply(ctx, id));
+        return this.cartCommands.legacy(ctx, orderCtx => this.lifecycleService.apply(orderCtx, id));
     }
 
     @Transaction('manual')
     @Mutation()
     @Allow(Permission.Authenticated)
     applyBestStorefrontCoupon(@Ctx() ctx: RequestContext) {
-        return this.cartCommands.legacy(ctx, () => this.lifecycleService.applyBest(ctx));
+        return this.cartCommands.legacy(ctx, orderCtx => this.lifecycleService.applyBest(orderCtx));
     }
 
     @Transaction('manual')
     @Mutation()
     @Allow(Permission.Authenticated)
     removeStorefrontCoupon(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
-        return this.cartCommands.legacy(ctx, () => this.lifecycleService.remove(ctx, id));
+        return this.cartCommands.legacy(ctx, orderCtx => this.lifecycleService.remove(orderCtx, id));
     }
 }
 

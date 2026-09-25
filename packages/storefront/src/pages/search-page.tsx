@@ -1,12 +1,13 @@
-import { keepPreviousData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 import { useNavigate, useRouter } from '@tanstack/react-router';
-import { ArrowLeft, CircleAlert, Download, LayoutGrid, Search, ShoppingBag, Trash2 } from 'lucide-react';
+import { ArrowLeft, CircleAlert, Download, LayoutGrid, Search, ShoppingBag, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 // eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
 import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { ProductRow } from '../components/common/product-row';
+import { useDesktopLayout } from '../desktop-layout';
 import { languageCodeFor } from '../i18n';
 import { isInputMethodKey } from '../input-method';
 import { offlineLoadError } from '../loading-state';
@@ -20,9 +21,9 @@ import { storefrontErrorMessage } from '../storefront-errors';
 import { SearchPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { readStoredStrings, scopedStorageKey, SEARCH_HISTORY_STORAGE_KEY } from '../storefront-storage';
-import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
+import { EmptyState, ListSkeleton, SectionIcon } from '../storefront-ui/page-shell';
 import { ProductSection } from '../storefront-ui/product-section';
-import { MarketConfig, Product, ProductSearchSort, StorefrontLanguage } from '../types';
+import { CollectionSummary, MarketConfig, Product, ProductSearchSort, StorefrontLanguage } from '../types';
 
 import '../styles/search-surfaces.css';
 
@@ -31,10 +32,12 @@ import '../styles/search-surfaces.css';
 export interface SearchPageProps {
     api: ShopApi;
     products: Product[];
+    collections?: CollectionSummary[];
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
     storefrontCode: string;
+    customerId?: string | null;
     initialQuery: string;
 }
 
@@ -43,15 +46,34 @@ export function SearchPage() {
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const router = useRouter();
     const goBack = () => router.history.back();
-    const { api, products, market, locale, language, storefrontCode, initialQuery } =
-        SearchPageContext.useValue();
-    const queryClient = useQueryClient();
+    const {
+        api,
+        products,
+        collections = [],
+        market,
+        locale,
+        language,
+        storefrontCode,
+        customerId,
+        initialQuery,
+    } = SearchPageContext.useValue();
     const isZh = language === 'zh';
+    const desktop = useDesktopLayout();
+    const closeSearch = () => {
+        if (router.history.canGoBack()) {
+            router.history.back();
+        } else {
+            navigateTo({ name: 'home' });
+        }
+    };
     const [query, setQuery] = useState(initialQuery);
     const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
     const [resultSort, setResultSort] = useState<ProductSearchSort>('recommended');
     const [history, setHistory] = useState<string[]>([]);
-    const searchHistoryStorageKey = scopedStorageKey(SEARCH_HISTORY_STORAGE_KEY, storefrontCode);
+    const storeSearchHistoryKey = scopedStorageKey(SEARCH_HISTORY_STORAGE_KEY, storefrontCode);
+    const searchHistoryStorageKey = storeSearchHistoryKey
+        ? `${storeSearchHistoryKey}:${customerId ? `customer:${encodeURIComponent(customerId)}` : 'guest'}`
+        : '';
     const popularSearches = products.slice(0, 6);
     const vendureLanguageCode = languageCodeFor(language);
     const term = submittedQuery.trim();
@@ -75,7 +97,6 @@ export function SearchPage() {
         placeholderData: keepPreviousData,
         meta: publicQueryMeta(),
     });
-    // Keep cache publication tied to new result pages while a destination route is loading.
     const results = useMemo(
         () => searchQuery.data?.pages.flatMap(page => page.items) ?? [],
         [searchQuery.data?.pages],
@@ -102,11 +123,15 @@ export function SearchPage() {
         if (!next) return;
         setQuery(next);
         setSubmittedQuery(next);
-        navigateTo({ name: 'search', term: next });
+        void navigate({ ...routeNavigateOptions({ name: 'search', term: next }), replace: true } as never);
         const nextHistory = [next, ...history.filter(item => item !== next)].slice(0, 8);
         setHistory(nextHistory);
         if (searchHistoryStorageKey) {
-            localStorage.setItem(searchHistoryStorageKey, JSON.stringify(nextHistory));
+            try {
+                localStorage.setItem(searchHistoryStorageKey, JSON.stringify(nextHistory));
+            } catch {
+                // Searching and in-memory history still work when browser storage is restricted.
+            }
         }
     };
 
@@ -115,21 +140,22 @@ export function SearchPage() {
     }, [searchHistoryStorageKey]);
 
     useEffect(() => {
-        for (const product of results) {
-            const queryKey = storefrontQueryKeys.product(
-                storefrontQueryKeys.market(market),
-                vendureLanguageCode,
-                product.id,
-            );
-            queryClient.setQueryData(queryKey, product);
-            void queryClient.prefetchQuery({
-                queryKey,
-                queryFn: () => product,
-                staleTime: PUBLIC_QUERY_STALE_TIME,
-                meta: publicQueryMeta(),
-            });
-        }
-    }, [market.code, market.currencyCode, queryClient, results, vendureLanguageCode]);
+        if (!desktop) return;
+        const onEscape = (event: KeyboardEvent) => {
+            if (
+                event.key !== 'Escape' ||
+                event.defaultPrevented ||
+                isInputMethodKey(event) ||
+                document.querySelector('[role="dialog"], [role="alertdialog"]')
+            )
+                return;
+            event.preventDefault();
+            if (router.history.canGoBack()) router.history.back();
+            else void navigate(routeNavigateOptions({ name: 'home' }) as never);
+        };
+        window.addEventListener('keydown', onEscape);
+        return () => window.removeEventListener('keydown', onEscape);
+    }, [desktop, navigate, router.history]);
 
     const loadMore = () => searchQuery.fetchNextPage();
 
@@ -159,20 +185,36 @@ export function SearchPage() {
                         type="search"
                         autoComplete="off"
                         value={query}
-                        onChange={event => setQuery(event.target.value)}
+                        onChange={event => {
+                            const next = event.target.value;
+                            setQuery(next);
+                            if (!next && submittedQuery) {
+                                setSubmittedQuery('');
+                                void navigate({
+                                    ...routeNavigateOptions({ name: 'search' }),
+                                    replace: true,
+                                } as never);
+                            }
+                        }}
                         onKeyDown={event => {
                             if (!isInputMethodKey(event.nativeEvent) && event.key === 'Enter') submit();
                         }}
                         placeholder={isZh ? '搜索商品、分类' : 'Search products'}
                     />
                 </label>
-                <button type="button" onClick={() => submit()}>
+                <button className="search-submit" type="button" onClick={() => submit()}>
                     {isZh ? '搜索' : 'Search'}
                 </button>
+                {desktop && (
+                    <button className="search-close" type="button" onClick={closeSearch}>
+                        <X size={18} aria-hidden="true" />
+                        <span>{isZh ? '关闭搜索' : 'Close search'}</span>
+                    </button>
+                )}
             </header>
             {!submittedQuery ? (
                 <div className="search-discovery">
-                    <section>
+                    <section className="search-recent">
                         <header>
                             <strong>{isZh ? '最近搜索' : 'Recent searches'}</strong>
                             {history.length > 0 && (
@@ -181,7 +223,11 @@ export function SearchPage() {
                                     onClick={() => {
                                         setHistory([]);
                                         if (searchHistoryStorageKey) {
-                                            localStorage.removeItem(searchHistoryStorageKey);
+                                            try {
+                                                localStorage.removeItem(searchHistoryStorageKey);
+                                            } catch {
+                                                // Clearing the in-memory history still works in restricted browsers.
+                                            }
                                         }
                                     }}
                                     aria-label={isZh ? '清空' : 'Clear'}
@@ -205,8 +251,24 @@ export function SearchPage() {
                     {!!popularSearches.length && (
                         <section className="popular-searches">
                             <header>
-                                <strong>{isZh ? '热门搜索' : 'Popular searches'}</strong>
-                                <span>{isZh ? '店内常看商品' : 'Popular in this store'}</span>
+                                <strong>
+                                    {desktop
+                                        ? isZh
+                                            ? '你可能在找'
+                                            : 'Discover products'
+                                        : isZh
+                                          ? '热门搜索'
+                                          : 'Popular searches'}
+                                </strong>
+                                <span>
+                                    {desktop
+                                        ? isZh
+                                            ? '店内商品'
+                                            : 'From this store'
+                                        : isZh
+                                          ? '店内常看商品'
+                                          : 'Popular in this store'}
+                                </span>
                             </header>
                             <ol>
                                 {popularSearches.map((product, index) => (
@@ -214,65 +276,112 @@ export function SearchPage() {
                                         <button type="button" onClick={() => submit(product.name)}>
                                             <b>{index + 1}</b>
                                             <span>{product.name}</span>
-                                            {index === 0 && <em>{isZh ? '热' : 'Hot'}</em>}
+                                            {!desktop && index === 0 && <em>{isZh ? '热' : 'Hot'}</em>}
                                         </button>
                                     </li>
                                 ))}
                             </ol>
                         </section>
                     )}
-                    <section>
-                        <header>
-                            <strong>{isZh ? '按场景发现' : 'Browse by need'}</strong>
-                            <span>{isZh ? '快速进入常用入口' : 'Quick store shortcuts'}</span>
-                        </header>
-                        <div className="discovery-grid">
-                            <button type="button" onClick={() => navigateTo({ name: 'category' })}>
-                                <LayoutGrid />
-                                <span>{isZh ? '全部商品' : 'All products'}</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    submit(
-                                        products.find(product =>
-                                            product.variants.some(
-                                                variant =>
-                                                    variant.customFields.fulfillmentType === 'physical',
-                                            ),
-                                        )?.name ??
-                                            products[0]?.name ??
-                                            '',
-                                    )
-                                }
+                    {desktop ? (
+                        <section className="search-browse">
+                            <header>
+                                <strong>{isZh ? '全部分类' : 'Categories'}</strong>
+                            </header>
+                            <nav
+                                className="search-category-links"
+                                aria-label={isZh ? '搜索分类' : 'Browse categories'}
                             >
-                                <ShoppingBag />
-                                <span>{isZh ? '现货商品' : 'Physical'}</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    submit(
-                                        products.find(product =>
-                                            product.variants.some(
-                                                variant => variant.customFields.fulfillmentType === 'digital',
-                                            ),
-                                        )?.name ??
-                                            products.at(-1)?.name ??
-                                            '',
-                                    )
-                                }
+                                {collections.map(collection => (
+                                    <button
+                                        key={collection.id}
+                                        type="button"
+                                        onClick={() =>
+                                            navigateTo({ name: 'category', collectionId: collection.id })
+                                        }
+                                    >
+                                        {collection.name}
+                                    </button>
+                                ))}
+                                {!collections.length && (
+                                    <button type="button" onClick={() => navigateTo({ name: 'category' })}>
+                                        {isZh ? '浏览全部商品' : 'Browse all products'}
+                                    </button>
+                                )}
+                            </nav>
+                            <header>
+                                <strong>{isZh ? '常用服务' : 'Services'}</strong>
+                            </header>
+                            <nav
+                                className="search-category-links"
+                                aria-label={isZh ? '常用服务' : 'Services'}
                             >
-                                <Download />
-                                <span>{isZh ? '数字内容' : 'Digital'}</span>
-                            </button>
-                        </div>
-                    </section>
+                                <button type="button" onClick={() => navigateTo({ name: 'services' })}>
+                                    {isZh ? '商业服务' : 'Business services'}
+                                </button>
+                                <button type="button" onClick={() => navigateTo({ name: 'support' })}>
+                                    {isZh ? '客服与帮助' : 'Help and support'}
+                                </button>
+                                <button type="button" onClick={() => navigateTo({ name: 'coupons' })}>
+                                    {isZh ? '优惠券' : 'Coupons'}
+                                </button>
+                            </nav>
+                        </section>
+                    ) : (
+                        <section className="search-browse">
+                            <header>
+                                <strong>{isZh ? '按场景发现' : 'Browse by need'}</strong>
+                                <span>{isZh ? '快速进入常用入口' : 'Quick store shortcuts'}</span>
+                            </header>
+                            <div className="discovery-grid">
+                                <button type="button" onClick={() => navigateTo({ name: 'category' })}>
+                                    <LayoutGrid />
+                                    <span>{isZh ? '全部商品' : 'All products'}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        submit(
+                                            products.find(product =>
+                                                product.variants.some(
+                                                    variant =>
+                                                        variant.customFields.fulfillmentType === 'physical',
+                                                ),
+                                            )?.name ??
+                                                products[0]?.name ??
+                                                '',
+                                        )
+                                    }
+                                >
+                                    <ShoppingBag />
+                                    <span>{isZh ? '现货商品' : 'Physical'}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        submit(
+                                            products.find(product =>
+                                                product.variants.some(
+                                                    variant =>
+                                                        variant.customFields.fulfillmentType === 'digital',
+                                                ),
+                                            )?.name ??
+                                                products.at(-1)?.name ??
+                                                '',
+                                        )
+                                    }
+                                >
+                                    <Download />
+                                    <span>{isZh ? '数字内容' : 'Digital'}</span>
+                                </button>
+                            </div>
+                        </section>
+                    )}
                     {!!products.length && (
                         <ProductSection
                             title={isZh ? '今日推荐' : "Today's picks"}
                             subtitle={isZh ? '从店内在售商品开始' : 'Available from this store'}
-                            products={products.slice(0, 2)}
+                            products={products.slice(0, desktop ? 6 : 2)}
                             market={market}
                             locale={locale}
                             language={language}
@@ -282,6 +391,57 @@ export function SearchPage() {
                 </div>
             ) : (
                 <section className="search-results">
+                    {desktop && (
+                        <aside
+                            className="search-results-sidebar"
+                            aria-label={isZh ? '搜索发现' : 'Search discovery'}
+                        >
+                            <h2 className="section-header-title-row">
+                                <SectionIcon kind="history" />
+                                {isZh ? '最近搜索' : 'Recent searches'}
+                            </h2>
+                            {history.length ? (
+                                <div className="search-results-recent">
+                                    {history.map(item => (
+                                        <button key={item} type="button" onClick={() => submit(item)}>
+                                            {item}
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p>{isZh ? '暂无搜索记录' : 'No recent searches'}</p>
+                            )}
+                            <h2 className="section-header-title-row">
+                                <SectionIcon kind="categories" />
+                                {isZh ? '全部分类' : 'Categories'}
+                            </h2>
+                            <nav aria-label={isZh ? '商品分类' : 'Product categories'}>
+                                {collections.map(collection => (
+                                    <button
+                                        key={collection.id}
+                                        type="button"
+                                        onClick={() =>
+                                            navigateTo({ name: 'category', collectionId: collection.id })
+                                        }
+                                    >
+                                        {collection.name}
+                                    </button>
+                                ))}
+                            </nav>
+                            <h2 className="section-header-title-row">
+                                <SectionIcon kind="services" />
+                                {isZh ? '常用服务' : 'Services'}
+                            </h2>
+                            <nav aria-label={isZh ? '常用服务' : 'Services'}>
+                                <button type="button" onClick={() => navigateTo({ name: 'services' })}>
+                                    {isZh ? '商业服务' : 'Business services'}
+                                </button>
+                                <button type="button" onClick={() => navigateTo({ name: 'support' })}>
+                                    {isZh ? '客服与帮助' : 'Help and support'}
+                                </button>
+                            </nav>
+                        </aside>
+                    )}
                     <header>
                         <strong>
                             {isZh ? `“${submittedQuery}”的结果` : `Results for “${submittedQuery}”`}
@@ -323,16 +483,26 @@ export function SearchPage() {
                         />
                     ) : results.length ? (
                         <div className="product-list">
-                            {results.map(product => (
-                                <ProductRow
-                                    key={product.id}
-                                    product={product}
+                            {desktop ? (
+                                <ProductSection
+                                    products={results}
                                     market={market}
                                     locale={locale}
                                     language={language}
-                                    onOpen={() => navigateTo({ name: 'product', id: product.id })}
+                                    onProduct={product => navigateTo({ name: 'product', id: product.id })}
                                 />
-                            ))}
+                            ) : (
+                                results.map(product => (
+                                    <ProductRow
+                                        key={product.id}
+                                        product={product}
+                                        market={market}
+                                        locale={locale}
+                                        language={language}
+                                        onOpen={() => navigateTo({ name: 'product', id: product.id })}
+                                    />
+                                ))
+                            )}
                             {searchError && (
                                 <div className="search-load-error" role="alert">
                                     <span>{searchError}</span>

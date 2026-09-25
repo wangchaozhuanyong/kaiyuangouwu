@@ -21,6 +21,7 @@ export const storeCustomerCouponSchema = gql`
         campaignId: ID!
         campaignName: String!
         campaignKind: StoreCouponCampaignKind!
+        appearanceTheme: StoreCouponAppearanceTheme
         status: StoreCustomerCouponStatus!
         minimumSpend: Money!
         currencyCode: CurrencyCode!

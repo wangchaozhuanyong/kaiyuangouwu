@@ -1,6 +1,7 @@
 import { type CSSProperties, type ReactNode, useState } from 'react';
 
 import { type ImageTone, useImageTone } from './image-tone';
+import { readableStorefrontForeground, storefrontContrastRatio } from './storefront-semantic-palette';
 
 export interface AuthVisualData {
     imageUrl?: string | null;
@@ -25,7 +26,7 @@ export function readableColor(background: string): string {
     return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722 > 0.179 ? '#172033' : '#ffffff';
 }
 
-/** Explicit block colors inherit from the current store when left unset; auto-adapts to image tone. */
+/** Explicit block colors inherit from the store; image loading never changes the copy surface. */
 export function authVisualStyle(content?: AuthVisualData, imageTone?: ImageTone): CSSProperties {
     const background = configuredColor(content?.backgroundColor);
     const accent = configuredColor(content?.settings?.accentColor);
@@ -34,22 +35,24 @@ export function authVisualStyle(content?: AuthVisualData, imageTone?: ImageTone)
     const isLightTone =
         imageTone === 'light' || (background ? readableColor(background) === '#172033' : false);
 
-    const defaultForeground = isLightTone
-        ? '#0f172a'
+    // A managed image never controls the copy palette: its tone may arrive after
+    // first paint, while the store surface stays stable through image loading.
+    const copySurface = background;
+    const foreground = copySurface
+        ? configuredText && storefrontContrastRatio(configuredText, copySurface) >= 4.5
+            ? configuredText
+            : readableStorefrontForeground(copySurface)
         : hasImage
-          ? '#ffffff'
-          : 'var(--auth-store-foreground, var(--store-foreground, #0f172a))';
-    const foreground = configuredText ?? (background ? readableColor(background) : defaultForeground);
-    const secondaryColor = isLightTone
-        ? '#334155'
-        : hasImage
-          ? 'rgba(239, 247, 255, 0.90)'
-          : 'var(--muted, #475569)';
+          ? 'var(--text, var(--auth-store-foreground, #0f172a))'
+          : (configuredText ?? 'var(--auth-store-foreground, var(--store-foreground, #0f172a))');
+    const secondaryColor = copySurface || hasImage ? foreground : 'var(--muted, #475569)';
 
     return {
         '--auth-visual-background':
-            background ??
-            (isLightTone ? '#f8fafc' : 'var(--auth-store-background, var(--skin-background, #f1f5f9))'),
+            copySurface ??
+            (hasImage
+                ? 'var(--surface, var(--auth-store-background, #f1f5f9))'
+                : 'var(--auth-store-background, var(--skin-background, #f1f5f9))'),
         '--auth-visual-foreground': foreground,
         '--auth-hero-secondary-text': secondaryColor,
         '--auth-visual-accent': accent ?? (isLightTone ? '#2563eb' : 'var(--accent, #635bff)'),

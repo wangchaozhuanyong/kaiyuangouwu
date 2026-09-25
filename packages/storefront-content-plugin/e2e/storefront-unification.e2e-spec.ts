@@ -3,6 +3,7 @@ import { AssetType, LanguageCode } from '@vendure/common/lib/generated-types';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
     Asset,
+    AssetTranslation,
     AutoIncrementIdStrategy,
     Customer,
     DefaultSearchPlugin,
@@ -1257,4 +1258,327 @@ describe('unified storefront Admin API to Shop API', () => {
             await backend.close();
         }
     }, 90000);
+    it('publishes page banners from the current Admin to Shop, preserves mobile layouts and store isolation', async () => {
+        adminClient.setChannelToken(stores[0].token);
+        shopClient.setChannelToken(stores[0].token);
+        const asset = await server.app
+            .get(TransactionalConnection)
+            .rawConnection.getRepository(Asset)
+            .save(
+                new Asset({
+                    name: 'page-banner.svg',
+                    type: AssetType.IMAGE,
+                    fileSize: 400,
+                    mimeType: 'image/svg+xml',
+                    width: 1200,
+                    height: 600,
+                    source: 'http://127.0.0.1:5299/assets/page-banner.svg',
+                    preview: 'http://127.0.0.1:5299/assets/page-banner.svg',
+                    channels: [{ id: Number(stores[0].id) }],
+                }),
+            );
+        await server.app
+            .get(TransactionalConnection)
+            .rawConnection.getRepository(AssetTranslation)
+            .save(
+                ['en', 'zh_Hans'].map(
+                    languageCode =>
+                        new AssetTranslation({
+                            base: asset,
+                            languageCode: languageCode as LanguageCode,
+                            name: 'page-banner.svg',
+                        }),
+                ),
+            );
+        const categoryMutation = gql`
+            mutation ($input: CreateCollectionInput!) {
+                createCollection(input: $input) {
+                    id
+                }
+            }
+        `;
+        const parent = (
+            await adminClient.query(categoryMutation, {
+                input: {
+                    filters: [],
+                    translations: [
+                        { languageCode: 'en', name: 'Banner parent', slug: 'banner-parent', description: '' },
+                        {
+                            languageCode: 'zh_Hans',
+                            name: '横幅父分类',
+                            slug: 'banner-parent',
+                            description: '',
+                        },
+                    ],
+                },
+            })
+        ).createCollection;
+        const child = (
+            await adminClient.query(categoryMutation, {
+                input: {
+                    filters: [],
+                    parentId: parent.id,
+                    translations: [
+                        { languageCode: 'en', name: 'Banner child', slug: 'banner-child', description: '' },
+                        {
+                            languageCode: 'zh_Hans',
+                            name: '横幅子分类',
+                            slug: 'banner-child',
+                            description: '',
+                        },
+                    ],
+                },
+            })
+        ).createCollection;
+        await adminClient.query(CREATE, {
+            input: {
+                code: 'storefront-client-plugins',
+                position: 30,
+                type: 'CLIENT_PLUGINS',
+                enabled: true,
+                translations: copy('测试商业服务', 'Test services').map(value => ({
+                    ...value,
+                    body: value.languageCode === LanguageCode.en ? 'Test service details' : '测试服务说明',
+                })),
+                settings: { businessServicesCopyVersion: 1 },
+                items: [],
+            },
+        });
+        await adminClient.query(CREATE, {
+            input: {
+                code: 'support-banner-test',
+                position: 31,
+                type: 'SUPPORT',
+                enabled: true,
+                internalName: '客服配图验收',
+                translations: copy('测试客户支持', 'Test support'),
+                settings: {},
+                items: [
+                    {
+                        enabled: true,
+                        position: 0,
+                        targetType: 'URL',
+                        targetValue: 'https://t.me/banner_test_support',
+                        settings: { supportChannel: 'TELEGRAM', supportAccount: 'banner_test_support' },
+                        translations: [
+                            { languageCode: 'zh_Hans', label: '测试客服', description: '' },
+                            { languageCode: 'en', label: 'Test support', description: '' },
+                        ],
+                    },
+                ],
+            },
+        });
+        const before = await adminClient.query(READ);
+        const servicesBefore = before.storefrontContentBlocks.find(
+            (block: any) => block.type === 'CLIENT_PLUGINS',
+        );
+        const frontend = await createServer({
+            root: fileURLToPath(new URL('../../storefront', import.meta.url)),
+            server: {
+                host: '127.0.0.1',
+                port: 5300,
+                strictPort: true,
+                proxy: { '/shop-api': 'http://127.0.0.1:5299' },
+            },
+        });
+        const backend = await createServer({
+            root: fileURLToPath(new URL('../../next-admin', import.meta.url)),
+            server: { host: '127.0.0.1', port: 5301, strictPort: true },
+        });
+        const browser = await chromium.launch({ headless: true });
+        const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+        await context.addInitScript(
+            ({ auth, channel }) => {
+                sessionStorage.setItem('local-test-admin-token', auth);
+                localStorage.setItem('vendure-active-channel-token', channel);
+            },
+            { auth: adminClient.getAuthToken(), channel: stores[0].token },
+        );
+        const uri = `http://127.0.0.1:5301/e2e/storefront-visual/index.html?stores=${stores.map(store => store.token).join(',')}`;
+        const output = process.env.STOREFRONT_TEST_OUTPUT ?? join(tmpdir(), 'vendure-unified-browser');
+        await mkdir(output, { recursive: true });
+        try {
+            await Promise.all([frontend.listen(), backend.listen()]);
+            const page = await context.newPage();
+            const openBanner = async (target: typeof page) => {
+                await target.goto(uri + '&panel=decoration');
+                await target.getByRole('button', { name: '装修设置', exact: true }).click();
+                await browserExpect(
+                    target.getByRole('region', { name: '电脑端分类横幅' }).getByLabel('横幅展示方式'),
+                ).toBeEnabled();
+            };
+            const chooseImage = async (target: typeof page, scope: ReturnType<typeof page.locator>) => {
+                await scope.getByRole('button', { name: '从素材库选择', exact: true }).click();
+                await target
+                    .getByRole('dialog', { name: '选择图片素材' })
+                    .getByRole('button', { name: 'page-banner.svg' })
+                    .click({ timeout: 6000 })
+                    .catch(async () => {
+                        throw new Error(
+                            await target.getByRole('dialog', { name: '选择图片素材' }).innerText(),
+                        );
+                    });
+            };
+            await openBanner(page);
+            const panel = page.getByRole('region', { name: '电脑端分类横幅' });
+            await panel.getByLabel('横幅展示方式').selectOption('image');
+            await chooseImage(page, panel);
+            await panel.getByRole('button', { name: '保存分类横幅' }).click();
+            await browserExpect(panel.getByRole('status')).toContainText('已保存');
+            const stale = await context.newPage();
+            await openBanner(stale);
+            await panel.getByLabel('图片焦点').selectOption('right');
+            await panel.getByRole('button', { name: '保存分类横幅' }).click();
+            await browserExpect(panel.getByRole('status')).toContainText('已保存');
+            const stalePanel = stale.getByRole('region', { name: '电脑端分类横幅' });
+            await stalePanel.getByLabel('图片焦点').selectOption('left');
+            await stalePanel.getByRole('button', { name: '保存分类横幅' }).click();
+            await browserExpect(stalePanel.getByRole('alert')).toContainText(/刷新|其他管理员|更新/);
+            await browserExpect(stalePanel.getByLabel('图片焦点')).toHaveValue('left');
+            await stalePanel.getByRole('button', { name: '重新读取并放弃修改' }).click();
+            await browserExpect(stalePanel.getByLabel('图片焦点')).toHaveValue('right');
+            await stale.close();
+            await panel.getByLabel('横幅设置范围').selectOption(parent.id);
+            await panel.getByLabel('横幅展示方式').selectOption('image');
+            await chooseImage(page, panel);
+            await panel.getByLabel('图片版式').selectOption('background');
+            await panel.getByRole('button', { name: '保存分类横幅' }).click();
+            await browserExpect(panel.getByRole('status')).toContainText('已保存');
+            await panel.getByLabel('横幅设置范围').selectOption(child.id);
+            await panel.getByLabel('横幅展示方式').selectOption('text');
+            await panel.getByRole('button', { name: '保存分类横幅' }).click();
+            await browserExpect(panel.getByRole('status')).toContainText('已保存');
+            await page.screenshot({ path: join(output, 'admin-category-banner.png'), fullPage: true });
+            const shop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+            await shop.emulateMedia({ reducedMotion: 'reduce' });
+            const categoryUrl = `http://127.0.0.1:5300/e2e/unification/index.html?channel=${stores[0].token}&page=category&category=${parent.id}&child=${child.id}`;
+            await shop.goto(categoryUrl);
+            await browserExpect(shop.locator('.desktop-catalog-hero')).toContainText('横幅子分类');
+            await browserExpect(shop.locator('.desktop-catalog-hero img')).toHaveCount(0);
+            await panel.getByLabel('横幅展示方式').selectOption('inherit');
+            await panel.getByRole('button', { name: '保存分类横幅' }).click();
+            await browserExpect(panel.getByRole('status')).toContainText('已保存');
+            await shop.reload();
+            await browserExpect(shop.locator('.desktop-catalog-hero')).toHaveClass(/is-background/);
+            await browserExpect(shop.locator('.desktop-catalog-hero img')).toHaveAttribute(
+                'src',
+                /page-banner.svg/,
+            );
+            await page.getByRole('button', { name: '关闭装修设置' }).click();
+            await page.getByLabel('测试店铺').selectOption(stores[1].token);
+            await page.getByRole('button', { name: '装修设置', exact: true }).click();
+            await browserExpect(panel.getByLabel('横幅展示方式')).toHaveValue('inherit');
+            await browserExpect(panel.getByRole('img', { name: '分类横幅图片预览' })).toHaveCount(0);
+            await page.goto(uri + '&panel=services');
+            await browserExpect(page.getByRole('heading', { name: /商业服务页文案/ })).toBeVisible();
+            const serviceImage = page.locator('fieldset').filter({ hasText: '电脑端商业服务页首配图' });
+            await chooseImage(page, serviceImage);
+            await page.getByRole('button', { name: '保存并发布', exact: true }).click();
+            await browserExpect(page.getByRole('status')).toContainText('已保存');
+            await page.goto(uri + '&panel=content');
+            await page
+                .locator('article')
+                .filter({ hasText: '客服配图验收' })
+                .getByRole('button', { name: '编辑内容' })
+                .click();
+            const supportImage = page
+                .locator('div')
+                .filter({ has: page.locator('div', { hasText: /^电脑端客服页首配图$/ }) })
+                .filter({ has: page.getByRole('button', { name: '从素材库选择' }) })
+                .last();
+            await chooseImage(page, supportImage);
+            await page.getByRole('button', { name: '保存并生效', exact: true }).click();
+            await browserExpect(page.getByRole('status'))
+                .toContainText('已保存')
+                .catch(async () => {
+                    throw new Error('Support save: ' + (await page.locator('body').innerText()));
+                });
+            const saved = (await shopClient.query(SHOP_READ)).storefrontContentBlocks;
+            const savedServices = saved.find((block: any) => block.type === 'CLIENT_PLUGINS');
+            expect(savedServices.settings).toEqual(servicesBefore.settings);
+            expect(savedServices.items).toEqual(servicesBefore.items);
+            expect(savedServices.imageUrl).toContain('page-banner.svg');
+            expect(saved.find((block: any) => block.type === 'SUPPORT').imageUrl).toContain(
+                'page-banner.svg',
+            );
+            for (const width of [1440, 390]) {
+                await shop.setViewportSize({ width, height: 1000 });
+                for (const route of ['category', 'services', 'support']) {
+                    await shop.goto(
+                        route === 'category'
+                            ? categoryUrl
+                            : `http://127.0.0.1:5300/e2e/unification/index.html?channel=${stores[0].token}&page=${route}`,
+                    );
+                    const selector =
+                        route === 'category'
+                            ? '.desktop-catalog-hero'
+                            : route === 'services'
+                              ? '.business-services-heading'
+                              : '.support-desktop-hero';
+                    await browserExpect(
+                        shop.locator(
+                            route === 'category'
+                                ? width >= 1024
+                                    ? '.desktop-catalog-main'
+                                    : '.category-page'
+                                : route === 'services'
+                                  ? '.business-services-page'
+                                  : '.support-center-content',
+                        ),
+                    ).toBeVisible();
+                    if (width >= 1024 && route === 'category') {
+                        const hero = await shop.locator('.desktop-catalog-hero').boundingBox();
+                        const side = await shop.locator('.desktop-catalog-sidebar').boundingBox();
+                        const frame = await shop
+                            .locator('.desktop-catalog-hero .safe-image-frame')
+                            .boundingBox();
+                        if (!hero || !side || !frame)
+                            throw new Error('Desktop category banner geometry is missing');
+                        expect(hero.height).toBeGreaterThanOrEqual(136);
+                        expect(hero.height).toBeLessThan(400);
+                        expect(hero.x).toBeGreaterThan(side.x + side.width);
+                        expect(frame.height).toBeGreaterThanOrEqual(hero.height - 1);
+                        expect(frame.width).toBeGreaterThanOrEqual(hero.width - 1);
+                    }
+                    if (width >= 1024) {
+                        await browserExpect(shop.locator(selector + ' img')).toHaveAttribute(
+                            'src',
+                            /page-banner.svg/,
+                        );
+                        await browserExpect
+                            .poll(() =>
+                                shop
+                                    .locator(selector + ' img')
+                                    .evaluate(
+                                        (image: HTMLImageElement) => image.complete && image.naturalWidth > 0,
+                                    ),
+                            )
+                            .toBe(true);
+                    } else {
+                        await browserExpect(shop.locator(selector + ' img')).not.toBeVisible();
+                    }
+                    expect(
+                        await shop.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+                    ).toBe(true);
+                    await shop.screenshot({
+                        path: join(output, `page-banner-${route}-${width}.png`),
+                        fullPage: true,
+                        animations: 'disabled',
+                    });
+                }
+            }
+            shopClient.setChannelToken(stores[1].token);
+            expect(
+                (await shopClient.query(SHOP_READ)).storefrontContentBlocks.some((block: any) =>
+                    block.imageUrl?.includes('page-banner.svg'),
+                ),
+            ).toBe(false);
+            await shop.close();
+        } finally {
+            await browser.close();
+            await Promise.all([frontend.close(), backend.close()]);
+            adminClient.setChannelToken(stores[0].token);
+            shopClient.setChannelToken(stores[0].token);
+        }
+    }, 90_000);
 });

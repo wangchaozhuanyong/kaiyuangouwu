@@ -1,21 +1,27 @@
+import { LayoutGrid } from 'lucide-react';
+
 import { catalogInputFromRoute, catalogRouteWithChanges } from '../../catalog-route-query';
 import { RouteState } from '../../storefront-router';
+import { SectionIcon } from '../../storefront-ui/page-shell';
+import { collectionImage, SafeImage } from '../../storefront-ui/product-display';
 import { useStorefront } from '../../StorefrontContext';
-import { CollectionSummary, StorefrontLanguage } from '../../types';
+import { CollectionSummary, Product, StorefrontLanguage } from '../../types';
 
 interface DesktopCategoryNavigationContext {
     route: RouteState;
     language: StorefrontLanguage;
     collections: CollectionSummary[];
+    products: Product[];
     loading: boolean;
     error: string | null;
     refetchStorefront: () => Promise<void>;
     navigate: (route: RouteState) => void;
 }
 
-export function DesktopCategoryNavigation() {
+export function DesktopCategoryNavigation({ expandChildren = false }: { expandChildren?: boolean } = {}) {
     const runtime: DesktopCategoryNavigationContext = useStorefront();
     const { route, language, collections, navigate } = runtime;
+    const products = runtime.products ?? [];
     const isZh = language === 'zh';
     const isCatalogPage = route.name === 'home' || route.name === 'category' || route.name === 'search';
     const catalogRoute: RouteState = isCatalogPage ? route : { name: 'home' };
@@ -32,6 +38,12 @@ export function DesktopCategoryNavigation() {
             className="desktop-category-navigation"
             aria-label={isZh ? '商品分类' : 'Product categories'}
         >
+            {expandChildren && (
+                <strong className="desktop-category-directory-title section-header-title-row">
+                    <SectionIcon kind="categories" />
+                    {isZh ? '全部分类目录' : 'All categories'}
+                </strong>
+            )}
             <div className="desktop-category-row">
                 <nav
                     className="desktop-local-navigation"
@@ -45,26 +57,51 @@ export function DesktopCategoryNavigation() {
                         aria-pressed={isCatalogPage && !input.collectionId && !input.term}
                         onClick={clearFilters}
                     >
+                        <span className="desktop-category-icon" aria-hidden="true">
+                            <LayoutGrid />
+                        </span>
                         <span>{isZh ? '全部商品' : 'All products'}</span>
                     </button>
-                    {collections.map(collection => (
-                        <button
-                            key={collection.id}
-                            type="button"
-                            className={activeCollection?.id === collection.id ? 'is-active' : undefined}
-                            aria-pressed={activeCollection?.id === collection.id}
-                            onClick={() =>
-                                update({
-                                    name: 'category',
-                                    collectionId: collection.id,
-                                    childId: 'all',
-                                    term: undefined,
-                                })
-                            }
-                        >
-                            <span>{collection.name}</span>
-                        </button>
-                    ))}
+                    {collections.map(collection => {
+                        const image = collectionImage(collection, products);
+                        return (
+                            <div className="desktop-category-entry" key={collection.id}>
+                                <button
+                                    type="button"
+                                    className={
+                                        activeCollection?.id === collection.id ? 'is-active' : undefined
+                                    }
+                                    aria-pressed={activeCollection?.id === collection.id}
+                                    onClick={() =>
+                                        update({
+                                            name: 'category',
+                                            collectionId: collection.id,
+                                            childId: 'all',
+                                            term: undefined,
+                                        })
+                                    }
+                                >
+                                    <span className="desktop-category-icon" aria-hidden="true">
+                                        {image ? (
+                                            <SafeImage
+                                                src={image}
+                                                alt=""
+                                                imageKind="icon"
+                                                sizes="32px"
+                                                loading="eager"
+                                            />
+                                        ) : (
+                                            <LayoutGrid />
+                                        )}
+                                    </span>
+                                    <span>{collection.name}</span>
+                                </button>
+                                {expandChildren && activeCollection?.id === collection.id ? (
+                                    <DesktopSubcategoryNavigation />
+                                ) : null}
+                            </div>
+                        );
+                    })}
                 </nav>
             </div>
             {runtime.loading && !collections.length ? (

@@ -174,6 +174,12 @@ export const featureHelpContent = {
         example: '例如：筛选“待发货”订单，核对收件地址后批量创建履约。',
         impact: '操作可改变订单状态并触发履约、通知或库存变化。',
     },
+    'sales.customer-service-feedback': {
+        purpose: '查看客户对当前店铺客服服务提交的评分、标签、意见及关联订单。',
+        requirements: ['选择正确店铺', '当前管理员具有客户数据查看权限'],
+        example: '例如：按订单号核对一条四星评价，并联系负责该订单的客服跟进。',
+        impact: '此页面只读，不会修改评价或订单；客户意见仅供有权限的店铺管理员查看。',
+    },
     'sales.order-items': {
         purpose: '查看订单内的商品、SKU、数量、单价和分摊金额。',
         requirements: ['订单数据已加载', '需调整商品时必须进入允许修改的订单流程'],
@@ -200,9 +206,9 @@ export const featureHelpContent = {
     },
     'sales.after-sales': {
         purpose: '处理退款、退货、补发和售后协商，并记录完整处理结论。',
-        requirements: ['先核对订单、买家诉求和涉及商品', '提交前确认金额与处理方式'],
+        requirements: ['先核对订单、买家诉求、图片凭证和涉及商品', '提交前确认金额与处理方式'],
         example: '例如：核实一件破损商品后，选择部分退款并写明处理说明。',
-        impact: '可影响支付、库存、订单状态与买家通知。',
+        impact: '可影响支付、库存、订单状态与买家通知。买家图片凭证仅授权人员可查看，工单关闭后保留 180 天。',
     },
     'sales.card-pool': {
         purpose: '跨商品查看发卡记录和交付异常；具体 SKU 的交付与库存配置在商品编辑页完成。',
@@ -273,6 +279,12 @@ export const featureHelpContent = {
         example: '例如：选择现代东方，查看手机和电脑组件示例，确认后点击应用到当前店铺。',
         impact: '预览不会发布；应用仅影响当前店铺，恢复默认皮肤可还原配色，商品和装修内容继续保留。',
     },
+    'storefront.support-faq': {
+        purpose: '编辑当前店铺客服页面展示的中英文常见问题。',
+        requirements: ['问题和答案的中英文均填写完整', '启用后保存装修设置才会发布'],
+        example: '例如：说明配送费用在哪里确认，再分别填写中文和英文问答。',
+        impact: '只有启用且两种语言均完整的问答会显示在前台；停用不会删除编辑内容。',
+    },
     'storefront.decoration': {
         purpose: '编排商城首页楼层、启用状态和每个模块的展示内容。',
         requirements: ['先选择要配置的店铺', '保存前在桌面和移动预览中核对'],
@@ -340,9 +352,9 @@ export const featureHelpContent = {
         impact: '会改变模块的前台可见人群和时段。',
     },
     'storefront.content': {
-        purpose: '管理固定页面文案、系统公告和营销落地页内容。',
+        purpose: '管理固定页面文案、首页公告和营销落地页内容。',
         requirements: ['先选择店铺与内容类型', '发布前检查多语言、链接和预览'],
-        example: '例如：更新售后政策页，同时在全站公告中提醒生效日期。',
+        example: '例如：更新售后政策页，同时在首页公告栏中提醒生效日期。',
         impact: '保存或发布后可影响前台对应页面与公告。',
     },
     'storefront.fixed-content': {
@@ -352,10 +364,10 @@ export const featureHelpContent = {
         impact: '只影响当前店铺对应固定页面。',
     },
     'storefront.announcements': {
-        purpose: '发布全站系统公告，并控制状态、顺序和有效时间。',
+        purpose: '发布首页公告，并控制状态、顺序和有效时间。',
         requirements: ['填写清晰标题和内容', '定时公告需核对时区与开始结束时间'],
         example: '例如：发布“9 月 5 日 02:00–04:00 系统维护”公告。',
-        impact: '启用后可在当前店铺前台全站显示。',
+        impact: '启用后可在当前店铺首页公告栏显示。',
     },
     'storefront.landing-source': {
         purpose: '编辑营销落地页的 HTML 或结构化源码，并通过安全预览检查效果。',

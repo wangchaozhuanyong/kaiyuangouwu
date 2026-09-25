@@ -70,7 +70,7 @@ export class StorefrontReviewService {
             repository.average('rating', where),
         ]);
         return {
-            items: items.map(item => this.localizeMerchantResponse(item, ctx)),
+            items: items.map(item => this.shopReview(item, ctx)),
             totalItems,
             averageRating: averageRating ?? 0,
         };
@@ -82,7 +82,7 @@ export class StorefrontReviewService {
             where: { channelId: ctx.channelId, customerId: customer.id },
             order: { createdAt: 'DESC', id: 'DESC' },
         });
-        return reviews.map(review => this.localizeMerchantResponse(review, ctx));
+        return reviews.map(review => this.shopReview(review, ctx));
     }
 
     async findCandidates(ctx: RequestContext): Promise<StorefrontReviewCandidate[]> {
@@ -210,6 +210,7 @@ export class StorefrontReviewService {
                 title: input.title.trim(),
                 body: input.body.trim(),
                 customerName: this.maskCustomerName(customerName || customer.emailAddress),
+                anonymous: input.anonymous === true,
                 productName: variant.product?.name || variant.name,
                 sku: variant.sku,
                 merchantResponse: null,
@@ -357,7 +358,7 @@ export class StorefrontReviewService {
         if (!review) {
             throw new EntityNotFoundError(StorefrontReview.name, id);
         }
-        return this.localizeMerchantResponse(review, ctx);
+        return this.shopReview(review, ctx);
     }
 
     private async getAdminOrThrow(ctx: RequestContext, id: ID): Promise<StorefrontReview> {
@@ -380,9 +381,19 @@ export class StorefrontReviewService {
         return review;
     }
 
+    private shopReview(review: StorefrontReview, ctx: RequestContext): StorefrontReview {
+        const localized = this.localizeMerchantResponse(review, ctx);
+        if (localized.anonymous) {
+            localized.customerName = String(ctx.languageCode).toLowerCase().startsWith('zh')
+                ? '匿名用户'
+                : 'Anonymous customer';
+        }
+        return localized;
+    }
+
     private fulfillmentType(line: OrderLine): 'physical' | 'digital' {
-        const lineFields = line.customFields as { fulfillmentTypeSnapshot?: string };
-        const variantFields = line.productVariant.customFields as { fulfillmentType?: string };
+        const lineFields = (line.customFields ?? {}) as { fulfillmentTypeSnapshot?: string };
+        const variantFields = (line.productVariant.customFields ?? {}) as { fulfillmentType?: string };
         return lineFields.fulfillmentTypeSnapshot === 'digital' || variantFields.fulfillmentType === 'digital'
             ? 'digital'
             : 'physical';

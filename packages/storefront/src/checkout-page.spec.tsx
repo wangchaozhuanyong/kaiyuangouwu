@@ -181,6 +181,23 @@ function renderCheckout(
 }
 
 describe('CheckoutPage digital delivery', () => {
+    it('keeps address before items and places the coupon action in the amount summary', () => {
+        const container = document.createElement('div');
+        container.innerHTML = renderCheckout(orderFor('PHYSICAL'));
+        const main = container.querySelector('.desktop-checkout-main');
+        const address = main?.querySelector('.checkout-address-section');
+        const items = main?.querySelector('.checkout-product-group');
+        const couponAction = container.querySelector('.price-summary-coupon button');
+
+        expect(address).not.toBeNull();
+        expect(items).not.toBeNull();
+        expect(
+            Array.from(main?.querySelectorAll('.checkout-address-section, .checkout-product-group') ?? []),
+        ).toEqual([address, items]);
+        expect(couponAction?.closest('.desktop-checkout-summary')).not.toBeNull();
+        expect(main?.querySelector('.checkout-options .price-summary-coupon')).toBeNull();
+    });
+
     it('shows only the delivery email for a guest digital order', () => {
         const markup = renderCheckout(orderFor('DIGITAL'));
 

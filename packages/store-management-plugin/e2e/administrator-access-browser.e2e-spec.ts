@@ -1,7 +1,11 @@
 import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
+import { AssetType } from '@vendure/common/lib/generated-types';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
     AdministratorService,
+    Asset,
+    AssetTranslation,
+    Channel,
     ChannelService,
     ConfigService,
     CurrencyCode,
@@ -21,6 +25,7 @@ import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { StorefrontReviewPlugin } from '@vendure/storefront-review-plugin';
 import { createTestEnvironment, registerInitializer, SqljsInitializer } from '@vendure/testing';
 import { TwoFactorDashboardPlugin } from '@vendure/two-factor-dashboard-plugin';
+import gql from 'graphql-tag';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -32,6 +37,7 @@ import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-conf
 import { CommerceFulfillmentPlugin } from '../../commerce-fulfillment-plugin/src/commerce-fulfillment.plugin';
 import { AdministratorAccessService } from '../src/administrator-access.service';
 import { manageStoreTeamPermission } from '../src/constants';
+import { StoreProfile } from '../src/entities/store-profile.entity';
 import { MerchantInitialPasswordService } from '../src/merchant-initial-password.service';
 import { StoreManagementPlugin } from '../src/store-management.plugin';
 
@@ -95,7 +101,7 @@ const config = mergeConfig(testConfig(), {
     ],
 });
 
-const { server } = createTestEnvironment(config);
+const { server, adminClient, shopClient } = createTestEnvironment(config);
 const origin = `http://127.0.0.1:${config.apiOptions.port}`;
 let browser: Browser;
 
@@ -130,6 +136,559 @@ describe.sequential('administrator access browser acceptance', () => {
                 'store-primary@example.test',
                 'store-staff@example.test',
             ]);
+        });
+    });
+
+    it('opens the customer service feedback inbox in NextAdmin', async () => {
+        await withAuthenticatedPage(credentials.owner, async page => {
+            await page.getByLabel('切换当前店铺').selectOption('browser-store-token');
+            await page.waitForFunction(
+                () => sessionStorage.getItem('vendure-active-channel-token') === 'browser-store-token',
+            );
+            await page.goto(`${origin}/dashboard/sales/customer-service-feedback`);
+            try {
+                await page.getByRole('heading', { name: '客服服务评价' }).waitFor();
+            } catch (error) {
+                throw new Error(
+                    `Feedback route ${page.url()}: ${(await page.locator('body').innerText()).slice(0, 900)}`,
+                    { cause: error },
+                );
+            }
+            await expectPageText(page, '暂无客服评价');
+            await page.getByRole('button', { name: '刷新' }).click();
+            await expectPageText(page, '暂无客服评价');
+            shopClient.setChannelToken('browser-store-token');
+            await adminClient.asSuperAdmin();
+            adminClient.setChannelToken('browser-store-token');
+            const registration = await adminClient.query(gql`
+                mutation {
+                    createCustomer(
+                        input: {
+                            emailAddress: "browser-feedback@example.test"
+                            firstName: "Feedback"
+                            lastName: "Browser"
+                        }
+                        password: "BrowserFeedbackPass123!"
+                    ) {
+                        ... on Customer {
+                            id
+                        }
+                    }
+                }
+            `);
+            expect(registration.createCustomer.id).toBeTruthy();
+            await shopClient.asUserWithCredentials(
+                'browser-feedback@example.test',
+                'BrowserFeedbackPass123!',
+            );
+            const submitted = await shopClient.query(gql`
+                mutation {
+                    submitMyCustomerServiceFeedback(
+                        input: { rating: 4, tags: ["FRIENDLY"], comment: "客服评价后台闭环测试" }
+                    ) {
+                        id
+                        rating
+                    }
+                }
+            `);
+            expect(submitted.submitMyCustomerServiceFeedback.rating).toBe(4);
+            await page.getByRole('button', { name: '刷新' }).click();
+            await page.getByText('客服评价后台闭环测试').waitFor();
+            await expectPageText(page, '态度热情');
+            await shopClient.query(gql`
+                mutation {
+                    logout {
+                        success
+                    }
+                }
+            `);
+        });
+    });
+
+    it('saves selected desktop category artwork through the actual NextAdmin login and publishes it to Shop API', async () => {
+        const connection = server.app.get(TransactionalConnection);
+        const channel = await connection.rawConnection.getRepository(Channel).findOneByOrFail({
+            token: 'browser-store-token',
+        });
+        const asset = await connection.rawConnection.getRepository(Asset).save(
+            new Asset({
+                name: 'authenticated-category-banner.svg',
+                type: AssetType.IMAGE,
+                fileSize: 400,
+                mimeType: 'image/svg+xml',
+                width: 1600,
+                height: 480,
+                source: 'authenticated-category-banner.svg',
+                preview: 'authenticated-category-banner.svg',
+                channels: [{ id: channel.id }],
+            }),
+        );
+        await connection.rawConnection.getRepository(AssetTranslation).save(
+            [LanguageCode.en, LanguageCode.zh_Hans].map(
+                languageCode =>
+                    new AssetTranslation({
+                        base: asset,
+                        languageCode,
+                        name: asset.name,
+                    }),
+            ),
+        );
+        await withAuthenticatedPage(credentials.owner, async page => {
+            await page.getByLabel('切换当前店铺').selectOption('browser-store-token');
+            await page.waitForFunction(
+                () => sessionStorage.getItem('vendure-active-channel-token') === 'browser-store-token',
+            );
+            await page.goto(`${origin}/dashboard/storefront/decoration?panel=desktop-category-banners`);
+            const settings = page.getByRole('dialog', { name: '商城装修设置' });
+            const banner = settings.getByRole('region', { name: '电脑端分类横幅' });
+            const mode = banner.getByRole('combobox', { name: '横幅展示方式' });
+            try {
+                await mode.waitFor({ timeout: 10_000 });
+            } catch (error) {
+                throw new Error(
+                    `Category editor did not load (${page.url()}): ${(await page.locator('body').innerText()).slice(0, 1_000)}`,
+                    { cause: error },
+                );
+            }
+            await mode.selectOption('image');
+            await banner.getByRole('button', { name: '从素材库选择' }).click();
+            await page
+                .getByRole('dialog', { name: '选择图片素材' })
+                .getByRole('button')
+                .filter({ hasText: asset.name })
+                .click();
+            await banner.getByRole('button', { name: '保存分类横幅' }).click();
+            await banner.getByRole('status').filter({ hasText: '分类横幅已保存到当前店铺' }).waitFor();
+
+            shopClient.setChannelToken('browser-store-token');
+            const published = await shopClient.query(gql`
+                query PublishedCategoryBanner {
+                    storefrontContent {
+                        code
+                        enabled
+                        settings
+                        imageAsset {
+                            name
+                        }
+                    }
+                }
+            `);
+            expect(published.storefrontContent).toContainEqual(
+                expect.objectContaining({
+                    code: 'desktop-category-banner-default',
+                    enabled: true,
+                    settings: expect.objectContaining({ mode: 'image' }),
+                    imageAsset: expect.objectContaining({ name: asset.name }),
+                }),
+            );
+
+            await page.reload();
+            await page
+                .getByRole('dialog', { name: '商城装修设置' })
+                .getByRole('combobox', { name: '横幅展示方式' })
+                .waitFor();
+            expect(
+                await page
+                    .getByRole('dialog', { name: '商城装修设置' })
+                    .getByRole('combobox', { name: '横幅展示方式' })
+                    .inputValue(),
+            ).toBe('image');
+            await page
+                .getByRole('dialog', { name: '商城装修设置' })
+                .getByRole('region', { name: '电脑端分类横幅' })
+                .getByText(asset.name)
+                .waitFor();
+        });
+    });
+
+    it('saves commercial service artwork through NextAdmin and publishes it to Shop API', async () => {
+        const connection = server.app.get(TransactionalConnection);
+        const channel = await connection.rawConnection.getRepository(Channel).findOneByOrFail({
+            token: 'browser-store-token',
+        });
+        const asset = await connection.rawConnection.getRepository(Asset).save(
+            new Asset({
+                name: 'authenticated-business-services.svg',
+                type: AssetType.IMAGE,
+                fileSize: 400,
+                mimeType: 'image/svg+xml',
+                width: 1600,
+                height: 480,
+                source: 'authenticated-business-services.svg',
+                preview: 'authenticated-business-services.svg',
+                channels: [{ id: channel.id }],
+            }),
+        );
+        await connection.rawConnection.getRepository(AssetTranslation).save(
+            [LanguageCode.en, LanguageCode.zh_Hans].map(
+                languageCode =>
+                    new AssetTranslation({
+                        base: asset,
+                        languageCode,
+                        name: asset.name,
+                    }),
+            ),
+        );
+
+        await withAuthenticatedPage(credentials.owner, async page => {
+            await page.getByLabel('切换当前店铺').selectOption('browser-store-token');
+            await page.waitForFunction(
+                () => sessionStorage.getItem('vendure-active-channel-token') === 'browser-store-token',
+            );
+            await page.goto(`${origin}/dashboard/storefront/business-services-copy`);
+            await page.getByRole('heading', { name: '商业服务页文案' }).waitFor();
+            await page.getByRole('button', { name: '从素材库选择' }).click();
+            await page
+                .getByRole('dialog', { name: '选择图片素材' })
+                .getByRole('button')
+                .filter({ hasText: asset.name })
+                .click();
+            await page.getByRole('button', { name: '保存并发布' }).click();
+            await page.getByText('已保存到当前店铺；修改的中文文案将按翻译设置同步。').waitFor();
+
+            const admin = await graphql(
+                page,
+                `
+                    query SavedBusinessServicesArtwork {
+                        storefrontContentBlocks {
+                            code
+                            enabled
+                            imageAsset {
+                                name
+                            }
+                            translations {
+                                languageCode
+                                title
+                                body
+                            }
+                        }
+                    }
+                `,
+            );
+            expect(admin.errors).toBeUndefined();
+            const saved = (
+                admin.data?.storefrontContentBlocks as Array<{
+                    code: string;
+                    enabled: boolean;
+                    imageAsset: { name: string } | null;
+                    translations: Array<{ languageCode: string; title: string; body: string }>;
+                }>
+            ).find(block => block.code === 'storefront-client-plugins');
+            expect(saved?.imageAsset?.name).toBe(asset.name);
+
+            shopClient.setChannelToken('browser-store-token');
+            const published = await shopClient.query(gql`
+                query PublishedBusinessServicesArtwork {
+                    storefrontContent {
+                        code
+                        enabled
+                        imageAsset {
+                            name
+                        }
+                    }
+                }
+            `);
+            expect(published.storefrontContent, JSON.stringify(saved)).toContainEqual(
+                expect.objectContaining({
+                    code: 'storefront-client-plugins',
+                    enabled: true,
+                    imageAsset: expect.objectContaining({ name: asset.name }),
+                }),
+            );
+
+            await page.reload();
+            await page.getByText(asset.name).waitFor();
+        });
+    });
+
+    it('creates support content with selected artwork in NextAdmin and publishes it to Shop API', async () => {
+        const connection = server.app.get(TransactionalConnection);
+        const channel = await connection.rawConnection.getRepository(Channel).findOneByOrFail({
+            token: 'browser-store-token',
+        });
+        const asset = await connection.rawConnection.getRepository(Asset).save(
+            new Asset({
+                name: 'authenticated-support-hero.svg',
+                type: AssetType.IMAGE,
+                fileSize: 400,
+                mimeType: 'image/svg+xml',
+                width: 1600,
+                height: 480,
+                source: 'authenticated-support-hero.svg',
+                preview: 'authenticated-support-hero.svg',
+                channels: [{ id: channel.id }],
+            }),
+        );
+        await connection.rawConnection.getRepository(AssetTranslation).save(
+            [LanguageCode.en, LanguageCode.zh_Hans].map(
+                languageCode =>
+                    new AssetTranslation({
+                        base: asset,
+                        languageCode,
+                        name: asset.name,
+                    }),
+            ),
+        );
+
+        await withAuthenticatedPage(credentials.owner, async page => {
+            await page.getByLabel('切换当前店铺').selectOption('browser-store-token');
+            await page.waitForFunction(
+                () => sessionStorage.getItem('vendure-active-channel-token') === 'browser-store-token',
+            );
+            await page.goto(`${origin}/dashboard/storefront/content?tab=pages`);
+            await page.getByRole('heading', { name: '店铺内容与页面' }).waitFor();
+            const card = page
+                .getByRole('article')
+                .filter({ has: page.getByRole('heading', { name: '客服与帮助' }) });
+            await card.getByRole('button', { name: '开始配置' }).click();
+            const editor = page.getByRole('dialog', { name: '新建店铺楼层区块' });
+            await editor
+                .getByText('电脑端客服页首配图')
+                .locator('..')
+                .getByRole('button', { name: '从素材库选择' })
+                .click();
+            await page
+                .getByRole('dialog', { name: '选择图片素材' })
+                .getByRole('button')
+                .filter({ hasText: asset.name })
+                .click();
+            await editor.getByRole('checkbox', { name: '客服渠道 2' }).check();
+            await editor.getByRole('textbox', { name: 'QQ 号 *' }).fill('123456789');
+            await editor.getByRole('button', { name: '添加问题' }).click();
+            await editor.getByRole('textbox', { name: '中文问题 1' }).fill('如何确认运费？');
+            await editor.getByRole('textbox', { name: '中文答案 1' }).fill('结算时按地址计算。');
+            await editor.getByRole('button', { name: 'English' }).click();
+            await editor
+                .getByRole('textbox', { name: 'English question 1' })
+                .fill('How is shipping calculated?');
+            await editor
+                .getByRole('textbox', { name: 'English answer 1' })
+                .fill('It is calculated at checkout.');
+            await editor.getByRole('checkbox', { name: '启用问题 1' }).check();
+            await editor.getByRole('button', { name: '保存并生效' }).click();
+            await editor.waitFor({ state: 'hidden' });
+
+            shopClient.setChannelToken('browser-store-token');
+            const published = await shopClient.query(gql`
+                query PublishedSupportArtwork {
+                    storefrontContent {
+                        type
+                        enabled
+                        imageAsset {
+                            name
+                        }
+                        settings
+                        items {
+                            enabled
+                            targetType
+                            targetValue
+                            settings
+                        }
+                    }
+                }
+            `);
+            expect(published.storefrontContent).toContainEqual(
+                expect.objectContaining({
+                    type: 'SUPPORT',
+                    enabled: true,
+                    imageAsset: expect.objectContaining({ name: asset.name }),
+                    settings: expect.objectContaining({
+                        supportFaqs: [
+                            expect.objectContaining({
+                                enabled: true,
+                                questionZh: '如何确认运费？',
+                                answerEn: 'It is calculated at checkout.',
+                            }),
+                        ],
+                    }),
+                    items: expect.arrayContaining([
+                        expect.objectContaining({
+                            enabled: true,
+                            targetType: 'URL',
+                            targetValue: 'https://wpa.qq.com/msgrd?v=3&uin=123456789&site=qq&menu=yes',
+                            settings: expect.objectContaining({ supportChannel: 'QQ' }),
+                        }),
+                    ]),
+                }),
+            );
+
+            await page.reload();
+            await page
+                .getByRole('article')
+                .filter({ hasText: '客服与帮助' })
+                .getByRole('button', { name: '编辑内容' })
+                .click();
+            const reopened = page.getByRole('dialog', { name: '编辑店铺楼层区块' });
+            await reopened.getByText(asset.name).waitFor();
+            expect(await reopened.getByRole('textbox', { name: '中文问题 1' }).inputValue()).toBe(
+                '如何确认运费？',
+            );
+        });
+    });
+
+    it('edits both legal documents in NextAdmin and publishes their content to Shop API', async () => {
+        await withAuthenticatedPage(credentials.owner, async page => {
+            await page.getByLabel('切换当前店铺').selectOption('browser-store-token');
+            await page.waitForFunction(
+                () => sessionStorage.getItem('vendure-active-channel-token') === 'browser-store-token',
+            );
+            await page.goto(`${origin}/dashboard/storefront/content?tab=pages`);
+            const card = page
+                .getByRole('article')
+                .filter({ has: page.getByRole('heading', { name: '法律条款' }) });
+            await card.getByRole('button', { name: '开始配置' }).click();
+            const editor = page.getByRole('dialog', { name: '新建店铺楼层区块' });
+            const privacy = editor
+                .getByRole('checkbox', { name: '子项 1' })
+                .locator('xpath=ancestor::article');
+            const terms = editor.getByRole('checkbox', { name: '子项 2' }).locator('xpath=ancestor::article');
+            await privacy.getByLabel('法律正文').fill('本地隐私政策验收正文。\n第二段。');
+            await terms.getByLabel('法律正文').fill('本地使用条款验收正文。');
+            await editor.getByRole('button', { name: 'English' }).click();
+            await privacy.getByLabel('法律正文').fill('Local privacy policy acceptance.\nSecond paragraph.');
+            await terms.getByLabel('法律正文').fill('Local terms of use acceptance.');
+            await editor.getByRole('checkbox', { name: '前台启用' }).check();
+            await editor.getByRole('button', { name: '保存并生效' }).click();
+            await editor.waitFor({ state: 'hidden' });
+
+            shopClient.setChannelToken('browser-store-token');
+            const published = await shopClient.query(gql`
+                query PublishedLegalDocuments {
+                    storefrontContent {
+                        type
+                        items {
+                            label
+                            description
+                            targetType
+                            targetValue
+                        }
+                    }
+                }
+            `);
+            expect(published.storefrontContent).toContainEqual(
+                expect.objectContaining({
+                    type: 'LEGAL',
+                    items: expect.arrayContaining([
+                        expect.objectContaining({
+                            label: 'Privacy policy',
+                            description: 'Local privacy policy acceptance.\nSecond paragraph.',
+                            targetType: 'PAGE',
+                            targetValue: '/legal?id=privacy',
+                        }),
+                        expect.objectContaining({
+                            label: 'Terms of use',
+                            description: 'Local terms of use acceptance.',
+                            targetType: 'PAGE',
+                            targetValue: '/legal?id=terms',
+                        }),
+                    ]),
+                }),
+            );
+
+            await page.reload();
+            await card.getByRole('button', { name: '编辑内容' }).click();
+            const reopened = page.getByRole('dialog', { name: '编辑店铺楼层区块' });
+            expect(
+                await reopened
+                    .getByRole('checkbox', { name: '子项 1' })
+                    .locator('xpath=ancestor::article')
+                    .getByLabel('法律正文')
+                    .inputValue(),
+            ).toBe('本地隐私政策验收正文。\n第二段。');
+        });
+    });
+
+    it('creates a homepage announcement in NextAdmin and publishes it to Shop API', async () => {
+        await withAuthenticatedPage(credentials.owner, async page => {
+            await page.getByLabel('切换当前店铺').selectOption('browser-store-token');
+            await page.waitForFunction(
+                () => sessionStorage.getItem('vendure-active-channel-token') === 'browser-store-token',
+            );
+            await page.goto(`${origin}/dashboard/storefront/content?tab=announcements`);
+            await page.getByRole('button', { name: '新建公告' }).first().click();
+            const editor = page.getByRole('dialog', { name: '新建首页公告' });
+            await editor.getByLabel('中文标题 *').fill('本地后台公告验收');
+            await editor.getByLabel('中文正文 *').fill('仅用于本地登录态发布验证。');
+            await editor.getByRole('checkbox', { name: '人工锁定' }).nth(0).check();
+            await editor.getByRole('checkbox', { name: '人工锁定' }).nth(1).check();
+            await editor.getByLabel('英文标题').fill('Local announcement acceptance');
+            await editor.getByLabel('英文正文').fill('Local authenticated publication check only.');
+            await editor.getByRole('button', { name: '创建公告' }).click();
+            await editor.waitFor({ state: 'hidden' });
+
+            shopClient.setChannelToken('browser-store-token');
+            const published = await shopClient.query(gql`
+                query PublishedHomepageAnnouncement {
+                    activeSystemAnnouncements {
+                        title
+                        content
+                    }
+                }
+            `);
+            expect(published.activeSystemAnnouncements).toContainEqual(
+                expect.objectContaining({
+                    title: 'Local announcement acceptance',
+                    content: 'Local authenticated publication check only.',
+                }),
+            );
+
+            await page.reload();
+            await page.getByRole('heading', { name: '本地后台公告验收' }).waitFor();
+        });
+    });
+
+    it('creates a fixed-color coupon in NextAdmin and publishes its appearance to Shop API', async () => {
+        await withAuthenticatedPage(credentials.owner, async page => {
+            await page.getByLabel('切换当前店铺').selectOption('browser-store-token');
+            await page.waitForFunction(
+                () => sessionStorage.getItem('vendure-active-channel-token') === 'browser-store-token',
+            );
+            await page.goto(`${origin}/dashboard/marketing/promotions`);
+            await page.getByRole('heading', { name: '优惠与促销' }).waitFor();
+            await page.getByRole('button', { name: '新建优惠券' }).first().click();
+            const editor = page.getByRole('dialog', { name: '新建优惠券活动' });
+            await editor.getByLabel('活动名称 *').fill('登录态固定配色测试券');
+            await editor.getByLabel('券面配色（仅影响展示）').selectOption('gold');
+            await editor.getByRole('button', { name: '创建优惠券' }).click();
+            await page.getByText('优惠券活动已创建并开始按排期生效').waitFor();
+
+            const admin = await graphql(
+                page,
+                `
+                    query {
+                        storeCouponCampaigns {
+                            id
+                            name
+                            appearanceTheme
+                        }
+                    }
+                `,
+            );
+            expect(admin.errors).toBeUndefined();
+            const campaign = (
+                admin.data?.storeCouponCampaigns as Array<{
+                    id: string;
+                    name: string;
+                    appearanceTheme: string;
+                }>
+            ).find(item => item.name === '登录态固定配色测试券');
+            expect(campaign?.appearanceTheme).toBe('gold');
+
+            shopClient.setChannelToken('browser-store-token');
+            const shop = await shopClient.query(gql`
+                query PublishedCouponAppearance {
+                    activeStorefrontCoupons {
+                        id
+                        appearanceTheme
+                    }
+                }
+            `);
+            expect(shop.activeStorefrontCoupons).toContainEqual(
+                expect.objectContaining({ id: campaign?.id, appearanceTheme: 'gold' }),
+            );
+
+            await page.reload();
+            await page.getByText('登录态固定配色测试券').waitFor();
         });
     });
 
@@ -248,8 +807,22 @@ async function seedAccessMatrix() {
         defaultLanguageCode: LanguageCode.en,
         currencyCode: CurrencyCode.USD,
         pricesIncludeTax: template.pricesIncludeTax,
+        // This fixture has no zones; empty IDs keep the ChannelService's original unassigned behavior.
+        defaultShippingZoneId: '',
+        defaultTaxZoneId: '',
     });
     if ('errorCode' in createdChannel) throw new Error(createdChannel.message);
+    const profileRepository = connection.rawConnection.getRepository(StoreProfile);
+    const profile =
+        (await profileRepository.findOneBy({ channelId: createdChannel.id })) ??
+        new StoreProfile({
+            channelId: createdChannel.id,
+            descriptionZh: '',
+            descriptionEn: '',
+        });
+    profile.status = 'ACTIVE';
+    profile.isPublished = true;
+    await profileRepository.save(profile);
     const [superAdminRole, customerRole] = await Promise.all([
         roleService.getSuperAdminRole(ctx),
         roleService.getCustomerRole(ctx),

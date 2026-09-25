@@ -119,18 +119,22 @@ export function PaymentPage({
         staleTime: 0,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
-    const appliedReferralAmount =
-        order?.payments
-            ?.filter(
-                payment =>
-                    payment.method === 'referral-balance' &&
-                    (payment.state === 'Settled' || payment.state === 'Authorized'),
-            )
-            .reduce((total, payment) => total + payment.amount, 0) ?? 0;
+    const coveredPayments =
+        order?.payments?.filter(payment => payment.state === 'Settled' || payment.state === 'Authorized') ??
+        [];
+    const appliedReferralAmount = coveredPayments
+        .filter(payment => payment.method === 'referral-balance')
+        .reduce((total, payment) => total + payment.amount, 0);
+    const otherCoveredAmount = coveredPayments
+        .filter(payment => payment.method !== 'referral-balance')
+        .reduce((total, payment) => total + payment.amount, 0);
     const referralWallet = referralOverviewQuery.data?.wallets.find(
         wallet => wallet.currencyCode === order?.currencyCode,
     );
-    const outstandingAmount = Math.max(0, (order?.totalWithTax ?? 0) - appliedReferralAmount);
+    const outstandingAmount = Math.max(
+        0,
+        (order?.totalWithTax ?? 0) - appliedReferralAmount - otherCoveredAmount,
+    );
     const maximumReferralAmount = Math.min(referralWallet?.availableBalance ?? 0, outstandingAmount);
     const canUseReferral =
         paymentCurrencyCode !== 'USDT' &&
@@ -684,16 +688,22 @@ export function PaymentPage({
                             <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
                         </div>
                         {appliedReferralAmount > 0 && (
-                            <>
-                                <div>
-                                    <dt>{isZh ? '返利余额抵扣' : 'Referral balance'}</dt>
-                                    <dd>-{formatMoney(appliedReferralAmount, order.currencyCode, locale)}</dd>
-                                </div>
-                                <div className="summary-total">
-                                    <dt>{isZh ? '剩余待支付' : 'Remaining due'}</dt>
-                                    <dd>{formatMoney(outstandingAmount, order.currencyCode, locale)}</dd>
-                                </div>
-                            </>
+                            <div>
+                                <dt>{isZh ? '返利余额抵扣' : 'Referral balance'}</dt>
+                                <dd>-{formatMoney(appliedReferralAmount, order.currencyCode, locale)}</dd>
+                            </div>
+                        )}
+                        {otherCoveredAmount > 0 && (
+                            <div>
+                                <dt>{isZh ? '已付／已授权' : 'Paid or authorized'}</dt>
+                                <dd>-{formatMoney(otherCoveredAmount, order.currencyCode, locale)}</dd>
+                            </div>
+                        )}
+                        {appliedReferralAmount + otherCoveredAmount > 0 && (
+                            <div className="summary-total">
+                                <dt>{isZh ? '剩余待支付' : 'Remaining due'}</dt>
+                                <dd>{formatMoney(outstandingAmount, order.currencyCode, locale)}</dd>
+                            </div>
                         )}
                         {isUsdtPayment && (
                             <div className="summary-total">
@@ -769,7 +779,6 @@ export function OrderConfirmationPage({
     api,
     code,
     confirmationToken,
-    initialOrder,
     customer,
     market,
     locale,
@@ -778,7 +787,6 @@ export function OrderConfirmationPage({
     api: ShopApi;
     code: string;
     confirmationToken: string;
-    initialOrder: Order | null;
     customer: ActiveCustomer | null;
     market: MarketConfig;
     locale: string;
@@ -788,29 +796,42 @@ export function OrderConfirmationPage({
     const navigateTo = (route: PaymentRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
     const orderQuery = useQuery({
-        queryKey: storefrontQueryKeys.orderByCode(
-            storefrontQueryKeys.market(market),
-            languageCodeFor(language),
-            code,
-        ),
+        queryKey: [
+            ...storefrontQueryKeys.orderByCode(
+                storefrontQueryKeys.market(market),
+                languageCodeFor(language),
+                code,
+            ),
+            confirmationToken,
+        ],
         queryFn: ({ signal }) => api.orderByConfirmationToken(confirmationToken, signal),
         enabled: Boolean(code && confirmationToken),
-        initialData: confirmationToken && initialOrder?.code === code ? initialOrder : undefined,
         staleTime: 0,
         refetchOnMount: 'always',
         refetchInterval: query => orderStatusRefreshInterval(query.state.data?.state),
-        gcTime: PUBLIC_QUERY_GC_TIME,
+        gcTime: 0,
     });
-    const order = code ? (orderQuery.data ?? null) : null;
+    const order =
+        code &&
+        confirmationToken &&
+        orderQuery.isFetchedAfterMount &&
+        !orderQuery.isError &&
+        !orderQuery.isPaused &&
+        orderQuery.data?.code === code
+            ? orderQuery.data
+            : null;
     const usdtReceipt = order ? usdtPaymentReceipt(order) : null;
     const isTestOrder = order?.state === 'TestPaymentSettled';
-    const loading = Boolean(code && confirmationToken && orderQuery.isLoading);
-    const loadError =
-        orderQuery.isPaused && orderQuery.data === undefined
-            ? offlineLoadError(language)
-            : orderQuery.error instanceof Error
-              ? storefrontErrorMessage(orderQuery.error, language)
-              : '';
+    const loading = Boolean(
+        code &&
+        confirmationToken &&
+        (orderQuery.isLoading || (orderQuery.isFetching && !orderQuery.isFetchedAfterMount)),
+    );
+    const loadError = orderQuery.isPaused
+        ? offlineLoadError(language)
+        : orderQuery.error instanceof Error
+          ? storefrontErrorMessage(orderQuery.error, language)
+          : '';
 
     if (loading) {
         return (

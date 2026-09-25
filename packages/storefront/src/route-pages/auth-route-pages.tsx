@@ -3,6 +3,7 @@ import { preload } from 'react-dom';
 
 import { authOriginalImageUrl } from '../../../storefront-content-plugin/src/shared/auth-visual';
 import { findAuthVisualContent } from '../auth-visual';
+import { useDesktopLayout } from '../desktop-layout';
 import {
     LazyForgotPasswordPage,
     LazyLoginPage,
@@ -23,10 +24,11 @@ function AuthRouteBoundary({
     heroVariant?: 'login' | 'register';
 }) {
     const runtime = useRuntime();
+    const desktop = useDesktopLayout();
     const content = heroVariant ? findAuthVisualContent(runtime.contentBlocks, heroVariant) : undefined;
-    if (content?.imageUrl) {
+    if (desktop && content?.imageUrl) {
         const source = authOriginalImageUrl(content.imageUrl);
-        const responsive = imageSources(source, 'detail', '(min-width: 1024px) 640px, 100vw');
+        const responsive = imageSources(source, 'detail', '(min-width: 1024px) 640px, 1px');
         preload(responsive.src, {
             as: 'image',
             fetchPriority: 'high',
@@ -51,6 +53,7 @@ export function LoginRoutePage() {
             <LazyLoginPage
                 returnTo={runtime.route.returnTo}
                 returnVariantId={runtime.route.id}
+                returnQuantity={runtime.route.quantity}
                 api={runtime.api}
                 language={runtime.language}
                 logoUrl={runtime.logoUrl}
@@ -73,6 +76,7 @@ export function RegisterRoutePage() {
             <LazyRegisterPage
                 returnTo={runtime.route.returnTo}
                 returnVariantId={runtime.route.id}
+                returnQuantity={runtime.route.quantity}
                 api={runtime.api}
                 language={runtime.language}
                 logoUrl={runtime.logoUrl}
@@ -95,6 +99,7 @@ export function VerifyAccountRoutePage() {
             <LazyVerifyAccountPage
                 returnTo={runtime.route.returnTo}
                 returnVariantId={runtime.route.id}
+                returnQuantity={runtime.route.quantity}
                 api={runtime.api}
                 language={runtime.language}
                 logoUrl={runtime.logoUrl}
@@ -114,6 +119,7 @@ export function ForgotPasswordRoutePage() {
             <LazyForgotPasswordPage
                 returnTo={runtime.route.returnTo}
                 returnVariantId={runtime.route.id}
+                returnQuantity={runtime.route.quantity}
                 api={runtime.api}
                 language={runtime.language}
                 logoUrl={runtime.logoUrl}
@@ -132,6 +138,7 @@ export function ResetPasswordRoutePage() {
             <LazyResetPasswordPage
                 returnTo={runtime.route.returnTo}
                 returnVariantId={runtime.route.id}
+                returnQuantity={runtime.route.quantity}
                 api={runtime.api}
                 language={runtime.language}
                 logoUrl={runtime.logoUrl}

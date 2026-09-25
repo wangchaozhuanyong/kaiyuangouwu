@@ -127,6 +127,7 @@ function couponRecord(): StoreCouponRecord {
         name: '测试优惠券',
         couponCode: 'CPN_TEST',
         kind: 'COLLECTION_PERCENTAGE',
+        appearanceTheme: null,
         enabled: true,
         startsAt: '2026-09-01T00:00:00.000Z',
         endsAt: '2026-09-30T00:00:00.000Z',

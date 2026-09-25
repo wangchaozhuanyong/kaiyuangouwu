@@ -48,6 +48,7 @@ export function ItemEditor({
     const generatedSupportLink = supportLinkFromAccount(supportChannel, supportAccount);
     const accountCopy = supportAccountCopy(supportChannel, automaticSupportLink);
     const coreCategories = blockType === 'CORE_CATEGORIES';
+    const legal = blockType === 'LEGAL';
     const updateLocalizedSetting = (field: 'badgeLabel' | 'ctaLabel', value: string) =>
         onChange({
             ...item,
@@ -97,13 +98,24 @@ export function ItemEditor({
                         className={inputClass}
                     />
                 </Field>
-                <Field label="说明">
-                    <input
-                        value={translation.description}
-                        onChange={event => updateTranslation({ description: event.target.value })}
-                        className={inputClass}
-                    />
-                </Field>
+                <div className={legal ? 'sm:col-span-2' : undefined}>
+                    <Field label={legal ? '法律正文' : '说明'}>
+                        {legal ? (
+                            <textarea
+                                rows={8}
+                                value={translation.description}
+                                onChange={event => updateTranslation({ description: event.target.value })}
+                                className={`${inputClass} min-h-40 resize-y`}
+                            />
+                        ) : (
+                            <input
+                                value={translation.description}
+                                onChange={event => updateTranslation({ description: event.target.value })}
+                                className={inputClass}
+                            />
+                        )}
+                    </Field>
+                </div>
                 {coreCategories && (
                     <>
                         <Field label={`${language === 'zh_Hans' ? '中文' : '英文'}角标文案`}>
@@ -196,7 +208,26 @@ export function ItemEditor({
                         />
                     </Field>
                 )}
-                {!support && (
+                {legal && (
+                    <Field label="法律文件">
+                        <select
+                            value={item.targetValue ?? ''}
+                            onChange={event =>
+                                onChange({
+                                    ...item,
+                                    targetType: 'PAGE',
+                                    targetValue: event.target.value || null,
+                                })
+                            }
+                            className={inputClass}
+                        >
+                            <option value="">请选择</option>
+                            <option value="/legal?id=privacy">隐私政策</option>
+                            <option value="/legal?id=terms">使用条款</option>
+                        </select>
+                    </Field>
+                )}
+                {!support && !legal && (
                     <Field label="跳转类型">
                         <select
                             value={navigation ? 'PAGE' : item.targetType}
@@ -218,7 +249,7 @@ export function ItemEditor({
                         </select>
                     </Field>
                 )}
-                {!support && (
+                {!support && !legal && (
                     <Field label="跳转目标">
                         <TargetValueInput
                             type={navigation ? 'PAGE' : item.targetType}

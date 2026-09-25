@@ -27,6 +27,7 @@ const routes = [
     ['account', '/account'],
     ['product', '/product?id=product-1'],
     ['search', '/search?term=cup'],
+    ['search-discovery', '/search'],
     ['purchase', '/purchase'],
     ['checkout', '/checkout'],
     ['payment', '/payment'],
@@ -37,7 +38,6 @@ const routes = [
     ['addresses', '/addresses'],
     ['account-security', '/account-security'],
     ['favorites', '/favorites'],
-    ['announcements', '/announcements'],
     ['history', '/history'],
     ['notifications', '/notifications'],
     ['coupons', '/coupons'],
@@ -63,6 +63,7 @@ const criticalRoutes = new Set([
     'services',
     'product',
     'cart',
+    'purchase',
     'checkout',
     'account',
     'login',
@@ -99,19 +100,34 @@ try {
     for (const preset of presets) {
         for (const width of requestedWidth ? [requestedWidth] : [390, 1023, 1024, 1440]) {
             const scopedRoutes =
-                width === 390 || width === 1440
+                requestedRoute || requestedWidth || width === 390 || width === 1440
                     ? routes
                     : routes.filter(([name]) => criticalRoutes.has(name));
             const selectedRoutes = requestedRoute
-                ? scopedRoutes.filter(([name]) => name === requestedRoute)
+                ? scopedRoutes.filter(([name]) => requestedRoute.split(',').includes(name))
                 : scopedRoutes;
+            if (requestedRoute && selectedRoutes.length === 0) {
+                throw new Error(`No visual routes matched ${requestedRoute} at ${width}px`);
+            }
             const page = await browser.newPage({
                 viewport: { width, height: width < 1024 ? 844 : 1000 },
                 locale: 'zh-CN',
                 reducedMotion: 'reduce',
             });
             const errors = [];
+            const today = new Date();
+            today.setHours(12, 0, 0, 0);
+            const earlier = new Date(today);
+            earlier.setDate(earlier.getDate() - 7);
+            const savedProductsActivity = {
+                favoriteProductIds: ['product-1', 'product-2'],
+                recentProductVisits: [
+                    { productId: 'product-1', visitedAt: today.toISOString() },
+                    { productId: 'product-2', visitedAt: earlier.toISOString() },
+                ],
+            };
             let signedIn = true;
+            const notificationReadKeys = new Set(['ORDER:notification-order-0:2026-09-23T08:00:00.000Z']);
             page.on('pageerror', error => errors.push(error.message));
             if (requestedContent === 'product-detail') {
                 await page.addInitScript(() => localStorage.setItem('storefront-analytics-opt-out:v1', '1'));
@@ -120,9 +136,33 @@ try {
                 const url = new URL(route.request().url());
                 if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.abort();
                 if (url.pathname.includes('shop-api')) {
+                    const data = fixtureData(preset, signedIn, requestedContent);
+                    if (requestedContent === 'saved-products') {
+                        const request = route.request().postDataJSON();
+                        const query = String(request.query ?? '');
+                        if (query.includes('removeMyFavoriteProducts')) {
+                            const removed = new Set(request.variables?.productIds ?? []);
+                            savedProductsActivity.favoriteProductIds =
+                                savedProductsActivity.favoriteProductIds.filter(id => !removed.has(id));
+                        }
+                        data.myCustomerProductActivity = savedProductsActivity;
+                        data.removeMyFavoriteProducts = savedProductsActivity;
+                    }
+                    if (requestedContent === 'notifications') {
+                        const request = route.request().postDataJSON();
+                        if (String(request.query).includes('markMyStoreNotificationsRead')) {
+                            for (const reference of request.variables?.references ?? []) {
+                                notificationReadKeys.add(
+                                    `${reference.kind}:${reference.sourceId}:${new Date(reference.version).toISOString()}`,
+                                );
+                            }
+                        }
+                        data.myStoreNotificationReadKeys = [...notificationReadKeys];
+                        data.markMyStoreNotificationsRead = [...notificationReadKeys];
+                    }
                     return route.fulfill({
                         contentType: 'application/json',
-                        body: JSON.stringify({ data: fixtureData(preset, signedIn, requestedContent) }),
+                        body: JSON.stringify({ data }),
                     });
                 }
                 if (url.pathname.includes('/storefront-realtime')) {
@@ -263,11 +303,7 @@ try {
                 if (name === 'home' && width >= 1024) {
                     const alignment = await page.evaluate(() => {
                         const header = document.querySelector('.proto-header-inner')?.getBoundingClientRect();
-                        const sections = [
-                            '.proto-hero-section',
-                            '.proto-filter-bar',
-                            '.proto-product-section',
-                        ];
+                        const sections = ['.homepage-modules'];
                         return sections.map(selector => {
                             const rect = document.querySelector(selector)?.getBoundingClientRect();
                             return {
@@ -365,15 +401,29 @@ try {
                     }
                 }
                 if (name === 'category' && width >= 1024) {
+                    if (requestedContent === 'category-banner') {
+                        await expect(page.locator('.desktop-catalog-hero.has-image')).toBeVisible();
+                        await expect(page.locator('.desktop-catalog-hero-side-image')).toBeVisible();
+                        await page.screenshot({
+                            path: `${output}/${preset}-${width}-category-banner.png`,
+                            fullPage: true,
+                            animations: 'disabled',
+                        });
+                    }
                     await expect(page.locator('.desktop-category-navigation')).toBeVisible();
                     await expect(page.locator('.desktop-local-navigation')).toBeVisible();
                     await expect(page.locator('.desktop-category-navigation')).toHaveCSS(
                         'border-bottom-width',
                         '0px',
                     );
-                    const activeCategory = page.locator('.desktop-local-navigation [aria-pressed="true"]');
+                    const activeCategory = page
+                        .locator('.desktop-local-navigation [aria-pressed="true"]')
+                        .first();
                     await expect(activeCategory).toHaveCSS('border-bottom-width', '0px');
                     await page.getByRole('button', { name: '日常用品' }).click();
+                    if (requestedContent === 'category-banner') {
+                        await expect(page.locator('.desktop-catalog-hero.has-image')).toBeVisible();
+                    }
                     await expect(page.locator('.desktop-subcategory-sidebar')).toBeVisible();
                     const childCategory = page.locator('.desktop-subcategory-sidebar').getByRole('button', {
                         name: '随行杯',
@@ -381,6 +431,100 @@ try {
                     });
                     await childCategory.click();
                     await expect(childCategory).toHaveAttribute('aria-pressed', 'true');
+                    if (requestedContent === 'category-banner') {
+                        await expect(page.locator('.desktop-catalog-hero.has-image')).toHaveCount(0);
+                        await expect(page.locator('.desktop-catalog-hero h1')).toContainText('随行杯');
+                    }
+                }
+                if (name === 'category' && width < 1024 && requestedContent === 'category-banner') {
+                    await expect(page.locator('.desktop-catalog-hero')).toHaveCount(0);
+                }
+                if (name === 'category') {
+                    await page.getByRole('button', { name: '筛选', exact: true }).click();
+                    const sheet = page.getByRole('dialog', { name: '筛选', exact: true });
+                    await expect(sheet).toBeVisible();
+                    const bounds = await sheet.locator('.price-range-inputs label').evaluateAll(labels =>
+                        labels.map(label => {
+                            const rect = label.getBoundingClientRect();
+                            const input = label.querySelector('input').getBoundingClientRect();
+                            return {
+                                y: rect.y,
+                                height: rect.height,
+                                centerDelta: Math.abs(rect.y + rect.height / 2 - input.y - input.height / 2),
+                            };
+                        }),
+                    );
+                    expect(bounds).toHaveLength(2);
+                    expect(bounds[0].y).toBe(bounds[1].y);
+                    for (const bound of bounds) {
+                        expect(bound.height).toBe(44);
+                        expect(bound.centerDelta).toBeLessThanOrEqual(1);
+                    }
+                    await sheet.getByRole('button', { name: '100-300', exact: true }).click();
+                    await expect(sheet.getByRole('spinbutton', { name: '最低价' })).toHaveValue('100');
+                    await expect(sheet.getByRole('spinbutton', { name: '最高价' })).toHaveValue('300');
+                    const filterContrast = await page.evaluate(async () => {
+                        const result = await window.axe.run(document.querySelector('[role="dialog"]'), {
+                            runOnly: ['color-contrast'],
+                        });
+                        return result.violations.map(violation => ({
+                            id: violation.id,
+                            nodes: violation.nodes.map(node => node.target),
+                        }));
+                    });
+                    expect(filterContrast, `${preset}/${width} filter dialog contrast`).toEqual([]);
+                    await sheet.getByRole('spinbutton', { name: '最低价' }).fill('400');
+                    await expect(sheet.locator('.filter-confirm-button')).toBeDisabled();
+                    const unchangedUrl = page.url();
+                    await page.keyboard.press('Escape');
+                    await expect(sheet).toHaveCount(0);
+                    expect(page.url()).toBe(unchangedUrl);
+                    if (width >= 1024) {
+                        await page.getByRole('button', { name: '日常用品', exact: true }).click();
+                        const selectedScope = new URL(page.url());
+                        expect(selectedScope.searchParams.get('collectionId')).toBeTruthy();
+                        await page.getByRole('button', { name: '筛选', exact: true }).click();
+                        await sheet.getByRole('button', { name: '100-300', exact: true }).click();
+                        await sheet.locator('.filter-confirm-button').click();
+                        await expect(page).toHaveURL(/minPrice=100/);
+                        await page
+                            .locator('.desktop-catalog-actions')
+                            .getByRole('button', { name: '重置', exact: true })
+                            .click();
+                        await expect.poll(() => new URL(page.url()).searchParams.get('minPrice')).toBeNull();
+                        for (const key of ['collectionId', 'childId', 'sort', 'term']) {
+                            expect(new URL(page.url()).searchParams.get(key)).toBe(
+                                selectedScope.searchParams.get(key),
+                            );
+                        }
+                    }
+                }
+                if (name === 'search-discovery') {
+                    await expect(page.locator('.search-discovery')).toBeVisible();
+                    if (width >= 1024) {
+                        const recent = await page.locator('.search-recent').boundingBox();
+                        const suggestions = await page.locator('.popular-searches').boundingBox();
+                        expect(recent.x + recent.width).toBeLessThan(suggestions.x);
+                    }
+                }
+                if (name === 'coupons' && requestedContent === 'coupons' && width >= 1024) {
+                    await expect(page.locator('.desktop-coupon-ticket')).toHaveCount(4);
+                    for (const face of await page.locator('.desktop-coupon-value').all()) {
+                        const colors = await face.evaluate(el => ({
+                            fg: getComputedStyle(el).color,
+                            bg: getComputedStyle(el).backgroundColor,
+                        }));
+                        expect(textContrast(colors.fg, colors.bg)).toBeGreaterThanOrEqual(4.5);
+                    }
+                }
+                if (name === 'coupons' && requestedContent === 'coupons' && width < 1024) {
+                    const cards = await page.locator('.coupon-activity-card').evaluateAll(elements =>
+                        elements.map(card => ({
+                            className: card.className,
+                            color: getComputedStyle(card).color,
+                        })),
+                    );
+                    expect(new Set(cards.map(card => card.color)).size, JSON.stringify(cards)).toBe(4);
                 }
                 if (name === 'services') {
                     const slot = page.locator('.business-services-page .category-client-plugin-slot');
@@ -513,11 +657,25 @@ try {
                         await expect(page.locator(selector).first()).toHaveCSS('border-bottom-width', '0px');
                     }
                 }
+                if (name === 'product' && requestedContent === 'product-coupon-quantity') {
+                    const consent = page.getByRole('button', { name: '仅必要功能' });
+                    if (await consent.isVisible()) await consent.click();
+                    const coupon = page.locator('.detail-coupon-price');
+                    await expect(coupon).toHaveCount(0);
+                    const increase = page.getByRole('button', { name: '增加数量' });
+                    await increase.click();
+                    await expect(coupon).toContainText('2件券后合计');
+                    await expect(coupon).toContainText('MYR 54.8');
+                    await increase.click();
+                    await expect(page.locator('.detail-quantity output')).toHaveText('3');
+                    await expect(coupon).toContainText('3件券后合计');
+                    await expect(coupon).toContainText('MYR 84.7');
+                }
                 if (width < 1024 && name === 'product') {
                     const productLayout = await page.evaluate(() => {
                         const root = document.querySelector('.product-detail-page').getBoundingClientRect();
                         const sections = [
-                            '.detail-gallery',
+                            '.detail-gallery-shell',
                             '.detail-summary',
                             '.detail-options',
                             '.detail-service-bar',
@@ -619,10 +777,21 @@ try {
                         ".auth-page-has-image:not(.auth-page-managed) .auth-hero[data-image-tone='dark']",
                     );
                     if (await darkFallbackHero.count()) {
-                        await expect(darkFallbackHero.locator('.auth-hero-copy h2')).toHaveCSS(
-                            'color',
-                            'rgb(255, 255, 255)',
-                        );
+                        const copyColors = await darkFallbackHero
+                            .locator('.auth-hero-copy')
+                            .evaluate(copy => {
+                                const copyBackground = getComputedStyle(copy).backgroundColor;
+                                return {
+                                    background:
+                                        copyBackground === 'rgba(0, 0, 0, 0)'
+                                            ? getComputedStyle(copy.parentElement).backgroundColor
+                                            : copyBackground,
+                                    foreground: getComputedStyle(copy.querySelector('h2')).color,
+                                };
+                            });
+                        expect(
+                            textContrast(copyColors.foreground, copyColors.background),
+                        ).toBeGreaterThanOrEqual(4.5);
                     }
                 }
                 if (width < 1024 && name === 'account') {
@@ -646,6 +815,7 @@ try {
                         '.support-hours-note',
                         '.support-channel-list',
                         '.support-channel-row',
+                        '.support-faq-card',
                         '.support-evaluation-card',
                         '.support-tag-btn',
                         '.support-evaluation-textarea',
@@ -654,6 +824,8 @@ try {
                     }
                     await page.locator('.support-tag-btn').first().click();
                     await expect(page.locator('.support-tag-btn').first()).toHaveClass(/is-active/);
+                    await page.locator('.support-faq-item summary').first().click();
+                    await expect(page.locator('.support-faq-item p').first()).toBeVisible();
                 }
                 if (name === 'notifications' && requestedContent === 'dense') {
                     const notificationList = page.locator('.notification-list');
@@ -667,11 +839,45 @@ try {
                         .evaluate(element => element.scrollWidth <= element.clientWidth + 1);
                     expect(detailFits, `${preset}/${width}/notifications order reference fits`).toBe(true);
                 }
+                if (name === 'cart' && requestedContent === 'coupons' && width >= 1024) {
+                    await page.locator('.cart-summary-panel .coupon-row').click();
+                    const sheet = page.locator('.coupon-selector-sheet');
+                    await expect(sheet.locator('.desktop-coupon-ticket')).toHaveCount(4);
+                    await expect(sheet.locator('.is-selected')).toHaveCount(1);
+                    await expect(sheet.locator('.is-unavailable')).toHaveCount(1);
+                    await page.screenshot({
+                        path: `${output}/${preset}-${width}-coupon-picker.png`,
+                        fullPage: true,
+                    });
+                    await page.keyboard.press('Escape');
+                }
                 if (name === 'reviews' && requestedContent === 'reviews') {
                     await expect(page.locator('.review-center-pending > header > span')).toHaveText('14');
                     await expect(page.locator('.review-candidate-row')).toHaveCount(4);
                     await expect(page.locator('.review-candidate-row').first().locator('img')).toBeVisible();
                     await expect(page.locator('.review-candidate-more')).toBeVisible();
+                }
+                if (name === 'notifications' && requestedContent === 'notifications') {
+                    await expect(page.locator('.notification-list > button')).toHaveCount(5);
+                    await expect(page.locator('.notification-list > button.is-unread')).toHaveCount(4);
+                    await expect(
+                        page.locator('.notification-toolbar button[aria-pressed="true"]'),
+                    ).toHaveText('全部消息');
+                }
+                if (['purchase', 'checkout'].includes(name) && requestedContent === 'normal') {
+                    const sections = await page
+                        .locator('.desktop-checkout-main')
+                        .evaluate(main =>
+                            ['.checkout-address-section', '.checkout-product-group', '.checkout-options'].map(
+                                selector => main.querySelector(selector)?.getBoundingClientRect().top ?? -1,
+                            ),
+                        );
+                    expect(sections.every(top => top >= 0 && top < 3000)).toBe(true);
+                    expect(sections[0]).toBeLessThan(sections[1]);
+                    expect(sections[1]).toBeLessThan(sections[2]);
+                    await expect(
+                        page.locator('.desktop-checkout-summary .price-summary-coupon'),
+                    ).toBeVisible();
                 }
                 if (width < 1024 && name === 'checkout') {
                     await expect(page.locator('.checkout-options > button').first()).toHaveCSS(
@@ -701,6 +907,7 @@ try {
                     );
                 }
                 if (
+                    requestedWidth ||
                     (width === 1440 &&
                         [
                             'home',
@@ -708,17 +915,30 @@ try {
                             'product',
                             'cart',
                             'checkout',
+                            'purchase',
                             'account',
                             'login',
                             'services',
+                            'search',
+                            'support',
                             'image-studio',
                             'two-factor',
+                            'mail-query',
                             'reviews',
                             'legal',
                             'notifications',
-                            'reviews',
                         ].includes(name)) ||
                     (requestedContent === 'product-detail' && name === 'product') ||
+                    ([
+                        'coupons',
+                        'search-discovery',
+                        'order-detail',
+                        'orders',
+                        'account-security',
+                        'favorites',
+                        'history',
+                    ].includes(name) &&
+                        [390, 1440].includes(width)) ||
                     (width === 390 &&
                         [
                             'home',
@@ -727,6 +947,7 @@ try {
                             'product',
                             'cart',
                             'checkout',
+                            'purchase',
                             'orders',
                             'account',
                             'addresses',
@@ -734,6 +955,7 @@ try {
                             'services',
                             'support',
                             'two-factor',
+                            'mail-query',
                             'reviews',
                             'legal',
                             'notifications',
@@ -750,6 +972,10 @@ try {
                     await expect(page.locator('.review-candidate-row')).toHaveCount(14);
                     await page.locator('.review-candidate-row').last().click();
                     await expect(page.locator('.review-composer')).toBeInViewport();
+                    const anonymousOption = page.locator('.review-anonymous-option input[type="checkbox"]');
+                    await expect(anonymousOption).not.toBeChecked();
+                    await anonymousOption.check();
+                    await expect(anonymousOption).toBeChecked();
                     if (width < 1024) {
                         const composerTop = await page
                             .locator('.review-composer')
@@ -759,6 +985,21 @@ try {
                             `${preset}/${width}/reviews composer below header`,
                         ).toBeGreaterThanOrEqual(52);
                     }
+                }
+                if (name === 'notifications' && requestedContent === 'notifications') {
+                    await page.getByRole('button', { name: /未读消息/ }).click();
+                    await expect(page.locator('.notification-list > button')).toHaveCount(4);
+                    await page.getByRole('button', { name: '全部标为已读' }).click();
+                    await expect(page.locator('.notification-list > button')).toHaveCount(0);
+                    await expect(page.locator('.notification-empty-filter')).toBeVisible();
+                }
+                if (name === 'legal') {
+                    const documentButtons = page.locator('.legal-document-navigation button');
+                    await expect(documentButtons).toHaveCount(2);
+                    await expect(documentButtons.first()).toHaveAttribute('aria-current', 'page');
+                    await documentButtons.last().click();
+                    await expect(page).toHaveURL(/\/legal\?id=terms$/u);
+                    await expect(documentButtons.last()).toHaveAttribute('aria-current', 'page');
                 }
                 await page.keyboard.press('Tab');
                 const keyboardFocus = await page.evaluate(() => {
@@ -815,7 +1056,7 @@ try {
                 }
                 let primaryContrast;
                 if (name === 'home' && (width === 390 || width === 1440)) {
-                    const primary = page.locator(width >= 1024 ? '.proto-btn-upgrade' : '.hero-rich-cta-btn');
+                    const primary = page.locator('.hero-rich-cta-btn');
                     await expect(primary, `${preset}/${width} home primary action`).toBeVisible();
                     await page.mouse.move(0, 0);
                     primaryContrast = {};
@@ -840,6 +1081,40 @@ try {
                         ).toBeGreaterThanOrEqual(4.5);
                     }
                 }
+                if (
+                    requestedContent === 'saved-products' &&
+                    width >= 1024 &&
+                    ['favorites', 'history'].includes(name)
+                ) {
+                    const toolbar = await page.locator('.desktop-account-workbench-toolbar').boundingBox();
+                    const rail = await page.locator('.desktop-account-navigation').boundingBox();
+                    expect(
+                        Math.abs(toolbar.y - rail.y),
+                        `${name} content aligned with account rail`,
+                    ).toBeLessThanOrEqual(1);
+                }
+                if (requestedContent === 'saved-products' && width >= 1024 && name === 'favorites') {
+                    await page.getByRole('button', { name: '批量管理', exact: true }).click();
+                    await page.getByRole('checkbox', { name: '选择 日常随行杯', exact: true }).check();
+                    await page.getByRole('button', { name: '取消所选收藏', exact: true }).click();
+                    await expect(page.locator('.favorites-page .product-card')).toHaveCount(1);
+                    await expect(page.locator('.favorites-page')).toContainText('第二件收藏商品');
+                    await page.reload();
+                    await expect(page.locator('.favorites-page .product-card')).toHaveCount(1);
+                }
+                if (requestedContent === 'saved-products' && width >= 1024 && name === 'history') {
+                    await expect(page.locator('.history-page .product-card')).toHaveCount(2);
+                    const periods = page.getByRole('group', { name: '浏览日期' });
+                    await periods.getByRole('button', { name: '今天', exact: true }).click();
+                    await expect(page.locator('.history-page .product-card')).toHaveCount(1);
+                    await periods.getByRole('button', { name: '更早', exact: true }).click();
+                    await expect(page.locator('.history-page .product-card')).toHaveCount(1);
+                    await expect(page.locator('.history-page')).toContainText('第二件收藏商品');
+                    await periods.getByRole('button', { name: '昨天', exact: true }).click();
+                    await expect(page.locator('.history-page .product-card')).toHaveCount(0);
+                    await periods.getByRole('button', { name: '全部', exact: true }).click();
+                    await expect(page.locator('.history-page .product-card')).toHaveCount(2);
+                }
                 results.push({
                     preset,
                     width,
@@ -858,12 +1133,64 @@ try {
                 }
 
                 if (name === 'home' && width >= 1024) {
-                    const tools = page.locator('.proto-tool-item');
+                    const tools = page.locator('.quick-grid > button');
                     await expect(tools).toHaveCount(5);
-                    await expect(page.locator('.proto-tools-count')).toContainText('5 个入口');
-                    await expect(page.locator('.proto-tools-pagination')).toHaveCount(0);
+                    await expect(page.locator('.quick-grid h2')).toContainText('快捷入口');
+                    await expect(page.locator('.desktop-quick-pagination')).toHaveCount(0);
                     await expect(tools.filter({ hasText: '商品分类' })).toBeVisible();
                     await expect(tools.filter({ hasText: '优惠中心' })).toBeVisible();
+                    const pair = await page
+                        .locator('.home-intro-grid')
+                        .first()
+                        .evaluate(root => {
+                            const hero = root.querySelector('.hero');
+                            const quick = root.querySelector('.quick-grid');
+                            const copy = hero?.querySelector('.hero-rich-content');
+                            const image = hero?.querySelector('.hero-rich-backdrop');
+                            if (!hero || !quick || !copy) return null;
+                            const heroBounds = hero.getBoundingClientRect();
+                            const quickBounds = quick.getBoundingClientRect();
+                            return {
+                                heroHeight: heroBounds.height,
+                                heroWidth: heroBounds.width,
+                                heroRight: heroBounds.right,
+                                heroBottom: heroBounds.bottom,
+                                quickHeight: quickBounds.height,
+                                quickLeft: quickBounds.left,
+                                quickTop: quickBounds.top,
+                                copyBackground: getComputedStyle(copy).backgroundColor,
+                                imageRatio:
+                                    image instanceof HTMLImageElement && image.naturalHeight > 0
+                                        ? image.naturalWidth / image.naturalHeight
+                                        : null,
+                            };
+                        });
+                    expect(pair, `${preset}/${width}/home has the paired hero`).not.toBeNull();
+                    expect(pair.copyBackground, `${preset}/${width}/home copy has no card`).toBe(
+                        'rgba(0, 0, 0, 0)',
+                    );
+                    if (width >= 1400) {
+                        expect(
+                            pair.heroRight,
+                            `${preset}/${width}/home hero and quick links do not overlap`,
+                        ).toBeLessThanOrEqual(pair.quickLeft);
+                        expect(
+                            Math.abs(pair.heroHeight - pair.quickHeight),
+                            `${preset}/${width}/home equal height`,
+                        ).toBeLessThanOrEqual(2);
+                    } else {
+                        expect(
+                            pair.quickTop,
+                            `${preset}/${width}/home quick links follow artwork`,
+                        ).toBeGreaterThanOrEqual(pair.heroBottom);
+                    }
+                    if (requestedContent === 'wide-hero') {
+                        expect(pair.imageRatio, `${preset}/${width}/home image decoded`).not.toBeNull();
+                        expect(
+                            Math.abs(pair.heroWidth / pair.heroHeight - pair.imageRatio) / pair.imageRatio,
+                            `${preset}/${width}/home preserves wide artwork`,
+                        ).toBeLessThan(0.08);
+                    }
                 }
 
                 if (name === 'home' && width === 1440) {

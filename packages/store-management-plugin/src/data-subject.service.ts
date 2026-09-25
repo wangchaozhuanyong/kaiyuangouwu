@@ -306,6 +306,8 @@ export class DataSubjectService {
                 }
                 await this.dataRetention.quarantineAllCustomerAvatars(txCtx, customer.id);
                 await this.removeOptionalCustomerRows(txCtx, 'CustomerDeliveryEmail', customer.id);
+                await this.removeOptionalCustomerRows(txCtx, 'CustomerServiceFeedback', customer.id);
+                await this.removeOptionalCustomerRows(txCtx, 'CustomerProductActivity', customer.id);
                 await this.anonymizeOptionalCustomerRows(txCtx, 'StorefrontReview', customer.id, {
                     customerName: 'Deleted user',
                 });
@@ -493,6 +495,8 @@ export class DataSubjectService {
             ]);
         const [
             reviews,
+            serviceFeedback,
+            productActivity,
             afterSales,
             deliveryEmails,
             imageJobs,
@@ -529,6 +533,26 @@ export class DataSubjectService {
                 'productId',
                 'productVariantId',
                 'channelId',
+            ]),
+            this.optionalCustomerRows(ctx, 'CustomerServiceFeedback', customerId, [
+                'id',
+                'createdAt',
+                'updatedAt',
+                'channelId',
+                'orderId',
+                'orderCode',
+                'rating',
+                'tagsJson',
+                'comment',
+            ]),
+            this.optionalCustomerRows(ctx, 'CustomerProductActivity', customerId, [
+                'id',
+                'createdAt',
+                'updatedAt',
+                'channelId',
+                'productId',
+                'kind',
+                'visitedAt',
             ]),
             this.optionalCustomerRows(ctx, 'AfterSalesRequest', customerId, [
                 'id',
@@ -1006,6 +1030,8 @@ export class DataSubjectService {
             },
             consentRecords,
             reviews,
+            serviceFeedback,
+            productActivity,
             afterSales,
             dataRequests: requests.map(request => ({
                 id: String(request.id),

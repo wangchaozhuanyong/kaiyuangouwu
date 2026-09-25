@@ -2,12 +2,16 @@ import { ApolloClient, ApolloLink, InMemoryCache, createHttpLink } from '@apollo
 import { ApolloProvider, useQuery } from '@apollo/client/react';
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
 import { STOREFRONT_CONTENT_QUERY, type StorefrontContentResult } from '../../src/graphql/storefront.graphql';
 import { AdminPermissionsContext } from '../../src/hooks/use-admin-permissions';
 import '../../src/index.css';
+import { BusinessServicesCopyModule } from '../../src/pages/Storefront/BusinessServicesCopyModule';
 import { BlockPreview } from '../../src/pages/Storefront/storefront-block-preview';
 import { cloneContentBlock } from '../../src/pages/Storefront/storefront-content-utils';
+import { StorefrontContentModule } from '../../src/pages/Storefront/StorefrontContentModule';
+import { StorefrontModule } from '../../src/pages/Storefront/StorefrontModule';
 import { StorefrontVisualPresetPanel } from '../../src/pages/Storefront/StorefrontVisualPresetPanel';
 
 // Test-only local API and synthetic test-session credentials, never a production account.
@@ -66,13 +70,27 @@ export function Fixture() {
                             ))}
                         </select>
                     </label>
-                    <FeatureHelpProvider>
-                        {new URLSearchParams(location.search).has('preview') ? (
-                            <AuthPreviewFixture />
-                        ) : (
-                            <StorefrontVisualPresetPanel />
-                        )}
-                    </FeatureHelpProvider>
+                    <MemoryRouter
+                        initialEntries={
+                            new URLSearchParams(location.search).has('openCategoryBanner')
+                                ? ['/storefront/decoration?panel=desktop-category-banners']
+                                : ['/']
+                        }
+                    >
+                        <FeatureHelpProvider>
+                            {new URLSearchParams(location.search).get('panel') === 'decoration' ? (
+                                <StorefrontModule />
+                            ) : new URLSearchParams(location.search).get('panel') === 'services' ? (
+                                <BusinessServicesCopyModule />
+                            ) : new URLSearchParams(location.search).get('panel') === 'content' ? (
+                                <StorefrontContentModule />
+                            ) : new URLSearchParams(location.search).has('preview') ? (
+                                <AuthPreviewFixture />
+                            ) : (
+                                <StorefrontVisualPresetPanel />
+                            )}
+                        </FeatureHelpProvider>
+                    </MemoryRouter>
                 </main>
             </AdminPermissionsContext.Provider>
         </ApolloProvider>

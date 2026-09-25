@@ -7,6 +7,7 @@ export interface SubmitStorefrontReviewInput {
     rating: number;
     title: string;
     body: string;
+    anonymous?: boolean;
 }
 
 export interface StorefrontReviewListOptions {

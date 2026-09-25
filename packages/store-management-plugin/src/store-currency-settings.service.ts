@@ -52,7 +52,7 @@ export const USDT_RATE_INTERVAL_OPTIONS = [5, 10, 15, 30, 60] as const;
 export const DEFAULT_USDT_RATE_DAILY_TIME = '10:00';
 
 interface CurrencyChannelFields {
-    currencySelectorEnabled?: boolean | null;
+    currencySelectorEnabled?: boolean | number | null;
     currencyRateMode?: string | null;
     cnyToMyrRate?: number | null;
     currencyRateMarkupBps?: number | null;
@@ -61,7 +61,7 @@ interface CurrencyChannelFields {
     currencyRateUpdatedAt?: Date | string | null;
     currencyPricesUpdatedAt?: Date | string | null;
     currencySyncedPriceCount?: number | null;
-    usdtDisplayEnabled?: boolean | null;
+    usdtDisplayEnabled?: boolean | number | null;
     usdtRateMarkupBps?: number | null;
     usdtRateScheduleMode?: string | null;
     usdtRateIntervalMinutes?: number | null;
@@ -101,10 +101,15 @@ export class StoreCurrencySettingsService {
         return this.toConfiguration(ctx, await this.getActiveChannel(ctx));
     }
 
+    async getForChannel(ctx: RequestContext, channel: Channel): Promise<StoreCurrencyConfiguration> {
+        return this.toConfiguration(ctx, channel);
+    }
+
     async getPublic(ctx: RequestContext): Promise<StoreCurrencyConfiguration> {
+        const channel = await this.getActiveChannel(ctx);
         return {
-            ...(await this.toConfiguration(ctx, ctx.channel)),
-            ...publicCurrencySelection(ctx.channel),
+            ...(await this.toConfiguration(ctx, channel)),
+            ...publicCurrencySelection(channel),
         };
     }
 
@@ -546,7 +551,7 @@ export class StoreCurrencySettingsService {
             updatedAt: channel.updatedAt,
             defaultCurrencyCode,
             availableCurrencyCodes,
-            selectorEnabled: customFields.currencySelectorEnabled !== false,
+            selectorEnabled: storedChannelBoolean(customFields.currencySelectorEnabled, true),
             rateMode: normalizeRateMode(customFields.currencyRateMode),
             cnyToMyrRate: positiveNumber(customFields.cnyToMyrRate, 0.6),
             markupPercent: finiteNumber(customFields.currencyRateMarkupBps, 0) / 100,
@@ -555,7 +560,7 @@ export class StoreCurrencySettingsService {
             rateUpdatedAt: nullableDate(customFields.currencyRateUpdatedAt),
             pricesUpdatedAt: null,
             syncedPriceCount: 0,
-            usdtDisplayEnabled: customFields.usdtDisplayEnabled === true,
+            usdtDisplayEnabled: storedChannelBoolean(customFields.usdtDisplayEnabled, false),
             usdtMarkupPercent: finiteNumber(customFields.usdtRateMarkupBps, 0) / 100,
             ...usdtRateSchedule,
             cnyPerUsdtRate,
@@ -567,7 +572,7 @@ export class StoreCurrencySettingsService {
             usdtRateNextRunAt: getNextUsdtRateRefreshAt(usdtRateSchedule, usdtRateUpdatedAt, now),
             usdtRateExpiresAt,
             usdtRateAvailable:
-                customFields.usdtDisplayEnabled === true &&
+                storedChannelBoolean(customFields.usdtDisplayEnabled, false) &&
                 cnyPerUsdtRate !== null &&
                 usdtRateExpiresAt !== null &&
                 now.getTime() <= usdtRateExpiresAt.getTime(),
@@ -613,6 +618,12 @@ export class StoreCurrencySettingsService {
             expiresAt: quote.expiresAt,
         };
     }
+}
+
+function storedChannelBoolean(value: boolean | number | null | undefined, fallback: boolean): boolean {
+    if (value === true || value === 1) return true;
+    if (value === false || value === 0) return false;
+    return fallback;
 }
 
 function isLockNotSupportedError(error: unknown): boolean {

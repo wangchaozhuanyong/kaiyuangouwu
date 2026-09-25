@@ -1,7 +1,6 @@
 import { createContext, useContext } from 'react';
 
 import { type AccountPageProps } from './pages/account-page';
-import { type AnnouncementsPageProps } from './pages/announcements-page';
 import { type BrowsingHistoryPageProps } from './pages/browsing-history-page';
 import { type BusinessServicesPageProps } from './pages/business-services-page';
 import { type CartPageProps } from './pages/cart-page';
@@ -42,4 +41,3 @@ export const AccountPageContext = createPageContext<AccountPageProps>('AccountPa
 export const FavoriteProductsPageContext =
     createPageContext<FavoriteProductsPageProps>('FavoriteProductsPage');
 export const BrowsingHistoryPageContext = createPageContext<BrowsingHistoryPageProps>('BrowsingHistoryPage');
-export const AnnouncementsPageContext = createPageContext<AnnouncementsPageProps>('AnnouncementsPage');

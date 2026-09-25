@@ -3,7 +3,6 @@ import {
     AlertTriangle,
     ArrowLeft,
     Camera,
-    CheckCircle2,
     ChevronRight,
     Download,
     FileJson,
@@ -307,10 +306,6 @@ export function AccountSecurityPage({
                     <div className="security-user-meta">
                         <div className="security-user-title-row">
                             <h2 className="security-user-name">{displayName}</h2>
-                            <span className="security-status-badge">
-                                <CheckCircle2 size={12} aria-hidden="true" />
-                                <span>{isZh ? '已认证' : 'Verified'}</span>
-                            </span>
                         </div>
                         <p className="security-user-email">{customer.emailAddress}</p>
                         <div className="security-avatar-actions">
@@ -514,17 +509,14 @@ export function AccountSecurityPage({
                             </span>
                             <div className="security-item-info">
                                 <strong className="security-item-title">
-                                    {isZh ? '账号安全评级' : 'Security Level'}
+                                    {isZh ? '登录保护' : 'Sign-in protection'}
                                 </strong>
                                 <span className="security-item-subtitle">
                                     {isZh
-                                        ? '已绑定密保邮箱，账户处于高等级保护状态'
-                                        : 'Protected with verified email'}
+                                        ? '通过账户邮箱验证后重置密码，请妥善保管登录信息。'
+                                        : 'Reset your password after email verification. Keep your sign-in details secure.'}
                                 </span>
                             </div>
-                            <span className="security-safe-badge">
-                                <span>{isZh ? '极佳' : 'Optimal'}</span>
-                            </span>
                         </div>
                     </div>
                 </div>
@@ -548,7 +540,7 @@ export function AccountSecurityPage({
                                 </div>
                             ) : (
                                 fraudRiskCases.map(riskCase => {
-                                    const canAppeal = ['OPEN', 'REJECTED'].includes(riskCase.status);
+                                    const canAppeal = canAppealFraudRiskCase(riskCase);
                                     const pendingAppeal = riskCase.appeals.find(
                                         appeal => appeal.status === 'PENDING',
                                     );
@@ -567,9 +559,7 @@ export function AccountSecurityPage({
                                                         {riskCaseStatusLabel(riskCase.status, language)}
                                                     </strong>
                                                     <span className="security-item-subtitle">
-                                                        {isZh
-                                                            ? `订单 ${riskCase.orderId ?? '—'} 暂需人工复核；批准后可继续支付`
-                                                            : `Order ${riskCase.orderId ?? '—'} is under manual review; checkout resumes after release.`}
+                                                        {riskCaseDescription(riskCase, language)}
                                                     </span>
                                                 </div>
                                             </div>
@@ -611,11 +601,6 @@ export function AccountSecurityPage({
                                                                         riskAppealReason,
                                                                     )
                                                                         .then(() => {
-                                                                            setRiskMessage(
-                                                                                isZh
-                                                                                    ? '申诉已提交'
-                                                                                    : 'Appeal submitted',
-                                                                            );
                                                                             setRiskAppealId(null);
                                                                             setRiskAppealReason('');
                                                                         })
@@ -910,6 +895,46 @@ function riskCaseStatusLabel(status: FraudRiskCase['status'], language: Storefro
         CLOSED: ['已关闭', 'Closed'],
     };
     return labels[status][language === 'zh' ? 0 : 1];
+}
+
+export function canAppealFraudRiskCase(riskCase: Pick<FraudRiskCase, 'status' | 'appeals'>): boolean {
+    return ['OPEN', 'REJECTED'].includes(riskCase.status) && riskCase.appeals.length === 0;
+}
+
+export function riskCaseDescription(
+    riskCase: Pick<FraudRiskCase, 'orderId' | 'status'>,
+    language: StorefrontLanguage,
+): string {
+    const isZh = language === 'zh';
+    const order = riskCase.orderId ? (isZh ? `订单 ${riskCase.orderId}` : `Order ${riskCase.orderId}`) : null;
+    if (riskCase.status === 'APPROVED') {
+        return order
+            ? isZh
+                ? `${order} 已放行，可继续付款`
+                : `${order} was released. You can continue checkout.`
+            : isZh
+              ? '复核已通过，可继续操作'
+              : 'Review completed. You can continue.';
+    }
+    if (riskCase.status === 'REJECTED') {
+        return order
+            ? isZh
+                ? `${order} 未通过复核，请查看结果或联系客服`
+                : `${order} was blocked. Review the result or contact support.`
+            : isZh
+              ? '复核未通过，请查看结果或联系客服'
+              : 'Review was declined. Check the result or contact support.';
+    }
+    if (riskCase.status === 'CLOSED') {
+        return isZh ? '该风险案件已关闭' : 'This risk case is closed.';
+    }
+    return order
+        ? isZh
+            ? `${order} 暂需人工复核；批准后可继续支付`
+            : `${order} is under manual review; checkout resumes after release.`
+        : isZh
+          ? '该操作正在人工复核，审核后将更新状态'
+          : 'This activity is under manual review. The status will update after a decision.';
 }
 
 function formatPrivacyDate(value: string, language: StorefrontLanguage): string {

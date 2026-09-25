@@ -32,13 +32,12 @@ import {
 
 import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
 import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
+import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { LocalePreferencesSheet, LocalePreferencesTrigger } from '../components/common/locale-preferences';
 import { ProductCard } from '../components/common/product-card';
-import { DesktopUnifiedHome } from '../components/desktop/desktop-unified-home';
 import { claimableCouponCampaigns } from '../coupon-center-state';
 import { useDesktopLayout } from '../desktop-layout';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
-import { heroThemeStyle, isLightColor, useImageTone } from '../hero-theme';
 import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-merchandising';
 import { homepageModuleEntries } from '../homepage-module-order';
 import { resolveManagedContentCopy } from '../managed-content-copy';
@@ -124,7 +123,22 @@ export function buildHomeNoticeItems(
     noticeBlock: StorefrontContentBlock | undefined,
     language: StorefrontLanguage,
 ): HomeNoticeItem[] {
-    const systemNoticeItems = systemAnnouncements.flatMap(announcement => {
+    const now = Date.now();
+    const recentCutoff = now - 30 * 24 * 60 * 60 * 1000;
+    const recentAnnouncements = systemAnnouncements
+        .filter(announcement => {
+            const publishedAt = announcement.startsAt ?? announcement.createdAt;
+            if (!publishedAt) return true; // Older API responses keep their previous behavior during rollout.
+            const time = Date.parse(publishedAt);
+            return Number.isFinite(time) && time >= recentCutoff && time <= now;
+        })
+        .sort((left, right) => {
+            const leftTime = Date.parse(left.startsAt ?? left.createdAt ?? '') || 0;
+            const rightTime = Date.parse(right.startsAt ?? right.createdAt ?? '') || 0;
+            return rightTime - leftTime;
+        })
+        .slice(0, 5);
+    const systemNoticeItems = recentAnnouncements.flatMap(announcement => {
         const announcementTitle = announcement.title.trim();
         const content = announcement.content.trim();
         if (!announcementTitle && !content) return [];
@@ -159,7 +173,7 @@ export function buildHomeNoticeItems(
         ];
     });
     if (managedNoticeItems.length || !noticeBlock || noticeBlock.items.length) {
-        return [...systemNoticeItems, ...managedNoticeItems];
+        return [...systemNoticeItems, ...managedNoticeItems].slice(0, 5);
     }
 
     const title = noticeBlock.title.trim();
@@ -179,7 +193,7 @@ export function buildHomeNoticeItems(
             targetValue: noticeBlock.targetValue,
             linkUrl: null,
         },
-    ];
+    ].slice(0, 5);
 }
 
 export function NoticeDetailSheet({
@@ -250,6 +264,7 @@ function HomepageCouponHub({
     onToast,
 }: HomepageCouponHubProps) {
     const navigate = useNavigate();
+    const desktop = useDesktopLayout();
     const isZh = language === 'zh';
     const [claimingId, setClaimingId] = useState<string | null>(null);
     const handleClaim = async (coupon: StorefrontCouponCard) => {
@@ -298,6 +313,45 @@ function HomepageCouponHub({
                 <div className="coupon-hub-scroll" role="list">
                     {coupons.map(coupon => {
                         const canClaim = coupon.claimable && !coupon.claimed;
+                        const claimAction = (
+                            <button
+                                type="button"
+                                className={`coupon-claim-btn ${!canClaim ? 'is-claimed' : ''}${claimingId === coupon.id ? ' is-claiming' : ''}`}
+                                onClick={() => void handleClaim(coupon)}
+                                disabled={!canClaim || loading || claimingId !== null}
+                                aria-label={
+                                    !canClaim
+                                        ? isZh
+                                            ? `已领取 ${coupon.title}`
+                                            : `Claimed ${coupon.title}`
+                                        : isZh
+                                          ? `领取 ${coupon.title}`
+                                          : `Claim ${coupon.title}`
+                                }
+                            >
+                                <span className="coupon-btn-text-wrap">
+                                    {claimingId === coupon.id ? (
+                                        <span>{isZh ? '领取中' : 'Claiming'}</span>
+                                    ) : !canClaim ? (
+                                        <>
+                                            <span>{isZh ? '已领取' : 'Claimed'}</span>
+                                            <Check size={12} strokeWidth={2.4} aria-hidden="true" />
+                                        </>
+                                    ) : (
+                                        <span>{isZh ? '立即领取' : 'Claim'}</span>
+                                    )}
+                                </span>
+                            </button>
+                        );
+                        if (desktop)
+                            return (
+                                <DesktopCouponTicket
+                                    key={coupon.id}
+                                    card={coupon}
+                                    role="listitem"
+                                    action={claimAction}
+                                />
+                            );
 
                         return (
                             <div
@@ -331,36 +385,7 @@ function HomepageCouponHub({
                                     <p className="coupon-ticket-desc">{coupon.description}</p>
                                 </div>
 
-                                <div className="coupon-ticket-action">
-                                    <button
-                                        type="button"
-                                        className={`coupon-claim-btn ${!canClaim ? 'is-claimed' : ''}${claimingId === coupon.id ? ' is-claiming' : ''}`}
-                                        onClick={() => void handleClaim(coupon)}
-                                        disabled={!canClaim || loading || claimingId !== null}
-                                        aria-label={
-                                            !canClaim
-                                                ? isZh
-                                                    ? `已领取 ${coupon.title}`
-                                                    : `Claimed ${coupon.title}`
-                                                : isZh
-                                                  ? `领取 ${coupon.title}`
-                                                  : `Claim ${coupon.title}`
-                                        }
-                                    >
-                                        <span className="coupon-btn-text-wrap">
-                                            {claimingId === coupon.id ? (
-                                                <span>{isZh ? '领取中' : 'Claiming'}</span>
-                                            ) : !canClaim ? (
-                                                <>
-                                                    <span>{isZh ? '已领取' : 'Claimed'}</span>
-                                                    <Check size={12} strokeWidth={2.4} aria-hidden="true" />
-                                                </>
-                                            ) : (
-                                                <span>{isZh ? '立即领取' : 'Claim'}</span>
-                                            )}
-                                        </span>
-                                    </button>
-                                </div>
+                                <div className="coupon-ticket-action">{claimAction}</div>
                             </div>
                         );
                     })}
@@ -387,6 +412,8 @@ export interface HomePageProps {
     contentError: string;
     loading: boolean;
     error: string | null;
+    catalogLoading: boolean;
+    catalogError: string | null;
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
@@ -433,6 +460,8 @@ export function HomePage() {
         contentError,
         loading,
         error,
+        catalogLoading,
+        catalogError,
         market,
         locale,
         language,
@@ -476,6 +505,14 @@ export function HomePage() {
             entry => entry.type === type && (blockId === undefined || entry.block?.id === blockId),
         );
     const hasHomepageModule = (type: StorefrontContentBlock['type']) => homepageModuleOrder(type) >= 0;
+    const introOrders = ['HERO', 'QUICK_LINKS', 'TRUST_BAR']
+        .map(type => homepageModuleOrder(type as StorefrontContentBlock['type']))
+        .filter(order => order >= 0);
+    // Group adjacent introductory modules only; a merchant can move other modules between them.
+    const groupedIntro =
+        desktop &&
+        introOrders.length > 0 &&
+        Math.max(...introOrders) - Math.min(...introOrders) + 1 === introOrders.length;
     const managedSections = homepageModules.flatMap(entry =>
         entry.block && ['CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY', 'CUSTOM'].includes(entry.type)
             ? [entry.block]
@@ -485,8 +522,12 @@ export function HomePage() {
         new Map([...products, ...managedContentProducts].map(product => [product.id, product])).values(),
     );
     const [heroIndex, setHeroIndex] = useState(0);
+    const [readyHeroImage, setReadyHeroImage] = useState('');
+    const [quickPage, setQuickPage] = useState(0);
     const [heroInteractionPaused, setHeroInteractionPaused] = useState(false);
     const [noticeIndex, setNoticeIndex] = useState(0);
+    const [noticeHovered, setNoticeHovered] = useState(false);
+    const [noticeFocused, setNoticeFocused] = useState(false);
     const [openNoticeId, setOpenNoticeId] = useState<string | null>(null);
     const [preferencesOpen, setPreferencesOpen] = useState(false);
     const [heroGestureActive, setHeroGestureActive] = useState(false);
@@ -509,17 +550,12 @@ export function HomePage() {
             : undefined;
     const hero = managedHeroProduct;
     const heroImage = managedHero?.imageUrl ?? '';
-    // Context-aware fallback: when CORS prevents canvas sampling, use explicit
-    // text/background color to decide fallback tone so dark text never gets white overlay.
-    const heroFallbackTone: 'light' | 'dark' = (() => {
-        const HEX = /^#[0-9a-f]{6}$/i;
-        const text = typeof managedHero?.textColor === 'string' ? managedHero.textColor.trim() : '';
-        const bg = typeof managedHero?.backgroundColor === 'string' ? managedHero.backgroundColor.trim() : '';
-        if ((HEX.test(text) && !isLightColor(text)) || (HEX.test(bg) && isLightColor(bg))) return 'light';
-        return 'dark';
-    })();
-    const heroImageTone = useImageTone(heroImage, heroFallbackTone);
-    const heroStyle = managedHero ? heroThemeStyle(managedHero, heroImageTone) : undefined;
+    const heroImageWidth = managedHero?.imageAsset?.width;
+    const heroImageHeight = managedHero?.imageAsset?.height;
+    const heroAspectRatio =
+        heroImageWidth && heroImageHeight && heroImageWidth > 0 && heroImageHeight > 0
+            ? `${heroImageWidth} / ${heroImageHeight}`
+            : '2 / 1';
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
     const defaultNoticeItem: HomeNoticeItem = {
         id: 'default-notice',
@@ -600,7 +636,14 @@ export function HomePage() {
     }, []);
 
     useEffect(() => {
-        if (noticeItems.length < 2 || openNoticeId || prefersReducedMotion || !pageVisible) {
+        if (
+            noticeItems.length < 2 ||
+            openNoticeId ||
+            noticeHovered ||
+            noticeFocused ||
+            prefersReducedMotion ||
+            !pageVisible
+        ) {
             return;
         }
         const timer = window.setInterval(
@@ -608,7 +651,15 @@ export function HomePage() {
             noticeIntervalSeconds * 1000,
         );
         return () => window.clearInterval(timer);
-    }, [noticeIntervalSeconds, noticeItems.length, openNoticeId, pageVisible, prefersReducedMotion]);
+    }, [
+        noticeIntervalSeconds,
+        noticeItems.length,
+        openNoticeId,
+        noticeHovered,
+        noticeFocused,
+        pageVisible,
+        prefersReducedMotion,
+    ]);
 
     useEffect(() => {
         if (noticeIndex >= noticeItems.length) setNoticeIndex(0);
@@ -643,13 +694,13 @@ export function HomePage() {
     ]);
 
     useEffect(() => {
-        if (heroCount < 2 || !shouldPrefetchMedia()) return;
+        if (heroCount < 2 || readyHeroImage !== heroImage || !shouldPrefetchMedia()) return;
         const nextIndex = heroIndexAfterManualMove(heroIndex, heroCount, 1);
         const nextHero = managedHeroes[nextIndex];
         if (!nextHero) return;
         const nextImage = nextHero.imageUrl ?? '';
         void decodeStorefrontImage(nextImage, 'hero').catch(() => undefined);
-    }, [heroCount, heroIndex, managedHeroes]);
+    }, [heroCount, heroImage, heroIndex, managedHeroes, readyHeroImage]);
 
     useEffect(() => {
         if (heroIndex >= heroCount) setHeroIndex(0);
@@ -749,59 +800,23 @@ export function HomePage() {
         icon: ReactNode;
         disabled?: boolean;
         onClick: () => void;
-    }> = (quickBlock?.items ?? [])
-        // Desktop collections already have a persistent entry in DesktopHeader.
-        .filter(
-            item =>
-                !desktop ||
-                item.targetType !== 'COLLECTION' ||
-                !collections.some(collection => collection.id === item.targetValue),
-        )
-        .map((item, index) => ({
-            id: item.id,
-            label: item.label,
-            icon: renderColorfulQuickIcon(item.label, index, item.imageUrl),
-            disabled: item.targetType === 'NONE' || !item.targetValue,
-            onClick: () => onContentTarget(item.targetType, item.targetValue),
-        }));
+    }> = (quickBlock?.items ?? []).map((item, index) => ({
+        id: item.id,
+        label: item.label,
+        icon: renderColorfulQuickIcon(item.label, index, item.imageUrl),
+        disabled: item.targetType === 'NONE' || !item.targetValue,
+        onClick: () => onContentTarget(item.targetType, item.targetValue),
+    }));
+    const quickPageCount = Math.max(1, Math.ceil(quickLinks.length / 5));
+    const activeQuickPage = Math.min(quickPage, quickPageCount - 1);
+    const visibleQuickLinks = desktop
+        ? quickLinks.slice(activeQuickPage * 5, activeQuickPage * 5 + 5)
+        : quickLinks;
     const trustIcons = [ShieldCheck, Zap, Lock, Headphones];
     const trustItems = (trustBlock?.items ?? []).map(item => item.label);
     const trustBarHasLongCopy = trustItems.some(label => Array.from(label.trim()).length > (isZh ? 4 : 10));
     const colorfulTrustBar = isColorfulHomepageStyle(trustBlock?.settings?.visualStyle);
     const colorfulQuickLinks = isColorfulHomepageStyle(quickBlock?.settings?.visualStyle);
-
-    if (desktop) {
-        const previewParameters =
-            typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-        const previewHomeScenario =
-            previewParameters?.get('storefrontPreviewEmbedded') === '1'
-                ? previewParameters.get('storefrontPreviewScenario')
-                : null;
-        return (
-            <main
-                className="page home-page desktop-neo-home-page"
-                data-page-pending={loading ? 'query' : undefined}
-            >
-                <DesktopUnifiedHome
-                    products={
-                        previewHomeScenario === 'empty' || previewHomeScenario === 'loading' ? [] : products
-                    }
-                    loading={
-                        previewHomeScenario === 'loading' || (previewHomeScenario !== 'empty' && loading)
-                    }
-                    contentBlocks={contentBlocks}
-                    language={language}
-                    storefrontName={storefrontName}
-                    storefrontDescription={storefrontDescription}
-                    storefrontTagline={storefrontTagline}
-                    market={market}
-                    locale={locale}
-                    onProductSelect={id => navigateTo({ name: 'product', id })}
-                    onContentTarget={onContentTarget}
-                />
-            </main>
-        );
-    }
 
     return (
         <main className="page home-page" data-page-pending={loading ? 'query' : undefined}>
@@ -892,18 +907,27 @@ export function HomePage() {
                                         : `Read full notice: ${activeNoticeItem.title}`
                                 }
                                 onClick={() => setOpenNoticeId(activeNoticeItem.id)}
+                                onMouseEnter={() => setNoticeHovered(true)}
+                                onMouseLeave={() => setNoticeHovered(false)}
+                                onFocus={() => setNoticeFocused(true)}
+                                onBlur={() => setNoticeFocused(false)}
                             >
                                 <Bell aria-hidden="true" />
                                 <span key={activeNoticeItem.id}>{activeNoticeItem.summary}</span>
                                 <ChevronRight aria-hidden="true" />
                             </button>
                         ) : null}
-                        <div className="home-intro-grid">
+                        <div
+                            className={`home-intro-grid${groupedIntro ? ' is-grouped-intro' : ''}`}
+                            style={groupedIntro ? { order: Math.min(...introOrders) } : undefined}
+                        >
                             {hasHomepageModule('HERO') && heroCount > 0 && (
                                 <section
-                                    className={`hero${heroCount > 1 ? ' is-swipeable' : ''}`}
-                                    style={{ ...heroStyle, order: homepageModuleOrder('HERO') }}
-                                    data-image-tone={heroImageTone}
+                                    className={`hero${desktop ? ' hero-image-overlay' : ''}${heroCount > 1 ? ' is-swipeable' : ''}`}
+                                    style={{
+                                        order: homepageModuleOrder('HERO'),
+                                        aspectRatio: desktop ? heroAspectRatio : undefined,
+                                    }}
                                     role="region"
                                     aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
                                     aria-roledescription={isZh ? '轮播' : 'carousel'}
@@ -940,7 +964,6 @@ export function HomePage() {
                                     {managedHero && (
                                         <HeroScene
                                             content={managedHero}
-                                            imageUrl={heroImage}
                                             imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${managedHero.title || hero?.name || storefrontName}`}
                                             onImageOpen={handleHeroImageOpen}
                                             onOpen={openActiveHero}
@@ -955,14 +978,21 @@ export function HomePage() {
                                                     }
                                                     className="hero-rich-backdrop"
                                                     imageKind="hero"
+                                                    width={heroImageWidth || undefined}
+                                                    height={heroImageHeight || undefined}
                                                     loading="eager"
                                                     fetchPriority={heroIndex === 0 ? 'high' : 'auto'}
+                                                    onImageReady={() => setReadyHeroImage(heroImage)}
                                                 />
                                             }
                                         />
                                     )}
                                     {desktop && heroCount > 1 && (
-                                        <>
+                                        <div
+                                            className="desktop-hero-navigation"
+                                            role="group"
+                                            aria-label={isZh ? '轮播切换' : 'Carousel navigation'}
+                                        >
                                             <button
                                                 type="button"
                                                 className="desktop-hero-arrow is-previous"
@@ -975,6 +1005,10 @@ export function HomePage() {
                                             >
                                                 <ChevronLeft aria-hidden="true" />
                                             </button>
+                                            <span className="desktop-hero-count" aria-hidden="true">
+                                                <strong>{String(heroIndex + 1).padStart(2, '0')}</strong>
+                                                <span>/ {String(heroCount).padStart(2, '0')}</span>
+                                            </span>
                                             <button
                                                 type="button"
                                                 className="desktop-hero-arrow is-next"
@@ -987,11 +1021,7 @@ export function HomePage() {
                                             >
                                                 <ChevronRight aria-hidden="true" />
                                             </button>
-                                            <span className="desktop-hero-count" aria-hidden="true">
-                                                <strong>{String(heroIndex + 1).padStart(2, '0')}</strong>
-                                                <span>/ {String(heroCount).padStart(2, '0')}</span>
-                                            </span>
-                                        </>
+                                        </div>
                                     )}
                                     {heroCount > 1 && (
                                         <div
@@ -1051,7 +1081,13 @@ export function HomePage() {
                                     style={{ order: homepageModuleOrder('QUICK_LINKS') }}
                                     aria-label={isZh ? '快捷入口' : 'Quick links'}
                                 >
-                                    {quickLinks.map(item => (
+                                    {desktop && (
+                                        <SectionHeader
+                                            kind="services"
+                                            title={quickBlock?.title || (isZh ? '常用服务' : 'Quick links')}
+                                        />
+                                    )}
+                                    {visibleQuickLinks.map(item => (
                                         <button
                                             type="button"
                                             key={item.id}
@@ -1063,6 +1099,34 @@ export function HomePage() {
                                             {desktop && <ChevronRight aria-hidden="true" />}
                                         </button>
                                     ))}
+                                    {desktop && quickPageCount > 1 && (
+                                        <div className="desktop-quick-pagination">
+                                            <button
+                                                type="button"
+                                                aria-label={isZh ? '上一组快捷入口' : 'Previous shortcuts'}
+                                                onClick={() =>
+                                                    setQuickPage(
+                                                        (activeQuickPage - 1 + quickPageCount) %
+                                                            quickPageCount,
+                                                    )
+                                                }
+                                            >
+                                                <ChevronLeft aria-hidden="true" />
+                                            </button>
+                                            <span aria-live="polite">
+                                                {activeQuickPage + 1} / {quickPageCount}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                aria-label={isZh ? '下一组快捷入口' : 'Next shortcuts'}
+                                                onClick={() =>
+                                                    setQuickPage((activeQuickPage + 1) % quickPageCount)
+                                                }
+                                            >
+                                                <ChevronRight aria-hidden="true" />
+                                            </button>
+                                        </div>
+                                    )}
                                 </nav>
                             ) : null}
                         </div>
@@ -1122,15 +1186,30 @@ export function HomePage() {
                                 className={homepageSectionShellClassName}
                                 style={{ order: homepageModules.length }}
                             >
-                                <EmptyState
-                                    icon={<ShoppingBag />}
-                                    title={isZh ? '暂无在售商品' : 'No products are available'}
-                                    detail={
-                                        isZh
-                                            ? '商家在管理后台上架商品后会显示在这里'
-                                            : 'Products will appear here after the merchant publishes them'
-                                    }
-                                />
+                                {catalogLoading ? (
+                                    <PageSkeleton
+                                        variant="catalog"
+                                        label={isZh ? '正在加载商品' : 'Loading products'}
+                                    />
+                                ) : catalogError ? (
+                                    <EmptyState
+                                        icon={<WifiOff />}
+                                        title={isZh ? '商品暂时无法加载' : 'Products are unavailable'}
+                                        detail={catalogError}
+                                        action={isZh ? '重试' : 'Try again'}
+                                        onAction={onRetry}
+                                    />
+                                ) : (
+                                    <EmptyState
+                                        icon={<ShoppingBag />}
+                                        title={isZh ? '暂无在售商品' : 'No products are available'}
+                                        detail={
+                                            isZh
+                                                ? '商家在管理后台上架商品后会显示在这里'
+                                                : 'Products will appear here after the merchant publishes them'
+                                        }
+                                    />
+                                )}
                             </div>
                         )}
 
@@ -1160,6 +1239,7 @@ export function HomePage() {
                                 style={{ order: homepageModuleOrder('BEST_SELLERS') }}
                             >
                                 <ProductSection
+                                    kind="best-sellers"
                                     title={bestSellersTitle}
                                     subtitle={bestSellersBlock?.subtitle}
                                     action={isZh ? '更多' : 'More'}
@@ -1179,6 +1259,7 @@ export function HomePage() {
                                 style={{ order: homepageModuleOrder('RECOMMENDATIONS') }}
                             >
                                 <ProductSection
+                                    kind="recommendations"
                                     title={resolveManagedContentCopy(
                                         recommendationsBlock,
                                         'title',
@@ -1538,7 +1619,12 @@ function CategoryPromotionSection({
                 ...managedContentStyle(block),
             }}
         >
-            <SectionHeader title={block.title} subtitle={block.subtitle} subtitlePlacement="end" />
+            <SectionHeader
+                kind="categories"
+                title={block.title}
+                subtitle={block.subtitle}
+                subtitlePlacement="end"
+            />
             <div className={`category-promotion-layout${hasSupportingContent ? '' : ' is-visual-only'}`}>
                 <button
                     className="category-promotion-visual"

@@ -12,6 +12,8 @@
 lerna-debug.log
 dist
 e2e/__data__/*
+packages/next-admin/e2e/carousel/results/
+packages/store-management-plugin/e2e/__data__/
 docs/resources/_gen/*
 docs/static/main.js*
 docs/static/main.css*

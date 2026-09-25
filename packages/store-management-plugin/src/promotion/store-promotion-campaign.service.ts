@@ -34,6 +34,7 @@ import { convertChannelAmount } from '../store-currency-price-selection-strategy
 import {
     CreateStoreCouponCampaignInput,
     CreateStoreFlashSaleInput,
+    StoreCouponAppearanceTheme,
     StoreCouponCampaignKind,
     StoreCouponCampaignStats,
     StoreCouponCampaignView,
@@ -109,6 +110,7 @@ export class StorePromotionCampaignService {
                 return {
                     ...view,
                     ...stats,
+                    appearanceTheme: config?.appearanceTheme ?? null,
                     claimStartsAt: config?.claimStartsAt ?? promotion.startsAt,
                     claimEndsAt: config?.claimEndsAt ?? promotion.endsAt,
                     validityDays: config?.validityDays ?? null,
@@ -256,6 +258,7 @@ export class StorePromotionCampaignService {
         ctx: RequestContext,
         input: CreateStoreCouponCampaignInput,
     ): Promise<StoreCouponCampaignView> {
+        const appearanceTheme = validCouponAppearanceTheme(input.appearanceTheme);
         const normalized = await this.normalizeCouponInput(ctx, input);
         const result = await this.promotionService.createPromotion(ctx, normalized);
         if (isGraphQlErrorResult(result)) {
@@ -283,6 +286,7 @@ export class StorePromotionCampaignService {
                 issueLimit: this.optionalPositiveInteger(input.issueLimit ?? input.usageLimit, '发放数量'),
                 perCustomerClaimLimit: 1,
                 stackPolicy: input.stackPolicy ?? 'EXCLUSIVE',
+                appearanceTheme,
                 returnOnCancellation: input.returnOnCancellation ?? true,
                 returnOnFullRefund: input.returnOnFullRefund ?? true,
                 archivedAt: null,
@@ -294,6 +298,7 @@ export class StorePromotionCampaignService {
         return {
             ...view,
             ...emptyCampaignStats(),
+            appearanceTheme: config.appearanceTheme,
             claimStartsAt: config.claimStartsAt,
             claimEndsAt: config.claimEndsAt,
             validityDays: config.validityDays,
@@ -494,6 +499,33 @@ export class StorePromotionCampaignService {
         return updated;
     }
 
+    async setCouponAppearance(
+        ctx: RequestContext,
+        id: ID,
+        theme: StoreCouponAppearanceTheme | null | undefined,
+    ): Promise<StoreCouponCampaignView> {
+        const appearanceTheme = validCouponAppearanceTheme(theme);
+        const promotion = await this.promotionService.findOne(ctx, id);
+        if (!promotion || !this.toCouponView(promotion)) throw new UserInputError('找不到该优惠券活动');
+        const config = await this.lockOwnedCampaign(ctx, promotion);
+        if (config.appearanceTheme !== appearanceTheme) {
+            config.appearanceTheme = appearanceTheme;
+            await this.connection
+                .getRepository(ctx, StoreCouponCampaignConfig)
+                .save(config, { reload: false });
+        }
+        const updated = (await this.findCoupons(ctx)).find(coupon => idsAreEqual(coupon.id, id));
+        if (!updated) throw new UserInputError('优惠券外观保存后无法读取');
+        await this.eventBus?.publish(
+            new StorefrontDataChangedEvent(ctx, ['content'], {
+                channelIds: [ctx.channelId],
+                entityType: 'StoreCouponCampaign',
+                entityIds: [id],
+            }),
+        );
+        return updated;
+    }
+
     async archiveCouponCampaign(ctx: RequestContext, id: ID): Promise<StoreCouponCampaignView> {
         const promotion = await this.promotionService.findOne(ctx, id);
         if (!promotion || !this.toCouponView(promotion)) {
@@ -668,6 +700,7 @@ export class StorePromotionCampaignService {
             name: promotion.name,
             couponCode: promotion.couponCode,
             kind,
+            appearanceTheme: null,
             enabled: promotion.enabled,
             startsAt: promotion.startsAt,
             endsAt: promotion.endsAt,
@@ -870,6 +903,7 @@ export class StorePromotionCampaignService {
                     issueLimit: promotion.usageLimit,
                     perCustomerClaimLimit: 1,
                     stackPolicy: 'EXCLUSIVE',
+                    appearanceTheme: null,
                     returnOnCancellation: true,
                     returnOnFullRefund: true,
                     archivedAt: null,
@@ -1033,6 +1067,14 @@ function emptyCampaignStats(): StoreCouponCampaignStats {
         assistedRevenueTotal: 0,
         financialTotals: [],
     };
+}
+
+function validCouponAppearanceTheme(
+    value: StoreCouponAppearanceTheme | null | undefined,
+): StoreCouponAppearanceTheme | null {
+    if (value == null) return null;
+    if (value === 'rose' || value === 'gold' || value === 'blue' || value === 'emerald') return value;
+    throw new UserInputError('优惠券券面配色只能选择系统预设');
 }
 
 function reportDateKey(value: string | Date): string {

@@ -97,7 +97,7 @@ export type { IcloudMailItem, IcloudQueryResult };
 export class ShopApi {
     private readonly authTokens: AuthTokenState;
     private storefrontCatalogAvailable: boolean | null = null;
-    private readonly contentReviewsApi: ContentReviewsApi;
+    readonly contentReviewsApi: ContentReviewsApi;
     private readonly catalogApi: CatalogApi;
     private readonly accountApi: AccountApi;
     private readonly referralsApi: ReferralsApi;

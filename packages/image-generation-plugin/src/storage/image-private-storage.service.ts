@@ -626,7 +626,9 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
             const page = await this.objects.list(limit, this.objectScanCursor);
             this.objectScanCursor = page.cursor;
             const objectCandidates = page.items.filter(
-                item => item.modifiedAt.getTime() < Date.now() - 60 * 60_000,
+                item =>
+                    /^private\/v1\/(?:reference|output)\//.test(item.key) &&
+                    item.modifiedAt.getTime() < Date.now() - 60 * 60_000,
             );
             if (!objectCandidates.length) return 0;
             const objectExisting = await this.connection.rawConnection.getRepository(ImagePrivateAsset).find({
@@ -644,7 +646,7 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
             return objectRemoved;
         }
         if (!existsSync(this.root)) return 0;
-        this.orphanScan ??= storageFiles(this.root);
+        this.orphanScan ??= generationStorageFiles(this.root);
         const cutoff = Date.now() - 60 * 60_000;
         const candidates: Array<{ path: string; storageKey: string }> = [];
         // Advance past live and recent files as well as orphans. Directory entries also
@@ -709,6 +711,11 @@ async function* storageFiles(directory: string, depth = 0): AsyncGenerator<strin
         // Never follow symbolic links. Normal storage uses only three directory levels.
         if (entry.isDirectory() && depth < 32) yield* storageFiles(entryPath, depth + 1);
     }
+}
+
+async function* generationStorageFiles(root: string): AsyncGenerator<string | undefined> {
+    // Domain-specific retention must not collect other private media sharing this root.
+    for (const kind of ['reference', 'output']) yield* storageFiles(path.join(root, kind));
 }
 
 async function readUpload(upload: UploadedImageFile, maxBytes: number): Promise<Buffer> {

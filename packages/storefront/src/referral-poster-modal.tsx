@@ -183,12 +183,12 @@ export function ReferralPosterModal({
             onClick={onClose}
         >
             <div
-                className="relative my-auto w-full max-w-sm min-w-0 overflow-hidden rounded-3xl bg-white px-4 pb-4 pt-14 shadow-2xl"
+                className="referral-poster-dialog relative my-auto w-full max-w-sm min-w-0 overflow-hidden rounded-3xl px-4 pb-4 pt-14 shadow-2xl"
                 onClick={event => event.stopPropagation()}
             >
                 <button
                     type="button"
-                    className="absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full bg-white/95 text-slate-600 shadow"
+                    className="referral-poster-close absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full shadow"
                     onClick={onClose}
                     aria-label={isZh ? '关闭' : 'Close'}
                 >
@@ -211,7 +211,7 @@ export function ReferralPosterModal({
                             alt={isZh ? `${style.name}邀请海报预览` : `${style.name} referral poster preview`}
                         />
                     ) : (
-                        <div className="grid size-full place-items-center bg-[linear-gradient(145deg,#172554,#7c3aed,#db2777)] text-sm font-bold text-white">
+                        <div className="referral-poster-placeholder grid size-full place-items-center text-sm font-bold">
                             {renderError
                                 ? isZh
                                     ? '海报生成失败'
@@ -263,11 +263,7 @@ export function ReferralPosterModal({
                                 type="button"
                                 data-template-id={item.id}
                                 data-active={selectedId === item.id}
-                                className={`shrink-0 rounded-xl border px-3 py-2 text-xs font-bold transition-all ${
-                                    selectedId === item.id
-                                        ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
-                                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                                }`}
+                                className="referral-poster-template-button shrink-0 rounded-xl px-3 py-2 text-xs font-bold"
                                 onClick={() => setSelectedId(item.id)}
                             >
                                 {item.name}
@@ -278,7 +274,7 @@ export function ReferralPosterModal({
                 <div className="mt-4 grid w-full min-w-0 grid-cols-2 gap-3">
                     <button
                         type="button"
-                        className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 font-bold text-white disabled:opacity-60"
+                        className="referral-poster-save flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 font-bold disabled:opacity-60"
                         disabled={generating || !posterDataUrl}
                         onClick={download}
                     >
@@ -287,7 +283,7 @@ export function ReferralPosterModal({
                     </button>
                     <button
                         type="button"
-                        className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 font-bold text-slate-700"
+                        className="referral-poster-copy flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 font-bold"
                         onClick={() => void copyText()}
                     >
                         {copied ? <Check className="size-4" /> : <Copy className="size-4" />}

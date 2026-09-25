@@ -156,7 +156,7 @@ it.each(
     ].flatMap(scope =>
         ['pending', 'failure', 'no-collections', 'late-return'].map(outcome => ({ ...scope, outcome })),
     ),
-)('keeps old products out of a new detail scope: %j', async target => {
+)('keeps catalog summaries out of product-detail scopes: %j', async target => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 120000 } } });
     const root = createRoot(document.createElement('div'));
     const product = {
@@ -226,12 +226,12 @@ it.each(
         await act(async () => {
             await Promise.resolve(render());
         });
-        for (let attempt = 0; attempt < 20 && !queryClient.getQueryData(cnyKey); attempt++) {
+        for (let attempt = 0; attempt < 20 && api.catalog.mock.calls.length < 1; attempt++) {
             await act(async () => {
                 await new Promise(resolve => setTimeout(resolve, 10));
             });
         }
-        expect(queryClient.getQueryData(cnyKey)).toEqual(product);
+        expect(queryClient.getQueryData(cnyKey)).toBeUndefined();
         expect(queryClient.getQueryData(myrKey)).toBeUndefined();
         props.market = { code: target.code, currencyCode: target.currencyCode };
         props.language = target.language;
@@ -258,7 +258,7 @@ it.each(
                     releaseLate({ items: [{ ...product, name: 'Late target response' }], totalItems: 1 }),
                 );
             });
-            expect(queryClient.getQueryData(cnyKey)).toEqual(product);
+            expect(queryClient.getQueryData(cnyKey)).toBeUndefined();
             expect(queryClient.getQueryData(myrKey)).toBeUndefined();
         }
         const correctDetailRequest = vi.fn(() =>

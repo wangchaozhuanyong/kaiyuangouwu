@@ -5,6 +5,7 @@ import { useNavigate, useRouter } from '@tanstack/react-router';
 import { Badge, CalendarDays, Check, ChevronRight, MapPin, TicketPercent } from 'lucide-react';
 import { ReactNode, useState } from 'react';
 
+import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import {
     CouponCenterTab,
     couponCampaignActionState,
@@ -14,6 +15,7 @@ import {
     customerCouponsForTab,
     isLockedCoupon,
 } from '../coupon-center-state';
+import { useDesktopLayout } from '../desktop-layout';
 import { PageSkeleton } from '../route-loading';
 import {
     StorefrontCouponCard,
@@ -542,6 +544,8 @@ function CouponTicket({
     action: ReactNode;
     meta?: string;
 }) {
+    const desktop = useDesktopLayout();
+    if (desktop) return <DesktopCouponTicket card={card} action={action} meta={meta} />;
     return (
         <article className="coupon-center-ticket-item">
             <div
@@ -589,6 +593,21 @@ function ActivityCoupon({
     muted?: boolean;
     action: ReactNode;
 }) {
+    const desktop = useDesktopLayout();
+    if (desktop)
+        return (
+            <article className="coupon-center-ticket-item">
+                <DesktopCouponTicket
+                    card={card}
+                    action={action}
+                    meta={campaignValidity(campaign, language)}
+                />
+                <details className="desktop-coupon-rules">
+                    <summary>{language === 'zh' ? '使用规则' : 'Terms of use'}</summary>
+                    <CampaignInstructions campaign={campaign} language={language} />
+                </details>
+            </article>
+        );
     return (
         <article className={`coupon-activity-card coupon-ticket-${card.theme}${muted ? ' is-claimed' : ''}`}>
             <div className="coupon-activity-hero">

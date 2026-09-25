@@ -1,4 +1,4 @@
-import { createElement } from 'react';
+import { createElement, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +13,7 @@ import {
     verificationErrorMessage,
     verificationRequiresPassword,
 } from './auth-pages';
+import { DesktopLayoutContext } from './desktop-layout';
 import { readStorefrontStylesheet } from './test-stylesheet';
 import { StorefrontContentBlock } from './types';
 
@@ -25,6 +26,10 @@ const authPageProps = {
 };
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
+
+function renderDesktop(element: ReactElement): string {
+    return renderToStaticMarkup(createElement(DesktopLayoutContext.Provider, { value: true }, element));
+}
 
 describe('loginErrorMessage', () => {
     it('does not reveal whether an account exists', () => {
@@ -131,7 +136,7 @@ describe('account verification errors', () => {
 
 describe('auth password visibility controls', () => {
     it('renders one password visibility button on the login page', () => {
-        const markup = renderToStaticMarkup(
+        const markup = renderDesktop(
             createElement(LoginPage, {
                 ...authPageProps,
                 onSuccess: vi.fn().mockResolvedValue(undefined),
@@ -168,7 +173,7 @@ describe('auth password visibility controls', () => {
     });
 
     it('renders independent password visibility buttons for registration and confirmation', () => {
-        const markup = renderToStaticMarkup(createElement(RegisterPage, authPageProps));
+        const markup = renderDesktop(createElement(RegisterPage, authPageProps));
 
         expect(markup).toContain('auth-register-ai-campaign-v2-480.webp');
         expect(markup).toContain('auth-page-has-image');
@@ -287,7 +292,7 @@ describe('auth password visibility controls', () => {
     });
 
     it('renders the managed image, copy and theme when the dashboard has published a login visual', () => {
-        const markup = renderToStaticMarkup(
+        const markup = renderDesktop(
             createElement(LoginPage, {
                 ...authPageProps,
                 onSuccess: vi.fn().mockResolvedValue(undefined),
@@ -339,6 +344,16 @@ describe('auth password visibility controls', () => {
         expect(markup).not.toContain('auth-brand-lockup');
         expect(markup).not.toContain('auth-hero-benefit');
         expect(markup).not.toContain('支持服务类型');
+    });
+
+    it('does not request hidden login or registration artwork on mobile', () => {
+        const loginMarkup = renderToStaticMarkup(
+            createElement(LoginPage, { ...authPageProps, onSuccess: vi.fn() }),
+        );
+        const registerMarkup = renderToStaticMarkup(createElement(RegisterPage, authPageProps));
+
+        expect(loginMarkup).not.toContain('auth-login-ai-campaign-v2-480.webp');
+        expect(registerMarkup).not.toContain('auth-register-ai-campaign-v2-480.webp');
     });
 
     it('uses neutral login visuals for password recovery when no store content exists', () => {

@@ -139,7 +139,12 @@ export function ReferralPage() {
     };
 
     return (
-        <Subpage title={isZh ? '邀请返利' : 'Referral rewards'} language={language} onBack={onBack}>
+        <Subpage
+            className="referral-page"
+            title={isZh ? '邀请返利' : 'Referral rewards'}
+            language={language}
+            onBack={onBack}
+        >
             {programQuery.isLoading || overviewQuery.isLoading ? (
                 <PageSkeleton label={isZh ? '正在加载邀请返利' : 'Loading referral rewards'} />
             ) : !customer ? (

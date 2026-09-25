@@ -28,7 +28,7 @@ export class CustomerDeliveryEmailShopResolver {
         @Ctx() ctx: RequestContext,
         @Args('input') input: SetActiveOrderDeliveryEmailInput,
     ) {
-        return this.cartCommands.legacy(ctx, () => this.service.setActiveOrderEmail(ctx, input));
+        return this.cartCommands.legacy(ctx, orderCtx => this.service.setActiveOrderEmail(orderCtx, input));
     }
 
     @Transaction()

@@ -77,6 +77,20 @@ export const damatongAssets = Object.freeze([
         nameEn: 'Damatong AI tools and software subscriptions hero',
     },
     {
+        key: 'business-services-renovation',
+        file: path.join(storefrontAssetDirectory, 'business-services-renovation-v1.webp'),
+        mimeType: 'image/webp',
+        nameZh: '大马通装修服务页概念主图',
+        nameEn: 'Damatong renovation services concept hero',
+    },
+    {
+        key: 'support-service-banner',
+        file: path.join(storefrontAssetDirectory, 'support-service-banner-v1.webp'),
+        mimeType: 'image/webp',
+        nameZh: '大马通客服页主图',
+        nameEn: 'Damatong customer support banner',
+    },
+    {
         key: 'auth-login',
         file: path.join(storefrontAssetDirectory, 'auth-login.webp'),
         mimeType: 'image/webp',

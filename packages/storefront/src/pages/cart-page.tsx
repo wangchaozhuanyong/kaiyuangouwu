@@ -582,6 +582,7 @@ export function CartPage() {
 
             {couponOpen && order && (
                 <CouponSheet
+                    currencyCode={order.currencyCode}
                     coupons={coupons}
                     orderId={order.id}
                     language={language}

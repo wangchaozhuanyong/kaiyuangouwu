@@ -192,7 +192,7 @@ async function setup(options: { paid?: boolean; balance?: number; history?: Imag
         root.unmount();
         container.remove();
     });
-    return { api, container, onNotify };
+    return { api, container, onNotify, root };
 }
 function button(container: Element, text: string) {
     const value = [...container.querySelectorAll('button')].find(item => item.textContent?.includes(text));
@@ -215,6 +215,52 @@ async function type(container: Element, value: string) {
 }
 
 describe('AI studio complete customer workflows', () => {
+    it('does not show the previous account balance or draft while another account loads', async () => {
+        const { api, container, root } = await setup({ balance: 2500 });
+        await type(container, '客户 A 的私有创作内容');
+        const previousBalance = container.querySelector('.is-balance')?.textContent;
+        expect(previousBalance).toBeTruthy();
+        expect(container.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('客户 A 的私有创作内容');
+        api.imageStudioConfig.mockImplementation(() => new Promise(() => undefined));
+
+        await act(async () => {
+            root.render(
+                <AiImageStudioPage
+                    api={api as unknown as ShopApi}
+                    customer={{ id: 'customer-2' } as ActiveCustomer}
+                    market={market}
+                    displayCurrencyCode="CNY"
+                    language="zh"
+                    onBack={() => undefined}
+                    onSignIn={() => undefined}
+                    onNotify={() => undefined}
+                />,
+            );
+        });
+        expect(container.querySelector('.is-balance')).toBeNull();
+        expect(container.querySelector<HTMLTextAreaElement>('textarea')?.value).not.toBe(
+            '客户 A 的私有创作内容',
+        );
+        expect(container.textContent).not.toContain(previousBalance);
+
+        await act(async () => {
+            root.render(
+                <AiImageStudioPage
+                    api={api as unknown as ShopApi}
+                    customer={{ id: 'customer-1' } as ActiveCustomer}
+                    market={market}
+                    displayCurrencyCode="CNY"
+                    language="zh"
+                    onBack={() => undefined}
+                    onSignIn={() => undefined}
+                    onNotify={() => undefined}
+                />,
+            );
+        });
+        expect(container.querySelector('.is-balance')?.textContent).toBe(previousBalance);
+        expect(container.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('客户 A 的私有创作内容');
+    });
+
     it('preserves the draft, quantity and consent while switching views and restoring scroll positions', async () => {
         const { container } = await setup({ history: [job(1)] });
         expect(container.querySelector('.ai-studio-composer label')?.classList.contains('sr-only')).toBe(

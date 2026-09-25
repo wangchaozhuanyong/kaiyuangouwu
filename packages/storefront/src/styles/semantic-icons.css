@@ -1,0 +1,21 @@
+/* Shared semantic icon palette. Each skin supplies its five contrast-checked tones. */
+[data-icon-tone='security'] {
+    --semantic-icon-foreground: var(--skin-tool-security-foreground, var(--accent-ink));
+    --semantic-icon-background: var(--skin-tool-security-background, var(--accent-soft));
+}
+[data-icon-tone='mail'] {
+    --semantic-icon-foreground: var(--skin-tool-mail-foreground, var(--success));
+    --semantic-icon-background: var(--skin-tool-mail-background, var(--accent-soft));
+}
+[data-icon-tone='studio'] {
+    --semantic-icon-foreground: var(--skin-tool-studio-foreground, var(--accent-ink));
+    --semantic-icon-background: var(--skin-tool-studio-background, var(--accent-soft));
+}
+[data-icon-tone='coupon'] {
+    --semantic-icon-foreground: var(--skin-tool-coupon-foreground, var(--warning));
+    --semantic-icon-background: var(--skin-tool-coupon-background, var(--accent-soft));
+}
+[data-icon-tone='support'] {
+    --semantic-icon-foreground: var(--skin-tool-support-foreground, var(--accent-ink));
+    --semantic-icon-background: var(--skin-tool-support-background, var(--accent-soft));
+}

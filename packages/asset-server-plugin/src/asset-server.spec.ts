@@ -88,6 +88,19 @@ describe('SVG asset responses', () => {
         },
     );
 
+    it('keeps a wide managed image intact in a bounded resize preset', async () => {
+        const wideArtwork = Buffer.from(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520"><rect width="1600" height="520" fill="#123456"/></svg>',
+        );
+        await storage.writeFileFromBuffer('source/wide.svg', wideArtwork);
+        const origin = await start();
+        const response = await fetch(`${origin}/source/wide.svg?preset=bounded&format=webp`);
+        const metadata = await sharp(Buffer.from(await response.arrayBuffer())).metadata();
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toMatch(/^image\/webp\b/);
+        expect([metadata.width, metadata.height]).toEqual([96, 31]);
+    });
+
     it('preserves the access strategy cache policy for generated and cached images', async () => {
         await storage.writeFileFromBuffer('source/public.svg', source);
         const policy = 'private, max-age=300, must-revalidate';

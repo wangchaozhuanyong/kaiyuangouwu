@@ -1,6 +1,5 @@
 /* Shared component defaults. Responsive layout is loaded after this file. */
 
-
 .ai-studio-composer,
 .ai-studio-options,
 .ai-studio-checkout,
@@ -402,7 +401,7 @@
 .ai-studio-reference-preview img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .ai-studio-reference-preview > svg {
@@ -838,7 +837,7 @@
 
 .ai-generation-output > img {
     display: block;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .ai-generation-placeholder {
@@ -964,6 +963,7 @@
 }
 
 .ai-studio-view-tabs button {
+    border-radius: var(--skin-control-radius);
     min-height: 52px;
     padding: 12px 8px;
     position: relative;
@@ -975,18 +975,8 @@
 }
 
 .ai-studio-view-tabs button[aria-selected='true'] {
+    background: var(--accent-soft);
     color: var(--accent-ink);
-}
-
-.ai-studio-view-tabs button[aria-selected='true']::after {
-    width: 56px;
-    height: 3px;
-    position: absolute;
-    bottom: 0;
-    left: calc(50% - 28px);
-    border-radius: 2px;
-    background: var(--accent);
-    content: '';
 }
 
 .ai-studio-shell.ai-studio-workflow > [role='tabpanel'][hidden] {
@@ -1373,8 +1363,7 @@
     min-height: 44px;
     padding: 8px 0;
     border: 0;
-    border-bottom: 2px solid transparent;
-    border-radius: 0;
+    border-radius: var(--skin-control-radius);
     color: var(--muted);
     background: transparent;
     font-size: 13px;
@@ -1382,8 +1371,8 @@
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-history-filters button.is-active {
-    border-bottom-color: var(--accent);
-    color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-generation-card {

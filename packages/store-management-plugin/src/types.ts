@@ -33,6 +33,7 @@ export interface UpdateSystemAnnouncementInput extends CreateSystemAnnouncementI
 
 export interface SystemAnnouncementPublicView {
     id: ID;
+    createdAt: Date;
     title: string;
     content: string;
     linkUrl: string | null;
@@ -71,6 +72,7 @@ export type StoreCouponCampaignKind =
     'ORDER_FIXED' | 'ORDER_PERCENTAGE' | 'COLLECTION_PERCENTAGE' | 'PRODUCT_PERCENTAGE';
 
 export type StoreCouponStackPolicy = 'EXCLUSIVE' | 'STACKABLE';
+export type StoreCouponAppearanceTheme = 'rose' | 'gold' | 'blue' | 'emerald';
 
 export type StoreCustomerCouponStatus = 'AVAILABLE' | 'LOCKED' | 'USED' | 'RETURNED' | 'EXPIRED' | 'REVOKED';
 
@@ -88,6 +90,7 @@ export type StoreCouponLedgerEventType =
 export interface CreateStoreCouponCampaignInput {
     name: string;
     kind: StoreCouponCampaignKind;
+    appearanceTheme?: StoreCouponAppearanceTheme | null;
     minimumSpend?: number | null;
     discountAmount?: number | null;
     discountRate?: number | null;
@@ -135,6 +138,7 @@ export interface StoreCouponCampaignView extends StoreCouponCampaignStats {
     name: string;
     couponCode?: string;
     kind: StoreCouponCampaignKind;
+    appearanceTheme: StoreCouponAppearanceTheme | null;
     enabled: boolean;
     startsAt: Date | null;
     endsAt: Date | null;
@@ -165,6 +169,7 @@ export interface StoreCustomerCouponView {
     campaignId: ID;
     campaignName: string;
     campaignKind: StoreCouponCampaignKind;
+    appearanceTheme: StoreCouponAppearanceTheme | null;
     status: StoreCustomerCouponStatus;
     minimumSpend: number;
     currencyCode: CurrencyCode;
@@ -240,6 +245,7 @@ export interface StoreCouponUsageRecordView {
     campaignId: ID;
     campaignName: string;
     campaignKind: StoreCouponCampaignKind;
+    appearanceTheme: StoreCouponAppearanceTheme | null;
     status: 'USED' | 'REFUNDED';
     currencyCode: CurrencyCode;
     minimumSpend: number;

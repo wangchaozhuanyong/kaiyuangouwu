@@ -99,6 +99,7 @@ export function CouponEditor({
                     input: {
                         name: draft.name.trim(),
                         kind: draft.kind,
+                        appearanceTheme: draft.appearanceTheme,
                         minimumSpend,
                         discountAmount,
                         discountRate: draft.kind === 'ORDER_FIXED' ? null : Number(draft.discountValue),
@@ -170,6 +171,26 @@ export function CouponEditor({
                         });
                     }}
                     options={Object.entries(couponKindLabels)}
+                />
+                <FormSelect
+                    label="券面配色（仅影响展示）"
+                    value={draft.appearanceTheme ?? 'default'}
+                    onChange={value =>
+                        setDraft({
+                            ...draft,
+                            appearanceTheme:
+                                value === 'default'
+                                    ? null
+                                    : (value as NonNullable<CouponDraft['appearanceTheme']>),
+                        })
+                    }
+                    options={[
+                        ['default', '按券种默认'],
+                        ['rose', '朱砂红'],
+                        ['gold', '古铜金'],
+                        ['blue', '黛青蓝'],
+                        ['emerald', '松石绿'],
+                    ]}
                 />
                 <FormInput
                     label={`最低消费金额 (${currencyCode})`}

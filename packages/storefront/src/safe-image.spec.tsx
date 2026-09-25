@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { isImageAlreadyDecoded } from './safe-image';
 import { SafeImage } from './storefront-ui/product-display';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -32,8 +33,15 @@ describe('SafeImage', () => {
                 root.render(<SafeImage src="/assets/broken-decode.png" alt="" />);
                 await Promise.resolve();
             });
-            expect(host.querySelector('img')?.classList.contains('is-loaded')).toBe(false);
+            const image = requiredImage(host);
+            Object.defineProperties(image, { complete: { value: true }, naturalWidth: { value: 320 } });
+            await act(async () => {
+                image.dispatchEvent(new Event('load'));
+                await Promise.resolve();
+            });
+            expect(host.querySelector('.safe-image.is-loaded')).toBeNull();
             expect(host.querySelector('[data-safe-image=ready]')).toBeNull();
+            expect(isImageAlreadyDecoded('/assets/broken-decode.png')).toBe(false);
         } finally {
             act(() => root.unmount());
             decode.mockRestore();
@@ -117,6 +125,27 @@ describe('SafeImage', () => {
         expect(markup).toContain('has-placeholder');
         expect(markup).toContain('storefront-placeholder-square-48');
         expect(markup).toContain('storefront-card-square-960');
+    });
+
+    it('keeps the hero preview visible when a responsive preset falls back to the original', () => {
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() =>
+                root.render(<SafeImage src="/assets/preview/banner.jpg" alt="Banner" imageKind="hero" />),
+            );
+            const image = requiredImage(host);
+            act(() => {
+                image.dispatchEvent(new Event('error'));
+            });
+            expect(image.getAttribute('srcset')).toBeNull();
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toContain(
+                'storefront-placeholder-wide-64',
+            );
+            expect(host.querySelector('.safe-image-fallback svg')).toBeNull();
+        } finally {
+            act(() => root.unmount());
+        }
     });
 
     it('keeps a stable frame for external images while they decode', () => {

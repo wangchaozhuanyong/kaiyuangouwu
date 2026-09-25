@@ -30,6 +30,95 @@ describe('store currency price conversion', () => {
     });
 });
 
+describe('MySQL Channel currency flags', () => {
+    it.each([
+        { selector: 0, usdt: 1, expectedSelector: false, expectedUsdt: true },
+        { selector: 1, usdt: 0, expectedSelector: true, expectedUsdt: false },
+    ])('respects persisted numeric flags for selector=$selector and USDT=$usdt', async input => {
+        const service = Object.create(StoreCurrencySettingsService.prototype) as StoreCurrencySettingsService;
+        Object.assign(service, {
+            usdtPaymentService: {
+                walletStatus: vi.fn().mockResolvedValue({
+                    configured: true,
+                    network: 'TRC20',
+                    receivingAddressMasked: 'T...test',
+                    receivingAddressFingerprint: 'a'.repeat(64),
+                    reviewStatus: 'ACTIVE',
+                }),
+            },
+        });
+        const configuration = await (service as any).toConfiguration(
+            { channelId: 'channel-1' },
+            {
+                id: 'channel-1',
+                code: 'test',
+                updatedAt: new Date(),
+                defaultCurrencyCode: CurrencyCode.MYR,
+                availableCurrencyCodes: [CurrencyCode.MYR, CurrencyCode.CNY],
+                customFields: {
+                    currencySelectorEnabled: input.selector,
+                    usdtDisplayEnabled: input.usdt,
+                    cnyToMyrRate: 0.6,
+                    cnyPerUsdtRate: 7.2,
+                    usdtRateUpdatedAt: new Date(),
+                },
+            },
+        );
+        expect(configuration).toMatchObject({
+            selectorEnabled: input.expectedSelector,
+            usdtDisplayEnabled: input.expectedUsdt,
+            usdtRateAvailable: input.expectedUsdt,
+        });
+    });
+
+    it('serves the current Shop currency and rate after an Admin update', async () => {
+        const service = Object.create(StoreCurrencySettingsService.prototype) as StoreCurrencySettingsService;
+        Object.assign(service, {
+            channelService: {
+                findOne: vi.fn().mockResolvedValue({
+                    id: 'channel-1',
+                    code: 'test',
+                    updatedAt: new Date(),
+                    defaultCurrencyCode: CurrencyCode.MYR,
+                    availableCurrencyCodes: [CurrencyCode.MYR, CurrencyCode.CNY],
+                    customFields: {
+                        currencySelectorEnabled: 1,
+                        usdtDisplayEnabled: 1,
+                        cnyToMyrRate: 0.6,
+                        cnyPerUsdtRate: 7.2,
+                        usdtRateUpdatedAt: new Date(),
+                    },
+                }),
+            },
+            usdtPaymentService: {
+                walletStatus: vi.fn().mockResolvedValue({
+                    configured: true,
+                    network: 'TRC20',
+                    receivingAddressMasked: 'T...test',
+                    receivingAddressFingerprint: 'a'.repeat(64),
+                    reviewStatus: 'ACTIVE',
+                }),
+            },
+        });
+
+        const publicConfiguration = await service.getPublic({
+            channelId: 'channel-1',
+            channel: {
+                defaultCurrencyCode: CurrencyCode.CNY,
+                availableCurrencyCodes: [CurrencyCode.CNY],
+                customFields: { cnyPerUsdtRate: null },
+            },
+        } as never);
+
+        expect(publicConfiguration).toMatchObject({
+            defaultCurrencyCode: CurrencyCode.MYR,
+            availableCurrencyCodes: [CurrencyCode.MYR, CurrencyCode.CNY],
+            myrPerUsdtRate: 4.32,
+            usdtRateAvailable: true,
+        });
+    });
+});
+
 describe('legacy currency price sync mutation', () => {
     it('does not materialize secondary-currency prices in manual mode', async () => {
         const service = Object.create(StoreCurrencySettingsService.prototype) as StoreCurrencySettingsService;
@@ -166,6 +255,64 @@ describe('USDT checkout quote amount', () => {
 
     it('rejects invalid rate inputs without producing an infinite amount', () => {
         expect(calculateUsdtCheckoutAmount(10_000, 0, 0)).toBe(0);
+    });
+
+    it('locks the remaining fiat amount after settled payments and returns the persisted quote', async () => {
+        const order = {
+            id: 'order-1',
+            salesChannelId: 'channel-1',
+            state: 'ArrangingPayment',
+            currencyCode: CurrencyCode.MYR,
+            totalWithTax: 12_000,
+            customFields: { paymentCurrencyCode: 'USDT' },
+            payments: [
+                { state: 'Settled', amount: 2_000 },
+                { state: 'Declined', amount: 5_000 },
+            ],
+        };
+        const repository = {
+            findOne: vi.fn().mockResolvedValue(null),
+            save: vi.fn((savedQuote: object) => Promise.resolve({ id: 'quote-1', ...savedQuote })),
+        };
+        const usdtPaymentService = { expirePendingIntentsForOrder: vi.fn().mockResolvedValue(0) };
+        const service = Object.create(StoreCurrencySettingsService.prototype) as StoreCurrencySettingsService;
+        Object.assign(service, {
+            orderService: { findOne: vi.fn().mockResolvedValue(order) },
+            connection: { getRepository: vi.fn().mockReturnValue(repository) },
+            usdtPaymentService,
+        });
+        vi.spyOn(service, 'get').mockResolvedValue({
+            usdtRateAvailable: true,
+            myrPerUsdtRate: 4,
+            usdtMarkupPercent: 0,
+            usdtRateSource: 'synthetic-rate',
+        } as Awaited<ReturnType<StoreCurrencySettingsService['get']>>);
+        const ensureIntent = vi
+            .spyOn(service as any, 'ensureCheckoutPaymentIntent')
+            .mockResolvedValue({ id: 'intent-1' });
+        vi.spyOn(service as any, 'toCheckoutQuoteView').mockImplementation((value: unknown) => value);
+
+        const quote = await service.createCheckoutUsdtQuote({
+            session: { activeOrderId: 'order-1' },
+            channelId: 'channel-1',
+        } as never);
+
+        expect(quote).toMatchObject({
+            fiatCurrencyCode: CurrencyCode.MYR,
+            fiatAmount: 10_000,
+            fiatPerUsdtRate: 4,
+            usdtAmount: '25.000000',
+            source: 'synthetic-rate',
+        });
+        expect(repository.findOne).toHaveBeenCalledWith(
+            expect.objectContaining({ where: expect.objectContaining({ fiatAmount: 10_000 }) }),
+        );
+        expect(usdtPaymentService.expirePendingIntentsForOrder).toHaveBeenCalledWith(
+            expect.anything(),
+            'order-1',
+            '报价已被当前订单金额替代',
+        );
+        expect(ensureIntent).toHaveBeenCalledOnce();
     });
 });
 

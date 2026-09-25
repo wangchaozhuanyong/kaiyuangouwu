@@ -2,7 +2,6 @@ import { lazyRouteComponent } from '@tanstack/react-router';
 
 import {
     AccountPageContext,
-    AnnouncementsPageContext,
     BrowsingHistoryPageContext,
     CouponCenterPageContext,
     FavoriteProductsPageContext,
@@ -15,10 +14,6 @@ import '../styles/account-catalog-surfaces.css';
 import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
 
 const AccountPage = lazyRouteComponent(() => import('../pages/account-page'), 'AccountPage');
-const AnnouncementsPage = lazyRouteComponent(
-    () => import('../pages/announcements-page'),
-    'AnnouncementsPage',
-);
 const BrowsingHistoryPage = lazyRouteComponent(
     () => import('../pages/browsing-history-page'),
     'BrowsingHistoryPage',
@@ -51,7 +46,6 @@ export function AccountRoutePage() {
                     accountHeroImageUrl:
                         runtime.contentBlocks.find(block => block.type === 'ACCOUNT_HERO')?.imageUrl ?? null,
                     favoriteProductCount: runtime.favoriteProductIds.length,
-                    announcementCount: runtime.systemAnnouncements.length,
                     couponCount: runtime.myCoupons.filter((coupon: { status: string }) =>
                         ['AVAILABLE', 'RETURNED', 'LOCKED'].includes(coupon.status),
                     ).length,
@@ -78,24 +72,6 @@ export function AccountRoutePage() {
     );
 }
 
-export function AnnouncementsRoutePage() {
-    const runtime = useRuntime();
-    return (
-        <AnnouncementsPageContext.Provider
-            value={{
-                announcements: runtime.systemAnnouncements,
-                loading: runtime.contentQuery.isLoading && runtime.contentQuery.data === undefined,
-                error: runtime.contentError,
-                language: runtime.language,
-                onBack: runtime.goBack,
-                onRetry: () => void runtime.contentQuery.refetch(),
-            }}
-        >
-            <AnnouncementsPage />
-        </AnnouncementsPageContext.Provider>
-    );
-}
-
 export function FavoritesRoutePage() {
     const runtime = useRuntime();
     const isZh = runtime.language === 'zh';
@@ -107,16 +83,31 @@ export function FavoritesRoutePage() {
                 market: runtime.market,
                 locale: runtime.locale,
                 language: runtime.language,
+                activityLoading: runtime.productActivity.loading,
+                activityError: runtime.productActivity.error,
+                onActivityRetry: () => void runtime.productActivity.retry(),
                 onRemove: (productId: string) => {
-                    runtime.toggleFavoriteProduct(productId);
-                    runtime.notify(isZh ? '已取消收藏' : 'Removed from favorites');
+                    void runtime.toggleFavoriteProduct(productId).then(ok => {
+                        if (ok) runtime.notify(isZh ? '已取消收藏' : 'Removed from favorites');
+                    });
+                },
+                onRemoveMany: (productIds: string[]) => {
+                    void runtime.removeFavoriteProducts(productIds).then(ok => {
+                        if (ok)
+                            runtime.notify(
+                                isZh
+                                    ? `已取消 ${productIds.length} 件收藏`
+                                    : `${productIds.length} favorites removed`,
+                            );
+                    });
                 },
                 onClear: () => {
-                    if (runtime.storefrontCode) {
-                        localStorage.removeItem(`storefront-favorite-product-ids:${runtime.storefrontCode}`);
-                    }
-                    runtime.setFavoriteProductIds([]);
-                    runtime.notify(isZh ? '收藏已清空' : 'Favorites cleared');
+                    void runtime.productActivity
+                        .clearFavorites()
+                        .then(() => {
+                            runtime.notify(isZh ? '收藏已清空' : 'Favorites cleared');
+                        })
+                        .catch(() => runtime.notify(isZh ? '清空收藏失败' : 'Could not clear favorites'));
                 },
             }}
         >
@@ -133,15 +124,22 @@ export function HistoryRoutePage() {
             value={{
                 api: runtime.api,
                 productIds: runtime.recentProductIds,
+                visitTimes: runtime.productActivity.visitTimes,
+                activityLoading: runtime.productActivity.loading,
+                activityError: runtime.productActivity.error,
+                onActivityRetry: () => void runtime.productActivity.retry(),
                 market: runtime.market,
                 locale: runtime.locale,
                 language: runtime.language,
                 onClear: () => {
-                    if (runtime.storefrontCode) {
-                        localStorage.removeItem(`storefront-recent-product-ids:${runtime.storefrontCode}`);
-                    }
-                    runtime.setRecentProductIds([]);
-                    runtime.notify(isZh ? '浏览足迹已清空' : 'Browsing history cleared');
+                    void runtime.productActivity
+                        .clearVisits()
+                        .then(() => {
+                            runtime.notify(isZh ? '浏览足迹已清空' : 'Browsing history cleared');
+                        })
+                        .catch(() =>
+                            runtime.notify(isZh ? '清空足迹失败' : 'Could not clear browsing history'),
+                        );
                 },
             }}
         >
@@ -230,7 +228,6 @@ export function ReferralRoutePage() {
 }
 
 export const preloadAccountRoutePage = registerRoutePreload(AccountRoutePage, AccountPage);
-export const preloadAnnouncementsRoutePage = registerRoutePreload(AnnouncementsRoutePage, AnnouncementsPage);
 export const preloadFavoritesRoutePage = registerRoutePreload(FavoritesRoutePage, FavoriteProductsPage);
 export const preloadHistoryRoutePage = registerRoutePreload(HistoryRoutePage, BrowsingHistoryPage);
 export const preloadNotificationsRoutePage = registerRoutePreload(NotificationsRoutePage, NotificationsPage);

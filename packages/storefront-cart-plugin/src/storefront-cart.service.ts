@@ -75,9 +75,13 @@ const CONTROLLED_TEST_PAYMENT_HANDLER_CODE = 'controlled-test-payment-handler';
 export function isRegisteredProductionPaymentMethod(
     method: Pick<PaymentMethod, 'code' | 'handler' | 'translations'>,
     registeredHandlerCodes: ReadonlySet<string>,
+    paymentCurrencyCode?: string,
 ): boolean {
     const handlerCode = method.handler?.code;
     if (!handlerCode || !registeredHandlerCodes.has(handlerCode)) {
+        return false;
+    }
+    if (paymentCurrencyCode && (paymentCurrencyCode === 'USDT') !== (method.code === 'usdt-trc20')) {
         return false;
     }
     if (INTERNAL_BALANCE_PAYMENT_CODES.has(method.code) || INTERNAL_BALANCE_PAYMENT_CODES.has(handlerCode)) {
@@ -292,18 +296,26 @@ export class StorefrontCartService {
         item: AddStorefrontCartItemInput,
         snapshot: StorefrontCart,
     ): Promise<StorefrontCheckoutResult> {
+        const existing = snapshot.lines.find(line =>
+            idsAreEqual(line.productVariantId, item.productVariantId),
+        );
+        // An unchanged selected line skips applyChanges stock validation; force projection to recheck it.
+        const stockAlreadyValidated = !(existing && existing.selected && existing.quantity === item.quantity);
         const projected = await this.applyChanges(
             ctx,
             {
-                add: [item],
+                add: existing ? [] : [item],
                 lines: snapshot.lines.map(line => ({
                     lineId: line.id,
                     selected: idsAreEqual(line.productVariantId, item.productVariantId),
+                    ...(idsAreEqual(line.productVariantId, item.productVariantId)
+                        ? { quantity: item.quantity }
+                        : {}),
                 })),
             },
             snapshot.revision,
             snapshot,
-            { force: true, stockAlreadyValidated: true },
+            { force: true, stockAlreadyValidated },
         );
         if (isGraphQlErrorResult(projected)) {
             return projected;
@@ -456,10 +468,14 @@ export class StorefrontCartService {
         if (!projected.checkoutOrder) {
             return new CartProjectionError('ORDER_MISSING', 'No checkout order exists for the selection.');
         }
+        const paymentCurrencyCode = String(
+            (projected.checkoutOrder.customFields as { paymentCurrencyCode?: string | null } | undefined)
+                ?.paymentCurrencyCode ?? projected.checkoutOrder.currencyCode,
+        );
         if (
             process.env.NODE_ENV === 'production' &&
             projected.checkoutOrder.totalWithTax > 0 &&
-            !(await this.hasProductionPaymentMethod(ctx))
+            !(await this.hasProductionPaymentMethod(ctx, paymentCurrencyCode))
         ) {
             const message =
                 ctx.languageCode === LanguageCode.zh_Hans
@@ -497,7 +513,10 @@ export class StorefrontCartService {
         return new StorefrontCheckoutSession(lockedCart, transition, checkout);
     }
 
-    private async hasProductionPaymentMethod(ctx: RequestContext): Promise<boolean> {
+    private async hasProductionPaymentMethod(
+        ctx: RequestContext,
+        paymentCurrencyCode: string,
+    ): Promise<boolean> {
         const registeredHandlerCodes = new Set(
             this.configService.paymentOptions.paymentMethodHandlers.map(handler => handler.code),
         );
@@ -508,7 +527,9 @@ export class StorefrontCartService {
             where: { enabled: true, channels: { id: ctx.channelId } },
             relations: { channels: true, translations: true },
         });
-        return methods.some(method => isRegisteredProductionPaymentMethod(method, registeredHandlerCodes));
+        return methods.some(method =>
+            isRegisteredProductionPaymentMethod(method, registeredHandlerCodes, paymentCurrencyCode),
+        );
     }
 
     async reopenCart(ctx: RequestContext, expectedRevision: number): Promise<StorefrontCartMutationResult> {
@@ -867,6 +888,13 @@ export class StorefrontCartService {
             );
         }
 
+        // The request defaults to the channel currency. A customer may have selected
+        // another order currency, which must survive every checkout re-price.
+        const orderCtx =
+            order && ctx.currencyCode !== order.currencyCode
+                ? ctx.copy({ channel: ctx.channel, currencyCode: order.currencyCode })
+                : ctx;
+
         if (order) {
             // Checkout validates every retained line without destroying order line identity,
             // coupon allocations, delivery contacts or shipping selections.
@@ -887,7 +915,7 @@ export class StorefrontCartService {
                 .map(line => line.id);
             if (removedLineIds.length > 0) {
                 const removeResult = await this.orderService.removeItemsFromOrder(
-                    ctx,
+                    orderCtx,
                     order.id,
                     removedLineIds,
                 );
@@ -906,7 +934,11 @@ export class StorefrontCartService {
                     : [];
             });
             if (quantityChanges.length > 0) {
-                const adjustResult = await this.orderService.adjustOrderLines(ctx, order.id, quantityChanges);
+                const adjustResult = await this.orderService.adjustOrderLines(
+                    orderCtx,
+                    order.id,
+                    quantityChanges,
+                );
                 if (adjustResult.errorResults.length > 0) {
                     const error = adjustResult.errorResults[0];
                     return new CartProjectionError(error.errorCode, error.message);
@@ -923,7 +955,7 @@ export class StorefrontCartService {
             );
             if (addedLines.length > 0) {
                 const addResult = await this.orderService.addItemsToOrder(
-                    ctx,
+                    orderCtx,
                     order.id,
                     addedLines.map(line => ({
                         productVariantId: line.productVariantId,
@@ -936,7 +968,7 @@ export class StorefrontCartService {
                 }
                 order = addResult.order;
             }
-            if (force) order = await this.orderService.applyPriceAdjustments(ctx, order, order.lines);
+            if (force) order = await this.orderService.applyPriceAdjustments(orderCtx, order, order.lines);
         }
 
         const lineRepository = this.connection.getRepository(ctx, StorefrontCartLine);

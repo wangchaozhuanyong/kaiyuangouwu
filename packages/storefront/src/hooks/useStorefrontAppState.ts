@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ShopApiError } from '../api';
 import { subscribeAuthSessionChanges } from '../auth-session-sync';
 import { resumeAuthenticatedCheckout } from '../checkout-authentication';
+import { clearStudioCache } from '../pages/ai-image-studio-cache';
 import { resolveCurrentCheckoutOrder } from '../payment-readiness';
 import { cartLineCanSelect } from '../product-availability';
 import { storefrontQueryKeys } from '../query-client';
@@ -12,15 +13,7 @@ import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { preloadRouteMedia } from '../route-media-preload';
 import { isPublicStorefrontRoute } from '../storefront-access';
 import { storefrontErrorMessage } from '../storefront-errors';
-import { scopedStorageKey } from '../storefront-storage';
-import {
-    FAVORITE_PRODUCT_LIMIT,
-    FAVORITE_PRODUCT_STORAGE_KEY,
-    RECENT_PRODUCT_LIMIT,
-    RECENT_PRODUCT_STORAGE_KEY,
-    writeStoredCurrency,
-    writeStoredSettlementCurrency,
-} from '../storefront-utils';
+import { writeStoredCurrency, writeStoredSettlementCurrency } from '../storefront-utils';
 import { ActiveCustomer, CreateAfterSalesRequestInput, Order, StorefrontCart } from '../types';
 
 export type ToastPayload =
@@ -32,6 +25,7 @@ export type ToastPayload =
           action?: { label: string; onClick: () => void };
       };
 
+import { useCustomerProductActivity } from './useCustomerProductActivity';
 import { useStorefrontBootstrap } from './useStorefrontBootstrap';
 import { useStorefrontCartActions } from './useStorefrontCartActions';
 import { useStorefrontCoupons } from './useStorefrontCoupons';
@@ -52,10 +46,10 @@ export function useStorefrontAppState() {
         displayCurrencyCode,
         setDisplayCurrencyCode,
         storefrontContextResolved,
-        favoriteProductIds,
-        recentProductIds,
-        setFavoriteProductIds,
-        setRecentProductIds,
+        favoriteProductIds: guestFavoriteProductIds,
+        recentProductIds: guestRecentProductIds,
+        setFavoriteProductIds: setGuestFavoriteProductIds,
+        setRecentProductIds: setGuestRecentProductIds,
         storefrontCode,
         logoUrl,
         logoOnLightUrl,
@@ -80,6 +74,7 @@ export function useStorefrontAppState() {
         refetchStorefront,
         toggleLanguage,
         products,
+        productsQuery,
         collections,
         contentQuery,
         configQuery,
@@ -99,7 +94,6 @@ export function useStorefrontAppState() {
         contentError,
     } = useStorefrontBootstrap();
     const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
-    const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
     const [cartLoading, setCartLoading] = useState(false);
     const [checkoutStarting, setCheckoutStarting] = useState(false);
     const [cartError, setCartError] = useState<string | null>(null);
@@ -156,6 +150,19 @@ export function useStorefrontAppState() {
         cartQueryError,
     } = useStorefrontCustomerData(queryContext);
 
+    const productActivity = useCustomerProductActivity({
+        api,
+        market,
+        language,
+        customerId: customer?.id ?? null,
+        storefrontCode,
+        guestFavoriteProductIds,
+        guestRecentProductIds,
+        setGuestFavoriteProductIds,
+        setGuestRecentProductIds,
+    });
+    const { favoriteProductIds, recentProductIds } = productActivity;
+
     const cart = cartState.cart;
     useEffect(() => {
         if (cartState.confirmed) queryClient.setQueryData(cartQueryKey, cartState.confirmed);
@@ -197,6 +204,8 @@ export function useStorefrontAppState() {
         products,
         contentBlocks,
         configuredBlockTypes,
+        activeRoute: route.name,
+        contentReady: contentQuery.data !== undefined,
     });
 
     const currentCheckoutOrder = resolveCurrentCheckoutOrder(cart?.checkoutOrder, checkoutOrder);
@@ -220,6 +229,7 @@ export function useStorefrontAppState() {
         [market.code, market.currencyCode, queryClient, vendureLanguageCode],
     );
     const clearPrivateQueryCache = useCallback(() => {
+        clearStudioCache();
         queryClient.removeQueries({
             predicate: query =>
                 query.queryKey[0] === 'storefront' &&
@@ -245,7 +255,6 @@ export function useStorefrontAppState() {
             const currentRefreshId = ++refreshId;
             cartController.reset();
             clearPrivateQueryCache();
-            setCompletedOrder(null);
             void Promise.all([api.activeCustomer(), api.cart()])
                 .then(([nextCustomer, nextCart]) => {
                     if (currentRefreshId !== refreshId) return;
@@ -522,42 +531,39 @@ export function useStorefrontAppState() {
         logoUrl,
     });
 
+    const visitProductRef = useRef(productActivity.visitProduct);
+    visitProductRef.current = productActivity.visitProduct;
     useEffect(() => {
-        if (route.name !== 'product' || !selectedProduct || !storefrontCode) return;
-        setRecentProductIds(current => {
-            const next = [
-                selectedProduct.id,
-                ...current.filter(productId => productId !== selectedProduct.id),
-            ].slice(0, RECENT_PRODUCT_LIMIT);
-            if (
-                next.length === current.length &&
-                next.every((productId, index) => productId === current[index])
-            ) {
-                return current;
-            }
-            localStorage.setItem(
-                scopedStorageKey(RECENT_PRODUCT_STORAGE_KEY, storefrontCode),
-                JSON.stringify(next),
-            );
-            return next;
+        if (route.name !== 'product' || !selectedProduct?.id || !storefrontCode) return;
+        void visitProductRef.current(selectedProduct.id).catch(() => {
+            // A failed passive visit must not interrupt product browsing.
         });
-    }, [route.name, selectedProduct, storefrontCode]);
+    }, [route.name, selectedProduct?.id, storefrontCode, customer?.id]);
 
     const toggleFavoriteProduct = useCallback(
-        (productId: string) => {
-            if (!storefrontCode) return;
-            setFavoriteProductIds(current => {
-                const next = current.includes(productId)
-                    ? current.filter(currentProductId => currentProductId !== productId)
-                    : [productId, ...current].slice(0, FAVORITE_PRODUCT_LIMIT);
-                localStorage.setItem(
-                    scopedStorageKey(FAVORITE_PRODUCT_STORAGE_KEY, storefrontCode),
-                    JSON.stringify(next),
-                );
-                return next;
-            });
+        async (productId: string) => {
+            try {
+                await productActivity.toggleFavoriteProduct(productId);
+                return true;
+            } catch (activityError) {
+                notify({ message: storefrontErrorMessage(activityError, language), type: 'error' });
+                return false;
+            }
         },
-        [storefrontCode],
+        [productActivity.toggleFavoriteProduct, language, notify],
+    );
+
+    const removeFavoriteProducts = useCallback(
+        async (productIds: string[]) => {
+            try {
+                await productActivity.removeFavoriteProducts(productIds);
+                return true;
+            } catch (activityError) {
+                notify({ message: storefrontErrorMessage(activityError, language), type: 'error' });
+                return false;
+            }
+        },
+        [productActivity.removeFavoriteProducts, language, notify],
     );
 
     const switchCurrency = useCallback(
@@ -624,8 +630,10 @@ export function useStorefrontAppState() {
 
     const storefrontContextValue = {
         route,
+        displayedRoute,
         api,
         products,
+        productsQuery,
         collections,
         contentBlocks,
         managedContentProducts,
@@ -644,6 +652,7 @@ export function useStorefrontAppState() {
         recommendationsBlock,
         contentError,
         contentQuery,
+        configQuery,
         loading,
         error,
         publicLoadState,
@@ -703,7 +712,6 @@ export function useStorefrontAppState() {
         customerCouponUsageRecordsQuery,
         customerCouponUsageRecordsError,
         currentCheckoutOrder,
-        completedOrder,
         activeCollectionId,
         activeChildId,
         sortMode,
@@ -713,6 +721,7 @@ export function useStorefrontAppState() {
         maximumPrice,
         favoriteProductIds,
         recentProductIds,
+        productActivity,
         selectedProduct,
         routeProductLoading,
         routeProductError,
@@ -737,12 +746,10 @@ export function useStorefrontAppState() {
         addToCart,
         startDirectPurchase,
         toggleFavoriteProduct,
-        setFavoriteProductIds,
-        setRecentProductIds,
+        removeFavoriteProducts,
         setCart,
         setCustomer,
         setCheckoutOrder,
-        setCompletedOrder,
         clearPrivateQueryCache,
         invalidateCustomerRouteQueries,
         applyCoupon,

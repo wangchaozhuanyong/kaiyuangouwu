@@ -70,9 +70,10 @@ describe('checkout authentication continuation', () => {
             name: 'login',
             returnTo: 'purchase',
             id: 'chosen-variant',
+            quantity: 3,
         });
         expect(controller.execute).toHaveBeenCalledWith({
-            buyNow: { productVariantId: 'chosen-variant', quantity: 1 },
+            buyNow: { productVariantId: 'chosen-variant', quantity: 3 },
         });
         expect(api.beginCheckout).not.toHaveBeenCalled();
         expect(resumed.route).toEqual({ name: 'purchase' });
@@ -185,6 +186,7 @@ describe('guest Buy now and auth-page navigation', () => {
                         onContentTarget={vi.fn()}
                         returnTo="purchase"
                         returnVariantId="selected-variant"
+                        returnQuantity={3}
                     />,
                 ),
             );
@@ -192,12 +194,12 @@ describe('guest Buy now and auth-page navigation', () => {
             act(() => buttons.find(button => button.textContent?.includes('忘记密码'))?.click());
             expect(navigate).toHaveBeenCalledWith({
                 to: '/forgot-password',
-                search: { returnTo: 'purchase', id: 'selected-variant' },
+                search: { returnTo: 'purchase', id: 'selected-variant', quantity: 3 },
             });
             act(() => container.querySelector<HTMLButtonElement>('.auth-switch button')?.click());
             expect(navigate).toHaveBeenCalledWith({
                 to: '/register',
-                search: { returnTo: 'purchase', id: 'selected-variant' },
+                search: { returnTo: 'purchase', id: 'selected-variant', quantity: 3 },
                 replace: true,
             });
         } finally {

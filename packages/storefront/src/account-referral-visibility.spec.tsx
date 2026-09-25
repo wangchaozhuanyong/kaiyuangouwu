@@ -90,6 +90,7 @@ function renderAccount(
             pending: 0,
             shipping: 0,
             receiving: 0,
+            completed: 0,
         },
     );
     client.setQueryData(
@@ -129,7 +130,6 @@ function renderAccount(
                     logoUrl: null,
                     accountHeroImageUrl,
                     favoriteProductCount: 0,
-                    announcementCount: 0,
                     couponCount: 0,
                     displayCurrencyCode: market.currencyCode,
                     availableCurrencyCodes: [market.currencyCode],
@@ -149,7 +149,7 @@ function renderAccount(
 }
 
 describe('account referral visibility', () => {
-    it('shows real referral balance in the three-column mobile account card when enabled', () => {
+    it('shows real referral balance beside the two mobile account shortcuts when enabled', () => {
         const markup = renderAccount(true);
 
         expect(markup).toContain('account-mobile-header');
@@ -157,7 +157,7 @@ describe('account referral visibility', () => {
         expect(markup).toContain('我的订单中心');
         expect(markup).toContain('返利余额');
         expect(markup).toContain('¥8.8');
-        expect(markup.match(/class="account-hero-asset"/g)).toHaveLength(3);
+        expect(markup.match(/class="account-hero-asset"/g)).toHaveLength(2);
         expect(markup).not.toContain('data-page-pending="query"');
     });
 

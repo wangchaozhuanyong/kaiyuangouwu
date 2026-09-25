@@ -3,8 +3,7 @@ import type { MouseEventHandler, ReactNode } from 'react';
 
 import { normalizedHeroThemePreset } from '../content-visuals';
 
-import { heroThemeStyle, heroUsesImageOverlay, isLightColor, type HeroThemeData } from './hero-theme';
-import { useImageTone } from './image-tone';
+import { heroThemeStyle, type HeroThemeData } from './hero-theme';
 
 export interface HeroSceneData extends HeroThemeData {
     title: string;
@@ -16,19 +15,17 @@ export interface HeroSceneData extends HeroThemeData {
     items: Array<{ label: string; description: string; enabled?: boolean }>;
 }
 
-/** The carousel and its draft preview render the same saved copy and overlay. */
+/** The carousel and its draft preview render the same saved copy and local contrast surface. */
 export function HeroScene({
     content,
     image,
     imageLabel,
-    imageUrl,
     onImageOpen,
     onOpen,
 }: {
     content: HeroSceneData;
     image: ReactNode;
     imageLabel: string;
-    imageUrl?: string | null;
     onImageOpen?: MouseEventHandler<HTMLButtonElement>;
     onOpen?: () => void;
 }) {
@@ -38,21 +35,10 @@ export function HeroScene({
     const subtitle = content.subtitle.trim();
     const body = content.body.trim();
     const ctaLabel = content.ctaLabel.trim();
-    const resolvedImageUrl = imageUrl ?? content.imageUrl ?? null;
-    // Compute context-aware fallback for when CORS prevents canvas sampling:
-    // If the admin set dark text or a light background, we must assume light tone.
-    const HEX = /^#[0-9a-f]{6}$/i;
-    const rawText = typeof content.textColor === 'string' ? content.textColor.trim() : '';
-    const rawBg = typeof content.backgroundColor === 'string' ? content.backgroundColor.trim() : '';
-    const contextFallbackTone: 'light' | 'dark' =
-        (HEX.test(rawText) && !isLightColor(rawText)) || (HEX.test(rawBg) && isLightColor(rawBg))
-            ? 'light'
-            : 'dark';
-    const imageTone = useImageTone(resolvedImageUrl, contextFallbackTone);
-    const adaptiveStyle = heroThemeStyle(content, imageTone);
+    const adaptiveStyle = heroThemeStyle(content);
 
     return (
-        <div className="hero-scene-wrapper" data-image-tone={imageTone} style={adaptiveStyle}>
+        <div className="hero-scene-wrapper" style={adaptiveStyle}>
             <button
                 type="button"
                 className="hero-rich-image-link"
@@ -61,16 +47,17 @@ export function HeroScene({
             >
                 {image}
             </button>
-            {heroUsesImageOverlay(content) && <div className="hero-rich-overlay-shade" />}
             <div className={`hero-rich-content ${warm ? 'is-vip' : ''}`}>
-                {subtitle && (
-                    <div className={`hero-rich-pill ${warm ? 'is-vip-pill' : ''}`}>
-                        {warm ? <ShieldCheck aria-hidden="true" /> : <Zap aria-hidden="true" />}
-                        <span>{subtitle}</span>
-                    </div>
-                )}
-                <h1 className="hero-rich-title">{title}</h1>
-                {body && <p className="hero-rich-desc">{body}</p>}
+                <div className="hero-rich-copy-surface">
+                    {subtitle && (
+                        <div className={`hero-rich-pill ${warm ? 'is-vip-pill' : ''}`}>
+                            {warm ? <ShieldCheck aria-hidden="true" /> : <Zap aria-hidden="true" />}
+                            <span>{subtitle}</span>
+                        </div>
+                    )}
+                    <h1 className="hero-rich-title">{title}</h1>
+                    {body && <p className="hero-rich-desc">{body}</p>}
+                </div>
                 {items.length > 0 && (
                     <div className="hero-rich-stats-row">
                         {items.map((item, index) => (

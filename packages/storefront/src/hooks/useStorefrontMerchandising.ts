@@ -1,3 +1,4 @@
+/* eslint-disable import/order -- prettier-plugin-organize-imports places type-only imports after runtime imports. */
 import { useQuery } from '@tanstack/react-query';
 
 import { buildBestSellerProducts, buildRecommendationProducts } from '../home-merchandising';
@@ -8,6 +9,7 @@ import {
     storefrontQueryKeys,
 } from '../query-client';
 import { useProductsByIdsQuery } from '../route-queries';
+import type { RouteState } from '../storefront-router';
 import { contentNumberSetting, contentStringArraySetting } from '../storefront-utils';
 import {
     ActiveCustomer,
@@ -28,12 +30,16 @@ export function useStorefrontMerchandising({
     products,
     contentBlocks,
     configuredBlockTypes,
+    activeRoute,
+    contentReady,
 }: StorefrontQueryContext & {
     customer: ActiveCustomer | null;
     recentProductIds: string[];
     products: Product[];
     contentBlocks: StorefrontContentBlock[];
     configuredBlockTypes: StorefrontContentBlockType[];
+    activeRoute: RouteState['name'];
+    contentReady: boolean;
 }) {
     const bestSellersBlock = contentBlocks.find(block => block.type === 'BEST_SELLERS');
 
@@ -55,6 +61,9 @@ export function useStorefrontMerchandising({
 
     const showRecommendations =
         Boolean(recommendationsBlock) || !configuredBlockTypes.includes('RECOMMENDATIONS');
+    const homeContentReady = activeRoute === 'home' && contentReady;
+    const recommendationsReady =
+        (activeRoute === 'home' || activeRoute === 'recommendations') && contentReady;
 
     // Keep enough variety for configured sections without loading the previous
     // 48-product ceiling on every home visit. Larger managed sections still
@@ -69,7 +78,7 @@ export function useStorefrontMerchandising({
             take: bestSellerCandidateCount,
         }),
         queryFn: ({ signal }) => api.catalog({ sort: 'sales', take: bestSellerCandidateCount }, signal),
-        enabled: storefrontContextResolved && showBestSellers,
+        enabled: storefrontContextResolved && homeContentReady && showBestSellers,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
@@ -86,6 +95,7 @@ export function useStorefrontMerchandising({
         queryFn: () => api.productSales(bestSellerCandidates.map(product => product.id)),
         enabled:
             storefrontContextResolved &&
+            homeContentReady &&
             showBestSellers &&
             !bestSellerCatalogQuery.isPending &&
             bestSellerCandidates.length > 0,
@@ -96,7 +106,7 @@ export function useStorefrontMerchandising({
 
     const pinnedBestSellerQuery = useProductsByIdsQuery({
         api,
-        productIds: pinnedBestSellerIds,
+        productIds: homeContentReady ? pinnedBestSellerIds : [],
         market,
         language,
     });
@@ -113,7 +123,7 @@ export function useStorefrontMerchandising({
 
     const personalizationSourceQuery = useProductsByIdsQuery({
         api,
-        productIds: personalizationSourceIds,
+        productIds: recommendationsReady ? personalizationSourceIds : [],
         market,
         language,
     });
@@ -126,7 +136,7 @@ export function useStorefrontMerchandising({
         }),
         queryFn: ({ signal }) =>
             api.catalog({ sort: 'recommended', take: recommendationCandidateCount }, signal),
-        enabled: storefrontContextResolved && showRecommendations,
+        enabled: storefrontContextResolved && recommendationsReady && showRecommendations,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),

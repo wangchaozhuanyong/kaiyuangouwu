@@ -14,7 +14,6 @@ export const navigationTargetOptions = [
     { value: '/favorites', zh: '我的收藏', en: 'Favorites' },
     { value: '/history', zh: '浏览足迹', en: 'History' },
     { value: '/notifications', zh: '消息中心', en: 'Notifications' },
-    { value: '/announcements', zh: '系统公告', en: 'Announcements' },
     { value: '/support', zh: '客服中心', en: 'Support' },
     { value: '/reviews', zh: '评价中心', en: 'Reviews' },
 ] as const;

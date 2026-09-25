@@ -16,6 +16,7 @@ const commonReviewTypes = gql`
         title: String!
         body: String!
         customerName: String!
+        anonymous: Boolean!
         productName: String!
         sku: String!
         merchantResponse: String
@@ -58,6 +59,7 @@ const commonReviewTypes = gql`
         rating: Int!
         title: String!
         body: String!
+        anonymous: Boolean
     }
 `;
 
@@ -77,6 +79,10 @@ export const shopApiExtensions = gql`
 
 export const adminApiExtensions = gql`
     ${commonReviewTypes}
+
+    extend type StorefrontReview {
+        customerId: ID
+    }
 
     input ModerateStorefrontReviewInput {
         id: ID!

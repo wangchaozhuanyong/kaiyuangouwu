@@ -11,6 +11,7 @@ import {
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
+import { useDesktopLayout } from './desktop-layout';
 import { languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
 import {
@@ -62,6 +63,7 @@ export function ReviewCenterPage({
     onNotify: (message: string) => void;
 }) {
     const isZh = language === 'zh';
+    const desktop = useDesktopLayout();
     const queryClient = useQueryClient();
     const reviewsQuery = useQuery({
         queryKey: storefrontQueryKeys.customerReviews(
@@ -88,6 +90,7 @@ export function ReviewCenterPage({
     const reviews = reviewsQuery.data ?? [];
     const candidates = candidatesQuery.data ?? [];
     const [selected, setSelected] = useState<StorefrontReviewCandidate | null>(null);
+    const [activeList, setActiveList] = useState<'pending' | 'submitted'>('pending');
     const [showAllCandidates, setShowAllCandidates] = useState(false);
     const composerRef = useRef<HTMLFormElement>(null);
     const candidateImages = new Map(
@@ -126,6 +129,7 @@ export function ReviewCenterPage({
             }),
         ]);
         setSelected(null);
+        setActiveList('submitted');
         onNotify(isZh ? '评价已提交，审核通过后将公开展示' : 'Review submitted for moderation');
     };
 
@@ -167,6 +171,31 @@ export function ReviewCenterPage({
                 />
             ) : (
                 <>
+                    {desktop && (
+                        <div className="desktop-account-workbench-toolbar review-center-toolbar">
+                            <h1>{isZh ? '评价中心' : 'Reviews'}</h1>
+                            <div role="tablist" aria-label={isZh ? '评价列表' : 'Review lists'}>
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={activeList === 'pending'}
+                                    aria-controls="review-pending-panel"
+                                    onClick={() => setActiveList('pending')}
+                                >
+                                    {isZh ? `待评价 ${candidates.length}` : `To review ${candidates.length}`}
+                                </button>
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={activeList === 'submitted'}
+                                    aria-controls="review-submitted-panel"
+                                    onClick={() => setActiveList('submitted')}
+                                >
+                                    {isZh ? `本次提交 ${reviews.length}` : `Submitted ${reviews.length}`}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     {selected && (
                         <ReviewComposer
                             key={selected.orderLineId}
@@ -177,7 +206,12 @@ export function ReviewCenterPage({
                             onSubmit={submit}
                         />
                     )}
-                    <section className="review-center-section review-center-pending">
+                    <section
+                        id="review-pending-panel"
+                        role={desktop ? 'tabpanel' : undefined}
+                        hidden={desktop && activeList !== 'pending'}
+                        className="review-center-section review-center-pending"
+                    >
                         <header>
                             <div>
                                 <strong>{isZh ? '待评价商品' : 'Ready to review'}</strong>
@@ -265,7 +299,12 @@ export function ReviewCenterPage({
                             </p>
                         )}
                     </section>
-                    <section className="review-center-section">
+                    <section
+                        id="review-submitted-panel"
+                        role={desktop ? 'tabpanel' : undefined}
+                        hidden={desktop && activeList !== 'submitted'}
+                        className="review-center-section"
+                    >
                         <header>
                             <div>
                                 <strong>{isZh ? '我的评价' : 'My reviews'}</strong>
@@ -440,6 +479,7 @@ function ReviewComposer({
     const [rating, setRating] = useState(5);
     const [title, setTitle] = useState('');
     const [body, setBody] = useState('');
+    const [anonymous, setAnonymous] = useState(false);
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -460,6 +500,7 @@ function ReviewComposer({
                 rating,
                 title: title.trim(),
                 body: body.trim(),
+                anonymous,
             });
         } catch (submitError) {
             setError(storefrontErrorMessage(submitError, language));
@@ -517,6 +558,19 @@ function ReviewComposer({
                     onChange={event => setBody(event.target.value)}
                     disabled={submitting}
                 />
+            </label>
+            <label className="review-anonymous-option">
+                <input
+                    type="checkbox"
+                    checked={anonymous}
+                    onChange={event => setAnonymous(event.target.checked)}
+                    disabled={submitting}
+                />
+                <span>
+                    {isZh
+                        ? '匿名展示（商家仍可核对订单归属）'
+                        : 'Display anonymously (the store can still verify your order)'}
+                </span>
             </label>
             {error && (
                 <small className="form-error" role="alert">

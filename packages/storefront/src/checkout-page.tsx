@@ -572,19 +572,13 @@ export function CheckoutPage({
             {!!physicalLines.length && (
                 <CheckoutItemsGroup
                     title={
-                        directPurchase
-                            ? isZh
-                                ? '本次购买'
-                                : 'Your purchase'
-                            : isZh
-                              ? '快递配送'
-                              : 'Delivery'
+                        directPurchase ? (isZh ? '确认商品' : 'Review items') : isZh ? '快递配送' : 'Delivery'
                     }
                     hint={
                         directPurchase
                             ? isZh
-                                ? '单品直购'
-                                : 'Buy now'
+                                ? `共 ${physicalLines.reduce((sum, line) => sum + line.quantity, 0)} 件商品`
+                                : `${physicalLines.reduce((sum, line) => sum + line.quantity, 0)} items`
                             : isZh
                               ? `${physicalLines.length} 种 · 共 ${physicalLines.reduce((sum, line) => sum + line.quantity, 0)} 件`
                               : `${physicalLines.length} ${physicalLines.length === 1 ? 'product' : 'products'}`
@@ -603,8 +597,8 @@ export function CheckoutPage({
                     title={
                         directPurchase
                             ? isZh
-                                ? '本次购买'
-                                : 'Your purchase'
+                                ? '确认商品'
+                                : 'Review items'
                             : isZh
                               ? '数字交付'
                               : 'Digital delivery'
@@ -612,8 +606,8 @@ export function CheckoutPage({
                     hint={
                         directPurchase
                             ? isZh
-                                ? '单品直购'
-                                : 'Buy now'
+                                ? `共 ${digitalLines.reduce((sum, line) => sum + line.quantity, 0)} 件商品`
+                                : `${digitalLines.reduce((sum, line) => sum + line.quantity, 0)} items`
                             : isZh
                               ? `${digitalLines.length} 种 · 共 ${digitalLines.reduce((sum, line) => sum + line.quantity, 0)} 件`
                               : `${digitalLines.length} ${digitalLines.length === 1 ? 'product' : 'products'}`
@@ -661,9 +655,11 @@ export function CheckoutPage({
                 ref={formRef}
                 className={checkoutPageClassName('checkout-form')}
                 onSubmit={event => void submit(event)}
+                onInput={() => {
+                    if (formError) setFormError(null);
+                }}
             >
                 <div className="desktop-checkout-main">
-                    {directPurchase && renderCheckoutItems()}
                     {hasDigitalProducts && (
                         <section
                             className={checkoutPageClassName(
@@ -764,7 +760,19 @@ export function CheckoutPage({
                         <section
                             className={checkoutPageClassName('checkout-section checkout-address-section')}
                         >
-                            <h2>{isZh ? '收货地址' : 'Shipping address'}</h2>
+                            <header className="checkout-address-heading">
+                                <h2>
+                                    <MapPin aria-hidden="true" />
+                                    {isZh ? '收货地址' : 'Shipping address'}
+                                </h2>
+                                <button
+                                    type="button"
+                                    onClick={manageAddress}
+                                    disabled={submitting || cartPending || cartUnknown || customerLoading}
+                                >
+                                    {isZh ? '选择地址' : 'Choose address'}
+                                </button>
+                            </header>
                             {customerLoading ? (
                                 <div className="checkout-address-loading" role="status" aria-busy="true">
                                     {isZh ? '正在加载收货地址…' : 'Loading shipping address…'}
@@ -799,7 +807,7 @@ export function CheckoutPage({
                             )}
                         </section>
                     )}
-                    {!directPurchase && renderCheckoutItems()}
+                    {renderCheckoutItems()}
                     <section className={checkoutPageClassName('checkout-section checkout-options')}>
                         {isDigitalOnly && (
                             <div
@@ -868,20 +876,13 @@ export function CheckoutPage({
                                 <ChevronRight />
                             </small>
                         </button>
-                        <button type="button" onClick={() => setCouponOpen(true)}>
-                            <span>{isZh ? '优惠券' : 'Coupon'}</span>
-                            <small title={selectedCouponLabel ?? undefined}>
-                                {selectedCouponLabel ??
-                                    (isZh ? '选择已领取优惠券' : 'Choose a claimed coupon')}
-                                <ChevronRight />
-                            </small>
-                        </button>
                     </section>
                 </div>
                 <aside className="desktop-checkout-summary">
                     {formError && <InlineError message={formError} />}
                     {shippingError && !shippingPickerOpen && <InlineError message={shippingError} />}
                     <section className={checkoutPageClassName('checkout-section checkout-summary-section')}>
+                        <h2>{isZh ? '费用明细' : 'Cost summary'}</h2>
                         <PriceSummary
                             pending={cartPending}
                             shippingPending={Boolean(
@@ -895,6 +896,9 @@ export function CheckoutPage({
                             language={language}
                             flashSales={flashSales}
                             requiresShipping={requiresShipping}
+                            couponLabel={selectedCouponLabel}
+                            couponDisabled={submitting || cartPending || cartUnknown}
+                            onChooseCoupon={() => setCouponOpen(true)}
                         />
                     </section>
                     <section
@@ -1084,6 +1088,7 @@ export function CheckoutPage({
             )}
             {couponOpen && (
                 <CouponSheet
+                    currencyCode={order.currencyCode}
                     coupons={coupons}
                     orderId={order.id}
                     language={language}
@@ -1177,7 +1182,10 @@ function CheckoutItemsGroup({
     return (
         <section className={checkoutPageClassName('checkout-section checkout-product-group')}>
             <header className={checkoutPageClassName('checkout-section-title')}>
-                <h2>{title}</h2>
+                <h2>
+                    <ShoppingBag aria-hidden="true" />
+                    {title}
+                </h2>
                 <span aria-live="polite">
                     {pending ? (isZh ? '正在确认最新价格' : 'Confirming latest price') : hint}
                 </span>
@@ -1291,6 +1299,9 @@ function PriceSummary({
     pending = false,
     shippingPending = false,
     shippingUnavailable,
+    couponLabel,
+    couponDisabled = false,
+    onChooseCoupon,
 }: {
     order: Order;
     locale: string;
@@ -1300,6 +1311,9 @@ function PriceSummary({
     pending?: boolean;
     shippingPending?: boolean;
     shippingUnavailable?: string;
+    couponLabel: string | null;
+    couponDisabled?: boolean;
+    onChooseCoupon: () => void;
 }) {
     const isZh = language === 'zh';
     const discount = Math.abs(order.discounts.reduce((sum, item) => sum + item.amountWithTax, 0));
@@ -1329,6 +1343,17 @@ function PriceSummary({
             <div>
                 <dt>{isZh ? '商品金额' : 'Items'}</dt>
                 <dd>{formatMoney(order.subTotalWithTax + discount, order.currencyCode, locale)}</dd>
+            </div>
+            <div className="price-summary-coupon">
+                <dt>{isZh ? '优惠券' : 'Coupon'}</dt>
+                <dd>
+                    <button type="button" onClick={onChooseCoupon} disabled={couponDisabled}>
+                        <span title={couponLabel ?? undefined}>
+                            {couponLabel ?? (isZh ? '选择已领取优惠券' : 'Choose a claimed coupon')}
+                        </span>
+                        <ChevronRight aria-hidden="true" />
+                    </button>
+                </dd>
             </div>
             <div>
                 <dt>

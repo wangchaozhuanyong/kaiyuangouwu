@@ -62,12 +62,12 @@ export const systemAnnouncementRoute: DashboardRouteDefinition = {
         sectionId: 'system',
         id: 'system-announcements',
         url: '/system-announcements',
-        title: '系统公告',
+        title: '首页公告',
         icon: Megaphone,
         requiresPermission: ['SuperAdmin'],
     },
     path: '/system-announcements',
-    loader: () => ({ breadcrumb: () => '系统公告' }),
+    loader: () => ({ breadcrumb: () => '首页公告' }),
     component: () => <SystemAnnouncementPage />,
 };
 
@@ -89,7 +89,7 @@ function SystemAnnouncementPage() {
     const deleteMutation = useMutation({
         mutationFn: (id: string) => api.mutate(deleteSystemAnnouncementMutation, { id }),
         onSuccess: async () => {
-            toast.success('系统公告已删除');
+            toast.success('首页公告已删除');
             await refresh();
         },
         onError: error => toast.error(errorMessage(error)),
@@ -97,7 +97,7 @@ function SystemAnnouncementPage() {
 
     return (
         <Page pageId="system-announcements">
-            <PageTitle>系统公告</PageTitle>
+            <PageTitle>首页公告</PageTitle>
             <PageActionBar>
                 <PageActionBarRight>
                     <Button onClick={() => setDraft(newAnnouncementDraft())}>
@@ -120,7 +120,7 @@ function SystemAnnouncementPage() {
                         </div>
                     ) : query.isError ? (
                         <div className="flex items-center justify-between rounded-md border p-4">
-                            <span className="text-sm text-destructive">系统公告加载失败</span>
+                            <span className="text-sm text-destructive">首页公告加载失败</span>
                             <Button size="sm" variant="outline" onClick={() => void query.refetch()}>
                                 <RefreshCw className="size-4" />
                                 重试
@@ -174,7 +174,7 @@ function SystemAnnouncementPage() {
                                                 <Pencil className="size-4" />
                                             </Button>
                                             <ConfirmationDialog
-                                                title="删除这条系统公告？"
+                                                title="删除这条首页公告？"
                                                 description="删除后将立即从客户端公告中移除，且无法恢复。"
                                                 confirmText="确认删除"
                                                 cancelText="取消"
@@ -196,7 +196,7 @@ function SystemAnnouncementPage() {
                             ))}
                         </div>
                     ) : (
-                        <p className="text-sm text-muted-foreground">还没有系统公告。</p>
+                        <p className="text-sm text-muted-foreground">还没有首页公告。</p>
                     )}
                 </PageBlock>
             </PageLayout>
@@ -237,7 +237,7 @@ function AnnouncementEditor({
                       input: announcementInput(value, false),
                   }),
         onSuccess: async () => {
-            toast.success(localDraft?.id ? '系统公告已更新' : '系统公告已创建');
+            toast.success(localDraft?.id ? '首页公告已更新' : '首页公告已创建');
             await onSaved();
         },
         onError: error => toast.error(errorMessage(error)),
@@ -261,7 +261,7 @@ function AnnouncementEditor({
             <Sheet open={Boolean(draft)} onOpenChange={open => !open && requestClose()}>
                 <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[640px] sm:max-w-[640px]">
                     <SheetHeader className="shrink-0 border-b px-6 py-5 text-left">
-                        <SheetTitle>{draft?.id ? '编辑系统公告' : '新建系统公告'}</SheetTitle>
+                        <SheetTitle>{draft?.id ? '编辑首页公告' : '新建首页公告'}</SheetTitle>
                         <SheetDescription>填写中文即可，保存时会自动生成英文。</SheetDescription>
                     </SheetHeader>
                     <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">

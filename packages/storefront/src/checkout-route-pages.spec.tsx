@@ -48,7 +48,6 @@ describe('checkout route handoff', () => {
             market: { code: 'fixture' },
             displayCurrencyCode: 'MYR',
             locale: 'zh-CN',
-            setCompletedOrder: vi.fn(),
             setCheckoutOrder: vi.fn(),
             notify: vi.fn(),
             navigate,

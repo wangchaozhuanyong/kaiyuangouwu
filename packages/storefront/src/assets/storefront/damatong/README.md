@@ -18,6 +18,8 @@ to the Channel profile, collections, and content blocks consumed by the Shop API
 - `hero-marketplace.webp` - 1600x900 physical-goods carousel hero.
 - `hero-services-v1.webp` - 1600x900 work, study, and MM2H service carousel hero.
 - `hero-ai-subscriptions-v1.webp` - 1600x900 AI tools and software subscription carousel hero.
+- `business-services-renovation-v1.webp` - 1600x900 renovation services page concept hero; select it through the store's Admin content editor after the publisher uploads it. This generated interior is illustrative, not a completed client project.
+- `support-service-banner-v1.webp` - 1600x667 customer support page banner; the 280x116 desktop media slot remains clear and the store selects the asset through Admin after upload.
 - `auth-login.webp` - 1600x900 login visual.
 - `auth-register.webp` - 1600x900 registration visual.
 - `category-authentic-cigarettes.webp` - 1024x1024 sealed tobacco category still-life.

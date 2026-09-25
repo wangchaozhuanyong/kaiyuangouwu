@@ -42,6 +42,76 @@ describe('MailQueryPage', () => {
         vi.useRealTimers();
     });
 
+    it('keeps recent query codes in their own store and account without exposing legacy records', () => {
+        const record = (code: string) =>
+            JSON.stringify([{ code, updatedAt: Date.now(), aliasEmail: `${code}@example.test` }]);
+        localStorage.setItem('icloud_relay_recent_queries', record('BUY-LEGACY-0001'));
+        localStorage.setItem('icloud_relay_recent_queries:store-a', record('BUY-OLD-0001'));
+        localStorage.setItem('icloud_relay_recent_queries:store-a:customer:alice', record('BUY-AAAA-0001'));
+        localStorage.setItem('icloud_relay_recent_queries:store-a:customer:bob', record('BUY-BBBB-0002'));
+        localStorage.setItem('icloud_relay_recent_queries:store-b:customer:alice', record('BUY-CCCC-0003'));
+        localStorage.setItem('icloud_relay_recent_queries:store-a:guest', record('BUY-GGGG-0004'));
+        const api = { queryMails: vi.fn() } as unknown as ShopApi;
+
+        act(() => {
+            root.render(
+                <MailQueryPage
+                    key="store-a:alice"
+                    api={api}
+                    marketCode="store-a"
+                    customerId="alice"
+                    language="zh"
+                />,
+            );
+        });
+        expect(container.textContent).toContain('BUY-AAAA-0001');
+        expect(container.textContent).not.toContain('BUY-BBBB-0002');
+        expect(container.textContent).not.toContain('BUY-LEGACY-0001');
+        expect(container.textContent).not.toContain('BUY-OLD-0001');
+        expect(container.textContent).not.toContain('BUY-GGGG-0004');
+
+        act(() => {
+            root.render(
+                <MailQueryPage
+                    key="store-a:bob"
+                    api={api}
+                    marketCode="store-a"
+                    customerId="bob"
+                    language="zh"
+                />,
+            );
+        });
+        expect(container.textContent).toContain('BUY-BBBB-0002');
+        expect(container.textContent).not.toContain('BUY-AAAA-0001');
+
+        act(() => {
+            container.querySelector<HTMLButtonElement>('#clearAllHistoryBtn')?.click();
+        });
+        expect(localStorage.getItem('icloud_relay_recent_queries:store-a:customer:bob')).toBeNull();
+        expect(localStorage.getItem('icloud_relay_recent_queries:store-a:customer:alice')).not.toBeNull();
+        expect(localStorage.getItem('icloud_relay_recent_queries:store-a')).not.toBeNull();
+
+        act(() => {
+            root.render(
+                <MailQueryPage
+                    key="store-b:alice"
+                    api={api}
+                    marketCode="store-b"
+                    customerId="alice"
+                    language="zh"
+                />,
+            );
+        });
+        expect(container.textContent).toContain('BUY-CCCC-0003');
+        expect(container.textContent).not.toContain('BUY-AAAA-0001');
+
+        act(() => {
+            root.render(<MailQueryPage key="store-a:guest" api={api} marketCode="store-a" language="zh" />);
+        });
+        expect(container.textContent).toContain('BUY-GGGG-0004');
+        expect(container.textContent).not.toContain('BUY-AAAA-0001');
+    });
+
     it('renders full portal UI with zero text flickering and complete sections', () => {
         const mockApi = {
             queryMails: vi.fn(),
@@ -53,6 +123,7 @@ describe('MailQueryPage', () => {
             root.render(
                 <MailQueryPage
                     api={mockApi as unknown as ShopApi}
+                    marketCode="my-malaysia"
                     brandingName="大马通"
                     language="zh"
                     onBack={onBack}
@@ -131,7 +202,12 @@ describe('MailQueryPage', () => {
 
         act(() => {
             root.render(
-                <MailQueryPage api={mockApi as unknown as ShopApi} brandingName="大马通" language="zh" />,
+                <MailQueryPage
+                    api={mockApi as unknown as ShopApi}
+                    marketCode="my-malaysia"
+                    brandingName="大马通"
+                    language="zh"
+                />,
             );
         });
 
@@ -163,7 +239,7 @@ describe('MailQueryPage', () => {
         expect(container.textContent).toContain('一键复制');
 
         // Check recent queries saved to localStorage
-        const stored = localStorage.getItem('icloud_relay_recent_queries');
+        const stored = localStorage.getItem('icloud_relay_recent_queries:my-malaysia:guest');
         expect(stored).not.toBeNull();
         expect(stored).toContain('BUY-ABCD-1234');
     });
@@ -188,7 +264,12 @@ describe('MailQueryPage', () => {
 
         act(() => {
             root.render(
-                <MailQueryPage api={mockApi as unknown as ShopApi} brandingName="大马通" language="zh" />,
+                <MailQueryPage
+                    api={mockApi as unknown as ShopApi}
+                    marketCode="my-malaysia"
+                    brandingName="大马通"
+                    language="zh"
+                />,
             );
         });
 
@@ -208,13 +289,84 @@ describe('MailQueryPage', () => {
         expect(container.textContent).toContain('专属查询码无效或已过期');
     });
 
+    it('refreshes new mail and keeps the last result when a later refresh fails', async () => {
+        const first = {
+            success: true,
+            message: null,
+            targetType: 'VIRTUAL',
+            aliasEmail: 'buyer@example.test',
+            primaryEmail: null,
+            codeExpiresAt: null,
+            remainingDays: 4,
+            totalEmails: 1,
+            items: [
+                {
+                    id: 'mail-first',
+                    fromAddress: 'sender@example.test',
+                    fromName: 'Sender',
+                    subject: 'First mail',
+                    receivedAt: new Date().toISOString(),
+                    extractedCode: null,
+                    bodyText: 'First mail',
+                    bodyHtml: '',
+                    targetEmail: 'buyer@example.test',
+                    virtualEmailId: 'virtual-1',
+                },
+            ],
+            virtualEmailsList: [],
+        };
+        const queryMails = vi
+            .fn()
+            .mockResolvedValueOnce(first)
+            .mockResolvedValueOnce({
+                ...first,
+                totalEmails: 2,
+                items: [...first.items, { ...first.items[0], id: 'mail-second', subject: 'New mail' }],
+            })
+            .mockRejectedValueOnce(new Error('Temporary network error'));
+        act(() => {
+            root.render(
+                <MailQueryPage
+                    api={{ queryMails } as unknown as ShopApi}
+                    marketCode="my-malaysia"
+                    language="zh"
+                />,
+            );
+        });
+        const input = container.querySelector<HTMLInputElement>('#codeInput');
+        if (!input) throw new Error('Missing query input');
+        act(() => setInputValue(input, 'BUY-AAAA-1234'));
+        await act(async () => {
+            container.querySelector<HTMLButtonElement>('#queryBtn')?.click();
+            await Promise.resolve();
+        });
+        expect(container.textContent).toContain('First mail');
+
+        await act(async () => {
+            container.querySelector<HTMLButtonElement>('#refreshNowBtn')?.click();
+            await Promise.resolve();
+        });
+        expect(container.textContent).toContain('New mail');
+        expect(container.querySelector('#totalMailCount')?.textContent).toContain('2');
+
+        await act(async () => {
+            container.querySelector<HTMLButtonElement>('#refreshNowBtn')?.click();
+            await Promise.resolve();
+        });
+        expect(container.textContent).toContain('New mail');
+        expect(container.querySelector('#refreshStatus')?.textContent).toContain('Temporary network error');
+        expect(queryMails).toHaveBeenCalledTimes(3);
+    });
+
     it('shows toast when attempting query with empty input', async () => {
         const mockApi = {
             queryMails: vi.fn(),
         };
 
         act(() => {
-            root.render(<MailQueryPage api={mockApi as unknown as ShopApi} language="zh" />);
+            root.render(
+                <MailQueryPage api={mockApi as unknown as ShopApi} marketCode="my-malaysia" language="zh" />,
+            );
         });
 
         const queryBtn = container.querySelector<HTMLButtonElement>('#queryBtn');

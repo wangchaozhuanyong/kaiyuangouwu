@@ -76,6 +76,9 @@ beforeAll(async () => {
         defaultLanguageCode: LanguageCode.en,
         currencyCode: CurrencyCode.GBP,
         pricesIncludeTax: true,
+        // This fixture has no zones; empty IDs keep the ChannelService's original unassigned behavior.
+        defaultShippingZoneId: '',
+        defaultTaxZoneId: '',
     });
     expect('id' in channel).toBe(true);
     ctxB = await server.app

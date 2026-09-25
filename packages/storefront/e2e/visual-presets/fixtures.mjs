@@ -6,6 +6,14 @@ const image =
             '<circle cx="970" cy="260" r="170" fill="#e9dec8"/>' +
             '<path d="M680 600L830 100 1120 610" fill="#b29b74"/></svg>',
     );
+const wideHeroImage =
+    'data:image/svg+xml,' +
+    encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520">' +
+            '<rect width="1600" height="520" fill="#cabc9c"/>' +
+            '<circle cx="1230" cy="160" r="180" fill="#e9dec8"/>' +
+            '<path d="M850 520L1070 40 1500 520" fill="#b29b74"/></svg>',
+    );
 const portraitImage =
     'data:image/svg+xml,' +
     encodeURIComponent(
@@ -122,6 +130,7 @@ const customer = {
     pending: { totalItems: 0 },
     shipping: { totalItems: 0 },
     receiving: { totalItems: 0 },
+    completed: { totalItems: 0 },
 };
 const block = {
     id: 'hero-1',
@@ -162,10 +171,10 @@ const quickLinksBlock = {
     body: '',
     ctaLabel: '',
     items: [
-        ['商品分类', '浏览店铺当前开放的商品分类', 'CATEGORY', null],
+        ['商品分类', '浏览店铺当前开放的商品分类', 'PAGE', 'category'],
         ['智能服务', '查看店铺提供的工具与服务', 'PAGE', 'services'],
-        ['帮助中心', '订单与服务遇到问题，查看帮助', 'SUPPORT', null],
-        ['优惠中心', '查看当前可领取的店铺优惠', 'COUPON', null],
+        ['帮助中心', '订单与服务遇到问题，查看帮助', 'SUPPORT', '/support'],
+        ['优惠中心', '查看当前可领取的店铺优惠', 'PAGE', 'coupons'],
         ['我的订单', '查询订单状态与物流进度', 'PAGE', 'orders'],
     ].map(([label, description, targetType, targetValue], position) => ({
         id: `qa-quick-link-${position}`,
@@ -229,12 +238,26 @@ const supportBlock = {
     position: 10_002,
     startsAt: null,
     endsAt: null,
-    imageUrl: null,
+    imageUrl: image,
     backgroundColor: null,
     textColor: null,
     targetType: 'NONE',
     targetValue: null,
-    settings: { serviceDaysZh: '每日', serviceStartTime: '10:00', serviceEndTime: '20:00' },
+    settings: {
+        serviceDaysZh: '每日',
+        serviceStartTime: '10:00',
+        serviceEndTime: '20:00',
+        supportFaqs: [
+            {
+                id: 'qa-delivery',
+                enabled: true,
+                questionZh: '下单前如何确认运费？',
+                answerZh: '请在结算页输入收货地址，页面会显示当前订单的运费。',
+                questionEn: 'How can I check shipping costs?',
+                answerEn: 'Enter your delivery address at checkout to see the shipping cost.',
+            },
+        ],
+    },
     title: '客服与帮助',
     subtitle: '',
     body: '咨询订单或售后时，请准备订单号与问题说明。',
@@ -373,6 +396,7 @@ function denseCommerceFixture(signedIn) {
                   pending: { totalItems: 1 },
                   shipping: { totalItems: 1 },
                   receiving: { totalItems: 1 },
+                  completed: { totalItems: 1 },
               }
             : null,
         order: signedIn ? orders[0] : null,
@@ -520,6 +544,7 @@ function aftercareFixture(signedIn) {
                   pending: { totalItems: 0 },
                   shipping: { totalItems: 0 },
                   receiving: { totalItems: 0 },
+                  completed: { totalItems: 0 },
               }
             : null,
         myAfterSalesRequests: signedIn ? afterSales : [],
@@ -630,6 +655,112 @@ function reviewCenterFixture(signedIn) {
 }
 
 export function fixtureData(presetId = 'modern-oriental', signedIn = true, content = 'normal') {
+    const notificationOrders =
+        content === 'notifications'
+            ? ['Shipped', 'PaymentSettled', 'Delivered'].map((state, index) => ({
+                  ...order,
+                  id: `notification-order-${index}`,
+                  code: `QA-NOTIFY-${index + 1}`,
+                  state,
+                  orderPlacedAt: `2026-09-${20 - index}T08:00:00.000Z`,
+                  updatedAt: `2026-09-${23 - index}T08:00:00.000Z`,
+              }))
+            : [];
+    const notificationRequests =
+        content === 'notifications'
+            ? ['APPROVED', 'PENDING'].map((state, index) => ({
+                  id: `notification-request-${index}`,
+                  code: `QA-AFTER-${index + 1}`,
+                  state,
+                  updatedAt: `2026-09-${22 - index}T10:00:00.000Z`,
+                  order: {
+                      id: notificationOrders[index].id,
+                      code: notificationOrders[index].code,
+                      state: notificationOrders[index].state,
+                  },
+              }))
+            : [];
+    const notificationCustomer =
+        content === 'notifications'
+            ? { ...customer, orders: { items: notificationOrders, totalItems: notificationOrders.length } }
+            : customer;
+    const couponCampaigns =
+        content === 'product-coupon-quantity'
+            ? [
+                  {
+                      id: 'qa-product-quantity-coupon',
+                      name: '满50减5',
+                      kind: 'ORDER_FIXED',
+                      appearanceTheme: 'rose',
+                      startsAt: null,
+                      endsAt: '2099-12-31T00:00:00Z',
+                      claimStartsAt: null,
+                      claimEndsAt: null,
+                      validityDays: null,
+                      minimumSpend: 5000,
+                      currencyCode: 'MYR',
+                      discountAmount: 500,
+                      discountRate: null,
+                      collectionIds: [],
+                      productVariantIds: [],
+                      remainingIssueCount: null,
+                      claimed: false,
+                      claimable: true,
+                  },
+              ]
+            : content === 'coupons'
+              ? ['ORDER_FIXED', 'ORDER_PERCENTAGE', 'COLLECTION_PERCENTAGE', 'PRODUCT_PERCENTAGE'].map(
+                    (kind, index) => ({
+                        id: `qa-campaign-${index}`,
+                        name: `验收优惠券 ${index + 1}`,
+                        kind,
+                        appearanceTheme: ['blue', 'emerald', 'rose', 'gold'][index],
+                        startsAt: null,
+                        endsAt: '2099-12-31T00:00:00Z',
+                        claimStartsAt: null,
+                        claimEndsAt: null,
+                        validityDays: null,
+                        minimumSpend: 2000,
+                        currencyCode: 'MYR',
+                        discountAmount: kind === 'ORDER_FIXED' ? 500 : null,
+                        discountRate: kind === 'ORDER_FIXED' ? null : 9.5,
+                        collectionIds: [],
+                        productVariantIds: [],
+                        remainingIssueCount: null,
+                        claimed: true,
+                        claimable: false,
+                    }),
+                )
+              : [];
+    const ownedCoupons =
+        signedIn && content === 'coupons'
+            ? couponCampaigns.map((campaign, index) => ({
+                  id: `qa-coupon-${index}`,
+                  campaignId: campaign.id,
+                  campaignName: campaign.name,
+                  campaignKind: campaign.kind,
+                  appearanceTheme: campaign.appearanceTheme,
+                  status: index === 0 ? 'LOCKED' : 'AVAILABLE',
+                  minimumSpend: campaign.minimumSpend,
+                  currencyCode: 'MYR',
+                  discountAmount: campaign.discountAmount,
+                  discountRate: campaign.discountRate,
+                  collectionIds: [],
+                  productVariantIds: [],
+                  claimedAt: '2026-01-01T00:00:00Z',
+                  validFrom: '2026-01-01T00:00:00Z',
+                  validUntil: campaign.endsAt,
+                  lockedAt: null,
+                  usedAt: null,
+                  returnedAt: null,
+                  expiredAt: null,
+                  lockedOrderId: index === 0 ? order.id : null,
+                  usedOrderId: null,
+                  returnCount: 0,
+                  usable: index !== 0 && index !== 3,
+              }))
+            : [];
+
     const detailProduct =
         content === 'product-detail'
             ? {
@@ -672,21 +803,66 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true, conte
             configuredBlockTypes: ['HERO', 'AUTH_LOGIN', 'AUTH_REGISTER'],
         },
         storefrontContent: [
-            block,
+            content === 'wide-hero'
+                ? { ...block, imageUrl: wideHeroImage, imageAsset: { width: 1600, height: 520 } }
+                : block,
             quickLinksBlock,
             servicesBlock,
             ...(content === 'support' ? [supportBlock] : []),
+            ...(content === 'category-banner'
+                ? [
+                      {
+                          ...block,
+                          id: 'qa-category-banner-default',
+                          code: 'desktop-category-banner-default',
+                          type: 'CUSTOM',
+                          position: 100,
+                          targetType: 'NONE',
+                          targetValue: null,
+                          settings: {
+                              purpose: 'desktop-category-banner',
+                              categoryId: 'default',
+                              mode: 'image',
+                              layout: 'side',
+                              focal: 'center',
+                          },
+                      },
+                      {
+                          ...block,
+                          id: 'qa-category-banner-child',
+                          code: 'desktop-category-banner-collection-cups',
+                          type: 'CUSTOM',
+                          position: 101,
+                          imageUrl: null,
+                          targetType: 'NONE',
+                          targetValue: null,
+                          settings: {
+                              purpose: 'desktop-category-banner',
+                              categoryId: 'collection-cups',
+                              mode: 'text',
+                              layout: 'side',
+                              focal: 'center',
+                          },
+                      },
+                  ]
+                : []),
         ],
         activeStorefrontFlashSales: [],
         activeSystemAnnouncements: [],
-        products: { items: [detailProduct], totalItems: 1 },
+        products: {
+            items:
+                content === 'saved-products'
+                    ? [detailProduct, { ...detailProduct, id: 'product-2', name: '第二件收藏商品' }]
+                    : [detailProduct],
+            totalItems: content === 'saved-products' ? 2 : 1,
+        },
         product: detailProduct,
         collections: { items: [collection], totalItems: 1 },
         storefrontCatalog: { items: [detailProduct], totalItems: 1 },
         storefrontProductSales: [],
         activeStoreCommerceMode: 'HYBRID',
         storefrontCart: cart,
-        activeCustomer: signedIn ? customer : null,
+        activeCustomer: signedIn ? notificationCustomer : null,
         order: signedIn ? order : null,
         myStorefrontReviews: [],
         myStorefrontReviewCandidates: signedIn
@@ -706,12 +882,14 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true, conte
                   },
               ]
             : [],
-        myAfterSalesRequests: [],
+        myAfterSalesRequests: signedIn ? notificationRequests : [],
+        myStoreNotificationReadKeys: [],
+        markMyStoreNotificationsRead: [],
         myCustomerAvatar: null,
-        activeStorefrontCoupons: [],
-        myStorefrontCoupons: [],
+        activeStorefrontCoupons: couponCampaigns,
+        myStorefrontCoupons: ownedCoupons,
         myStorefrontCouponUsageRecords: [],
-        myStorefrontCouponsPage: { items: [], totalItems: 0 },
+        myStorefrontCouponsPage: { items: ownedCoupons, totalItems: ownedCoupons.length },
         myStorefrontCouponUsageRecordsPage: { items: [], totalItems: 0 },
         myDeliveryEmails: [],
         eligibleShippingMethods: [],

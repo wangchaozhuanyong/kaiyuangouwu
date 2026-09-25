@@ -49,13 +49,13 @@ describe('Adaptive Image Tone & Typography Contrast Engine', () => {
         const style = heroThemeStyle({ textColor: '#ffffff' });
         expect(style['--hero-title-color']).toBe('#ffffff');
         expect(style['--hero-body-color']).toBe('#f1f5f9');
-        expect(style['--hero-overlay-strong']).not.toContain('255, 255, 255');
+        expect(style['--hero-copy-background']).toBe('var(--surface)');
+        expect(style['--hero-copy-foreground']).toBe('var(--text)');
     });
 
-    it('uses a strong protective overlay scrim to keep text readable on any background image', () => {
+    it('keeps the full image unobscured and places copy on a separate surface', () => {
         const lightStyle = heroThemeStyle({}, 'light');
-        // Strong protective scrim (0.94) ensures dark text remains readable on any photo
-        expect(lightStyle['--hero-overlay-strong']).toBe('rgba(255, 255, 255, 0.94)');
-        expect(lightStyle['--hero-overlay-fade']).toBe('transparent');
+        expect(lightStyle['--hero-copy-background']).toBe('var(--surface)');
+        expect(lightStyle['--hero-copy-foreground']).toBe('var(--text)');
     });
 });

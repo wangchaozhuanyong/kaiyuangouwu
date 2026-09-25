@@ -132,6 +132,12 @@ import { AddMarketingAttribution1789689600000 } from './1789689600000-add-market
 import { CloseFinanceProfitReconciliation1789693200000 } from './1789693200000-close-finance-profit-reconciliation';
 import { AddGovernanceAndFraudControl1789696800000 } from './1789696800000-add-governance-and-fraud-control';
 import { GuardAdministratorPermissionAudit1789700400000 } from './1789700400000-guard-administrator-permission-audit';
+import { AddCouponAppearanceTheme1790208000000 } from './1790208000000-add-coupon-appearance-theme';
+import { AddReviewAnonymous1790208060000 } from './1790208060000-add-review-anonymous';
+import { AddNotificationReadState1790208120000 } from './1790208120000-add-notification-read-state';
+import { AddAfterSalesEvidence1790258400000 } from './1790258400000-add-after-sales-evidence';
+import { AddCustomerServiceFeedback1790310000000 } from './1790310000000-add-customer-service-feedback';
+import { AddCustomerProductActivity1790310060000 } from './1790310060000-add-customer-product-activity';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -268,4 +274,10 @@ export const devServerMigrations = [
     CloseFinanceProfitReconciliation1789693200000,
     AddGovernanceAndFraudControl1789696800000,
     GuardAdministratorPermissionAudit1789700400000,
+    AddCouponAppearanceTheme1790208000000,
+    AddReviewAnonymous1790208060000,
+    AddNotificationReadState1790208120000,
+    AddAfterSalesEvidence1790258400000,
+    AddCustomerServiceFeedback1790310000000,
+    AddCustomerProductActivity1790310060000,
 ];

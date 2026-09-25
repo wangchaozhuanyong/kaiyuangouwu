@@ -1,5 +1,5 @@
 import { Navigate } from '@tanstack/react-router';
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 
 import { cartResolvedRoutes, customerResolvedRoutes, isCheckoutRoute, RouteName } from '../storefront-router';
 import { AsyncRouteStatePage } from '../storefront-ui/page-shell';
@@ -62,5 +62,11 @@ export function RouteGate({ name, children }: { name: RouteName; children: React
             />
         );
     }
-    return children;
+    return customerResolvedRoutes.includes(name) ? (
+        <Fragment key={JSON.stringify([runtime.market?.code, runtime.customer?.id ?? null])}>
+            {children}
+        </Fragment>
+    ) : (
+        children
+    );
 }
