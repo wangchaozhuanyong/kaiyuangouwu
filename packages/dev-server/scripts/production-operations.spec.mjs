@@ -291,6 +291,28 @@ void test(
     },
 );
 
+void test(
+    'Linux root restores a reboot-cleared lock as the deployment account without replacing it',
+    {
+        skip: process.platform !== 'linux' || process.getuid?.() !== 0,
+    },
+    t => {
+        const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-operations-lock-'));
+        t.after(() => rmSync(root, { recursive: true, force: true }));
+        chmodSync(root, 0o1777);
+        const lock = path.join(root, 'deploy.lock');
+        const owner = 'nobody';
+        const ownerId = Number(execFileSync('id', ['-u', owner], { encoding: 'utf8' }).trim());
+        operations.restoreMissingProductionLock(lock, owner);
+        const first = statSync(lock);
+        assert.equal(first.uid, ownerId);
+        assert.equal(first.mode % 0o1000, 0o640);
+        operations.restoreMissingProductionLock(lock, owner);
+        assert.equal(statSync(lock).ino, first.ino);
+        operations.withProductionLock(() => assert.equal(statSync(lock).ino, first.ino), lock);
+    },
+);
+
 void test('oversized diagnostic evidence fails before any retention can start', () => {
     assert.throws(() => operations.encodeBeforeReport({ data: 'x'.repeat(18000) }), /evidence limit/u);
 });

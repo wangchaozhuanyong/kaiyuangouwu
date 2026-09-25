@@ -40,6 +40,9 @@ commit or changed release inventory requires a new diagnosis and review. Both
 operations acquire the existing production deployment lock. Cleanup revalidates
 the plan before deleting anything and refreshes the existing health service after
 completion; a remaining health failure is reported as a failed operation.
+If a reboot cleared `/run/lock`, the operation restores the lock exclusively as
+the `ubuntu` deployment account before acquiring it. A foreign-owned or
+non-regular lock is not replaced.
 
 Normal deployment, verification, rollback and branch cleanup continue to use
 the existing workflows described in `DEPLOYMENT_RUNBOOK.md`. This operation
