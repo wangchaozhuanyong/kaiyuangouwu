@@ -45,12 +45,46 @@ const DEPLOYMENT_CACHE_DIRECTORIES = Object.freeze([
     { label: 'root-npm-content-cache', directory: '/root/.npm/_cacache' },
 ]);
 
+function restoreMissingProductionLock(lockPath = DEPLOY_LOCK, owner = 'ubuntu') {
+    // /run is cleared on reboot. Let the deployment account create its own lock
+    // exclusively, so root never leaves a root-owned inode in the sticky directory.
+    const createExclusive = [
+        'import os, sys',
+        'os.umask(0o027)',
+        'try:',
+        '    fd = os.open(sys.argv[1], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640)',
+        'except FileExistsError:',
+        '    pass',
+        'else:',
+        '    os.close(fd)',
+    ].join('\n');
+    const created = spawnSync('runuser', ['-u', owner, '--', 'python3', '-c', createExclusive, lockPath], {
+        stdio: 'ignore',
+        timeout: 10000,
+    });
+    assert.equal(created.status, 0, 'Could not restore the production deployment lock as its owner');
+}
+
 function withProductionLock(callback, lockPath = DEPLOY_LOCK) {
-    // The existing deployment lock is owned by ubuntu in a sticky directory.
-    // Open it without O_CREAT: root must not recreate it or change its owner.
-    const lockFd = openSync(lockPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+    // The deployment lock is owned by ubuntu in a sticky directory. Root must
+    // neither create it nor change its owner when /run/lock is cleared on reboot.
+    let lockFd;
     try {
-        assert.ok(fstatSync(lockFd).isFile(), 'The production lock must be a regular file');
+        lockFd = openSync(lockPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+    } catch (error) {
+        if (lockPath !== DEPLOY_LOCK || error.code !== 'ENOENT') throw error;
+        restoreMissingProductionLock();
+        lockFd = openSync(lockPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+    }
+    try {
+        const lockInfo = fstatSync(lockFd);
+        assert.ok(lockInfo.isFile(), 'The production lock must be a regular file');
+        if (lockPath === DEPLOY_LOCK)
+            assert.equal(
+                lockInfo.uid,
+                statSync('/home/ubuntu').uid,
+                'The production lock must belong to ubuntu',
+            );
         const acquired = spawnSync('flock', ['--exclusive', '--wait', '300', '3'], {
             stdio: ['ignore', 'pipe', 'pipe', lockFd],
             timeout: 310000,
@@ -1778,4 +1812,5 @@ module.exports = {
     validateRequest,
     verifyOffsiteFileBackupPolicy,
     withProductionLock,
+    restoreMissingProductionLock,
 };
