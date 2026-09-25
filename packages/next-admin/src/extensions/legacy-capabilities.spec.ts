@@ -51,7 +51,7 @@ function legacyRoutePathsFromSource() {
 }
 
 describe('legacy capability parity contract', () => {
-    it('maps all 33 local plugin routes to the exact new capability', () => {
+    it('maps all 34 local plugin routes to the exact new capability', () => {
         const actual = getNextAdminExtensionLegacyRoutes()
             .map(({ path, target }) => ({ legacyPath: path, target }))
             .sort((left, right) => left.legacyPath.localeCompare(right.legacyPath));
@@ -60,11 +60,14 @@ describe('legacy capability parity contract', () => {
             target,
         })).sort((left, right) => left.legacyPath.localeCompare(right.legacyPath));
 
-        expect(LEGACY_ROUTE_CAPABILITIES).toHaveLength(33);
+        expect(LEGACY_ROUTE_CAPABILITIES).toHaveLength(34);
         expect(actual).toEqual(expected);
-        expect(new Set(actual.map(item => item.legacyPath)).size).toBe(33);
+        expect(new Set(actual.map(item => item.legacyPath)).size).toBe(34);
+        // The old Dashboard editor was retired; NextAdmin keeps its URL as a compatibility redirect.
         expect(legacyRoutePathsFromSource()).toEqual(
-            LEGACY_ROUTE_CAPABILITIES.map(item => item.legacyPath).sort(),
+            LEGACY_ROUTE_CAPABILITIES.filter(item => item.legacyPath !== '/desktop-category-banners')
+                .map(item => item.legacyPath)
+                .sort(),
         );
     });
 

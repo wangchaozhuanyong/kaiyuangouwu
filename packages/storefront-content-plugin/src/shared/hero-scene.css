@@ -7,11 +7,8 @@ html[data-storefront-preset='modern-oriental'] {
 }
 
 .hero {
-    --hero-overlay-color: #090d16;
-    --hero-overlay-strong: rgba(9, 13, 22, 0.92);
-    --hero-overlay-medium: rgba(9, 13, 22, 0.82);
-    --hero-overlay-soft: rgba(9, 13, 22, 0.46);
-    --hero-overlay-fade: rgba(9, 13, 22, 0.08);
+    --hero-copy-background: var(--surface);
+    --hero-copy-foreground: var(--text);
     --hero-title-color: #ffffff;
     --hero-body-color: #cbd5e1;
     --hero-accent-color: #67e8f9;
@@ -30,13 +27,15 @@ html[data-storefront-preset='modern-oriental'] {
     --hero-stat-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
     --hero-pagination-color: rgba(255, 255, 255, 0.5);
     --hero-pagination-active-color: #ffffff;
-    min-height: 195px;
+    min-height: 0;
     margin: 0 12px 14px;
     position: relative;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
     border: 0;
     border-radius: var(--skin-hero-radius, 18px);
-    background: #090d16;
+    background: var(--hero-copy-background);
     box-shadow:
         0 8px 24px -4px rgba(0, 0, 0, 0.45),
         0 0 0 1px rgba(255, 255, 255, 0.08);
@@ -54,11 +53,10 @@ html[data-storefront-preset='modern-oriental'] {
 
 .hero-rich-image-link {
     width: 100%;
-    height: 100%;
+    height: auto;
     padding: 0;
-    position: absolute;
+    position: relative;
     z-index: 0;
-    inset: 0;
     overflow: hidden;
     border: 0;
     border-radius: inherit;
@@ -72,51 +70,63 @@ html[data-storefront-preset='modern-oriental'] {
 }
 
 .hero .safe-image-frame {
-    background-color: var(--hero-overlay-color);
+    background-color: var(--surface, #090d16);
+    height: auto;
 }
 
-/* Full Bleed 3D Rich Visual Backdrop */
+/* Preserve the whole merchant image at both viewport sizes. */
 .hero-rich-backdrop {
-    position: absolute;
-    inset: 0;
+    position: relative;
     width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: right center;
+    height: auto;
+    object-fit: contain;
+    object-position: center;
     z-index: 0;
 }
 
-/* Wrapper to bridge adaptive tone variables */
+/* Pass the managed copy palette to both layout children. */
 .hero-scene-wrapper {
     display: contents;
 }
 
-.hero-rich-overlay-shade {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-        90deg,
-        var(--hero-overlay-strong) 0%,
-        var(--hero-overlay-medium) 42%,
-        var(--hero-overlay-soft) 68%,
-        var(--hero-overlay-fade) 100%
-    );
-    -webkit-mask-image: linear-gradient(90deg, black 0%, black 50%, transparent 85%);
-    mask-image: linear-gradient(90deg, black 0%, black 50%, transparent 85%);
-    pointer-events: none;
-    z-index: 1;
-}
-
 .hero-rich-content {
+    pointer-events: none;
     position: relative;
     z-index: 2;
-    min-height: 195px;
-    padding: 14px 16px 14px 16px;
-    width: 58%;
+    min-height: 0;
+    padding: 16px;
+    width: 100%;
+    background: var(--hero-copy-background);
+    color: var(--hero-copy-foreground);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     gap: 8px;
+}
+
+.hero-rich-copy-surface {
+    align-self: flex-start;
+    max-width: 100%;
+    display: grid;
+    justify-items: start;
+    gap: 8px;
+    border-radius: var(--skin-card-radius, 14px);
+}
+
+.hero-rich-copy-surface .hero-rich-title {
+    color: var(--hero-copy-foreground);
+    text-shadow: none;
+}
+.hero-rich-copy-surface .hero-rich-desc {
+    color: var(--hero-copy-body-foreground, var(--hero-copy-foreground));
+    text-shadow: none;
+}
+
+.hero-rich-copy-surface .hero-rich-pill {
+    color: var(--hero-copy-foreground);
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
 }
 
 .hero-rich-pill {
@@ -174,36 +184,6 @@ html[data-storefront-preset='modern-oriental'] {
     -webkit-font-smoothing: antialiased;
 }
 
-/* Light tone adaptive enhancements (e.g. daytime city, white marble tables) */
-[data-image-tone='light'] .hero-rich-title {
-    color: var(--hero-title-color, #0f172a);
-    text-shadow: var(--hero-title-shadow, 0 1px 1px rgba(255, 255, 255, 0.9), 0 2px 8px rgba(0, 0, 0, 0.04));
-}
-
-[data-image-tone='light'] .hero-rich-desc {
-    color: var(--hero-body-color, #334155);
-    text-shadow: var(--hero-body-shadow, 0 1px 1px rgba(255, 255, 255, 0.85));
-}
-
-[data-image-tone='light'] .hero-rich-pill {
-    background: rgba(255, 255, 255, 0.85);
-    border-color: rgba(15, 23, 42, 0.15);
-    color: #0f172a;
-}
-
-/* Dark tone adaptive enhancements (e.g. night scenery, dark interiors) */
-[data-image-tone='dark'] .hero-rich-title {
-    color: var(--hero-title-color, #ffffff);
-    text-shadow: var(--hero-title-shadow, 0 2px 10px rgba(0, 0, 0, 0.85), 0 0 20px rgba(0, 0, 0, 0.35));
-}
-
-[data-image-tone='dark'] .hero-rich-desc {
-    /* Body color is fully controlled by --hero-body-color from hero-theme.ts;
-       do NOT override to #f1f5f9 here — when title is dark, body must stay dark. */
-    color: var(--hero-body-color);
-    text-shadow: var(--hero-body-shadow, 0 1px 4px rgba(0, 0, 0, 0.85));
-}
-
 .hero-rich-stats-row {
     display: flex;
     flex-wrap: wrap;
@@ -215,14 +195,14 @@ html[data-storefront-preset='modern-oriental'] {
 .hero-stat-badge {
     padding: 3px 6px;
     border-radius: 6px;
-    background: var(--hero-stat-background);
-    border: 1px solid var(--hero-accent-subtle-border);
+    background: color-mix(in srgb, var(--hero-copy-foreground) 8%, transparent);
+    border: 1px solid transparent;
     display: flex;
     flex-direction: column;
     align-items: center;
     line-height: 1.1;
     min-width: 44px;
-    box-shadow: var(--hero-stat-shadow);
+    box-shadow: none;
 }
 
 .hero-stat-badge.is-vip {
@@ -232,28 +212,29 @@ html[data-storefront-preset='modern-oriental'] {
 .hero-stat-badge .stat-num {
     font-size: 10px;
     font-weight: 800;
-    color: var(--hero-accent-color);
+    color: var(--hero-accent-readable, var(--hero-copy-foreground));
 }
 
 .hero-stat-badge.is-vip .stat-num {
-    color: var(--hero-accent-color);
+    color: var(--hero-accent-readable, var(--hero-copy-foreground));
 }
 
 .hero-stat-badge .stat-lbl {
     font-size: 8px;
-    color: var(--hero-body-color);
+    color: var(--hero-copy-body-foreground, var(--hero-copy-foreground));
     font-weight: 600;
 }
 
 .hero-rich-cta-btn {
+    pointer-events: auto;
     margin-top: 4px;
     min-height: var(--experience-control-min, 44px);
     flex-shrink: 0;
     padding: 8px 14px;
     border-radius: var(--skin-control-radius, 8px);
     border: 0;
-    background: var(--accent, var(--hero-accent-secondary-color));
-    color: var(--accent-foreground, var(--hero-button-text-color));
+    background: var(--hero-button-background, var(--accent));
+    color: var(--hero-button-foreground, var(--accent-foreground));
     font-size: 12px;
     font-weight: 700;
     display: inline-flex;
@@ -268,12 +249,16 @@ html[data-storefront-preset='modern-oriental'] {
     text-shadow: none;
 }
 
-.hero-rich-cta-btn:active {
-    transform: scale(0.96);
+@media (hover: hover) and (pointer: fine) {
+    .hero-rich-cta-btn:hover {
+        background: var(--hero-button-hover-background, var(--accent-hover, var(--accent)));
+        box-shadow: 0 5px 14px color-mix(in srgb, var(--hero-copy-foreground) 12%, transparent);
+        transform: translateY(-1px);
+    }
 }
 
 .hero-rich-cta-btn.is-vip-btn {
-    background: var(--accent, var(--hero-accent-secondary-color));
+    background: var(--hero-button-background, var(--accent));
 }
 
 .hero-rich-cta-btn svg {
@@ -283,7 +268,7 @@ html[data-storefront-preset='modern-oriental'] {
 
 @media (max-width: 380px) {
     .hero-rich-content {
-        width: 65%;
+        width: 100%;
         padding: 12px 14px;
     }
     .hero-rich-title {
@@ -300,8 +285,8 @@ html[data-storefront-preset='modern-oriental'] {
 
 @media (min-width: 1024px) {
     .hero-rich-content {
-        width: 52%;
-        padding: 32px 36px;
+        width: 100%;
+        padding: 18px 24px;
     }
 
     .hero-rich-pill {
@@ -348,4 +333,113 @@ html[data-storefront-preset='modern-oriental'] {
         width: 15px;
         height: 15px;
     }
+}
+
+/* Desktop storefront and editor share one on-image composition, without a separate copy card. */
+.hero.hero-image-overlay {
+    display: block;
+    min-height: 0;
+    background: var(--skin-hero-background, #10212f);
+}
+
+.hero.hero-image-overlay .hero-rich-image-link::after {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+        90deg,
+        var(--hero-image-overlay-start, rgba(16, 33, 47, 0.86)) 0%,
+        var(--hero-image-overlay-middle, rgba(16, 33, 47, 0.42)) 38%,
+        transparent 76%
+    );
+}
+
+.hero.hero-image-overlay .hero-rich-image-link,
+.hero.hero-image-overlay .safe-image-frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.hero.hero-image-overlay .hero-rich-backdrop {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.hero.hero-image-overlay .hero-rich-content {
+    position: absolute;
+    z-index: 2;
+    top: 50%;
+    left: clamp(28px, 3vw, 44px);
+    bottom: auto;
+    transform: translateY(-50%);
+    width: min(450px, calc(100% - 170px));
+    max-height: calc(100% - 88px);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 12px;
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--hero-image-copy-foreground, #fff);
+    box-shadow: none;
+}
+
+.hero.hero-image-overlay .hero-rich-copy-surface {
+    min-width: 0;
+    gap: 6px;
+}
+
+.hero.hero-image-overlay :is(.hero-rich-title, .hero-rich-pill, .hero-stat-badge .stat-num) {
+    color: var(--hero-image-copy-foreground, #fff);
+    text-shadow: var(--hero-image-text-shadow, 0 1px 5px rgba(5, 16, 27, 0.48));
+}
+
+.hero.hero-image-overlay .hero-rich-title {
+    margin: 0;
+    font-size: clamp(27px, 2.5vw, 36px);
+    line-height: 1.2;
+    font-weight: 700;
+    -webkit-font-smoothing: antialiased;
+}
+
+.hero.hero-image-overlay .hero-rich-desc {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.7;
+    font-weight: 500;
+    -webkit-line-clamp: 3;
+    -webkit-font-smoothing: antialiased;
+}
+
+.hero.hero-image-overlay :is(.hero-rich-desc, .hero-stat-badge .stat-lbl) {
+    color: var(--hero-image-body-foreground, #fff);
+    text-shadow: var(--hero-image-text-shadow, 0 1px 5px rgba(5, 16, 27, 0.48));
+}
+
+.hero.hero-image-overlay .hero-rich-pill {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+}
+
+.hero.hero-image-overlay .hero-rich-cta-btn {
+    align-self: flex-start;
+    min-height: var(--experience-control-min, 44px);
+    padding: 10px 22px;
+    margin: 12px 0 0;
+    border: 0;
+    box-shadow: none;
+    font-size: 14px;
 }

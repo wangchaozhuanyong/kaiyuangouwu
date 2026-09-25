@@ -304,6 +304,7 @@ export class AccountApi extends BaseDomainApi {
                 pending: { totalItems: number };
                 shipping: { totalItems: number };
                 receiving: { totalItems: number };
+                completed: { totalItems: number };
             } | null;
         }>(
             `
@@ -321,6 +322,10 @@ export class AccountApi extends BaseDomainApi {
                             take: 0
                             filter: { state: { in: ["Shipped", "PartiallyShipped"] } }
                         }) { totalItems }
+                        completed: orders(options: {
+                            take: 0
+                            filter: { state: { eq: "Delivered" } }
+                        }) { totalItems }
                     }
                 }
             `,
@@ -331,6 +336,7 @@ export class AccountApi extends BaseDomainApi {
             pending: result.activeCustomer?.pending.totalItems ?? 0,
             shipping: result.activeCustomer?.shipping.totalItems ?? 0,
             receiving: result.activeCustomer?.receiving.totalItems ?? 0,
+            completed: result.activeCustomer?.completed.totalItems ?? 0,
         };
     }
 

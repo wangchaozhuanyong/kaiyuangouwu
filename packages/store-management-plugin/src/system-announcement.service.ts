@@ -45,8 +45,8 @@ export class SystemAnnouncementService {
                 channelId: ctx.channelId,
             })
             .distinct(true)
-            .orderBy('announcement.priority', 'DESC')
-            .addOrderBy('announcement.createdAt', 'DESC')
+            .orderBy('announcement.createdAt', 'DESC')
+            .addOrderBy('announcement.priority', 'DESC')
             .addOrderBy('announcement.id', 'DESC')
             .take(20)
             .getMany();
@@ -55,6 +55,7 @@ export class SystemAnnouncementService {
             .filter(announcement => isZh || hasCompleteAnnouncementTranslation(announcement))
             .map(announcement => ({
                 id: announcement.id,
+                createdAt: announcement.createdAt,
                 title: localizedText(announcement.titleZh, announcement.titleEn, isZh),
                 content: localizedText(announcement.contentZh, announcement.contentEn, isZh),
                 linkUrl: announcement.linkUrl,

@@ -1,6 +1,6 @@
-import { Link } from '@tanstack/react-router';
-import { Search, ShoppingCart } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { createLink, Link } from '@tanstack/react-router';
+import { Search, ShoppingCart, UserRound } from 'lucide-react';
+import { type AnchorHTMLAttributes, forwardRef, useEffect, useState } from 'react';
 
 import { BrandLogo } from '../../storefront-ui/content-ui';
 import { useStorefront } from '../../StorefrontContext';
@@ -8,6 +8,22 @@ import { StorefrontContentBlock } from '../../types';
 
 import { resolveBottomNavigationItems } from './bottom-navigation';
 import { LocalePreferencesSheet, LocalePreferencesTrigger } from './locale-preferences';
+
+// The router's destination can be active while the previous page is still visible.
+const DesktopNavigationLink = createLink(
+    forwardRef<HTMLAnchorElement, AnchorHTMLAttributes<HTMLAnchorElement> & { current: boolean }>(
+        function DesktopNavigationAnchor({ current, ...props }, ref) {
+            return (
+                <a
+                    {...props}
+                    ref={ref}
+                    aria-current={current ? 'page' : undefined}
+                    data-status={current ? 'active' : undefined}
+                />
+            );
+        },
+    ),
+);
 
 function activeNavigationRoute(route: string): string {
     if (route === 'product' || route === 'search') return 'category';
@@ -25,6 +41,7 @@ function activeNavigationRoute(route: string): string {
             'coupons',
             'referral',
             'reviews',
+            'support',
         ].includes(route)
     ) {
         return 'account';
@@ -41,31 +58,21 @@ export function DesktopHeader({
 }) {
     const context = useStorefront();
     const isZh = context.language === 'zh';
-    const [query, setQuery] = useState(context.route.term ?? '');
     const [preferencesOpen, setPreferencesOpen] = useState(false);
-    const searchInputRef = useRef<HTMLInputElement>(null);
     const navigationItems = resolveBottomNavigationItems(navigationBlock, context.language).filter(
         item => item.routeName !== 'cart',
     );
-    const activeRoute = activeNavigationRoute(context.route.name);
-    const searchResultsOpen = context.route.name === 'search' && !!context.route.term?.trim();
+    const visibleRoute = context.displayedRoute ?? context.route;
+    const activeRoute = activeNavigationRoute(visibleRoute.name);
     const openSearch = () => {
-        if (context.route.name === 'search' && !context.route.term?.trim()) {
-            document.querySelector<HTMLInputElement>('.search-page .search-header input')?.focus();
-            return;
-        }
         context.navigate({ name: 'search' });
     };
 
-    useEffect(() => setQuery(context.route.term ?? ''), [context.route.term]);
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
                 event.preventDefault();
-                if (searchInputRef.current) {
-                    searchInputRef.current.focus();
-                    searchInputRef.current.select();
-                } else if (context.route.name === 'search') {
+                if (visibleRoute.name === 'search') {
                     document.querySelector<HTMLInputElement>('.search-page .search-header input')?.focus();
                 } else {
                     context.navigate({ name: 'search' });
@@ -77,7 +84,7 @@ export function DesktopHeader({
     }, [context.navigate, context.route.name]);
 
     return (
-        <header className="proto-desktop-header">
+        <header className={`proto-desktop-header${visibleRoute.name === 'search' ? ' is-search-page' : ''}`}>
             <div className="proto-header-inner">
                 <div className="proto-header-left">
                     <Link className="proto-brand" to="/" aria-label={context.storefrontName}>
@@ -90,48 +97,20 @@ export function DesktopHeader({
                     </Link>
                     <nav className="proto-nav-links" aria-label={isZh ? '主导航' : 'Main navigation'}>
                         {navigationItems.map(item => (
-                            <Link
+                            <DesktopNavigationLink
                                 key={item.key}
                                 to={item.target}
                                 className={`proto-nav-link ${activeRoute === item.routeName ? 'is-active' : ''}`}
-                                aria-current={activeRoute === item.routeName ? 'page' : undefined}
+                                current={activeRoute === item.routeName}
                             >
                                 {item.label}
-                            </Link>
+                            </DesktopNavigationLink>
                         ))}
                     </nav>
                 </div>
 
-                <div className="proto-header-search">
-                    {searchResultsOpen ? (
-                        <form
-                            className="proto-search-form"
-                            role="search"
-                            action="/search"
-                            autoComplete="off"
-                            onSubmit={event => {
-                                event.preventDefault();
-                                const next = query.trim();
-                                context.navigate(next ? { name: 'search', term: next } : { name: 'search' });
-                            }}
-                        >
-                            <Search className="proto-search-icon" aria-hidden="true" />
-                            <input
-                                ref={searchInputRef}
-                                className="proto-search-input"
-                                aria-label={isZh ? '搜索商品' : 'Search products'}
-                                placeholder={isZh ? '搜索商品' : 'Search products'}
-                                name="term"
-                                type="search"
-                                autoComplete="off"
-                                value={query}
-                                onChange={event => setQuery(event.target.value)}
-                            />
-                            <button type="submit" className="proto-search-submit">
-                                {isZh ? '搜索' : 'Search'}
-                            </button>
-                        </form>
-                    ) : (
+                {visibleRoute.name !== 'search' && (
+                    <div className="proto-header-search">
                         <button
                             type="button"
                             className="proto-search-open"
@@ -144,17 +123,23 @@ export function DesktopHeader({
                                 {isZh ? '搜索' : 'Search'}
                             </span>
                         </button>
-                    )}
-                </div>
+                    </div>
+                )}
 
                 <div className="proto-header-right">
                     <LocalePreferencesTrigger
+                        className="proto-header-action"
                         language={context.language}
                         currencyCode={context.displayCurrencyCode}
                         expanded={preferencesOpen}
                         onClick={() => setPreferencesOpen(true)}
                     />
-                    <Link to="/cart" className="proto-cart-link" aria-label={isZh ? '购物车' : 'Cart'}>
+                    <DesktopNavigationLink
+                        to="/cart"
+                        className="proto-cart-link proto-header-action"
+                        current={activeRoute === 'cart'}
+                        aria-label={isZh ? '购物车' : 'Cart'}
+                    >
                         <ShoppingCart className="proto-cart-icon" aria-hidden="true" />
                         <span className="proto-cart-text">{isZh ? '购物车' : 'Cart'}</span>
                         {cartQuantity > 0 && (
@@ -162,10 +147,15 @@ export function DesktopHeader({
                                 {cartQuantity > 99 ? '99+' : cartQuantity}
                             </span>
                         )}
-                    </Link>
-                    <Link to={context.customer ? '/account' : '/login'} className="proto-login-btn">
+                    </DesktopNavigationLink>
+                    <DesktopNavigationLink
+                        to={context.customer ? '/account' : '/login'}
+                        className="proto-login-btn proto-header-action"
+                        current={activeRoute === 'account' || visibleRoute.name === 'login'}
+                    >
+                        <UserRound aria-hidden="true" />
                         {context.customer ? (isZh ? '我的账户' : 'My account') : isZh ? '登录' : 'Sign in'}
-                    </Link>
+                    </DesktopNavigationLink>
                 </div>
             </div>
             {preferencesOpen ? (

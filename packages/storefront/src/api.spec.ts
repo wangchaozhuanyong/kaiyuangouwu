@@ -269,6 +269,12 @@ describe('ShopApi session response ordering', () => {
             field: 'uploadImageReference',
             run: (api: ShopApi, file: File) => api.uploadImageReference(file, true),
         },
+        {
+            name: 'after-sales evidence',
+            field: 'uploadAfterSalesEvidence',
+            run: (api: ShopApi, file: File) =>
+                api.contentReviewsApi.uploadAfterSalesEvidence('order-1', file),
+        },
     ])('does not restore the session from a late $name upload', async ({ field, run }) => {
         const earlier = pending();
         const fetchMock = installFetch()
@@ -534,6 +540,7 @@ describe('ShopApi storefront mutations', () => {
         );
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
         expect(request.query).toContain('storefrontContent');
+        expect(request.query).toContain('imageAsset { width height }');
         expect(request.query).toContain('storefrontContentSettings');
         expect(request.query).not.toContain('activeStorefrontCoupons');
         expect(request.query).toContain('activeStorefrontFlashSales');
@@ -840,6 +847,65 @@ describe('ShopApi storefront mutations', () => {
                 auth: defaultAuthSettings,
             },
         });
+    });
+
+    it('keeps flash sales and announcements when an older Shop API lacks announcement createdAt', async () => {
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        errors: [
+                            {
+                                message:
+                                    'Cannot query field "createdAt" on type "StorefrontSystemAnnouncement".',
+                            },
+                        ],
+                    }),
+                    { status: 400, headers: { 'content-type': 'application/json' } },
+                ),
+            )
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        data: {
+                            storefrontContent: [],
+                            storefrontContentSettings: {
+                                heroAutoplayIntervalSeconds: 7,
+                                configuredBlockTypes: ['HERO'],
+                                auth: defaultAuthSettings,
+                            },
+                            activeStorefrontFlashSales: [
+                                { id: 'sale-1', startsAt: null, endsAt: null, items: [] },
+                            ],
+                            activeSystemAnnouncements: [
+                                {
+                                    id: 'notice-1',
+                                    title: '店铺公告',
+                                    content: '公告内容',
+                                    linkUrl: null,
+                                    startsAt: null,
+                                    endsAt: null,
+                                },
+                            ],
+                        },
+                    }),
+                    { status: 200, headers: { 'content-type': 'application/json' } },
+                ),
+            );
+        vi.stubGlobal('fetch', fetchMock);
+
+        const result = await new ShopApi(market).storefrontContent();
+        expect(result.flashSales).toHaveLength(1);
+        expect(result.systemAnnouncements).toHaveLength(1);
+        expect(result.settings.configuredBlockTypes).toEqual(['HERO']);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        const modernRequest = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as { query: string };
+        const retryRequest = JSON.parse(jsonRequestBody(fetchMock.mock.calls[1][1])) as { query: string };
+        expect(modernRequest.query).toContain('createdAt');
+        expect(retryRequest.query).not.toContain('createdAt');
+        expect(retryRequest.query).toContain('activeStorefrontFlashSales');
+        expect(retryRequest.query).toContain('activeSystemAnnouncements');
     });
 
     it('falls back to the legacy storefront content query when optional commerce fields are unavailable', async () => {
@@ -2015,6 +2081,54 @@ describe('ShopApi storefront mutations', () => {
         expect(JSON.parse(map)).toEqual({ 0: ['variables.file'] });
     });
 
+    it('uploads private after-sales evidence with its order and mandatory multipart preflight', async () => {
+        const reference = { id: 'evidence-fixture' };
+        const fetchMock = mockGraphQlResponse({ uploadAfterSalesEvidence: reference });
+        const file = new File(['synthetic'], 'receipt.png', { type: 'image/png' });
+        await expect(
+            new ShopApi(market).contentReviewsApi.uploadAfterSalesEvidence('order-1', file),
+        ).resolves.toEqual(reference);
+        const request = fetchMock.mock.calls[0][1] as RequestInit;
+        expect(request.headers).toHaveProperty('Apollo-Require-Preflight', 'true');
+        expect(request.headers).not.toHaveProperty('content-type');
+        expect(request.credentials).toBe('include');
+        const form = request.body as FormData;
+        const operations = form.get('operations');
+        const map = form.get('map');
+        if (typeof operations !== 'string' || typeof map !== 'string')
+            throw new Error('Missing evidence multipart metadata');
+        expect(JSON.parse(operations).variables).toEqual({
+            orderId: 'order-1',
+            file: null,
+        });
+        expect(JSON.parse(map)).toEqual({ 0: ['variables.file'] });
+    });
+
+    it('reads and marks notification versions through the content domain client', async () => {
+        const references = [
+            { kind: 'ORDER' as const, sourceId: 'order-1', version: '2026-09-25T00:00:00.000Z' },
+        ];
+        const key = 'ORDER:order-1:2026-09-25T00:00:00.000Z';
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ data: { myStoreNotificationReadKeys: [key] } })),
+            )
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ data: { markMyStoreNotificationsRead: [key] } })),
+            );
+        vi.stubGlobal('fetch', fetchMock);
+        const client = new ShopApi(market).contentReviewsApi;
+        await expect(client.notificationReadKeys(references)).resolves.toEqual([key]);
+        await expect(client.markNotificationsRead(references)).resolves.toEqual([key]);
+        const requests = fetchMock.mock.calls.map(([, init]) =>
+            JSON.parse(jsonRequestBody(init as RequestInit)),
+        );
+        expect(requests.map(request => request.variables)).toEqual([{ references }, { references }]);
+        expect(requests[0].query).toContain('myStoreNotificationReadKeys(references: $references)');
+        expect(requests[1].query).toContain('markMyStoreNotificationsRead(references: $references)');
+    });
+
     it('paginates and filters customer orders on the server', async () => {
         const fetchMock = mockGraphQlResponse({
             activeCustomer: { orders: { totalItems: 14, items: [] } },
@@ -2131,6 +2245,7 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('query MyAfterSalesRequests');
         expect(request.query).toContain('events {');
         expect(request.query).toContain('lineAmountWithTax');
+        expect(request.query).not.toContain('returnStockLocation');
     });
 
     it('submits after-sales selections without client-calculated money values', async () => {
@@ -2256,6 +2371,7 @@ describe('ShopApi storefront mutations', () => {
                 pending: { totalItems: 2 },
                 shipping: { totalItems: 3 },
                 receiving: { totalItems: 4 },
+                completed: { totalItems: 5 },
             },
         });
 
@@ -2263,12 +2379,15 @@ describe('ShopApi storefront mutations', () => {
             pending: 2,
             shipping: 3,
             receiving: 4,
+            completed: 5,
         });
 
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
         expect(request.query).toContain('pending: orders');
         expect(request.query).toContain('shipping: orders');
         expect(request.query).toContain('receiving: orders');
+        expect(request.query).toContain('completed: orders');
+        expect(request.query).toContain('eq: "Delivered"');
     });
 });
 

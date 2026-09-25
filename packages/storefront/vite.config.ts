@@ -30,6 +30,7 @@ export default defineConfig(({ mode }) => {
                 '/storefront-realtime': apiProxyTarget,
                 '/assets': apiProxyTarget,
                 '/image-generation': apiProxyTarget,
+                '/after-sales/evidence': apiProxyTarget,
             },
         },
         preview: {
@@ -39,6 +40,7 @@ export default defineConfig(({ mode }) => {
                 '/storefront-realtime': apiProxyTarget,
                 '/assets/preview': apiProxyTarget,
                 '/image-generation': apiProxyTarget,
+                '/after-sales/evidence': apiProxyTarget,
             },
         },
     };

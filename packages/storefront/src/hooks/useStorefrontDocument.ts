@@ -83,7 +83,6 @@ export function useStorefrontMetadata({
             addresses: isZh ? '地址管理' : 'Addresses',
             'account-security': isZh ? '账户与安全' : 'Account and security',
             favorites: isZh ? '我的收藏' : 'My favorites',
-            announcements: isZh ? '网站公告' : 'Website notices',
             history: isZh ? '浏览足迹' : 'Browsing history',
             notifications: isZh ? '消息通知' : 'Notifications',
             coupons: isZh ? '优惠券' : 'Coupons',

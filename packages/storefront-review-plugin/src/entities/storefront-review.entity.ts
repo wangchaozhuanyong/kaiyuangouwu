@@ -42,6 +42,9 @@ export class StorefrontReview extends VendureEntity {
     @Column({ type: 'varchar', length: 120 })
     customerName: string;
 
+    @Column({ type: 'boolean', default: false })
+    anonymous: boolean;
+
     @Column({ type: 'varchar', length: 255 })
     productName: string;
 

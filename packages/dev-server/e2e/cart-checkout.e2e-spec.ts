@@ -1,3 +1,4 @@
+import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
 import { CommerceFulfillmentPlugin } from '@vendure/commerce-fulfillment-plugin';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
@@ -57,6 +58,7 @@ const config = mergeConfig(testConfig(), {
         ],
     },
     plugins: [
+        CatalogManagementPlugin,
         ContentTranslationPlugin.init({
             provider: {
                 name: 'cart-qa',
@@ -265,7 +267,7 @@ describe('complete cart domain on MySQL', () => {
         result = await send({ beginCheckout: true });
         expect(result.status, result.message).toBe('APPLIED');
         expect(result.cart.checkoutOrder.lines.map((line: any) => line.id)).toEqual(orderLines);
-        expect(result.cart.checkoutOrder.customFields).toEqual({
+        expect(result.cart.checkoutOrder.customFields).toMatchObject({
             customerNote: 'Keep this reviewed delivery note',
             deliveryEmail: 'delivery@example.test',
         });

@@ -68,6 +68,17 @@ describe('store activation readiness', () => {
                 new Set(['another-handler']),
             ),
         ).toBe(false);
+        const usdt = method('usdt-trc20', 'usdt-trc20-chain-handler', 'USDT-TRC20');
+        const registeredUsdtHandler = new Set(['usdt-trc20-chain-handler']);
+        expect(isProductionPaymentMethod(usdt, registeredUsdtHandler)).toBe(false);
+        expect(isProductionPaymentMethod(usdt, registeredUsdtHandler, true)).toBe(true);
+        expect(
+            isProductionPaymentMethod(
+                method('usdt-trc20', 'other-handler', 'USDT-TRC20'),
+                new Set(['other-handler']),
+                true,
+            ),
+        ).toBe(false);
     });
 
     it('does not accept Chinese text stored in an English translation field', () => {

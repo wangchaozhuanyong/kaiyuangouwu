@@ -8,7 +8,6 @@ import {
     Headphones,
     Heart,
     MapPin,
-    Megaphone,
     Package,
     RotateCcw,
     Store,
@@ -24,7 +23,6 @@ import { ShopApi } from '../api';
 import accountRefractionImage from '../assets/ui/account-refraction.webp';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { useDesktopLayout } from '../desktop-layout';
-import { useImageTone } from '../hero-theme';
 import { compactUiCopy, languageCodeFor } from '../i18n';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
 import {
@@ -62,7 +60,6 @@ export interface AccountPageProps {
     logoUrl: string | null;
     accountHeroImageUrl: string | null;
     favoriteProductCount: number;
-    announcementCount: number;
     couponCount: number;
     displayCurrencyCode?: string;
     availableCurrencyCodes?: string[];
@@ -91,7 +88,6 @@ export function AccountPage() {
         logoUrl,
         accountHeroImageUrl,
         favoriteProductCount,
-        announcementCount,
         couponCount,
         displayCurrencyCode,
         availableCurrencyCodes,
@@ -148,7 +144,7 @@ export function AccountPage() {
     const referralWallet = referralOverviewQuery.data?.wallets.find(
         wallet => wallet.currencyCode === market.currencyCode,
     );
-    const counts = countsQuery.data ?? { pending: 0, shipping: 0, receiving: 0 };
+    const counts = countsQuery.data ?? { pending: 0, shipping: 0, receiving: 0, completed: 0 };
     const afterSalesQuery = useQuery({
         queryKey: storefrontQueryKeys.afterSalesRequests(
             storefrontQueryKeys.market(market),
@@ -186,7 +182,6 @@ export function AccountPage() {
     const customerName = customer
         ? `${customer.lastName}${customer.firstName}`.trim() || customer.emailAddress
         : '';
-    const accountHeroTone = useImageTone(desktop ? null : accountHeroImageUrl);
 
     if (desktop)
         return (
@@ -199,7 +194,6 @@ export function AccountPage() {
                 language={language}
                 storefrontName={storefrontName}
                 favoriteProductCount={favoriteProductCount}
-                announcementCount={announcementCount}
                 couponCount={couponCount}
                 onContentTarget={onContentTarget}
                 counts={countsQuery.data}
@@ -235,7 +229,6 @@ export function AccountPage() {
             )}
             <section
                 className={`account-hero lg:col-span-full ${accountHeroImageUrl ? 'has-custom-background' : ''}`}
-                data-image-tone={accountHeroTone}
                 aria-labelledby={customer ? undefined : 'guest-account-title'}
             >
                 {accountHeroImageUrl && (
@@ -342,16 +335,6 @@ export function AccountPage() {
                                     {isZh ? '有效优惠券' : 'Coupons'}
                                 </span>
                             </button>
-                            <button
-                                type="button"
-                                className="account-hero-asset"
-                                onClick={() => navigateTo({ name: 'announcements' })}
-                            >
-                                <strong className="account-hero-asset-value">{announcementCount}</strong>
-                                <span className="account-hero-asset-label">
-                                    {isZh ? '网站公告' : 'Notices'}
-                                </span>
-                            </button>
                         </div>
                     </div>
                 ) : (
@@ -407,6 +390,7 @@ export function AccountPage() {
                     <AccountShortcut
                         inlineCount={desktop}
                         icon={<WalletCards />}
+                        tone="pending"
                         label={compactCopy.orders.unpaid}
                         count={desktop ? countsQuery.data?.pending : counts.pending}
                         onClick={() => navigateTo({ name: 'orders', tab: 'pending' })}
@@ -414,6 +398,7 @@ export function AccountPage() {
                     <AccountShortcut
                         inlineCount={desktop}
                         icon={<Package />}
+                        tone="shipping"
                         label={compactCopy.orders.processing}
                         count={desktop ? countsQuery.data?.shipping : counts.shipping}
                         onClick={() => navigateTo({ name: 'orders', tab: 'shipping' })}
@@ -421,6 +406,7 @@ export function AccountPage() {
                     <AccountShortcut
                         inlineCount={desktop}
                         icon={<Truck />}
+                        tone="receiving"
                         label={compactCopy.orders.shipped}
                         count={desktop ? countsQuery.data?.receiving : counts.receiving}
                         onClick={() => navigateTo({ name: 'orders', tab: 'receiving' })}
@@ -428,6 +414,15 @@ export function AccountPage() {
                     <AccountShortcut
                         inlineCount={desktop}
                         icon={<CircleCheck />}
+                        tone="completed"
+                        label={compactCopy.orders.completed}
+                        count={desktop ? countsQuery.data?.completed : counts.completed}
+                        onClick={() => navigateTo({ name: 'orders', tab: 'completed' })}
+                    />
+                    <AccountShortcut
+                        inlineCount={desktop}
+                        icon={<CircleCheck />}
+                        tone="reviews"
                         label={isZh ? '评价' : 'Reviews'}
                         count={undefined}
                         onClick={() => navigateTo({ name: 'reviews' })}
@@ -435,6 +430,7 @@ export function AccountPage() {
                     <AccountShortcut
                         inlineCount={desktop}
                         icon={<RotateCcw />}
+                        tone="service"
                         label={isZh ? '退换/售后' : 'Returns'}
                         count={desktop && !afterSalesQuery.data ? undefined : activeAfterSalesCount}
                         onClick={() => navigateTo({ name: 'orders', tab: 'service' })}
@@ -530,10 +526,11 @@ export function AccountPage() {
                 className={`account-services ${accountSectionClass}`}
                 aria-label={isZh ? '常用服务' : 'Services'}
             >
-                <div className="account-service-grid grid grid-cols-4 gap-x-1 gap-y-1.5 lg:gap-4 [&>button]:flex [&>button]:min-h-14 [&>button]:min-w-0 [&>button]:flex-col [&>button]:items-center [&>button]:justify-center [&>button]:gap-1 [&>button]:rounded-lg [&>button]:border-0 [&>button]:bg-transparent [&>button]:px-0.5 [&>button]:py-1 hover:[&>button]:bg-[var(--soft)] [&>button>span]:relative [&>button>span]:grid [&>button>span]:size-[34px] [&>button>span]:place-items-center [&>button>span]:rounded-[10px] [&>button>span]:bg-[var(--soft)] [&>button>span]:text-[var(--text)] [&>button>span]:transition-all hover:[&>button>span]:-translate-y-0.5 hover:[&>button>span]:shadow-[0_4px_10px_rgba(0,0,0,0.08)] [&>button>span_svg]:size-5 [&>button:nth-child(1)>span]:bg-rose-50 [&>button:nth-child(1)>span]:text-rose-500 [&>button:nth-child(2)>span]:bg-red-50 [&>button:nth-child(2)>span]:text-red-500 [&>button:nth-child(3)>span]:bg-amber-50 [&>button:nth-child(3)>span]:text-amber-500 [&>button:nth-child(4)>span]:bg-emerald-50 [&>button:nth-child(4)>span]:text-emerald-500 [&>button:nth-child(5)>span]:bg-sky-50 [&>button:nth-child(5)>span]:text-sky-500 [&>button:nth-child(6)>span]:bg-indigo-50 [&>button:nth-child(6)>span]:text-indigo-500 [&>button:nth-child(7)>span]:bg-violet-50 [&>button:nth-child(7)>span]:text-violet-500 [&>button:nth-child(8)>span]:bg-slate-100 [&>button:nth-child(8)>span]:text-slate-600 [&>button>span_em]:absolute [&>button>span_em]:-right-2 [&>button>span_em]:-top-[5px] [&>button>span_em]:grid [&>button>span_em]:h-4 [&>button>span_em]:min-w-5 [&>button>span_em]:place-items-center [&>button>span_em]:rounded-full [&>button>span_em]:border-[1.5px] [&>button>span_em]:border-white [&>button>span_em]:bg-[var(--accent)] [&>button>span_em]:px-1 [&>button>span_em]:text-[9px] [&>button>span_em]:font-semibold [&>button>span_em]:not-italic [&>button>span_em]:leading-[13px] [&>button>span_em]:text-white [&>button>b]:max-w-full [&>button>b]:overflow-hidden [&>button>b]:text-ellipsis [&>button>b]:whitespace-nowrap [&>button>b]:text-xs [&>button>b]:font-medium [&>button>b]:text-[var(--text)]">
+                <div className="account-service-grid grid grid-cols-4 gap-x-1 gap-y-1.5 lg:gap-4 [&>button]:flex [&>button]:min-h-14 [&>button]:min-w-0 [&>button]:flex-col [&>button]:items-center [&>button]:justify-center [&>button]:gap-1 [&>button]:rounded-lg [&>button]:border-0 [&>button]:bg-transparent [&>button]:px-0.5 [&>button]:py-1 hover:[&>button]:bg-[var(--soft)] [&>button>span]:relative [&>button>span]:grid [&>button>span]:size-[34px] [&>button>span]:place-items-center [&>button>span]:rounded-[10px] [&>button>span]:bg-[var(--soft)] [&>button>span]:text-[var(--text)] [&>button>span]:transition-transform hover:[&>button>span]:-translate-y-0.5 hover:[&>button>span]:shadow-[0_4px_10px_rgba(0,0,0,0.08)] [&>button>span_svg]:size-5 [&>button>span_em]:absolute [&>button>span_em]:-right-2 [&>button>span_em]:-top-[5px] [&>button>span_em]:grid [&>button>span_em]:h-4 [&>button>span_em]:min-w-5 [&>button>span_em]:place-items-center [&>button>span_em]:rounded-full [&>button>span_em]:border-[1.5px] [&>button>span_em]:border-white [&>button>span_em]:bg-[var(--accent)] [&>button>span_em]:px-1 [&>button>span_em]:text-[9px] [&>button>span_em]:font-semibold [&>button>span_em]:not-italic [&>button>span_em]:leading-[13px] [&>button>span_em]:text-white [&>button>b]:max-w-full [&>button>b]:overflow-hidden [&>button>b]:text-ellipsis [&>button>b]:whitespace-nowrap [&>button>b]:text-xs [&>button>b]:font-medium [&>button>b]:text-[var(--text)]">
                     {!desktop && (
                         <ServiceButton
                             icon={<Heart />}
+                            tone="support"
                             label={compactCopy.services.favorites}
                             badge={favoriteProductCount > 0 ? String(favoriteProductCount) : undefined}
                             onClick={() => navigateTo({ name: 'favorites' })}
@@ -542,20 +539,16 @@ export function AccountPage() {
                     {!desktop && (
                         <ServiceButton
                             icon={<TicketPercent />}
+                            tone="coupon"
                             label={compactCopy.services.coupons}
                             badge={couponCount > 0 ? String(couponCount) : undefined}
                             onClick={() => navigateTo({ name: 'coupons' })}
                         />
                     )}
-                    <ServiceButton
-                        icon={<Megaphone />}
-                        label={compactCopy.services.announcements}
-                        badge={announcementCount > 0 ? String(announcementCount) : undefined}
-                        onClick={() => navigateTo({ name: 'announcements' })}
-                    />
                     {!desktop && (
                         <ServiceButton
                             icon={<MapPin />}
+                            tone="security"
                             label={compactCopy.services.addresses}
                             onClick={() =>
                                 customer ? navigateTo({ name: 'addresses' }) : navigateTo({ name: 'login' })
@@ -564,21 +557,25 @@ export function AccountPage() {
                     )}
                     <ServiceButton
                         icon={<Bell />}
+                        tone="studio"
                         label={compactCopy.services.messages}
                         onClick={() => navigateTo({ name: 'notifications' })}
                     />
                     <ServiceButton
                         icon={<CircleCheck />}
+                        tone="coupon"
                         label={compactCopy.services.reviews}
                         onClick={() => navigateTo({ name: 'reviews' })}
                     />
                     <ServiceButton
                         icon={<Headphones />}
+                        tone="support"
                         label={compactCopy.services.support}
                         onClick={() => navigateTo({ name: 'support' })}
                     />
                     <ServiceButton
                         icon={<Store />}
+                        tone="mail"
                         label={compactCopy.services.store}
                         onClick={() => navigateTo({ name: 'home' })}
                     />
@@ -616,7 +613,7 @@ export function AccountPage() {
             {!desktop && (
                 <ProductSection
                     centerLabel={isZh ? '专属推荐' : 'Just for you'}
-                    className="account-recommendations"
+                    className={`account-recommendations${products.length === 1 ? ' account-recommendations-single' : ''}`}
                     products={products.slice(0, 4)}
                     market={market}
                     locale={locale}

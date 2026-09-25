@@ -48,6 +48,8 @@ export interface StorefrontPaletteAudit {
         name:
             | 'body'
             | 'page-body'
+            | 'elevated-body'
+            | 'subtle-body'
             | 'muted'
             | 'page-muted'
             | 'button'
@@ -55,7 +57,12 @@ export interface StorefrontPaletteAudit {
             | 'emphasis'
             | 'page-emphasis'
             | 'border'
-            | 'focus';
+            | 'page-border'
+            | 'focus'
+            | 'page-focus'
+            | 'success'
+            | 'warning'
+            | 'danger';
         ratio: number;
         minimum: number;
         passes: boolean;
@@ -390,6 +397,8 @@ export function auditStorefrontSemanticPalette(palette: StorefrontSemanticPalett
     const definitions: Array<[StorefrontPaletteAudit['checks'][number]['name'], string, string, number]> = [
         ['body', palette.text, palette.surface, 4.5],
         ['page-body', palette.text, palette.page, 4.5],
+        ['elevated-body', palette.text, palette.elevated, 4.5],
+        ['subtle-body', palette.text, palette.subtle, 4.5],
         ['muted', palette.muted, palette.surface, 4.5],
         ['page-muted', palette.muted, palette.page, 4.5],
         ['button', palette.onAccent, palette.accent, 4.5],
@@ -397,7 +406,12 @@ export function auditStorefrontSemanticPalette(palette: StorefrontSemanticPalett
         ['emphasis', palette.accentInk, palette.accentSoft, 4.5],
         ['page-emphasis', palette.accentInk, palette.page, 4.5],
         ['border', palette.border, palette.surface, 3],
+        ['page-border', palette.border, palette.page, 3],
         ['focus', palette.focus, palette.surface, 3],
+        ['page-focus', palette.focus, palette.page, 3],
+        ['success', palette.success, palette.surface, 4.5],
+        ['warning', palette.warning, palette.surface, 4.5],
+        ['danger', palette.danger, palette.surface, 4.5],
     ];
     const checks = definitions.map(([name, foreground, background, minimum]) => {
         const ratio = storefrontContrastRatio(foreground, background);

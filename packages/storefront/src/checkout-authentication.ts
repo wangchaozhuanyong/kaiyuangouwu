@@ -16,7 +16,7 @@ export async function resumeAuthenticatedCheckout(
     }
     if (returnTo === 'purchase' && loginRoute.id) {
         const { session: purchaseSession } = await controller.execute({
-            buyNow: { productVariantId: loginRoute.id, quantity: 1 },
+            buyNow: { productVariantId: loginRoute.id, quantity: loginRoute.quantity ?? 1 },
         });
         if (!purchaseSession) throw new Error('Checkout session is missing.');
         return { ...purchaseSession, route: { name: 'purchase' } };

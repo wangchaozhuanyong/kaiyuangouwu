@@ -90,8 +90,8 @@ export function AccountHeroImagePanel({
                             <small className="mt-1 block text-[11px]">查看个人资料 ›</small>
                         </span>
                     </div>
-                    <div className="absolute inset-x-4 bottom-4 grid grid-cols-4 gap-2 text-center text-[10px] font-medium text-indigo-950 dark:text-indigo-100">
-                        {['我的收藏', '优惠券', '网站公告', '邀请返利'].map(label => (
+                    <div className="absolute inset-x-4 bottom-4 grid grid-cols-2 gap-2 text-center text-[10px] font-medium text-indigo-950 dark:text-indigo-100">
+                        {['收藏 / 返利', '有效优惠券'].map(label => (
                             <span
                                 key={label}
                                 className="rounded-md bg-white/15 px-1 py-2 backdrop-blur-[2px]"

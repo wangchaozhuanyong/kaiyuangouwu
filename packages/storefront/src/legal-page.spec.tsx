@@ -40,6 +40,7 @@ describe('ManagedLegalPage', () => {
                 storefrontName="Demo Store"
                 contentBlocks={[createLegalBlock(kind)]}
                 onBack={vi.fn()}
+                onSelectDocument={vi.fn()}
             />,
         );
 
@@ -60,6 +61,7 @@ describe('ManagedLegalPage', () => {
                 storefrontName="Demo Store"
                 contentBlocks={[legalBlock]}
                 onBack={vi.fn()}
+                onSelectDocument={vi.fn()}
             />,
         );
 
@@ -84,6 +86,7 @@ describe('ManagedLegalPage', () => {
                     privacyEmail: 'privacy@moyaoai.com',
                 }}
                 onBack={vi.fn()}
+                onSelectDocument={vi.fn()}
             />,
         );
 
@@ -108,10 +111,28 @@ describe('ManagedLegalPage', () => {
                 storefrontHostname="damatong.net"
                 contentBlocks={[legalBlock]}
                 onBack={vi.fn()}
+                onSelectDocument={vi.fn()}
             />,
         );
 
         expect(markup).not.toContain('本隐私政策仅适用于 moyaoai.com。');
         expect(markup).toContain('法律文件暂未发布');
+    });
+
+    it('法律导航展示两份文件并标记当前页面', () => {
+        const markup = renderToStaticMarkup(
+            <ManagedLegalPage
+                kind="terms"
+                language="zh"
+                storefrontName="大马通"
+                contentBlocks={[createLegalBlock('terms')]}
+                onBack={vi.fn()}
+                onSelectDocument={vi.fn()}
+            />,
+        );
+
+        expect(markup).toContain('法律与条款');
+        expect(markup).toMatch(/<button[^>]*>[^<]*<span>隐私政策<\/span>/);
+        expect(markup).toMatch(/<button[^>]*aria-current="page"[^>]*>[^<]*<span>使用条款<\/span>/);
     });
 });

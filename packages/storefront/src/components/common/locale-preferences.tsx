@@ -9,11 +9,13 @@ export function LocalePreferencesTrigger({
     currencyCode,
     expanded,
     onClick,
+    className,
 }: {
     language: StorefrontLanguage;
     currencyCode: string;
     expanded: boolean;
     onClick: () => void;
+    className?: string;
 }) {
     const isZh = language === 'zh';
     const languageLabel = isZh ? '简中' : 'EN';
@@ -21,7 +23,7 @@ export function LocalePreferencesTrigger({
     return (
         <button
             type="button"
-            className="locale-preferences-trigger"
+            className={`locale-preferences-trigger${className ? ` ${className}` : ''}`}
             aria-label={
                 isZh
                     ? `语言与货币：简体中文，${currencyCode}`

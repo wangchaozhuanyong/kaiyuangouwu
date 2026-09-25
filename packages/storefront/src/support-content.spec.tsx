@@ -123,4 +123,50 @@ describe('support content', () => {
         expect(markup).toContain('class="support-evaluation-card"');
         expect(markup).toContain('tabindex="-1"');
     });
+
+    it('shows only published bilingual FAQs in the selected language', () => {
+        const content = {
+            ...supportBlock,
+            settings: {
+                ...supportBlock.settings,
+                supportFaqs: [
+                    {
+                        id: 'delivery',
+                        enabled: true,
+                        questionZh: '如何确认运费？',
+                        answerZh: '结算时按地址计算。',
+                        questionEn: 'How is shipping calculated?',
+                        answerEn: 'It is calculated at checkout.',
+                    },
+                    {
+                        id: 'draft',
+                        enabled: true,
+                        questionZh: '未完成问题',
+                        answerZh: '未完成答案',
+                        questionEn: '',
+                        answerEn: '',
+                    },
+                ],
+            },
+        };
+        const chinese = renderToStaticMarkup(<SupportContent content={content} language="zh" />);
+        const english = renderToStaticMarkup(<SupportContent content={content} language="en" />);
+
+        expect(chinese).toContain('如何确认运费？');
+        expect(chinese).toContain('结算时按地址计算。');
+        expect(chinese).not.toContain('未完成问题');
+        expect(english).toContain('How is shipping calculated?');
+        expect(english).not.toContain('如何确认运费？');
+    });
+
+    it('shows a configured banner image in the desktop support header', () => {
+        const markup = renderToStaticMarkup(
+            <SupportContent
+                content={{ ...supportBlock, imageUrl: '/assets/preview/support-banner.webp' }}
+                language="zh"
+            />,
+        );
+        expect(markup).toContain('support-desktop-hero');
+        expect(markup).toContain('/assets/preview/support-banner.webp');
+    });
 });

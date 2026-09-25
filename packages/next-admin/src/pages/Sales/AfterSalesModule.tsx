@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { ADMIN_API_URL } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
@@ -59,6 +60,7 @@ interface RefundItem {
 }
 
 interface AfterSalesRequest {
+    evidence?: Array<{ id: string; available: boolean; previewUrl: string | null; expiresAt: string | null }>;
     id: string;
     createdAt: string;
     updatedAt: string;
@@ -877,6 +879,74 @@ export function AfterSalesModule() {
                                     </div>
                                     <p className="mt-1 whitespace-pre-wrap">{selectedRequest.description}</p>
                                 </div>
+                                {!!selectedRequest.evidence?.length && (
+                                    <div className="mt-4 space-y-2">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <h4 className="text-xs font-semibold text-slate-900">
+                                                买家图片凭证
+                                                <FeatureHelpButton
+                                                    topic="sales.after-sales"
+                                                    title="买家图片凭证"
+                                                />
+                                            </h4>
+                                            <button
+                                                type="button"
+                                                disabled={loading}
+                                                className="text-xs text-slate-600 hover:text-slate-900 disabled:opacity-50"
+                                                onClick={() => {
+                                                    const id = selectedRequest.id;
+                                                    void refetch()
+                                                        .then(result => {
+                                                            const current =
+                                                                result.data?.afterSalesRequests.items.find(
+                                                                    item => item.id === id,
+                                                                );
+                                                            if (current) setSelectedRequest(current);
+                                                        })
+                                                        .catch(() => setActionError('凭证刷新失败，请重试'));
+                                                }}
+                                            >
+                                                刷新图片
+                                            </button>
+                                        </div>
+                                        <div className="grid max-w-md grid-cols-3 gap-3">
+                                            {selectedRequest.evidence.map((image, index) => {
+                                                const url =
+                                                    image.available &&
+                                                    image.previewUrl?.startsWith('/after-sales/evidence/')
+                                                        ? new URL(
+                                                              image.previewUrl,
+                                                              new URL(ADMIN_API_URL, window.location.origin),
+                                                          ).href
+                                                        : null;
+                                                return url ? (
+                                                    <a
+                                                        key={image.id}
+                                                        href={url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="block aspect-square overflow-hidden rounded-lg bg-slate-100 focus-visible:outline focus-visible:outline-2"
+                                                        aria-label={`查看买家凭证 ${index + 1}`}
+                                                    >
+                                                        <img
+                                                            src={url}
+                                                            alt={`买家凭证 ${index + 1}`}
+                                                            className="h-full w-full object-contain"
+                                                            loading="lazy"
+                                                        />
+                                                    </a>
+                                                ) : (
+                                                    <span key={image.id} className="text-xs text-slate-500">
+                                                        凭证已过保留期或已移除
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                        <p className="text-xs text-slate-500">
+                                            凭证仅供有权限的人员查看，工单关闭后保留 180 天。
+                                        </p>
+                                    </div>
+                                )}
                             </section>
                             <section>
                                 <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-900">

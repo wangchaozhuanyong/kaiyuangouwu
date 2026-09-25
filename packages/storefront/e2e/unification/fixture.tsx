@@ -5,16 +5,33 @@ import { createRoot } from 'react-dom/client';
 
 import { ShopApi } from '../../src/api';
 import { LoginPage, RegisterPage } from '../../src/auth-pages';
+import { DesktopLayoutContext, useDesktopViewport } from '../../src/desktop-layout';
 import { useStorefrontBrandColors, useStorefrontMetadata } from '../../src/hooks/useStorefrontDocument';
+import { BusinessServicesPage } from '../../src/pages/business-services-page';
+import { CategoryPage } from '../../src/pages/category-page';
+import { DesktopCatalogPage } from '../../src/pages/desktop-catalog-page';
 import { HomePage } from '../../src/pages/home-page';
-import { HomePageContext } from '../../src/storefront-page-contexts';
+import { SupportContent } from '../../src/pages/support-page';
+import {
+    BusinessServicesPageContext,
+    CategoryPageContext,
+    HomePageContext,
+} from '../../src/storefront-page-contexts';
 import { StorefrontContext, type StorefrontContextValue } from '../../src/StorefrontContext';
 import '../../src/styles.css';
+import '../../src/styles/desktop-catalog.css';
 import '../../src/styles/desktop-layout.css';
+import '../../src/styles/home-showcase.css';
 import '../../src/styles/visual-presets.css';
 // Auth's desktop composition lives here in the production entry too.
+import '../../src/commerce-styles';
+import '../../src/styles/control-surfaces.css';
+import '../../src/styles/desktop-commerce.css';
+import '../../src/styles/desktop-home.css';
 import '../../src/styles/desktop-pages.css';
-import { StorefrontContentBlock, StorefrontContentSettings } from '../../src/types';
+import '../../src/styles/locale-preferences.css';
+import '../../src/styles/subpage-content.css';
+import { CollectionSummary, StorefrontContentBlock, StorefrontContentSettings } from '../../src/types';
 import { useStorefrontVisualPreset } from '../../src/use-storefront-visual-preset';
 
 // Only this test entry point uses the isolated SQL.js Shop API on loopback.
@@ -27,14 +44,20 @@ const query = `query BrowserStoreContent {
         targetType targetValue settings title subtitle body ctaLabel
         items { id enabled position imageUrl targetType targetValue settings label description }
     }
+    collections(options: { take: 100, topLevelOnly: true, sort: { position: ASC } }) {
+        items { id name slug description position parentId featuredAsset { id preview }
+            children { id name slug description position parentId featuredAsset { id preview } } }
+    }
     storefrontContentSettings { heroAutoplayIntervalSeconds configuredBlockTypes }
     storefrontBranding { backgroundColor primaryColor }
 }`;
 function Fixture() {
+    const desktop = useDesktopViewport();
     const [token, setToken] = useState(initialToken);
     const [language, setLanguage] = useState<'zh' | 'en'>('zh');
     const [data, setData] = useState<{
         storefrontContent: StorefrontContentBlock[];
+        collections: { items: CollectionSummary[] };
         storefrontContentSettings: StorefrontContentSettings;
         storefrontBranding: { backgroundColor: string | null; primaryColor: string | null };
     } | null>(null);
@@ -51,7 +74,11 @@ function Fixture() {
     );
     const api = useMemo(() => new ShopApi(market, language === 'zh' ? 'zh_Hans' : 'en'), [market, language]);
     const visual = useStorefrontVisualPreset(api, market, language);
-    const [catalogRoute, setCatalogRoute] = useState({ name: 'home' } as StorefrontContextValue['route']);
+    const [catalogRoute, setCatalogRoute] = useState({
+        name: params.get('page') === 'category' ? 'category' : 'home',
+        collectionId: params.get('category') ?? undefined,
+        childId: params.get('child') ?? undefined,
+    } as StorefrontContextValue['route']);
     const [error, setError] = useState('');
     const [refresh, setRefresh] = useState(0);
     useEffect(() => {
@@ -81,7 +108,7 @@ function Fixture() {
     };
     const blocks = (data?.storefrontContent ?? []).map(block => ({
         ...block,
-        imageUrl: block.imageUrl ? apiOrigin + block.imageUrl : null,
+        imageUrl: block.imageUrl ? new URL(block.imageUrl, apiOrigin).href : null,
     }));
     const page = params.get('page');
     const storefrontName = params.get('name') ?? 'Store';
@@ -114,19 +141,22 @@ function Fixture() {
                 >
                     中文 / English
                 </button>
-                <div className={`storefront-app${window.innerWidth >= 1024 ? ' desktop-store-layout' : ''}`}>
+                <div className={`storefront-app${desktop ? ' desktop-store-layout' : ''}`}>
                     <div id="storefront-content">
-                        <AuthPage
-                            api={api}
-                            language={language}
-                            storefrontName={storefrontName}
-                            logoUrl={null}
-                            onBack={() => undefined}
-                            onSuccess={() => Promise.resolve()}
-                            authVisualContent={blocks.find(
-                                block => block.type === (page === 'login' ? 'AUTH_LOGIN' : 'AUTH_REGISTER'),
-                            )}
-                        />
+                        <DesktopLayoutContext.Provider value={desktop}>
+                            <AuthPage
+                                api={api}
+                                language={language}
+                                storefrontName={storefrontName}
+                                logoUrl={null}
+                                onBack={() => undefined}
+                                onSuccess={() => Promise.resolve()}
+                                authVisualContent={blocks.find(
+                                    block =>
+                                        block.type === (page === 'login' ? 'AUTH_LOGIN' : 'AUTH_REGISTER'),
+                                )}
+                            />
+                        </DesktopLayoutContext.Provider>
                     </div>
                 </div>
             </>
@@ -136,7 +166,7 @@ function Fixture() {
         route: catalogRoute,
         api,
         market,
-        collections: [],
+        collections: data?.collections.items ?? [],
         contentBlocks: blocks,
         language,
         locale: language === 'zh' ? 'zh-CN' : 'en-US',
@@ -158,6 +188,79 @@ function Fixture() {
             return Promise.resolve();
         },
     } as unknown as StorefrontContextValue;
+    if (['category', 'services', 'support'].includes(page ?? '')) {
+        if (!data) return <p role="status">{error || 'Loading'}</p>;
+        const support = blocks.find(block => block.type === 'SUPPORT');
+        return (
+            <StorefrontContext.Provider value={runtime}>
+                <DesktopLayoutContext.Provider value={desktop}>
+                    <div
+                        className={`storefront-app${desktop ? ' desktop-store-layout has-desktop-catalog' : ''}`}
+                    >
+                        {page === 'category' ? (
+                            desktop ? (
+                                <DesktopCatalogPage />
+                            ) : (
+                                <CategoryPageContext.Provider
+                                    value={{
+                                        api,
+                                        products: [],
+                                        collections: data.collections.items,
+                                        contentBlocks: blocks,
+                                        loading: false,
+                                        error: null,
+                                        market,
+                                        locale: 'zh-CN',
+                                        language,
+                                        activeCollectionId: catalogRoute.collectionId ?? 'all',
+                                        activeChildId: catalogRoute.childId ?? 'all',
+                                        sortMode: 'recommended',
+                                        fulfillmentFilter: 'all',
+                                        inStockOnly: false,
+                                        minimumPrice: '',
+                                        maximumPrice: '',
+                                        onCollectionChange: (collectionId, childId) =>
+                                            setCatalogRoute({ name: 'category', collectionId, childId }),
+                                        onChildChange: childId =>
+                                            setCatalogRoute(current => ({ ...current, childId })),
+                                        onSortChange: () => undefined,
+                                        onFilterChange: () => undefined,
+                                        onNotify: () => undefined,
+                                        onRetry: reload,
+                                    }}
+                                >
+                                    <CategoryPage />
+                                </CategoryPageContext.Provider>
+                            )
+                        ) : page === 'services' ? (
+                            <BusinessServicesPageContext.Provider
+                                value={{
+                                    contentBlocks: blocks,
+                                    language,
+                                    storefrontName,
+                                    logoUrl: null,
+                                    marketLabel: 'Test',
+                                    displayCurrencyCode: 'USD',
+                                    availableCurrencyCodes: ['USD'],
+                                    currencyLoading: false,
+                                    onToggleLanguage: () =>
+                                        setLanguage(value => (value === 'zh' ? 'en' : 'zh')),
+                                    onCurrencyChange: () => undefined,
+                                    onNotifications: () => undefined,
+                                    onNavigate: setCatalogRoute,
+                                    onContentTarget: () => undefined,
+                                }}
+                            >
+                                <BusinessServicesPage />
+                            </BusinessServicesPageContext.Provider>
+                        ) : support ? (
+                            <SupportContent content={support} language={language} />
+                        ) : null}
+                    </div>
+                </DesktopLayoutContext.Provider>
+            </StorefrontContext.Provider>
+        );
+    }
     return (
         <StorefrontContext.Provider value={runtime}>
             <div className="storefront-app">
@@ -194,6 +297,8 @@ function Fixture() {
                                 couponLoading: false,
                                 loading: !data && !error,
                                 error,
+                                catalogLoading: false,
+                                catalogError: null,
                                 contentError: '',
                                 language,
                                 locale: language === 'zh' ? 'zh-CN' : 'en-US',

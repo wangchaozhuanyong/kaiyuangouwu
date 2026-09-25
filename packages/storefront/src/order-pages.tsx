@@ -29,6 +29,10 @@ import { FormEvent, MouseEvent, ReactNode, useEffect, useId, useRef, useState } 
 
 import { ShopApi } from './api';
 import { formatBusinessDate } from './business-time';
+import {
+    AfterSalesEvidenceGallery,
+    AfterSalesEvidenceUploader,
+} from './components/common/after-sales-evidence';
 import { useDesktopLayout } from './desktop-layout';
 import { compactUiCopy, languageCodeFor } from './i18n';
 import { isInputMethodKey } from './input-method';
@@ -63,7 +67,7 @@ import {
 
 const orderPageClassName = (className?: string | false | null) => pageClassName(orderPageStyles, className);
 
-export type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'service';
+export type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'completed' | 'service';
 type OrderRoute = { name: 'login' | 'order-detail'; id?: string };
 type LogisticsFilter = 'all' | 'transit' | 'preparing' | 'delivered';
 type LogisticsStatus = Exclude<LogisticsFilter, 'all'> | 'cancelled';
@@ -249,6 +253,7 @@ export function OrdersPage({
         { id: 'pending', label: compactCopy.orders.unpaid },
         { id: 'shipping', label: compactCopy.orders.processing },
         { id: 'receiving', label: compactCopy.orders.shipped },
+        { id: 'completed', label: compactCopy.orders.completed },
         { id: 'service', label: compactCopy.orders.returns },
     ];
 
@@ -934,6 +939,11 @@ function AfterSalesList({
                             </span>
                         ))}
                     </div>
+                    <AfterSalesEvidenceGallery
+                        items={request.evidence ?? []}
+                        language={language}
+                        onRefresh={onRetry}
+                    />
                     <dl>
                         <div>
                             <dt>{isZh ? '类型' : 'Type'}</dt>
@@ -1105,6 +1115,7 @@ function AfterSalesList({
 }
 
 export function OrderDetailPage({
+    api,
     order,
     locale,
     language,
@@ -1118,6 +1129,7 @@ export function OrderDetailPage({
     onUnavailable,
     onNotify,
 }: {
+    api?: ShopApi;
     order: Order | null;
     market: MarketConfig;
     locale: string;
@@ -1134,6 +1146,7 @@ export function OrderDetailPage({
 }) {
     const navigate = useNavigate();
     const isZh = language === 'zh';
+    const desktop = useDesktopLayout();
     const [cancelOpen, setCancelOpen] = useState(false);
     const [afterSalesOpen, setAfterSalesOpen] = useState(false);
     const [logisticsSheetOpen, setLogisticsSheetOpen] = useState(false);
@@ -1203,6 +1216,75 @@ export function OrderDetailPage({
         );
     };
 
+    const orderSummary = (
+        <section className={orderPageClassName('order-detail-summary')}>
+            <PriceSummary order={order} locale={locale} language={language} />
+        </section>
+    );
+    const orderActions = (
+        <div className={orderPageClassName('order-detail-actions')}>
+            {canCancel && (
+                <button
+                    type="button"
+                    className={orderPageClassName('danger-action')}
+                    onClick={() => setCancelOpen(true)}
+                >
+                    {isZh ? '取消订单' : 'Cancel order'}
+                </button>
+            )}
+            {canRequestAfterSales && (
+                <button
+                    type="button"
+                    className={orderPageClassName('order-secondary-action')}
+                    onClick={() => setAfterSalesOpen(true)}
+                >
+                    <ShieldCheck aria-hidden="true" />
+                    {isZh ? '申请售后' : 'Request after-sales'}
+                </button>
+            )}
+            {(inTransit || fulfillments.length > 0) && (
+                <button
+                    type="button"
+                    className={orderPageClassName('order-secondary-action')}
+                    onClick={() => setLogisticsSheetOpen(true)}
+                >
+                    <Truck aria-hidden="true" />
+                    {isZh ? '查看物流' : 'Track'}
+                </button>
+            )}
+            {!pending && (
+                <button
+                    type="button"
+                    className={orderPageClassName('order-secondary-action')}
+                    onClick={navigateToEvaluation}
+                >
+                    <Sparkles aria-hidden="true" />
+                    {isZh ? '服务评价' : 'Rate service'}
+                </button>
+            )}
+            <button
+                type="button"
+                className={orderPageClassName('primary-action')}
+                onClick={pending ? () => void onReopen(order) : () => void onBuyAgain(order)}
+            >
+                <RotateCcw aria-hidden="true" />
+                {pending ? (isZh ? '返回修改订单' : 'Reopen order') : isZh ? '再来一单' : 'Buy again'}
+            </button>
+        </div>
+    );
+    const orderProductRows = order.lines.map(line => (
+        <article key={line.id}>
+            <ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} />
+            <div>
+                <strong>{line.productVariant.name}</strong>
+                <em>{orderLinePolicyLabel(line, language)}</em>
+            </div>
+            <span>
+                <b>{formatMoney(line.linePriceWithTax, line.productVariant.currencyCode, locale)}</b>
+                <small>×{line.quantity}</small>
+            </span>
+        </article>
+    ));
     return (
         <main className={orderPageClassName('page subpage order-detail-page')}>
             <SubHeader title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack} />
@@ -1325,21 +1407,15 @@ export function OrderDetailPage({
                     <strong>{storefrontName}</strong>
                     <span>{isZh ? `${order.lines.length} 种商品` : `${order.lines.length} products`}</span>
                 </header>
-                {order.lines.map(line => (
-                    <article key={line.id}>
-                        <ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} />
-                        <div>
-                            <strong>{line.productVariant.name}</strong>
-                            <em>{orderLinePolicyLabel(line, language)}</em>
-                        </div>
-                        <span>
-                            <b>
-                                {formatMoney(line.linePriceWithTax, line.productVariant.currencyCode, locale)}
-                            </b>
-                            <small>×{line.quantity}</small>
-                        </span>
-                    </article>
-                ))}
+                {desktop ? (
+                    <div className="desktop-order-purchase-row">
+                        <div className="desktop-order-products">{orderProductRows}</div>
+                        {orderSummary}
+                        {orderActions}
+                    </div>
+                ) : (
+                    orderProductRows
+                )}
             </section>
             {!!digitalDeliveries.length && (
                 <section
@@ -1460,60 +1536,15 @@ export function OrderDetailPage({
                     </div>
                 )}
             </section>
-            <section className={orderPageClassName('order-detail-summary')}>
-                <PriceSummary order={order} locale={locale} language={language} />
-            </section>
-            <div className={orderPageClassName('order-detail-actions')}>
-                {canCancel && (
-                    <button
-                        type="button"
-                        className={orderPageClassName('danger-action')}
-                        onClick={() => setCancelOpen(true)}
-                    >
-                        {isZh ? '取消订单' : 'Cancel order'}
-                    </button>
-                )}
-                {canRequestAfterSales && (
-                    <button
-                        type="button"
-                        className={orderPageClassName('order-secondary-action')}
-                        onClick={() => setAfterSalesOpen(true)}
-                    >
-                        <ShieldCheck aria-hidden="true" />
-                        {isZh ? '申请售后' : 'Request after-sales'}
-                    </button>
-                )}
-                {(inTransit || fulfillments.length > 0) && (
-                    <button
-                        type="button"
-                        className={orderPageClassName('order-secondary-action')}
-                        onClick={() => setLogisticsSheetOpen(true)}
-                    >
-                        <Truck aria-hidden="true" />
-                        {isZh ? '查看物流' : 'Track'}
-                    </button>
-                )}
-                {!pending && (
-                    <button
-                        type="button"
-                        className={orderPageClassName('order-secondary-action')}
-                        onClick={navigateToEvaluation}
-                    >
-                        <Sparkles aria-hidden="true" />
-                        {isZh ? '服务评价' : 'Rate service'}
-                    </button>
-                )}
-                <button
-                    type="button"
-                    className={orderPageClassName('primary-action')}
-                    onClick={pending ? () => void onReopen(order) : () => void onBuyAgain(order)}
-                >
-                    <RotateCcw aria-hidden="true" />
-                    {pending ? (isZh ? '返回修改订单' : 'Reopen order') : isZh ? '再来一单' : 'Buy again'}
-                </button>
-            </div>
+            {!desktop && (
+                <>
+                    {orderSummary}
+                    {orderActions}
+                </>
+            )}
             {afterSalesOpen && (
                 <AfterSalesRequestSheet
+                    api={api}
                     order={order}
                     locale={locale}
                     language={language}
@@ -1861,12 +1892,14 @@ export function LogisticsTrackingSheet({
 }
 
 function AfterSalesRequestSheet({
+    api,
     order,
     locale,
     language,
     onClose,
     onConfirm,
 }: {
+    api?: ShopApi;
     order: Order;
     locale: string;
     language: StorefrontLanguage;
@@ -1879,10 +1912,13 @@ function AfterSalesRequestSheet({
     const [reason, setReason] = useState<AfterSalesReason>('OTHER');
     const [description, setDescription] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [evidenceIds, setEvidenceIds] = useState<string[]>([]);
+    const [evidenceBusy, setEvidenceBusy] = useState(false);
+    const [evidenceReady, setEvidenceReady] = useState(!api);
     const [error, setError] = useState('');
     const dialogRef = useRef<HTMLElement>(null);
     const closeRef = useRef(onClose);
-    const submittingRef = useRef(submitting);
+    const submittingRef = useRef(submitting || evidenceBusy);
     const previousFocus = useRef<HTMLElement | null>(null);
     const titleId = useId();
     const eligibleLines = order.lines.filter(
@@ -1901,8 +1937,8 @@ function AfterSalesRequestSheet({
         closeRef.current = onClose;
     }, [onClose]);
     useEffect(() => {
-        submittingRef.current = submitting;
-    }, [submitting]);
+        submittingRef.current = submitting || evidenceBusy;
+    }, [submitting, evidenceBusy]);
     useEffect(() => {
         if (containsDigital && type !== 'REFUND_ONLY') setType('REFUND_ONLY');
     }, [containsDigital, type]);
@@ -1951,12 +1987,20 @@ function AfterSalesRequestSheet({
 
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (!selectedLines.length || description.trim().length < 3 || submitting) return;
+        if (
+            !selectedLines.length ||
+            description.trim().length < 3 ||
+            submitting ||
+            evidenceBusy ||
+            !evidenceReady
+        )
+            return;
         setSubmitting(true);
         setError('');
         try {
             await onConfirm({
                 orderId: order.id,
+                evidenceIds,
                 type,
                 reason,
                 description: description.trim(),
@@ -1983,7 +2027,7 @@ function AfterSalesRequestSheet({
             <button
                 className={orderPageClassName('sheet-mask')}
                 type="button"
-                disabled={submitting}
+                disabled={submitting || evidenceBusy}
                 onClick={onClose}
                 aria-label={isZh ? '关闭' : 'Close'}
             />
@@ -1999,7 +2043,7 @@ function AfterSalesRequestSheet({
                     <strong id={titleId}>{isZh ? '申请售后' : 'Request after-sales'}</strong>
                     <button
                         type="button"
-                        disabled={submitting}
+                        disabled={submitting || evidenceBusy}
                         onClick={onClose}
                         aria-label={isZh ? '关闭' : 'Close'}
                     >
@@ -2017,13 +2061,14 @@ function AfterSalesRequestSheet({
                                         <input
                                             type="checkbox"
                                             checked={selected}
-                                            disabled={submitting}
-                                            onChange={event =>
+                                            disabled={submitting || evidenceBusy}
+                                            onChange={event => {
+                                                const checked = event.currentTarget.checked;
                                                 setQuantities(current => ({
                                                     ...current,
-                                                    [line.id]: event.currentTarget.checked ? 1 : 0,
-                                                }))
-                                            }
+                                                    [line.id]: checked ? 1 : 0,
+                                                }));
+                                            }}
                                         />
                                         <span>
                                             <strong>{line.productVariant.name}</strong>
@@ -2037,7 +2082,7 @@ function AfterSalesRequestSheet({
                                                 min={1}
                                                 max={line.quantity}
                                                 value={quantities[line.id] ?? 1}
-                                                disabled={submitting}
+                                                disabled={submitting || evidenceBusy}
                                                 onChange={event => {
                                                     const value = Number(event.currentTarget.value);
                                                     setQuantities(current => ({
@@ -2066,7 +2111,7 @@ function AfterSalesRequestSheet({
                         <span>{isZh ? '售后类型' : 'Request type'}</span>
                         <select
                             value={type}
-                            disabled={submitting}
+                            disabled={submitting || evidenceBusy}
                             onChange={event => setType(event.currentTarget.value as AfterSalesType)}
                         >
                             <option value="REFUND_ONLY">
@@ -2094,7 +2139,7 @@ function AfterSalesRequestSheet({
                         <span>{isZh ? '申请原因' : 'Reason'}</span>
                         <select
                             value={reason}
-                            disabled={submitting}
+                            disabled={submitting || evidenceBusy}
                             onChange={event => setReason(event.currentTarget.value as AfterSalesReason)}
                         >
                             {afterSalesReasonOptions.map(option => (
@@ -2112,7 +2157,7 @@ function AfterSalesRequestSheet({
                             minLength={3}
                             maxLength={2000}
                             required
-                            disabled={submitting}
+                            disabled={submitting || evidenceBusy}
                             placeholder={
                                 isZh
                                     ? '请说明问题、期望处理方式；不要填写密码等敏感信息'
@@ -2121,6 +2166,17 @@ function AfterSalesRequestSheet({
                             onChange={event => setDescription(event.currentTarget.value)}
                         />
                     </label>
+                    {api && (
+                        <AfterSalesEvidenceUploader
+                            api={api.contentReviewsApi}
+                            orderId={order.id}
+                            language={language}
+                            disabled={submitting}
+                            onChange={setEvidenceIds}
+                            onBusyChange={setEvidenceBusy}
+                            onReadyChange={setEvidenceReady}
+                        />
+                    )}
                     <div className={orderPageClassName('after-sales-request-total')}>
                         <span>{isZh ? '预计申请金额' : 'Estimated request amount'}</span>
                         <strong>{formatMoney(requestedPreview, order.currencyCode, locale)}</strong>
@@ -2136,13 +2192,19 @@ function AfterSalesRequestSheet({
                         </div>
                     )}
                     <div className={orderPageClassName('after-sales-submit-actions')}>
-                        <button type="button" disabled={submitting} onClick={onClose}>
+                        <button type="button" disabled={submitting || evidenceBusy} onClick={onClose}>
                             {isZh ? '取消' : 'Cancel'}
                         </button>
                         <button
                             className={orderPageClassName('primary-action')}
                             type="submit"
-                            disabled={submitting || !selectedLines.length || description.trim().length < 3}
+                            disabled={
+                                submitting ||
+                                evidenceBusy ||
+                                !evidenceReady ||
+                                !selectedLines.length ||
+                                description.trim().length < 3
+                            }
                         >
                             {submitting
                                 ? isZh
@@ -3016,5 +3078,6 @@ function orderStatesForTab(tab: OrderTab): string[] | undefined {
     if (tab === 'pending') return ['AddingItems', 'ArrangingPayment'];
     if (tab === 'shipping') return ['PaymentAuthorized', 'PaymentSettled'];
     if (tab === 'receiving') return ['Shipped', 'PartiallyShipped'];
+    if (tab === 'completed') return ['Delivered'];
     return undefined;
 }

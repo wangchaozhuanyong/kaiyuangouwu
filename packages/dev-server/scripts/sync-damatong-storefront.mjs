@@ -620,27 +620,33 @@ function contentItemInput(item) {
     };
 }
 
-function hasDashboardSupportContacts(block) {
+function hasDashboardSupportContent(block) {
     return (
         block?.type === 'SUPPORT' &&
         block.settings?.placeholderContacts !== true &&
-        block.items.some(
-            item =>
-                item.enabled !== false &&
-                item.targetType !== 'NONE' &&
-                typeof item.targetValue === 'string' &&
-                item.targetValue.trim().length > 0,
-        )
+        (block.settings?.contactOwnership === 'dashboard' ||
+            block.items.some(
+                item =>
+                    item.enabled !== false &&
+                    item.targetType !== 'NONE' &&
+                    typeof item.targetValue === 'string' &&
+                    item.targetValue.trim().length > 0,
+            ))
     );
 }
 
 export function preserveDashboardSupportContacts(existingBlocks, desiredBlocks) {
     const existing = existingBlocks.find(block => block.type === 'SUPPORT');
-    if (!hasDashboardSupportContacts(existing)) return desiredBlocks;
+    if (!hasDashboardSupportContent(existing)) return desiredBlocks;
     return desiredBlocks.map(block =>
         block.type === 'SUPPORT'
             ? {
                   ...block,
+                  imageAssetId: existing.imageAsset?.id ?? existing.imageAssetId ?? null,
+                  imageUrl:
+                      existing.imageAsset?.id || existing.imageAssetId ? null : (existing.imageUrl ?? null),
+                  targetType: existing.targetType ?? 'NONE',
+                  targetValue: existing.targetValue ?? null,
                   settings: {
                       ...block.settings,
                       ...existing.settings,
@@ -656,6 +662,94 @@ export function preserveDashboardSupportContacts(existingBlocks, desiredBlocks) 
                   items: existing.items.map(contentItemInput),
               }
             : block,
+    );
+}
+
+export function preserveDashboardBusinessServices(existingBlocks, desiredBlocks) {
+    const existing = existingBlocks.find(
+        block => block.type === 'CLIENT_PLUGINS' && block.code === 'storefront-client-plugins',
+    );
+    if (existing?.settings?.businessServicesCopyVersion !== 1) return desiredBlocks;
+
+    const existingItems = new Map(existing.items.map(item => [itemStableKey(item), item]));
+    return desiredBlocks.map(block => {
+        if (block.type !== 'CLIENT_PLUGINS' || block.code !== existing.code) return block;
+        const syncedKeys = new Set(block.items.map(itemStableKey));
+        const imageAssetId = existing.imageAsset?.id ?? existing.imageAssetId ?? null;
+        return {
+            ...block,
+            imageAssetId,
+            imageUrl: imageAssetId ? null : (existing.imageUrl ?? null),
+            targetType: existing.targetType ?? 'NONE',
+            targetValue: existing.targetValue ?? null,
+            translations: normalizedTranslations(existing.translations, [
+                'title',
+                'subtitle',
+                'body',
+                'ctaLabel',
+            ]),
+            // Refresh the source-owned AI plugin, while keeping its visibility and the
+            // other tools that the store configured in NextAdmin.
+            items: [
+                ...block.items.map(item => {
+                    const current = existingItems.get(itemStableKey(item));
+                    return current
+                        ? {
+                              ...item,
+                              id: current.id,
+                              enabled: current.enabled,
+                              position: current.position,
+                          }
+                        : item;
+                }),
+                ...existing.items.filter(item => !syncedKeys.has(itemStableKey(item))).map(contentItemInput),
+            ],
+        };
+    });
+}
+
+export function preserveDashboardLegalNavigation(existingBlocks, desiredBlocks) {
+    return desiredBlocks.map(block => {
+        if (block.type !== 'LEGAL' && block.type !== 'NAVIGATION') return block;
+        const existing =
+            existingBlocks.find(
+                candidate => candidate.code === block.code && candidate.type === block.type,
+            ) ?? existingBlocks.find(candidate => candidate.type === block.type);
+        if (!existing) return block;
+        const imageAssetId = existing.imageAsset?.id ?? existing.imageAssetId ?? null;
+        return {
+            ...block,
+            internalName: existing.internalName ?? block.internalName,
+            layoutVariant: existing.layoutVariant ?? block.layoutVariant,
+            enabled: existing.enabled,
+            position: existing.position,
+            startsAt: existing.startsAt ?? null,
+            endsAt: existing.endsAt ?? null,
+            imageAssetId,
+            imageUrl: imageAssetId ? null : (existing.imageUrl ?? null),
+            backgroundColor: existing.backgroundColor ?? null,
+            textColor: existing.textColor ?? null,
+            targetType: existing.targetType ?? 'NONE',
+            targetValue: existing.targetValue ?? null,
+            settings: existing.settings ?? null,
+            translations: normalizedTranslations(existing.translations, [
+                'title',
+                'subtitle',
+                'body',
+                'ctaLabel',
+            ]),
+            items: existing.items.map(contentItemInput),
+        };
+    });
+}
+
+function preserveDashboardOwnedBlocks(existingBlocks, desiredBlocks) {
+    return preserveDashboardLegalNavigation(
+        existingBlocks,
+        preserveDashboardBusinessServices(
+            existingBlocks,
+            preserveDashboardSupportContacts(existingBlocks, desiredBlocks),
+        ),
     );
 }
 
@@ -1262,7 +1356,7 @@ export async function syncDamatongStorefront({
     const plannedCollectionIds = new Map(
         categoryPlanPreview.map(plan => [plan.code, plan.id ?? `pending-collection:${plan.code}`]),
     );
-    const previewBlocks = preserveDashboardSupportContacts(
+    const previewBlocks = preserveDashboardOwnedBlocks(
         currentContent.blocks,
         buildDamatongContentBlocks({
             assetIdsByKey: plannedAssetIds,
@@ -1394,7 +1488,7 @@ export async function syncDamatongStorefront({
             collectionIdsByCode.set(plan.code, id);
         }
 
-        desiredBlocks = preserveDashboardSupportContacts(
+        desiredBlocks = preserveDashboardOwnedBlocks(
             currentContent.blocks,
             buildDamatongContentBlocks({
                 assetIdsByKey,

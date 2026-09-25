@@ -12,6 +12,7 @@ export type SafeImageProps = {
     frameClassName?: string;
     alt: string;
     imageKind?: StorefrontImageKind;
+    onImageReady?: (image: HTMLImageElement) => void;
 } & Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt' | 'onError'>;
 
 export function SafeImage(props: SafeImageProps) {
@@ -70,6 +71,7 @@ function SafeImageSource({
     alt,
     imageKind,
     onLoad,
+    onImageReady,
     className,
     retainedSrc,
     onReady,
@@ -84,22 +86,27 @@ function SafeImageSource({
     const sourceKey = [sources.src, sources.srcSet ?? imageProps.srcSet ?? '', sources.sizes ?? ''].join(
         '\u0000',
     );
-    const initiallyDecoded = isImageAlreadyDecoded(sources.src, currentSrc, sourceKey);
+    // A decoded small srcset candidate does not make a larger candidate ready.
+    const initiallyDecoded =
+        !sources.srcSet && !imageProps.srcSet && isImageAlreadyDecoded(sources.src, currentSrc, sourceKey);
     const [loadedCandidate, setLoadedCandidate] = useState(() =>
         initiallyDecoded ? sourceKey + '\u0001cached' : '',
     );
     const imageRef = useRef<HTMLImageElement>(null);
+    const notifiedCandidate = useRef('');
     const active = useRef(true);
     const exceededBudget = useRef(false);
     const latestSourceKey = useRef(sourceKey);
     latestSourceKey.current = sourceKey;
     const loaded = loadedCandidate.startsWith(sourceKey + '\u0001') && !failed;
+    const heroPlaceholder =
+        imageKind === 'hero' ? imageSources(src, imageKind, imageProps.sizes).placeholderSrc : undefined;
     const placeholder =
         retainedSrc ||
         (placeholderSrc && imageKind
             ? (storefrontPlaceholderUrl(placeholderSrc, imageKind) ?? placeholderSrc)
             : placeholderSrc) ||
-        (imageKind === 'hero' ? sources.placeholderSrc : undefined);
+        heroPlaceholder;
 
     function useFallback() {
         if (!active.current) return;
@@ -117,11 +124,6 @@ function SafeImageSource({
     function reveal(image: HTMLImageElement, onDecoded?: () => void) {
         if (!image.complete || image.naturalWidth === 0) return;
         const candidate = imageCandidateIdentity(image);
-        markImageDecoded(image.currentSrc || image.src);
-        markImageDecoded(sources.src);
-        markImageDecoded(currentSrc);
-        markImageDecoded(sourceKey);
-        markImageDecoded(candidate);
         void decodeImageElement(image)
             .then(() => {
                 if (
@@ -136,6 +138,10 @@ function SafeImageSource({
                 markImageDecoded(currentSrc);
                 markImageDecoded(sourceKey);
                 markImageDecoded(candidate);
+                if (notifiedCandidate.current !== candidate) {
+                    notifiedCandidate.current = candidate;
+                    onImageReady?.(image);
+                }
                 setLoadedCandidate(sourceKey + '\u0001' + candidate);
                 setTimedOut(false);
                 onReady(image.currentSrc || image.src);
@@ -162,12 +168,10 @@ function SafeImageSource({
         image?.addEventListener(IMAGE_WAIT_EXPIRED_EVENT, expire);
         if (image?.complete && image.naturalWidth > 0) {
             const candidate = imageCandidateIdentity(image);
-            markImageDecoded(image.currentSrc || image.src);
-            markImageDecoded(sources.src);
-            markImageDecoded(currentSrc);
-            markImageDecoded(sourceKey);
-            markImageDecoded(candidate);
-            if (!loadedCandidate.startsWith(sourceKey + '\u0001')) {
+            if (
+                isImageAlreadyDecoded(image.currentSrc || image.src) &&
+                !loadedCandidate.startsWith(sourceKey + '\u0001')
+            ) {
                 setLoadedCandidate(sourceKey + '\u0001' + candidate);
                 setTimedOut(false);
                 onReady(image.currentSrc || image.src);

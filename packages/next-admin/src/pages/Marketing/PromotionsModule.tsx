@@ -23,10 +23,12 @@ import {
     MARKETING_OVERVIEW_QUERY,
     MarketingOverviewResult,
     REVOKE_COUPON_CAMPAIGN_MUTATION,
+    SET_COUPON_APPEARANCE_MUTATION,
     SET_PROMOTION_ENABLED_MUTATION,
     STOP_COUPON_ISSUANCE_MUTATION,
     StoreCouponRecord,
     UPDATE_PROMOTION_NAME_MUTATION,
+    type StoreCouponAppearanceTheme,
 } from '../../graphql/marketing.graphql';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
@@ -35,7 +37,7 @@ import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney } from '../Sales/sales-utils';
 import { GenericPromotionsPanel } from './GenericPromotionsPanel';
 import { MarketingAttributionPanel } from './MarketingAttributionPanel';
-import { NameDialog, SensitiveDialog } from './promotion-actions';
+import { CouponAppearanceDialog, NameDialog, SensitiveDialog } from './promotion-actions';
 import { CampaignDetailDialog } from './promotion-details';
 import { CouponEditor, FlashEditor, GrantCouponDialog } from './promotion-editors';
 import { CouponList, FlashSaleList } from './promotion-lists';
@@ -74,6 +76,8 @@ export function PromotionsModule() {
     const [flashEditorOpen, setFlashEditorOpen] = useState(false);
     const [sensitiveAction, setSensitiveAction] = useState<SensitiveAction | null>(null);
     const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+    const [appearanceEditing, setAppearanceEditing] = useState<StoreCouponRecord | null>(null);
+    const [appearanceError, setAppearanceError] = useState('');
     const [granting, setGranting] = useState<StoreCouponRecord | null>(null);
     const [viewing, setViewing] = useState<CampaignDetail | null>(null);
     const [couponVisibility, setCouponVisibility] = useState<CouponVisibility>('CURRENT');
@@ -140,12 +144,39 @@ export function PromotionsModule() {
         deleteStorePromotion: { result: string; message?: string | null };
     }>(DELETE_STORE_PROMOTION_MUTATION);
     const [updateName, renameState] = useMutation(UPDATE_PROMOTION_NAME_MUTATION);
+    const [setAppearance, appearanceState] = useMutation<{
+        setStoreCouponAppearance: { id: string; appearanceTheme: StoreCouponAppearanceTheme | null };
+    }>(SET_COUPON_APPEARANCE_MUTATION);
     const actionPending =
         enabledState.loading ||
         stopState.loading ||
         archiveState.loading ||
         revokeState.loading ||
         deleteState.loading;
+
+    const saveAppearance = async (theme: StoreCouponAppearanceTheme | null) => {
+        if (!appearanceEditing) return;
+        setAppearanceError('');
+        try {
+            const response = await setAppearance({ variables: { id: appearanceEditing.id, theme } });
+            if (
+                response.data?.setStoreCouponAppearance.id !== appearanceEditing.id ||
+                response.data.setStoreCouponAppearance.appearanceTheme !== theme
+            ) {
+                throw new Error('保存结果未确认，请刷新后核对券面配色');
+            }
+            setAppearanceEditing(null);
+            setNotice('券面配色已保存，优惠规则未改变');
+            try {
+                await overview.refetch();
+            } catch {
+                setNotice('');
+                setActionError('配色已保存，但列表刷新失败，请手动刷新核对');
+            }
+        } catch (error) {
+            setAppearanceError(errorText(error));
+        }
+    };
 
     const refreshAll = async () => {
         setActionError('');
@@ -420,6 +451,11 @@ export function PromotionsModule() {
                         onGrant={setGranting}
                         onView={item => setViewing({ type: 'COUPON', item })}
                         onRename={setRenaming}
+                        onAppearance={coupon => {
+                            setAppearanceError('');
+                            setActionError('');
+                            setAppearanceEditing(coupon);
+                        }}
                         onSensitive={openSensitiveAction}
                     />
                 ) : activeTab === 'FLASH_SALES' ? (
@@ -511,6 +547,18 @@ export function PromotionsModule() {
                     pending={renameState.loading}
                     onClose={() => setRenaming(null)}
                     onConfirm={saveName}
+                />
+            )}
+            {appearanceEditing && (
+                <CouponAppearanceDialog
+                    coupon={appearanceEditing}
+                    pending={appearanceState.loading}
+                    error={appearanceError}
+                    onClose={() => {
+                        setAppearanceEditing(null);
+                        setAppearanceError('');
+                    }}
+                    onConfirm={saveAppearance}
                 />
             )}
             {granting && (

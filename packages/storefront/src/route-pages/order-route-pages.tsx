@@ -114,6 +114,7 @@ export function OrderDetailRoutePage() {
         <RouteGate name="order-detail">
             <AuthPageBoundary language={runtime.language} onBack={runtime.goBack}>
                 <LazyOrderDetailPage
+                    api={runtime.api}
                     order={runtime.selectedOrder}
                     market={runtime.market}
                     locale={runtime.locale}
@@ -185,6 +186,10 @@ export function AddressesRoutePage() {
 
 export function AccountSecurityRoutePage() {
     const runtime = useRuntime();
+    return <AccountSecurityRouteContent key={runtime.customer?.id ?? 'guest'} runtime={runtime} />;
+}
+
+function AccountSecurityRouteContent({ runtime }: { runtime: ReturnType<typeof useRuntime> }) {
     const isZh = runtime.language === 'zh';
     const [avatarHistory, setAvatarHistory] = useState<CustomerAvatarHistoryEntry[]>([]);
     const [avatarHistoryLoading, setAvatarHistoryLoading] = useState(Boolean(runtime.customer));

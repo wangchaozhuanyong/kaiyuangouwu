@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InventoryControlService } from '@vendure/catalog-management-plugin';
 import { ID } from '@vendure/common/lib/shared-types';
 import { ContentTranslationService, isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
@@ -16,8 +16,10 @@ import {
 import { createHash, randomBytes } from 'node:crypto';
 import { FindOptionsWhere, In, LessThanOrEqual, Like } from 'typeorm';
 
+import { AfterSalesEvidenceService } from './after-sales-evidence.service';
 import {
     activeAfterSalesStates,
+    afterSalesEligibleOrderStates,
     afterSalesReasons,
     AfterSalesState,
     afterSalesStates,
@@ -39,13 +41,6 @@ import {
     UpdateAfterSalesReplacementInput,
 } from './types';
 
-const ELIGIBLE_ORDER_STATES = [
-    'PaymentSettled',
-    'PartiallyShipped',
-    'Shipped',
-    'PartiallyDelivered',
-    'Delivered',
-];
 const DESCRIPTION_MAX_LENGTH = 2_000;
 const RESOLUTION_MAX_LENGTH = 2_000;
 const MAX_ITEMS_PER_REQUEST = 20;
@@ -68,6 +63,7 @@ export class AfterSalesService {
         private readonly customerService: CustomerService,
         private readonly translations: ContentTranslationService,
         private readonly inventoryControl: InventoryControlService,
+        @Optional() private readonly evidence?: AfterSalesEvidenceService,
     ) {}
 
     async findForCustomer(ctx: RequestContext): Promise<AfterSalesRequest[]> {
@@ -163,7 +159,7 @@ export class AfterSalesService {
         if (String(order.customer?.id) !== String(customer.id)) {
             throw new UserInputError('订单不存在或当前账号无权申请售后');
         }
-        if (!ELIGIBLE_ORDER_STATES.includes(order.state)) {
+        if (!afterSalesEligibleOrderStates.includes(order.state)) {
             throw new UserInputError('当前订单状态暂不支持申请售后');
         }
 
@@ -294,6 +290,10 @@ export class AfterSalesService {
                     }),
             ),
         );
+        if (input.evidenceIds?.length) {
+            if (!this.evidence) throw new UserInputError('售后图片服务暂不可用');
+            await this.evidence.attach(ctx, request, input.evidenceIds);
+        }
         await this.addEvent(
             ctx,
             request,

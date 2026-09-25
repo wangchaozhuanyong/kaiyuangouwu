@@ -106,6 +106,11 @@ const AfterSalesModule = lazy(() =>
 const ReviewsModule = lazy(() =>
     routeModuleLoaders.reviews().then(module => ({ default: module.ReviewsModule })),
 );
+const CustomerServiceFeedbackModule = lazy(() =>
+    routeModuleLoaders
+        .customerServiceFeedback()
+        .then(module => ({ default: module.CustomerServiceFeedbackModule })),
+);
 const PromotionsModule = lazy(() =>
     routeModuleLoaders.promotions().then(module => ({ default: module.PromotionsModule })),
 );
@@ -373,7 +378,14 @@ defineNextAdminExtension({
         {
             id: 'storefront-decoration',
             path: '/storefront/decoration',
-            legacyPaths: ['/storefront-carousel', '/storefront-navigation'],
+            legacyPaths: [
+                '/storefront-carousel',
+                '/storefront-navigation',
+                {
+                    path: '/desktop-category-banners',
+                    target: '/storefront/decoration?panel=desktop-category-banners',
+                },
+            ],
             title: '商城装修',
             component: StorefrontModule,
             permissions: ['ReadStorefrontContent'],
@@ -497,6 +509,14 @@ defineNextAdminExtension({
             component: ReviewsModule,
             permissions: ['ReadOrder'],
             preload: routeModuleLoaders.reviews,
+        },
+        {
+            id: 'operations-customer-service-feedback',
+            path: '/sales/customer-service-feedback',
+            title: '客服服务评价',
+            component: CustomerServiceFeedbackModule,
+            permissions: ['ReadCustomer'],
+            preload: routeModuleLoaders.customerServiceFeedback,
         },
         {
             id: 'operations-manual-digital-delivery',

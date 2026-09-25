@@ -5,6 +5,7 @@ import { Not } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createContentPublicationChecker } from './content-publication';
+import { DESKTOP_CATEGORY_BANNER_PURPOSE, desktopCategoryBannerCode } from './desktop-category-banner';
 import { StorefrontContentBlock } from './entities/storefront-content-block.entity';
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
 import { StorefrontContentService } from './storefront-content.service';
@@ -700,6 +701,68 @@ describe('StorefrontContentService Channel isolation', () => {
                 where: { id: 'block-a', channelId: 'store-b', code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
             }),
         );
+    });
+});
+
+describe('StorefrontContentService desktop category banner guard', () => {
+    const settings = {
+        purpose: DESKTOP_CATEGORY_BANNER_PURPOSE,
+        categoryId: 'category-8',
+        mode: 'image',
+        layout: 'side',
+        focal: 'center',
+    };
+
+    it('checks the category belongs to the active store', async () => {
+        const findOne = vi.fn().mockResolvedValue(null);
+        const connection = { getRepository: vi.fn().mockReturnValue({ findOne }) };
+        const service = new StorefrontContentService(connection as any, {} as any, {} as any, {} as any);
+        const input = validate(
+            createInput({
+                code: desktopCategoryBannerCode('category-8'),
+                type: 'CUSTOM',
+                targetType: 'NONE',
+                targetValue: null,
+                imageAssetId: 'asset-8',
+                settings,
+            }),
+        );
+
+        await expect(
+            (service as any).validateDesktopCategoryBanner({ channelId: 'store-a' }, input, []),
+        ).rejects.toThrow(/当前店铺不存在/);
+        expect(findOne).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({ channels: { id: 'store-a' }, isRoot: false }),
+            }),
+        );
+    });
+
+    it('rejects a reserved code without matching settings and permits explicit text fallback', async () => {
+        const service = new StorefrontContentService({} as any, {} as any, {} as any, {} as any);
+        const forged = validate(
+            createInput({
+                code: desktopCategoryBannerCode('default'),
+                type: 'CUSTOM',
+                targetType: 'NONE',
+                targetValue: null,
+            }),
+        );
+        await expect(
+            (service as any).validateDesktopCategoryBanner({ channelId: 'store-a' }, forged, []),
+        ).rejects.toThrow(/设置不正确/);
+        const textOnly = validate(
+            createInput({
+                code: desktopCategoryBannerCode('default'),
+                type: 'CUSTOM',
+                targetType: 'NONE',
+                targetValue: null,
+                settings: { ...settings, categoryId: 'default', mode: 'text' },
+            }),
+        );
+        await expect(
+            (service as any).validateDesktopCategoryBanner({ channelId: 'store-a' }, textOnly, []),
+        ).resolves.toBeUndefined();
     });
 });
 

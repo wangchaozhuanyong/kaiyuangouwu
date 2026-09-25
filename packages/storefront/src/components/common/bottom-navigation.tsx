@@ -9,7 +9,6 @@ import {
     History,
     House,
     LayoutGrid,
-    Megaphone,
     ReceiptText,
     Search,
     ShoppingCart,
@@ -41,7 +40,6 @@ export const navigationTargetRoutes = {
     '/favorites': 'favorites',
     '/history': 'history',
     '/notifications': 'notifications',
-    '/announcements': 'announcements',
     '/support': 'support',
     '/reviews': 'reviews',
 } as const satisfies Record<string, RouteName>;
@@ -74,7 +72,6 @@ const targetIcons: Record<
     '/favorites': Heart,
     '/history': History,
     '/notifications': Bell,
-    '/announcements': Megaphone,
     '/support': Headphones,
     '/reviews': Star,
 };

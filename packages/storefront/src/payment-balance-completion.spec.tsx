@@ -86,6 +86,67 @@ describe('balance payment completion', () => {
         }
     });
 
+    it.each([
+        { paymentState: 'Settled', remaining: '¥0.43' },
+        { paymentState: 'Authorized', remaining: '¥0.43' },
+        { paymentState: 'Declined', remaining: '¥0.63' },
+    ])(
+        'counts an external $paymentState payment only when it covers the order',
+        ({ paymentState, remaining }) => {
+            const host = document.createElement('div');
+            document.body.append(host);
+            const root = createRoot(host);
+            const order = {
+                id: '44',
+                code: 'SIM',
+                state: 'ArrangingPayment',
+                currencyCode: 'CNY',
+                lines: [],
+                payments: [
+                    { id: '28', method: 'referral-balance', amount: 50, state: 'Settled' },
+                    { id: '29', method: 'external-card', amount: 20, state: paymentState },
+                ],
+                subTotalWithTax: 113,
+                shippingWithTax: 0,
+                totalWithTax: 113,
+                taxSummary: [],
+                customFields: {},
+            };
+            try {
+                act(() =>
+                    root.render(
+                        <PaymentPage
+                            api={{} as never}
+                            order={order as never}
+                            cart={{ state: 'PAYMENT_PENDING' } as never}
+                            customer={{ id: '27' } as never}
+                            market={{ code: 'sim', currencyCode: 'CNY' } as never}
+                            displayCurrencyCode="CNY"
+                            locale="zh-CN"
+                            language="zh"
+                            onCancel={vi.fn()}
+                            onOrderChange={vi.fn()}
+                            onComplete={vi.fn()}
+                        />,
+                    ),
+                );
+                const remainingRow = [...host.querySelectorAll('dt')].find(
+                    item => item.textContent === '剩余待支付',
+                );
+                expect(remainingRow?.nextElementSibling?.textContent).toBe(remaining);
+                const externalRow = [...host.querySelectorAll('dt')].find(
+                    item => item.textContent === '已付／已授权',
+                );
+                expect(externalRow?.nextElementSibling?.textContent).toBe(
+                    paymentState === 'Declined' ? undefined : '-¥0.2',
+                );
+            } finally {
+                act(() => root.unmount());
+                host.remove();
+            }
+        },
+    );
+
     it.each(['Delivered', 'PartiallyDelivered', 'PaymentSettled', 'ArrangingPayment'])(
         'handles the payment response state %s',
         async state => {

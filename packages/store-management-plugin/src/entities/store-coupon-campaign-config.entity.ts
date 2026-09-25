@@ -45,6 +45,9 @@ export class StoreCouponCampaignConfig extends VendureEntity {
     @Column({ type: 'varchar', length: 16, default: 'EXCLUSIVE' })
     stackPolicy: CouponStackPolicy;
 
+    @Column({ type: 'varchar', length: 16, nullable: true })
+    appearanceTheme: import('../types').StoreCouponAppearanceTheme | null;
+
     @Column({ type: 'boolean', default: true })
     returnOnCancellation: boolean;
 

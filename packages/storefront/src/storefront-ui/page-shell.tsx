@@ -3,13 +3,17 @@ import {
     Bell,
     ChevronRight,
     CircleAlert,
+    Clock3,
     Flame,
+    Headphones,
+    Heart,
     LayoutGrid,
     Minus,
     Package,
     ShieldCheck,
     ShoppingBag,
     Sparkles,
+    Star,
     Tag,
     WifiOff,
     X,
@@ -38,7 +42,6 @@ export function asyncRouteTitle(routeName: RouteName, language: StorefrontLangua
         'order-detail': isZh ? '订单详情' : 'Order details',
         addresses: isZh ? '地址管理' : 'Addresses',
         'account-security': isZh ? '账户与安全' : 'Account and security',
-        announcements: isZh ? '网站公告' : 'Website notices',
         notifications: isZh ? '消息通知' : 'Notifications',
         coupons: isZh ? '优惠券' : 'Coupons',
         referral: isZh ? '邀请返利' : 'Referral rewards',
@@ -210,6 +213,53 @@ export function getSectionIcon(title?: string): ReactNode {
     return <ShoppingBag size={13} />;
 }
 
+export type SectionKind =
+    | 'coupons'
+    | 'flash-sale'
+    | 'best-sellers'
+    | 'recommendations'
+    | 'categories'
+    | 'services'
+    | 'history'
+    | 'support'
+    | 'orders';
+
+/** Determined by module identity so merchant copy and language cannot change the icon. */
+export function SectionIcon({ kind }: { kind: SectionKind }) {
+    const tone = {
+        coupons: 'coupon',
+        'flash-sale': 'support',
+        'best-sellers': 'coupon',
+        recommendations: 'support',
+        categories: 'security',
+        services: 'mail',
+        history: 'studio',
+        support: 'support',
+        orders: 'security',
+    }[kind];
+    const Icon = {
+        coupons: Tag,
+        'flash-sale': Clock3,
+        'best-sellers': Star,
+        recommendations: Heart,
+        categories: LayoutGrid,
+        services: ShieldCheck,
+        history: Clock3,
+        support: Headphones,
+        orders: Package,
+    }[kind];
+    return (
+        <span
+            className="section-header-icon-pill"
+            data-section-kind={kind}
+            data-icon-tone={tone}
+            aria-hidden="true"
+        >
+            <Icon />
+        </span>
+    );
+}
+
 export function SectionHeader({
     title,
     subtitle,
@@ -218,6 +268,7 @@ export function SectionHeader({
     onAction,
     icon,
     subtitlePlacement = 'below',
+    kind,
 }: {
     title?: string;
     subtitle?: string;
@@ -226,6 +277,7 @@ export function SectionHeader({
     onAction?: () => void;
     icon?: ReactNode;
     subtitlePlacement?: 'below' | 'end';
+    kind?: SectionKind;
 }) {
     const resolvedIcon = icon ?? getSectionIcon(title);
     const subtitleAtEnd = subtitlePlacement === 'end';
@@ -234,10 +286,14 @@ export function SectionHeader({
             {(title || (subtitle && !subtitleAtEnd)) && (
                 <div className="section-header-title-lockup">
                     <div className="section-header-title-row">
-                        {resolvedIcon && (
-                            <span className="section-header-icon-pill" aria-hidden="true">
-                                {resolvedIcon}
-                            </span>
+                        {kind ? (
+                            <SectionIcon kind={kind} />
+                        ) : (
+                            resolvedIcon && (
+                                <span className="section-header-icon-pill" aria-hidden="true">
+                                    {resolvedIcon}
+                                </span>
+                            )
                         )}
                         {title && <h2>{title}</h2>}
                     </div>
@@ -265,18 +321,30 @@ export function AccountShortcut({
     icon,
     label,
     count,
+    tone,
     inlineCount = false,
     onClick,
 }: {
     icon: ReactNode;
     label: string;
     count: number | undefined;
+    tone?: 'pending' | 'shipping' | 'receiving' | 'completed' | 'reviews' | 'service';
     inlineCount?: boolean;
     onClick: () => void;
 }) {
+    const iconTone =
+        tone === 'pending' || tone === 'reviews'
+            ? 'coupon'
+            : tone === 'shipping'
+              ? 'security'
+              : tone === 'receiving'
+                ? 'studio'
+                : tone === 'completed'
+                  ? 'mail'
+                  : 'support';
     return (
-        <button type="button" onClick={onClick}>
-            <span>
+        <button type="button" onClick={onClick} data-order-status={tone}>
+            <span data-icon-tone={iconTone}>
                 {icon}
                 {!inlineCount && count != null && count > 0 && <b>{count}</b>}
             </span>
@@ -290,15 +358,17 @@ export function ServiceButton({
     icon,
     label,
     badge,
+    tone,
     onClick,
 }: {
     icon: ReactNode;
     label: string;
     badge?: string;
+    tone?: 'security' | 'mail' | 'studio' | 'coupon' | 'support';
     onClick: () => void;
 }) {
     return (
-        <button type="button" onClick={onClick}>
+        <button type="button" onClick={onClick} data-icon-tone={tone}>
             <span>
                 {icon}
                 {badge && <em>{badge}</em>}

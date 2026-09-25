@@ -4,6 +4,14 @@ export type AfterSalesType = (typeof afterSalesTypes)[number];
 export const afterSalesStates = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'COMPLETED'] as const;
 export type AfterSalesState = (typeof afterSalesStates)[number];
 
+export const afterSalesEligibleOrderStates = [
+    'PaymentSettled',
+    'PartiallyShipped',
+    'Shipped',
+    'PartiallyDelivered',
+    'Delivered',
+];
+
 export const afterSalesReasons = [
     'CHANGED_MIND',
     'NOT_AS_DESCRIBED',

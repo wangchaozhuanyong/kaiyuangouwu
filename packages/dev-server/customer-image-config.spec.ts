@@ -17,7 +17,15 @@ describe('customer image production configuration', () => {
                 CUSTOMER_AVATAR_STORAGE_ROOT: '/data/assets/avatars',
             }),
         ).toThrow('separate');
-        expect(() => customerImageConfiguration('/data/assets', true, environment)).not.toThrow();
+        const config = customerImageConfiguration('/data/assets', true, {
+            ...environment,
+            IMAGE_GENERATION_DOWNLOAD_SECRET: 'synthetic-signing-secret',
+        });
+        expect(config.evidenceStorage).toEqual({
+            blobStore: undefined,
+            rootDirectory: '/data/private',
+            signingSecret: 'synthetic-signing-secret',
+        });
     });
     it('requires distinct buckets and an HTTPS media origin before enabling S3', () => {
         const s3 = {
@@ -28,7 +36,8 @@ describe('customer image production configuration', () => {
             CUSTOMER_PRIVATE_IMAGE_S3_BUCKET: 'synthetic-private-bucket',
             CUSTOMER_AVATAR_CDN_ORIGIN: 'https://media.example.test',
         };
-        expect(() => customerImageConfiguration('/data/assets', true, s3)).not.toThrow();
+        const config = customerImageConfiguration('/data/assets', true, s3);
+        expect(config.evidenceStorage.blobStore).toBe(config.privateObjects);
         expect(() =>
             customerImageConfiguration('/data/assets', true, {
                 ...s3,

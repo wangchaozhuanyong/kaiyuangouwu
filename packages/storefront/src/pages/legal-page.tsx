@@ -17,6 +17,7 @@ export interface ManagedLegalPageProps {
     legalIdentity?: StorefrontLegalIdentity;
     storefrontHostname?: string;
     onBack: () => void;
+    onSelectDocument: (kind: 'privacy' | 'terms') => void;
 }
 
 export function ManagedLegalPage({
@@ -27,6 +28,7 @@ export function ManagedLegalPage({
     legalIdentity,
     storefrontHostname,
     onBack,
+    onSelectDocument,
 }: ManagedLegalPageProps) {
     const isZh = language === 'zh';
     const isPrivacy = kind === 'privacy';
@@ -75,56 +77,97 @@ export function ManagedLegalPage({
 
     return (
         <main className="page subpage legal-page">
-            <SubHeader title={title} language={language} onBack={onBack} />
-            <article className="legal-managed-content">
-                {document?.subtitle && (
-                    <header className="legal-managed-intro">
-                        <p>
-                            {interpolateLegalProfileTokens(document.subtitle, scopedLegalIdentity, language)}
-                        </p>
-                    </header>
-                )}
-                {legalDetails.length > 0 ? (
-                    <dl
-                        className="legal-identity-card"
-                        aria-label={isZh ? '经营主体与联系信息' : 'Legal identity and contact information'}
-                    >
-                        {legalDetails.map(({ label, value, isEmail }) => (
-                            <div key={label}>
-                                <dt>{label}</dt>
-                                <dd>
-                                    {isEmail && isValidEmail(value) ? (
-                                        <a href={`mailto:${value}`}>{value}</a>
-                                    ) : (
-                                        value
-                                    )}
-                                </dd>
-                            </div>
+            <SubHeader
+                title={title}
+                language={language}
+                onBack={onBack}
+                action={<span className="legal-header-brand">{storefrontName}</span>}
+            />
+            <div className="legal-document-layout">
+                <aside
+                    className="legal-document-navigation"
+                    aria-label={isZh ? '法律与条款' : 'Legal documents'}
+                >
+                    <h2>{isZh ? '法律与条款' : 'Legal documents'}</h2>
+                    <nav aria-label={isZh ? '法律文件切换' : 'Legal document navigation'}>
+                        {(['privacy', 'terms'] as const).map(documentKind => (
+                            <button
+                                key={documentKind}
+                                type="button"
+                                className={documentKind === kind ? 'is-active' : undefined}
+                                aria-current={documentKind === kind ? 'page' : undefined}
+                                onClick={() => onSelectDocument(documentKind)}
+                            >
+                                <span>
+                                    {documentKind === 'privacy'
+                                        ? isZh
+                                            ? '隐私政策'
+                                            : 'Privacy Policy'
+                                        : isZh
+                                          ? '使用条款'
+                                          : 'Terms of use'}
+                                </span>
+                                <span className="legal-document-navigation-dot" aria-hidden="true" />
+                            </button>
                         ))}
-                    </dl>
-                ) : null}
-                {document ? (
-                    <div className="legal-managed-body">
-                        {interpolateLegalProfileTokens(document.body, scopedLegalIdentity, language)}
-                    </div>
-                ) : (
-                    <div className="legal-managed-empty" role="status">
-                        <CircleAlert aria-hidden="true" />
-                        <div>
-                            <strong>{isZh ? '法律文件暂未发布' : 'Legal document not published'}</strong>
+                    </nav>
+                </aside>
+                <article className="legal-managed-content">
+                    {document?.subtitle && (
+                        <header className="legal-managed-intro">
                             <p>
-                                {isZh
-                                    ? '请联系店铺客服获取最新政策内容。'
-                                    : 'Contact store support for the current policy.'}
+                                {interpolateLegalProfileTokens(
+                                    document.subtitle,
+                                    scopedLegalIdentity,
+                                    language,
+                                )}
                             </p>
+                        </header>
+                    )}
+                    {legalDetails.length > 0 ? (
+                        <dl
+                            className="legal-identity-card"
+                            aria-label={
+                                isZh ? '经营主体与联系信息' : 'Legal identity and contact information'
+                            }
+                        >
+                            {legalDetails.map(({ label, value, isEmail }) => (
+                                <div key={label}>
+                                    <dt>{label}</dt>
+                                    <dd>
+                                        {isEmail && isValidEmail(value) ? (
+                                            <a href={`mailto:${value}`}>{value}</a>
+                                        ) : (
+                                            value
+                                        )}
+                                    </dd>
+                                </div>
+                            ))}
+                        </dl>
+                    ) : null}
+                    {document ? (
+                        <div className="legal-managed-body">
+                            {interpolateLegalProfileTokens(document.body, scopedLegalIdentity, language)}
                         </div>
-                    </div>
-                )}
-                <footer>
-                    <strong>{storefrontName}</strong>
-                    <span>{title}</span>
-                </footer>
-            </article>
+                    ) : (
+                        <div className="legal-managed-empty" role="status">
+                            <CircleAlert aria-hidden="true" />
+                            <div>
+                                <strong>{isZh ? '法律文件暂未发布' : 'Legal document not published'}</strong>
+                                <p>
+                                    {isZh
+                                        ? '请联系店铺客服获取最新政策内容。'
+                                        : 'Contact store support for the current policy.'}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                    <footer>
+                        <strong>{storefrontName}</strong>
+                        <span>{title}</span>
+                    </footer>
+                </article>
+            </div>
         </main>
     );
 }

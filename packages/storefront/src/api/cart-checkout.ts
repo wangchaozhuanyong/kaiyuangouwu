@@ -332,7 +332,7 @@ export class CartCheckoutApi extends BaseDomainApi {
         }>(
             `query MyStorefrontCouponUsageRecordsPage($options: StoreCouponPageOptions) {
                 myStorefrontCouponUsageRecordsPage(options: $options) { items {
-                id customerCouponId campaignId campaignName campaignKind status currencyCode
+                id customerCouponId campaignId campaignName campaignKind appearanceTheme status currencyCode
                 minimumSpend discountAmount discountRate savedAmount usedAt refundedAt orderId orderCode
             } totalItems } }`,
             { options },
@@ -378,6 +378,7 @@ export class CartCheckoutApi extends BaseDomainApi {
                         campaignId
                         campaignName
                         campaignKind
+                        appearanceTheme
                         status
                         currencyCode
                         minimumSpend

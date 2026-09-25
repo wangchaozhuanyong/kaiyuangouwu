@@ -19,6 +19,8 @@ const STOREFRONT_BLOCK_FIELDS = gql`
             mimeType
             preview
             source
+            width
+            height
         }
         imageUrl
         backgroundColor
@@ -235,6 +237,15 @@ export const SYSTEM_ANNOUNCEMENTS_QUERY = gql`
             updatedAt
             enabled
             priority
+            targetMode
+            channels {
+                id
+                code
+                customFields {
+                    storefrontNameZh
+                    storefrontNameEn
+                }
+            }
             titleZh
             titleEn
             titleEnLocked
@@ -244,6 +255,21 @@ export const SYSTEM_ANNOUNCEMENTS_QUERY = gql`
             linkUrl
             startsAt
             endsAt
+        }
+    }
+`;
+
+export const SYSTEM_ANNOUNCEMENT_CHANNELS_QUERY = gql`
+    query NextAdminSystemAnnouncementChannels {
+        channels(options: { take: 1000 }) {
+            items {
+                id
+                code
+                customFields {
+                    storefrontNameZh
+                    storefrontNameEn
+                }
+            }
         }
     }
 `;
@@ -368,6 +394,8 @@ export interface StorefrontAssetRef {
     name: string;
     preview: string;
     source: string;
+    width?: number;
+    height?: number;
 }
 
 export interface StorefrontBlockTranslation {
@@ -469,6 +497,8 @@ export interface SystemAnnouncementRecord {
     updatedAt: string;
     enabled: boolean;
     priority: number;
+    targetMode: 'ALL' | 'SINGLE' | 'MULTIPLE';
+    channels: SystemAnnouncementChannel[];
     titleZh: string;
     titleEn: string;
     titleEnLocked: boolean;
@@ -478,6 +508,15 @@ export interface SystemAnnouncementRecord {
     linkUrl: string | null;
     startsAt: string | null;
     endsAt: string | null;
+}
+
+export interface SystemAnnouncementChannel {
+    id: string;
+    code: string;
+    customFields?: {
+        storefrontNameZh?: string | null;
+        storefrontNameEn?: string | null;
+    } | null;
 }
 
 export interface StorefrontPromotionRecord {

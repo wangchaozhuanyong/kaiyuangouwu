@@ -5,8 +5,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
     AuthVisual,
     authVisualStyle,
-    configuredColor,
-    readableColor,
     type AuthVisualData,
 } from '../../../../storefront-content-plugin/src/shared/auth-visual';
 import { HeroScene, type HeroSceneData } from '../../../../storefront-content-plugin/src/shared/hero-scene';
@@ -22,8 +20,10 @@ import {
     semanticPaletteCssVariables,
     storefrontSkinCssVariables,
 } from '../../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
+import { supportFaqItems } from '../../../../storefront-content-plugin/src/support-faq';
 import { normalizeStorefrontVisualPreset } from '../../../../storefront-content-plugin/src/visual-presets';
 import { getActiveChannelToken } from '../../apollo';
+import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { type StorefrontContentBlock, type StorefrontLanguageCode } from '../../graphql/storefront.graphql';
 import { blockTranslation, itemTranslation } from './storefront-content-utils';
@@ -50,6 +50,14 @@ export function BlockPreview({
         const startTime = stringSetting(block.settings?.serviceStartTime, '09:00');
         const endTime = stringSetting(block.settings?.serviceEndTime, '18:00');
         const channels = block.items.filter(item => item.enabled);
+        const faqs = supportFaqItems(block.settings).filter(
+            item =>
+                item.enabled &&
+                item.questionZh.trim() &&
+                item.answerZh.trim() &&
+                item.questionEn.trim() &&
+                item.answerEn.trim(),
+        );
         return (
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
@@ -62,12 +70,25 @@ export function BlockPreview({
                     </span>
                 </div>
                 <div className="p-4" style={{ backgroundColor: block.backgroundColor ?? '#f8fafc' }}>
-                    <h4 className="text-base font-bold text-slate-900">
-                        {translation.title || (isZh ? '客服中心' : 'Customer support')}
-                    </h4>
-                    {translation.subtitle && (
-                        <p className="mt-1 text-xs leading-5 text-slate-500">{translation.subtitle}</p>
-                    )}
+                    <div className="flex items-center gap-4">
+                        <div className="min-w-0 flex-1">
+                            <h4 className="text-base font-bold text-slate-900">
+                                {translation.title || (isZh ? '客服中心' : 'Customer support')}
+                            </h4>
+                            {translation.subtitle && (
+                                <p className="mt-1 text-xs leading-5 text-slate-500">
+                                    {translation.subtitle}
+                                </p>
+                            )}
+                        </div>
+                        {image && (
+                            <img
+                                src={image}
+                                alt={isZh ? '客服页首配图预览' : 'Support header image preview'}
+                                className="h-20 w-[32%] shrink-0 rounded-lg bg-white object-contain"
+                            />
+                        )}
+                    </div>
                     <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
                         <div className="flex items-center justify-between gap-3 text-[11px]">
                             <strong className="text-slate-800">
@@ -124,6 +145,28 @@ export function BlockPreview({
                             </p>
                         )}
                     </div>
+                    {faqs.length > 0 && (
+                        <section
+                            className="mt-3 rounded-lg bg-white p-3"
+                            aria-label={isZh ? '常见问题预览' : 'FAQ preview'}
+                        >
+                            <h5 className="text-xs font-bold text-slate-800">
+                                {isZh ? '常见问题' : 'Frequently asked questions'}
+                            </h5>
+                            <div className="mt-2 space-y-2">
+                                {faqs.map(item => (
+                                    <div key={item.id} className="text-xs">
+                                        <strong className="text-slate-800">
+                                            {isZh ? item.questionZh : item.questionEn}
+                                        </strong>
+                                        <p className="mt-1 whitespace-pre-wrap text-slate-500">
+                                            {isZh ? item.answerZh : item.answerEn}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
                 </div>
             </section>
         );
@@ -213,14 +256,20 @@ const PREVIEW_BRANDING = gql`
     }
 `;
 
-function HeroBlockPreview({
+export function HeroBlockPreview({
     block,
     language,
+    fixedViewport,
+    compact = false,
 }: {
     block: StorefrontContentBlock;
     language: StorefrontLanguageCode;
+    fixedViewport?: 'mobile' | 'desktop';
+    compact?: boolean;
 }) {
-    const [viewport, setViewport] = useState<'mobile' | 'desktop'>('mobile');
+    const [selectedViewport, setViewport] = useState<'mobile' | 'desktop'>('mobile');
+    const viewport = fixedViewport ?? selectedViewport;
+    const [expanded, setExpanded] = useState(false);
     const previewFrame = useRef<HTMLDivElement>(null);
     const [previewWidth, setPreviewWidth] = useState(390);
     useEffect(() => {
@@ -230,11 +279,15 @@ function HeroBlockPreview({
         observer.observe(frame);
         return () => observer.disconnect();
     }, []);
-    const frameWidth = viewport === 'desktop' ? 1024 : 390;
-    const frameHeight = viewport === 'desktop' ? 400 : 235;
+    const frameWidth = viewport === 'desktop' ? (compact ? 874 : 1024) : 390;
+    const imageWidth = block.imageAsset?.width;
+    const imageHeight = block.imageAsset?.height;
+    const imageRatio =
+        imageWidth && imageHeight && imageWidth > 0 && imageHeight > 0 ? imageWidth / imageHeight : 2;
+    const desktopHeroHeight = Math.ceil(850 / imageRatio);
+    const frameHeight = viewport === 'desktop' ? desktopHeroHeight + 24 : 235;
     const frameScale = Math.min(1, previewWidth / frameWidth);
     const imageUrl = block.imageAsset?.preview ?? block.imageUrl ?? '';
-    const imageTone = useImageTone(imageUrl);
     const content: HeroSceneData = {
         ...blockTranslation(block, language),
         backgroundColor: block.backgroundColor,
@@ -259,41 +312,34 @@ function HeroBlockPreview({
         (!getActiveChannelToken() || getActiveChannelToken() === brandingQuery.data?.activeChannel.token)
             ? brandingQuery.data?.storefrontPreviewBranding
             : undefined;
-    const oriental = branding && brandingQuery.data?.storefrontVisualPreset.presetId === 'modern-oriental';
-    const palette = oriental ? undefined : branding;
-    const background = configuredColor(palette?.backgroundColor);
+    const presetId = normalizeStorefrontVisualPreset(brandingQuery.data?.storefrontVisualPreset.presetId);
+    const paletteVariables = {
+        ...semanticPaletteCssVariables(resolveStorefrontSemanticPalette(presetId, branding)),
+        ...storefrontSkinCssVariables(presetId),
+    };
     const imageSources = responsiveImageSources(imageUrl, 'hero');
-    const style = {
-        '--store-background': background,
-        '--store-foreground': background ? readableColor(background) : undefined,
-        '--store-primary': configuredColor(palette?.primaryColor),
-        '--store-highlight': configuredColor(palette?.highlightColor),
-    } as CSSProperties;
+    const style = paletteVariables as CSSProperties;
     const document =
         '<!doctype html>' +
         renderToStaticMarkup(
-            <html
-                lang={language === 'zh_Hans' ? 'zh' : 'en'}
-                data-storefront-preset={oriental ? 'modern-oriental' : 'classic'}
-            >
+            <html lang={language === 'zh_Hans' ? 'zh' : 'en'} data-storefront-preset={presetId}>
                 <head>
                     <meta charSet="utf-8" />
                     <style>{`*{box-sizing:border-box;border:0 solid}body{margin:0;padding:12px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Roboto,sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;font-feature-settings:'cv02','cv03','cv04','cv11';--font-numeric:-apple-system,BlinkMacSystemFont,'SF Pro Display','PingFang SC','Segoe UI',Roboto,sans-serif}button{font:inherit;padding:0}h1,p{margin:0}img{display:block;max-width:100%;height:auto} ${heroSceneCss}`}</style>
                 </head>
                 <body style={style}>
                     <section
-                        className="hero"
-                        data-image-tone={imageTone}
+                        className={`hero${viewport === 'desktop' ? ' hero-editor-desktop hero-image-overlay' : ''}`}
                         style={{
-                            ...heroThemeStyle(content, imageTone),
+                            ...heroThemeStyle(content),
                             margin: 0,
                             width: viewport === 'desktop' ? 850 : '100%',
-                            minHeight: viewport === 'desktop' ? 360 : 195,
+                            minHeight: viewport === 'desktop' ? desktopHeroHeight : 195,
+                            aspectRatio: viewport === 'desktop' ? String(imageRatio) : undefined,
                         }}
                     >
                         <HeroScene
                             content={content}
-                            imageUrl={imageUrl}
                             imageLabel={content.title}
                             image={
                                 imageUrl ? (
@@ -303,6 +349,8 @@ function HeroBlockPreview({
                                         }
                                         srcSet={imageSources?.webpSrcSet}
                                         sizes={imageSources?.sizes}
+                                        width={imageWidth || undefined}
+                                        height={imageHeight || undefined}
                                         className="hero-rich-backdrop"
                                         alt={content.title}
                                     />
@@ -317,6 +365,42 @@ function HeroBlockPreview({
                 </body>
             </html>,
         );
+    const frame = (
+        <div
+            ref={previewFrame}
+            style={{
+                position: 'relative',
+                minWidth: 0,
+                overflow: 'hidden',
+                height: frameHeight * frameScale,
+            }}
+        >
+            <iframe
+                title="首页轮播效果"
+                sandbox=""
+                srcDoc={document}
+                width={frameWidth}
+                height={frameHeight}
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    display: 'block',
+                    border: 0,
+                    transform: `scale(${frameScale})`,
+                    transformOrigin: 'top left',
+                }}
+            />
+        </div>
+    );
+    if (compact) {
+        return (
+            <div className="overflow-hidden rounded-xl bg-white" aria-label="首页横幅预览">
+                {brandingQuery.error && <p role="alert">品牌配色加载失败，请刷新预览。</p>}
+                {frame}
+            </div>
+        );
+    }
     return (
         <section
             className="overflow-hidden rounded-xl border border-slate-200 bg-white"
@@ -339,6 +423,13 @@ function HeroBlockPreview({
                             {value === 'mobile' ? '手机' : '电脑'}
                         </button>
                     ))}
+                    <button
+                        type="button"
+                        onClick={() => setExpanded(true)}
+                        className="rounded border px-2 py-1 text-xs"
+                    >
+                        放大预览
+                    </button>
                 </div>
             </div>
             <p className="p-3 text-xs text-slate-500">
@@ -349,32 +440,40 @@ function HeroBlockPreview({
                     品牌配色加载失败，请刷新预览。
                 </p>
             )}
-            <div
-                ref={previewFrame}
-                style={{
-                    position: 'relative',
-                    minWidth: 0,
-                    overflow: 'hidden',
-                    height: frameHeight * frameScale,
-                }}
-            >
-                <iframe
-                    title="首页轮播效果"
-                    sandbox=""
-                    srcDoc={document}
-                    width={viewport === 'desktop' ? 1024 : 390}
-                    height={viewport === 'desktop' ? 400 : 235}
-                    style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        display: 'block',
-                        border: 0,
-                        transform: `scale(${frameScale})`,
-                        transformOrigin: 'top left',
-                    }}
-                />
-            </div>
+            {frame}
+            {expanded && (
+                <AccessibleDialogSurface
+                    accessibleName="放大轮播效果预览"
+                    onRequestClose={() => setExpanded(false)}
+                    className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4"
+                >
+                    <div className="flex max-h-[90vh] w-full max-w-[1100px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+                        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                            <h3 className="flex items-center gap-2 text-sm font-bold">
+                                轮播效果预览 · {viewport === 'desktop' ? '电脑' : '手机'}
+                                <FeatureHelpButton topic="storefront.hero-preview" title="轮播效果预览" />
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => setExpanded(false)}
+                                className="rounded border border-slate-300 px-3 py-1.5 text-xs"
+                            >
+                                关闭预览
+                            </button>
+                        </div>
+                        <div className="overflow-auto p-4">
+                            <iframe
+                                title="放大首页轮播效果"
+                                sandbox=""
+                                srcDoc={document}
+                                width={frameWidth}
+                                height={frameHeight}
+                                className="block max-w-none border-0"
+                            />
+                        </div>
+                    </div>
+                </AccessibleDialogSurface>
+            )}
         </section>
     );
 }

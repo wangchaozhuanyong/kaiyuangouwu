@@ -17,7 +17,12 @@ import { IsNull } from 'typeorm';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { StoreProfile } from './entities/store-profile.entity';
 import { storeShippingMethodCode, storeZoneName } from './store-commerce-settings.service';
+import { StoreCurrencySettingsService } from './store-currency-settings.service';
 import { StoreActivationCheck, StoreActivationCheckCode, StoreActivationReadiness } from './types';
+import {
+    USDT_TRC20_PAYMENT_HANDLER_CODE,
+    USDT_TRC20_PAYMENT_METHOD_CODE,
+} from './usdt/usdt-payment.constants';
 
 const TEST_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|sandbox|test)(?:$|[-_\s])|测试/iu;
 const INTERNAL_BALANCE_PAYMENT_CODES = new Set(['referral-balance', 'referral-balance-payment']);
@@ -49,6 +54,7 @@ export function hasCompleteStoreProfile(profile: StoreProfile): boolean {
 export function isProductionPaymentMethod(
     method: Pick<PaymentMethod, 'code' | 'handler' | 'translations'>,
     registeredHandlerCodes?: ReadonlySet<string>,
+    usdtPaymentReady = false,
 ): boolean {
     if (
         INTERNAL_BALANCE_PAYMENT_CODES.has(method.code) ||
@@ -61,6 +67,18 @@ export function isProductionPaymentMethod(
         (!method.handler?.code || !registeredHandlerCodes.has(method.handler.code))
     ) {
         return false;
+    }
+    if (
+        method.code === USDT_TRC20_PAYMENT_METHOD_CODE ||
+        method.handler?.code === USDT_TRC20_PAYMENT_HANDLER_CODE
+    ) {
+        if (
+            !usdtPaymentReady ||
+            method.code !== USDT_TRC20_PAYMENT_METHOD_CODE ||
+            method.handler?.code !== USDT_TRC20_PAYMENT_HANDLER_CODE
+        ) {
+            return false;
+        }
     }
     const searchable = [
         method.code,
@@ -143,6 +161,7 @@ export class StoreActivationReadinessService {
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly configService: ConfigService,
+        private readonly currencySettings: StoreCurrencySettingsService,
     ) {}
 
     async get(ctx: RequestContext, profile: StoreProfile): Promise<StoreActivationReadiness> {
@@ -199,6 +218,20 @@ export class StoreActivationReadinessService {
         const registeredPaymentHandlers = new Set(
             this.configService.paymentOptions.paymentMethodHandlers.map(handler => handler.code),
         );
+        const hasUsdtMethod = paymentMethods.some(
+            method =>
+                method.code === USDT_TRC20_PAYMENT_METHOD_CODE ||
+                method.handler?.code === USDT_TRC20_PAYMENT_HANDLER_CODE,
+        );
+        const usdtConfiguration = hasUsdtMethod
+            ? await this.currencySettings.getForChannel(ctx, channel)
+            : null;
+        const usdtPaymentReady = Boolean(
+            usdtConfiguration?.selectorEnabled &&
+            usdtConfiguration.usdtDisplayEnabled &&
+            usdtConfiguration.usdtRateAvailable &&
+            usdtConfiguration.usdtPaymentConfigured,
+        );
 
         return evaluateStoreActivationReadiness(
             {
@@ -214,7 +247,7 @@ export class StoreActivationReadinessService {
                     storeShippingMethod?.calculator?.code === SHIPPING_CALCULATOR_CODE &&
                     storeShippingMethod?.checker?.code === SHIPPING_CHECKER_CODE,
                 payment: paymentMethods.some(method =>
-                    isProductionPaymentMethod(method, registeredPaymentHandlers),
+                    isProductionPaymentMethod(method, registeredPaymentHandlers, usdtPaymentReady),
                 ),
             },
             channel.customFields?.commerceMode ?? 'DIGITAL_ONLY',

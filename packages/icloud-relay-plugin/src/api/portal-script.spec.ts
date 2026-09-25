@@ -25,12 +25,14 @@ async function portal(
         storefrontBranding: { name: '测试店铺甲' },
         storefrontVisualPreset: { channelId: 'store-a', presetId: 'modern-oriental' },
     },
+    recentStorage: Record<string, string> = {},
 ) {
     const dom = new JSDOM(PORTAL_HTML, {
         url: 'https://store.example/mail-query',
         runScripts: 'outside-only',
     });
     windows.push(dom);
+    for (const [key, value] of Object.entries(recentStorage)) dom.window.localStorage.setItem(key, value);
     const requests: Array<{
         signal: AbortSignal;
         resolve: (data: unknown) => void;
@@ -250,6 +252,36 @@ describe('mail portal store configuration', () => {
 });
 
 describe('buyer recent mail display and error states', () => {
+    it('shows and saves history only for a verified store', async () => {
+        const record = (code: string) => JSON.stringify([{ code, updatedAt: Date.now() }]);
+        const storage = {
+            icloud_relay_recent_queries: record('BUY-LEGACY-0001'),
+            'icloud_relay_recent_queries:store-a': record('BUY-AAAA-0001'),
+            'icloud_relay_recent_queries:store-b': record('BUY-BBBB-0002'),
+        };
+        const { window, document, requests } = await portal(undefined, storage);
+        expect(document.getElementById('recentList')?.textContent).toContain('BUY-AAAA-0001');
+        expect(document.getElementById('recentList')?.textContent).not.toContain('BUY-BBBB-0002');
+        expect(document.getElementById('recentList')?.textContent).not.toContain('BUY-LEGACY-0001');
+
+        const query = window.doQuery('BUY-AAAA-1234');
+        requests[0].resolve(result('New mail', 'VIRTUAL'));
+        await query;
+        expect(window.localStorage.getItem('icloud_relay_recent_queries:store-a')).toContain('BUY-AAAA-1234');
+        expect(window.localStorage.getItem('icloud_relay_recent_queries:store-b')).toBe(
+            storage['icloud_relay_recent_queries:store-b'],
+        );
+
+        const unverified = await portal(
+            {
+                activeChannel: { id: 'store-a' },
+                storefrontVisualPreset: { channelId: 'store-b', presetId: 'modern-oriental' },
+            },
+            storage,
+        );
+        expect(unverified.document.getElementById('recentSection')?.style.display).toBe('none');
+    });
+
     it('replaces the five visible mails on refresh and shows an accurate limit label', async () => {
         const { window, document, requests } = await portal();
         const mailResult = (start: number) => ({

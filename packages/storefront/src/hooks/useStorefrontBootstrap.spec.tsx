@@ -8,7 +8,7 @@ import { enabledMarkets, marketForStorefrontConfig } from '../i18n';
 import { storefrontQueryKeys } from '../query-client';
 import { scopedStorageKey } from '../storefront-storage';
 import { FAVORITE_PRODUCT_STORAGE_KEY } from '../storefront-utils';
-import { StorefrontConfig } from '../types';
+import { Product, StorefrontConfig } from '../types';
 
 import { useStorefrontBootstrap } from './useStorefrontBootstrap';
 
@@ -21,6 +21,7 @@ describe('storefront bootstrap boundaries', () => {
     let client: QueryClient;
     let value: ReturnType<typeof useStorefrontBootstrap>;
     let config: StorefrontConfig | undefined;
+    let listedProducts: Product[] | undefined;
     const dataUpdatedAt = 123_000;
     function Harness() {
         value = useStorefrontBootstrap();
@@ -64,9 +65,10 @@ describe('storefront bootstrap boundaries', () => {
         client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
         root = createRoot(document.createElement('div'));
         config = undefined;
+        listedProducts = undefined;
         queries.read.mockReset().mockImplementation(() => ({
             configQuery: { data: config, dataUpdatedAt, refetch: vi.fn() },
-            productsQuery: { data: undefined, refetch: vi.fn() },
+            productsQuery: { data: listedProducts, refetch: vi.fn() },
             collectionsQuery: { refetch: vi.fn() },
         }));
     });
@@ -100,6 +102,23 @@ describe('storefront bootstrap boundaries', () => {
         expect(value.storefrontName).toBe('测试店铺');
     });
 
+    it('keeps listing summaries out of the complete product-detail cache', () => {
+        config = nextConfig();
+        listedProducts = [
+            { id: 'named', name: 'List title' } as Product,
+            { id: 'untitled', name: '' } as Product,
+        ];
+        render();
+        for (const product of listedProducts) {
+            const key = storefrontQueryKeys.product(
+                storefrontQueryKeys.market(value.market),
+                'zh_Hans',
+                product.id,
+            );
+            expect(client.getQueryData(key)).toBeUndefined();
+        }
+    });
+
     it('does not overwrite a newer configuration already cached for the destination', () => {
         config = nextConfig();
         const key = [
@@ -123,6 +142,7 @@ describe('storefront bootstrap boundaries', () => {
             '["other-store"]',
         );
         localStorage.setItem(scopedStorageKey(FAVORITE_PRODUCT_STORAGE_KEY, config.code), '["own-product"]');
+        localStorage.setItem('storefront-favorite-product-ids:my-malaysia', '["previous-account"]');
         render();
         expect(value.favoriteProductIds).toEqual(['own-product']);
         expect(value.storefrontDescription).toBe('店铺说明');

@@ -461,7 +461,7 @@ describe('StoreCouponLifecycleService', () => {
                     status: expect.anything(),
                     usedAt: expect.anything(),
                 },
-                relations: { customerCoupon: true, order: true },
+                relations: { customerCoupon: { campaignConfig: true }, order: true },
                 order: { usedAt: 'DESC', id: 'DESC' },
             }),
         );

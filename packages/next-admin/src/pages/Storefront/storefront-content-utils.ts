@@ -1,5 +1,6 @@
 import { STOREFRONT_ACCOUNT_HERO_CODE } from '../../../../storefront-content-plugin/src/account-hero-config';
 import { homepageModuleCatalog } from '../../../../storefront-content-plugin/src/homepage-manifest';
+import { supportFaqValidation } from '../../../../storefront-content-plugin/src/support-faq';
 import type {
     StorefrontBlockTranslation,
     StorefrontBlockType,
@@ -21,7 +22,7 @@ export interface StorefrontModuleDescriptor {
 export const homepageModuleDescriptors: readonly StorefrontModuleDescriptor[] = homepageModuleCatalog;
 
 export const contentModuleDescriptors: StorefrontModuleDescriptor[] = [
-    { type: 'LEGAL', name: '法律条款', description: '服务协议、隐私政策与网站规则', defaultEnabled: true },
+    { type: 'LEGAL', name: '法律条款', description: '服务协议、隐私政策与网站规则', defaultEnabled: false },
     {
         type: 'SUPPORT',
         name: '客服与帮助',
@@ -69,7 +70,6 @@ export const navigationTargets = [
     ['/favorites', '我的收藏'],
     ['/history', '浏览足迹'],
     ['/notifications', '消息中心'],
-    ['/announcements', '系统公告'],
     ['/support', '客服中心'],
     ['/reviews', '评价中心'],
     ['/legal?id=privacy', '隐私政策'],
@@ -167,6 +167,12 @@ export function newContentBlock(
             ],
         }));
         block.settings = { authVisualVersion: 1, accentColor: type === 'AUTH_LOGIN' ? '#22D3EE' : '#8B5CF6' };
+    }
+    if (type === 'LEGAL') {
+        block.items = [
+            navigationItem(0, '/legal?id=privacy', '隐私政策', 'Privacy policy'),
+            navigationItem(1, '/legal?id=terms', '使用条款', 'Terms of use'),
+        ];
     }
     if (type === 'SUPPORT') {
         block.settings = { ...defaultSupportSettings };
@@ -328,6 +334,11 @@ export function storefrontBlockInput(
     block: StorefrontContentBlock,
     original?: StorefrontContentBlock | null,
 ) {
+    const savedOriginal = original?.id ? original : undefined;
+    const unsavedOriginal = original && !original.id ? original : undefined;
+    const source = blockTranslation(block, 'zh_Hans');
+    const initialSource = unsavedOriginal ? blockTranslation(unsavedOriginal, 'zh_Hans') : null;
+    const initialEnglish = unsavedOriginal ? blockTranslation(unsavedOriginal, 'en') : null;
     return {
         code: block.code.trim(),
         internalName: block.internalName.trim(),
@@ -338,7 +349,7 @@ export function storefrontBlockInput(
         startsAt: block.startsAt,
         endsAt: block.endsAt,
         imageAssetId: block.imageAsset?.id ?? block.imageAssetId ?? null,
-        imageUrl: block.imageUrl?.trim() || null,
+        imageUrl: block.imageAsset?.id || block.imageAssetId ? null : block.imageUrl?.trim() || null,
         backgroundColor: block.backgroundColor?.trim() || null,
         textColor: block.textColor?.trim() || null,
         targetType: block.targetType,
@@ -348,10 +359,19 @@ export function storefrontBlockInput(
             .map(translation => ({
                 ...translation,
                 updatedFields:
-                    translation.languageCode === 'en' && original
-                        ? (['title', 'subtitle', 'body', 'ctaLabel'] as const).filter(
-                              field => translation[field] !== blockTranslation(original, 'en')[field],
-                          )
+                    translation.languageCode === 'en'
+                        ? savedOriginal
+                            ? (['title', 'subtitle', 'body', 'ctaLabel'] as const).filter(
+                                  field =>
+                                      translation[field] !== blockTranslation(savedOriginal, 'en')[field],
+                              )
+                            : unsavedOriginal && initialSource && initialEnglish
+                              ? (['title', 'subtitle', 'body', 'ctaLabel'] as const).filter(
+                                    field =>
+                                        source[field] === initialSource[field] ||
+                                        translation[field] !== initialEnglish[field],
+                                )
+                              : undefined
                         : undefined,
             }))
             .filter(translation => translation.updatedFields == null || translation.updatedFields.length > 0)
@@ -382,24 +402,34 @@ export function storefrontBlockInput(
                 enabled: item.enabled,
                 position,
                 imageAssetId: item.imageAsset?.id ?? item.imageAssetId ?? null,
-                imageUrl: item.imageUrl?.trim() || null,
+                imageUrl: item.imageAsset?.id || item.imageAssetId ? null : item.imageUrl?.trim() || null,
                 targetType,
                 targetValue:
                     targetType === 'NONE' ? null : (generatedTarget ?? (item.targetValue?.trim() || null)),
                 settings: item.settings,
                 translations: item.translations
                     .map(translation => {
-                        const previous = original?.items.find(candidate =>
+                        const previous = (savedOriginal ?? unsavedOriginal)?.items.find(candidate =>
                             item.id ? candidate.id === item.id : candidate.position === item.position,
                         );
                         const english = previous?.translations.find(value => value.languageCode === 'en');
+                        const initialItemSource = previous?.translations.find(
+                            value => value.languageCode === 'zh_Hans',
+                        );
+                        const itemSource = item.translations.find(value => value.languageCode === 'zh_Hans');
                         return {
                             ...translation,
                             updatedFields:
                                 translation.languageCode === 'en' && english
-                                    ? (['label', 'description'] as const).filter(
-                                          field => translation[field] !== english[field],
-                                      )
+                                    ? savedOriginal
+                                        ? (['label', 'description'] as const).filter(
+                                              field => translation[field] !== english[field],
+                                          )
+                                        : (['label', 'description'] as const).filter(
+                                              field =>
+                                                  itemSource?.[field] === initialItemSource?.[field] ||
+                                                  translation[field] !== english[field],
+                                          )
                                     : undefined,
                         };
                     })
@@ -445,6 +475,8 @@ export function storefrontBlockValidation(block: StorefrontContentBlock): string
         return '客户端导航必须保留 1 至 5 项';
     }
     if (block.type === 'SUPPORT') {
+        const faqError = supportFaqValidation(block.settings);
+        if (faqError) return faqError;
         const startTime = supportSetting(
             block.settings?.serviceStartTime,
             defaultSupportSettings.serviceStartTime,

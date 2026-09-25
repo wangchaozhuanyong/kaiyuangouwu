@@ -46,6 +46,13 @@ describe('responsiveImageSources', () => {
         expect(bundledHero?.placeholderSrc).toContain('default-hero-32.webp');
     });
 
+    it('uses uncropped responsive presets for uploaded carousel artwork', () => {
+        const sources = responsiveImageSources('/assets/preview/banner.png', 'hero');
+        expect(sources?.webpSrcSet).toContain('preset=storefront-hero-fit-480');
+        expect(sources?.webpSrcSet).toContain('preset=storefront-hero-fit-1600');
+        expect(sources?.fallbackSrc).toContain('preset=storefront-hero-fit-1600');
+    });
+
     it('serves the Token carousel fallback at each reviewed responsive width', () => {
         const sources = responsiveImageSources(HERO_TOKEN_TOPUP_IMAGE, 'hero');
 

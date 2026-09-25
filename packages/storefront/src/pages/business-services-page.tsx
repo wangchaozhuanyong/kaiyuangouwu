@@ -1,9 +1,10 @@
-import { ExternalLink, Puzzle } from 'lucide-react';
+import { ChevronRight, ExternalLink, KeyRound, Mail, Puzzle, WandSparkles } from 'lucide-react';
 
 import { ClientPluginSlot, resolveClientPlugins } from '../client-plugins/client-plugin-registry';
 import { resolveBottomNavigationItems } from '../components/common/bottom-navigation';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { useDesktopLayout } from '../desktop-layout';
+import { SafeImage } from '../safe-image';
 import { BusinessServicesPageContext } from '../storefront-page-contexts';
 import { type RouteState } from '../storefront-router';
 import {
@@ -72,6 +73,27 @@ export function BusinessServicesPage() {
             ? clientPluginBlock.targetValue?.trim() || null
             : null;
     const plugins = resolveClientPlugins(clientPluginBlock, 'BUSINESS_SERVICES_MAIN');
+    const shortcuts = [
+        {
+            code: 'ai-image-studio-entry',
+            route: 'image-studio',
+            label: isZh ? 'AI 图片工坊' : 'AI image studio',
+            Icon: WandSparkles,
+        },
+        {
+            code: 'two-factor-code-tool',
+            route: 'two-factor',
+            label: isZh ? '2FA 动态码' : 'Authenticator',
+            Icon: KeyRound,
+        },
+        {
+            code: 'icloud-mail-query-entry',
+            route: 'mail-query',
+            label: isZh ? '邮件验证码查询' : 'Mail verification codes',
+            Icon: Mail,
+        },
+    ].filter(shortcut => plugins.some(plugin => plugin.code === shortcut.code));
+    const heroImageUrl = desktop && clientPluginBlock?.enabled ? clientPluginBlock.imageUrl : null;
 
     return (
         <main className="page business-services-page">
@@ -93,13 +115,24 @@ export function BusinessServicesPage() {
             )}
             <header className="business-services-heading">
                 <div className="business-services-heading-copy">
-                    <span className="business-services-heading-kicker">
-                        {desktop ? heroTitle : heroKicker}
-                    </span>
-                    <h1 className="business-services-page-title">{desktop ? pageTitle : heroTitle}</h1>
+                    <span className="business-services-heading-kicker">{heroKicker}</span>
+                    <h1 className="business-services-page-title">
+                        {desktop && !hasManagedCopy ? pageTitle : heroTitle}
+                    </h1>
                     <p>{heroDescription}</p>
+                    {desktop && heroLinkTarget ? (
+                        <button
+                            type="button"
+                            className="business-services-heading-link"
+                            onClick={() => onContentTarget('URL', heroLinkTarget)}
+                        >
+                            {clientPluginBlock?.ctaLabel.trim() ||
+                                (isZh ? '打开服务网站' : 'Open service website')}
+                            <ExternalLink aria-hidden="true" />
+                        </button>
+                    ) : null}
                 </div>
-                {heroLinkTarget ? (
+                {!desktop && heroLinkTarget ? (
                     <button
                         type="button"
                         className="business-services-heading-link"
@@ -108,6 +141,31 @@ export function BusinessServicesPage() {
                         {isZh ? (desktop ? '点击前往' : '直通服务') : desktop ? 'Open link' : 'Open service'}
                         <ExternalLink aria-hidden="true" />
                     </button>
+                ) : null}
+
+                {desktop && (heroImageUrl || shortcuts.length > 0) ? (
+                    <div className="business-services-hero-media">
+                        {heroImageUrl ? (
+                            <SafeImage src={heroImageUrl} alt="" imageKind="hero" />
+                        ) : (
+                            <nav
+                                className="business-services-hero-shortcuts"
+                                aria-label={isZh ? '服务快捷入口' : 'Service shortcuts'}
+                            >
+                                {shortcuts.map(({ code, route, label, Icon }) => (
+                                    <button
+                                        key={code}
+                                        type="button"
+                                        onClick={() => onNavigate({ name: route } as RouteState)}
+                                    >
+                                        <Icon aria-hidden="true" />
+                                        <span>{label}</span>
+                                        <ChevronRight aria-hidden="true" />
+                                    </button>
+                                ))}
+                            </nav>
+                        )}
+                    </div>
                 ) : null}
             </header>
 

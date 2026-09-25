@@ -8,6 +8,11 @@ import { StorefrontContext } from '../../StorefrontContext';
 import { DesktopHeader } from './desktop-header';
 
 vi.mock('@tanstack/react-router', () => ({
+    createLink:
+        (Component: React.ElementType) =>
+        ({ to, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { to?: string }) => (
+            <Component {...props} href={to} aria-current="page" />
+        ),
     Link: ({ children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
         <a {...props}>{children}</a>
     ),
@@ -22,7 +27,10 @@ describe('desktop header search', () => {
     const switchCurrency = vi.fn();
     const toggleLanguage = vi.fn();
 
-    function renderHeader(route: { name: 'home' } | { name: 'search'; term?: string }) {
+    function renderHeader(
+        route: { name: 'home' } | { name: 'search'; term?: string },
+        displayedRoute = route,
+    ) {
         act(() => {
             root.render(
                 <StorefrontContext.Provider
@@ -30,6 +38,7 @@ describe('desktop header search', () => {
                         {
                             language: 'zh',
                             route,
+                            displayedRoute,
                             navigate,
                             storefrontName: '大马通',
                             logoUrl: null,
@@ -83,22 +92,16 @@ describe('desktop header search', () => {
         expect(navigate).toHaveBeenCalledWith({ name: 'search' });
     });
 
-    it('submits a trimmed query from the search results header', () => {
+    it('leaves one search form on the dedicated search page', () => {
         renderHeader({ name: 'search', term: 'gemini' });
-        const input = host.querySelector<HTMLInputElement>('.proto-search-input');
-        const button = host.querySelector<HTMLButtonElement>('.proto-search-submit');
-        expect(button?.textContent).toBe('搜索');
-        if (!input || !button) throw new Error('Missing desktop search controls');
+        expect(host.querySelector('.proto-header-search')).toBeNull();
+        expect(host.querySelector('.proto-desktop-header.is-search-page')).not.toBeNull();
+    });
 
-        act(() => {
-            // eslint-disable-next-line @typescript-eslint/unbound-method -- The native setter is invoked with the input as its receiver below.
-            const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-            valueSetter?.call(input, '  111  ');
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-        });
-        act(() => button.click());
-
-        expect(navigate).toHaveBeenCalledWith({ name: 'search', term: '111' });
+    it('keeps navigation and search controls aligned with the page still visible during loading', () => {
+        renderHeader({ name: 'search', term: 'cup' }, { name: 'home' });
+        expect(host.querySelector('[aria-current="page"]')?.textContent).toBe('首页');
+        expect(host.querySelector('.proto-header-search')).not.toBeNull();
     });
 
     it('stages and saves language and currency from one compact header trigger', async () => {

@@ -25,7 +25,9 @@ import {
     useQueryClient,
 } from '@vendure/dashboard';
 import { Monitor, RefreshCw, RotateCcw, Save, Smartphone, Sparkles } from 'lucide-react';
-import { CSSProperties, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+
+import { readableStorefrontForeground, storefrontContrastRatio } from '../shared/storefront-semantic-palette';
 
 import {
     AuthVisualBlockType,
@@ -63,9 +65,9 @@ const copy = {
         selectImage: '从素材库选择或上传',
         replaceImage: '更换图片',
         removeImage: '改用系统默认图',
-        color: '文字与遮罩颜色',
+        color: '文案区颜色',
         textColor: '主文字',
-        overlayColor: '遮罩底色',
+        overlayColor: '文案区底色',
         accentColor: '标签强调色',
         content: '广告文案',
         chinese: '中文',
@@ -87,7 +89,7 @@ const copy = {
         saved: '页面视觉已保存并发布',
         validation: '请填写中文顶部短句、主标题、说明文案和三个卖点标签。',
         loadError: '无法加载登录注册页视觉配置。',
-        liveHint: '文字作为网页内容叠加在图片上，不会写入图片，手机端会自动适配。',
+        liveHint: '图片完整展示；文字位于独立文案区，不会写入或遮挡图片。',
     },
     en: {
         nav: 'Login & registration visuals',
@@ -109,9 +111,9 @@ const copy = {
         selectImage: 'Select or upload asset',
         replaceImage: 'Replace image',
         removeImage: 'Use built-in image',
-        color: 'Copy and overlay colors',
+        color: 'Copy surface colors',
         textColor: 'Primary text',
-        overlayColor: 'Overlay base',
+        overlayColor: 'Copy surface background',
         accentColor: 'Tag accent',
         content: 'Campaign copy',
         chinese: '中文',
@@ -134,15 +136,9 @@ const copy = {
         saved: 'Page visual saved and published',
         validation: 'Enter the Chinese eyebrow, headline, supporting copy and all three benefit tags.',
         loadError: 'Could not load login and registration visual settings.',
-        liveHint:
-            'Copy is layered over the image as HTML, not baked into it, and adapts automatically on mobile.',
+        liveHint: 'The full image remains visible. Copy sits on a separate surface at both viewport sizes.',
     },
 } as const;
-
-const PREVIEW_OVERLAY_BACKGROUND = [
-    'linear-gradient(90deg, color-mix(in srgb, var(--preview-overlay) 88%, transparent), color-mix(in srgb, var(--preview-overlay) 28%, transparent))',
-    'linear-gradient(0deg, color-mix(in srgb, var(--preview-overlay) 46%, transparent), transparent 62%)',
-].join(', ');
 
 type AuthVisualCopy = { [Key in keyof (typeof copy)['zh']]: string };
 
@@ -336,18 +332,20 @@ function AuthVisualEditor({
     const accentColor = authVisualAccentColor(draft);
     const valid = isAuthVisualValid(draft);
     const editLanguages: AuthVisualLanguageCode[] = editEnglish ? ['zh_Hans', 'en'] : ['zh_Hans'];
-    const previewStyle = {
-        '--preview-text': draft.textColor ?? '#ffffff',
-        '--preview-overlay': draft.backgroundColor ?? '#020718',
-        '--preview-accent': accentColor,
-        ...(previewImage ? { backgroundImage: `url("${previewImage.replace(/"/g, '%22')}")` } : {}),
-    } as CSSProperties;
+    const previewBackground =
+        draft.backgroundColor && /^#[0-9a-f]{6}$/i.test(draft.backgroundColor)
+            ? draft.backgroundColor
+            : '#ffffff';
+    const configuredPreviewText =
+        draft.textColor && /^#[0-9a-f]{6}$/i.test(draft.textColor) ? draft.textColor : '#0f172a';
+    const previewForeground =
+        storefrontContrastRatio(configuredPreviewText, previewBackground) >= 4.5
+            ? configuredPreviewText
+            : readableStorefrontForeground(previewBackground);
     const previewViewportClassName = [
-        'relative overflow-hidden rounded-2xl border bg-slate-950 bg-cover bg-center shadow-xl',
-        'transition-[max-width,aspect-ratio] duration-300',
-        previewViewport === 'mobile'
-            ? 'mx-auto aspect-[390/230] min-h-[230px] max-w-[390px]'
-            : 'aspect-[16/9] min-h-[280px] max-w-full',
+        'overflow-hidden rounded-2xl border bg-white shadow-xl',
+        'transition-[max-width] duration-300',
+        previewViewport === 'mobile' ? 'mx-auto max-w-[390px]' : 'max-w-full',
     ].join(' ');
 
     const updateTranslation = (
@@ -582,31 +580,24 @@ function AuthVisualEditor({
                     </div>
                 </div>
                 <div className={previewViewport === 'mobile' ? 'rounded-2xl bg-muted/30 p-3' : ''}>
-                    <div className={previewViewportClassName} style={previewStyle}>
-                        <div
-                            className="absolute inset-0"
-                            style={{
-                                background: PREVIEW_OVERLAY_BACKGROUND,
-                            }}
-                        />
-                        {!previewImage ? (
-                            <div className="absolute inset-0 grid place-items-center opacity-30">
-                                <Sparkles className="size-28 text-cyan-300" />
+                    <div className={previewViewportClassName}>
+                        {previewImage ? (
+                            <img src={previewImage} alt="" className="block h-auto w-full object-contain" />
+                        ) : (
+                            <div className="grid aspect-[16/9] place-items-center bg-slate-950">
+                                <Sparkles className="size-28 text-cyan-300" aria-hidden="true" />
                             </div>
-                        ) : null}
+                        )}
                         <div
-                            className={`absolute z-10 text-[var(--preview-text)] ${
-                                previewViewport === 'mobile'
-                                    ? 'inset-x-5 bottom-5 text-center'
-                                    : 'inset-x-7 bottom-7'
-                            }`}
+                            className={`p-5 ${previewViewport === 'mobile' ? 'text-center' : 'text-left'}`}
+                            style={{ backgroundColor: previewBackground, color: previewForeground }}
                         >
                             <span
-                                className="inline-flex rounded-full border px-3 py-1 text-[10px] font-bold tracking-[0.14em] backdrop-blur"
+                                className="inline-flex rounded-full border px-3 py-1 text-[10px] font-bold tracking-[0.14em]"
                                 style={{
-                                    borderColor: `color-mix(in srgb, var(--preview-accent) 70%, transparent)`,
-                                    color: 'var(--preview-accent)',
-                                    background: 'color-mix(in srgb, var(--preview-overlay) 58%, transparent)',
+                                    borderColor: `color-mix(in srgb, ${accentColor} 70%, transparent)`,
+                                    color: previewForeground,
+                                    background: `color-mix(in srgb, ${accentColor} 12%, ${previewBackground})`,
                                 }}
                             >
                                 {previewTranslation.ctaLabel}
@@ -627,7 +618,8 @@ function AuthVisualEditor({
                                 {draft.items.map((item, position) => (
                                     <span
                                         key={item.id ?? position}
-                                        className="rounded-full border border-white/20 bg-black/25 px-3 py-1 text-[11px] backdrop-blur"
+                                        className="rounded-full border px-3 py-1 text-[11px]"
+                                        style={{ borderColor: previewForeground, color: previewForeground }}
                                     >
                                         {item.translations.find(
                                             translation => translation.languageCode === previewLanguage,

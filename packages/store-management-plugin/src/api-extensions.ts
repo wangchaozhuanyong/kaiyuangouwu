@@ -3,6 +3,12 @@ import { gql } from 'graphql-tag';
 import { administratorAccessSchema } from './administrator-access.schema';
 import { businessClosureCommonSchema } from './business-closure-common.schema';
 import { customerGovernanceApiSchema } from './customer-governance-api.schema';
+import { customerProductActivityShopSchema } from './customer-product-activity.schema';
+import {
+    customerServiceFeedbackAdminSchema,
+    customerServiceFeedbackCommonSchema,
+    customerServiceFeedbackShopSchema,
+} from './customer-service-feedback.schema';
 import { storeCustomerCouponSchema } from './promotion/store-coupon-api.schema';
 import { referralPosterFields } from './referral/referral-poster-fields';
 import { storePaymentApiSchema } from './store-payment-api.schema';
@@ -12,6 +18,7 @@ import { trafficAdminSchema, trafficShopSchema } from './traffic/traffic-api.sch
 
 const commonTypes = gql`
     ${businessClosureCommonSchema}
+    ${customerServiceFeedbackCommonSchema}
 
     enum StoreProfileStatus {
         DRAFT
@@ -29,6 +36,13 @@ const commonTypes = gql`
         ORDER_PERCENTAGE
         COLLECTION_PERCENTAGE
         PRODUCT_PERCENTAGE
+    }
+
+    enum StoreCouponAppearanceTheme {
+        rose
+        gold
+        blue
+        emerald
     }
 
     enum StoreCouponStackPolicy {
@@ -130,6 +144,7 @@ const commonTypes = gql`
         campaignId: ID!
         campaignName: String!
         campaignKind: StoreCouponCampaignKind!
+        appearanceTheme: StoreCouponAppearanceTheme
         status: String!
         currencyCode: CurrencyCode!
         minimumSpend: Money!
@@ -205,6 +220,7 @@ export const adminApiExtensions = gql`
     ${storefrontPreviewBrandingSchema}
     ${trafficAdminSchema}
     ${commonTypes}
+    ${customerServiceFeedbackAdminSchema}
     ${storeProfileInputSchema}
 
     input ProvisionStoreAdministratorInput {
@@ -463,6 +479,7 @@ export const adminApiExtensions = gql`
         name: String!
         couponCode: String!
         kind: StoreCouponCampaignKind!
+        appearanceTheme: StoreCouponAppearanceTheme
         enabled: Boolean!
         startsAt: DateTime
         endsAt: DateTime
@@ -507,6 +524,7 @@ export const adminApiExtensions = gql`
     input CreateStoreCouponCampaignInput {
         name: String!
         kind: StoreCouponCampaignKind!
+        appearanceTheme: StoreCouponAppearanceTheme
         minimumSpend: Money
         discountAmount: Money
         discountRate: Float
@@ -1026,6 +1044,7 @@ export const adminApiExtensions = gql`
         resetStorefrontPromotionPage: StorefrontPromotionPage!
         previewStorefrontPromotionPage(input: UpdateStorefrontPromotionDraftInput!): String!
         createStoreCouponCampaign(input: CreateStoreCouponCampaignInput!): StoreCouponCampaign!
+        setStoreCouponAppearance(id: ID!, theme: StoreCouponAppearanceTheme): StoreCouponCampaign!
         repairStoreCouponCampaign(campaignId: ID!, fingerprint: String!, password: String!): JSON!
         repairStoreCouponClosure(campaignId: ID!, fingerprint: String!, password: String!): JSON!
         createStoreFlashSale(input: CreateStoreFlashSaleInput!): StoreFlashSale!
@@ -1081,6 +1100,8 @@ export const adminApiExtensions = gql`
 export const shopApiExtensions = gql`
     ${trafficShopSchema}
     ${commonTypes}
+    ${customerServiceFeedbackShopSchema}
+    ${customerProductActivityShopSchema}
     ${storefrontBrandingSchema}
 
     extend type ProductVariant {
@@ -1110,6 +1131,7 @@ export const shopApiExtensions = gql`
         id: ID!
         name: String!
         kind: StoreCouponCampaignKind!
+        appearanceTheme: StoreCouponAppearanceTheme
         startsAt: DateTime
         endsAt: DateTime
         minimumSpend: Money!
@@ -1128,6 +1150,7 @@ export const shopApiExtensions = gql`
 
     type StorefrontSystemAnnouncement {
         id: ID!
+        createdAt: DateTime!
         title: String!
         content: String!
         linkUrl: String

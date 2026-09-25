@@ -4,6 +4,7 @@ const fallbackFields = {
     content: new Set([
         'Query.activeStorefrontFlashSales',
         'Query.activeSystemAnnouncements',
+        'StorefrontSystemAnnouncement.createdAt',
         'StorefrontContentSettings.auth',
         'StorefrontContentSettings.configuredBlockTypes',
         'StorefrontContentBlock.internalName',
@@ -11,6 +12,7 @@ const fallbackFields = {
         'StorefrontContentBlock.settings',
         'StorefrontContentItem.settings',
     ]),
+    announcementsCreatedAt: new Set(['StorefrontSystemAnnouncement.createdAt']),
     coupons: new Set(['Query.activeStorefrontCoupons']),
     provinces: new Set(['Query.availableStorefrontProvinces']),
     visualPreset: new Set(['Query.storefrontVisualPreset']),

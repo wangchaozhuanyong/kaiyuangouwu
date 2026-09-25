@@ -23,6 +23,22 @@ function validSupportBlock() {
 }
 
 describe('storefront support content editor', () => {
+    it('uses selected asset IDs without submitting generated preview URLs as external sources', () => {
+        const block = validSupportBlock();
+        block.imageAssetId = 'selected-banner';
+        block.imageUrl = '/assets/banner-preview.webp';
+        block.items[0].imageAssetId = 'selected-qr';
+        block.items[0].imageUrl = '/assets/qr-preview.webp';
+        const input = storefrontBlockInput(block);
+        expect(input.imageAssetId).toBe('selected-banner');
+        expect(input.imageUrl).toBeNull();
+        expect(input.items[0].imageAssetId).toBe('selected-qr');
+        expect(input.items[0].imageUrl).toBeNull();
+        block.imageAssetId = null;
+        block.imageUrl = 'https://images.example.test/external.jpg';
+        expect(storefrontBlockInput(block).imageUrl).toBe('https://images.example.test/external.jpg');
+    });
+
     it('hydrates legacy missing service hours before validation and save', () => {
         const block = validSupportBlock();
         const qq = block.items.find(item => item.settings?.supportChannel === 'QQ');
@@ -110,6 +126,24 @@ describe('storefront support content editor', () => {
         expect(storefrontBlockValidation(block)).toBeNull();
     });
 
+    it('requires bilingual copy before a support FAQ can be published', () => {
+        const block = validSupportBlock();
+        const faq = {
+            id: 'shipping',
+            enabled: true,
+            questionZh: '如何确认运费？',
+            answerZh: '结算时计算。',
+            questionEn: '',
+            answerEn: '',
+        };
+        block.settings = { ...block.settings, supportFaqs: [faq] };
+
+        expect(storefrontBlockValidation(block)).toBe('请填写第 1 条常见问题的中英文问题与答案');
+        faq.questionEn = 'How is shipping calculated?';
+        faq.answerEn = 'It is calculated at checkout.';
+        expect(storefrontBlockValidation(block)).toBeNull();
+    });
+
     it('requires enabled manual support channels to use an http(s) link', () => {
         const block = validSupportBlock();
         const qq = block.items.find(item => item.settings?.supportChannel === 'QQ');
@@ -175,6 +209,7 @@ describe('storefront account hero editor', () => {
 
 it('only submits edited English fields and keeps cleared English explicit', () => {
     const original = newContentBlock('CORE_CATEGORIES', 0);
+    original.id = 'persisted-block';
     const edited = cloneContentBlock(original);
     edited.translations.find(item => item.languageCode === 'zh_Hans')!.title = '中文最新标题';
     expect(storefrontBlockInput(edited, original).translations.map(item => item.languageCode)).toEqual([
@@ -184,4 +219,49 @@ it('only submits edited English fields and keeps cleared English explicit', () =
     expect(
         storefrontBlockInput(edited, original).translations.find(item => item.languageCode === 'en'),
     ).toMatchObject({ title: '', updatedFields: ['title'] });
+});
+
+it('includes default English copy when a new content block has not been saved', () => {
+    const draft = newContentBlock('SUPPORT', 0);
+    const input = storefrontBlockInput(draft, draft);
+
+    expect(input.translations.find(item => item.languageCode === 'en')).toMatchObject({ title: 'Support' });
+    expect(input.items[0].translations.find(item => item.languageCode === 'en')).toMatchObject({
+        label: 'WeChat support',
+    });
+});
+
+it('does not lock unchanged English defaults to newly edited Chinese copy', () => {
+    const original = newContentBlock('SUPPORT', 0);
+    const edited = cloneContentBlock(original);
+    edited.translations.find(item => item.languageCode === 'zh_Hans')!.title = '自定义客服';
+    edited.items[0].translations.find(item => item.languageCode === 'zh_Hans')!.label = '自定义微信客服';
+
+    const input = storefrontBlockInput(edited, original);
+    expect(input.translations.find(item => item.languageCode === 'en')?.updatedFields).not.toContain('title');
+    expect(input.items[0].translations.find(item => item.languageCode === 'en')?.updatedFields).not.toContain(
+        'label',
+    );
+
+    edited.translations.find(item => item.languageCode === 'en')!.title = 'Custom support';
+    edited.items[0].translations.find(item => item.languageCode === 'en')!.label = 'Custom WeChat support';
+    const manuallyTranslated = storefrontBlockInput(edited, original);
+    expect(manuallyTranslated.translations.find(item => item.languageCode === 'en')?.updatedFields).toContain(
+        'title',
+    );
+    expect(
+        manuallyTranslated.items[0].translations.find(item => item.languageCode === 'en')?.updatedFields,
+    ).toContain('label');
+});
+
+it('prepares privacy and terms documents in a new legal content block', () => {
+    const block = newContentBlock('LEGAL', 0);
+    expect(block.enabled).toBe(false);
+    expect(block.items.map(item => item.targetValue)).toEqual(['/legal?id=privacy', '/legal?id=terms']);
+    expect(
+        block.items.map(
+            item => item.translations.find(translation => translation.languageCode === 'zh_Hans')?.label,
+        ),
+    ).toEqual(['隐私政策', '使用条款']);
+    expect(storefrontBlockInput(block, block).items.map(item => item.targetType)).toEqual(['PAGE', 'PAGE']);
 });

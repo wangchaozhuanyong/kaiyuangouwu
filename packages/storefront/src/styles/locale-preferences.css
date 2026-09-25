@@ -222,21 +222,6 @@
 }
 
 @media (min-width: 1024px) {
-    .proto-header-right .locale-preferences-trigger {
-        min-height: 40px;
-        padding-inline: 10px;
-        border-radius: 9px;
-        background: transparent;
-        box-shadow: none;
-        color: var(--proto-nav-link, var(--text));
-        font-size: 13px;
-    }
-
-    .proto-header-right .locale-preferences-trigger:hover {
-        background: var(--control-surface-hover, var(--soft));
-        box-shadow: none;
-    }
-
     body:has(.desktop-store-layout) .sheet-layer > .locale-preferences-sheet {
         width: min(520px, 100%);
     }

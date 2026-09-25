@@ -113,15 +113,13 @@ export class FraudRiskService {
         const facts = await this.orderRiskFacts(evaluationCtx, order);
         const signals = scoreOrderRiskSignals(facts, rules);
         const riskScore = signals.reduce((total, signal) => total + signal.points, 0);
-        const subjectDigest = sha256(
-            stableJson({
-                orderId: String(order.id),
-                totalWithTax: order.totalWithTax,
-                customerId: order.customerId == null ? null : String(order.customerId),
-                currencyCode: order.currencyCode,
-                signals,
-            }),
-        );
+        const subjectDigest = fraudRiskSubjectDigest({
+            orderId: order.id,
+            totalWithTax: order.totalWithTax,
+            customerId: order.customerId ?? null,
+            currencyCode: order.currencyCode,
+            signals,
+        });
         const previous = await this.connection.getRepository(evaluationCtx, FraudRiskCase).findOne({
             where: {
                 channelId: ctx.channelId,
@@ -342,11 +340,11 @@ export class FraudRiskService {
             relations: { appeals: true },
         });
         if (!riskCase) throw new UserInputError('风险案件不存在或不属于当前客户');
-        if (!['OPEN', 'REJECTED'].includes(riskCase.status)) throw new UserInputError('当前案件不能提交申诉');
-        if (riskCase.appeals.length) throw new UserInputError('每个风险案件只能提交一次申诉');
         const repository = this.connection.getRepository(ctx, FraudRiskAppeal);
         const existing = await repository.findOneBy({ riskCaseId: riskCase.id, idempotencyKey });
         if (existing) return existing;
+        if (riskCase.appeals.length) throw new UserInputError('每个风险案件只能提交一次申诉');
+        if (!['OPEN', 'REJECTED'].includes(riskCase.status)) throw new UserInputError('当前案件不能提交申诉');
         let appeal: FraudRiskAppeal;
         try {
             appeal = await repository.save(
@@ -371,7 +369,10 @@ export class FraudRiskService {
         }
         riskCase.status = 'APPEALED';
         riskCase.dueAt = new Date(Date.now() + 2 * 60 * 60 * 1_000);
-        await this.connection.getRepository(ctx, FraudRiskCase).save(riskCase, { reload: false });
+        await this.connection.getRepository(ctx, FraudRiskCase).update(riskCase.id, {
+            status: riskCase.status,
+            dueAt: riskCase.dueAt,
+        });
         await this.appendEvent(ctx, riskCase, {
             eventType: 'APPEALED',
             actorType: 'CUSTOMER',
@@ -599,6 +600,36 @@ export function scoreOrderRiskSignals(
         });
     }
     return signals;
+}
+
+export function fraudRiskSubjectDigest(input: {
+    orderId: ID;
+    totalWithTax: number;
+    customerId: ID | null;
+    currencyCode: string;
+    signals: FraudRiskSignal[];
+}): string {
+    // Ages change every millisecond while the risk signal is still the same.
+    // Keep the precise ages in case evidence, but key a review to the stable
+    // signal and its other evidence so an approved case can actually unblock.
+    const signals = input.signals.map(signal => ({
+        code: signal.code,
+        points: signal.points,
+        evidence: Object.fromEntries(
+            Object.entries(signal.evidence).filter(
+                ([key]) => key !== 'customerAgeHours' && key !== 'referralAgeHours',
+            ),
+        ),
+    }));
+    return sha256(
+        stableJson({
+            orderId: String(input.orderId),
+            totalWithTax: input.totalWithTax,
+            customerId: input.customerId == null ? null : String(input.customerId),
+            currencyCode: input.currencyCode,
+            signals,
+        }),
+    );
 }
 
 function requiredActor(ctx: RequestContext): string {

@@ -1,7 +1,71 @@
 import { AlertCircle } from 'lucide-react';
 import { useState } from 'react';
-import { SensitiveAction, sensitiveCopy } from './promotion-model';
+import type { StoreCouponAppearanceTheme, StoreCouponRecord } from '../../graphql/marketing.graphql';
+import { couponAppearanceOptions, SensitiveAction, sensitiveCopy } from './promotion-model';
 import { FormInput, Modal, ModalFooter } from './promotion-ui';
+
+export function CouponAppearanceDialog({
+    coupon,
+    pending,
+    error,
+    onClose,
+    onConfirm,
+}: {
+    coupon: StoreCouponRecord;
+    pending: boolean;
+    error?: string;
+    onClose: () => void;
+    onConfirm: (theme: StoreCouponAppearanceTheme | null) => Promise<void>;
+}) {
+    const [theme, setTheme] = useState<StoreCouponAppearanceTheme | null>(coupon.appearanceTheme);
+    return (
+        <Modal
+            title="修改券面配色"
+            description={`${coupon.name} · 仅调整券面颜色，优惠规则与已领取记录不变。`}
+            onClose={pending ? () => undefined : onClose}
+            width="max-w-md"
+        >
+            <fieldset disabled={pending} className="grid gap-2">
+                <legend className="mb-2 text-xs font-bold text-slate-700">选择券面配色</legend>
+                {couponAppearanceOptions.map(option => {
+                    const value = option.value === 'default' ? null : option.value;
+                    return (
+                        <label
+                            key={option.value}
+                            className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-xs font-bold ${theme === value ? 'border-blue-500 bg-blue-50 text-slate-900' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
+                        >
+                            <input
+                                type="radio"
+                                name="coupon-appearance-theme"
+                                value={option.value}
+                                checked={theme === value}
+                                onChange={() => setTheme(value)}
+                                className="h-4 w-4 accent-blue-600"
+                            />
+                            <span
+                                className={`h-5 w-5 shrink-0 rounded ${option.swatchClass}`}
+                                aria-hidden="true"
+                            />
+                            {option.label}
+                        </label>
+                    );
+                })}
+            </fieldset>
+            {error && (
+                <p role="alert" className="mt-3 text-xs text-rose-700">
+                    {error}
+                </p>
+            )}
+            <ModalFooter
+                onCancel={pending ? () => undefined : onClose}
+                onConfirm={() => void onConfirm(theme)}
+                pending={pending}
+                disabled={theme === coupon.appearanceTheme}
+                confirmLabel="保存配色"
+            />
+        </Modal>
+    );
+}
 
 export function SensitiveDialog({
     action,

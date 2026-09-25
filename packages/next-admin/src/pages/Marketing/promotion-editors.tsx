@@ -16,6 +16,7 @@ import { dataTableSortPolicy } from '../../utils/data-table-sort-policy';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney, majorInputToMoney } from '../Sales/sales-utils';
 import {
+    couponAppearanceOptions,
     CouponDraft,
     couponDraftError,
     couponKindLabels,
@@ -99,6 +100,7 @@ export function CouponEditor({
                     input: {
                         name: draft.name.trim(),
                         kind: draft.kind,
+                        appearanceTheme: draft.appearanceTheme,
                         minimumSpend,
                         discountAmount,
                         discountRate: draft.kind === 'ORDER_FIXED' ? null : Number(draft.discountValue),
@@ -170,6 +172,20 @@ export function CouponEditor({
                         });
                     }}
                     options={Object.entries(couponKindLabels)}
+                />
+                <FormSelect
+                    label="券面配色（仅影响展示）"
+                    value={draft.appearanceTheme ?? 'default'}
+                    onChange={value =>
+                        setDraft({
+                            ...draft,
+                            appearanceTheme:
+                                value === 'default'
+                                    ? null
+                                    : (value as NonNullable<CouponDraft['appearanceTheme']>),
+                        })
+                    }
+                    options={couponAppearanceOptions.map(({ value, label }) => [value, label])}
                 />
                 <FormInput
                     label={`最低消费金额 (${currencyCode})`}

@@ -161,6 +161,7 @@ export const customerCouponFields = `
     campaignId
     campaignName
     campaignKind
+    appearanceTheme
     status
     minimumSpend
     currencyCode
@@ -228,6 +229,7 @@ export const imageGenerationJobFields = `
 // details are fetched separately by id when a customer opens an order.
 export const orderSummaryFields = `
     id
+    updatedAt
     code
     state
     orderPlacedAt
@@ -263,6 +265,7 @@ export const orderSummaryFields = `
 `;
 
 export const afterSalesFields = `
+    evidence { id createdAt mimeType byteSize available previewUrl expiresAt }
     id
     createdAt
     updatedAt
@@ -309,7 +312,6 @@ export const afterSalesFields = `
         rejectedReturnQuantity
         returnLotCode
         inventoryOperationId
-        returnStockLocation { id name }
     }
     events {
         id
@@ -331,6 +333,7 @@ export const storefrontReviewFields = `
     title
     body
     customerName
+    anonymous
     productName
     sku
     merchantResponse

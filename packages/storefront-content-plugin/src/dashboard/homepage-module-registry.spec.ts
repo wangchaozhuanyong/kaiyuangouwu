@@ -1,3 +1,4 @@
+/* eslint-disable import/order -- The Prettier import organizer places type imports after runtime imports. */
 import { describe, expect, it } from 'vitest';
 import type { ContentBlock } from './storefront-content.graphql';
 
@@ -8,6 +9,7 @@ import {
     movedHomepageBlockIds,
     reorderedHomepageBlockIds,
 } from './homepage-module-registry';
+/* eslint-enable import/order */
 
 function block(input: Partial<ContentBlock> & Pick<ContentBlock, 'type' | 'code'>): ContentBlock {
     return {
@@ -59,6 +61,21 @@ describe('homepage module registry', () => {
         expect(entries.find(entry => entry.type === 'HERO')).toMatchObject({ duplicateCount: 0 });
         expect(entries.find(entry => entry.type === 'HERO')?.blocks).toHaveLength(2);
         expect(entries.find(entry => entry.type === 'COUPONS')).toMatchObject({ duplicateCount: 1 });
+    });
+    it('keeps category banner settings out of the homepage editor', () => {
+        const entries = homepageLayoutEntries([
+            block({
+                id: 'banner',
+                code: 'desktop-category-banner-default',
+                type: 'CUSTOM',
+                position: 1,
+                settings: { purpose: 'desktop-category-banner' },
+            }),
+            block({ id: 'custom', code: 'home-custom', type: 'CUSTOM', position: 2 }),
+        ]);
+        expect(entries.filter(entry => entry.type === 'CUSTOM').map(entry => entry.block?.id)).toEqual([
+            'custom',
+        ]);
     });
 
     it('reorders whole fixed groups without losing custom or hidden block IDs', () => {

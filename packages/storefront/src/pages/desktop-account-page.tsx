@@ -1,9 +1,19 @@
-import { ChevronRight, Headphones, Package, Truck, UserRound } from 'lucide-react';
+import {
+    CheckCircle2,
+    ChevronRight,
+    Headphones,
+    Package,
+    RotateCcw,
+    Star,
+    Truck,
+    UserRound,
+    WalletCards,
+} from 'lucide-react';
 
 import { SafeImage } from '../safe-image';
 import { RouteState } from '../storefront-router';
 import { orderStateLabel } from '../storefront-ui/order-ui';
-import { LegalFooter } from '../storefront-ui/page-shell';
+import { LegalFooter, SectionIcon } from '../storefront-ui/page-shell';
 import { formatMoney, OrderImage } from '../storefront-ui/product-display';
 import { ProductSection } from '../storefront-ui/product-section';
 import { CustomerOrderCounts } from '../types';
@@ -33,7 +43,6 @@ export function DesktopAccountPage({
     language,
     storefrontName,
     favoriteProductCount,
-    announcementCount,
     couponCount,
     onContentTarget,
     counts,
@@ -48,10 +57,41 @@ export function DesktopAccountPage({
     const orders = customer?.orders.items ?? [];
     const name = customer ? `${customer.lastName}${customer.firstName}`.trim() || customer.emailAddress : '';
     const statuses = [
-        { tab: 'pending', label: isZh ? '待付款' : 'Unpaid', count: counts?.pending },
-        { tab: 'shipping', label: isZh ? '待发货' : 'Processing', count: counts?.shipping },
-        { tab: 'receiving', label: isZh ? '待收货' : 'Shipped', count: counts?.receiving },
-        { tab: 'service', label: isZh ? '退款 / 售后' : 'Returns', count: afterSalesCount },
+        {
+            tab: 'pending',
+            label: isZh ? '待付款' : 'Unpaid',
+            count: counts?.pending,
+            Icon: WalletCards,
+            tone: 'coupon',
+        },
+        {
+            tab: 'shipping',
+            label: isZh ? '待发货' : 'Processing',
+            count: counts?.shipping,
+            Icon: Package,
+            tone: 'security',
+        },
+        {
+            tab: 'receiving',
+            label: isZh ? '待收货' : 'Shipped',
+            count: counts?.receiving,
+            Icon: Truck,
+            tone: 'studio',
+        },
+        {
+            tab: 'completed',
+            label: isZh ? '已完成' : 'Completed',
+            count: counts?.completed,
+            Icon: CheckCircle2,
+            tone: 'mail',
+        },
+        {
+            tab: 'service',
+            label: isZh ? '售后' : 'Returns',
+            count: afterSalesCount,
+            Icon: RotateCcw,
+            tone: 'support',
+        },
     ] as const;
     const delivery = orders.find(order =>
         order.lines.some(
@@ -130,7 +170,10 @@ export function DesktopAccountPage({
             </section>
             <section className="desktop-account-orders" aria-labelledby="desktop-my-orders">
                 <header>
-                    <h2 id="desktop-my-orders">{isZh ? '我的订单' : 'My orders'}</h2>
+                    <h2 id="desktop-my-orders">
+                        <SectionIcon kind="orders" />
+                        {isZh ? '我的订单' : 'My orders'}
+                    </h2>
                     <button type="button" onClick={() => navigate({ name: 'orders', tab: 'all' })}>
                         {isZh ? '查看全部订单' : 'View all orders'}
                         <ChevronRight />
@@ -146,9 +189,15 @@ export function DesktopAccountPage({
                             type="button"
                             onClick={() => navigate({ name: 'orders', tab: status.tab })}
                         >
+                            <span
+                                className="desktop-order-status-icon"
+                                data-icon-tone={status.tone}
+                                aria-hidden="true"
+                            >
+                                <status.Icon />
+                            </span>
                             <span>{status.label}</span>
                             <strong>{customer ? (status.count ?? '—') : '—'}</strong>
-                            <ChevronRight />
                         </button>
                     ))}
                 </nav>
@@ -225,15 +274,21 @@ export function DesktopAccountPage({
             <div className="desktop-account-detail-grid">
                 <section>
                     <header>
-                        <h2>{isZh ? '物流动态' : 'Delivery updates'}</h2>
+                        <h2>
+                            <SectionIcon kind="history" />
+                            {isZh ? '物流动态' : 'Delivery updates'}
+                        </h2>
                         <button type="button" onClick={() => navigate({ name: 'logistics' })}>
                             {isZh ? '查看物流' : 'View delivery'}
                             <ChevronRight />
                         </button>
                     </header>
                     <div className="desktop-delivery-summary">
-                        <Truck aria-hidden="true" />
+                        {delivery ? <OrderImage order={delivery} /> : <Truck aria-hidden="true" />}
                         <div>
+                            {delivery && (
+                                <strong>{delivery.lines[0]?.productVariant.name || delivery.code}</strong>
+                            )}
                             <strong>
                                 {delivery
                                     ? orderStateLabel(delivery.state, language)
@@ -250,27 +305,50 @@ export function DesktopAccountPage({
                             </p>
                         </div>
                     </div>
+                    {delivery && (
+                        <button
+                            type="button"
+                            className="desktop-delivery-action"
+                            onClick={() => navigate({ name: 'order-detail', id: delivery.id })}
+                        >
+                            {isZh ? '查看订单详情' : 'View order details'}
+                            <ChevronRight aria-hidden="true" />
+                        </button>
+                    )}
                 </section>
                 <section>
                     <header>
-                        <h2>{isZh ? '店铺与帮助' : 'Store and help'}</h2>
-                        <Headphones aria-hidden="true" />
+                        <h2>
+                            <SectionIcon kind="support" />
+                            {isZh ? '店铺与帮助' : 'Store and help'}
+                        </h2>
                     </header>
                     <div className="desktop-account-help">
                         <button type="button" onClick={() => navigate({ name: 'support' })}>
-                            {isZh ? '联系客服' : 'Customer service'}
-                            <ChevronRight />
+                            <Headphones aria-hidden="true" />
+                            <span>
+                                <strong>{isZh ? '联系客服' : 'Customer service'}</strong>
+                                <small>
+                                    {isZh ? '商品、订单与售后咨询' : 'Products, orders and after-sales'}
+                                </small>
+                            </span>
+                            <ChevronRight aria-hidden="true" />
                         </button>
-                        <button type="button" onClick={() => navigate({ name: 'announcements' })}>
-                            {isZh ? '店铺公告' : 'Store notices'}
-                            {announcementCount > 0 && <small>{announcementCount}</small>}
-                            <ChevronRight />
+                        <button type="button" onClick={() => navigate({ name: 'reviews' })}>
+                            <Star aria-hidden="true" />
+                            <span>
+                                <strong>{isZh ? '评价中心' : 'Reviews'}</strong>
+                                <small>{isZh ? '分享你的使用体验' : 'Share your experience'}</small>
+                            </span>
+                            <ChevronRight aria-hidden="true" />
                         </button>
                     </div>
                 </section>
             </div>
             {products.length > 0 && (
                 <ProductSection
+                    className="desktop-account-recommendations"
+                    kind="recommendations"
                     title={isZh ? '为你推荐' : 'Recommended for you'}
                     products={products.slice(0, 4)}
                     market={market}

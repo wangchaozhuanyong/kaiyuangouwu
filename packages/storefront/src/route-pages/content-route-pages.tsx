@@ -1,7 +1,9 @@
 import { lazyRouteComponent } from '@tanstack/react-router';
 
+import { resolveQueryLoadState } from '../loading-state';
 import { BusinessServicesPageContext, SupportPageContext } from '../storefront-page-contexts';
 import { FlashSalePage, RecommendationPage } from '../storefront-ui/content-ui';
+import { AsyncRouteStatePage } from '../storefront-ui/page-shell';
 import { Product } from '../types';
 
 import '../commerce-styles';
@@ -29,6 +31,24 @@ const MailQueryPage = lazyRouteComponent(
 
 export function ServicesRoutePage() {
     const runtime = useRuntime();
+    const contentLoadState = resolveQueryLoadState({
+        hasData: runtime.contentQuery.data !== undefined,
+        isLoading: runtime.contentQuery.isLoading,
+        isPaused: runtime.contentQuery.isPaused,
+        isError: runtime.contentQuery.isError,
+    });
+    if (contentLoadState !== 'ready') {
+        return (
+            <AsyncRouteStatePage
+                routeName="services"
+                state={contentLoadState}
+                error={runtime.contentError}
+                language={runtime.language}
+                onBack={runtime.goBack}
+                onRetry={() => void runtime.contentQuery.refetch()}
+            />
+        );
+    }
     return (
         <BusinessServicesPageContext.Provider
             value={{
@@ -87,7 +107,10 @@ export function MailQueryRoutePage() {
     const runtime = useRuntime();
     return (
         <MailQueryPage
+            key={JSON.stringify([runtime.market.code, runtime.customer?.id ?? null])}
             api={runtime.api}
+            marketCode={runtime.market.code}
+            customerId={runtime.customer?.id}
             brandingName={runtime.storefrontName}
             language={runtime.language}
             onBack={runtime.goBack}
@@ -151,11 +174,14 @@ export function SupportRoutePage() {
     return (
         <SupportPageContext.Provider
             value={{
+                api: runtime.api,
+                customer: runtime.customer,
                 content: runtime.supportContent,
                 language: runtime.language,
                 orderCode: runtime.route.orderCode,
                 focus: runtime.route.focus,
                 onNotify: runtime.notify,
+                onSignIn: () => runtime.navigate({ name: 'login' }),
             }}
         >
             <SupportPage />

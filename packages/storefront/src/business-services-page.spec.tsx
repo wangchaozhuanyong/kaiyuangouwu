@@ -139,8 +139,8 @@ describe('business services page', () => {
             stylesheet.matchAll(/\.business-services-page \.category-client-plugin\s*\{([^}]+)\}/g),
             match => match[1],
         ).find(block => block.includes('flex: 1 1'));
-        expect(desktopCard).toContain('grid-template-columns: minmax(0, 1fr);');
-        expect(desktopCard).toContain('grid-template-rows: auto 1fr auto;');
+        expect(desktopCard).toContain('grid-template-columns: 48px minmax(0, 1fr);');
+        expect(desktopCard).toContain('grid-template-rows: 1fr auto;');
         expect(stylesheet).toMatch(
             /@media \(min-width: 1024px\)[\s\S]*?\.business-services-page \.category-client-plugin-icon\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*1;/,
         );

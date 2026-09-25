@@ -76,6 +76,16 @@ const afterSalesTypes = gql`
         note: String!
     }
 
+    type AfterSalesEvidence {
+        id: ID!
+        createdAt: DateTime!
+        mimeType: String!
+        byteSize: Int!
+        available: Boolean!
+        previewUrl: String
+        expiresAt: DateTime
+    }
+
     type AfterSalesRequest implements Node {
         id: ID!
         createdAt: DateTime!
@@ -116,6 +126,7 @@ const afterSalesTypes = gql`
         order: Order!
         items: [AfterSalesItem!]!
         events: [AfterSalesEvent!]!
+        evidence: [AfterSalesEvidence!]!
     }
 
     input CreateAfterSalesItemInput {
@@ -129,6 +140,7 @@ const afterSalesTypes = gql`
         reason: AfterSalesReason!
         description: String!
         items: [CreateAfterSalesItemInput!]!
+        evidenceIds: [ID!]
     }
 
     input SubmitAfterSalesReturnShipmentInput {
@@ -567,6 +579,17 @@ export const shopApiExtensions = gql`
     ${customerDeliveryEmailTypes}
     ${fulfillmentDeliveryTypes}
 
+    enum StoreNotificationKind {
+        ORDER
+        AFTER_SALES
+    }
+
+    input StoreNotificationReferenceInput {
+        kind: StoreNotificationKind!
+        sourceId: ID!
+        version: String!
+    }
+
     enum AutoCardDeliveryState {
         WAITING_STOCK
         ALLOCATED
@@ -651,9 +674,12 @@ export const shopApiExtensions = gql`
     }
 
     extend type Mutation {
+        markMyStoreNotificationsRead(references: [StoreNotificationReferenceInput!]!): [String!]!
         createStorefrontOrderConfirmationToken: StorefrontOrderConfirmationToken!
         cancelMyAuthorizedOrder(orderId: ID!, reason: String!): Order!
         createAfterSalesRequest(input: CreateAfterSalesRequestInput!): AfterSalesRequest!
+        uploadAfterSalesEvidence(orderId: ID!, file: Upload!): AfterSalesEvidence!
+        removeMyAfterSalesEvidenceDraft(id: ID!): Boolean!
         cancelMyAfterSalesRequest(id: ID!): AfterSalesRequest!
         submitMyAfterSalesReturnShipment(input: SubmitAfterSalesReturnShipmentInput!): AfterSalesRequest!
         confirmMyAfterSalesReplacement(input: ConfirmAfterSalesReplacementInput!): AfterSalesRequest!
@@ -665,9 +691,11 @@ export const shopApiExtensions = gql`
     }
 
     extend type Query {
+        myStoreNotificationReadKeys(references: [StoreNotificationReferenceInput!]!): [String!]!
         activeStoreCommerceMode: StoreCommerceMode!
         storefrontOrderByConfirmationToken(token: String!): Order
         myAfterSalesRequests: [AfterSalesRequest!]!
+        myAfterSalesEvidenceDrafts(orderId: ID!): [AfterSalesEvidence!]!
         myAfterSalesRequest(id: ID!): AfterSalesRequest
         myDeliveryEmails: [CustomerDeliveryEmail!]!
     }

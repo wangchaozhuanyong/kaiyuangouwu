@@ -3,14 +3,20 @@ import { describe, expect, it } from 'vitest';
 import { readStorefrontStylesheet } from './test-stylesheet';
 
 describe('locale preferences presentation', () => {
-    it('uses a low-chrome desktop trigger and a shared responsive dialog', () => {
-        const stylesheet = readStorefrontStylesheet(['./styles/locale-preferences.css']);
+    it('uses the shared desktop action surface and a responsive dialog', () => {
+        const stylesheet = readStorefrontStylesheet([
+            './styles/locale-preferences.css',
+            './styles/desktop-home.css',
+        ]);
 
         expect(stylesheet).toMatch(
             /\.locale-preferences-trigger\s*\{[^}]*border:\s*0;[^}]*background-color:\s*var\(--control-surface[^}]*background-image:\s*var\(--control-surface-image/,
         );
         expect(stylesheet).toMatch(
-            /\.proto-header-right \.locale-preferences-trigger\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/,
+            /\.proto-header-right > \.proto-header-action\s*\{[^}]*background-color:\s*var\(--control-surface\);[^}]*box-shadow:\s*var\(--control-elevation\);/,
+        );
+        expect(stylesheet).toMatch(
+            /\.proto-header-right > \.proto-header-action:hover\s*\{[^}]*background:\s*var\(--control-surface-hover\);/,
         );
         expect(stylesheet).toMatch(
             /\.locale-preferences-language\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/,

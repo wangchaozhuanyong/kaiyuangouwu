@@ -18,7 +18,8 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import { channelRequestContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -41,6 +42,7 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { AccountHeroImagePanel } from './AccountHeroImagePanel';
+import { DesktopCategoryBannerPanel } from './DesktopCategoryBannerPanel';
 import {
     StorefrontAuthSettingsPanel,
     type StorefrontGooglePlatformSettingsInput,
@@ -49,6 +51,7 @@ import {
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
 import { StorefrontFloorList } from './StorefrontFloorList';
 import { StorefrontVisualPresetPanel } from './StorefrontVisualPresetPanel';
+import { HeroBlockPreview } from './storefront-block-preview';
 import {
     blockTranslation,
     errorText,
@@ -71,6 +74,8 @@ import {
 type Viewport = 'MOBILE' | 'DESKTOP';
 
 export function StorefrontModule() {
+    const location = useLocation();
+    const categoryBannerRef = useRef<HTMLDivElement>(null);
     const { hasAnyPermission } = useAdminPermissions();
     const canCreate = hasAnyPermission(['CreateStorefrontContent']);
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
@@ -79,7 +84,26 @@ export function StorefrontModule() {
     const [previewLanguage, setPreviewLanguage] = useState<StorefrontLanguageCode>('zh_Hans');
     const [viewport, setViewport] = useState<Viewport>('MOBILE');
     const [carouselOpen, setCarouselOpen] = useState(false);
-    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(
+        new URLSearchParams(location.search).get('panel') === 'desktop-category-banners',
+    );
+    useEffect(() => {
+        if (new URLSearchParams(location.search).get('panel') === 'desktop-category-banners') {
+            setSettingsOpen(true);
+        }
+    }, [location.search]);
+    useEffect(() => {
+        if (
+            !settingsOpen ||
+            new URLSearchParams(location.search).get('panel') !== 'desktop-category-banners'
+        ) {
+            return;
+        }
+        const frame = requestAnimationFrame(() => {
+            categoryBannerRef.current?.scrollIntoView({ block: 'start' });
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [location.search, settingsOpen]);
     const [actionPending, setActionPending] = useState(false);
     const [editing, setEditing] = useState<StorefrontContentBlock | null>(null);
     const [deleting, setDeleting] = useState<StorefrontContentBlock | null>(null);
@@ -588,6 +612,9 @@ export function StorefrontModule() {
                     />
                 ) : null}
                 <StorefrontVisualPresetPanel />
+                <div ref={categoryBannerRef}>
+                    <DesktopCategoryBannerPanel />
+                </div>
                 <AccountHeroImagePanel
                     key={query.data?.activeChannel.id ?? 'loading'}
                     block={accountHeroBlock}
@@ -1176,6 +1203,16 @@ function PreviewBlock({
     desktop: boolean;
     language: StorefrontLanguageCode;
 }) {
+    if (block.type === 'HERO') {
+        return (
+            <HeroBlockPreview
+                block={block}
+                language={language}
+                fixedViewport={desktop ? 'desktop' : 'mobile'}
+                compact
+            />
+        );
+    }
     const copy = blockTranslation(block, language);
     const image = block.imageAsset?.preview ?? block.imageUrl;
     const productAutomation = ['COUPONS', 'FLASH_SALE', 'BEST_SELLERS', 'RECOMMENDATIONS'].includes(

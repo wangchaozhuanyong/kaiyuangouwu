@@ -22,6 +22,7 @@ describe('StorePromotionCampaignService', () => {
         const coupon = await harness.service.createCoupon(ctx, {
             name: '新客满减',
             kind: 'ORDER_FIXED',
+            appearanceTheme: 'blue',
             minimumSpend: 10_000,
             discountAmount: 2_000,
             perCustomerUsageLimit: 1,
@@ -54,6 +55,7 @@ describe('StorePromotionCampaignService', () => {
             expect.objectContaining({
                 couponCode: expect.stringMatching(/^CPN_[A-F0-9]{32}$/),
                 kind: 'ORDER_FIXED',
+                appearanceTheme: 'blue',
                 minimumSpend: 10_000,
                 discountAmount: 2_000,
             }),
@@ -288,6 +290,38 @@ describe('StorePromotionCampaignService', () => {
         expect(harness.softDeletePromotion).not.toHaveBeenCalled();
     });
 
+    it('changes only the owned coupon appearance and exposes the saved theme', async () => {
+        const promotion = couponPromotion();
+        const harness = createHarness({ promotions: [promotion] });
+
+        const updated = await harness.service.setCouponAppearance(ctx, promotion.id, 'emerald');
+
+        expect(updated.appearanceTheme).toBe('emerald');
+        expect(updated.name).toBe(promotion.name);
+        expect(harness.updatePromotion).not.toHaveBeenCalled();
+        await expect(
+            harness.service.setCouponAppearance(ctx, promotion.id, 'invalid' as any),
+        ).rejects.toThrow();
+    });
+
+    it('cannot change the appearance of another channel coupon', async () => {
+        const promotion = couponPromotion();
+        const harness = createHarness({
+            promotions: [promotion],
+            initialConfig: new StoreCouponCampaignConfig({
+                id: 'config-1',
+                promotionId: promotion.id,
+                channelId: 'other-channel',
+                appearanceTheme: 'rose',
+            }),
+        });
+
+        await expect(harness.service.setCouponAppearance(ctx, promotion.id, 'blue')).rejects.toThrow(
+            '其他店铺',
+        );
+        expect(harness.updatePromotion).not.toHaveBeenCalled();
+    });
+
     it('archives an issued coupon campaign without deleting its protected history', async () => {
         const promotion = couponPromotion();
         const harness = createHarness({ promotions: [promotion], issuedCount: 3 });
@@ -403,11 +437,13 @@ function createHarness({
     variants = [],
     promotions = [],
     issuedCount = 0,
+    initialConfig = null,
     reportRows,
 }: {
     variants?: any[];
     promotions?: any[];
     issuedCount?: number;
+    initialConfig?: StoreCouponCampaignConfig | null;
     reportRows?: {
         ledger: any[];
         usage: any[];
@@ -455,7 +491,7 @@ function createHarness({
         ),
     };
     const updateEntity = vi.fn();
-    let campaignConfig: StoreCouponCampaignConfig | null = null;
+    let campaignConfig: StoreCouponCampaignConfig | null = initialConfig;
     let allocationReportQuery = 0;
     const queryBuilder = (rows: any[]) => {
         const builder = {

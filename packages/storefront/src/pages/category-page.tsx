@@ -1,4 +1,3 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
     ArrowUpDown,
@@ -18,6 +17,7 @@ import { minimumProductPrice } from '../catalog-page-utils';
 import { catalogInputFromRoute } from '../catalog-route-query';
 import { centeredHorizontalScrollLeft, compactCategoryLabel } from '../category-navigation';
 import { CategoryClientPluginSlot } from '../client-plugins/client-plugin-registry';
+import { CatalogFilterSheet } from '../components/common/catalog-filter-sheet';
 import { CategoryPaginationStatus } from '../components/common/category-pagination-status';
 import { ProductRow } from '../components/common/product-row';
 import { useCategoryPagination } from '../hooks/useCategoryPagination';
@@ -25,12 +25,11 @@ import { useScrollDirectionVisibility } from '../hooks/useScrollDirectionVisibil
 import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
 import { productAvailability } from '../product-availability';
-import { PUBLIC_QUERY_STALE_TIME, publicQueryMeta, storefrontQueryKeys } from '../query-client';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { CategoryPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
-import { EmptyState, ListSkeleton, Sheet } from '../storefront-ui/page-shell';
-import { collectionImage, productImage, SafeImage } from '../storefront-ui/product-display';
+import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
+import { collectionImage, SafeImage } from '../storefront-ui/product-display';
 import {
     CollectionSummary,
     FulfillmentType,
@@ -74,11 +73,7 @@ export interface CategoryPageProps {
     onRetry: () => void;
 }
 
-export function categoryFilterActionLabel(language: StorefrontLanguage, resultCount: number | null): string {
-    if (resultCount === null) return language === 'zh' ? '应用筛选' : 'Apply filters';
-    if (language === 'zh') return `查看 ${resultCount} 件商品`;
-    return `View ${resultCount} ${resultCount === 1 ? 'product' : 'products'}`;
-}
+export { categoryFilterActionLabel } from '../components/common/catalog-filter-sheet';
 
 export function CategoryPage() {
     const navigate = useNavigate();
@@ -105,7 +100,6 @@ export function CategoryPage() {
         onNotify,
         onRetry,
     } = CategoryPageContext.useValue();
-    const queryClient = useQueryClient();
     const isZh = language === 'zh';
     const clientPluginBlock = contentBlocks.find(block => block.type === 'CLIENT_PLUGINS');
     const [filterOpen, setFilterOpen] = useState(false);
@@ -131,22 +125,8 @@ export function CategoryPage() {
     const collectionImageMap = useMemo(() => {
         const map = new Map<string, string>();
         for (const collection of primaryCollections) {
-            const direct = collectionImage(collection);
-            if (direct) {
-                map.set(collection.id, direct);
-                continue;
-            }
-            const matchedProduct = products.find(product =>
-                product.collections.some(
-                    productCollection =>
-                        productCollection.id === collection.id ||
-                        productCollection.parentId === collection.id,
-                ),
-            );
-            const fallback = productImage(matchedProduct);
-            if (fallback) {
-                map.set(collection.id, fallback);
-            }
+            const image = collectionImage(collection, products);
+            if (image) map.set(collection.id, image);
         }
         return map;
     }, [primaryCollections, products]);
@@ -218,33 +198,6 @@ export function CategoryPage() {
             : catalogQuery.error instanceof Error
               ? storefrontErrorMessage(catalogQuery.error, language)
               : '';
-
-    useEffect(() => {
-        // Placeholder pages belong to an older query and must not seed product detail state.
-        if (!catalogQuery.isSuccess || catalogQuery.isPlaceholderData) return;
-        for (const product of categoryProducts) {
-            const queryKey = storefrontQueryKeys.product(
-                storefrontQueryKeys.market(market),
-                vendureLanguageCode,
-                product.id,
-            );
-            queryClient.setQueryData(queryKey, product);
-            void queryClient.prefetchQuery({
-                queryKey,
-                queryFn: () => product,
-                staleTime: PUBLIC_QUERY_STALE_TIME,
-                meta: publicQueryMeta(),
-            });
-        }
-    }, [
-        categoryProducts,
-        catalogQuery.isSuccess,
-        catalogQuery.isPlaceholderData,
-        market.code,
-        market.currencyCode,
-        queryClient,
-        vendureLanguageCode,
-    ]);
 
     const allCategoriesRef = useRef<HTMLDivElement | null>(null);
 
@@ -722,133 +675,28 @@ export function CategoryPage() {
             )}
 
             {filterOpen && (
-                <Sheet
-                    title={isZh ? '筛选' : 'Filter'}
+                <CatalogFilterSheet
                     language={language}
+                    currencyCode={market.currencyCode}
+                    value={{
+                        fulfillment: draftType,
+                        inStockOnly: draftStock,
+                        minPrice: draftMinimumPrice,
+                        maxPrice: draftMaximumPrice,
+                    }}
+                    resultCount={draftResultCount}
+                    onChange={value => {
+                        setDraftType(value.fulfillment);
+                        setDraftStock(value.inStockOnly);
+                        setDraftMinimumPrice(value.minPrice);
+                        setDraftMaximumPrice(value.maxPrice);
+                    }}
+                    onApply={value => {
+                        onFilterChange(value.fulfillment, value.inStockOnly, value.minPrice, value.maxPrice);
+                        setFilterOpen(false);
+                    }}
                     onClose={() => setFilterOpen(false)}
-                >
-                    <div className="filter-sheet-content">
-                        <label className="filter-card filter-stock-card">
-                            <span className="filter-stock-title">{isZh ? '仅看有货' : 'In stock only'}</span>
-                            <input
-                                type="checkbox"
-                                checked={draftStock}
-                                onChange={event => setDraftStock(event.target.checked)}
-                            />
-                        </label>
-                        <fieldset className="filter-fieldset">
-                            <legend className="filter-legend">{isZh ? '价格区间' : 'Price range'}</legend>
-                            <div className="price-range-inputs">
-                                <label>
-                                    <span>{market.currencyCode}</span>
-                                    <input
-                                        type="number"
-                                        inputMode="decimal"
-                                        min="0"
-                                        placeholder={isZh ? '最低价' : 'Min'}
-                                        value={draftMinimumPrice}
-                                        onChange={event => setDraftMinimumPrice(event.target.value)}
-                                    />
-                                </label>
-                                <span className="price-separator">—</span>
-                                <label>
-                                    <span>{market.currencyCode}</span>
-                                    <input
-                                        type="number"
-                                        inputMode="decimal"
-                                        min="0"
-                                        placeholder={isZh ? '最高价' : 'Max'}
-                                        value={draftMaximumPrice}
-                                        onChange={event => setDraftMaximumPrice(event.target.value)}
-                                    />
-                                </label>
-                            </div>
-                            <div className="price-presets">
-                                {(
-                                    [
-                                        [0, 100],
-                                        [100, 300],
-                                        [300, 800],
-                                        [800, null],
-                                    ] as const
-                                ).map(([minimum, maximum]) => (
-                                    <button
-                                        type="button"
-                                        key={`${minimum}-${maximum ?? 'up'}`}
-                                        className={
-                                            draftMinimumPrice === String(minimum) &&
-                                            draftMaximumPrice === (maximum === null ? '' : String(maximum))
-                                                ? 'is-active'
-                                                : undefined
-                                        }
-                                        onClick={() => {
-                                            setDraftMinimumPrice(String(minimum));
-                                            setDraftMaximumPrice(maximum === null ? '' : String(maximum));
-                                        }}
-                                    >
-                                        {maximum === null
-                                            ? `${minimum}${isZh ? '以上' : '+'}`
-                                            : `${minimum}-${maximum}`}
-                                    </button>
-                                ))}
-                            </div>
-                        </fieldset>
-                        <fieldset className="filter-fieldset">
-                            <legend className="filter-legend">{isZh ? '商品类型' : 'Product type'}</legend>
-                            <div className="segmented-options">
-                                {(['all', 'physical', 'digital'] as const).map(type => (
-                                    <button
-                                        type="button"
-                                        key={type}
-                                        className={draftType === type ? 'is-active' : undefined}
-                                        onClick={() => setDraftType(type)}
-                                    >
-                                        {type === 'all'
-                                            ? isZh
-                                                ? '全部'
-                                                : 'All'
-                                            : type === 'physical'
-                                              ? isZh
-                                                  ? '实物'
-                                                  : 'Physical'
-                                              : isZh
-                                                ? '数字商品'
-                                                : 'Digital'}
-                                    </button>
-                                ))}
-                            </div>
-                        </fieldset>
-                        <div className="sheet-actions filter-actions">
-                            <button
-                                type="button"
-                                className="reset-filter-button"
-                                onClick={() => {
-                                    setDraftType('all');
-                                    setDraftStock(false);
-                                    setDraftMinimumPrice('');
-                                    setDraftMaximumPrice('');
-                                }}
-                            >
-                                {isZh ? '重置' : 'Reset'}
-                            </button>
-                            <button
-                                type="button"
-                                className="primary-action filter-confirm-button"
-                                onClick={() => {
-                                    onFilterChange(
-                                        draftType,
-                                        draftStock,
-                                        draftMinimumPrice,
-                                        draftMaximumPrice,
-                                    );
-                                    setFilterOpen(false);
-                                }}
-                            >
-                                {categoryFilterActionLabel(language, draftResultCount)}
-                            </button>
-                        </div>
-                    </div>
-                </Sheet>
+                />
             )}
         </main>
     );

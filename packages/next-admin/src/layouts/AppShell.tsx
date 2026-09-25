@@ -487,6 +487,7 @@ export function AppShell() {
             '/sales/profit': '利润统计',
             '/sales/after-sales': '售后与退款',
             '/sales/reviews': '买家评价管理',
+            '/sales/customer-service-feedback': '客服服务评价',
             '/customers/list': '客户管理',
             '/marketing/promotions': '优惠与促销',
             '/marketing/referrals': '分销与返利',
@@ -957,6 +958,13 @@ export function AppShell() {
                                 className={navItemClass}
                             >
                                 买家评价管理
+                            </NavLink>
+                            <NavLink
+                                allowed={canAccessPath('/sales/customer-service-feedback')}
+                                to="/sales/customer-service-feedback"
+                                className={navItemClass}
+                            >
+                                客服服务评价
                             </NavLink>
                         </div>
                     </div>

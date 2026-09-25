@@ -121,6 +121,15 @@ const ORDER_LIST_FIELDS = gql`
 
 const AFTER_SALES_FIELDS = gql`
     fragment AdminAfterSalesFields on AfterSalesRequest {
+        evidence {
+            id
+            createdAt
+            mimeType
+            byteSize
+            available
+            previewUrl
+            expiresAt
+        }
         id
         createdAt
         updatedAt
@@ -746,6 +755,8 @@ export const GET_STOREFRONT_REVIEWS = gql`
                 title
                 body
                 customerName
+                anonymous
+                customerId
                 productName
                 sku
                 merchantResponse

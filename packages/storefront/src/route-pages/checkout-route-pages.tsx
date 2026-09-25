@@ -81,7 +81,6 @@ export function PaymentRoutePage() {
                     onCancel={(order: Order) => void runtime.reopenPendingOrder(order)}
                     onOrderChange={(order: Order) => runtime.setCheckoutOrder(order)}
                     onComplete={(order: Order, confirmationToken: string) => {
-                        runtime.setCompletedOrder(order);
                         runtime.setCheckoutOrder(order);
                         runtime.notify(isZh ? '支付状态已更新' : 'Payment status updated');
                         runtime.navigate(
@@ -110,7 +109,6 @@ export function OrderConfirmationRoutePage() {
                     api={runtime.api}
                     code={runtime.route.id ?? ''}
                     confirmationToken={runtime.route.token ?? ''}
-                    initialOrder={runtime.completedOrder}
                     customer={runtime.customer}
                     market={runtime.market}
                     locale={runtime.locale}

@@ -28,6 +28,23 @@ interface StorefrontCouponOptions extends StorefrontQueryContext {
     setCartError: (error: string | null) => void;
 }
 
+function suppressedCouponScope(marketCode: string): string | null {
+    try {
+        return sessionStorage.getItem(`storefront:coupon-auto-selection-suppressed:${marketCode}`);
+    } catch {
+        return null;
+    }
+}
+
+function rememberSuppressedCouponScope(marketCode: string, scope: string): void {
+    if (!scope) return;
+    try {
+        sessionStorage.setItem(`storefront:coupon-auto-selection-suppressed:${marketCode}`, scope);
+    } catch {
+        // Keep the in-memory choice when browser storage is unavailable.
+    }
+}
+
 export function useStorefrontCoupons({
     api,
     market,
@@ -60,19 +77,33 @@ export function useStorefrontCoupons({
               .join('|')}`
         : '';
     const couponAutoSelectionAttemptRef = useRef('');
+    const couponAutoSelectionPendingRef = useRef('');
     const couponAutoSelectionSuppressedRef = useRef('');
+    const couponAutoSelectionScopeRef = useRef(couponAutoSelectionScope);
+    couponAutoSelectionScopeRef.current = couponAutoSelectionScope;
 
     const applyCoupon = useCallback(
         async (customerCouponId: string): Promise<string | null> => {
+            const previousSuppression = couponAutoSelectionSuppressedRef.current;
             couponAutoSelectionSuppressedRef.current = couponAutoSelectionScope;
             setCartLoading(true);
             setCartError(null);
+            let applied = false;
             try {
                 await api.applyCustomerCoupon(customerCouponId);
+                applied = true;
+                rememberSuppressedCouponScope(market.code, couponAutoSelectionScope);
+                await refreshCart();
                 await Promise.all([queryClient.invalidateQueries({ queryKey: customerCouponQueryKey })]);
                 notify(isZh ? '优惠券已使用' : 'Coupon applied');
                 return null;
             } catch (requestError) {
+                if (applied) {
+                    return isZh
+                        ? '优惠券已使用，但订单金额刷新失败，请刷新购物车后确认。'
+                        : 'The coupon was applied, but the order total could not refresh. Refresh your cart to confirm.';
+                }
+                couponAutoSelectionSuppressedRef.current = previousSuppression;
                 return requestError instanceof Error
                     ? storefrontErrorMessage(requestError, language)
                     : text.loadError;
@@ -85,6 +116,7 @@ export function useStorefrontCoupons({
             couponAutoSelectionScope,
             customerCouponQueryKey,
             isZh,
+            market.code,
             notify,
             queryClient,
             refreshCart,
@@ -115,6 +147,7 @@ export function useStorefrontCoupons({
                     );
                 }
                 await Promise.all([
+                    queryClient.invalidateQueries({ queryKey: customerCouponQueryKey }),
                     queryClient.invalidateQueries({ queryKey: couponCampaignsQueryKey }),
                     queryClient.invalidateQueries({
                         queryKey: storefrontQueryKeys.customerCouponUsageRecords(
@@ -167,15 +200,26 @@ export function useStorefrontCoupons({
 
     const removeCoupon = useCallback(
         async (customerCouponId: string): Promise<string | null> => {
+            const previousSuppression = couponAutoSelectionSuppressedRef.current;
             couponAutoSelectionSuppressedRef.current = couponAutoSelectionScope;
             setCartLoading(true);
             setCartError(null);
+            let removed = false;
             try {
                 await api.removeCustomerCoupon(customerCouponId);
+                removed = true;
+                rememberSuppressedCouponScope(market.code, couponAutoSelectionScope);
+                await refreshCart();
                 await Promise.all([queryClient.invalidateQueries({ queryKey: customerCouponQueryKey })]);
                 notify(isZh ? '已取消使用优惠券' : 'Coupon unapplied');
                 return null;
             } catch (requestError) {
+                if (removed) {
+                    return isZh
+                        ? '优惠券已取消，但订单金额刷新失败，请刷新购物车后确认。'
+                        : 'The coupon was removed, but the order total could not refresh. Refresh your cart to confirm.';
+                }
+                couponAutoSelectionSuppressedRef.current = previousSuppression;
                 return requestError instanceof Error
                     ? storefrontErrorMessage(requestError, language)
                     : text.loadError;
@@ -188,6 +232,7 @@ export function useStorefrontCoupons({
             couponAutoSelectionScope,
             customerCouponQueryKey,
             isZh,
+            market.code,
             notify,
             queryClient,
             refreshCart,
@@ -207,6 +252,8 @@ export function useStorefrontCoupons({
             !couponAutoSelectionScope ||
             !couponAutoSelectionAttemptKey ||
             couponAutoSelectionSuppressedRef.current === couponAutoSelectionScope ||
+            suppressedCouponScope(market.code) === couponAutoSelectionScope ||
+            couponAutoSelectionPendingRef.current === couponAutoSelectionScope ||
             couponAutoSelectionAttemptRef.current === couponAutoSelectionAttemptKey ||
             myCoupons.some(coupon => coupon.lockedOrderId === order.id) ||
             !myCoupons.some(coupon => coupon.usable)
@@ -215,14 +262,21 @@ export function useStorefrontCoupons({
         }
 
         couponAutoSelectionAttemptRef.current = couponAutoSelectionAttemptKey;
+        couponAutoSelectionPendingRef.current = couponAutoSelectionScope;
+        setCartLoading(true);
         let active = true;
+        let selected = false;
         void api
             .applyBestCustomerCoupon()
             .then(async coupon => {
                 if (!coupon) return;
+                selected = true;
                 queryClient.setQueryData<StoreCustomerCoupon[]>(customerCouponQueryKey, current =>
                     current?.map(existing => (existing.id === coupon.id ? coupon : existing)),
                 );
+                if (couponAutoSelectionScopeRef.current === couponAutoSelectionScope) {
+                    await refreshCart();
+                }
                 if (active) {
                     notify(
                         isZh
@@ -232,7 +286,23 @@ export function useStorefrontCoupons({
                 }
                 await Promise.all([queryClient.invalidateQueries({ queryKey: customerCouponQueryKey })]);
             })
-            .catch(() => undefined);
+            .catch(() => {
+                if (selected && couponAutoSelectionScopeRef.current === couponAutoSelectionScope) {
+                    setCartError(
+                        isZh
+                            ? '优惠券已自动选择，但订单金额刷新失败，请刷新购物车后确认。'
+                            : 'A coupon was selected, but the order total could not refresh. Refresh your cart to confirm.',
+                    );
+                }
+            })
+            .finally(() => {
+                if (couponAutoSelectionPendingRef.current === couponAutoSelectionScope) {
+                    couponAutoSelectionPendingRef.current = '';
+                }
+                if (couponAutoSelectionScopeRef.current === couponAutoSelectionScope) {
+                    setCartLoading(false);
+                }
+            });
         return () => {
             active = false;
         };
@@ -246,11 +316,14 @@ export function useStorefrontCoupons({
         customerCouponQueryKey,
         customerCouponsQuery.isPending,
         isZh,
+        market.code,
         myCoupons,
         notify,
         queryClient,
         refreshCart,
         route.name,
+        setCartError,
+        setCartLoading,
     ]);
 
     return { applyCoupon, claimCoupon, removeCoupon };

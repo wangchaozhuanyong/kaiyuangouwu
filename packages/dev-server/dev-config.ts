@@ -90,6 +90,7 @@ import {
     shouldSendOrderConfirmation,
 } from './order-confirmation-email';
 import { resolveRuntimeAdminCredentials } from './runtime-admin-credentials';
+import { storefrontAssetPresets } from './storefront-asset-presets';
 import { StorefrontGoogleAuthenticationStrategy as GoogleAuthStrategy } from './storefront-google-authentication-strategy';
 import { StorefrontNativeAuthenticationStrategy as NativeAuthStrategy } from './storefront-native-authentication-strategy';
 
@@ -376,6 +377,7 @@ const importAssetsDir = configuredDirectory(
 );
 const assetUploadDir = configuredDirectory('VENDURE_ASSET_UPLOAD_DIR', path.join(serverRoot, 'assets'));
 const customerImages = customerImageConfiguration(assetUploadDir, IS_PRODUCTION);
+const commerceFulfillmentOptions = { testPaymentsEnabled, evidenceStorage: customerImages.evidenceStorage };
 
 function safeAssetAttachmentPath(source: string): string {
     const root = path.resolve(assetUploadDir);
@@ -983,7 +985,7 @@ export const devConfig: VendureConfig = {
                       trustProxyHeaders: process.env.STORE_DOMAIN_TRUST_PROXY === 'true',
                       bypassHosts: storeDomainBypassHosts(),
                   }),
-                  CommerceFulfillmentPlugin.init({ testPaymentsEnabled }),
+                  CommerceFulfillmentPlugin.init(commerceFulfillmentOptions),
                   ImageGenerationPlugin.init({
                       blobStore: customerImages.privateObjects,
                       storageRoot: process.env.IMAGE_GENERATION_STORAGE_ROOT,
@@ -1009,30 +1011,7 @@ export const devConfig: VendureConfig = {
             assetUploadDir,
             namingStrategy: customerImages.namingStrategy,
             storageStrategyFactory: customerImages.storageStrategyFactory,
-            presets: [
-                { name: 'storefront-original-preview', width: 1600, height: 1600, mode: 'resize' },
-                { name: 'storefront-placeholder-square-48', width: 48, height: 48, mode: 'crop' },
-                { name: 'storefront-placeholder-wide-64', width: 64, height: 32, mode: 'crop' },
-                { name: 'storefront-thumbnail-160', width: 160, height: 160, mode: 'crop' },
-                { name: 'storefront-thumbnail-320', width: 320, height: 320, mode: 'crop' },
-                { name: 'storefront-icon-64', width: 64, height: 64, mode: 'crop' },
-                { name: 'storefront-icon-96', width: 96, height: 96, mode: 'crop' },
-                // Keep legacy card presets available while older storefront bundles are still cached.
-                { name: 'storefront-card-320', width: 320, height: 280, mode: 'crop' },
-                { name: 'storefront-card-640', width: 640, height: 560, mode: 'crop' },
-                { name: 'storefront-card-square-320', width: 320, height: 320, mode: 'resize' },
-                { name: 'storefront-card-square-160', width: 160, height: 160, mode: 'resize' },
-                { name: 'storefront-card-square-240', width: 240, height: 240, mode: 'resize' },
-                { name: 'storefront-card-square-640', width: 640, height: 640, mode: 'resize' },
-                { name: 'storefront-card-square-960', width: 960, height: 960, mode: 'resize' },
-                { name: 'storefront-hero-480', width: 480, height: 240, mode: 'crop' },
-                { name: 'storefront-hero-960', width: 960, height: 480, mode: 'crop' },
-                { name: 'storefront-hero-1440', width: 1440, height: 720, mode: 'crop' },
-                { name: 'storefront-hero-1600', width: 1600, height: 800, mode: 'crop' },
-                { name: 'storefront-detail-640', width: 640, height: 640, mode: 'resize' },
-                { name: 'storefront-detail-1200', width: 1200, height: 1200, mode: 'resize' },
-                { name: 'storefront-detail-1600', width: 1600, height: 1600, mode: 'resize' },
-            ],
+            presets: storefrontAssetPresets,
             cacheHeader: 'private, no-store',
             imageTransformStrategy: createCatalogImageTransformStrategies(BOOTSTRAP_BASE_SCHEMA),
         }),

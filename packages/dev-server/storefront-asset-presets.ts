@@ -1,0 +1,30 @@
+import type { ImageTransformPreset } from '@vendure/asset-server-plugin';
+
+export const storefrontAssetPresets: ImageTransformPreset[] = [
+    { name: 'storefront-original-preview', width: 1600, height: 1600, mode: 'resize' },
+    { name: 'storefront-placeholder-square-48', width: 48, height: 48, mode: 'crop' },
+    { name: 'storefront-placeholder-wide-64', width: 64, height: 64, mode: 'resize' },
+    { name: 'storefront-thumbnail-160', width: 160, height: 160, mode: 'crop' },
+    { name: 'storefront-thumbnail-320', width: 320, height: 320, mode: 'crop' },
+    { name: 'storefront-icon-64', width: 64, height: 64, mode: 'crop' },
+    { name: 'storefront-icon-96', width: 96, height: 96, mode: 'crop' },
+    // Keep legacy card presets available while older storefront bundles are still cached.
+    { name: 'storefront-card-320', width: 320, height: 280, mode: 'crop' },
+    { name: 'storefront-card-640', width: 640, height: 560, mode: 'crop' },
+    { name: 'storefront-card-square-320', width: 320, height: 320, mode: 'resize' },
+    { name: 'storefront-card-square-160', width: 160, height: 160, mode: 'resize' },
+    { name: 'storefront-card-square-240', width: 240, height: 240, mode: 'resize' },
+    { name: 'storefront-card-square-640', width: 640, height: 640, mode: 'resize' },
+    { name: 'storefront-card-square-960', width: 960, height: 960, mode: 'resize' },
+    { name: 'storefront-hero-480', width: 480, height: 240, mode: 'crop' },
+    { name: 'storefront-hero-960', width: 960, height: 480, mode: 'crop' },
+    { name: 'storefront-hero-1440', width: 1440, height: 720, mode: 'crop' },
+    { name: 'storefront-hero-1600', width: 1600, height: 800, mode: 'crop' },
+    { name: 'storefront-hero-fit-480', width: 480, height: 480, mode: 'resize' },
+    { name: 'storefront-hero-fit-960', width: 960, height: 960, mode: 'resize' },
+    { name: 'storefront-hero-fit-1440', width: 1440, height: 1440, mode: 'resize' },
+    { name: 'storefront-hero-fit-1600', width: 1600, height: 1600, mode: 'resize' },
+    { name: 'storefront-detail-640', width: 640, height: 640, mode: 'resize' },
+    { name: 'storefront-detail-1200', width: 1200, height: 1200, mode: 'resize' },
+    { name: 'storefront-detail-1600', width: 1600, height: 1600, mode: 'resize' },
+];

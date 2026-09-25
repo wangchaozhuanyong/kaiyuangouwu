@@ -135,6 +135,16 @@ describe('storefront client plugin configuration', () => {
         ]);
     });
 
+    it('preserves the selected page image when saving service copy', () => {
+        const draft = createClientPluginDraft();
+        draft.imageAssetId = 'asset-7';
+        draft.imageUrl = '/assets/preview/service-banner.webp';
+        expect(clientPluginBlockInput(draft)).toMatchObject({
+            imageAssetId: 'asset-7',
+            imageUrl: '/assets/preview/service-banner.webp',
+        });
+    });
+
     it('keeps existing plugins global and validates selected category targeting', () => {
         let draft = addClientPlugin(createClientPluginDraft(), clientPluginCatalog[0]);
         expect(draft.items[0].settings).toMatchObject({

@@ -39,10 +39,41 @@ try {
     );
     await expect(page.getByRole('spinbutton', { name: '轮播间隔（秒）' })).toHaveCount(0);
     const preview = page.getByRole('region', { name: '首页轮播预览' });
-    await expect(preview.getByRole('img')).toHaveCount(1);
+    const previewFrame = preview.frameLocator('iframe[title="首页轮播效果"]');
+    await expect(previewFrame.locator('.hero-rich-backdrop')).toHaveCount(1);
     await preview.getByRole('button', { name: '预览第 2 张轮播图' }).click();
-    await expect(preview.getByRole('heading', { name: '留学服务' })).toBeVisible();
+    await expect(previewFrame.locator('.hero-rich-title')).toHaveText('留学服务');
+    await page.getByRole('button', { name: '电脑', exact: true }).first().click();
+    await expect(previewFrame.locator('.hero-image-overlay')).toBeVisible();
+    const geometry = await previewFrame.locator('.hero').evaluate(hero => {
+        const image = hero.querySelector('.hero-rich-backdrop');
+        const copy = hero.querySelector('.hero-rich-content');
+        const bounds = hero.getBoundingClientRect();
+        const imageBounds = image.getBoundingClientRect();
+        const copyBounds = copy.getBoundingClientRect();
+        return {
+            ratio: bounds.width / bounds.height,
+            imageFit: getComputedStyle(image).objectFit,
+            titleSize: getComputedStyle(hero.querySelector('.hero-rich-title')).fontSize,
+            copyBackground: getComputedStyle(copy).backgroundColor,
+            copyInsideImage:
+                copyBounds.left >= imageBounds.left &&
+                copyBounds.right <= imageBounds.right &&
+                copyBounds.top >= imageBounds.top &&
+                copyBounds.bottom <= imageBounds.bottom,
+        };
+    });
+    expect(Math.abs(geometry.ratio / (1600 / 520) - 1)).toBeLessThan(0.01);
+    expect(geometry).toMatchObject({
+        imageFit: 'cover',
+        titleSize: '27px',
+        copyBackground: 'rgba(0, 0, 0, 0)',
+        copyInsideImage: true,
+    });
     await page.screenshot({ path: `${output}/homepage-desktop.png`, fullPage: true });
+    await page.getByRole('button', { name: '手机', exact: true }).first().click();
+    await expect(previewFrame.locator('.hero-image-overlay')).toHaveCount(0);
+    await expect(previewFrame.locator('.hero-rich-backdrop')).toHaveCSS('object-fit', 'contain');
 
     await page.getByRole('button', { name: '首页轮播图', exact: true }).click();
     await expect(manager().getByRole('article')).toHaveCount(3);
@@ -107,9 +138,9 @@ try {
 
     await manager()
         .getByRole('article', { name: 'AI 订阅', exact: true })
-        .getByRole('button', { name: '启用', exact: true })
+        .getByRole('button', { name: '启用楼层', exact: true })
         .click();
-    await expect(manager().getByRole('article', { name: 'AI 订阅', exact: true })).toContainText('展示中');
+    await expect(manager().getByRole('article', { name: 'AI 订阅', exact: true })).toContainText('已发布');
     await page.evaluate(() => {
         window.carouselFixture.faults.delete = true;
     });
@@ -329,10 +360,10 @@ try {
             2,
         ),
     );
-    console.log('Carousel browser checks passed (isolated fixture)');
+    process.stdout.write('Carousel browser checks passed (isolated fixture)\n');
 } catch (error) {
     await page.screenshot({ path: `${output}/failure.png`, fullPage: true });
-    console.error(errors);
+    process.stderr.write(`${JSON.stringify(errors)}\n`);
     throw error;
 } finally {
     await browser.close();

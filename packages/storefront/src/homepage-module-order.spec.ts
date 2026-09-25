@@ -42,6 +42,16 @@ describe('homepageModuleEntries', () => {
                 .map(entry => entry.block?.id),
         ).toEqual(['ordinary']);
     });
+    it('does not render desktop category banner records as homepage custom sections', () => {
+        const records = [
+            {
+                ...block('CUSTOM', 1, 'desktop-category-banner-default'),
+                settings: { purpose: 'desktop-category-banner', categoryId: 'default' },
+            },
+            block('CUSTOM', 2, 'ordinary'),
+        ];
+        expect(homepageModuleEntries(records, []).map(entry => entry.block?.id)).toEqual(['ordinary']);
+    });
     it('does not invent modules for a new, empty or fully disabled store', () => {
         expect(homepageModuleEntries([], [])).toEqual([]);
         expect(homepageModuleEntries([], ['HERO', 'QUICK_LINKS', 'NOTICE', 'COUPONS'])).toEqual([]);

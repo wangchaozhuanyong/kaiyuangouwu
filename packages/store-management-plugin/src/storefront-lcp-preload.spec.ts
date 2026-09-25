@@ -35,8 +35,8 @@ describe('storefront LCP preload', () => {
         expect(link).toContain('rel="preload"');
         expect(link).toContain('as="image"');
         expect(link).toContain('fetchpriority="high"');
-        expect(link).toContain('preset=storefront-hero-480&amp;format=webp&amp;q=90 480w');
-        expect(link).toContain('preset=storefront-hero-1600&amp;format=webp&amp;q=90');
+        expect(link).toContain('preset=storefront-hero-fit-480&amp;format=webp&amp;q=90 480w');
+        expect(link).toContain('preset=storefront-hero-fit-1600&amp;format=webp&amp;q=90');
         expect(link).toContain('imagesizes="(min-width: 1024px) 850px, calc(100vw - 20px)"');
     });
 
@@ -65,12 +65,12 @@ describe('storefront LCP preload', () => {
         const second = await service.render(ctx);
         await service.invalidate('store-a');
 
-        expect(first).toContain('storefront-hero-480');
+        expect(first).toContain('storefront-hero-fit-480');
         expect(second).toBe('<link cached />');
         expect(content.findPublished).toHaveBeenCalledTimes(1);
         expect(cache.set).toHaveBeenCalledWith(
             'StorefrontLcpPreload:store-a:zh_Hans',
-            expect.stringContaining('storefront-hero-1600'),
+            expect.stringContaining('storefront-hero-fit-1600'),
             expect.objectContaining({ tags: [storefrontContentCacheTag('store-a')] }),
         );
         expect(cache.invalidateTags).toHaveBeenCalledWith([storefrontContentCacheTag('store-a')]);

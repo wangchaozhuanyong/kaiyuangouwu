@@ -13,7 +13,7 @@ import {
     uiCopy,
 } from '../i18n';
 import { configureMoneyDisplay } from '../money-display';
-import { PUBLIC_QUERY_STALE_TIME, publicQueryMeta, storefrontQueryKeys } from '../query-client';
+import { storefrontQueryKeys } from '../query-client';
 import { captureReferralAttribution } from '../referral-attribution';
 import { readStoredStrings, scopedStorageKey } from '../storefront-storage';
 import {
@@ -28,13 +28,7 @@ import {
     readStoredSettlementCurrency,
     writeManualLanguage,
 } from '../storefront-utils';
-import {
-    MarketConfig,
-    Product,
-    StorefrontConfig,
-    StorefrontLanguage,
-    StorefrontLegalIdentity,
-} from '../types';
+import { MarketConfig, StorefrontConfig, StorefrontLanguage, StorefrontLegalIdentity } from '../types';
 import { useStorefrontVisualPreset } from '../use-storefront-visual-preset';
 
 import { useStorefrontBrandColors } from './useStorefrontDocument';
@@ -148,26 +142,6 @@ export function useStorefrontBootstrap() {
         usdtMarkupPercent: configQuery.data?.currencyConfiguration?.usdtMarkupPercent ?? 0,
     });
 
-    const cacheProducts = useCallback(
-        (items: Product[]) => {
-            for (const product of items) {
-                const queryKey = storefrontQueryKeys.product(
-                    storefrontQueryKeys.market(market),
-                    vendureLanguageCode,
-                    product.id,
-                );
-                queryClient.setQueryData(queryKey, product);
-                void queryClient.prefetchQuery({
-                    queryKey,
-                    queryFn: () => product,
-                    staleTime: PUBLIC_QUERY_STALE_TIME,
-                    meta: publicQueryMeta(),
-                });
-            }
-        },
-        [market.code, market.currencyCode, queryClient, vendureLanguageCode],
-    );
-
     useEffect(() => {
         const config = configQuery.data;
         if (!config) return;
@@ -260,10 +234,6 @@ export function useStorefrontBootstrap() {
     ]);
 
     useStorefrontBrandColors(configQuery.data, visualConfig.presetId);
-
-    useEffect(() => {
-        if (productsQuery.data) cacheProducts(productsQuery.data);
-    }, [cacheProducts, productsQuery.data]);
 
     const refetchStorefront = useCallback(async () => {
         await Promise.all([productsQuery.refetch(), collectionsQuery.refetch(), configQuery.refetch()]);

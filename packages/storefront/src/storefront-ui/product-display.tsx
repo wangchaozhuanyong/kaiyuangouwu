@@ -2,6 +2,7 @@ import {
     Cpu,
     Download,
     Globe,
+    Headphones,
     LayoutGrid,
     Package,
     ShieldCheck,
@@ -349,12 +350,20 @@ export function OrderImage({ order }: { order: OrderSummary }) {
     );
 }
 
-export function collectionImage(collection: CollectionSummary): string | null {
-    return (
+export function collectionImage(collection: CollectionSummary, products: Product[] = []): string | null {
+    const managedImage =
         collection.featuredAsset?.preview ??
         collection.children?.find(child => child.featuredAsset?.preview)?.featuredAsset?.preview ??
-        null
+        null;
+    if (managedImage) return managedImage;
+
+    const matchedProduct = products.find(product =>
+        product.collections.some(
+            productCollection =>
+                productCollection.id === collection.id || productCollection.parentId === collection.id,
+        ),
     );
+    return productImage(matchedProduct);
 }
 
 export function trimText(value: string | undefined, length: number): string {
@@ -493,6 +502,15 @@ export function renderColorfulQuickIcon(label: string, index: number, imageUrl?:
 
     const cleanLabel = (label || '').toLowerCase();
     const fallbacks = [LayoutGrid, ShoppingBag, Sparkles, Download, ShieldCheck];
+    const tone = /保障|售后|质保|support|帮助|客服/.test(cleanLabel)
+        ? 'support'
+        : /券|coupon|优惠/.test(cleanLabel)
+          ? 'coupon'
+          : /代充|充值|topup|订单|orders?/.test(cleanLabel)
+            ? 'security'
+            : /apple|苹果|服务|中转|api|hub|ai/.test(cleanLabel)
+              ? 'studio'
+              : (['security', 'studio', 'support', 'coupon', 'mail'] as const)[index % 5];
     const Icon = /代充|充值|topup/.test(cleanLabel)
         ? Zap
         : /中转|api|hub|ai/.test(cleanLabel)
@@ -501,14 +519,16 @@ export function renderColorfulQuickIcon(label: string, index: number, imageUrl?:
             ? Smartphone
             : /海外|账号|global|account/.test(cleanLabel)
               ? Globe
-              : /保障|售后|质保|support/.test(cleanLabel)
-                ? ShieldCheck
-                : /券|coupon/.test(cleanLabel)
+              : /保障|售后|质保|support|帮助|客服/.test(cleanLabel)
+                ? Headphones
+                : /券|coupon|优惠/.test(cleanLabel)
                   ? TicketPercent
-                  : fallbacks[index % fallbacks.length];
+                  : /订单|orders?/.test(cleanLabel)
+                    ? Package
+                    : fallbacks[index % fallbacks.length];
 
     return (
-        <span className="colorful-icon-badge" aria-hidden="true">
+        <span className="colorful-icon-badge" data-icon-tone={tone} aria-hidden="true">
             <Icon />
         </span>
     );

@@ -18,6 +18,41 @@ afterEach(() => {
 });
 
 describe('ImagePrivateStorageService reference lifecycle', () => {
+    it('limits shared-bucket orphan cleanup to generation reference and output keys', async () => {
+        const query: any = {
+            where: () => query,
+            andWhere: () => query,
+            take: () => query,
+            getMany: () => Promise.resolve([]),
+        };
+        const repository = {
+            createQueryBuilder: () => query,
+            find: vi.fn().mockResolvedValue([]),
+            remove: vi.fn(),
+        };
+        const old = new Date(Date.now() - 2 * 60 * 60_000);
+        const blobStore = {
+            list: vi.fn().mockResolvedValue({
+                items: [
+                    { key: 'private/v1/after-sales/receipt.png', modifiedAt: old },
+                    { key: 'private/v1/reference/orphan.png', modifiedAt: old },
+                    { key: 'private/v1/output/orphan.png', modifiedAt: old },
+                ],
+            }),
+            delete: vi.fn().mockResolvedValue(undefined),
+        };
+        const service = new ImagePrivateStorageService(
+            { rawConnection: { getRepository: () => repository } } as any,
+            { production: false, blobStore: blobStore as any },
+        );
+        expect(await service.purgeExpired()).toBe(2);
+        expect(blobStore.delete.mock.calls.map(([key]) => key)).toEqual([
+            'private/v1/reference/orphan.png',
+            'private/v1/output/orphan.png',
+        ]);
+        await service.onModuleDestroy();
+    });
+
     it('advances past live files across bounded sweeps and preserves recent files and symlinks', async () => {
         const root = await mkdtemp(path.join(tmpdir(), 'private-image-sweep-'));
         const old = new Date(Date.now() - 2 * 60 * 60_000);
@@ -32,6 +67,10 @@ describe('ImagePrivateStorageService reference lifecycle', () => {
         const known = new Set(names.slice(0, 400).map(name => `reference/${name}`));
         const orphan = path.join(folder, names[400]);
         await writeFile(path.join(root, 'recent.png'), 'recent');
+        await mkdir(path.join(root, 'after-sales'));
+        const evidence = path.join(root, 'after-sales', 'unrelated-private-evidence.png');
+        await writeFile(evidence, 'synthetic private evidence');
+        await utimes(evidence, old, old);
         await symlink(folder, path.join(root, 'linked-directory'));
         const query: any = {
             where: () => query,
@@ -58,6 +97,7 @@ describe('ImagePrivateStorageService reference lifecycle', () => {
             await expect(lstat(orphan)).rejects.toMatchObject({ code: 'ENOENT' });
             expect((await readdir(folder)).length).toBe(400);
             expect((await lstat(path.join(root, 'recent.png'))).isFile()).toBe(true);
+            expect((await lstat(evidence)).isFile()).toBe(true);
             expect((await lstat(path.join(root, 'linked-directory'))).isSymbolicLink()).toBe(true);
             const batches = find.mock.calls
                 .map(([options]) => options.where.storageKey?.value)

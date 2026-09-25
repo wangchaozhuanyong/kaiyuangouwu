@@ -2,9 +2,12 @@ import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/cli
 import { ApolloProvider } from '@apollo/client/react';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
 import { AdminPermissionsProvider } from '../../src/components/admin-permissions-context';
 import '../../src/index.css';
+import { BusinessServicesCopyModule } from '../../src/pages/Storefront/BusinessServicesCopyModule';
+import { StorefrontContentModule } from '../../src/pages/Storefront/StorefrontContentModule';
 import { StorefrontModule } from '../../src/pages/Storefront/StorefrontModule';
 import { newContentBlock } from '../../src/pages/Storefront/storefront-content-utils';
 
@@ -16,10 +19,19 @@ const asset = {
     name: '轮播测试素材',
     type: 'IMAGE',
     mimeType: 'image/svg+xml',
-    preview: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="960" height="480"><rect width="960" height="480" fill="#bccbb5"/><rect x="540" y="80" width="250" height="330" rx="24" fill="#eef1e4"/><circle cx="180" cy="160" r="70" fill="#e8c38e"/><text x="90" y="340" font-size="32" fill="#223128">Carousel test image</text></svg>')}`,
+    preview: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520"><rect width="1600" height="520" fill="#bccbb5"/><rect x="940" y="70" width="340" height="390" rx="24" fill="#eef1e4"/><circle cx="260" cy="160" r="70" fill="#e8c38e"/></svg>')}`,
     source: '',
+    width: 1600,
+    height: 520,
 };
 asset.source = '/assets/fixture-carousel.svg';
+const replacementAsset = {
+    ...asset,
+    id: 'replacement-asset',
+    name: '替换轮播横幅',
+    preview: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520"><rect width="1600" height="520" fill="#445a78"/><rect x="1040" y="70" width="350" height="390" fill="#f3c99a"/></svg>')}`,
+    source: '/assets/replacement-carousel.svg',
+};
 let blocks = params.has('empty')
     ? []
     : [
@@ -40,7 +52,99 @@ let blocks = params.has('empty')
           imageAsset: type === 'HERO' ? asset : null,
           imageUrl: type === 'HERO' ? asset.preview : null,
       }));
+if (params.has('services')) {
+    blocks.push({
+        ...newContentBlock('CLIENT_PLUGINS', 10_001, '客户端插件配置'),
+        __typename: 'StorefrontContentBlock',
+        id: 'services-copy',
+        code: 'storefront-client-plugins',
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-09-01T00:00:00Z',
+        enabled: !params.has('services-disabled'),
+        imageAsset: asset,
+        imageUrl: asset.preview,
+        settings: { version: 1, page: 'category', businessServicesCopyVersion: 1 },
+        translations: [
+            {
+                languageCode: 'zh_Hans',
+                title: '商业服务',
+                subtitle: '',
+                body: '为您提供多种服务。',
+                ctaLabel: '',
+            },
+            {
+                languageCode: 'en',
+                title: 'Business services',
+                subtitle: '',
+                body: 'Explore our services.',
+                ctaLabel: '',
+            },
+        ],
+    });
+}
+if (params.has('support')) {
+    const supportBlock = newContentBlock('SUPPORT', 10_002, '客服中心');
+    blocks.push({
+        ...supportBlock,
+        __typename: 'StorefrontContentBlock',
+        id: 'support-page',
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-09-01T00:00:00Z',
+        enabled: true,
+        imageAsset: asset,
+        imageUrl: asset.preview,
+        items: supportBlock.items.map(item =>
+            item.settings?.supportChannel === 'QQ'
+                ? { ...item, enabled: true, settings: { ...item.settings, supportAccount: '12345678' } }
+                : item,
+        ),
+        settings: {
+            serviceDaysZh: '每日',
+            serviceDaysEn: 'Daily',
+            serviceStartTime: '09:00',
+            serviceEndTime: '18:00',
+            supportFaqs: [
+                {
+                    id: 'contact',
+                    enabled: true,
+                    questionZh: '如何联系客服？',
+                    answerZh: '请使用页面上的联系方式。',
+                    questionEn: 'How can I contact support?',
+                    answerEn: 'Use a contact method on this page.',
+                },
+            ],
+        },
+    });
+}
+if (params.has('recommendations')) {
+    blocks.push({
+        ...newContentBlock('RECOMMENDATIONS', 10_003, '猜你喜欢'),
+        __typename: 'StorefrontContentBlock',
+        id: 'recommendations',
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-09-01T00:00:00Z',
+        enabled: true,
+        imageAsset: null,
+        imageUrl: null,
+        translations: [
+            { languageCode: 'zh_Hans', title: '猜你喜欢', subtitle: '继续发现好物', body: '', ctaLabel: '' },
+            {
+                languageCode: 'en',
+                title: 'You may also like',
+                subtitle: 'Keep discovering',
+                body: '',
+                ctaLabel: '',
+            },
+        ],
+    });
+}
+if (params.has('persist') && sessionStorage.getItem('carousel-fixture-blocks')) {
+    blocks = JSON.parse(sessionStorage.getItem('carousel-fixture-blocks')!);
+}
 let interval = 6;
+let announcements = params.has('persist')
+    ? JSON.parse(sessionStorage.getItem('storefront-fixture-announcements') ?? '[]')
+    : [];
 if (params.has('sharing-records')) {
     blocks.push({
         ...blocks[0],
@@ -56,20 +160,39 @@ if (params.has('sharing-records')) {
 let revision = 0;
 const operations: Array<{ name: string; variables: unknown }> = [];
 const faults = { read: params.has('read-error'), write: false, delete: false, delayMs: 80 };
-Object.assign(window, { carouselFixture: { operations, faults, state: () => ({ blocks, interval }) } });
+Object.assign(window, {
+    carouselFixture: { operations, faults, state: () => ({ blocks, interval, announcements }) },
+});
 const settings = () => ({
     __typename: 'StorefrontContentSettings',
     heroAutoplayIntervalSeconds: interval,
     configuredBlockTypes: [...new Set(blocks.map(block => block.type))],
 });
-const channel = {
+const storeChannel = {
     __typename: 'Channel',
     id: 'fixture',
     code: '轮播测试店铺',
     token: 'fixture',
     defaultLanguageCode: 'zh_Hans',
     availableLanguageCodes: ['zh_Hans', 'en'],
+    customFields: { storefrontNameZh: '预览测试店铺', storefrontNameEn: 'Preview test store' },
 };
+const channel = params.has('platform-channel')
+    ? {
+          ...storeChannel,
+          id: 'platform-fixture',
+          code: '__default_channel__',
+          token: 'platform-fixture',
+          customFields: null,
+      }
+    : storeChannel;
+const otherChannel = {
+    __typename: 'Channel',
+    id: 'other-fixture',
+    code: 'other-fixture',
+    customFields: { storefrontNameZh: '第二测试店铺', storefrontNameEn: 'Second test store' },
+};
+const storeChannels = [storeChannel, otherChannel];
 const client = new ApolloClient({
     cache: new InMemoryCache(),
     link: new ApolloLink(
@@ -96,14 +219,14 @@ const client = new ApolloClient({
                                 storefrontVisualPreset: {
                                     __typename: 'StorefrontVisualPreset',
                                     channelId: 'fixture',
-                                    presetId: 'classic',
+                                    presetId: params.get('preset') ?? 'classic',
                                     revision: 'default',
                                 },
                             };
                         } else if (name === 'StorefrontPreviewBranding') {
                             data = {
                                 activeChannel: channel,
-                                storefrontVisualPreset: { presetId: 'classic' },
+                                storefrontVisualPreset: { presetId: params.get('preset') ?? 'classic' },
                                 storefrontPreviewBranding: {
                                     channelId: channel.id,
                                     name: '预览测试店铺',
@@ -116,7 +239,52 @@ const client = new ApolloClient({
                         } else if (name === 'NextAdminStorefrontEditorOptions') {
                             data = { products: { items: [], totalItems: 0 } };
                         } else if (name === 'GetAssets') {
-                            data = { assets: { items: [asset], totalItems: 1 } };
+                            data = { assets: { items: [asset, replacementAsset], totalItems: 2 } };
+                        } else if (name === 'NextAdminBannerCollections') {
+                            data = { collections: { items: [], totalItems: 0 } };
+                        } else if (name === 'NextAdminSystemAnnouncements') {
+                            data = { systemAnnouncements: announcements };
+                        } else if (name === 'NextAdminSystemAnnouncementChannels') {
+                            data = { channels: { items: [channel, ...storeChannels] } };
+                        } else if (name === 'NextAdminCreateSystemAnnouncement') {
+                            const next = {
+                                ...input,
+                                channels:
+                                    input.targetMode === 'ALL'
+                                        ? []
+                                        : storeChannels.filter(item => input.channelIds.includes(item.id)),
+                                id: `announcement-${++revision}`,
+                                createdAt: new Date().toISOString(),
+                                updatedAt: new Date().toISOString(),
+                            };
+                            announcements = [...announcements, next];
+                            if (params.has('persist')) {
+                                sessionStorage.setItem(
+                                    'storefront-fixture-announcements',
+                                    JSON.stringify(announcements),
+                                );
+                            }
+                            data = { createSystemAnnouncement: next };
+                        } else if (name === 'NextAdminUpdateSystemAnnouncement') {
+                            const previous = announcements.find(item => item.id === input.id);
+                            if (!previous) throw new Error('模拟公告不存在');
+                            const next = {
+                                ...previous,
+                                ...input,
+                                channels:
+                                    input.targetMode === 'ALL'
+                                        ? []
+                                        : storeChannels.filter(item => input.channelIds.includes(item.id)),
+                                updatedAt: new Date().toISOString(),
+                            };
+                            announcements = announcements.map(item => (item.id === input.id ? next : item));
+                            if (params.has('persist')) {
+                                sessionStorage.setItem(
+                                    'storefront-fixture-announcements',
+                                    JSON.stringify(announcements),
+                                );
+                            }
+                            data = { updateSystemAnnouncement: next };
                         } else if (name === 'NextAdminReorderStorefrontBlocks') {
                             if (
                                 ids.length !== blocks.length ||
@@ -160,10 +328,19 @@ const client = new ApolloClient({
                                 createdAt: previous?.createdAt ?? '2026-09-06T00:00:00Z',
                                 updatedAt: String(++revision),
                             };
-                            if ('imageAssetId' in input) next.imageAsset = input.imageAssetId ? asset : null;
+                            if ('imageAssetId' in input) {
+                                next.imageAsset = input.imageAssetId
+                                    ? input.imageAssetId === replacementAsset.id
+                                        ? replacementAsset
+                                        : asset
+                                    : null;
+                            }
                             blocks = previous
                                 ? blocks.map(block => (block.id === next.id ? next : block))
                                 : [...blocks, next];
+                            if (params.has('persist')) {
+                                sessionStorage.setItem('carousel-fixture-blocks', JSON.stringify(blocks));
+                            }
                             data = {
                                 [previous ? 'updateStorefrontContentBlock' : 'createStorefrontContentBlock']:
                                     next,
@@ -199,9 +376,25 @@ createRoot(document.getElementById('root')!).render(
                     <div className="bg-slate-900 px-4 py-2 text-xs text-white">
                         本地轮播管理验收 · 示例数据
                     </div>
-                    <div style={{ height: 'calc(100dvh - 32px)' }}>
-                        <StorefrontModule />
-                    </div>
+                    <MemoryRouter
+                        initialEntries={
+                            params.has('announcements')
+                                ? ['/?tab=announcements']
+                                : params.has('banner')
+                                  ? ['/storefront/decoration?panel=desktop-category-banners']
+                                  : ['/']
+                        }
+                    >
+                        <div style={{ height: 'calc(100dvh - 32px)' }}>
+                            {params.has('services') ? (
+                                <BusinessServicesCopyModule />
+                            ) : params.has('support') || params.has('announcements') ? (
+                                <StorefrontContentModule />
+                            ) : (
+                                <StorefrontModule />
+                            )}
+                        </div>
+                    </MemoryRouter>
                 </AdminPermissionsProvider>
             </ApolloProvider>
         </FeatureHelpProvider>

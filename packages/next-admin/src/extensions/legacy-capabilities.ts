@@ -14,6 +14,12 @@ export interface LegacyRouteCapability {
 export const LEGACY_ROUTE_CAPABILITIES: LegacyRouteCapability[] = [
     { id: 'after-sales', legacyPath: '/after-sales', target: '/sales/after-sales', status: 'MIGRATED' },
     {
+        id: 'desktop-category-banners',
+        legacyPath: '/desktop-category-banners',
+        target: '/storefront/decoration?panel=desktop-category-banners',
+        status: 'MIGRATED',
+    },
+    {
         id: 'auth-visuals',
         legacyPath: '/auth-visuals',
         target: '/storefront/content?tab=pages',

@@ -93,9 +93,30 @@ export class AdministratorAccessService {
         return this.inferAndPersistLegacy(ctx, ctx.activeUserId);
     }
 
-    findByUserId(ctx: RequestContext, userId: ID): Promise<AdministratorAccessProfile | null> {
-        return this.connection.getRepository(ctx, AdministratorAccessProfile).findOne({
+    findByUserId(
+        ctx: RequestContext,
+        userId: ID,
+        afterInsert = false,
+    ): Promise<AdministratorAccessProfile | null> {
+        const repository = this.connection.getRepository(ctx, AdministratorAccessProfile);
+        const database = afterInsert ? this.connection.rawConnection.options.type : undefined;
+        // A repeatable-read transaction may have seen the row as absent before
+        // another transaction won the insert. A locking read sees the winner.
+        const currentRead =
+            afterInsert &&
+            repository.manager.queryRunner?.isTransactionActive &&
+            database &&
+            ['mysql', 'mariadb', 'postgres'].includes(database);
+        return repository.findOne({
             where: { userId },
+            ...(currentRead
+                ? {
+                      lock: {
+                          mode: 'pessimistic_read' as const,
+                          ...(database === 'postgres' ? { tables: ['administrator_access_profile'] } : {}),
+                      },
+                  }
+                : {}),
             relations: {
                 channel: true,
                 administrator: { user: { roles: { channels: true } } },
@@ -788,7 +809,7 @@ export class AdministratorAccessService {
             if (existingOwner && !idsAreEqual(existingOwner.administratorId, administrator.id)) {
                 throw new UserInputError('检测到多个超级管理员，必须先完成所有者归并');
             }
-            return this.saveProfile(ctx, administrator, {
+            return this.initializeLegacyProfile(ctx, administrator, {
                 scope: 'PLATFORM',
                 authority: 'OWNER',
                 channel: null,
@@ -812,7 +833,7 @@ export class AdministratorAccessService {
             if (!idsAreEqual(platformRole.id, fixedRole.id)) {
                 throw new UserInputError('平台管理员固定角色不匹配');
             }
-            return this.saveProfile(ctx, administrator, {
+            return this.initializeLegacyProfile(ctx, administrator, {
                 scope: 'PLATFORM',
                 authority: 'ADMIN',
                 channel: null,
@@ -860,7 +881,7 @@ export class AdministratorAccessService {
                 const primary = await this.connection.getRepository(ctx, AdministratorAccessProfile).findOne({
                     where: { storePrimarySlot: channelIds[0] },
                 });
-                return this.saveProfile(ctx, administrator, {
+                return this.initializeLegacyProfile(ctx, administrator, {
                     scope: 'STORE',
                     authority: primary ? 'MANAGER' : 'ADMIN',
                     channel,
@@ -872,7 +893,7 @@ export class AdministratorAccessService {
                 });
             }
         }
-        return this.saveProfile(ctx, administrator, {
+        return this.initializeLegacyProfile(ctx, administrator, {
             scope: 'PLATFORM',
             authority: 'STAFF',
             channel: null,
@@ -883,6 +904,32 @@ export class AdministratorAccessService {
             storePrimarySlot: null,
             status: 'SUSPENDED',
         });
+    }
+
+    private async initializeLegacyProfile(
+        ctx: RequestContext,
+        administrator: Administrator,
+        input: Partial<AdministratorAccessProfile>,
+    ): Promise<AdministratorAccessProfile> {
+        // Parallel GraphQL fields and separate workers can both observe no profile.
+        // Let the unique constraints elect one insert, without updating an existing
+        // profile or aborting a PostgreSQL transaction on the losing request.
+        await this.connection
+            .getRepository(ctx, AdministratorAccessProfile)
+            .createQueryBuilder()
+            .insert()
+            .into(AdministratorAccessProfile)
+            .values({ administratorId: administrator.id, userId: administrator.user.id, ...input })
+            .orIgnore()
+            .updateEntity(false)
+            .execute();
+        const persisted = await this.findByUserId(ctx, administrator.user.id, true);
+        if (!persisted || !idsAreEqual(persisted.administratorId, administrator.id)) {
+            // An owner/primary slot belonging to somebody else is not a successful
+            // same-user retry. Keep the conflict closed for ownership review.
+            throw new UserInputError('管理员访问资料初始化冲突，请核查账号与岗位归属');
+        }
+        return persisted;
     }
 
     private saveProfile(

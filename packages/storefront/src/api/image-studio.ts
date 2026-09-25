@@ -14,13 +14,6 @@ import type {
 
 import { BaseDomainApi } from './base-domain-api';
 import { imageGenerationJobFields } from './fragments';
-import {
-    API_URL,
-    GraphQlResponse,
-    SEND_CLIENT_CHANNEL_TOKEN,
-    ShopApiTimeoutError,
-    createRequestSignal,
-} from './helpers';
 
 export class ImageStudioApi extends BaseDomainApi {
     async previewImageGenerationPrompt(
@@ -170,48 +163,17 @@ export class ImageStudioApi extends BaseDomainApi {
     }
 
     async uploadImageReference(file: File, termsAccepted: boolean): Promise<ImagePrivateAssetView> {
-        const operations = {
-            query: `mutation UploadImageReference($file: Upload!, $termsAccepted: Boolean!) {
+        const result = await this.upload<{ uploadImageReference: ImagePrivateAssetView }>(
+            `mutation UploadImageReference($file: Upload!, $termsAccepted: Boolean!) {
                 uploadImageReference(file: $file, termsAccepted: $termsAccepted) {
                     id originalName mimeType byteSize width height expiresAt previewUrl
                 }
             }`,
-            variables: { file: null, termsAccepted },
-        };
-        const form = new FormData();
-        form.set('operations', JSON.stringify(operations));
-        form.set('map', JSON.stringify({ 0: ['variables.file'] }));
-        form.set('0', file, file.name);
-        const headers: Record<string, string> = {
-            'language-code': this.languageCode,
-            'Apollo-Require-Preflight': 'true',
-        };
-        if (SEND_CLIENT_CHANNEL_TOKEN) headers['vendure-token'] = this.market.code;
-        if (this.authToken) headers.authorization = `Bearer ${this.authToken}`;
-        const separator = API_URL.includes('?') ? '&' : '?';
-        const timeout = createRequestSignal(undefined, 60_000);
-        const captureAuthToken = this.createAuthTokenCapture();
-        let response: Response;
-        let body: GraphQlResponse<{ uploadImageReference: ImagePrivateAssetView }>;
-        try {
-            response = await fetch(
-                `${API_URL}${separator}languageCode=${encodeURIComponent(this.languageCode)}&currencyCode=${encodeURIComponent(this.market.currencyCode)}`,
-                { method: 'POST', credentials: 'include', headers, body: form, signal: timeout.signal },
-            );
-            captureAuthToken(response);
-            body = (await response.json()) as GraphQlResponse<{
-                uploadImageReference: ImagePrivateAssetView;
-            }>;
-        } catch (error) {
-            if (timeout.didTimeout()) throw new ShopApiTimeoutError('参考图上传超时，请检查网络后重试');
-            throw error;
-        } finally {
-            timeout.cleanup();
-        }
-        if (!response.ok || body.errors?.length || !body.data) {
-            throw new Error(body.errors?.[0]?.message ?? `Reference upload failed (${response.status})`);
-        }
-        return body.data.uploadImageReference;
+            { termsAccepted },
+            file,
+            '参考图上传超时，请检查网络后重试',
+        );
+        return result.uploadImageReference;
     }
 
     async createImageGeneration(input: CreateImageGenerationInput): Promise<ImageGenerationJob> {

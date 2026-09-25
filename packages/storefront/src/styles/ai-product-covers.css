@@ -300,21 +300,7 @@
 }
 
 .sort-bar button::after {
-    width: 14px;
-    height: 2px;
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    margin: auto;
-    border-radius: 2px 2px 0 0;
-    background: var(--accent);
-    content: '';
-    opacity: 0;
-    transform: scaleX(0.5);
-    transition:
-        opacity 160ms ease,
-        transform 180ms ease;
+    content: none;
 }
 
 .sort-bar button svg {
@@ -323,13 +309,10 @@
 }
 
 .sort-bar button.is-active {
+    background: var(--accent-soft);
+    border-radius: var(--skin-control-radius);
     color: var(--accent-ink);
     font-weight: 700;
-}
-
-.sort-bar button.is-active::after {
-    opacity: 1;
-    transform: scaleX(1);
 }
 
 .sort-bar button:disabled {
@@ -360,27 +343,21 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr);
     align-items: center;
-    gap: 7px;
+    gap: 10px;
 }
 
 .price-range-inputs > i {
     height: 1px;
-    background: #cfd4d2;
-}
-
-.price-range-inputs {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    background: var(--line);
 }
 
 .price-range-inputs label {
-    flex: 1;
+    min-width: 0;
     height: 44px;
     padding: 0 12px;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    background: #f8fafc;
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -391,18 +368,23 @@
 }
 
 .price-range-inputs label:focus-within {
-    border-color: #0f172a;
-    background: #ffffff;
-    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+    border-color: var(--focus);
+    background: var(--paper);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 16%, transparent);
 }
 
 .price-range-inputs label span {
+    flex: none;
+    line-height: 1;
     font-size: 12px;
     font-weight: 700;
-    color: #64748b;
+    color: var(--muted);
 }
 
 .price-range-inputs input {
+    height: 100%;
+    padding: 0;
+    appearance: textfield;
     width: 100%;
     min-width: 0;
     border: 0;
@@ -410,7 +392,7 @@
     background: transparent;
     font-size: 14px;
     font-weight: 600;
-    color: #0f172a;
+    color: var(--text);
 }
 
 .price-range-inputs input:focus,
@@ -421,9 +403,16 @@
 }
 
 .price-separator {
-    color: #94a3b8;
+    text-align: center;
+    color: var(--muted);
     font-weight: 600;
     user-select: none;
+}
+
+.price-range-inputs input::-webkit-inner-spin-button,
+.price-range-inputs input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
 }
 
 .price-presets {
@@ -436,10 +425,10 @@
 .price-presets button {
     height: 44px;
     padding: 0 4px;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    background: #f8fafc;
-    color: #475569;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
     font-size: 12px;
     font-weight: 600;
     transition:
@@ -451,17 +440,17 @@
 }
 
 .price-presets button:hover {
-    background: #f1f5f9;
-    color: #0f172a;
-    border-color: #cbd5e1;
+    background: var(--control-surface-hover);
+    color: var(--text);
+    border-color: transparent;
 }
 
 .price-presets button.is-active {
-    border-color: #0f172a;
-    background: #0f172a;
-    color: #ffffff;
+    border-color: var(--text);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
     font-weight: 700;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);
+    box-shadow: none;
 }
 
 .sheet-actions .reset-filter-button {
@@ -609,9 +598,9 @@
 .filter-stock-card {
     min-height: 52px;
     padding: 0 14px;
-    border-radius: 12px;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    border: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -620,13 +609,13 @@
 }
 
 .filter-stock-card:hover {
-    background: #f1f5f9;
+    background: var(--control-surface-hover);
 }
 
 .filter-stock-title {
     font-size: 15px;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--text);
 }
 
 .filter-fieldset {
@@ -639,7 +628,7 @@
     margin-bottom: 10px;
     font-size: 14px;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--text);
 }
 
 .segmented-options {
@@ -651,10 +640,10 @@
 .segmented-options button {
     height: 44px;
     padding: 0 8px;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    background: #f8fafc;
-    color: #475569;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
     font-size: 13px;
     font-weight: 600;
     transition:
@@ -665,17 +654,17 @@
 }
 
 .segmented-options button:hover {
-    background: #f1f5f9;
-    color: #0f172a;
-    border-color: #cbd5e1;
+    background: var(--control-surface-hover);
+    color: var(--text);
+    border-color: transparent;
 }
 
 .segmented-options button.is-active {
-    border-color: #0f172a;
-    background: #0f172a;
-    color: #ffffff;
+    border-color: var(--text);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
     font-weight: 700;
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+    box-shadow: none;
 }
 
 .filter-stock-card input,
@@ -707,7 +696,7 @@
 
 .filter-stock-card input:checked,
 .switch-row input:checked {
-    background: #0f172a;
+    background: var(--accent);
 }
 
 .filter-stock-card input:checked::after,
@@ -1042,6 +1031,7 @@
     --coupon-accent: var(--accent-ink);
     --coupon-surface: var(--surface);
     --coupon-border: var(--line-subtle);
+    --coupon-hero-surface: var(--accent-soft);
     overflow: hidden;
     border: 1px solid var(--coupon-border);
     border-radius: var(--skin-card-radius);
@@ -1053,6 +1043,22 @@
         opacity 180ms ease;
 }
 
+.coupon-activity-card.coupon-ticket-rose {
+    --coupon-accent: var(--coupon-rose-ink);
+}
+.coupon-activity-card.coupon-ticket-gold {
+    --coupon-accent: var(--coupon-gold-ink);
+}
+.coupon-activity-card.coupon-ticket-blue {
+    --coupon-accent: var(--coupon-blue-ink);
+}
+.coupon-activity-card.coupon-ticket-emerald {
+    --coupon-accent: var(--coupon-emerald-ink);
+}
+.coupon-activity-card[class*='coupon-ticket-'] {
+    --coupon-border: color-mix(in srgb, var(--coupon-accent) 30%, var(--line-subtle));
+    --coupon-hero-surface: color-mix(in srgb, var(--coupon-accent) 12%, var(--surface));
+}
 .coupon-activity-card.is-claimed {
     opacity: 1;
     box-shadow: none;
@@ -1062,7 +1068,7 @@
     min-height: 146px;
     padding: 14px 16px 18px;
     border-radius: 0 0 50% 50% / 0 0 11px 11px;
-    background: var(--accent-soft);
+    background: var(--coupon-hero-surface);
     color: var(--coupon-accent);
     display: flex;
     flex-direction: column;
@@ -1478,7 +1484,7 @@
 }
 
 .review-candidate-image .safe-image {
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .review-candidate-copy,
@@ -1659,6 +1665,24 @@
 
 .review-composer textarea {
     resize: vertical;
+}
+
+.review-composer .review-anonymous-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.review-composer .review-anonymous-option input {
+    width: 16px;
+    height: 16px;
+    margin: 1px 0 0;
+    padding: 0;
+    flex: none;
+    accent-color: var(--accent);
 }
 
 .review-submit {

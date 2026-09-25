@@ -61,6 +61,11 @@ export function customerImageConfiguration(assetUploadDir: string, production: b
     }
     return {
         privateObjects,
+        evidenceStorage: {
+            blobStore: privateObjects,
+            rootDirectory: env.IMAGE_GENERATION_STORAGE_ROOT,
+            signingSecret: env.IMAGE_GENERATION_DOWNLOAD_SECRET,
+        },
         namingStrategy: new CustomerAvatarNamingStrategy(),
         storageStrategyFactory: (options: AssetServerOptions) =>
             new CustomerAvatarStorageStrategy(

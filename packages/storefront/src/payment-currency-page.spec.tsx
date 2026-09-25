@@ -100,4 +100,44 @@ describe('payment currency checkout page', () => {
         expect(markup).toContain('USDT 锁价应付');
         expect(markup).toContain('₮10.000137');
     });
+
+    it('shows the remaining fiat amount after prior settled payments while ignoring declined payments', () => {
+        const markup = renderToStaticMarkup(
+            <PaymentPage
+                api={{} as never}
+                cart={{ state: 'PAYMENT_PENDING' } as never}
+                order={
+                    {
+                        id: 'order-2',
+                        code: 'ORDER-2',
+                        state: 'ArrangingPayment',
+                        currencyCode: 'CNY',
+                        lines: [],
+                        payments: [
+                            { method: 'card', state: 'Settled', amount: 1_000 },
+                            { method: 'card', state: 'Declined', amount: 3_000 },
+                        ],
+                        subTotalWithTax: 8_200,
+                        shippingWithTax: 0,
+                        totalWithTax: 8_200,
+                        discounts: [],
+                        taxSummary: [],
+                        customFields: { paymentCurrencyCode: 'USDT' },
+                    } as never
+                }
+                customer={null}
+                market={{ code: 'cn', currencyCode: 'CNY' } as never}
+                displayCurrencyCode="CNY"
+                locale="zh-CN"
+                language="zh"
+                onCancel={vi.fn()}
+                onOrderChange={vi.fn()}
+                onComplete={vi.fn()}
+            />,
+        );
+
+        expect(markup).toContain('已付／已授权');
+        expect(markup).toContain('<dt>剩余待支付</dt><dd>¥72</dd>');
+        expect(markup).toContain('₮10.000137');
+    });
 });

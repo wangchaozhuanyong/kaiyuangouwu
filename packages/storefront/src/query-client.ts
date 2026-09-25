@@ -213,6 +213,12 @@ export const storefrontQueryKeys = {
         [...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId), 'order-counts'] as const,
     afterSalesRequests: (marketCode: string, languageCode: string, customerId: string) =>
         [...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId), 'after-sales'] as const,
+    notificationReads: (marketCode: string, languageCode: string, customerId: string, versions: string) =>
+        [
+            ...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId),
+            'notification-reads',
+            versions,
+        ] as const,
     customerReviews: (marketCode: string, languageCode: string, customerId: string) =>
         [...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId), 'reviews'] as const,
     reviewCandidates: (marketCode: string, languageCode: string, customerId: string) =>

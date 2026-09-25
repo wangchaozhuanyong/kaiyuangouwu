@@ -162,7 +162,6 @@ export interface AfterSalesItem {
     rejectedReturnQuantity: number;
     returnLotCode?: string | null;
     inventoryOperationId?: string | null;
-    returnStockLocation?: { id: string; name: string } | null;
 }
 
 export interface AfterSalesEvent {
@@ -173,6 +172,16 @@ export interface AfterSalesEvent {
     actorType: 'CUSTOMER' | 'ADMIN' | 'SYSTEM';
     actorLabel: string;
     note: string;
+}
+
+export interface AfterSalesEvidence {
+    id: string;
+    createdAt: string;
+    mimeType: string;
+    byteSize: number;
+    available: boolean;
+    previewUrl: string | null;
+    expiresAt: string | null;
 }
 
 export interface AfterSalesRequest {
@@ -211,6 +220,7 @@ export interface AfterSalesRequest {
     order: Pick<Order, 'id' | 'code' | 'state'>;
     items: AfterSalesItem[];
     events: AfterSalesEvent[];
+    evidence?: AfterSalesEvidence[];
 }
 
 export interface CreateAfterSalesRequestInput {
@@ -219,6 +229,7 @@ export interface CreateAfterSalesRequestInput {
     reason: AfterSalesReason;
     description: string;
     items: Array<{ orderLineId: string; quantity: number }>;
+    evidenceIds?: string[];
 }
 
 export interface SubmitAfterSalesReturnShipmentInput {
@@ -244,6 +255,7 @@ export interface StorefrontReview {
     title: string;
     body: string;
     customerName: string;
+    anonymous: boolean;
     productName: string;
     sku: string;
     merchantResponse?: string | null;
@@ -279,6 +291,7 @@ export interface SubmitStorefrontReviewInput {
     rating: number;
     title: string;
     body: string;
+    anonymous?: boolean;
 }
 
 export interface CheckoutFulfillment {
@@ -421,6 +434,7 @@ export interface OrderSummaryLine {
 
 export interface OrderSummary {
     id: string;
+    updatedAt?: string;
     code: string;
     state: string;
     orderPlacedAt?: string | null;
@@ -433,6 +447,12 @@ export interface OrderSummary {
     checkoutShipping?: Pick<CheckoutShipping, 'methodName'> | null;
 }
 
+export interface StoreNotificationReference {
+    kind: 'ORDER' | 'AFTER_SALES';
+    sourceId: string;
+    version: string;
+}
+
 export interface OrderPage {
     items: OrderSummary[];
     totalItems: number;
@@ -442,6 +462,7 @@ export interface CustomerOrderCounts {
     pending: number;
     shipping: number;
     receiving: number;
+    completed: number;
 }
 
 export interface CustomerAddress {
@@ -650,6 +671,28 @@ export interface ActiveCustomer {
     avatar?: Asset | null;
     addresses: CustomerAddress[] | null;
     orders: { items: OrderSummary[]; totalItems: number };
+}
+
+export interface CustomerServiceFeedback {
+    id: string;
+    orderCode: string | null;
+    rating: number;
+    tags: string[];
+    comment: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface SubmitCustomerServiceFeedbackInput {
+    orderCode?: string;
+    rating: number;
+    tags: string[];
+    comment?: string;
+}
+
+export interface CustomerProductActivity {
+    favoriteProductIds: string[];
+    recentProductVisits: Array<{ productId: string; visitedAt: string }>;
 }
 
 export interface CustomerAvatarHistoryEntry {
@@ -903,6 +946,7 @@ export interface StorefrontContentBlock {
     startsAt: string | null;
     endsAt: string | null;
     imageUrl: string | null;
+    imageAsset?: { width: number; height: number } | null;
     backgroundColor: string | null;
     textColor: string | null;
     targetType: StorefrontContentTargetType;
@@ -931,11 +975,13 @@ export interface StorefrontAuthSettings {
 
 export type StorefrontCouponCampaignKind =
     'ORDER_FIXED' | 'ORDER_PERCENTAGE' | 'COLLECTION_PERCENTAGE' | 'PRODUCT_PERCENTAGE';
+export type StorefrontCouponAppearanceTheme = 'rose' | 'gold' | 'blue' | 'emerald';
 
 export interface StorefrontCouponCampaign {
     id: string;
     name: string;
     kind: StorefrontCouponCampaignKind;
+    appearanceTheme?: StorefrontCouponAppearanceTheme | null;
     startsAt: string | null;
     endsAt: string | null;
     claimStartsAt: string | null;
@@ -959,6 +1005,7 @@ export interface StoreCustomerCoupon {
     campaignId: string;
     campaignName: string;
     campaignKind: StorefrontCouponCampaignKind;
+    appearanceTheme?: StorefrontCouponAppearanceTheme | null;
     status: StoreCustomerCouponStatus;
     minimumSpend: number;
     currencyCode?: string;
@@ -985,6 +1032,7 @@ export interface StoreCouponUsageRecord {
     campaignId: string;
     campaignName: string;
     campaignKind: StorefrontCouponCampaignKind;
+    appearanceTheme?: StorefrontCouponAppearanceTheme | null;
     status: 'USED' | 'REFUNDED';
     currencyCode: string;
     minimumSpend: number;
@@ -1031,6 +1079,7 @@ export interface StorefrontFlashSale {
 
 export interface StorefrontSystemAnnouncement {
     id: string;
+    createdAt?: string;
     title: string;
     content: string;
     linkUrl: string | null;

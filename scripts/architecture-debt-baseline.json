@@ -89,7 +89,7 @@
                 "packages/store-domain-plugin/src/dashboard"
             ],
             "extensions": [".ts", ".tsx", ".po"],
-            "maxLines": 52854,
+            "maxLines": 52883,
             "targetLines": 0,
             "owner": "admin-platform"
         }

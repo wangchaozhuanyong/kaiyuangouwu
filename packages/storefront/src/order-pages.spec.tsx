@@ -153,12 +153,13 @@ describe('OrdersPage route query', () => {
         expect(markup).not.toContain('aria-label="搜索订单"');
     });
 
-    it('uses compact professional English labels for the five order filters', () => {
+    it('includes completed orders in the same lifecycle filters on mobile', () => {
         const markup = renderOrders(undefined, 'en');
 
         expect(markup).toContain('>Unpaid</button>');
         expect(markup).toContain('>Processing</button>');
         expect(markup).toContain('>Shipped</button>');
+        expect(markup).toContain('>Completed</button>');
         expect(markup).toContain('>Returns</button>');
         expect(markup).not.toContain('After-sales');
         expect(markup).not.toContain('To receive');

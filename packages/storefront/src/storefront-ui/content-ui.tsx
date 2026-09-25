@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
+import { useDesktopLayout } from '../desktop-layout';
 import { selectManagedProducts } from '../home-merchandising';
 import { resolveManagedContentCopy } from '../managed-content-copy';
 import { managedContentStyle } from '../managed-content-style';
@@ -91,6 +93,7 @@ export function HomepageCouponHub({
     onToast,
 }: HomepageCouponHubProps) {
     const navigate = useNavigate();
+    const desktop = useDesktopLayout();
     const isZh = language === 'zh';
     const [claimingId, setClaimingId] = useState<string | null>(null);
     const handleClaim = async (coupon: StorefrontCouponCard) => {
@@ -129,6 +132,45 @@ export function HomepageCouponHub({
             <div className="coupon-hub-scroll" role="list">
                 {coupons.map(coupon => {
                     const canClaim = coupon.claimable && !coupon.claimed;
+                    const claimAction = (
+                        <button
+                            type="button"
+                            className={`coupon-claim-btn ${!canClaim ? 'is-claimed' : ''}${claimingId === coupon.id ? ' is-claiming' : ''}`}
+                            onClick={() => void handleClaim(coupon)}
+                            disabled={!canClaim || loading || claimingId !== null}
+                            aria-label={
+                                !canClaim
+                                    ? isZh
+                                        ? `已领取 ${coupon.title}`
+                                        : `Claimed ${coupon.title}`
+                                    : isZh
+                                      ? `领取 ${coupon.title}`
+                                      : `Claim ${coupon.title}`
+                            }
+                        >
+                            <span className="coupon-btn-text-wrap">
+                                {claimingId === coupon.id ? (
+                                    <span>{isZh ? '领取中' : 'Claiming'}</span>
+                                ) : !canClaim ? (
+                                    <>
+                                        <span>{isZh ? '已领取' : 'Claimed'}</span>
+                                        <Check size={12} strokeWidth={2.4} aria-hidden="true" />
+                                    </>
+                                ) : (
+                                    <span>{isZh ? '立即领取' : 'Claim'}</span>
+                                )}
+                            </span>
+                        </button>
+                    );
+                    if (desktop)
+                        return (
+                            <DesktopCouponTicket
+                                key={coupon.id}
+                                card={coupon}
+                                role="listitem"
+                                action={claimAction}
+                            />
+                        );
 
                     return (
                         <div
@@ -162,36 +204,7 @@ export function HomepageCouponHub({
                                 <p className="coupon-ticket-desc">{coupon.description}</p>
                             </div>
 
-                            <div className="coupon-ticket-action">
-                                <button
-                                    type="button"
-                                    className={`coupon-claim-btn ${!canClaim ? 'is-claimed' : ''}${claimingId === coupon.id ? ' is-claiming' : ''}`}
-                                    onClick={() => void handleClaim(coupon)}
-                                    disabled={!canClaim || loading || claimingId !== null}
-                                    aria-label={
-                                        !canClaim
-                                            ? isZh
-                                                ? `已领取 ${coupon.title}`
-                                                : `Claimed ${coupon.title}`
-                                            : isZh
-                                              ? `领取 ${coupon.title}`
-                                              : `Claim ${coupon.title}`
-                                    }
-                                >
-                                    <span className="coupon-btn-text-wrap">
-                                        {claimingId === coupon.id ? (
-                                            <span>{isZh ? '领取中' : 'Claiming'}</span>
-                                        ) : !canClaim ? (
-                                            <>
-                                                <span>{isZh ? '已领取' : 'Claimed'}</span>
-                                                <Check size={12} strokeWidth={2.4} aria-hidden="true" />
-                                            </>
-                                        ) : (
-                                            <span>{isZh ? '立即领取' : 'Claim'}</span>
-                                        )}
-                                    </span>
-                                </button>
-                            </div>
+                            <div className="coupon-ticket-action">{claimAction}</div>
                         </div>
                     );
                 })}
@@ -275,6 +288,7 @@ export function FlashSaleSection({
     return (
         <section className="content-section flash-sale-section">
             <SectionHeader
+                kind="flash-sale"
                 title={title}
                 subtitle={subtitle}
                 action={onMore ? (isZh ? '更多' : 'More') : undefined}
@@ -445,11 +459,7 @@ export function FlashSalePage({
                 <EmptyState
                     icon={<Flame />}
                     title={isZh ? '暂无进行中的秒杀' : 'No active flash sale'}
-                    detail={
-                        isZh
-                            ? '请留意首页和店铺公告中的下次活动'
-                            : 'Check the home page and store announcements for the next event'
-                    }
+                    detail={isZh ? '请留意首页的下次活动' : 'Check the home page for the next event'}
                 />
             )}
         </Subpage>

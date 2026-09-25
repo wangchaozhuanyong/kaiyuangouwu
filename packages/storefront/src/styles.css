@@ -4,6 +4,7 @@
 @import './styles/skeletons.css';
 @import './styles/traffic-consent.css';
 @import './styles/home-layout-base.css';
+@import './styles/semantic-icons.css';
 :root {
     --font-ui:
         -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'PingFang SC', 'Hiragino Sans GB',
@@ -300,8 +301,18 @@ button:disabled {
     outline-offset: 2px;
 }
 
-button:active:not(:disabled) {
-    transform: scale(0.97);
+@media (prefers-reduced-motion: no-preference) {
+    button:active:not(:disabled):not([aria-busy='true']):not([aria-disabled='true']) {
+        transform: translateY(1px);
+    }
+}
+
+button[aria-busy='true'] {
+    cursor: progress;
+}
+
+button:is(:disabled, [aria-disabled='true'], [aria-busy='true']) {
+    transform: none;
 }
 
 svg {
@@ -327,16 +338,18 @@ img {
     background-color: var(--product-media-bg);
     background-position: center;
     background-repeat: no-repeat;
-    background-size: cover;
+    background-size: contain;
 }
 
 .safe-image {
-    /* Let the browser paint cached and progressively decoded images immediately. */
+    /* Keep the fallback behind browser-painted pixels, including cache hits. */
+    position: relative;
+    z-index: 1;
     opacity: 1;
     transition: transform 220ms ease;
 }
 
-.safe-image-frame.has-placeholder .safe-image:not(.is-loaded) {
+.safe-image-frame.has-placeholder:not(.is-priority) .safe-image:not(.is-loaded) {
     opacity: 0;
 }
 
@@ -362,7 +375,7 @@ img {
     place-items: center;
     color: var(--muted);
     background: var(--product-media-bg);
-    background-size: cover;
+    background-size: contain;
     background-position: center;
     transition: opacity 180ms ease;
 }

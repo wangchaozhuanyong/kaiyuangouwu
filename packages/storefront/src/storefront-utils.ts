@@ -10,8 +10,8 @@ export { productImage } from './product-media';
 export { minimumProductPrice } from './product-pricing';
 
 export const STOREFRONT_NAME_MAX_DISPLAY_UNITS = 16;
-export const FAVORITE_PRODUCT_STORAGE_KEY = 'storefront-favorite-product-ids';
-export const RECENT_PRODUCT_STORAGE_KEY = 'storefront-recent-product-ids';
+export const FAVORITE_PRODUCT_STORAGE_KEY = 'storefront-guest-favorite-product-ids';
+export const RECENT_PRODUCT_STORAGE_KEY = 'storefront-guest-recent-product-ids';
 export const STOREFRONT_LANGUAGE_PREFERENCE_STORAGE_KEY = 'storefront-language-preference-v2';
 export const STOREFRONT_CURRENCY_PREFERENCE_STORAGE_KEY = 'storefront-currency-preference-v1';
 export const STOREFRONT_SETTLEMENT_CURRENCY_PREFERENCE_STORAGE_KEY =

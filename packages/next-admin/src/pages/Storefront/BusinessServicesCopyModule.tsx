@@ -1,7 +1,10 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { ExternalLink, RefreshCw, RotateCcw, Save, Sparkles } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
+import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
+import { AssetPicker } from './storefront-asset-picker';
 
 import {
     CREATE_STOREFRONT_BLOCK_MUTATION,
@@ -25,7 +28,7 @@ const BLOCK_CODE = 'storefront-client-plugins';
 const COPY_VERSION = 1;
 type Language = 'zh_Hans' | 'en';
 
-const defaults: Record<Language, { title: string; body: string }> = {
+const defaults: Record<Language, { title: string; body: string; subtitle?: string; ctaLabel?: string }> = {
     zh_Hans: {
         title: '发现更多商业能力',
         body: '这里展示店铺为你开放的工具、服务和专属权益。',
@@ -38,14 +41,23 @@ const defaults: Record<Language, { title: string; body: string }> = {
 
 export function BusinessServicesCopyModule() {
     const { hasAnyPermission } = useAdminPermissions();
-    const canEdit = hasAnyPermission(['UpdateStorefrontContent', 'UpdateSettings']);
     const query = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, {
         fetchPolicy: 'cache-and-network',
     });
     const source = query.data?.storefrontContentBlocks.find(
         block => block.type === 'CLIENT_PLUGINS' && block.code === BLOCK_CODE,
     );
-    const sourceSignature = source ? `${source.id}:${source.updatedAt}` : query.data ? 'empty' : '';
+    const channel = query.data?.activeChannel;
+    const consistent = channel && (!getActiveChannelToken() || channel.token === getActiveChannelToken());
+    const canEdit = Boolean(
+        consistent &&
+        !query.loading &&
+        !query.error &&
+        hasAnyPermission([source ? 'UpdateStorefrontContent' : 'CreateStorefrontContent']),
+    );
+    const sourceSignature = channel
+        ? `${channel.id}:${source ? `${source.id}:${source.updatedAt}` : 'empty'}`
+        : '';
     const [storedDraft, setDraft] = useState<StorefrontContentBlock | null>(() =>
         sourceSignature ? copyDraft(source) : null,
     );
@@ -81,6 +93,7 @@ export function BusinessServicesCopyModule() {
         }),
     );
     const pending = createState.loading || updateState.loading;
+    useUnsavedChangesWarning(dirty || pending, '商业服务页修改尚未保存，离开后将放弃本次修改。');
 
     const change = (languageCode: Language, key: 'title' | 'body', value: string) =>
         setDraft(current =>
@@ -117,37 +130,47 @@ export function BusinessServicesCopyModule() {
         );
 
     const save = async () => {
-        if (!draft || !valid || !canEdit || pending) return;
+        if (!draft || !valid || !canEdit || pending || !channel) return;
+        const activeToken = getActiveChannelToken();
+        const stillCurrent = () => getActiveChannelToken() === activeToken;
+        const context = channelRequestContext(channel.token);
         setError('');
         try {
             if (draft.id) {
                 if (!draft.updatedAt) throw new Error('缺少内容版本，请刷新后重试');
                 await update({
+                    context,
                     variables: {
                         input: {
                             id: draft.id,
                             expectedUpdatedAt: draft.updatedAt,
-                            ...storefrontBlockInput(draft, originalDraft ?? undefined),
+                            ...storefrontBlockInput({ ...draft, enabled: true }, originalDraft ?? undefined),
                         },
                     },
                 });
             } else {
                 await create({
-                    variables: { input: storefrontBlockInput(draft, originalDraft ?? undefined) },
+                    context,
+                    variables: {
+                        input: storefrontBlockInput({ ...draft, enabled: true }, originalDraft ?? undefined),
+                    },
                 });
             }
-            setNotice('中文已保存，英文待同步');
+            if (!stillCurrent()) return;
+            setNotice('已保存到当前店铺；修改的中文文案将按翻译设置同步。');
             try {
                 await query.refetch();
             } catch {
-                setError('保存已成功，但刷新失败，请稍后重新载入');
+                if (stillCurrent()) setError('保存已成功，但刷新失败，请稍后重新载入');
             }
         } catch (cause) {
+            if (!stillCurrent()) return;
             setNotice('');
             setError(toUserFacingError(cause, '商业服务页文案保存失败'));
         }
     };
     const preview = draft ? getTranslation(draft, previewLanguage) : defaults[previewLanguage];
+    const previewImage = draft?.imageAsset?.preview || draft?.imageUrl;
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
@@ -160,7 +183,7 @@ export function BusinessServicesCopyModule() {
                             <FeatureHelpButton topic="storefront.business-copy" title="商业服务页文案" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            编辑商业服务页顶部卡片的中英文标题、说明与跳转链接 · 当前店铺{' '}
+                            编辑商业服务页顶部卡片的文案、配图与跳转链接 · 当前店铺{' '}
                             {query.data ? getChannelDisplayName(query.data.activeChannel) : '读取中'}
                         </p>
                     </div>
@@ -208,7 +231,7 @@ export function BusinessServicesCopyModule() {
                                         />
                                     </h2>
                                     <p className="mt-1 text-xs text-slate-500">
-                                        保留同一配置块中的客户端插件与排序，只更新页面文案与跳转链接。
+                                        保留同一配置块中的客户端插件与排序，可更新页面文案、电脑端配图与跳转链接。
                                     </p>
                                 </div>
                                 {canEdit && (
@@ -268,6 +291,31 @@ export function BusinessServicesCopyModule() {
                                     </div>
                                 );
                             })}
+                            <fieldset
+                                disabled={!canEdit || pending}
+                                className="space-y-3 rounded-lg border border-slate-200 p-4"
+                            >
+                                <AssetPicker
+                                    label="电脑端商业服务页首配图"
+                                    value={draft.imageAsset}
+                                    fallbackUrl={draft.imageUrl}
+                                    onChange={asset =>
+                                        setDraft(current =>
+                                            current
+                                                ? {
+                                                      ...current,
+                                                      imageAsset: asset,
+                                                      imageAssetId: asset?.id ?? null,
+                                                      imageUrl: null,
+                                                  }
+                                                : current,
+                                        )
+                                    }
+                                />
+                                <p className="text-xs leading-5 text-slate-500">
+                                    图片显示在电脑端卡片右侧，手机端沿用原布局。建议选用主体清晰的横图。
+                                </p>
+                            </fieldset>
                             <div className="space-y-2 rounded-lg border border-slate-200 p-4">
                                 <Field label="跳转链接地址（可选）">
                                     <input
@@ -312,26 +360,39 @@ export function BusinessServicesCopyModule() {
                                     <option value="en">English</option>
                                 </select>
                             </div>
-                            <div className="mt-5 rounded-2xl bg-gradient-to-br from-slate-950 to-violet-950 p-7 text-white shadow-lg">
-                                <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-violet-300">
-                                    Business services
-                                </span>
-                                <div className="mt-4 flex items-center gap-4">
-                                    <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-                                        <h3 className="text-2xl font-bold leading-tight">
-                                            {preview.title || '—'}
-                                        </h3>
-                                        <p className="mt-3 text-sm leading-6 text-slate-300">
-                                            {preview.body || '—'}
-                                        </p>
-                                    </div>
+                            <div
+                                className={`relative isolate mt-5 grid gap-5 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 to-violet-950 p-7 text-white shadow-lg ${previewImage ? 'sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] sm:items-center' : ''}`}
+                            >
+                                <div className="min-w-0 [overflow-wrap:anywhere]">
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-violet-300">
+                                        {preview.subtitle?.trim() ||
+                                            (previewLanguage === 'zh_Hans'
+                                                ? '智能服务'
+                                                : 'Intelligent services')}
+                                    </span>
+                                    <h3 className="mt-4 text-2xl font-bold leading-tight">
+                                        {preview.title || '—'}
+                                    </h3>
+                                    <p className="mt-3 text-sm leading-6 text-slate-300">
+                                        {preview.body || '—'}
+                                    </p>
                                     {linkValue.trim() && linkIsValid ? (
-                                        <span className="inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white">
-                                            {previewLanguage === 'zh_Hans' ? '点击前往' : 'Open link'}
+                                        <span className="mt-5 inline-flex min-h-10 items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white">
+                                            {preview.ctaLabel?.trim() ||
+                                                (previewLanguage === 'zh_Hans'
+                                                    ? '打开服务网站'
+                                                    : 'Open service website')}
                                             <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                                         </span>
                                     ) : null}
                                 </div>
+                                {previewImage && (
+                                    <img
+                                        src={previewImage}
+                                        alt="商业服务页首配图预览"
+                                        className="h-40 w-full rounded-xl object-contain sm:h-[200px]"
+                                    />
+                                )}
                             </div>
                         </section>
                     </div>

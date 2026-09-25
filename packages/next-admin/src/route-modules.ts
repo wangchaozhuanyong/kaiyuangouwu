@@ -17,6 +17,7 @@ export const routeModuleLoaders = {
     orderWorkflow: () => import('./pages/Sales/OrderWorkflowEditor'),
     afterSales: () => import('./pages/Sales/AfterSalesModule'),
     reviews: () => import('./pages/Storefront/ReviewsModule'),
+    customerServiceFeedback: () => import('./pages/Sales/CustomerServiceFeedbackModule'),
     customers: () => import('./pages/Customers/CustomersModule'),
     promotions: () => import('./pages/Marketing/PromotionsModule'),
     referrals: () => import('./pages/Marketing/ReferralsModule'),

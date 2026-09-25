@@ -1,5 +1,6 @@
 import {
     PromotionProductRecord,
+    StoreCouponAppearanceTheme,
     StoreCouponKind,
     StoreCouponRecord,
     StoreFlashSaleRecord,
@@ -22,6 +23,7 @@ export type CouponVisibility = 'CURRENT' | 'ACTIVE' | 'ENDED' | 'ARCHIVED' | 'AL
 export interface CouponDraft {
     name: string;
     kind: StoreCouponKind;
+    appearanceTheme: StoreCouponAppearanceTheme | null;
     minimumSpend: string;
     discountValue: string;
     startsAt: string;
@@ -53,6 +55,18 @@ export const couponKindLabels: Record<StoreCouponKind, string> = {
     PRODUCT_PERCENTAGE: '单品折扣券',
 };
 
+export const couponAppearanceOptions: ReadonlyArray<{
+    value: StoreCouponAppearanceTheme | 'default';
+    label: string;
+    swatchClass: string;
+}> = [
+    { value: 'default', label: '按券种默认', swatchClass: 'bg-slate-300' },
+    { value: 'rose', label: '朱砂红', swatchClass: 'bg-rose-700' },
+    { value: 'gold', label: '古铜金', swatchClass: 'bg-amber-700' },
+    { value: 'blue', label: '黛青蓝', swatchClass: 'bg-slate-700' },
+    { value: 'emerald', label: '松石绿', swatchClass: 'bg-emerald-700' },
+];
+
 export const ledgerLabels: Record<string, string> = {
     CLAIMED: '已领取',
     LOCKED: '订单锁定',
@@ -72,6 +86,7 @@ export function newCouponDraft(): CouponDraft {
     return {
         name: '',
         kind: 'ORDER_FIXED',
+        appearanceTheme: null,
         minimumSpend: '0',
         discountValue: '1',
         startsAt: range.start,

@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createServer } from 'vite';
+import { createServer, type InlineConfig } from 'vite';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
@@ -25,10 +25,14 @@ const config = mergeConfig(testConfig(), {
             provider: {
                 name: 'traffic-test',
                 isConfigured: () => true,
-                translate: request => ({
-                    provider: 'traffic-test',
-                    translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
-                }),
+                translate: request =>
+                    Promise.resolve({
+                        provider: 'traffic-test',
+                        translations: request.segments.map(segment => ({
+                            key: segment.key,
+                            text: segment.text,
+                        })),
+                    }),
             },
         }),
         StoreManagementPlugin.init({
@@ -90,7 +94,7 @@ describe('storefront traffic Shop/Admin API integration', () => {
         await shopClient.asAnonymousUser();
         shopClient.setRequestHeader('user-agent', 'Mozilla/5.0 Traffic E2E Browser');
         shopClient.setRequestHeader('x-forwarded-for', '203.0.113.10');
-        shopClient.setRequestHeader('cookie', null);
+        shopClient.setRequestHeader('cookie', 'storefront_analytics_consent=granted');
         server.app.getHttpAdapter().getInstance().set('trust proxy', 'loopback');
     });
     afterAll(async () => {
@@ -107,7 +111,8 @@ describe('storefront traffic Shop/Admin API integration', () => {
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ query: '{ storefrontTraffic { businessDate } }' }),
         });
-        expect((await response.json()).errors?.length).toBeGreaterThan(0);
+        const responseBody = (await response.json()) as { errors?: unknown[] };
+        expect(responseBody.errors?.length).toBeGreaterThan(0);
         await expect(adminClient.query(REPORT, { days: 1000 })).rejects.toThrow();
     });
 
@@ -135,7 +140,10 @@ describe('storefront traffic Shop/Admin API integration', () => {
             recordStorefrontPageView: { recorded: false },
         });
         shopClient.setRequestHeader('user-agent', 'Mozilla/5.0 Traffic E2E Browser');
-        shopClient.setRequestHeader('cookie', 'storefront_analytics_opt_out=1');
+        shopClient.setRequestHeader(
+            'cookie',
+            'storefront_analytics_consent=granted; storefront_analytics_opt_out=1',
+        );
         expect(await shopClient.query(RECORD, { input: input() })).toMatchObject({
             recordStorefrontPageView: { recorded: false },
         });
@@ -151,23 +159,27 @@ describe('storefront traffic Shop/Admin API integration', () => {
     it('merges login into the anonymous browser without adding a page view', async () => {
         const first = input();
         await shopClient.query(RECORD, { input: first });
-        await shopClient.query(gql`
-            mutation {
-                registerCustomerAccount(
-                    input: {
-                        emailAddress: "traffic-fixture@example.test"
-                        password: "TrafficFixturePass123!"
-                        firstName: "Traffic"
-                        lastName: "Fixture"
-                    }
-                ) {
-                    ... on Success {
-                        success
+        const emailAddress = `traffic-fixture-${randomUUID()}@example.test`;
+        const created = await adminClient.query(
+            gql`
+                mutation ($input: CreateCustomerInput!, $password: String!) {
+                    createCustomer(input: $input, password: $password) {
+                        ... on Customer {
+                            id
+                        }
+                        ... on ErrorResult {
+                            message
+                        }
                     }
                 }
-            }
-        `);
-        await shopClient.asUserWithCredentials('traffic-fixture@example.test', 'TrafficFixturePass123!');
+            `,
+            {
+                input: { emailAddress, firstName: 'Traffic', lastName: 'Fixture' },
+                password: 'TrafficFixturePass123!',
+            },
+        );
+        expect(created.createCustomer.id, created.createCustomer.message).toBeTruthy();
+        await shopClient.asUserWithCredentials(emailAddress, 'TrafficFixturePass123!');
         await shopClient.query(RECORD, { input: { ...first, pageView: false } });
         await shopClient.query(RECORD, { input: input('traffic-e2e-browser-0002') });
         const report = await adminClient.query(REPORT, { days: 1 });
@@ -181,6 +193,8 @@ describe('storefront traffic Shop/Admin API integration', () => {
     it('collects browser navigation into the real API and shows responsive reports and browser exclusion', async () => {
         const root = join(process.cwd(), '../next-admin');
         const target = `http://127.0.0.1:${config.apiOptions.port}`;
+        const channelToken = config.defaultChannelToken;
+        if (!channelToken) throw new Error('Default Channel token is missing');
         const vite = await createServer({
             root,
             configFile: join(root, 'vite.config.ts'),
@@ -190,7 +204,7 @@ describe('storefront traffic Shop/Admin API integration', () => {
                 'import.meta.env.VITE_SHOP_API_URL': JSON.stringify('/shop-api'),
                 'import.meta.env.VITE_VENDURE_ADMIN_API_URL': JSON.stringify('/admin-api'),
             },
-            resolve: { dedupe: ['react', 'react-dom'] },
+            resolve: { dedupe: ['react', 'react-dom'] } as InlineConfig['resolve'],
             server: {
                 host: '127.0.0.1',
                 port: 5199,
@@ -199,7 +213,7 @@ describe('storefront traffic Shop/Admin API integration', () => {
                     '/shop-api': {
                         target,
                         headers: {
-                            'vendure-token': config.defaultChannelToken,
+                            'vendure-token': channelToken,
                             'x-forwarded-for': '203.0.113.10',
                         },
                     },
@@ -219,6 +233,14 @@ describe('storefront traffic Shop/Admin API integration', () => {
         const browser = await chromium.launch({ headless: true });
         try {
             const automated = await browser.newPage();
+            await automated.context().addCookies([
+                {
+                    name: 'storefront_analytics_consent',
+                    value: 'granted',
+                    domain: 'traffic.localhost',
+                    path: '/',
+                },
+            ]);
             await automated.route('**/*', route =>
                 ['traffic.localhost', 'admin.traffic.localhost'].includes(
                     new URL(route.request().url()).hostname,
@@ -252,6 +274,14 @@ describe('storefront traffic Shop/Admin API integration', () => {
                 userAgent:
                     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
             });
+            await context.addCookies([
+                {
+                    name: 'storefront_analytics_consent',
+                    value: 'granted',
+                    domain: 'traffic.localhost',
+                    path: '/',
+                },
+            ]);
             // Deliberate fixture-only human-browser simulation; production code still excludes automation.
             await context.addInitScript(() =>
                 Object.defineProperty(navigator, 'webdriver', { get: () => false }),
@@ -318,11 +348,11 @@ describe('storefront traffic Shop/Admin API integration', () => {
                 .poll(() => admin.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
                 .toBe(true);
             await admin.screenshot({ path: join(artifacts, 'mobile.png'), fullPage: true });
-            await browserExpect(admin.getByText('要排除自己检查店铺的访问', { exact: false })).toBeVisible();
+            await browserExpect(admin.getByText('后台页面本身不采集访问。', { exact: true })).toBeVisible();
             await shop.bringToFront();
-            await shop.getByRole('button', { name: '不统计本浏览器访问', exact: true }).click();
+            await shop.getByRole('button', { name: '访问统计：已允许 · 撤回', exact: true }).click();
             await browserExpect(
-                shop.getByRole('button', { name: '已排除本浏览器访问 · 恢复统计', exact: true }),
+                shop.getByRole('button', { name: '访问统计：已关闭 · 允许', exact: true }),
             ).toBeVisible();
             await shop.bringToFront();
             await shop.getByRole('button', { name: '返回首页', exact: true }).click();
@@ -330,7 +360,7 @@ describe('storefront traffic Shop/Admin API integration', () => {
             await browserExpect(shop.getByRole('heading', { name: '采集联调测试页' })).toBeVisible();
             expect((await total()).pageViewCount).toBe(3);
 
-            await shop.getByRole('button', { name: '已排除本浏览器访问 · 恢复统计', exact: true }).click();
+            await shop.getByRole('button', { name: '访问统计：已关闭 · 允许', exact: true }).click();
             await shop.bringToFront();
             await browserExpect.poll(async () => (await total()).pageViewCount).toBe(4);
             expect(errors).toEqual([]);

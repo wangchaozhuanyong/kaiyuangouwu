@@ -76,7 +76,10 @@ describe('browser compatibility policy', () => {
     it('keeps audited high-frequency touch controls at least 44px tall', () => {
         expect(stylesheet).toMatch(/\.currency-select\s*\{[^}]*height:\s*44px;/u);
         expect(stylesheet).toMatch(/\.sort-bar button\s*\{[^}]*height:\s*44px;/u);
-        expect(stylesheet).toMatch(/\.detail-options > div button\s*\{[^}]*min-height:\s*44px;/u);
+        const detailOptionMinHeight = stylesheet.match(
+            /\.detail-options > div button\s*\{[^}]*min-height:\s*(\d+)px;/u,
+        );
+        expect(Number(detailOptionMinHeight?.[1])).toBeGreaterThanOrEqual(44);
         expect(stylesheet).toMatch(/\.cart-line-actions > div button\s*\{[^}]*height:\s*44px;/u);
     });
 

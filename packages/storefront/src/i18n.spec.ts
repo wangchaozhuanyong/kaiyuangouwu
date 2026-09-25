@@ -22,6 +22,7 @@ describe('compact storefront copy', () => {
             unpaid: 'Unpaid',
             processing: 'Processing',
             shipped: 'Shipped',
+            completed: 'Completed',
             returns: 'Returns',
             all: 'All',
         });
@@ -36,6 +37,7 @@ describe('compact storefront copy', () => {
             compactUiCopy.en.orders.unpaid,
             compactUiCopy.en.orders.processing,
             compactUiCopy.en.orders.shipped,
+            compactUiCopy.en.orders.completed,
             compactUiCopy.en.orders.returns,
         ];
 

@@ -45,6 +45,8 @@ const defaultDraft = (): ImageStudioDraft => ({
 });
 
 const studioCache = new Map<string, ImageStudioCacheEntry>();
+const activePreloads = new Map<string, Promise<void>>();
+let cacheGeneration = 0;
 
 export function getStudioCacheKey(marketCode: string, customerId?: string | null): string {
     return `${marketCode}:${customerId ?? 'guest'}`;
@@ -100,10 +102,10 @@ export function updateStudioDraftCache(
 }
 
 export function clearStudioCache(): void {
+    cacheGeneration += 1;
     studioCache.clear();
+    activePreloads.clear();
 }
-
-let activePreloadPromise: Promise<void> | null = null;
 
 export async function preloadImageStudioData(
     api: ShopApi,
@@ -115,11 +117,14 @@ export async function preloadImageStudioData(
     if (existing?.config && Date.now() - existing.lastFetchedAt < 120_000) {
         return;
     }
-    if (activePreloadPromise) return activePreloadPromise;
+    const activePreload = activePreloads.get(key);
+    if (activePreload) return activePreload;
+    const generation = cacheGeneration;
 
-    activePreloadPromise = (async () => {
+    const preload = (async () => {
         try {
             const studioConfig = await api.imageStudioConfig();
+            if (generation !== cacheGeneration) return;
             if (!customer) {
                 setStudioCachedData(market.code, null, {
                     config: studioConfig,
@@ -138,6 +143,7 @@ export async function preloadImageStudioData(
                 api.imagePromptQuotaStatus(),
                 api.imageModelQuotaStatus(),
             ]);
+            if (generation !== cacheGeneration) return;
             const walletVal = wallet.status === 'fulfilled' ? wallet.value : undefined;
             const promptQuotaVal = loadedPromptQuota.status === 'fulfilled' ? loadedPromptQuota.value : null;
             const modelQuotasVal = loadedModelQuotas.status === 'fulfilled' ? loadedModelQuotas.value : [];
@@ -153,10 +159,11 @@ export async function preloadImageStudioData(
             });
         } catch {
             // Ignore background prefetch errors
-        } finally {
-            activePreloadPromise = null;
         }
     })();
-
-    return activePreloadPromise;
+    activePreloads.set(key, preload);
+    void preload.finally(() => {
+        if (activePreloads.get(key) === preload) activePreloads.delete(key);
+    });
+    return preload;
 }

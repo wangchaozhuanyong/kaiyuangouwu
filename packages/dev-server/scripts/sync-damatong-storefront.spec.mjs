@@ -16,6 +16,8 @@ import {
     isLocalApiOrigin,
     parseCliArguments,
     prepareDamatongAssets,
+    preserveDashboardBusinessServices,
+    preserveDashboardLegalNavigation,
     preserveDashboardSupportContacts,
     syncDamatongStorefront as publishDamatongStorefront,
     validateDamatongBrandNames,
@@ -464,6 +466,8 @@ test('real support contacts entered in Dashboard remain owned by Dashboard', () 
     const existing = desiredBlocks().map(asAdminBlock);
     const support = existing.find(block => block.type === 'SUPPORT');
     support.settings = { ...support.settings, placeholderContacts: false, contactOwnership: 'dashboard' };
+    support.imageAsset = { id: 'support-hero-asset' };
+    support.imageUrl = '/assets/preview/support-hero-asset.webp';
     support.translations[0].body = '客服已上线';
     support.items[0] = {
         ...support.items[0],
@@ -476,8 +480,104 @@ test('real support contacts entered in Dashboard remain owned by Dashboard', () 
         block => block.type === 'SUPPORT',
     );
     assert.equal(preserved.translations.find(value => value.languageCode === 'zh_Hans').body, '客服已上线');
+    assert.equal(preserved.imageAssetId, 'support-hero-asset');
+    assert.equal(preserved.imageUrl, null);
     assert.equal(preserved.items[0].id, support.items[0].id);
     assert.equal(preserved.items[0].targetValue, 'https://wa.me/60123456789');
+});
+
+test('Dashboard owned support image survives a sync even before contact links are entered', () => {
+    const existing = desiredBlocks().map(asAdminBlock);
+    const support = existing.find(block => block.type === 'SUPPORT');
+    support.settings = { ...support.settings, contactOwnership: 'dashboard' };
+    support.imageAsset = { id: 'support-image-only' };
+
+    const preserved = preserveDashboardSupportContacts(existing, desiredBlocks()).find(
+        block => block.type === 'SUPPORT',
+    );
+    assert.equal(preserved.imageAssetId, 'support-image-only');
+    assert.deepEqual(
+        preserved.items.map(item => item.id),
+        support.items.map(item => item.id),
+    );
+});
+
+test('business services publisher keeps the store image, copy, link and extra tools', () => {
+    const existing = desiredBlocks().map(asAdminBlock);
+    const services = existing.find(block => block.code === 'storefront-client-plugins');
+    services.imageAsset = { id: 'renovation-asset' };
+    services.imageUrl = '/assets/preview/renovation-asset.webp';
+    services.targetType = 'URL';
+    services.targetValue = 'https://flashcast.com.my';
+    services.translations.find(value => value.languageCode === 'zh_Hans').title = '装修服务';
+    services.translations.find(value => value.languageCode === 'en').title = 'Renovation services';
+    services.items[0].enabled = false;
+    services.items[0].position = 4;
+    services.items.push({
+        id: 'store-tool',
+        enabled: true,
+        position: 2,
+        imageAsset: null,
+        imageUrl: null,
+        targetType: 'PAGE',
+        targetValue: '/support',
+        settings: { pluginCode: 'store-support-entry', placement: 'BUSINESS_SERVICES_MAIN' },
+        translations: [
+            { languageCode: 'zh_Hans', label: '联系客服', description: '获取帮助' },
+            { languageCode: 'en', label: 'Contact support', description: 'Get help' },
+        ],
+    });
+
+    const preserved = preserveDashboardBusinessServices(existing, desiredBlocks());
+    const servicesPlan = buildDamatongContentPlans(existing, preserved).find(
+        plan => plan.code === 'storefront-client-plugins',
+    );
+    assert.equal(servicesPlan.input.imageAssetId, 'renovation-asset');
+    assert.equal(servicesPlan.input.imageUrl, null);
+    assert.equal(servicesPlan.input.targetValue, 'https://flashcast.com.my');
+    assert.equal(
+        servicesPlan.input.translations.find(value => value.languageCode === 'zh_Hans').title,
+        '装修服务',
+    );
+    assert.deepEqual(
+        servicesPlan.input.items.map(item => item.id),
+        [services.items[0].id, 'store-tool'],
+    );
+    assert.equal(servicesPlan.input.items[0].enabled, false);
+    assert.equal(servicesPlan.input.items[0].position, 4);
+    assert.equal(servicesPlan.input.items[0].settings.rendererVersion, 3);
+});
+
+test('publisher preserves Admin legal copy and navigation while still seeding missing blocks', () => {
+    const desired = desiredBlocks();
+    assert.deepEqual(preserveDashboardLegalNavigation([], desired), desired);
+    const existing = desired.map(asAdminBlock);
+    const legal = existing.find(block => block.type === 'LEGAL');
+    legal.enabled = false;
+    legal.items[0].targetValue = '/legal?id=privacy';
+    legal.items[0].translations.find(value => value.languageCode === 'zh_Hans').description =
+        '管理员审核中的隐私政策正文';
+    legal.items[0].translations.find(value => value.languageCode === 'en').description =
+        'Privacy policy under merchant review';
+    const navigation = existing.find(block => block.type === 'NAVIGATION');
+    navigation.items[2].translations.find(value => value.languageCode === 'zh_Hans').label = '商业服务';
+    navigation.items[2].translations.find(value => value.languageCode === 'en').label = 'Business services';
+
+    const plans = buildDamatongContentPlans(existing, preserveDashboardLegalNavigation(existing, desired));
+    const legalPlan = plans.find(plan => plan.type === 'LEGAL');
+    const navigationPlan = plans.find(plan => plan.type === 'NAVIGATION');
+    assert.equal(legalPlan.action, 'noop');
+    assert.equal(navigationPlan.action, 'noop');
+    assert.equal(legalPlan.input.enabled, false);
+    assert.equal(legalPlan.input.items[0].targetValue, '/legal?id=privacy');
+    assert.equal(
+        legalPlan.input.items[0].translations.find(value => value.languageCode === 'zh_Hans').description,
+        '管理员审核中的隐私政策正文',
+    );
+    assert.equal(
+        navigationPlan.input.items[2].translations.find(value => value.languageCode === 'zh_Hans').label,
+        '商业服务',
+    );
 });
 
 test('apply mode updates drift and verifies the same ids through Admin and Shop APIs', async () => {
@@ -490,6 +590,15 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
         sourceAiPluginItem: sourceItem,
     });
     const adminBlocks = blocks.map(asAdminBlock);
+    const publishedBlocks = structuredClone(blocks);
+    for (const collection of [adminBlocks, publishedBlocks]) {
+        const legal = collection.find(block => block.type === 'LEGAL');
+        legal.items[0].targetValue = '/legal?id=privacy';
+        legal.items[0].translations.find(value => value.languageCode === 'zh_Hans').description =
+            '管理员审核中的隐私政策正文';
+        const navigation = collection.find(block => block.type === 'NAVIGATION');
+        navigation.items[2].translations.find(value => value.languageCode === 'zh_Hans').label = '商业服务';
+    }
     let contentUpdated = false;
     let batchMutationCount = 0;
     let profileMutationCount = 0;
@@ -638,6 +747,11 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
             assert.equal(init.headers.authorization, 'Bearer auth-token');
             assert.equal(request.variables.input.expectedBlocks.length, adminBlocks.length);
             assert.equal(request.variables.input.updates[0].code, blocks[0].code);
+            assert.ok(
+                request.variables.input.updates.every(
+                    block => block.type !== 'LEGAL' && block.type !== 'NAVIGATION',
+                ),
+            );
             request.variables.input.updates.forEach(assertReviewedBlockInput);
             batchMutationCount += 1;
             contentUpdated = true;
@@ -693,7 +807,7 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
                                       };
                                   }),
                     },
-                    storefrontContent: blocks.map((block, blockIndex) => {
+                    storefrontContent: publishedBlocks.map((block, blockIndex) => {
                         const localized = block.translations.find(
                             value => value.languageCode === languageCode,
                         );

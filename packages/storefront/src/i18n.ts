@@ -221,6 +221,7 @@ export const compactUiCopy = {
             unpaid: '待付款',
             processing: '待发货',
             shipped: '待收货',
+            completed: '已完成',
             returns: '售后',
             due: '应付',
         },
@@ -239,7 +240,6 @@ export const compactUiCopy = {
         services: {
             favorites: '我的收藏',
             coupons: '优惠券',
-            announcements: '网站公告',
             addresses: '地址管理',
             messages: '消息通知',
             reviews: '评价中心',
@@ -255,6 +255,7 @@ export const compactUiCopy = {
             unpaid: 'Unpaid',
             processing: 'Processing',
             shipped: 'Shipped',
+            completed: 'Completed',
             returns: 'Returns',
             due: 'Due',
         },
@@ -273,7 +274,6 @@ export const compactUiCopy = {
         services: {
             favorites: 'Favorites',
             coupons: 'Coupons',
-            announcements: 'Notices',
             addresses: 'Addresses',
             messages: 'Messages',
             reviews: 'Reviews',

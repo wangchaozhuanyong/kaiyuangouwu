@@ -3,6 +3,7 @@ import { type CSSProperties } from 'react';
 import { normalizedHeroThemePreset } from '../content-visuals';
 
 import { type ImageTone } from './image-tone';
+import { readableStorefrontForeground, storefrontContrastRatio } from './storefront-semantic-palette';
 
 export interface HeroThemeData {
     backgroundColor?: string | null;
@@ -52,28 +53,70 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
     const hasExplicitText = HEX_COLOR_PATTERN.test(rawTextColor);
     const explicitTextIsLight = hasExplicitText && isLightColor(rawTextColor);
 
-    // Tone resolution:
-    // If text is explicitly dark, tone MUST be light to protect dark text with a light scrim.
-    // If text is explicitly light, tone MUST be dark to protect white text with a dark scrim.
-    // If text is not explicitly set, follow explicit background or imageTone.
+    // Legacy tone variables still style badges, while readable copy is paired
+    // with its own background independent of the artwork.
     const isLightTone = hasExplicitText
         ? !explicitTextIsLight
         : hasExplicitBg
           ? bgIsLight
           : imageTone === 'light';
-    const highContrast = settings.contrastMode === 'high';
-
-    const overlayColor = normalizedColor(
-        block.backgroundColor,
-        isLightTone
-            ? 'rgba(255, 255, 255, 0.96)'
-            : 'var(--store-background, var(--skin-hero-background, #090d16))',
-    );
+    const copyBackground = hasExplicitBg ? rawBgColor : 'var(--surface)';
+    const copyForeground = hasExplicitBg
+        ? hasExplicitText && storefrontContrastRatio(rawTextColor, rawBgColor) >= 4.5
+            ? rawTextColor
+            : readableStorefrontForeground(rawBgColor)
+        : 'var(--text)';
+    const configuredBody =
+        typeof settings.secondaryTextColor === 'string' ? settings.secondaryTextColor.trim() : '';
+    const copyBodyForeground = hasExplicitBg
+        ? HEX_COLOR_PATTERN.test(configuredBody) && storefrontContrastRatio(configuredBody, rawBgColor) >= 4.5
+            ? configuredBody
+            : copyForeground
+        : 'var(--muted)';
+    const imageOverlayBackground = hasExplicitBg ? rawBgColor : '#10212F';
+    const imageOverlayForeground = hasExplicitBg
+        ? copyForeground
+        : hasExplicitText && storefrontContrastRatio(rawTextColor, imageOverlayBackground) >= 4.5
+          ? rawTextColor
+          : '#FFFFFF';
+    const imageOverlayBodyForeground =
+        HEX_COLOR_PATTERN.test(configuredBody) &&
+        storefrontContrastRatio(configuredBody, imageOverlayBackground) >= 4.5
+            ? configuredBody
+            : imageOverlayForeground;
 
     const accentColor = normalizedColor(
         settings.accentColor,
         `var(--store-primary, var(--skin-hero-accent, ${defaultAccent}))`,
     );
+    const readableAccent = hasExplicitBg
+        ? HEX_COLOR_PATTERN.test(accentColor) && storefrontContrastRatio(accentColor, rawBgColor) >= 4.5
+            ? accentColor
+            : copyForeground
+        : 'var(--accent-ink)';
+    const accentSecondary = normalizedColor(
+        settings.accentSecondaryColor,
+        `var(--store-highlight, var(--skin-hero-secondary, ${defaultAccentSecondary}))`,
+    );
+    const configuredButtonText = normalizedColor(settings.buttonTextColor, '');
+    const explicitAccent = HEX_COLOR_PATTERN.test(accentColor);
+    const explicitAccentSecondary = HEX_COLOR_PATTERN.test(accentSecondary);
+    const gradientColors = explicitAccentSecondary ? [accentColor, accentSecondary] : [accentColor];
+    const sharedButtonForeground = explicitAccent
+        ? [configuredButtonText, '#ffffff', '#000000'].find(
+              candidate =>
+                  HEX_COLOR_PATTERN.test(candidate) &&
+                  gradientColors.every(color => storefrontContrastRatio(candidate, color) >= 4.5),
+          )
+        : undefined;
+    const buttonBackground = explicitAccent
+        ? explicitAccentSecondary && sharedButtonForeground
+            ? `linear-gradient(135deg, ${accentColor}, ${accentSecondary})`
+            : accentColor
+        : 'var(--accent)';
+    const buttonForeground = explicitAccent
+        ? (sharedButtonForeground ?? readableStorefrontForeground(accentColor))
+        : 'var(--accent-foreground)';
 
     // Explicit or adaptive title color
     const defaultTitleColor = isLightTone
@@ -95,35 +138,30 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
     } else if (!titleIsLight) {
         defaultBodyColor = '#334155';
     } else {
-        // A light title always sits on the dark protective scrim, including the
-        // first render before image-tone sampling completes. Falling back to the
-        // storefront foreground here can produce dark body copy on that scrim.
+        // Keep legacy badge typography aligned with its tone.
         defaultBodyColor = isLightTone ? '#334155' : '#f1f5f9';
     }
 
     return {
-        '--hero-overlay-color': overlayColor,
-        '--hero-overlay-strong': isLightTone
-            ? highContrast
-                ? 'rgba(255, 255, 255, 0.96)'
-                : 'rgba(255, 255, 255, 0.94)'
-            : colorWithAlpha(overlayColor, highContrast ? 0.97 : 0.92),
-        '--hero-overlay-medium': isLightTone
-            ? highContrast
-                ? 'rgba(255, 255, 255, 0.85)'
-                : 'rgba(255, 255, 255, 0.76)'
-            : colorWithAlpha(overlayColor, highContrast ? 0.9 : 0.82),
-        '--hero-overlay-soft': isLightTone
-            ? highContrast
-                ? 'rgba(255, 255, 255, 0.38)'
-                : 'rgba(255, 255, 255, 0.24)'
-            : colorWithAlpha(overlayColor, highContrast ? 0.66 : 0.46),
-        '--hero-overlay-fade': isLightTone
-            ? 'transparent'
-            : colorWithAlpha(overlayColor, highContrast ? 0.18 : 0.08),
+        '--hero-copy-background': copyBackground,
+        '--hero-copy-foreground': copyForeground,
+        '--hero-copy-body-foreground': copyBodyForeground,
+        '--hero-image-overlay-start': colorWithAlpha(imageOverlayBackground, 0.86),
+        '--hero-image-overlay-middle': colorWithAlpha(imageOverlayBackground, 0.42),
+        '--hero-image-copy-foreground': imageOverlayForeground,
+        '--hero-image-body-foreground': imageOverlayBodyForeground,
+        '--hero-image-text-shadow': isLightColor(imageOverlayForeground)
+            ? '0 1px 5px rgba(5, 16, 27, 0.48)'
+            : '0 1px 5px rgba(255, 255, 255, 0.6)',
         '--hero-title-color': titleColor,
         '--hero-body-color': defaultBodyColor,
         '--hero-accent-color': accentColor,
+        '--hero-accent-readable': readableAccent,
+        '--hero-button-background': buttonBackground,
+        '--hero-button-hover-background': explicitAccent
+            ? buttonBackground
+            : 'var(--accent-hover, var(--accent))',
+        '--hero-button-foreground': buttonForeground,
         '--hero-accent-soft': isLightTone ? 'rgba(255, 255, 255, 0.88)' : colorWithAlpha(accentColor, 0.18),
         '--hero-accent-border': isLightTone
             ? colorWithAlpha(accentColor, 0.65)
@@ -132,10 +170,7 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
         '--hero-accent-strong-border': colorWithAlpha(accentColor, 0.72),
         '--hero-accent-shadow': colorWithAlpha(accentColor, 0.42),
         '--hero-accent-text-shadow': colorWithAlpha(accentColor, 0.52),
-        '--hero-accent-secondary-color': normalizedColor(
-            settings.accentSecondaryColor,
-            `var(--store-highlight, var(--skin-hero-secondary, ${defaultAccentSecondary}))`,
-        ),
+        '--hero-accent-secondary-color': accentSecondary,
         '--hero-button-text-color': normalizedColor(settings.buttonTextColor, '#ffffff'),
         '--hero-title-shadow':
             isLightTone || !titleIsLight
@@ -155,8 +190,4 @@ export function heroThemeStyle(block: HeroThemeData, imageTone?: ImageTone): Her
         '--hero-pagination-color': isLightTone ? 'rgba(15, 23, 42, 0.35)' : 'rgba(255, 255, 255, 0.5)',
         '--hero-pagination-active-color': isLightTone ? '#0f172a' : '#ffffff',
     };
-}
-
-export function heroUsesImageOverlay(block: HeroThemeData): boolean {
-    return normalizedHeroThemePreset(block.settings?.themePreset) !== 'bright';
 }

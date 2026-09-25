@@ -3,11 +3,12 @@ import {
     StoreCouponUsageRecord,
     StoreCustomerCoupon,
     StorefrontContentBlock,
+    StorefrontCouponAppearanceTheme,
     StorefrontCouponCampaign,
     StorefrontLanguage,
 } from './types';
 
-export type StorefrontCouponTheme = 'gold' | 'rose' | 'blue' | 'emerald';
+export type StorefrontCouponTheme = StorefrontCouponAppearanceTheme;
 
 export interface StorefrontCouponCard {
     id: string;
@@ -63,6 +64,15 @@ const couponThemeByKind: Record<StorefrontCouponCampaign['kind'], StorefrontCoup
     COLLECTION_PERCENTAGE: 'blue',
     PRODUCT_PERCENTAGE: 'emerald',
 };
+
+function couponTheme(
+    configured: StorefrontCouponAppearanceTheme | null | undefined,
+    kind: StorefrontCouponCampaign['kind'],
+): StorefrontCouponTheme {
+    return configured === 'rose' || configured === 'gold' || configured === 'blue' || configured === 'emerald'
+        ? configured
+        : couponThemeByKind[kind];
+}
 
 export function bestProductCouponPrice({
     campaigns,
@@ -219,7 +229,7 @@ export function couponCardsFromCampaigns(
             title: coupon.name,
             description: threshold,
             tag: campaignKindLabel(coupon.kind, language),
-            theme: couponThemeByKind[coupon.kind],
+            theme: couponTheme(coupon.appearanceTheme, coupon.kind),
             claimed: coupon.claimed,
             claimable: coupon.claimable && !coupon.claimed,
         };
@@ -257,7 +267,7 @@ export function couponCardFromCustomerCoupon(
               ? '无门槛'
               : 'No minimum',
         tag: campaignKindLabel(coupon.campaignKind, language),
-        theme: couponThemeByKind[coupon.campaignKind],
+        theme: couponTheme(coupon.appearanceTheme, coupon.campaignKind),
         claimed: true,
         claimable: false,
     };
@@ -310,7 +320,7 @@ export function couponCardFromUsageRecord(
               ? '无门槛'
               : 'No minimum',
         tag: campaignKindLabel(record.campaignKind, language),
-        theme: couponThemeByKind[record.campaignKind],
+        theme: couponTheme(record.appearanceTheme, record.campaignKind),
         claimed: true,
         claimable: false,
     };

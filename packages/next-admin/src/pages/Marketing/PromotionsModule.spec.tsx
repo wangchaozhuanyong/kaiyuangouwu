@@ -1,21 +1,27 @@
-import type { ReactElement } from 'react';
+// @vitest-environment jsdom
+import { act, type ReactElement } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup as renderMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FeatureHelpProvider } from '../../components/FeatureHelp';
 
 import type { StoreCouponRecord } from '../../graphql/marketing.graphql';
+import { SET_COUPON_APPEARANCE_MUTATION } from '../../graphql/marketing.graphql';
 import { CampaignDetailDialog, PromotionsModule, SensitiveDialog } from './PromotionsModule';
 
 const apolloMocks = vi.hoisted(() => ({
     useMutation: vi.fn(),
     useQuery: vi.fn(),
+    setAppearance: vi.fn(),
+    refetch: vi.fn(),
 }));
 
 vi.mock('@apollo/client/react', () => apolloMocks);
 
 describe('PromotionsModule sensitive actions', () => {
     beforeEach(() => {
+        apolloMocks.refetch.mockResolvedValue(undefined);
         apolloMocks.useMutation.mockReturnValue([vi.fn(), { loading: false }]);
         apolloMocks.useQuery.mockReturnValue({
             data: {
@@ -27,8 +33,13 @@ describe('PromotionsModule sensitive actions', () => {
             },
             error: undefined,
             loading: false,
-            refetch: vi.fn(),
+            refetch: apolloMocks.refetch,
         });
+    });
+
+    afterEach(() => {
+        vi.clearAllMocks();
+        vi.unstubAllGlobals();
     });
 
     it('marks the campaign filter as a search field that credential autofill must ignore', () => {
@@ -117,7 +128,118 @@ describe('PromotionsModule sensitive actions', () => {
         expect(html).toContain('删除策略');
         expect(html).toContain('已领取 1 张，只可归档');
     });
+
+    it('edits an existing coupon theme, keeps mutation errors visible and refreshes after save', async () => {
+        const coupon = { ...couponRecord(), appearanceTheme: 'rose' as const };
+        apolloMocks.useQuery.mockReturnValue({
+            data: {
+                activeChannel: { id: 'channel-1', code: 'default', defaultCurrencyCode: 'CNY' },
+                storeCouponCampaigns: [coupon],
+                storeFlashSales: [],
+            },
+            error: undefined,
+            loading: false,
+            refetch: apolloMocks.refetch,
+        });
+        apolloMocks.useMutation.mockImplementation(document =>
+            document === SET_COUPON_APPEARANCE_MUTATION
+                ? [apolloMocks.setAppearance, { loading: false }]
+                : [vi.fn(), { loading: false }],
+        );
+        apolloMocks.setAppearance.mockRejectedValueOnce(new Error('店铺配色保存失败')).mockResolvedValueOnce({
+            data: { setStoreCouponAppearance: { id: coupon.id, appearanceTheme: 'gold' } },
+        });
+        vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        try {
+            await act(async () =>
+                root.render(
+                    <FeatureHelpProvider>
+                        <MemoryRouter>
+                            <PromotionsModule />
+                        </MemoryRouter>
+                    </FeatureHelpProvider>,
+                ),
+            );
+            expect(host.textContent).toContain('券面：朱砂红');
+            await act(async () =>
+                host.querySelector<HTMLButtonElement>('[aria-label="修改测试优惠券的券面配色"]')!.click(),
+            );
+            const dialog = host.querySelector('[role="dialog"]')!;
+            expect(dialog.querySelector<HTMLInputElement>('input[value="rose"]')!.checked).toBe(true);
+            expect(button(dialog, '保存配色').disabled).toBe(true);
+            await act(async () => dialog.querySelector<HTMLInputElement>('input[value="gold"]')!.click());
+            await act(async () => button(dialog, '保存配色').click());
+            expect(dialog.querySelector('[role="alert"]')?.textContent).toContain('店铺配色保存失败');
+            expect(apolloMocks.refetch).not.toHaveBeenCalled();
+            await act(async () => button(dialog, '保存配色').click());
+            expect(apolloMocks.setAppearance).toHaveBeenLastCalledWith({
+                variables: { id: coupon.id, theme: 'gold' },
+            });
+            expect(apolloMocks.refetch).toHaveBeenCalledOnce();
+            expect(host.querySelector('[role="dialog"]')).toBeNull();
+            expect(host.textContent).toContain('券面配色已保存，优惠规则未改变');
+        } finally {
+            await act(async () => root.unmount());
+            host.remove();
+        }
+    });
+
+    it('can restore an existing coupon to the default theme without changing its rules', async () => {
+        const coupon = { ...couponRecord(), appearanceTheme: 'emerald' as const };
+        apolloMocks.useQuery.mockReturnValue({
+            data: {
+                activeChannel: { id: 'channel-1', code: 'default', defaultCurrencyCode: 'CNY' },
+                storeCouponCampaigns: [coupon],
+                storeFlashSales: [],
+            },
+            error: undefined,
+            loading: false,
+            refetch: apolloMocks.refetch,
+        });
+        apolloMocks.useMutation.mockImplementation(document =>
+            document === SET_COUPON_APPEARANCE_MUTATION
+                ? [apolloMocks.setAppearance, { loading: false }]
+                : [vi.fn(), { loading: false }],
+        );
+        apolloMocks.setAppearance.mockResolvedValue({
+            data: { setStoreCouponAppearance: { id: coupon.id, appearanceTheme: null } },
+        });
+        vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        try {
+            await act(async () =>
+                root.render(
+                    <FeatureHelpProvider>
+                        <MemoryRouter>
+                            <PromotionsModule />
+                        </MemoryRouter>
+                    </FeatureHelpProvider>,
+                ),
+            );
+            await act(async () =>
+                host.querySelector<HTMLButtonElement>('[aria-label="修改测试优惠券的券面配色"]')!.click(),
+            );
+            const dialog = host.querySelector('[role="dialog"]')!;
+            await act(async () => dialog.querySelector<HTMLInputElement>('input[value="default"]')!.click());
+            await act(async () => button(dialog, '保存配色').click());
+            expect(apolloMocks.setAppearance).toHaveBeenCalledWith({
+                variables: { id: coupon.id, theme: null },
+            });
+        } finally {
+            await act(async () => root.unmount());
+            host.remove();
+        }
+    });
 });
+
+function button(container: Element, label: string): HTMLButtonElement {
+    return [...container.querySelectorAll('button')].find(item => item.textContent?.includes(label))!;
+}
 
 function couponRecord(): StoreCouponRecord {
     return {
@@ -127,6 +249,7 @@ function couponRecord(): StoreCouponRecord {
         name: '测试优惠券',
         couponCode: 'CPN_TEST',
         kind: 'COLLECTION_PERCENTAGE',
+        appearanceTheme: null,
         enabled: true,
         startsAt: '2026-09-01T00:00:00.000Z',
         endsAt: '2026-09-30T00:00:00.000Z',

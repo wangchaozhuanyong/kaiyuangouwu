@@ -85,6 +85,7 @@ export interface CreateAfterSalesRequestInput {
     reason: AfterSalesReason;
     description: string;
     items: CreateAfterSalesItemInput[];
+    evidenceIds?: ID[];
 }
 
 export interface AfterSalesRequestListOptions {

@@ -201,6 +201,17 @@ describe('production payment readiness', () => {
                 handlers,
             ),
         ).toBe(false);
+        const usdt = method('usdt-trc20', 'usdt-trc20-chain-handler', 'USDT payment');
+        const usdtHandlers = new Set(['usdt-trc20-chain-handler']);
+        expect(isRegisteredProductionPaymentMethod(usdt, usdtHandlers, 'CNY')).toBe(false);
+        expect(isRegisteredProductionPaymentMethod(usdt, usdtHandlers, 'USDT')).toBe(true);
+        expect(
+            isRegisteredProductionPaymentMethod(
+                method('stripe', 'stripe-payment', 'Card payment'),
+                handlers,
+                'USDT',
+            ),
+        ).toBe(false);
         expect(
             isRegisteredProductionPaymentMethod(
                 method('referral-balance', 'referral-balance-payment', '邀请返利余额'),
@@ -444,5 +455,43 @@ describe('cart inventory before persistence', () => {
             true,
         );
         expect(variants.getSaleableStockLevel).toHaveBeenCalledOnce();
+    });
+    it('replaces an existing cart quantity with the requested buy-now quantity', async () => {
+        const { service, cart, repository, projectCart } = setup(10, true, 2);
+        projectCart.mockImplementationOnce((...args: unknown[]) => {
+            const next = args[1] as StorefrontCart;
+            next.checkoutOrder = { id: 'order-1' } as any;
+            return next;
+        });
+
+        const result = await service.beginDirectPurchase(
+            {} as any,
+            { productVariantId: 'variant-1', quantity: 3 },
+            cart,
+        );
+
+        expect(result).toMatchObject({
+            cart: { lines: [{ quantity: 3, selected: true }] },
+        });
+        expect(repository.update).toHaveBeenCalledWith('line-1', { quantity: 3, selected: true });
+        expect(repository.save).not.toHaveBeenCalled();
+    });
+    it('rechecks stock when buy-now reuses an unchanged selected cart line', async () => {
+        const { service, cart, projectCart } = setup(0, true, 2);
+        projectCart.mockImplementationOnce((...args: unknown[]) => {
+            const next = args[1] as StorefrontCart;
+            next.checkoutOrder = { id: 'order-1' } as any;
+            return next;
+        });
+
+        await service.beginDirectPurchase({} as any, { productVariantId: 'variant-1', quantity: 2 }, cart);
+
+        expect(projectCart).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.anything(),
+            expect.anything(),
+            true,
+            false,
+        );
     });
 });

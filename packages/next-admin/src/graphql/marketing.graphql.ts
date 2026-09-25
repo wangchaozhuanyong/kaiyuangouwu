@@ -145,6 +145,7 @@ export const MARKETING_OVERVIEW_QUERY = gql`
             name
             couponCode
             kind
+            appearanceTheme
             enabled
             startsAt
             endsAt
@@ -312,6 +313,15 @@ export const CREATE_COUPON_CAMPAIGN_MUTATION = gql`
         createStoreCouponCampaign(input: $input) {
             id
             name
+        }
+    }
+`;
+
+export const SET_COUPON_APPEARANCE_MUTATION = gql`
+    mutation AdminSetCouponAppearance($id: ID!, $theme: StoreCouponAppearanceTheme) {
+        setStoreCouponAppearance(id: $id, theme: $theme) {
+            id
+            appearanceTheme
         }
     }
 `;
@@ -834,6 +844,7 @@ export const DELETE_REFERRAL_POSTER_MUTATION = gql`
 
 export type StoreCouponKind =
     'ORDER_FIXED' | 'ORDER_PERCENTAGE' | 'COLLECTION_PERCENTAGE' | 'PRODUCT_PERCENTAGE';
+export type StoreCouponAppearanceTheme = 'rose' | 'gold' | 'blue' | 'emerald';
 
 export interface StoreCouponRecord {
     id: string;
@@ -842,6 +853,7 @@ export interface StoreCouponRecord {
     name: string;
     couponCode: string;
     kind: StoreCouponKind;
+    appearanceTheme: StoreCouponAppearanceTheme | null;
     enabled: boolean;
     startsAt: string | null;
     endsAt: string | null;

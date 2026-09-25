@@ -244,6 +244,10 @@
     color: var(--accent-ink);
     transition: transform 180ms ease;
 }
+.colorful-icon-badge[data-icon-tone] {
+    color: var(--semantic-icon-foreground);
+    background: var(--semantic-icon-background);
+}
 
 .colorful-icon-badge svg {
     width: 22px;
@@ -437,6 +441,19 @@ html[lang='en'] .quick-grid b {
         transform 180ms ease,
         box-shadow 180ms ease,
         opacity 200ms ease;
+}
+
+.coupon-ticket-card.coupon-ticket-rose {
+    --coupon-accent: var(--coupon-rose-ink);
+}
+.coupon-ticket-card.coupon-ticket-gold {
+    --coupon-accent: var(--coupon-gold-ink);
+}
+.coupon-ticket-card.coupon-ticket-blue {
+    --coupon-accent: var(--coupon-blue-ink);
+}
+.coupon-ticket-card.coupon-ticket-emerald {
+    --coupon-accent: var(--coupon-emerald-ink);
 }
 
 .coupon-ticket-card:hover {
@@ -698,7 +715,7 @@ html[lang='en'] .quick-grid b {
 }
 
 .showcase-card-media > .responsive-picture > img {
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .showcase-card-image-shade {
@@ -815,7 +832,11 @@ html[lang='en'] .quick-grid b {
             color-mix(in srgb, var(--surface-elevated) 88%, rgb(var(--showcase-accent-rgb))),
             var(--surface-elevated)
         );
-    --showcase-action-background: color-mix(in srgb, var(--surface-elevated) 86%, rgb(var(--showcase-accent-rgb)));
+    --showcase-action-background: color-mix(
+        in srgb,
+        var(--surface-elevated) 86%,
+        rgb(var(--showcase-accent-rgb))
+    );
     --showcase-action-border: rgb(var(--showcase-accent-rgb) / 0.2);
     min-height: 176px;
     padding: 16px 14px 11px;
@@ -1223,7 +1244,7 @@ html[lang='en'] .quick-grid b {
 .managed-content-banner img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .managed-content-grid {
@@ -1273,7 +1294,7 @@ html[lang='en'] .quick-grid b {
     background: var(--soft);
     display: grid;
     place-items: center;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .managed-content-card.is-product-media .managed-content-media img {
@@ -1338,14 +1359,15 @@ html[lang='en'] .quick-grid b {
 .category-promotion-visual {
     position: relative;
     width: 100%;
-    min-height: 190px;
-    aspect-ratio: 16 / 9;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
     padding: 0;
     overflow: hidden;
     border: 0;
     border-radius: var(--radius-md);
     background: #e8edf5;
-    color: white;
+    color: var(--text);
     text-align: left;
     box-shadow: var(--shadow-sm);
     isolation: isolate;
@@ -1353,16 +1375,11 @@ html[lang='en'] .quick-grid b {
 }
 
 .category-promotion-visual::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    background: linear-gradient(180deg, transparent 38%, rgba(8, 15, 29, 0.78) 100%);
-    pointer-events: none;
+    content: none;
 }
 
 .category-promotion-section.is-color-marketplace .category-promotion-visual::after {
-    background: linear-gradient(180deg, transparent 62%, rgba(16, 45, 74, 0.18) 100%);
+    content: none;
 }
 
 .category-promotion-section.is-color-marketplace .category-promotion-visual-copy {
@@ -1373,8 +1390,7 @@ html[lang='en'] .quick-grid b {
     padding: 5px 9px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.84);
-    box-shadow: 0 5px 16px rgba(16, 45, 74, 0.1);
-    backdrop-filter: blur(8px);
+    color: #102d4a;
 }
 
 .category-promotion-visual:disabled {
@@ -1383,22 +1399,24 @@ html[lang='en'] .quick-grid b {
 
 .category-promotion-visual > img,
 .category-promotion-visual > .responsive-picture,
-.category-promotion-visual > .responsive-picture > img,
+.category-promotion-visual > .responsive-picture > img {
+    width: 100%;
+    height: auto;
+}
 .category-promotion-placeholder {
     width: 100%;
-    height: 100%;
+    min-height: 190px;
 }
 
 .category-promotion-visual > img,
 .category-promotion-visual > .responsive-picture > img {
     display: block;
-    object-fit: cover;
-    transition: transform 280ms ease;
+    object-fit: contain;
 }
 
 .category-promotion-visual:hover:not(:disabled) > img,
 .category-promotion-visual:hover:not(:disabled) > .responsive-picture > img {
-    transform: scale(1.025);
+    transform: none;
 }
 
 .category-promotion-visual:active:not(:disabled) {
@@ -1425,11 +1443,9 @@ html[lang='en'] .quick-grid b {
 }
 
 .category-promotion-visual-copy {
-    position: absolute;
-    right: 16px;
-    bottom: 14px;
-    left: 16px;
-    z-index: 2;
+    position: relative;
+    width: 100%;
+    padding: 12px 16px;
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
@@ -1442,11 +1458,8 @@ html[lang='en'] .quick-grid b {
     letter-spacing: 0.08em;
     padding: 3px 8px;
     border-radius: 9999px;
-    background: rgba(15, 23, 42, 0.68);
-    color: #ffffff;
-    backdrop-filter: blur(8px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
 }
 
 .category-promotion-visual-copy strong {
@@ -1664,7 +1677,7 @@ html[lang='en'] .quick-grid b {
 .featured-collection-product-placeholder {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .featured-collection-product-media img,
@@ -1674,7 +1687,7 @@ html[lang='en'] .quick-grid b {
 
 .featured-collection-product:hover .featured-collection-product-media img,
 .featured-collection-product:hover .featured-collection-product-media > .responsive-picture > img {
-    transform: scale(1.025);
+    transform: none;
 }
 
 .featured-collection-product-placeholder {
@@ -1788,12 +1801,11 @@ html[lang='en'] .quick-grid b {
 
 .content-story-visual img,
 .content-story-visual > .responsive-picture > img {
-    object-fit: cover;
-    transition: transform 600ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    object-fit: contain;
 }
 
 .content-story-visual:hover:not(:disabled) img {
-    transform: scale(1.025);
+    transform: none;
 }
 
 .content-story-placeholder {
@@ -1953,6 +1965,28 @@ html[lang='en'] .quick-grid b {
     justify-content: center;
     flex-shrink: 0;
     color: var(--oriental-gold, var(--accent-ink));
+}
+
+.section-header-icon-pill[data-section-kind] {
+    color: var(--accent-ink);
+    background: var(--accent-soft);
+}
+.section-header-icon-pill[data-section-kind='best-sellers'] {
+    color: var(--warning);
+    background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+}
+.section-header-icon-pill[data-section-kind='services'],
+.section-header-icon-pill[data-section-kind='support'] {
+    color: var(--success);
+    background: color-mix(in srgb, var(--success) 12%, var(--surface));
+}
+.section-header-icon-pill[data-section-kind='categories'] {
+    color: var(--focus);
+    background: color-mix(in srgb, var(--focus) 12%, var(--surface));
+}
+.section-header-icon-pill[data-icon-tone] {
+    color: var(--semantic-icon-foreground);
+    background: var(--semantic-icon-background);
 }
 
 .section-header-icon-pill svg {
@@ -2126,7 +2160,7 @@ html[lang='en'] .quick-grid b {
 .flash-sale-image .image-placeholder {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .flash-sale-image em {
@@ -2489,9 +2523,8 @@ html[lang='en'] .quick-grid b {
 
 .primary-category-image > img,
 .primary-category-image > .responsive-picture > img {
-    object-fit: cover;
+    object-fit: contain;
     border-radius: 7px;
-    filter: saturate(0.95);
     transition:
         filter 180ms ease,
         transform 220ms ease;
@@ -2748,9 +2781,8 @@ html[lang='en'] .primary-categories button {
 
 .all-primary-category-image > img,
 .all-primary-category-image > .responsive-picture > img {
-    object-fit: cover;
+    object-fit: contain;
     border-radius: 6px;
-    filter: saturate(0.95);
 }
 
 .all-primary-category-grid button > span:last-child {
@@ -3561,9 +3593,71 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     }
 
     .business-services-page .business-services-heading {
-        min-height: 176px;
-        margin: 0 0 28px;
-        padding: 32px 40px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr);
+        min-height: 244px;
+        margin: 0 0 24px;
+        padding: 32px;
+        gap: 32px;
+        background: var(--account-hero-bg, linear-gradient(120deg, #203446, #142630));
+        color: #fffdf8;
+    }
+    .business-services-page .business-services-heading:not(:has(.business-services-hero-media)) {
+        grid-template-columns: 1fr;
+        min-height: 200px;
+    }
+    .business-services-page
+        .business-services-heading
+        :is(.business-services-page-title, .business-services-heading-kicker, p) {
+        color: inherit;
+    }
+    .business-services-page .business-services-heading-copy > .business-services-heading-link {
+        margin: 24px 0 0;
+    }
+    .business-services-hero-media {
+        min-width: 0;
+    }
+    .business-services-hero-media :is(.safe-image-frame, img) {
+        width: 100%;
+        height: 200px;
+        border-radius: var(--skin-control-radius);
+        object-fit: contain;
+    }
+    .business-services-hero-shortcuts {
+        display: grid;
+        gap: 10px;
+        padding-left: 24px;
+        border-left: 1px solid #ffffff26;
+    }
+    .business-services-hero-shortcuts button {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 52px;
+        padding: 12px 14px;
+        border: 0;
+        border-radius: var(--skin-control-radius);
+        background: #ffffff0d;
+        color: #fffdf8;
+        font: inherit;
+        font-size: 13px;
+        text-align: left;
+        cursor: pointer;
+    }
+    .business-services-hero-shortcuts button:hover {
+        background: #ffffff20;
+    }
+    .business-services-hero-shortcuts button:focus-visible {
+        outline: 2px solid currentColor;
+        outline-offset: 2px;
+    }
+    .business-services-hero-shortcuts button > span {
+        flex: 1;
+    }
+    .business-services-hero-shortcuts svg {
+        width: 18px;
+        height: 18px;
+        flex: none;
     }
 
     .business-services-page .business-services-page-title {
@@ -3585,12 +3679,12 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     .business-services-page .category-client-plugin {
         display: grid;
         flex: 1 1 calc((100% - 40px) / 3);
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: auto 1fr auto;
+        grid-template-columns: 48px minmax(0, 1fr);
+        grid-template-rows: 1fr auto;
         align-content: start;
         align-items: start;
-        min-height: 224px;
-        gap: 20px;
+        min-height: 192px;
+        gap: 12px 16px;
         padding: 24px;
     }
 
@@ -3602,43 +3696,20 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     }
 
     .business-services-page .category-client-plugin-copy {
-        grid-column: 1;
-        grid-row: 2;
+        grid-column: 2;
+        grid-row: 1;
+        align-self: start;
     }
 
     .business-services-page .category-client-plugin-action {
-        grid-column: 1;
-        grid-row: 3;
-        align-self: start;
+        grid-column: 2;
+        grid-row: 2;
+        align-self: end;
         margin: 0;
     }
 
     .business-services-page :is(.category-client-plugin-coupon, .category-client-plugin-support) {
         flex-basis: calc((100% - 20px) / 2);
-        grid-template-columns: 48px minmax(0, 1fr);
-        grid-template-rows: auto auto;
-        min-height: 132px;
-        gap: 8px 18px;
-    }
-
-    .business-services-page
-        :is(.category-client-plugin-coupon, .category-client-plugin-support)
-        .category-client-plugin-icon {
-        grid-row: 1 / span 2;
-    }
-
-    .business-services-page
-        :is(.category-client-plugin-coupon, .category-client-plugin-support)
-        .category-client-plugin-copy {
-        grid-column: 2;
-        grid-row: 1;
-    }
-
-    .business-services-page
-        :is(.category-client-plugin-coupon, .category-client-plugin-support)
-        .category-client-plugin-action {
-        grid-column: 2;
-        grid-row: 2;
     }
 
     .business-services-page .category-client-plugin-copy strong {

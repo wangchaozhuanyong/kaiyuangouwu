@@ -1,6 +1,6 @@
 import type { StorefrontContentBlock, StorefrontContentBlockType } from './types';
 
-import { isSharingContent } from '../../storefront-content-plugin/src/content-purpose';
+import { isNonHomepageContent } from '../../storefront-content-plugin/src/content-purpose';
 import {
     homepageModuleCatalog,
     repeatableHomepageModuleTypes,
@@ -24,7 +24,7 @@ export function homepageModuleEntries(
     blocks: StorefrontContentBlock[],
     _configuredTypes: StorefrontContentBlockType[],
 ): HomepageModuleEntry[] {
-    const homepageBlocks = blocks.filter(block => !isSharingContent(block));
+    const homepageBlocks = blocks.filter(block => !isNonHomepageContent(block));
     const entries = fixedHomepageModuleTypes.flatMap<HomepageModuleEntry>(type => {
         if (repeatableHomepageModuleTypes.some(repeatable => repeatable === type)) return [];
         const matching = homepageBlocks

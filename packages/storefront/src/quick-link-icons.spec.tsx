@@ -50,6 +50,13 @@ describe('quick-link icons', () => {
         expect(markup).toContain('aria-hidden="true"');
     });
 
+    it('uses the same semantic fallback and skin tone for order and service links', () => {
+        expect(renderQuickIcon('我的订单')).toContain('lucide-package');
+        expect(renderQuickIcon('我的订单')).toContain('data-icon-tone="security"');
+        expect(renderQuickIcon('帮助中心')).toContain('lucide-headphones');
+        expect(renderQuickIcon('帮助中心')).toContain('data-icon-tone="support"');
+    });
+
     it('treats a blank managed image URL as unconfigured', () => {
         const markup = renderQuickIcon('苹果ID', '   ');
 

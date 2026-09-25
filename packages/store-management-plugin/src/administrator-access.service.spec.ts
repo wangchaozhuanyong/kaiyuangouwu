@@ -87,6 +87,71 @@ describe('AdministratorAccessService hierarchy policy', () => {
         expect(access.roleService.create).not.toHaveBeenCalled();
     });
 
+    function initializationService(persisted: unknown) {
+        const access = service();
+        const builder: any = {};
+        for (const method of ['insert', 'into', 'values', 'orIgnore', 'updateEntity'])
+            builder[method] = vi.fn(() => builder);
+        builder.execute = vi.fn().mockResolvedValue({});
+        const repository = {
+            manager: { queryRunner: { isTransactionActive: true } },
+            createQueryBuilder: vi.fn(() => builder),
+            findOne: vi.fn().mockResolvedValue(persisted),
+        };
+        access.connection = {
+            rawConnection: { options: { type: 'mysql' } },
+            getRepository: vi.fn(() => repository),
+        };
+        return { access, builder, repository };
+    }
+
+    it('retains the winning profile and suspended state instead of overwriting them during initialization', async () => {
+        const persisted = {
+            id: 'profile',
+            administratorId: 'admin',
+            userId: 'user',
+            status: 'SUSPENDED',
+            authority: 'STAFF',
+        };
+        const { access, builder } = initializationService(persisted);
+        const result = await access.initializeLegacyProfile(
+            {},
+            { id: 'admin', user: { id: 'user' } },
+            { authority: 'OWNER' },
+        );
+        expect(result).toBe(persisted);
+        expect(builder.orIgnore).toHaveBeenCalledOnce();
+    });
+
+    it('rejects a slot conflict belonging to another account rather than treating it as successful initialization', async () => {
+        const { access } = initializationService(null);
+        await expect(
+            access.initializeLegacyProfile({}, { id: 'admin', user: { id: 'user' } }, {}),
+        ).rejects.toThrow('初始化冲突');
+    });
+
+    it('rejects inconsistent administrator ownership on an existing user profile', async () => {
+        const { access } = initializationService({ administratorId: 'other-admin', userId: 'user' });
+        await expect(
+            access.initializeLegacyProfile({}, { id: 'admin', user: { id: 'user' } }, {}),
+        ).rejects.toThrow('初始化冲突');
+    });
+
+    it('uses a current read after an insert in MySQL transactions to avoid a stale missing-row snapshot', async () => {
+        const { access, repository } = initializationService({ administratorId: 'admin', userId: 'user' });
+        await access.initializeLegacyProfile({}, { id: 'admin', user: { id: 'user' } }, {});
+        expect(repository.findOne.mock.calls[0][0].lock).toEqual({ mode: 'pessimistic_read' });
+    });
+
+    it('propagates storage failures and does not return a profile as if the insert succeeded', async () => {
+        const { access, builder, repository } = initializationService(null);
+        builder.execute.mockRejectedValue(new Error('database unavailable'));
+        await expect(
+            access.initializeLegacyProfile({}, { id: 'admin', user: { id: 'user' } }, {}),
+        ).rejects.toThrow('database unavailable');
+        expect(repository.findOne).not.toHaveBeenCalled();
+    });
+
     it('allows the platform owner to create lower platform and store accounts only', () => {
         const access = service();
         const owner = profile('owner', 'PLATFORM', 'OWNER');
@@ -492,7 +557,7 @@ describe('AdministratorAccessService hierarchy policy', () => {
                 throw new Error('Unexpected repository');
             },
         };
-        access.saveProfile = vi
+        access.initializeLegacyProfile = vi
             .fn()
             .mockImplementation((_ctx: unknown, _administrator: unknown, input: unknown) => input);
 
@@ -518,7 +583,7 @@ describe('AdministratorAccessService hierarchy policy', () => {
             }),
         };
         access.ensurePlatformAdministratorRole = vi.fn().mockResolvedValue({ id: 'fixed-role' });
-        access.saveProfile = vi
+        access.initializeLegacyProfile = vi
             .fn()
             .mockImplementation((_ctx: unknown, _administrator: unknown, input: unknown) => input);
 
@@ -543,12 +608,12 @@ describe('AdministratorAccessService hierarchy policy', () => {
             }),
         };
         access.ensurePlatformAdministratorRole = vi.fn().mockResolvedValue({ id: 'fixed-role' });
-        access.saveProfile = vi.fn();
+        access.initializeLegacyProfile = vi.fn();
 
         await expect(access.inferAndPersistLegacy({} as any, 'platform-user')).rejects.toThrow(
             '固定角色不匹配',
         );
-        expect(access.saveProfile).not.toHaveBeenCalled();
+        expect(access.initializeLegacyProfile).not.toHaveBeenCalled();
     });
 
     it('refuses a fixed platform role that retains owner-only permissions', async () => {
@@ -607,9 +672,9 @@ describe('AdministratorAccessService hierarchy policy', () => {
                 { code: Permission.CreateApiKey, scope: 'OWNER_ONLY' },
             ]),
         };
-        access.saveProfile = vi.fn();
+        access.initializeLegacyProfile = vi.fn();
 
         await expect(access.inferAndPersistLegacy({} as any, 'legacy-user')).rejects.toThrow('包含平台权限');
-        expect(access.saveProfile).not.toHaveBeenCalled();
+        expect(access.initializeLegacyProfile).not.toHaveBeenCalled();
     });
 });

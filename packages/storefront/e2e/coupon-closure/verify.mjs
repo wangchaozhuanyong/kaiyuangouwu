@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { fixtureData } from '../cart-commands/fixtures.mjs';
 
 const output = fileURLToPath(new URL('../../../../artifacts/coupon-closure/', import.meta.url));
+const baseUrl = process.env.COUPON_CLOSURE_BASE_URL ?? 'http://127.0.0.1:5198';
+if (!['127.0.0.1', 'localhost'].includes(new URL(baseUrl).hostname)) {
+    throw new Error('Coupon closure fixture must use a local storefront');
+}
 await mkdir(output, { recursive: true });
 const results = [];
 for (const [engine, browserType] of [
@@ -52,6 +56,27 @@ for (const [engine, browserType] of [
                 orderId: `order-${index}`,
                 orderCode: `QA${index}`,
             }));
+            const campaigns = ['blue', 'gold', 'emerald', 'rose'].map((appearanceTheme, index) => ({
+                id: index === 0 ? 'campaign-0' : `campaign-new-${index}`,
+                name: `活动优惠券 ${index + 1}`,
+                kind: 'ORDER_FIXED',
+                appearanceTheme,
+                startsAt: null,
+                endsAt: '2099-09-16T12:00:00Z',
+                claimStartsAt: null,
+                claimEndsAt: null,
+                validityDays: null,
+                minimumSpend: 2000,
+                currencyCode: 'MYR',
+                discountAmount: (index + 1) * 500,
+                discountRate: null,
+                collectionIds: [],
+                productVariantIds: [],
+                remainingIssueCount: null,
+                claimed: index === 0,
+                claimable: index !== 0,
+            }));
+            fixture.activeStorefrontCoupons = campaigns;
             let failHistory = false;
             const errors = [];
             page.on('pageerror', error => errors.push(error.message));
@@ -59,6 +84,23 @@ for (const [engine, browserType] of [
                 const url = new URL(route.request().url());
                 if (url.pathname.includes('shop-api')) {
                     const { query, variables } = route.request().postDataJSON() ?? {};
+                    if (query?.includes('ClaimStorefrontCoupon')) {
+                        const campaign = campaigns.find(item => item.id === variables?.campaignId);
+                        if (!campaign) throw new Error('Unknown coupon campaign in fixture');
+                        campaign.claimed = true;
+                        campaign.claimable = false;
+                        const claimedCoupon = {
+                            ...coupons[0],
+                            id: `claimed-${campaign.id}`,
+                            campaignId: campaign.id,
+                            campaignName: campaign.name,
+                            appearanceTheme: campaign.appearanceTheme,
+                            minimumSpend: campaign.minimumSpend,
+                            discountAmount: campaign.discountAmount,
+                        };
+                        coupons.push(claimedCoupon);
+                        return route.fulfill({ json: { data: { claimStorefrontCoupon: claimedCoupon } } });
+                    }
                     const usage = query?.includes('MyStorefrontCouponUsageRecordsPage');
                     if (usage && failHistory)
                         return route.fulfill({
@@ -74,6 +116,7 @@ for (const [engine, browserType] of [
                         json: {
                             data: {
                                 ...fixture,
+                                activeStorefrontCoupons: campaigns,
                                 myStorefrontCoupons: coupons,
                                 myStorefrontCouponUsageRecords: history,
                                 myStorefrontCouponsPage: paged,
@@ -87,10 +130,27 @@ for (const [engine, browserType] of [
                     return route.fulfill({ status: 204, body: '' });
                 return route.continue();
             });
-            await page.goto('http://127.0.0.1:5198/coupons');
+            await page.goto(`${baseUrl}/coupons`);
+            await page.getByRole('button', { name: '仅必要功能' }).click();
             const tabs = page.locator('.coupon-center-tabs');
-            await tabs.getByRole('button', { name: /未使用|Unused/ }).click();
+            await expect(tabs.getByRole('button')).toHaveCount(4);
             const tickets = page.locator('.coupon-center-ticket-list > article');
+            await expect(tickets).toHaveCount(4);
+            await expect(tabs.getByRole('button', { name: /当前活动|Activities/ })).toContainText('4');
+            await page.screenshot({ path: `${output}/${engine}-${width}-activities.png`, fullPage: true });
+            await tabs.getByRole('button', { name: /未领取|Unclaimed/ }).click();
+            await expect(tickets).toHaveCount(3);
+            await expect(tabs.getByRole('button', { name: /未领取|Unclaimed/ })).toContainText('3');
+            await expect(tabs.getByRole('button', { name: /未领取|Unclaimed/ })).toHaveClass(/is-active/);
+            await expect(tabs.getByRole('button', { name: /当前活动|Activities/ })).not.toHaveClass(
+                /is-active/,
+            );
+            await page.screenshot({
+                path: `${output}/${engine}-${width}-unclaimed.png`,
+                fullPage: true,
+                animations: 'disabled',
+            });
+            await tabs.getByRole('button', { name: /未使用|Unused/ }).click();
             await expect(tickets).toHaveCount(20);
             await expect(page.locator('.coupon-center-pagination')).toContainText('45');
             await page.getByRole('button', { name: /下一页|Next/, exact: true }).click();
@@ -113,6 +173,12 @@ for (const [engine, browserType] of [
             await expect(tickets).toHaveCount(3);
             await expect(tickets.first()).toContainText('QA20');
             await page.screenshot({ path: `${output}/${engine}-${width}-history.png`, fullPage: true });
+            await tabs.getByRole('button', { name: /未领取|Unclaimed/ }).click();
+            await tickets.first().getByRole('button', { name: '领取' }).click();
+            await expect(tickets).toHaveCount(2);
+            await expect(tabs.getByRole('button', { name: /未领取|Unclaimed/ })).toContainText('2');
+            await tabs.getByRole('button', { name: /未使用|Unused/ }).click();
+            await expect(page.locator('.coupon-center-pagination')).toContainText('46');
             const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
             expect(overflow).toBe(false);
             expect(errors).toEqual([]);
@@ -121,6 +187,8 @@ for (const [engine, browserType] of [
                 width,
                 passed: true,
                 checks: [
+                    'four shared tabs and 4 campaign colors',
+                    '3 unclaimed campaigns, then 2 after account claim',
                     '45 coupons in 3 pages',
                     '23 history records in 2 pages',
                     'independent tab cursor',

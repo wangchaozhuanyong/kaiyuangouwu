@@ -189,6 +189,68 @@ describe('StorefrontReviewService', () => {
         expect(test.orderLineQueryBuilder.setLock).toHaveBeenCalledWith('pessimistic_write');
     });
 
+    it('keeps anonymous review ownership while hiding the public customer name', async () => {
+        const test = createHarness();
+        const submitted = await test.service.submit(test.ctx, { ...validInput, anonymous: true });
+
+        expect(submitted).toMatchObject({
+            anonymous: true,
+            customerName: 'Anonymous customer',
+            customerId: 'customer-1',
+        });
+        expect(test.reviewRepository.save).toHaveBeenCalledWith(
+            expect.objectContaining({
+                anonymous: true,
+                customerId: 'customer-1',
+                customerName: '王***明',
+                orderLineId: 'line-1',
+            }),
+        );
+
+        test.reviewRepository.findAndCount.mockResolvedValueOnce([
+            [
+                {
+                    ...submitted,
+                    customerName: '王***明',
+                    anonymous: true,
+                    merchantResponse: null,
+                },
+            ],
+            1,
+        ]);
+        const publicList = await test.service.findApprovedForProduct(test.ctx, 'product-1');
+        expect(publicList.items[0].customerName).toBe('Anonymous customer');
+
+        test.ctx.languageCode = 'zh';
+        test.reviewRepository.findAndCount.mockResolvedValueOnce([
+            [
+                {
+                    ...submitted,
+                    customerName: '王***明',
+                    anonymous: true,
+                    merchantResponse: null,
+                },
+            ],
+            1,
+        ]);
+        const chineseList = await test.service.findApprovedForProduct(test.ctx, 'product-1');
+        expect(chineseList.items[0].customerName).toBe('匿名用户');
+
+        test.reviewRepository.findAndCount.mockResolvedValueOnce([
+            [
+                {
+                    ...submitted,
+                    customerName: '王***明',
+                    anonymous: true,
+                    merchantResponse: null,
+                },
+            ],
+            1,
+        ]);
+        const adminList = await test.service.findForAdmin(test.ctx);
+        expect(adminList.items[0]).toMatchObject({ customerName: '王***明', customerId: 'customer-1' });
+    });
+
     it('allows physical orders to be reviewed once paid or shipped', async () => {
         const test = createHarness({ orderState: 'Shipped' });
 
