@@ -71,7 +71,9 @@ void test('production audit triggers are prepared through the local root socket 
 void test('prunes abandoned candidates and checks disk before worker pause and download', async () => {
     const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
     const guard = script.match(/check_production_disk_usage\(\) \{[\s\S]*?\n\}/u)?.[0];
+    const headroom = script.match(/check_production_disk_staging_headroom\(\) \{[\s\S]*?\n\}/u)?.[0];
     assert.ok(guard);
+    assert.ok(headroom);
     const calls = [...script.matchAll(/\ncheck_production_disk_usage\n/gu)].map(match => match.index);
     assert.equal(calls.length, 2);
     assert.match(script, /VENDURE_ALLOW_FAILED_RELEASE_PRUNE=1[\s\S]*--apply-failed-candidates/u);
@@ -79,6 +81,11 @@ void test('prunes abandoned candidates and checks disk before worker pause and d
     assert.ok(calls[0] > script.indexOf('--apply-failed-candidates'));
     assert.ok(calls[0] < script.indexOf('DEPLOY_DOWNLOAD_BEGIN'));
     assert.ok(calls[0] < script.indexOf('\npm2 stop vendure-worker 9>&-'));
+    assert.ok(script.indexOf('\ncheck_production_disk_staging_headroom\n') > calls[0]);
+    assert.ok(
+        script.indexOf('\ncheck_production_disk_staging_headroom\n') <
+            script.indexOf('\npm2 stop vendure-worker 9>&-'),
+    );
     assert.ok(calls[1] > script.indexOf('node "${candidate}/verify-runtime.mjs"'));
     const health = await readFile(
         path.join(repositoryRoot, 'deploy/systemd/vendure-production-healthcheck'),
@@ -111,6 +118,33 @@ void test('prunes abandoned candidates and checks disk before worker pause and d
         assert.equal(result.status, passes ? 0 : 1, `${usage}/${maximum}: ${result.stderr}`);
         if (passes) assert.match(result.stdout, /DEPLOY_DISK_OK/u);
         else assert.doesNotMatch(result.stdout, /DEPLOY_DISK_OK/u);
+    }
+    const headroomStub = `set -Eeuo pipefail
+        fail() { printf '%s\\n' "$1" >&2; exit 1; }
+        previous_runtime=/runtime
+        df() { printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n/dev/root %s 0 %s 0%% /\\n' "$FIXTURE_TOTAL_KIB" "$FIXTURE_AVAILABLE_KIB"; }
+        du() { printf '%s\\t/runtime\\n' "$FIXTURE_RUNTIME_KIB"; }`;
+    for (const [total, available, runtime, passes] of [
+        [40000000, 6800000, 600000, false],
+        [50000000, 16000000, 600000, true],
+        [50000000, 16000000, 0, false],
+    ]) {
+        const result = spawnSync(
+            'bash',
+            ['-c', `${headroomStub}\n${headroom}\ncheck_production_disk_staging_headroom`],
+            {
+                encoding: 'utf8',
+                env: {
+                    ...process.env,
+                    FIXTURE_TOTAL_KIB: String(total),
+                    FIXTURE_AVAILABLE_KIB: String(available),
+                    FIXTURE_RUNTIME_KIB: String(runtime),
+                },
+            },
+        );
+        assert.equal(result.status, passes ? 0 : 1, `${total}/${available}/${runtime}: ${result.stderr}`);
+        if (passes) assert.match(result.stdout, /DEPLOY_STAGING_DISK_OK/u);
+        else assert.doesNotMatch(result.stdout, /DEPLOY_STAGING_DISK_OK/u);
     }
 });
 
