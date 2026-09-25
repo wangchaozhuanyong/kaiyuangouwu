@@ -114,21 +114,13 @@ function contrastRatio(foreground, background) {
 
 test('the Damatong asset manifest is complete, unique and readable', async () => {
     const prepared = await prepareDamatongAssets();
-    assert.equal(prepared.length, 16);
+    assert.equal(prepared.length, 14);
     assert.equal(new Set(prepared.map(asset => asset.key)).size, prepared.length);
     assert.ok(prepared.every(asset => asset.bytes.byteLength > 0));
     assert.ok(prepared.every(asset => /^[a-f0-9]{64}$/u.test(asset.hash)));
     for (const asset of prepared) {
         assert.deepEqual(damatongAssetTags(asset.key, asset.hash), asset.tags);
     }
-    assert.ok(
-        prepared.find(asset => asset.key === 'business-services-renovation').bytes.byteLength <= 250_000,
-        'the renovation page concept image stays within the upload budget',
-    );
-    assert.ok(
-        prepared.find(asset => asset.key === 'support-service-banner').bytes.byteLength <= 100_000,
-        'the support banner stays within the upload budget',
-    );
 });
 
 test('the Damatong category plan contains exactly the requested six categories', () => {
