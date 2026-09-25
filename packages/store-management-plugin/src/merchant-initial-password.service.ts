@@ -248,6 +248,22 @@ export class MerchantInitialPasswordService {
         if (passwordProtectedAdminMutations.has(fieldName)) {
             return true;
         }
+        if (fieldName === 'createRole') {
+            const input = args?.input;
+            return (
+                typeof input === 'object' &&
+                input !== null &&
+                Array.isArray((input as { permissions?: unknown }).permissions) &&
+                (input as { permissions: unknown[] }).permissions.some(permission =>
+                    [
+                        'CreateIcloudRelay',
+                        'ReadIcloudRelay',
+                        'UpdateIcloudRelay',
+                        'DeleteIcloudRelay',
+                    ].includes(String(permission)),
+                )
+            );
+        }
         if (passwordProtectedPasswordChangeMutations.has(fieldName)) {
             const input = args?.input;
             return (
