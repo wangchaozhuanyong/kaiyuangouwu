@@ -1,6 +1,7 @@
 import { Heart } from 'lucide-react';
 
-import { productAvailability, productAvailabilityLabel } from '../../product-availability';
+import { productListingAvailability } from '../../product-availability';
+import { lowestPricedProductVariant } from '../../product-pricing';
 import {
     prefetchProductAsset,
     PriceDisplay,
@@ -14,7 +15,6 @@ import { buildProductRowSmartInfo } from './product-row';
 
 export function ProductCard({
     product,
-    market,
     locale,
     language,
     favorite,
@@ -34,9 +34,9 @@ export function ProductCard({
     imageSizes?: string;
 }) {
     const isZh = language === 'zh';
-    const variant = product.variants[0];
-    const availability = productAvailability(variant);
-    const stockLabel = productAvailabilityLabel(availability, isZh ? 'zh' : 'en');
+    const variant = lowestPricedProductVariant(product);
+    const availability = productListingAvailability(product.variants, language);
+    const stockLabel = availability.label;
     const subtitle = resolveProductSubtitle(product, 26, true);
     const smartInfo = buildProductRowSmartInfo(product, language);
 
@@ -93,11 +93,15 @@ export function ProductCard({
 
             <footer>
                 <div className="product-card-price">
-                    <PriceDisplay
-                        value={variant ? variant.priceWithTax : 0}
-                        currency={variant ? variant.currencyCode : market.currencyCode}
-                        locale={locale}
-                    />
+                    {variant ? (
+                        <PriceDisplay
+                            value={variant.priceWithTax}
+                            currency={variant.currencyCode}
+                            locale={locale}
+                        />
+                    ) : (
+                        '--'
+                    )}
                 </div>
                 <small className={`product-card-stock${availability.soldOut ? ' is-sold-out' : ''}`}>
                     {stockLabel}

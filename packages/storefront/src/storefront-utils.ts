@@ -4,9 +4,10 @@ import {
     serializeManualStorefrontLanguagePreference,
 } from './i18n';
 import { scopedStorageKey } from './storefront-storage';
-import { MarketConfig, Product, StorefrontLanguage } from './types';
+import { MarketConfig, StorefrontLanguage } from './types';
 
 export { productImage } from './product-media';
+export { minimumProductPrice } from './product-pricing';
 
 export const STOREFRONT_NAME_MAX_DISPLAY_UNITS = 16;
 export const FAVORITE_PRODUCT_STORAGE_KEY = 'storefront-favorite-product-ids';
@@ -113,10 +114,6 @@ export function writeStoredSettlementCurrency(marketCode: string, currencyCode: 
 
 export function setMetaContent(selector: string, content: string): void {
     document.querySelector<HTMLMetaElement>(selector)?.setAttribute('content', content);
-}
-
-export function minimumProductPrice(product: Product): number {
-    return Math.min(...product.variants.map(variant => variant.priceWithTax), Number.MAX_SAFE_INTEGER);
 }
 
 export function trimText(value: string | undefined, length: number): string {

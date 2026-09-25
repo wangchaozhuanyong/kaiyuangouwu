@@ -21,6 +21,7 @@ import { SafeImage } from '../safe-image';
 import { CollectionSummary, OrderSummary, Product, ProductVariant } from '../types';
 
 export { productImage } from '../product-media';
+export { minimumProductPrice } from '../product-pricing';
 
 export function OpenAiIcon({ className }: { className?: string }) {
     const pathD = [
@@ -354,10 +355,6 @@ export function collectionImage(collection: CollectionSummary): string | null {
         collection.children?.find(child => child.featuredAsset?.preview)?.featuredAsset?.preview ??
         null
     );
-}
-
-export function minimumProductPrice(product: Product): number {
-    return Math.min(...product.variants.map(variant => variant.priceWithTax), Number.MAX_SAFE_INTEGER);
 }
 
 export function trimText(value: string | undefined, length: number): string {
