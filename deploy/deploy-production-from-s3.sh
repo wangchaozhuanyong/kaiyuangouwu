@@ -60,6 +60,24 @@ check_production_disk_usage() {
     printf 'DEPLOY_DISK_OK usage_percent=%s limit_percent=%s\n' "${usage}" "${maximum}"
 }
 
+check_production_disk_staging_headroom() {
+    local maximum="${VENDURE_MAXIMUM_DISK_USAGE_PERCENT:-85}"
+    local total_kib available_kib runtime_kib reserve_kib required_kib
+    [[ "${maximum}" =~ ^([1-9][0-9]?|100)$ ]] || fail 'invalid production disk usage limit'
+    read -r total_kib available_kib < <(df -Pk / | awk 'NR == 2 { print $2, $4 }')
+    runtime_kib="$(du -sk "${previous_runtime}" | awk '{ print $1 }')"
+    [[ "${total_kib}" =~ ^[1-9][0-9]*$ && "${available_kib}" =~ ^[0-9]+$ &&
+        "${runtime_kib}" =~ ^[1-9][0-9]*$ ]] || fail 'could not measure production disk staging headroom'
+    # Allow room for both the downloaded archive and extracted runtime while
+    # preserving the same disk-health reserve used after artifact verification.
+    reserve_kib=$(( (total_kib * (100 - maximum) + 99) / 100 ))
+    required_kib=$(( reserve_kib + 2 * runtime_kib ))
+    (( available_kib > required_kib )) ||
+        fail 'root disk cannot stage a release within the health limit; review retention or expand the volume'
+    printf 'DEPLOY_STAGING_DISK_OK available_kib=%s required_kib=%s\n' \
+        "${available_kib}" "${required_kib}"
+}
+
 if [[ ! "${target_sha}" =~ ^[0-9a-f]{40}$ ]]; then
     fail 'target SHA must be a full lowercase Git SHA'
 fi
@@ -506,6 +524,7 @@ process.stdout.write(
 );
 '
 check_production_disk_usage
+check_production_disk_staging_headroom
 deploy_stage="pre-download-memory-readiness"
 # Free the same worker memory used by later migration before the first memory
 # guard. Keep the API serving while the artifact is downloaded and verified.
