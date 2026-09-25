@@ -37,6 +37,26 @@ export function productAvailabilityLabel(
     return language === 'zh' ? `库存 ${availability.stock}` : `${availability.stock} in stock`;
 }
 
+export function productListingAvailability(
+    variants: readonly ProductVariant[],
+    language: StorefrontLanguage,
+): { soldOut: boolean; label: string } {
+    const availability = variants.map(productAvailability);
+    if (availability.length <= 1) {
+        const single = availability[0] ?? productAvailability();
+        return { soldOut: single.soldOut, label: productAvailabilityLabel(single, language) };
+    }
+    const soldOut = availability.every(item => item.soldOut);
+    if (soldOut) return { soldOut, label: productAvailabilityLabel(availability[0], language) };
+    if (availability.some(item => item.soldOut)) {
+        return { soldOut, label: language === 'zh' ? '部分规格有货' : 'Some in stock' };
+    }
+    if (availability.every(item => item.unlimited)) {
+        return { soldOut, label: productAvailabilityLabel(availability[0], language) };
+    }
+    return { soldOut, label: language === 'zh' ? '规格有货' : 'In stock' };
+}
+
 export function variantCanIncreaseQuantity(variant: ProductVariant, quantity: number): boolean {
     const availability = productAvailability(variant);
     return availability.unlimited || (!availability.soldOut && quantity < (availability.stock ?? 0));

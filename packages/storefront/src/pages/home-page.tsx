@@ -43,6 +43,7 @@ import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-
 import { homepageModuleEntries } from '../homepage-module-order';
 import { resolveManagedContentCopy } from '../managed-content-copy';
 import { managedContentStyle } from '../managed-content-style';
+import { lowestPricedProductVariant } from '../product-pricing';
 import { PageSkeleton } from '../route-loading';
 import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-coupons';
 import { HomePageContext } from '../storefront-page-contexts';
@@ -68,7 +69,6 @@ import {
     contentStringArraySetting,
     decodeStorefrontImage,
     formatMoney,
-    minimumProductPrice,
     productImage,
     renderColorfulQuickIcon,
     SafeImage,
@@ -1646,9 +1646,7 @@ function FeaturedCollectionSection({
                     >
                         {mosaicProducts.map((product, index) => {
                             const imageUrl = productImage(product);
-                            const pricedVariant = product.variants.find(
-                                variant => variant.priceWithTax === minimumProductPrice(product),
-                            );
+                            const pricedVariant = lowestPricedProductVariant(product);
                             const priceLabel = pricedVariant
                                 ? formatMoney(pricedVariant.priceWithTax, pricedVariant.currencyCode, locale)
                                 : null;

@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 
-import { productAvailability, productAvailabilityLabel } from '../../product-availability';
+import { productListingAvailability } from '../../product-availability';
+import { lowestPricedProductVariant } from '../../product-pricing';
 import {
     prefetchProductAsset,
     PriceDisplay,
@@ -88,7 +89,6 @@ function extractWarrantyLabel(description: string, language: StorefrontLanguage)
 
 export function ProductRow({
     product,
-    market,
     locale,
     language,
     onOpen,
@@ -102,8 +102,8 @@ export function ProductRow({
     layout?: 'row' | 'catalog';
 }) {
     const isZh = language === 'zh';
-    const variant = product.variants[0];
-    const availability = productAvailability(variant);
+    const variant = lowestPricedProductVariant(product);
+    const availability = productListingAvailability(product.variants, language);
     const smartInfo = buildProductRowSmartInfo(product, language);
     const subtitle = resolveProductSubtitle(product, 48);
     return (
@@ -137,14 +137,18 @@ export function ProductRow({
                 </div>
                 <div className="product-row-bottom">
                     <p className="product-row-price">
-                        <PriceDisplay
-                            value={variant ? variant.priceWithTax : 0}
-                            currency={variant ? variant.currencyCode : market.currencyCode}
-                            locale={locale}
-                        />
+                        {variant ? (
+                            <PriceDisplay
+                                value={variant.priceWithTax}
+                                currency={variant.currencyCode}
+                                locale={locale}
+                            />
+                        ) : (
+                            '--'
+                        )}
                     </p>
                     <span className={`product-row-stock${availability.soldOut ? ' is-sold-out' : ''}`}>
-                        {productAvailabilityLabel(availability, language)}
+                        {availability.label}
                     </span>
                 </div>
             </div>

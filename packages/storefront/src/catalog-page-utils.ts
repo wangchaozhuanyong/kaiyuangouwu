@@ -1,9 +1,8 @@
+import { minimumProductPrice } from './product-pricing';
 import { SortMode } from './storefront-router';
 import { Product } from './types';
 
-export function minimumProductPrice(product: Product): number {
-    return Math.min(...product.variants.map(variant => variant.priceWithTax), Number.MAX_SAFE_INTEGER);
-}
+export { minimumProductPrice } from './product-pricing';
 
 export function sortCategoryProducts(
     products: Product[],

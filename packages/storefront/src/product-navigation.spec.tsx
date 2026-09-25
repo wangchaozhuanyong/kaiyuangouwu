@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { minimumProductPrice } from './catalog-page-utils';
 import { ProductCard } from './components/common/product-card';
 import { buildProductRowSmartInfo, ProductRow } from './components/common/product-row';
 import { ProductDetailPage } from './pages/product-detail-page';
@@ -151,6 +152,55 @@ describe('product image navigation layers', () => {
         expect(styles).toContain('aspect-ratio: var(--product-media-ratio);');
         expect(styles).toContain('object-fit: contain;');
         expect(styles).not.toMatch(/\.product-card-media[^}]*scale\(/);
+    });
+
+    it('shows the cheapest variant on both product cards and defaults detail to that variant', () => {
+        const base = digitalProduct.variants[0];
+        const product: Product = {
+            ...digitalProduct,
+            variants: [
+                { ...base, id: 'expensive', priceWithTax: 24000, autoCardAvailableStock: 0 },
+                { ...base, id: 'cheapest', priceWithTax: 1700, autoCardAvailableStock: 0 },
+                { ...base, id: 'available', priceWithTax: 2000, autoCardAvailableStock: 6 },
+            ],
+        };
+        const props = { product, market, locale: market.locale, language: 'zh' as const, onOpen: vi.fn() };
+        const card = renderToStaticMarkup(<ProductCard {...props} />);
+        const row = renderToStaticMarkup(<ProductRow {...props} />);
+        const detail = (initialVariantId?: string) =>
+            renderToStaticMarkup(
+                <ProductDetailPageContext.Provider
+                    value={{
+                        ...props,
+                        initialVariantId,
+                        products: [],
+                        flashSaleItems: [],
+                        couponCampaigns: [],
+                        customerCoupons: [],
+                        storefrontName: 'Store',
+                        cartQuantity: 0,
+                        api: {} as import('./api').ShopApi,
+                        logoUrl: null,
+                        favorite: false,
+                        onAdd: vi.fn(),
+                        onBuyNow: vi.fn(),
+                        onFavorite: vi.fn(),
+                        onNotify: vi.fn(),
+                        addingVariantId: null,
+                    }}
+                >
+                    <ProductDetailPage />
+                </ProductDetailPageContext.Provider>,
+            );
+
+        expect(minimumProductPrice(product)).toBe(1700);
+        for (const markup of [card, row]) {
+            expect(markup.replace(/<[^>]*>/gu, '').replaceAll('&nbsp;', ' ')).toMatch(/MYR\s*17\b/u);
+            expect(markup).toContain('部分规格有货');
+            expect(markup).not.toContain('已售罄');
+        }
+        expect(detail()).toMatch(/class="detail-price"[^>]*><strong>MYR[^<]*17\b/u);
+        expect(detail('available')).toMatch(/class="detail-price"[^>]*><strong>MYR[^<]*20\b/u);
     });
 
     it('renders the same cover in cards, rows, detail, sharing and metadata when the gallery starts elsewhere', () => {

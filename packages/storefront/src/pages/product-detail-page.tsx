@@ -16,6 +16,7 @@ import { useDesktopLayout } from '../desktop-layout';
 import { LazySharePosterModal } from '../lazy-storefront-pages';
 import { productAvailability, productAvailabilityLabel } from '../product-availability';
 import { productGalleryAssets } from '../product-media';
+import { lowestPricedProductVariant } from '../product-pricing';
 import { ProductReviewsSection } from '../review-pages';
 import { productDescriptionText, sanitizeProductDescription } from '../rich-text';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
@@ -104,16 +105,14 @@ export function ProductDetailPage() {
     const isZh = language === 'zh';
     const initialVariant =
         (initialVariantId && product.variants.find(item => item.id === initialVariantId)) ||
-        product.variants[0];
+        lowestPricedProductVariant(product);
     const [variantId, setVariantId] = useState(initialVariant?.id ?? '');
     const [headerScrolled, setHeaderScrolled] = useState(false);
 
     useEffect(() => {
-        if (initialVariantId && product.variants.some(item => item.id === initialVariantId)) {
-            setVariantId(initialVariantId);
-        }
-    }, [initialVariantId, product.id]);
-    const variant = product.variants.find(item => item.id === variantId) ?? product.variants[0];
+        setVariantId(initialVariant?.id ?? '');
+    }, [initialVariant?.id, product.id]);
+    const variant = product.variants.find(item => item.id === variantId) ?? initialVariant;
     const activeFlashItem = flashSaleItems.find(item => item.productVariantId === variant?.id);
     const displayedPrice = activeFlashItem?.salePrice ?? variant?.priceWithTax ?? null;
     const displayedCurrencyCode =
