@@ -117,6 +117,13 @@ export class AdministratorAccessResolver {
 
     @Transaction()
     @Mutation()
+    @Allow(Permission.SuperAdmin)
+    createMailboxIntegrationRole(@Ctx() ctx: RequestContext) {
+        return this.accessService.createMailboxIntegrationRole(ctx);
+    }
+
+    @Transaction()
+    @Mutation()
     @Allow(
         manageStoreTeamPermission.Permission,
         managePlatformTeamPermission.Permission,

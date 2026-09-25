@@ -31,6 +31,62 @@ function profile(
 }
 
 describe('AdministratorAccessService hierarchy policy', () => {
+    it('creates the mailbox integration role only for the platform owner and default channel', async () => {
+        const access = service();
+        access.current = vi.fn().mockResolvedValue(profile('owner', 'PLATFORM', 'OWNER'));
+        access.connection = {
+            getRepository: (_ctx: unknown, entity: unknown) => {
+                if (entity === Channel)
+                    return {
+                        findOne: vi.fn().mockResolvedValue({ id: 'default', code: '__default_channel__' }),
+                    };
+                if (entity === Role) return { findOne: vi.fn().mockResolvedValue(null) };
+                throw new Error('Unexpected repository');
+            },
+        };
+        access.roleService = {
+            create: vi.fn().mockResolvedValue({
+                id: 'mail-role',
+                code: 'id-business-mailbox-integration',
+                permissions: [],
+            }),
+        };
+        access.audit = { record: vi.fn() };
+
+        await access.createMailboxIntegrationRole({} as any);
+
+        expect(access.roleService.create).toHaveBeenCalledWith(expect.anything(), {
+            code: 'id-business-mailbox-integration',
+            description: 'ID Business 邮箱互通专用角色',
+            channelIds: ['default'],
+            permissions: ['CreateIcloudRelay', 'ReadIcloudRelay', 'UpdateIcloudRelay', 'DeleteIcloudRelay'],
+        });
+        expect(access.audit.record).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ action: 'CREATE_MAILBOX_INTEGRATION_ROLE', targetRoleId: 'mail-role' }),
+        );
+
+        access.current.mockResolvedValue(profile('admin', 'PLATFORM', 'ADMIN'));
+        await expect(access.createMailboxIntegrationRole({} as any)).rejects.toThrow();
+        expect(access.roleService.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses to replace an existing mailbox role', async () => {
+        const access = service();
+        access.current = vi.fn().mockResolvedValue(profile('owner', 'PLATFORM', 'OWNER'));
+        access.connection = {
+            getRepository: (_ctx: unknown, entity: unknown) => ({
+                findOne: vi
+                    .fn()
+                    .mockResolvedValue(entity === Channel ? { id: 'default' } : { id: 'existing-role' }),
+            }),
+        };
+        access.roleService = { create: vi.fn() };
+
+        await expect(access.createMailboxIntegrationRole({} as any)).rejects.toThrow('已存在');
+        expect(access.roleService.create).not.toHaveBeenCalled();
+    });
+
     it('allows the platform owner to create lower platform and store accounts only', () => {
         const access = service();
         const owner = profile('owner', 'PLATFORM', 'OWNER');

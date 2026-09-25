@@ -1,16 +1,18 @@
 // @vitest-environment jsdom
 
+import { print } from 'graphql';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfirmDialogContext } from '../../components/confirm-dialog-context';
+import { CREATE_MAILBOX_INTEGRATION_ROLE_MUTATION } from '../../graphql/management.graphql';
 import { SystemOpsModule } from './SystemOpsModule';
 import { MAILBOX_INTEGRATION_PERMISSIONS, MAILBOX_INTEGRATION_ROLE_CODE } from './mailbox-integration-role';
 
 const mocks = vi.hoisted(() => ({
     roleData: null as null | Record<string, unknown>,
-    createRole: vi.fn(),
+    createMailboxRole: vi.fn(),
     updateApiKey: vi.fn(),
     confirm: vi.fn(),
 }));
@@ -61,7 +63,7 @@ vi.mock('@apollo/client/react', () => ({
         const operation = document.definitions.find(definition => definition.kind === 'OperationDefinition')
             ?.name?.value;
         if (operation === 'NextAdminCreateMailboxIntegrationRole') {
-            return [mocks.createRole, { loading: false }];
+            return [mocks.createMailboxRole, { loading: false }];
         }
         if (operation === 'NextAdminUpdateApiKey') {
             return [mocks.updateApiKey, { loading: false }];
@@ -85,7 +87,9 @@ let root: Root;
 
 beforeEach(async () => {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    mocks.createRole.mockReset().mockResolvedValue({ data: { createRole: { id: 'mail-role' } } });
+    mocks.createMailboxRole
+        .mockReset()
+        .mockResolvedValue({ data: { createMailboxIntegrationRole: { id: 'mail-role' } } });
     mocks.updateApiKey.mockReset().mockResolvedValue({ data: { updateApiKey: { id: 'key-1' } } });
     mocks.confirm.mockReset().mockResolvedValue({ currentPassword: 'test-password' });
     container = document.createElement('div');
@@ -117,6 +121,12 @@ async function clickButton(label: string) {
 }
 
 describe('mailbox API key recovery', () => {
+    it('uses the restricted mailbox role endpoint instead of the blocked legacy role endpoint', () => {
+        const operation = print(CREATE_MAILBOX_INTEGRATION_ROLE_MUTATION);
+        expect(operation).toContain('createMailboxIntegrationRole');
+        expect(operation).not.toContain('createRole(');
+    });
+
     it('creates a default-channel role with only mailbox permissions', async () => {
         mocks.roleData = {
             activeChannel: { id: 'default-channel', code: '__default_channel__' },
@@ -124,15 +134,7 @@ describe('mailbox API key recovery', () => {
         };
         await renderPage();
         await clickButton('创建邮箱专用角色');
-        expect(mocks.createRole).toHaveBeenCalledWith({
-            variables: {
-                input: {
-                    code: MAILBOX_INTEGRATION_ROLE_CODE,
-                    description: 'ID Business 邮箱互通专用角色',
-                    permissions: [...MAILBOX_INTEGRATION_PERMISSIONS],
-                    channelIds: ['default-channel'],
-                },
-            },
+        expect(mocks.createMailboxRole).toHaveBeenCalledWith({
             context: { headers: { 'x-vendure-sensitive-action-password': 'test-password' } },
         });
     });

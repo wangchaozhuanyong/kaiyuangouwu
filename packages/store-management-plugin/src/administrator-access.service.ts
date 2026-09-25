@@ -66,6 +66,14 @@ const authorityRank: Record<AdministratorAccessAuthority, number> = {
     STAFF: 1,
 };
 
+const mailboxIntegrationRoleCode = 'id-business-mailbox-integration';
+const mailboxIntegrationPermissions = [
+    'CreateIcloudRelay',
+    'ReadIcloudRelay',
+    'UpdateIcloudRelay',
+    'DeleteIcloudRelay',
+] as unknown as Permission[];
+
 @Injectable()
 export class AdministratorAccessService {
     constructor(
@@ -336,6 +344,32 @@ export class AdministratorAccessService {
             action: 'CREATE_MANAGED_ROLE',
             targetRoleId: role.id,
             channelId: input.scope === 'STORE' ? input.channelId : null,
+            afterSummary: { code: role.code, permissions: role.permissions },
+        });
+        return role;
+    }
+
+    async createMailboxIntegrationRole(ctx: RequestContext): Promise<Role> {
+        const actor = await this.current(ctx);
+        if (actor.scope !== 'PLATFORM' || actor.authority !== 'OWNER') throw new ForbiddenError();
+        const channel = await this.connection.getRepository(ctx, Channel).findOne({
+            where: { code: '__default_channel__' },
+        });
+        if (!channel) throw new UserInputError('平台管理渠道不存在，无法创建邮箱专用角色');
+        const existing = await this.connection.getRepository(ctx, Role).findOne({
+            where: { code: mailboxIntegrationRoleCode },
+        });
+        if (existing) throw new UserInputError('邮箱专用角色已存在，请刷新后核对权限');
+        const role = await this.roleService.create(ctx, {
+            code: mailboxIntegrationRoleCode,
+            description: 'ID Business 邮箱互通专用角色',
+            channelIds: [channel.id],
+            permissions: mailboxIntegrationPermissions,
+        });
+        await this.audit.record(ctx, {
+            action: 'CREATE_MAILBOX_INTEGRATION_ROLE',
+            targetRoleId: role.id,
+            channelId: channel.id,
             afterSummary: { code: role.code, permissions: role.permissions },
         });
         return role;
