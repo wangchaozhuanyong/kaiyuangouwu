@@ -16,6 +16,7 @@ import { dataTableSortPolicy } from '../../utils/data-table-sort-policy';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney, majorInputToMoney } from '../Sales/sales-utils';
 import {
+    couponAppearanceOptions,
     CouponDraft,
     couponDraftError,
     couponKindLabels,
@@ -184,13 +185,7 @@ export function CouponEditor({
                                     : (value as NonNullable<CouponDraft['appearanceTheme']>),
                         })
                     }
-                    options={[
-                        ['default', '按券种默认'],
-                        ['rose', '朱砂红'],
-                        ['gold', '古铜金'],
-                        ['blue', '黛青蓝'],
-                        ['emerald', '松石绿'],
-                    ]}
+                    options={couponAppearanceOptions.map(({ value, label }) => [value, label])}
                 />
                 <FormInput
                     label={`最低消费金额 (${currencyCode})`}

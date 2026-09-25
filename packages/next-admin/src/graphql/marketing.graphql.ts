@@ -317,6 +317,15 @@ export const CREATE_COUPON_CAMPAIGN_MUTATION = gql`
     }
 `;
 
+export const SET_COUPON_APPEARANCE_MUTATION = gql`
+    mutation AdminSetCouponAppearance($id: ID!, $theme: StoreCouponAppearanceTheme) {
+        setStoreCouponAppearance(id: $id, theme: $theme) {
+            id
+            appearanceTheme
+        }
+    }
+`;
+
 export const CREATE_FLASH_SALE_MUTATION = gql`
     mutation AdminCreateFlashSale($input: CreateStoreFlashSaleInput!) {
         createStoreFlashSale(input: $input) {

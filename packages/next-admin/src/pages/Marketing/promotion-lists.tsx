@@ -3,6 +3,7 @@ import { StoreCouponRecord, StoreFlashSaleRecord } from '../../graphql/marketing
 import { formatMoney } from '../Sales/sales-utils';
 import {
     SensitiveAction,
+    couponAppearanceOptions,
     couponIsActive,
     couponKindLabels,
     couponRule,
@@ -20,6 +21,7 @@ export function CouponList({
     onGrant,
     onView,
     onRename,
+    onAppearance,
     onSensitive,
 }: {
     coupons: StoreCouponRecord[];
@@ -30,6 +32,7 @@ export function CouponList({
     onGrant: (coupon: StoreCouponRecord) => void;
     onView: (coupon: StoreCouponRecord) => void;
     onRename: (value: { id: string; name: string }) => void;
+    onAppearance: (coupon: StoreCouponRecord) => void;
     onSensitive: (action: SensitiveAction) => void;
 }) {
     if (!coupons.length)
@@ -60,6 +63,11 @@ export function CouponList({
                                     enabled={coupon.enabled}
                                     startsAt={coupon.claimStartsAt ?? coupon.startsAt}
                                     endsAt={coupon.claimEndsAt ?? coupon.endsAt}
+                                />
+                                <CouponAppearanceButton
+                                    coupon={coupon}
+                                    disabled={actionPending}
+                                    onClick={() => onAppearance(coupon)}
                                 />
                                 {coupon.archivedAt && (
                                     <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700">
@@ -204,6 +212,32 @@ export function CouponList({
                 </article>
             ))}
         </div>
+    );
+}
+
+function CouponAppearanceButton({
+    coupon,
+    disabled,
+    onClick,
+}: {
+    coupon: StoreCouponRecord;
+    disabled: boolean;
+    onClick: () => void;
+}) {
+    const option =
+        couponAppearanceOptions.find(item => item.value === (coupon.appearanceTheme ?? 'default')) ??
+        couponAppearanceOptions[0];
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            aria-label={`修改${coupon.name}的券面配色`}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-700 hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-blue-600 disabled:opacity-50"
+        >
+            <span className={`h-3 w-3 rounded-sm ${option.swatchClass}`} aria-hidden="true" />
+            券面：{option.label}
+        </button>
     );
 }
 

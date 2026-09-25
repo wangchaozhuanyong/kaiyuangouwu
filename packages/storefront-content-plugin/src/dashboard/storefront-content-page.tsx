@@ -193,7 +193,7 @@ const zhCopy = {
     backgroundColor: '背景色',
     textColor: '文字色',
     heroTheme: '轮播文字与配色',
-    heroThemeHint: '图片完整展示；底色、文字和按钮颜色只作用于图片下方的文案区。',
+    heroThemeHint: '电脑端文案位于图片上，局部底色保护文字；手机端沿用原有布局。请预览中英文文字对比度。',
     heroThemePreset: '应用通用亮色主题',
     heroCopyBackgroundColor: '文案区底色',
     heroTitleColor: '标题颜色',
@@ -343,7 +343,8 @@ const enCopy: typeof zhCopy = {
     backgroundColor: 'Background',
     textColor: 'Text color',
     heroTheme: 'Carousel copy and colors',
-    heroThemeHint: 'The full image remains visible; colors apply to the copy surface and button below it.',
+    heroThemeHint:
+        'Desktop copy overlays the image with a local contrast surface; mobile keeps its existing layout. Preview text contrast in both languages.',
     heroThemePreset: 'Apply neutral bright theme',
     heroCopyBackgroundColor: 'Copy surface color',
     heroTitleColor: 'Title color',
