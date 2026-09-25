@@ -17,6 +17,7 @@ import { AdministratorAccessProfile } from './entities/administrator-access-prof
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 
 const passwordProtectedAdminMutations = new Set([
+    'createMailboxIntegrationRole',
     'addManualPaymentToOrder',
     'cancelPayment',
     'cancelOrder',

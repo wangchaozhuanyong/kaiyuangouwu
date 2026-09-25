@@ -80,6 +80,16 @@ describe('administrator access failure audit', () => {
         expect(audit.record).not.toHaveBeenCalled();
     });
 
+    it('audits rejected mailbox role creation without recording the password', async () => {
+        const error = new UserInputError('role creation failed');
+        const { run, audit } = invoke('createMailboxIntegrationRole', {}, Promise.reject(error));
+        await expect(run()).rejects.toBe(error);
+        expect(audit.record).toHaveBeenCalledWith(
+            state.requestContext,
+            expect.objectContaining({ action: 'CREATE_MAILBOX_INTEGRATION_ROLE', result: 'FAILED' }),
+        );
+    });
+
     it('records rejected legacy account mutation entry points', async () => {
         const { run, audit, next } = invoke('createAdministrator', {}, Promise.resolve('unused'));
         await expect(run()).rejects.toThrow('受限管理接口');

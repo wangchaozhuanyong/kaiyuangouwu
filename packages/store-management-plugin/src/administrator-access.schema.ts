@@ -172,6 +172,7 @@ export const administratorAccessSchema = gql`
         updateManagedAdministrator(input: UpdateManagedAdministratorInput!): AdministratorAccessProfile!
         suspendManagedAdministrator(administratorId: ID!): AdministratorAccessProfile!
         createManagedRole(input: CreateManagedRoleInput!): Role!
+        createMailboxIntegrationRole: Role!
         updateManagedRole(input: UpdateManagedRoleInput!): Role!
         transferPlatformOwnership(
             targetAdministratorId: ID!

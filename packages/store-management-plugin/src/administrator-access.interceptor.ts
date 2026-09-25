@@ -29,6 +29,7 @@ const auditedMutations = new Set([
     'updateManagedAdministrator',
     'suspendManagedAdministrator',
     'createManagedRole',
+    'createMailboxIntegrationRole',
     'updateManagedRole',
     'transferPlatformOwnership',
     'transferStoreAdministration',

@@ -1275,8 +1275,8 @@ export const MAILBOX_INTEGRATION_ACCESS_QUERY = gql`
 `;
 
 export const CREATE_MAILBOX_INTEGRATION_ROLE_MUTATION = gql`
-    mutation NextAdminCreateMailboxIntegrationRole($input: CreateRoleInput!) {
-        createRole(input: $input) {
+    mutation NextAdminCreateMailboxIntegrationRole {
+        createMailboxIntegrationRole {
             id
         }
     }

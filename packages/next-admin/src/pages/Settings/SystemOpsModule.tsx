@@ -71,11 +71,7 @@ import { LookupPager } from '../Catalog/LookupPager';
 import { formatDateTime } from '../Sales/sales-utils';
 
 import { GovernanceRiskPanel } from './GovernanceRiskPanel';
-import {
-    isMailboxIntegrationRole,
-    MAILBOX_INTEGRATION_PERMISSIONS,
-    MAILBOX_INTEGRATION_ROLE_CODE,
-} from './mailbox-integration-role';
+import { isMailboxIntegrationRole } from './mailbox-integration-role';
 import { SettingsContentSkeleton } from './settings-ui';
 import { getSystemWorkerHealth } from './system-worker-health';
 import { TelegramNotificationsPanel } from './TelegramNotificationsPanel';
@@ -1065,7 +1061,7 @@ function ApiKeysPanel({
         fetchPolicy: 'network-only',
     });
     const [createMailboxRole, createMailboxRoleState] = useMutation<{
-        createRole: { id: string };
+        createMailboxIntegrationRole: { id: string };
     }>(CREATE_MAILBOX_INTEGRATION_ROLE_MUTATION);
     const [updateMailboxKey, updateMailboxKeyState] = useMutation<{
         updateApiKey: { id: string };
@@ -1098,17 +1094,9 @@ function ApiKeysPanel({
         if (!confirmation) return;
         try {
             const response = await createMailboxRole({
-                variables: {
-                    input: {
-                        code: MAILBOX_INTEGRATION_ROLE_CODE,
-                        description: 'ID Business 邮箱互通专用角色',
-                        permissions: [...MAILBOX_INTEGRATION_PERMISSIONS],
-                        channelIds: [channel.id],
-                    },
-                },
                 context: sensitiveActionContext(confirmation.currentPassword ?? ''),
             });
-            if (!response.data?.createRole.id) throw new Error('后端未返回新角色');
+            if (!response.data?.createMailboxIntegrationRole.id) throw new Error('后端未返回新角色');
             await mailboxAccess.refetch();
             await onChanged('邮箱专用角色已创建，请为目标 API 密钥设置该角色');
         } catch (error) {

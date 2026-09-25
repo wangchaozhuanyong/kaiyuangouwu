@@ -147,6 +147,19 @@ describe('MerchantInitialPasswordService', () => {
         ).resolves.toBeUndefined();
     });
 
+    it('requires the current password for the dedicated mailbox role mutation', async () => {
+        const ctx = { activeUserId: 'user-1', apiType: 'admin' } as any;
+        const missing = createService(null, false);
+        await expect(
+            missing.service.assertSensitiveAdminMutation(ctx, 'createMailboxIntegrationRole', undefined),
+        ).rejects.toMatchObject({ extensions: { code: SENSITIVE_ACTION_PASSWORD_REQUIRED } });
+
+        const accepted = createService(null, true);
+        await expect(
+            accepted.service.assertSensitiveAdminMutation(ctx, 'createMailboxIntegrationRole', 'Current123!'),
+        ).resolves.toBeUndefined();
+    });
+
     it('requires the current password only when updating the active administrator password', async () => {
         const passwordUpdate = createService(null, false);
         await expect(
