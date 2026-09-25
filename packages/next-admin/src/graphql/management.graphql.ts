@@ -1252,6 +1252,36 @@ export const SYSTEM_OPERATIONS_QUERY = gql`
     }
 `;
 
+export const MAILBOX_INTEGRATION_ACCESS_QUERY = gql`
+    query NextAdminMailboxIntegrationAccess {
+        activeChannel {
+            id
+            code
+        }
+        roles(options: { take: 2, filter: { code: { eq: "id-business-mailbox-integration" } } }) {
+            totalItems
+            items {
+                id
+                code
+                description
+                permissions
+                channels {
+                    id
+                    code
+                }
+            }
+        }
+    }
+`;
+
+export const CREATE_MAILBOX_INTEGRATION_ROLE_MUTATION = gql`
+    mutation NextAdminCreateMailboxIntegrationRole($input: CreateRoleInput!) {
+        createRole(input: $input) {
+            id
+        }
+    }
+`;
+
 export const CANCEL_JOB_MUTATION = gql`
     mutation NextAdminCancelJob($jobId: ID!) {
         cancelJob(jobId: $jobId) {
@@ -1813,4 +1843,18 @@ export interface SystemOperationsResult {
         id: string;
         user: { id: string; roles: Array<{ id: string; code: string; description: string }> };
     } | null;
+}
+
+export interface MailboxIntegrationAccessResult {
+    activeChannel: { id: string; code: string };
+    roles: {
+        totalItems: number;
+        items: Array<{
+            id: string;
+            code: string;
+            description: string;
+            permissions: string[];
+            channels: Array<{ id: string; code: string }>;
+        }>;
+    };
 }

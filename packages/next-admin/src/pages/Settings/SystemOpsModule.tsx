@@ -45,7 +45,9 @@ import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFields
 import {
     CANCEL_JOB_MUTATION,
     CREATE_API_KEY_MUTATION,
+    CREATE_MAILBOX_INTEGRATION_ROLE_MUTATION,
     DELETE_API_KEYS_MUTATION,
+    MAILBOX_INTEGRATION_ACCESS_QUERY,
     ROTATE_API_KEY_MUTATION,
     RUN_SCHEDULED_TASK_MUTATION,
     SET_SETTINGS_STORE_VALUE_MUTATION,
@@ -53,6 +55,7 @@ import {
     UPDATE_API_KEY_MUTATION,
     UPDATE_SCHEDULED_TASK_MUTATION,
     type ApiKeyRecord,
+    type MailboxIntegrationAccessResult,
     type ScheduledTaskRecord,
     type SettingsStoreFieldRecord,
     type SystemJobRecord,
@@ -68,6 +71,11 @@ import { LookupPager } from '../Catalog/LookupPager';
 import { formatDateTime } from '../Sales/sales-utils';
 
 import { GovernanceRiskPanel } from './GovernanceRiskPanel';
+import {
+    isMailboxIntegrationRole,
+    MAILBOX_INTEGRATION_PERMISSIONS,
+    MAILBOX_INTEGRATION_ROLE_CODE,
+} from './mailbox-integration-role';
 import { SettingsContentSkeleton } from './settings-ui';
 import { getSystemWorkerHealth } from './system-worker-health';
 import { TelegramNotificationsPanel } from './TelegramNotificationsPanel';
@@ -266,6 +274,7 @@ export function SystemOpsModule() {
                                     page={apiKeyPage}
                                     totalPages={apiKeyTotalPages}
                                     loading={query.loading}
+                                    canManageMailboxAccess={canGovern}
                                     roles={data.activeAdministrator?.user.roles ?? []}
                                     customFieldDefinitions={apiKeyCustomFields}
                                     onPageChange={setApiKeyPage}
@@ -1026,6 +1035,7 @@ function ApiKeysPanel({
     page,
     totalPages,
     loading,
+    canManageMailboxAccess,
     roles,
     customFieldDefinitions,
     onPageChange,
@@ -1039,6 +1049,7 @@ function ApiKeysPanel({
     page: number;
     totalPages: number;
     loading: boolean;
+    canManageMailboxAccess: boolean;
     roles: Array<{ id: string; code: string; description: string }>;
     customFieldDefinitions: CustomFieldDefinition[];
     onPageChange: (page: number) => void;
@@ -1049,10 +1060,94 @@ function ApiKeysPanel({
     const [createOpen, setCreateOpen] = useState(false);
     const [editingKey, setEditingKey] = useState<ApiKeyRecord | null>(null);
     const [secret, setSecret] = useState<{ title: string; value: string } | null>(null);
+    const mailboxAccess = useQuery<MailboxIntegrationAccessResult>(MAILBOX_INTEGRATION_ACCESS_QUERY, {
+        skip: !canManageMailboxAccess,
+        fetchPolicy: 'network-only',
+    });
+    const [createMailboxRole, createMailboxRoleState] = useMutation<{
+        createRole: { id: string };
+    }>(CREATE_MAILBOX_INTEGRATION_ROLE_MUTATION);
+    const [updateMailboxKey, updateMailboxKeyState] = useMutation<{
+        updateApiKey: { id: string };
+    }>(UPDATE_API_KEY_MUTATION);
     const [rotate, rotateState] = useMutation<{ rotateApiKey: { apiKey: string } }>(ROTATE_API_KEY_MUTATION);
     const [remove, removeState] = useMutation<{
         deleteApiKeys: Array<{ result: string; message: string | null }>;
     }>(DELETE_API_KEYS_MUTATION);
+    const channel = mailboxAccess.data?.activeChannel;
+    const roleList = mailboxAccess.data?.roles;
+    const configuredRole = roleList?.items[0];
+    const mailboxRole =
+        channel?.code === '__default_channel__' &&
+        roleList?.totalItems === 1 &&
+        configuredRole &&
+        isMailboxIntegrationRole(configuredRole, channel.id)
+            ? configuredRole
+            : null;
+    const createDedicatedRole = async () => {
+        if (!canManageMailboxAccess || channel?.code !== '__default_channel__' || roleList?.totalItems !== 0)
+            return;
+        const confirmation = await requestConfirmation({
+            title: '创建 ID Business 邮箱专用角色？',
+            description:
+                '该角色只在平台管理渠道拥有四项 iCloud 邮箱权限，不包含超级管理员权限。请验证当前管理员密码。',
+            confirmLabel: '验证并创建',
+            tone: 'warning',
+            requireCurrentPassword: true,
+        });
+        if (!confirmation) return;
+        try {
+            const response = await createMailboxRole({
+                variables: {
+                    input: {
+                        code: MAILBOX_INTEGRATION_ROLE_CODE,
+                        description: 'ID Business 邮箱互通专用角色',
+                        permissions: [...MAILBOX_INTEGRATION_PERMISSIONS],
+                        channelIds: [channel.id],
+                    },
+                },
+                context: sensitiveActionContext(confirmation.currentPassword ?? ''),
+            });
+            if (!response.data?.createRole.id) throw new Error('后端未返回新角色');
+            await mailboxAccess.refetch();
+            await onChanged('邮箱专用角色已创建，请为目标 API 密钥设置该角色');
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    const restrictKeyToMailbox = async (key: ApiKeyRecord) => {
+        if (!canManageMailboxAccess || !mailboxRole) return;
+        const confirmation = await requestConfirmation({
+            title: `将 API 密钥“${key.name}”设为邮箱专用？`,
+            description: '现有角色将全部替换为四项 iCloud 邮箱权限；密钥值不变。请验证当前管理员密码。',
+            confirmLabel: '验证并设置',
+            tone: 'warning',
+            requireCurrentPassword: true,
+        });
+        if (!confirmation) return;
+        try {
+            const latest = await mailboxAccess.refetch();
+            const latestChannel = latest.data?.activeChannel;
+            const latestRoles = latest.data?.roles;
+            const latestRole = latestRoles?.items[0];
+            if (
+                latestChannel?.code !== '__default_channel__' ||
+                latestRoles?.totalItems !== 1 ||
+                !latestRole ||
+                !isMailboxIntegrationRole(latestRole, latestChannel.id)
+            ) {
+                throw new Error('邮箱专用角色的权限或渠道已变化，请刷新后核对');
+            }
+            const response = await updateMailboxKey({
+                variables: { input: { id: key.id, roleIds: [latestRole.id] } },
+                context: sensitiveActionContext(confirmation.currentPassword ?? ''),
+            });
+            if (!response.data?.updateApiKey.id) throw new Error('后端未返回更新后的密钥');
+            await onChanged('API 密钥已限定为邮箱专用权限，密钥值未改变');
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
     const rotateKey = async (key: ApiKeyRecord) => {
         const confirmation = await requestConfirmation({
             title: `轮转 API 密钥“${key.name}”？`,
@@ -1096,7 +1191,11 @@ function ApiKeysPanel({
             onError(errorText(error));
         }
     };
-    const busy = rotateState.loading || removeState.loading;
+    const busy =
+        rotateState.loading ||
+        removeState.loading ||
+        createMailboxRoleState.loading ||
+        updateMailboxKeyState.loading;
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-100 p-5">
@@ -1112,6 +1211,36 @@ function ApiKeysPanel({
                     创建密钥
                 </button>
             </div>
+            {canManageMailboxAccess && (
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-blue-50/60 px-5 py-3 text-xs">
+                    <div>
+                        <strong className="text-slate-900">ID Business 邮箱互通</strong>
+                        <p className="mt-1 text-slate-600">
+                            {mailboxAccess.error
+                                ? '专用角色读取失败，请刷新后重试'
+                                : mailboxAccess.loading || !mailboxAccess.data
+                                  ? '正在检查邮箱专用角色'
+                                  : channel?.code !== '__default_channel__'
+                                    ? '请切换到平台管理渠道后配置专用角色'
+                                    : roleList?.totalItems === 0
+                                      ? '尚无邮箱专用角色；创建后可将目标密钥限定为四项邮箱权限'
+                                      : mailboxRole
+                                        ? '邮箱专用角色已就绪，仅包含四项邮箱权限'
+                                        : '同名角色的权限或渠道不符合专用要求，请先核对配置'}
+                        </p>
+                    </div>
+                    {channel?.code === '__default_channel__' && roleList?.totalItems === 0 && (
+                        <button
+                            type="button"
+                            onClick={() => void createDedicatedRole()}
+                            disabled={busy}
+                            className={secondaryButton}
+                        >
+                            创建邮箱专用角色
+                        </button>
+                    )}
+                </div>
+            )}
             <div className="divide-y divide-slate-100">
                 {keys.map(key => (
                     <div
@@ -1132,9 +1261,24 @@ function ApiKeysPanel({
                                 <span>
                                     最近使用：{key.lastUsedAt ? formatDateTime(key.lastUsedAt) : '从未使用'}
                                 </span>
+                                <span>
+                                    当前角色：
+                                    {key.user.roles.map(role => getRoleLabel(role)).join('、') || '无'}
+                                </span>
                             </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
+                            {mailboxRole &&
+                                (key.user.roles.length !== 1 || key.user.roles[0]?.id !== mailboxRole.id) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => void restrictKeyToMailbox(key)}
+                                        disabled={busy}
+                                        className={secondaryButton}
+                                    >
+                                        设为邮箱专用密钥
+                                    </button>
+                                )}
                             <button
                                 type="button"
                                 onClick={() => setEditingKey(key)}
@@ -1201,7 +1345,7 @@ function ApiKeysPanel({
             </div>
             {createOpen && (
                 <CreateApiKeyDialog
-                    roles={roles}
+                    roles={mailboxRole ? [...roles, mailboxRole] : roles}
                     onClose={() => setCreateOpen(false)}
                     onCreated={async value => {
                         setCreateOpen(false);
@@ -1214,7 +1358,13 @@ function ApiKeysPanel({
             {editingKey && (
                 <EditApiKeyDialog
                     item={editingKey}
-                    roles={roles}
+                    roles={[
+                        ...new Map(
+                            [...roles, ...(mailboxRole ? [mailboxRole] : []), ...editingKey.user.roles].map(
+                                role => [role.id, role],
+                            ),
+                        ).values(),
+                    ]}
                     customFieldDefinitions={customFieldDefinitions}
                     onClose={() => setEditingKey(null)}
                     onSaved={async () => {
