@@ -77,7 +77,14 @@ function withProductionLock(callback, lockPath = DEPLOY_LOCK) {
         lockFd = openSync(lockPath, constants.O_RDONLY | constants.O_NOFOLLOW);
     }
     try {
-        assert.ok(fstatSync(lockFd).isFile(), 'The production lock must be a regular file');
+        const lockInfo = fstatSync(lockFd);
+        assert.ok(lockInfo.isFile(), 'The production lock must be a regular file');
+        if (lockPath === DEPLOY_LOCK)
+            assert.equal(
+                lockInfo.uid,
+                statSync('/home/ubuntu').uid,
+                'The production lock must belong to ubuntu',
+            );
         const acquired = spawnSync('flock', ['--exclusive', '--wait', '300', '3'], {
             stdio: ['ignore', 'pipe', 'pipe', lockFd],
             timeout: 310000,
