@@ -162,7 +162,6 @@ export interface AfterSalesItem {
     rejectedReturnQuantity: number;
     returnLotCode?: string | null;
     inventoryOperationId?: string | null;
-    returnStockLocation?: { id: string; name: string } | null;
 }
 
 export interface AfterSalesEvent {

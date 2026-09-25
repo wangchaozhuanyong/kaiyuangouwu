@@ -312,7 +312,6 @@ export const afterSalesFields = `
         rejectedReturnQuantity
         returnLotCode
         inventoryOperationId
-        returnStockLocation { id name }
     }
     events {
         id

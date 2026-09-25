@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router';
 import {
     Check,
     ChevronLeft,
+    ChevronRight,
     Heart,
     Megaphone,
     Minus,
@@ -724,6 +725,12 @@ export function CouponSheet({
                                 </div>
                             );
                         })}
+                        <footer className="coupon-browse-footer">
+                            <button type="button" onClick={onBrowseCoupons} disabled={loading || submitting}>
+                                {isZh ? '查看更多优惠券' : 'Browse more coupons'}
+                                <ChevronRight aria-hidden="true" />
+                            </button>
+                        </footer>
                     </section>
                 ) : (
                     <section

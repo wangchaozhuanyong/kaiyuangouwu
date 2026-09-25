@@ -976,6 +976,53 @@
     color: var(--muted);
 }
 
+.coupon-browse-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+
+.coupon-browse-footer button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    font-weight: var(--font-weight-semibold);
+    transition:
+        background-color 160ms ease,
+        transform 160ms ease;
+}
+
+.coupon-browse-footer button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent-soft) 75%, var(--accent) 25%);
+    transform: translateY(-1px);
+}
+
+.coupon-browse-footer button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.coupon-browse-footer button:disabled {
+    cursor: wait;
+    opacity: 0.56;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .coupon-browse-footer button {
+        transition: none;
+    }
+
+    .coupon-browse-footer button:hover:not(:disabled) {
+        transform: none;
+    }
+}
+
 .coupon-sheet-content > .form-error {
     margin-top: 12px;
     display: block;

@@ -2245,6 +2245,7 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('query MyAfterSalesRequests');
         expect(request.query).toContain('events {');
         expect(request.query).toContain('lineAmountWithTax');
+        expect(request.query).not.toContain('returnStockLocation');
     });
 
     it('submits after-sales selections without client-calculated money values', async () => {

@@ -1,7 +1,9 @@
 import { lazyRouteComponent } from '@tanstack/react-router';
 
+import { resolveQueryLoadState } from '../loading-state';
 import { BusinessServicesPageContext, SupportPageContext } from '../storefront-page-contexts';
 import { FlashSalePage, RecommendationPage } from '../storefront-ui/content-ui';
+import { AsyncRouteStatePage } from '../storefront-ui/page-shell';
 import { Product } from '../types';
 
 import '../commerce-styles';
@@ -29,6 +31,24 @@ const MailQueryPage = lazyRouteComponent(
 
 export function ServicesRoutePage() {
     const runtime = useRuntime();
+    const contentLoadState = resolveQueryLoadState({
+        hasData: runtime.contentQuery.data !== undefined,
+        isLoading: runtime.contentQuery.isLoading,
+        isPaused: runtime.contentQuery.isPaused,
+        isError: runtime.contentQuery.isError,
+    });
+    if (contentLoadState !== 'ready') {
+        return (
+            <AsyncRouteStatePage
+                routeName="services"
+                state={contentLoadState}
+                error={runtime.contentError}
+                language={runtime.language}
+                onBack={runtime.goBack}
+                onRetry={() => void runtime.contentQuery.refetch()}
+            />
+        );
+    }
     return (
         <BusinessServicesPageContext.Provider
             value={{

@@ -89,6 +89,39 @@ describe('CouponSheet interactions', () => {
         expect(onApply).toHaveBeenCalledWith(coupon.id);
         expect(onClose).toHaveBeenCalledOnce();
     });
+
+    it.each([false, true])(
+        'opens the coupon center when coupons are already available in desktop=%s',
+        async desktop => {
+            const onBrowseCoupons = vi.fn();
+            await act(async () => {
+                root.render(
+                    <DesktopLayoutContext.Provider value={desktop}>
+                        <CouponSheet
+                            coupons={[coupon]}
+                            orderId="order-1"
+                            currencyCode="MYR"
+                            language="zh"
+                            loading={false}
+                            onApply={vi.fn().mockResolvedValue(null)}
+                            onRemove={vi.fn().mockResolvedValue(null)}
+                            onBrowseCoupons={onBrowseCoupons}
+                            onClose={vi.fn()}
+                        />
+                    </DesktopLayoutContext.Provider>,
+                );
+                await Promise.resolve();
+            });
+
+            const browseButton = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+                button => button.textContent?.includes('查看更多优惠券'),
+            );
+            expect(browseButton).toBeDefined();
+            act(() => browseButton?.click());
+            expect(onBrowseCoupons).toHaveBeenCalledOnce();
+        },
+    );
+
     it.each([false, true])(
         'keeps unavailable coupons disabled and a failed removal open in desktop=%s',
         async desktop => {
