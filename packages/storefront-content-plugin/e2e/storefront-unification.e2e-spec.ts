@@ -578,11 +578,11 @@ describe('unified storefront Admin API to Shop API', () => {
                                         : `${name} title`,
                                 );
                                 const imageLocator = page.locator('.auth-hero img');
-                                await browserExpect(imageLocator).toHaveAttribute(
-                                    'src',
-                                    new RegExp(`store-${index}\\.svg`),
-                                );
-                                if (width >= 1024)
+                                if (width >= 1024) {
+                                    await browserExpect(imageLocator).toHaveAttribute(
+                                        'src',
+                                        new RegExp(`store-${index}\\.svg`),
+                                    );
                                     await browserExpect
                                         .poll(() =>
                                             imageLocator.evaluate(
@@ -593,16 +593,20 @@ describe('unified storefront Admin API to Shop API', () => {
                                             ),
                                         )
                                         .toBe(true);
-                                await browserExpect(imageLocator).toHaveCSS('object-fit', 'cover');
-                                await browserExpect(imageLocator).toHaveCSS('filter', 'none');
-                                await browserExpect(page.locator('.auth-hero-copy')).toHaveCSS(
-                                    'background-color',
-                                    'rgba(0, 0, 0, 0)',
-                                );
-                                await browserExpect(page.locator('.auth-hero-copy')).toHaveCSS(
-                                    'box-shadow',
-                                    'none',
-                                );
+                                    await browserExpect(imageLocator).toHaveCSS('object-fit', 'contain');
+                                    await browserExpect(imageLocator).toHaveCSS('filter', 'none');
+                                    await browserExpect(page.locator('.auth-hero-copy')).toHaveCSS(
+                                        'background-color',
+                                        'rgba(0, 0, 0, 0)',
+                                    );
+                                    await browserExpect(page.locator('.auth-hero-copy')).toHaveCSS(
+                                        'box-shadow',
+                                        'none',
+                                    );
+                                } else {
+                                    // The mobile form does not download a hero hidden by the layout.
+                                    await browserExpect(imageLocator).toHaveCount(0);
+                                }
                                 const overlay = await page.locator('.auth-hero').evaluate(hero => ({
                                     background: getComputedStyle(hero, '::after').backgroundImage,
                                     display: getComputedStyle(hero, '::after').display,
@@ -652,13 +656,16 @@ describe('unified storefront Admin API to Shop API', () => {
                                     expect(Math.max(...itemTops) - Math.min(...itemTops)).toBeLessThan(2);
                                 }
                             } else {
-                                await browserExpect(page.locator('.auth-hero img')).toHaveAttribute(
-                                    'src',
-                                    new RegExp(`auth-${route}-ai-campaign-v2`),
-                                );
-                                if (width < 1024)
+                                if (width < 1024) {
+                                    await browserExpect(page.locator('.auth-hero img')).toHaveCount(0);
                                     await browserExpect(page.locator('.auth-hero')).toBeHidden();
-                                else await browserExpect(page.locator('.auth-hero')).toBeVisible();
+                                } else {
+                                    await browserExpect(page.locator('.auth-hero img')).toHaveAttribute(
+                                        'src',
+                                        new RegExp(`auth-${route}-ai-campaign-v2`),
+                                    );
+                                    await browserExpect(page.locator('.auth-hero')).toBeVisible();
+                                }
                                 await browserExpect(page.locator('.auth-page')).not.toContainText('MOYAO');
                             }
                             expect(
@@ -1126,8 +1133,8 @@ describe('unified storefront Admin API to Shop API', () => {
             const previewUrl = `http://127.0.0.1:5301/e2e/storefront-visual/index.html?stores=${stores.map(store => store.token).join(',')}&preview=auth`;
             for (const [state, background, accent] of [
                 ['explicit', 'rgb(32, 51, 70)', 'rgb(145, 49, 40)'],
-                ['inherited', 'rgb(241, 236, 226)', 'rgb(145, 49, 40)'],
-                ['classic', 'rgb(241, 245, 249)', 'rgb(21, 128, 61)'],
+                ['inherited', 'rgb(255, 250, 241)', 'rgb(145, 49, 40)'],
+                ['classic', 'rgb(255, 255, 255)', 'rgb(21, 128, 61)'],
             ]) {
                 if (state === 'inherited')
                     await adminClient.query(UPDATE, {
@@ -1535,9 +1542,13 @@ describe('unified storefront Admin API to Shop API', () => {
                         if (!hero || !side || !frame)
                             throw new Error('Desktop category banner geometry is missing');
                         expect(hero.height).toBeGreaterThanOrEqual(136);
-                        expect(hero.height).toBeLessThan(400);
                         expect(hero.x).toBeGreaterThan(side.x + side.width);
-                        expect(frame.height).toBeGreaterThanOrEqual(hero.height - 1);
+                        // Background mode preserves the whole image above its separate copy.
+                        // Its height follows the selected asset ratio, so a 2:1 fixture is taller
+                        // than the recommended 1600 × 480 banner without being clipped.
+                        expect(frame.height).toBeGreaterThan(130);
+                        expect(hero.height).toBeGreaterThanOrEqual(frame.height);
+                        expect(hero.height - frame.height).toBeLessThan(160);
                         expect(frame.width).toBeGreaterThanOrEqual(hero.width - 1);
                     }
                     if (width >= 1024) {

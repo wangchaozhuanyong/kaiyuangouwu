@@ -141,19 +141,22 @@ function Fixture() {
                 >
                     中文 / English
                 </button>
-                <div className={`storefront-app${window.innerWidth >= 1024 ? ' desktop-store-layout' : ''}`}>
+                <div className={`storefront-app${desktop ? ' desktop-store-layout' : ''}`}>
                     <div id="storefront-content">
-                        <AuthPage
-                            api={api}
-                            language={language}
-                            storefrontName={storefrontName}
-                            logoUrl={null}
-                            onBack={() => undefined}
-                            onSuccess={() => Promise.resolve()}
-                            authVisualContent={blocks.find(
-                                block => block.type === (page === 'login' ? 'AUTH_LOGIN' : 'AUTH_REGISTER'),
-                            )}
-                        />
+                        <DesktopLayoutContext.Provider value={desktop}>
+                            <AuthPage
+                                api={api}
+                                language={language}
+                                storefrontName={storefrontName}
+                                logoUrl={null}
+                                onBack={() => undefined}
+                                onSuccess={() => Promise.resolve()}
+                                authVisualContent={blocks.find(
+                                    block =>
+                                        block.type === (page === 'login' ? 'AUTH_LOGIN' : 'AUTH_REGISTER'),
+                                )}
+                            />
+                        </DesktopLayoutContext.Provider>
                     </div>
                 </div>
             </>
