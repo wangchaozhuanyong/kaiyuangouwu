@@ -1,6 +1,13 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
-import { internal_getRequestContext, parseContext, UserInputError } from '@vendure/core';
+import { Permission } from '@vendure/common/lib/generated-types';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
+import {
+    API_KEY_AUTH_STRATEGY_NAME,
+    internal_getRequestContext,
+    parseContext,
+    UserInputError,
+} from '@vendure/core';
 import { lastValueFrom } from 'rxjs';
 
 import { AdministratorAccessService } from './administrator-access.service';
@@ -36,6 +43,35 @@ const auditedMutations = new Set([
     'submitStoreGovernanceChange',
     'reviewStoreGovernanceChange',
 ]);
+const machineMailboxPermissions = new Map<string, Permission>([
+    ...[
+        'Query.icloudPrimaryAccounts',
+        'Query.icloudPrimaryAccount',
+        'Query.icloudVirtualEmails',
+        'Query.icloudVirtualEmail',
+        'Query.icloudReceivedMails',
+    ].map(field => [field, 'ReadIcloudRelay' as Permission] as const),
+    ...[
+        'Mutation.createIcloudPrimaryAccount',
+        'Mutation.createIcloudVirtualEmail',
+        'Mutation.batchCreateIcloudVirtualEmails',
+    ].map(field => [field, 'CreateIcloudRelay' as Permission] as const),
+    ...[
+        'Mutation.reconcileIcloudMailHistory',
+        'Mutation.updateIcloudPrimaryAccount',
+        'Mutation.testIcloudConnection',
+        'Mutation.syncIcloudAccount',
+        'Mutation.resetIcloudMasterCode',
+        'Mutation.updateIcloudVirtualEmail',
+        'Mutation.resetIcloudVirtualEmailCode',
+        'Mutation.reassignIcloudMail',
+    ].map(field => [field, 'UpdateIcloudRelay' as Permission] as const),
+    ...[
+        'Mutation.deleteIcloudPrimaryAccount',
+        'Mutation.deleteIcloudVirtualEmail',
+        'Mutation.deleteIcloudMail',
+    ].map(field => [field, 'DeleteIcloudRelay' as Permission] as const),
+]);
 
 @Injectable()
 export class AdministratorAccessInterceptor implements NestInterceptor {
@@ -51,6 +87,17 @@ export class AdministratorAccessInterceptor implements NestInterceptor {
         if (requestContext.apiType !== 'admin' || !requestContext.activeUserId) return next.handle();
         const rootField = `${parsed.info.parentType.name}.${parsed.info.fieldName}`;
         if (allowedForSuspendedAccount.has(rootField)) return next.handle();
+        const mailboxPermission = machineMailboxPermissions.get(rootField);
+        if (
+            requestContext.session?.authenticationStrategy === API_KEY_AUTH_STRATEGY_NAME &&
+            requestContext.channel.code === DEFAULT_CHANNEL_CODE &&
+            mailboxPermission &&
+            requestContext.userHasPermissions([mailboxPermission])
+        ) {
+            // Machine users have no Administrator profile. The resolver's @Allow check
+            // still enforces the mailbox permission for this exact field.
+            return next.handle();
+        }
         const profile = await this.accessService.current(requestContext);
         if (profile.status === 'SUSPENDED') {
             throw new UserInputError('当前管理账号已被停用，请联系上级管理员');

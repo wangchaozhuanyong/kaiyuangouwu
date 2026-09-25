@@ -1,6 +1,6 @@
-import { UserInputError } from '@vendure/core';
+import { API_KEY_AUTH_STRATEGY_NAME, UserInputError } from '@vendure/core';
 import { of } from 'rxjs';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
     parsed: {
@@ -8,7 +8,13 @@ const state = vi.hoisted(() => ({
         req: {},
         info: { parentType: { name: 'Mutation' }, fieldName: 'updateManagedAdministrator' },
     },
-    requestContext: { apiType: 'admin', activeUserId: 'actor-user' },
+    requestContext: {
+        apiType: 'admin',
+        activeUserId: 'actor-user',
+        session: { authenticationStrategy: 'native' },
+        channel: { code: '__default_channel__' },
+        userHasPermissions: vi.fn().mockReturnValue(true),
+    },
 }));
 
 vi.mock('@vendure/core', async importOriginal => ({
@@ -45,10 +51,50 @@ function invoke(
     const audit = { record: vi.fn().mockResolvedValue(undefined) };
     const next = { handle: vi.fn(() => of(value)) };
     const interceptor = new AdministratorAccessInterceptor(access as never, audit as never);
-    return { run: () => interceptor.intercept(context, next), audit, next };
+    return { run: () => interceptor.intercept(context, next), access, audit, next };
 }
 
 describe('administrator access failure audit', () => {
+    beforeEach(() => {
+        state.requestContext.session.authenticationStrategy = 'native';
+        state.requestContext.channel.code = '__default_channel__';
+        state.requestContext.userHasPermissions.mockReset().mockReturnValue(true);
+    });
+
+    it.each([
+        ['icloudPrimaryAccounts', 'Query', 'ReadIcloudRelay'],
+        ['createIcloudPrimaryAccount', 'Mutation', 'CreateIcloudRelay'],
+        ['updateIcloudVirtualEmail', 'Mutation', 'UpdateIcloudRelay'],
+        ['deleteIcloudMail', 'Mutation', 'DeleteIcloudRelay'],
+    ])(
+        'allows a dedicated API key to call %s without an employee profile',
+        async (field, parentType, permission) => {
+            state.requestContext.session.authenticationStrategy = API_KEY_AUTH_STRATEGY_NAME;
+            const { run, access, next } = invoke(field, {}, Promise.resolve('ok'), undefined, parentType);
+            await expect(run()).resolves.toBeTruthy();
+            expect(state.requestContext.userHasPermissions).toHaveBeenCalledWith([permission]);
+            expect(access.current).not.toHaveBeenCalled();
+            expect(next.handle).toHaveBeenCalledOnce();
+        },
+    );
+
+    it.each([
+        ['activeChannel', 'Query', true, '__default_channel__'],
+        ['icloudPrimaryAccounts', 'Query', false, '__default_channel__'],
+        ['icloudPrimaryAccounts', 'Query', true, 'store-channel'],
+    ])(
+        'keeps administrator governance for %s outside the dedicated key scope',
+        async (field, parentType, hasPermission, channelCode) => {
+            state.requestContext.session.authenticationStrategy = API_KEY_AUTH_STRATEGY_NAME;
+            state.requestContext.channel.code = channelCode;
+            state.requestContext.userHasPermissions.mockReturnValue(hasPermission);
+            const { run, access } = invoke(field, {}, Promise.resolve('unused'), undefined, parentType);
+            access.current.mockRejectedValue(new Error('No administrator profile'));
+            await expect(run()).rejects.toThrow('No administrator profile');
+            expect(access.current).toHaveBeenCalledOnce();
+        },
+    );
+
     it('records failed managed mutations after rejection without retaining secrets', async () => {
         const error = new UserInputError('password=private-value is invalid');
         const { run, audit } = invoke(
