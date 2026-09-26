@@ -159,3 +159,26 @@
         min-height: 2.9em;
     }
 }
+
+/* Narrow rows need the full card width for the currency and complete amount. */
+@media (max-width: 1023px) {
+    .product-row {
+        container-type: inline-size;
+    }
+
+    @container (max-width: 320px) {
+        .product-row-content {
+            display: contents;
+        }
+
+        .product-row-top {
+            grid-column: 2;
+        }
+
+        .product-row-bottom {
+            grid-column: 1 / -1;
+            margin-top: 0;
+            padding-top: 0;
+        }
+    }
+}
