@@ -44,7 +44,11 @@ import { PageSkeleton } from './route-loading';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
-import { SafeImage } from './storefront-ui/product-display';
+import {
+    ProductImagePlaceholder,
+    productImageUnavailableLabel,
+    SafeImage,
+} from './storefront-ui/product-display';
 import './styles/checkout-payment-surfaces.css';
 import './styles/logistics.css';
 import './styles/order-aftercare.css';
@@ -757,7 +761,11 @@ function LogisticsCard({
             <div className={orderPageClassName('logistics-products')}>
                 {physicalLines.map(line => (
                     <div className={orderPageClassName('logistics-product')} key={line.id}>
-                        <ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} />
+                        <ProductVariantImage
+                            language={language}
+                            variant={line.productVariant}
+                            alt={line.productVariant.name}
+                        />
                         <span>
                             <strong>{line.productVariant.name}</strong>
                         </span>
@@ -1274,7 +1282,11 @@ export function OrderDetailPage({
     );
     const orderProductRows = order.lines.map(line => (
         <article key={line.id}>
-            <ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} />
+            <ProductVariantImage
+                language={language}
+                variant={line.productVariant}
+                alt={line.productVariant.name}
+            />
             <div>
                 <strong>{line.productVariant.name}</strong>
                 <em>{orderLinePolicyLabel(line, language)}</em>
@@ -2280,7 +2292,7 @@ function OrderCard({
                 </span>
             </header>
             <button className={orderPageClassName('order-card-product')} type="button" onClick={onOpen}>
-                <OrderImage order={order} />
+                <OrderImage language={language} order={order} />
                 <div className={orderPageClassName('order-product-content')}>
                     <div className={orderPageClassName('order-product-heading')}>
                         <strong className={orderPageClassName('order-product-title')}>{firstLineName}</strong>
@@ -2525,25 +2537,41 @@ function InlineError({
     );
 }
 
-function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: string }) {
+function ProductVariantImage({
+    variant,
+    alt,
+    language,
+}: {
+    variant: ProductVariant;
+    alt: string;
+    language: StorefrontLanguage;
+}) {
     const source = variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview;
     if (!source)
         return (
-            <div className={orderPageClassName('image-placeholder')} aria-hidden="true">
-                <Package />
-            </div>
+            <ProductImagePlaceholder
+                language={language}
+                className={orderPageClassName('image-placeholder')}
+            />
         );
-    return <SafeImage src={source} alt={alt} imageKind="thumbnail" loading="lazy" decoding="async" />;
+    return (
+        <SafeImage
+            src={source}
+            alt={alt}
+            fallbackLabel={productImageUnavailableLabel(language)}
+            imageKind="thumbnail"
+            loading="lazy"
+            decoding="async"
+        />
+    );
 }
 
-function OrderImage({ order }: { order: OrderSummary }) {
+function OrderImage({ order, language }: { order: OrderSummary; language: StorefrontLanguage }) {
     const variant = order.lines[0]?.productVariant;
     return variant ? (
-        <ProductVariantImage variant={variant} alt={variant.name} />
+        <ProductVariantImage language={language} variant={variant} alt={variant.name} />
     ) : (
-        <div className={orderPageClassName('image-placeholder')} aria-hidden="true">
-            <Package />
-        </div>
+        <ProductImagePlaceholder language={language} className={orderPageClassName('image-placeholder')} />
     );
 }
 

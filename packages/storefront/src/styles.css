@@ -576,7 +576,7 @@ img {
     }
 
     .safe-image,
-    .notice-strip span,
+    .notice-strip-copy,
     .showcase-card,
     .showcase-card::after,
     .auth-button-spinner {
@@ -1031,6 +1031,7 @@ img {
 .notice-strip > svg:last-child {
     width: 15px;
     height: 15px;
+    flex-shrink: 0;
     margin-left: auto;
     color: var(--muted);
 }
@@ -1040,15 +1041,6 @@ img {
     width: 16px;
     height: 16px;
     flex-shrink: 0;
-}
-
-.notice-strip span {
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    font-weight: var(--font-weight-medium);
-    animation: notice-ticker-enter 240ms ease-out;
 }
 
 .notice-detail-content {

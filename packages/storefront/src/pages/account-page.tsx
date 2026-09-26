@@ -301,7 +301,7 @@ export function AccountPage() {
                         className="desktop-account-order-product"
                         onClick={() => navigateTo({ name: 'order-detail', id: latestOrder.id })}
                     >
-                        <OrderImage order={latestOrder} />
+                        <OrderImage language={language} order={latestOrder} />
                         <span>
                             <strong>
                                 {latestOrder.lines[0]?.productVariant.name ||
@@ -351,7 +351,7 @@ export function AccountPage() {
                             type="button"
                             onClick={() => navigateTo({ name: 'order-detail', id: latestLogisticsOrder.id })}
                         >
-                            <OrderImage order={latestLogisticsOrder} />
+                            <OrderImage language={language} order={latestLogisticsOrder} />
                             <span>
                                 <strong>{orderStateLabel(latestLogisticsOrder.state, language)}</strong>
                                 <small>
@@ -458,7 +458,11 @@ export function AccountPage() {
                     <div>
                         {recentVariants.map(variant => (
                             <article key={variant.id}>
-                                <ProductVariantImage variant={variant} alt={variant.name} />
+                                <ProductVariantImage
+                                    language={language}
+                                    variant={variant}
+                                    alt={variant.name}
+                                />
                                 <span>
                                     <strong>{variant.name}</strong>
                                 </span>

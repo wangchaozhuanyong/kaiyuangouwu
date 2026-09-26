@@ -19,7 +19,7 @@ import { formatDisplayMoney } from '../money-display';
 import { productImage } from '../product-media';
 import { imageSources, StorefrontImageKind } from '../responsive-image';
 import { SafeImage } from '../safe-image';
-import { CollectionSummary, OrderSummary, Product, ProductVariant } from '../types';
+import { CollectionSummary, OrderSummary, Product, ProductVariant, StorefrontLanguage } from '../types';
 
 export { productImage } from '../product-media';
 export { minimumProductPrice } from '../product-pricing';
@@ -237,13 +237,38 @@ export function AiProductCover({
     );
 }
 
+export function productImageUnavailableLabel(language: StorefrontLanguage): string {
+    return language === 'zh' ? '暂无商品图' : 'No image';
+}
+
+export function ProductImagePlaceholder({
+    language = 'zh',
+    className = '',
+}: {
+    language?: StorefrontLanguage;
+    className?: string;
+}) {
+    return (
+        <div className={`image-placeholder product-image-placeholder ${className}`.trim()}>
+            <span className="product-image-placeholder-copy">
+                <Package aria-hidden="true" />
+                <span className="product-image-placeholder-label">
+                    {productImageUnavailableLabel(language)}
+                </span>
+            </span>
+        </div>
+    );
+}
+
 export function ProductImage({
     product,
+    language = 'zh',
     loading = 'lazy',
     fetchPriority = 'auto',
     sizes,
 }: {
     product: Product;
+    language?: StorefrontLanguage;
     loading?: 'eager' | 'lazy';
     fetchPriority?: 'high' | 'low' | 'auto';
     sizes?: string;
@@ -251,20 +276,14 @@ export function ProductImage({
     const image = productImage(product);
 
     if (!image || image.includes('placeholder') || image.includes('default-hero')) {
-        const { brand } = parseAiProductInfo(product.name, product.description);
-        return brand === 'generic' ? (
-            <div className="image-placeholder" aria-hidden="true">
-                <Package />
-            </div>
-        ) : (
-            <AiProductCover name={product.name} description={product.description} />
-        );
+        return <ProductImagePlaceholder language={language} />;
     }
 
     return (
         <SafeImage
             src={image}
             alt={product.name}
+            fallbackLabel={productImageUnavailableLabel(language)}
             imageKind="card"
             loading={loading}
             fetchPriority={fetchPriority}
@@ -313,40 +332,46 @@ export function prefetchProductAsset(product: Product): void {
     if (image) prefetchStorefrontImage(image, 'detail');
 }
 
-export function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: string }) {
+export function ProductVariantImage({
+    variant,
+    alt,
+    language = 'zh',
+}: {
+    variant: ProductVariant;
+    alt: string;
+    language?: StorefrontLanguage;
+}) {
     const image = variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview;
-    const displayName = variant.name ? `${variant.product.name} ${variant.name}` : variant.product.name;
 
     if (!image || image.includes('placeholder') || image.includes('default-hero')) {
-        const { brand } = parseAiProductInfo(displayName);
-        return brand === 'generic' ? (
-            <div className="image-placeholder" aria-hidden="true">
-                <Package />
-            </div>
-        ) : (
-            <AiProductCover name={displayName} />
-        );
+        return <ProductImagePlaceholder language={language} />;
     }
 
-    return image ? (
-        <SafeImage src={image} alt={alt} imageKind="thumbnail" loading="lazy" />
-    ) : (
-        <div className="image-placeholder" aria-hidden="true">
-            <Package />
-        </div>
+    return (
+        <SafeImage
+            src={image}
+            alt={alt}
+            fallbackLabel={productImageUnavailableLabel(language)}
+            imageKind="thumbnail"
+            loading="lazy"
+        />
     );
 }
 
 export { isImageAlreadyDecoded, markImageDecoded, SafeImage } from '../safe-image';
 
-export function OrderImage({ order }: { order: OrderSummary }) {
+export function OrderImage({
+    order,
+    language = 'zh',
+}: {
+    order: OrderSummary;
+    language?: StorefrontLanguage;
+}) {
     const variant = order.lines[0]?.productVariant;
     return variant ? (
-        <ProductVariantImage variant={variant} alt={variant.name} />
+        <ProductVariantImage variant={variant} alt={variant.name} language={language} />
     ) : (
-        <div className="image-placeholder" aria-hidden="true">
-            <Package />
-        </div>
+        <ProductImagePlaceholder language={language} />
     );
 }
 

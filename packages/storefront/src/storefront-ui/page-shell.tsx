@@ -496,10 +496,21 @@ export function InlineError({
     );
 }
 
-export function ListSkeleton({ label = 'Loading' }: { label?: string }) {
+export function ListSkeleton({
+    label = 'Loading',
+    layout = 'rows',
+}: {
+    label?: string;
+    layout?: 'rows' | 'products';
+}) {
     return (
-        <div data-page-pending="data" className="list-skeleton" role="status" aria-label={label}>
-            {[0, 1, 2, 3].map(item => (
+        <div
+            data-page-pending="data"
+            className={`list-skeleton${layout === 'products' ? ' is-product-grid' : ''}`}
+            role="status"
+            aria-label={label}
+        >
+            {Array.from({ length: layout === 'products' ? 6 : 4 }, (_, item) => (
                 <span key={item}>
                     <i />
                     <b />

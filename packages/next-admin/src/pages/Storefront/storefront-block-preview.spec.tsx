@@ -119,12 +119,17 @@ describe('real client decoration preview', () => {
             expect.objectContaining({ type: 'decoration-draft', channelCode: 'shop' }),
             window.location.origin,
         );
+        block.type = 'FEATURED_COLLECTION';
+        block.settings = { displayCount: 6, selectedProductIds: ['1', '2', '3', '4', '5', '6'] };
         block.translations[0].title = '未保存的新标题';
         await render();
         expect(send).toHaveBeenLastCalledWith(
             expect.objectContaining({
                 draft: expect.objectContaining({
-                    block: expect.objectContaining({ title: '未保存的新标题' }),
+                    block: expect.objectContaining({
+                        title: '未保存的新标题',
+                        settings: { displayCount: 6, selectedProductIds: ['1', '2', '3', '4', '5', '6'] },
+                    }),
                 }),
             }),
             window.location.origin,

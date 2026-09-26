@@ -1215,9 +1215,6 @@
     .desktop-account-layout .account-history-products:not(.history-date-group) > .section-header {
         display: none;
     }
-    .desktop-account-layout :is(.favorites-page, .history-page) .product-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
 
     .desktop-store-layout .address-list {
         padding: 0;

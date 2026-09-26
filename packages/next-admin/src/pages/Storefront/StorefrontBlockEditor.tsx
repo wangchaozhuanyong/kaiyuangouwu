@@ -595,7 +595,7 @@ export function StorefrontBlockEditor({
                                                 />
                                             </Field>
                                         ) : (
-                                            <Field label="展示数量">
+                                            <Field label="展示商品总数（非每行列数）">
                                                 <input
                                                     type="number"
                                                     min={1}

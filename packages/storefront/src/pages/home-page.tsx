@@ -5,6 +5,7 @@ import {
     ChevronLeft,
     ChevronRight,
     CircleCheck,
+    ClipboardList,
     Download,
     ExternalLink,
     Headphones,
@@ -16,6 +17,7 @@ import {
     Sparkles,
     Tag,
     Truck,
+    UserRound,
     WifiOff,
     Zap,
 } from 'lucide-react';
@@ -66,6 +68,8 @@ import {
     decodeStorefrontImage,
     formatMoney,
     productImage,
+    ProductImagePlaceholder,
+    productImageUnavailableLabel,
     renderColorfulQuickIcon,
     SafeImage,
     shouldPrefetchMedia,
@@ -573,6 +577,8 @@ export function HomePage() {
         linkUrl: null,
     };
     const activeNoticeItem = noticeItems[noticeIndex % Math.max(1, noticeItems.length)] ?? defaultNoticeItem;
+    const activeNoticeTitle = activeNoticeItem.title || (isZh ? '公告' : 'Notice');
+    const activeNoticePreview = activeNoticeItem.content.replace(/\s+/gu, ' ').trim();
     const openNoticeItem =
         openNoticeId === defaultNoticeItem.id
             ? defaultNoticeItem
@@ -825,11 +831,36 @@ export function HomePage() {
         heroCount > 0 &&
         quickLinks.length > 0;
     const trustItems = desktopServiceFallback
-        ? isZh
-            ? ['商品信息', '订单可查', '帮助中心', '账户服务']
-            : ['Products', 'Orders', 'Help center', 'Account']
-        : (trustBlock?.items ?? []).map(item => item.label);
-    const trustBarHasLongCopy = trustItems.some(label => Array.from(label.trim()).length > (isZh ? 4 : 10));
+        ? [
+              {
+                  label: isZh ? '商品信息' : 'Products',
+                  description: isZh ? '查看规格、价格与库存' : 'View specifications, prices and stock',
+                  icon: ShoppingBag,
+              },
+              {
+                  label: isZh ? '订单可查' : 'Orders',
+                  description: isZh ? '查看订单与交付状态' : 'Check order and delivery status',
+                  icon: ClipboardList,
+              },
+              {
+                  label: isZh ? '帮助中心' : 'Help center',
+                  description: isZh ? '常见问题与客服入口' : 'Find answers and contact support',
+                  icon: Headphones,
+              },
+              {
+                  label: isZh ? '账户服务' : 'Account',
+                  description: isZh ? '管理个人资料与账户信息' : 'Manage your profile and account',
+                  icon: UserRound,
+              },
+          ]
+        : (trustBlock?.items ?? []).map((item, index) => ({
+              label: item.label,
+              description: item.description,
+              icon: trustIcons[index % trustIcons.length],
+          }));
+    const trustBarHasLongCopy = trustItems.some(
+        ({ label }) => Array.from(label.trim()).length > (isZh ? 4 : 10),
+    );
     const colorfulTrustBar = isColorfulHomepageStyle(trustBlock?.settings?.visualStyle);
     const colorfulQuickLinks = isColorfulHomepageStyle(quickBlock?.settings?.visualStyle);
 
@@ -898,8 +929,8 @@ export function HomePage() {
                                 aria-expanded={Boolean(openNoticeItem)}
                                 aria-label={
                                     isZh
-                                        ? `查看公告全文：${activeNoticeItem.title}`
-                                        : `Read full notice: ${activeNoticeItem.title}`
+                                        ? `查看公告全文：${activeNoticeTitle}`
+                                        : `Read full notice: ${activeNoticeTitle}`
                                 }
                                 onClick={() => setOpenNoticeId(activeNoticeItem.id)}
                                 onMouseEnter={() => setNoticeHovered(true)}
@@ -908,7 +939,12 @@ export function HomePage() {
                                 onBlur={() => setNoticeFocused(false)}
                             >
                                 <Bell aria-hidden="true" />
-                                <span key={activeNoticeItem.id}>{activeNoticeItem.summary}</span>
+                                <span className="notice-strip-copy" key={activeNoticeItem.id}>
+                                    <strong className="notice-strip-title">{activeNoticeTitle}</strong>
+                                    {activeNoticePreview && (
+                                        <span className="notice-strip-content">{activeNoticePreview}</span>
+                                    )}
+                                </span>
                                 <ChevronRight aria-hidden="true" />
                             </button>
                         ) : null}
@@ -1063,12 +1099,22 @@ export function HomePage() {
                                     }}
                                     aria-label={isZh ? '服务信息' : 'Service information'}
                                 >
-                                    {trustItems.map((label, index) => {
-                                        const TrustIcon = trustIcons[index % trustIcons.length];
+                                    {trustItems.map(({ label, description, icon: TrustIcon }, index) => {
                                         return (
                                             <div className="home-trust-item" key={`${label}-${index}`}>
                                                 <TrustIcon className="trust-icon" aria-hidden="true" />
-                                                <span className="home-trust-label">{label}</span>
+                                                {desktop ? (
+                                                    <span className="home-trust-copy">
+                                                        <span className="home-trust-label">{label}</span>
+                                                        {description.trim() && (
+                                                            <small className="home-trust-description">
+                                                                {description}
+                                                            </small>
+                                                        )}
+                                                    </span>
+                                                ) : (
+                                                    <span className="home-trust-label">{label}</span>
+                                                )}
                                             </div>
                                         );
                                     })}
@@ -1442,7 +1488,8 @@ function ManagedContentSection({
         return (
             <FeaturedCollectionSection
                 block={block}
-                products={additionalSelectedProducts}
+                products={selectedProducts}
+                market={market}
                 language={language}
                 locale={locale}
                 onContentTarget={onContentTarget}
@@ -1451,6 +1498,19 @@ function ManagedContentSection({
     }
     if (block.type === 'STORY') {
         return <ContentStorySection block={block} language={language} onContentTarget={onContentTarget} />;
+    }
+    if (block.type === 'CUSTOM' && !block.imageUrl && !block.body && !block.items.length && !blockHasTarget) {
+        return (
+            <ProductSection
+                title={block.title}
+                subtitle={block.subtitle}
+                products={selectedProducts}
+                market={market}
+                locale={locale}
+                language={language}
+                onProduct={product => onContentTarget('PRODUCT', product.id)}
+            />
+        );
     }
     return (
         <section
@@ -1576,7 +1636,7 @@ function CategoryPromotionSection({
 
                 {categoryProducts.length ? (
                     <div
-                        className={`product-grid category-promotion-products category-promotion-products-${productGridCount}`}
+                        className={`product-grid category-promotion-products category-promotion-products-${productGridCount} desktop-product-rail is-four-column`}
                     >
                         {categoryProducts.map(product => (
                             <ProductCard
@@ -1611,18 +1671,21 @@ function FeaturedCollectionSection({
     products,
     language,
     locale,
+    market,
     onContentTarget,
 }: {
     block: StorefrontContentBlock;
     products: Product[];
     language: StorefrontLanguage;
     locale: string;
+    market: MarketConfig;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const isZh = language === 'zh';
     const desktop = useDesktopLayout();
     const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
-    const mosaicProducts = products.slice(0, 5);
+    const [expanded, setExpanded] = useState(false);
+    const mosaicProducts = desktop ? products : products.slice(0, 5);
 
     return (
         <section
@@ -1653,11 +1716,23 @@ function FeaturedCollectionSection({
 
                 {mosaicProducts.length ? (
                     <div
-                        className="featured-collection-mosaic"
+                        className={`featured-collection-mosaic${desktop ? ' desktop-product-rail' : ''}`}
                         data-product-count={mosaicProducts.length}
                         aria-label={block.title}
                     >
                         {mosaicProducts.map((product, index) => {
+                            if (desktop)
+                                return (
+                                    <ProductCard
+                                        key={product.id}
+                                        product={product}
+                                        market={market}
+                                        locale={locale}
+                                        language={language}
+                                        imageSizes="(min-width: 1024px) 200px, calc(50vw - 24px)"
+                                        onOpen={() => onContentTarget('PRODUCT', product.id)}
+                                    />
+                                );
                             const imageUrl = productImage(product);
                             const pricedVariant = lowestPricedProductVariant(product);
                             const priceLabel = pricedVariant
@@ -1686,13 +1761,16 @@ function FeaturedCollectionSection({
                                             <SafeImage
                                                 src={imageUrl}
                                                 alt={product.name}
+                                                fallbackLabel={productImageUnavailableLabel(language)}
+                                                sizes="(min-width: 1024px) 220px, 50vw"
                                                 imageKind="card"
                                                 loading="lazy"
                                             />
                                         ) : (
-                                            <span className="featured-collection-product-placeholder">
-                                                <LayoutGrid aria-hidden="true" />
-                                            </span>
+                                            <ProductImagePlaceholder
+                                                language={language}
+                                                className="featured-collection-product-placeholder"
+                                            />
                                         )}
                                         {!desktop && productCopy}
                                     </span>
@@ -1704,6 +1782,36 @@ function FeaturedCollectionSection({
                 ) : (
                     <div className="featured-collection-empty" aria-hidden="true">
                         <span>{isZh ? '精选内容' : 'Curated selection'}</span>
+                    </div>
+                )}
+                {!desktop && products.length > 5 && (
+                    <div className="featured-collection-overflow">
+                        <button
+                            className="featured-collection-action"
+                            type="button"
+                            aria-expanded={expanded}
+                            aria-controls={`${block.id}-remaining`}
+                            onClick={() => setExpanded(value => !value)}
+                        >
+                            {expanded
+                                ? isZh
+                                    ? '收起其余商品'
+                                    : 'Show fewer products'
+                                : isZh
+                                  ? `展开其余 ${products.length - 5} 件商品`
+                                  : `Show ${products.length - 5} more products`}
+                        </button>
+                        <div id={`${block.id}-remaining`} hidden={!expanded}>
+                            {expanded && (
+                                <ProductSection
+                                    products={products.slice(5)}
+                                    market={market}
+                                    locale={locale}
+                                    language={language}
+                                    onProduct={product => onContentTarget('PRODUCT', product.id)}
+                                />
+                            )}
+                        </div>
                     </div>
                 )}
             </div>

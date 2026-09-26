@@ -397,20 +397,6 @@
         padding-inline: 14px;
         padding-top: 14px;
     }
-    .desktop-store-layout .product-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        column-gap: 20px;
-        row-gap: 24px;
-    }
-    @media (min-width: 1280px) {
-        .desktop-store-layout .product-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            column-gap: 20px;
-            row-gap: 24px;
-        }
-    }
-
     /* A single account rail is shared by all account routes. */
     .desktop-account-layout {
         display: grid;
@@ -1027,16 +1013,9 @@
             box-shadow: var(--control-elevation);
         }
     }
-    .desktop-account-page .product-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
     .desktop-account-recommendations.product-section {
         margin: 0;
         padding: 0;
-    }
-    .desktop-account-page .desktop-account-recommendations .product-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 16px;
     }
     .desktop-account-page .section-header h2 {
         font-size: 18px;
@@ -1516,8 +1495,9 @@
     }
     .desktop-product-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 28px 20px;
+        grid-template-columns: var(--desktop-product-tracks);
+        gap: 24px 16px;
+        align-items: stretch;
     }
     .desktop-catalog-results > .empty-state {
         min-height: 340px;
@@ -1839,9 +1819,6 @@
         }
         .desktop-store-nav {
             gap: 0 24px;
-        }
-        .desktop-product-grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
         }
         .desktop-account-layout {
             grid-template-columns: 240px minmax(0, 1fr);

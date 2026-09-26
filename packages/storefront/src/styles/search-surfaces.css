@@ -478,10 +478,7 @@
         width: 100%;
         padding: 0;
     }
-    .search-page .search-results .product-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 20px;
-    }
+
     .search-page .search-results {
         display: grid;
         grid-template-columns: 250px minmax(0, 1fr);
@@ -660,10 +657,5 @@
         border-radius: var(--skin-control-radius);
         background: var(--module-action-surface);
         box-shadow: none;
-    }
-
-    .search-page .search-discovery .product-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
     }
 }

@@ -21,7 +21,7 @@ export function ProductCard({
     onOpen,
     onFavorite,
     priority = false,
-    imageSizes,
+    imageSizes = '(min-width: 1024px) 220px, calc(50vw - 24px)',
 }: {
     product: Product;
     market: MarketConfig;
@@ -77,6 +77,7 @@ export function ProductCard({
 
             <div className="product-card-media">
                 <ProductImage
+                    language={language}
                     product={product}
                     loading={priority ? 'eager' : 'lazy'}
                     fetchPriority={priority ? 'high' : 'auto'}

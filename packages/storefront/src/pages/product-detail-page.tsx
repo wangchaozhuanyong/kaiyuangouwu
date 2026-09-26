@@ -165,7 +165,7 @@ export function ProductDetailPage() {
                 Number(b.collections.some(collection => collectionIds.has(collection.id))) -
                 Number(a.collections.some(collection => collectionIds.has(collection.id))),
         )
-        .slice(0, 4);
+        .slice(0, 6);
     const descriptionHtml = sanitizeProductDescription(product.description, { textOnly: true });
     const [posterOpen, setPosterOpen] = useState(false);
     const shareProduct = () => {

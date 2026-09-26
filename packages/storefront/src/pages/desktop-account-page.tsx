@@ -178,7 +178,7 @@ export function DesktopAccountPage({
                                     className="desktop-order-product"
                                     onClick={() => navigate({ name: 'order-detail', id: order.id })}
                                 >
-                                    <OrderImage order={order} />
+                                    <OrderImage language={language} order={order} />
                                     <span>
                                         <strong>{order.lines[0]?.productVariant.name || order.code}</strong>
                                         <small>
@@ -244,7 +244,11 @@ export function DesktopAccountPage({
                         </button>
                     </header>
                     <div className="desktop-delivery-summary">
-                        {delivery ? <OrderImage order={delivery} /> : <Truck aria-hidden="true" />}
+                        {delivery ? (
+                            <OrderImage language={language} order={delivery} />
+                        ) : (
+                            <Truck aria-hidden="true" />
+                        )}
                         <div>
                             {delivery && (
                                 <strong>{delivery.lines[0]?.productVariant.name || delivery.code}</strong>
@@ -307,6 +311,7 @@ export function DesktopAccountPage({
             </div>
             {products.length > 0 && (
                 <ProductSection
+                    desktopRail
                     className="desktop-account-recommendations"
                     kind="recommendations"
                     title={isZh ? '为你推荐' : 'Recommended for you'}

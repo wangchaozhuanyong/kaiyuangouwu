@@ -1,10 +1,15 @@
-import { Package } from 'lucide-react';
 import { useState } from 'react';
 
 import { productGalleryAssets } from '../product-media';
 import { Asset, Product, StorefrontLanguage } from '../types';
 
-import { prefetchStorefrontImage, SafeImage, scheduleIdleWork } from './product-display';
+import {
+    prefetchStorefrontImage,
+    ProductImagePlaceholder,
+    productImageUnavailableLabel,
+    SafeImage,
+    scheduleIdleWork,
+} from './product-display';
 
 export function ProductGallery({ product, language }: { product: Product; language: StorefrontLanguage }) {
     const assets = productGalleryAssets(product);
@@ -40,15 +45,14 @@ function GalleryImages({
                     <SafeImage
                         src={assets[activeImage].preview}
                         alt={`${productName} ${activeImage + 1}`}
+                        fallbackLabel={productImageUnavailableLabel(language)}
                         imageKind="detail"
                         loading="eager"
                         fetchPriority="high"
                         onLoad={prefetchAdjacentGalleryImages}
                     />
                 ) : (
-                    <div className="image-placeholder" aria-hidden="true">
-                        <Package />
-                    </div>
+                    <ProductImagePlaceholder language={language} />
                 )}
                 {!!assets.length && (
                     <span className="gallery-count">
@@ -72,7 +76,13 @@ function GalleryImages({
                             }
                             onClick={() => setActiveImage(index)}
                         >
-                            <SafeImage src={asset.preview} alt="" imageKind="thumbnail" loading="lazy" />
+                            <SafeImage
+                                src={asset.preview}
+                                alt=""
+                                fallbackLabel={productImageUnavailableLabel(language)}
+                                imageKind="thumbnail"
+                                loading="lazy"
+                            />
                         </button>
                     ))}
                 </div>

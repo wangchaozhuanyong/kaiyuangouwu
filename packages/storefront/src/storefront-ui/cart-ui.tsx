@@ -6,7 +6,6 @@ import {
     Heart,
     Megaphone,
     Minus,
-    Package,
     Pin,
     Share2,
     TicketPercent,
@@ -29,7 +28,7 @@ import { routeHref } from '../storefront-router';
 import { MarketConfig, StoreCustomerCoupon, StorefrontCart, StorefrontLanguage } from '../types';
 
 import { Sheet } from './page-shell';
-import { formatMoney, ProductVariantImage } from './product-display';
+import { formatMoney, ProductImagePlaceholder, ProductVariantImage } from './product-display';
 
 export function CartGroup({
     title,
@@ -179,7 +178,7 @@ function DesktopCartLine({
                         to={routeHref({ name: 'product', id: variant.product.id })}
                         className="desktop-cart-product-link"
                     >
-                        <ProductVariantImage variant={variant} alt={name} />
+                        <ProductVariantImage language={language} variant={variant} alt={name} />
                         <strong>{name}</strong>
                     </Link>
                 ) : (
@@ -527,11 +526,9 @@ export function SwipeableCartLine({
                 </label>
                 <div className="cart-line-image">
                     {variant ? (
-                        <ProductVariantImage variant={variant} alt={variant.name} />
+                        <ProductVariantImage language={language} variant={variant} alt={variant.name} />
                     ) : (
-                        <div className="image-placeholder">
-                            <Package />
-                        </div>
+                        <ProductImagePlaceholder language={language} />
                     )}
                 </div>
                 <div className="cart-line-copy">

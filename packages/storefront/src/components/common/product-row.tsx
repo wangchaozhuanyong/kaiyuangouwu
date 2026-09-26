@@ -120,7 +120,7 @@ export function ProductRow({
                 aria-label={`${isZh ? '查看' : 'View'} ${product.name}`}
             />
             <div className="product-row-image">
-                <ProductImage product={product} />
+                <ProductImage language={language} product={product} />
             </div>
             <div className="product-row-content">
                 <div className="product-row-top">

@@ -23,7 +23,9 @@ export function ProductSection({
     subtitlePlacement,
     selection,
     kind,
+    desktopRail = false,
 }: {
+    desktopRail?: boolean;
     title?: string;
     kind?: SectionKind;
     subtitle?: string;
@@ -59,7 +61,7 @@ export function ProductSection({
                     subtitlePlacement={subtitlePlacement}
                 />
             ) : null}
-            <div className="product-grid">
+            <div className={`product-grid${desktopRail ? ' desktop-product-rail is-four-column' : ''}`}>
                 {products.map((product, index) => {
                     const card = (
                         <ProductCard
@@ -69,7 +71,7 @@ export function ProductSection({
                             locale={locale}
                             language={language}
                             priority={index === 0}
-                            imageSizes="(min-width: 1280px) 220px, (min-width: 1024px) 20vw, calc(50vw - 24px)"
+                            imageSizes="(min-width: 1024px) 200px, calc(50vw - 24px)"
                             favorite={favoriteProductIds?.includes(product.id)}
                             onOpen={() => onProduct(product)}
                             onFavorite={onFavorite ? () => onFavorite(product) : undefined}

@@ -469,6 +469,35 @@
     height: 48px;
 }
 
+.product-image-placeholder {
+    background: var(--product-media-bg);
+    color: var(--muted);
+}
+
+.product-image-placeholder-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 4px;
+    text-align: center;
+}
+
+.product-image-placeholder-copy > svg {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+}
+
+.product-image-placeholder-label {
+    font-size: 12px;
+    line-height: 1.3;
+    font-weight: 400;
+    overflow-wrap: anywhere;
+}
+
 /* Skeleton loading styles have been extracted to dedicated styles/skeletons.css */
 
 @media (prefers-reduced-motion: reduce) {

@@ -339,6 +339,40 @@ describe('product image navigation layers', () => {
         expect(empty).not.toContain('<img');
     });
 
+    it.each(['zh', 'en'] as const)(
+        'labels missing images consistently in %s product cards, rows and galleries',
+        language => {
+            for (const name of ['普通商品', 'ChatGPT Plus']) {
+                const product = { ...digitalProduct, name };
+                const label = language === 'zh' ? '暂无商品图' : 'No image';
+                const surfaces = [
+                    <ProductCard
+                        product={product}
+                        market={market}
+                        locale="zh-CN"
+                        language={language}
+                        onOpen={vi.fn()}
+                    />,
+                    <ProductRow
+                        product={product}
+                        market={market}
+                        locale="zh-CN"
+                        language={language}
+                        onOpen={vi.fn()}
+                    />,
+                    <ProductGallery product={product} language={language} />,
+                ];
+                for (const surface of surfaces) {
+                    const markup = renderToStaticMarkup(surface);
+                    expect(markup).toContain(label);
+                    expect(markup).toContain('product-image-placeholder');
+                    expect(markup).not.toContain('ai-product-cover');
+                    expect(markup).not.toContain('<img');
+                }
+            }
+        },
+    );
+
     it('derives compact one-line product information from fulfillment and warranty data', () => {
         const info = buildProductRowSmartInfo(
             { ...digitalProduct, description: 'ChatGPT Plus 正规渠道，质保一个月' },
@@ -421,13 +455,13 @@ describe('product image navigation layers', () => {
         expect(markup).toContain('product-card-detail-link');
         expect(markup).toContain('product-card-favorite');
         expect(markup).toContain('aria-label="收藏 ChatGPT Plus 成品号"');
-        expect(markup).toContain('ai-product-cover');
+        expect(markup).toContain('暂无商品图');
         expect(markup).toContain('库存 10');
         expect(markup).not.toContain('加入购物车');
         expect(markup).not.toContain('含税');
     });
 
-    it('keeps list-row links above generated cover layers without add buttons', () => {
+    it('keeps list-row links above the missing-image placeholder without add buttons', () => {
         const markup = renderToStaticMarkup(
             <ProductRow
                 product={digitalProduct}
@@ -440,7 +474,7 @@ describe('product image navigation layers', () => {
         const stylesheet = readStorefrontStylesheet();
 
         expect(markup).toContain('product-row-detail-link');
-        expect(markup).toContain('ai-product-cover');
+        expect(markup).toContain('暂无商品图');
         expect(markup).toContain('库存 10');
         expect(markup).not.toContain('加入购物车');
         expect(stylesheet).toMatch(/\.product-row-detail-link\s*\{[^}]*z-index:\s*10;/);

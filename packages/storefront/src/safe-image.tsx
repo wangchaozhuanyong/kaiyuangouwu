@@ -9,6 +9,7 @@ export type SafeImageProps = {
     fallbackSrc?: string;
     placeholderSrc?: string;
     showFallbackIcon?: boolean;
+    fallbackLabel?: string;
     frameClassName?: string;
     alt: string;
     imageKind?: StorefrontImageKind;
@@ -67,6 +68,7 @@ function SafeImageSource({
     fallbackSrc,
     placeholderSrc,
     showFallbackIcon = true,
+    fallbackLabel,
     frameClassName,
     alt,
     imageKind,
@@ -205,7 +207,15 @@ function SafeImageSource({
                 aria-hidden="true"
                 style={placeholder ? { backgroundImage: `url(${JSON.stringify(placeholder)})` } : undefined}
             >
-                {!placeholder && showFallbackIcon && <Package />}
+                {!placeholder &&
+                    (failed && fallbackLabel ? (
+                        <span className="product-image-placeholder-copy">
+                            {showFallbackIcon && <Package />}
+                            <span className="product-image-placeholder-label">{fallbackLabel}</span>
+                        </span>
+                    ) : (
+                        showFallbackIcon && <Package />
+                    ))}
             </span>
             {!failed ? (
                 <img
@@ -226,7 +236,7 @@ function SafeImageSource({
                 <span
                     className="safe-image-unavailable"
                     role={alt ? 'img' : undefined}
-                    aria-label={alt || undefined}
+                    aria-label={alt ? [alt, fallbackLabel].filter(Boolean).join(' · ') : undefined}
                 />
             )}
         </span>

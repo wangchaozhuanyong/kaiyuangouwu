@@ -269,7 +269,10 @@ export function DesktopCatalogPage() {
                         aria-busy={query.isFetching}
                     >
                         {query.isPending && !error ? (
-                            <ListSkeleton label={isZh ? '正在加载商品' : 'Loading products'} />
+                            <ListSkeleton
+                                layout="products"
+                                label={isZh ? '正在加载商品' : 'Loading products'}
+                            />
                         ) : error && !products.length ? (
                             <EmptyState
                                 icon={<WifiOff />}

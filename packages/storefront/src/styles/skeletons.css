@@ -257,6 +257,27 @@
     width: 68%;
 }
 
+@media (min-width: 1024px) {
+    .skeleton-catalog-list,
+    .list-skeleton.is-product-grid {
+        padding: 0;
+        grid-template-columns: var(--desktop-product-tracks);
+        gap: 24px 16px;
+    }
+
+    .list-skeleton.is-product-grid > span {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto 22px 18px;
+    }
+
+    .list-skeleton.is-product-grid i {
+        grid-row: auto;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .page-skeleton > span,
     .page-skeleton > div span,

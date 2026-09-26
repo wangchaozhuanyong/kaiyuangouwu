@@ -418,6 +418,23 @@ describe('HomePage hero carousel', () => {
 });
 
 describe('HomePage localized trust bar layout', () => {
+    it('shows saved service descriptions on desktop while preserving compact mobile labels', () => {
+        const block = {
+            ...trustBarBlock,
+            items: trustBarBlock.items.map((item, index) => ({
+                ...item,
+                description: index === 0 ? '发货后可查看物流进度' : '',
+            })),
+        };
+        const desktopMarkup = renderHome({ contentBlocks: [block] }, true);
+        const mobileMarkup = renderHome({ contentBlocks: [block] });
+
+        expect(desktopMarkup).toContain('发货后可查看物流进度');
+        expect(desktopMarkup).not.toContain('查看规格、价格与库存');
+        expect(mobileMarkup).toContain('物流');
+        expect(mobileMarkup).not.toContain('发货后可查看物流进度');
+    });
+
     it('keeps every saved trust item beyond the old four-item limit', () => {
         const markup = renderHome({
             contentBlocks: [
@@ -625,7 +642,7 @@ describe('HomePage flash-sale product count', () => {
         expect(markup.match(/loading="eager"/g) ?? []).toHaveLength(4);
         expect(markup.match(/loading="lazy"/g) ?? []).toHaveLength(1);
         expect(markup).toContain('preset=storefront-thumbnail-160');
-        expect(markup).toContain('sizes="(min-width: 420px) 126px, 30vw"');
+        expect(markup).toContain('sizes="(min-width: 1024px) 220px, (min-width: 420px) 126px, 30vw"');
         expect(markup).toMatch(/<header class="section-header">[\s\S]*role="timer"[\s\S]*<\/header>/);
     });
 
@@ -969,6 +986,7 @@ describe('HomePage desktop intro layout', () => {
         expect(desktopMarkup).toContain('class="home-trust-bar"');
         expect(desktopMarkup.match(/class="home-trust-item"/g)).toHaveLength(4);
         expect(desktopMarkup).toContain('商品信息');
+        expect(desktopMarkup).toContain('查看规格、价格与库存');
         expect(desktopMarkup).not.toContain('正品保障');
         expect(renderHome({ contentBlocks })).not.toContain('class="home-trust-bar"');
         // Configured but unpublished means the merchant hid or scheduled this module.
@@ -1338,8 +1356,34 @@ describe('HomePage notices', () => {
 
         expect(markup).toContain('aria-haspopup="dialog"');
         expect(markup).toContain('aria-label="查看公告全文：配送公告"');
+        expect(markup).toContain('class="notice-strip-title">配送公告</strong>');
+        expect(markup).toContain('这是一段需要在详情中完整阅读的公告正文。');
         expect(markup).not.toContain('class="notice-strip" type="button" disabled');
     });
+
+    it.each(['block', 'item'] as const)(
+        'shows managed %s notice content beside its title without shortening the text',
+        source => {
+            const body = '第一段公告正文。\n\n第二段保留完整内容，按屏幕宽度决定展示多少。';
+            const block: StorefrontContentBlock = {
+                ...trustBarBlock,
+                type: 'NOTICE',
+                title: '服务提醒',
+                subtitle: '',
+                body: source === 'block' ? body : '',
+                items:
+                    source === 'item'
+                        ? [{ ...trustBarBlock.items[0], label: '服务提醒', description: body }]
+                        : [],
+            };
+            for (const desktop of [false, true]) {
+                const markup = renderHome({ contentBlocks: [block], systemAnnouncements: [] }, desktop);
+                expect(markup).toContain('class="notice-strip-title">服务提醒</strong>');
+                expect(markup).toContain(body.replace(/\s+/gu, ' '));
+            }
+            expect(buildHomeNoticeItems([], block, 'zh')[0].content).toBe(body);
+        },
+    );
 
     it('shows the full content and jump button in the notice detail sheet', () => {
         const content = '第一段完整内容。\n\n第二段完整内容，不能在公告条中被截断后丢失。';
@@ -1542,6 +1586,68 @@ describe('HomePage featured collection', () => {
         settings: { displayCount: 4, selectedProductIds: [featuredProduct.id] },
         items: [],
     };
+
+    it.each([0, 1, 5, 6, 7])('keeps every configured desktop collection product (%i items)', count => {
+        const products = Array.from({ length: count }, (_, index) => ({
+            ...featuredProduct,
+            id: `count-${index}`,
+            name: `完整商品名称 ${index} Long product name with specifications`,
+        }));
+        const block = {
+            ...featuredCollectionBlock,
+            settings: { displayCount: Math.max(1, count), selectedProductIds: products.map(item => item.id) },
+            // Items are not separately rendered by collections and must not remove selected products.
+            items: count
+                ? [
+                      {
+                          ...coreCategoriesBlock.items[0],
+                          targetType: 'PRODUCT' as const,
+                          targetValue: products[0].id,
+                      },
+                  ]
+                : [],
+        };
+        const props = {
+            configuredBlockTypes: [...baseProps.configuredBlockTypes, 'FEATURED_COLLECTION' as const],
+            contentBlocks: [block],
+            managedContentProducts: products,
+        };
+        const desktopMarkup = renderHome(props, true);
+        expect((desktopMarkup.match(/class="product-card"/g) ?? []).length).toBe(count);
+        for (const item of products)
+            expect(desktopMarkup).toContain(`<strong class="product-card-name">${item.name}</strong>`);
+        const mobileMarkup = renderHome(props, false);
+        expect(
+            (mobileMarkup.match(/class="featured-collection-product(?: is-featured)?"/g) ?? []).length,
+        ).toBe(Math.min(5, count));
+        if (count > 5) {
+            expect(mobileMarkup).toContain(`展开其余 ${count - 5} 件商品`);
+            expect(mobileMarkup).toContain('aria-expanded="false"');
+        }
+    });
+
+    it('honors the configured total without filling empty slots or returning extra products', () => {
+        const products = Array.from({ length: 7 }, (_, index) => ({
+            ...featuredProduct,
+            id: `limited-${index}`,
+            name: `限量选品 ${index}`,
+        }));
+        const markup = renderHome(
+            {
+                configuredBlockTypes: [...baseProps.configuredBlockTypes, 'FEATURED_COLLECTION'],
+                contentBlocks: [
+                    {
+                        ...featuredCollectionBlock,
+                        settings: { displayCount: 6, selectedProductIds: products.map(item => item.id) },
+                    },
+                ],
+                managedContentProducts: products,
+            },
+            true,
+        );
+        expect(markup).toContain('<strong class="product-card-name">限量选品 5</strong>');
+        expect(markup).not.toContain('<strong class="product-card-name">限量选品 6</strong>');
+    });
 
     it('groups managed products into one responsive collection module', () => {
         const productsInCollection: Product[] = Array.from({ length: 5 }, (_, index) => {

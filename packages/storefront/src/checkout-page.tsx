@@ -6,7 +6,6 @@ import {
     CircleCheck,
     Mail,
     MapPin,
-    Package,
     Plus,
     RotateCcw,
     ShoppingBag,
@@ -29,7 +28,11 @@ import { appliedCouponLabel } from './storefront-coupons';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions, RouteState } from './storefront-router';
 import { CouponSheet } from './storefront-ui/cart-ui';
-import { SafeImage } from './storefront-ui/product-display';
+import {
+    ProductImagePlaceholder,
+    productImageUnavailableLabel,
+    SafeImage,
+} from './storefront-ui/product-display';
 import './styles/checkout-payment-surfaces.css';
 import { checkoutPageStyles, pageClassName } from './tailwind/checkout-page-styles';
 import { TaxSummaryRows } from './tax-summary';
@@ -1193,7 +1196,11 @@ function CheckoutItemsGroup({
             <div className={checkoutPageClassName('checkout-items')}>
                 {lines.map(line => (
                     <article key={line.id}>
-                        <ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} />
+                        <ProductVariantImage
+                            language={language}
+                            variant={line.productVariant}
+                            alt={line.productVariant.name}
+                        />
                         <div>
                             <strong>{line.productVariant.name}</strong>
                             <em>{checkoutLinePolicyText(line, isZh)}</em>
@@ -1800,15 +1807,33 @@ function Field({
         </label>
     );
 }
-function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: string }) {
+function ProductVariantImage({
+    variant,
+    alt,
+    language,
+}: {
+    variant: ProductVariant;
+    alt: string;
+    language: StorefrontLanguage;
+}) {
     const src = variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview;
     if (!src)
         return (
-            <div className={checkoutPageClassName('image-placeholder')} aria-hidden="true">
-                <Package />
-            </div>
+            <ProductImagePlaceholder
+                language={language}
+                className={checkoutPageClassName('image-placeholder')}
+            />
         );
-    return <SafeImage src={src} alt={alt} imageKind="thumbnail" loading="lazy" decoding="async" />;
+    return (
+        <SafeImage
+            src={src}
+            alt={alt}
+            fallbackLabel={productImageUnavailableLabel(language)}
+            imageKind="thumbnail"
+            loading="lazy"
+            decoding="async"
+        />
+    );
 }
 function formatMoney(value: number, currency: string, locale: string) {
     return formatDisplayMoney(value, currency, locale);

@@ -34,7 +34,8 @@ export function HeroScene({
     onImageOpen?: MouseEventHandler<HTMLButtonElement>;
     onOpen?: () => void;
 }) {
-    const warm = normalizedHeroThemePreset(content.settings?.themePreset) === 'warm';
+    const preset = normalizedHeroThemePreset(content.settings?.themePreset);
+    const warm = preset === 'warm';
     const items = content.items.filter(item => item.enabled !== false);
     const title = content.title.trim();
     const subtitle = content.subtitle.trim();
@@ -43,7 +44,10 @@ export function HeroScene({
     const adaptiveStyle = heroThemeStyle(content);
 
     return (
-        <div className="hero-scene-wrapper" style={adaptiveStyle}>
+        <div
+            className={`hero-scene-wrapper${preset === 'bright' ? ' is-original-image' : ''}`}
+            style={adaptiveStyle}
+        >
             <button
                 type="button"
                 className="hero-rich-image-link"

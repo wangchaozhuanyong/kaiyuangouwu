@@ -22,6 +22,42 @@ function requiredImage(host: ParentNode): HTMLImageElement {
 }
 
 describe('SafeImage', () => {
+    it('shows a product-image message only after all image sources fail and clears it for a replacement', () => {
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() =>
+                root.render(
+                    <SafeImage
+                        src="/broken-product.png"
+                        fallbackSrc="/backup-product.png"
+                        alt="商品"
+                        fallbackLabel="暂无商品图"
+                    />,
+                ),
+            );
+            expect(host.textContent).not.toContain('暂无商品图');
+            act(() => {
+                requiredImage(host).dispatchEvent(new Event('error'));
+            });
+            expect(host.textContent).not.toContain('暂无商品图');
+            act(() => {
+                requiredImage(host).dispatchEvent(new Event('error'));
+            });
+            expect(host.textContent).toContain('暂无商品图');
+            expect(host.querySelector('[role=img]')?.getAttribute('aria-label')).toBe('商品 · 暂无商品图');
+
+            act(() =>
+                root.render(
+                    <SafeImage src="/replacement-product.png" alt="商品" fallbackLabel="暂无商品图" />,
+                ),
+            );
+            expect(host.textContent).not.toContain('暂无商品图');
+            expect(requiredImage(host).getAttribute('src')).toBe('/replacement-product.png');
+        } finally {
+            act(() => root.unmount());
+        }
+    });
     it('does not mark a failed decode as loaded or cache a broken image', async () => {
         const decode = vi
             .spyOn(HTMLImageElement.prototype, 'decode')
