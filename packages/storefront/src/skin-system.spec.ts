@@ -104,7 +104,7 @@ describe('storefront skin system', () => {
                 .find(rule => rule.includes('background: transparent;')) ?? '';
         expect(desktopRow).toContain('background: transparent;');
         expect(desktopRow).toContain('border-top: 0;');
-        expect(desktopRow).toContain('border-radius: var(--radius-sm);');
+        expect(desktopRow).toContain('border-radius: 0;');
         expect(desktopRow).toContain('box-shadow: none;');
     });
 
