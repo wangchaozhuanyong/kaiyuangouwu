@@ -3066,11 +3066,6 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         box-shadow: none;
     }
 
-    html[lang='en'] .category-page .primary-category-switcher {
-        height: auto;
-        min-height: 129px;
-    }
-
     .category-topbar > .search-trigger {
         border: 0;
         background: var(--control-surface, var(--soft));
