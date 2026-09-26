@@ -1,5 +1,7 @@
 import { Check, LayoutGrid } from 'lucide-react';
 
+import allCategoriesIcon from '../../assets/icons/catalog-directory-color.webp';
+import allProductsIcon from '../../assets/icons/catalog-products-color.webp';
 import { catalogInputFromRoute, catalogRouteWithChanges } from '../../catalog-route-query';
 import { RouteState } from '../../storefront-router';
 import { collectionImage, SafeImage } from '../../storefront-ui/product-display';
@@ -40,7 +42,7 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
             {expandChildren && (
                 <strong className="desktop-category-directory-title">
                     <span className="desktop-category-icon" aria-hidden="true">
-                        <LayoutGrid />
+                        <img src={allCategoriesIcon} width={28} height={28} alt="" decoding="async" />
                     </span>
                     <span>{isZh ? '全部分类目录' : 'All categories'}</span>
                 </strong>
@@ -59,7 +61,7 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
                         onClick={clearFilters}
                     >
                         <span className="desktop-category-icon" aria-hidden="true">
-                            <LayoutGrid />
+                            <img src={allProductsIcon} width={28} height={28} alt="" decoding="async" />
                         </span>
                         <span>{isZh ? '全部商品' : 'All products'}</span>
                     </button>

@@ -294,11 +294,6 @@ export function CartPage() {
                 />
             ) : (
                 <>
-                    <ol className="cart-flow-steps" aria-label={isZh ? '购物流程' : 'Shopping steps'}>
-                        <li aria-current="step">01 {isZh ? '购物车' : 'Cart'}</li>
-                        <li>02 {isZh ? '确认订单' : 'Confirm order'}</li>
-                        <li>03 {isZh ? '支付' : 'Payment'}</li>
-                    </ol>
                     <div className="cart-commerce-layout">
                         <div className="cart-main-column">
                             <div className="cart-groups">

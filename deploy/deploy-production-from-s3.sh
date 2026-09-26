@@ -1039,13 +1039,23 @@ sudo -n systemctl enable --now vendure-mysql-restore-drill.timer
 sudo -n systemctl enable --now vendure-file-backup.timer
 sudo -n systemctl enable --now vendure-file-backup-retention.timer
 sudo -n systemctl disable --now vendure-file-restore-drill.timer
-if [[ ! -s /var/lib/vendure-readiness/restore-drill.json || \
-    "$(sudo -n systemctl show vendure-mysql-restore-drill.service -p Result --value)" != "success" ]]; then
+restore_drill_evidence_recent() {
+    local completed_at completed_epoch observed_epoch
+    local maximum_age="${VENDURE_MAXIMUM_RESTORE_DRILL_AGE_SECONDS:-777600}"
+    completed_at="$(sudo -n jq -er '.completedAt' /var/lib/vendure-readiness/restore-drill.json 2>/dev/null)" || return 1
+    completed_epoch="$(date -u --date="${completed_at}" +%s 2>/dev/null)" || return 1
+    [[ "${completed_epoch}" =~ ^[0-9]+$ && "${maximum_age}" =~ ^[0-9]+$ ]] || return 1
+    observed_epoch="$(date +%s)"
+    ((observed_epoch - completed_epoch >= 0 && observed_epoch - completed_epoch <= maximum_age))
+}
+if ! restore_drill_evidence_recent || \
+    [[ "$(sudo -n systemctl show vendure-mysql-restore-drill.service -p Result --value)" != "success" ]]; then
     if ! sudo -n systemctl start vendure-mysql-restore-drill.service; then
         sudo -n journalctl -u vendure-mysql-restore-drill.service -n 80 --no-pager >&2 || true
         fail 'the MySQL restore drill failed'
     fi
 fi
+restore_drill_evidence_recent || fail 'the MySQL restore drill did not produce a recent receipt'
 if ! sudo -n find /var/backups/vendure-files -maxdepth 1 -type f -name 'vendure-files-*.tar.gz.sha256' -print -quit | grep -q . || \
     [[ "$(sudo -n systemctl show vendure-file-backup.service -p Result --value)" != "success" ]]; then
     if ! sudo -n systemctl start vendure-file-backup.service; then
