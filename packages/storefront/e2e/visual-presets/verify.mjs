@@ -16,7 +16,7 @@ const requestedContent = process.env.STOREFRONT_VISUAL_CONTENT || 'normal';
 const presets = requestedPreset ? [requestedPreset] : ['classic', 'modern-oriental', 'neo-minimalist'];
 const expectedPaletteSignature = {
     classic: { page: '#f1f5f9', surface: '#ffffff', text: '#0f172a', brand: '#3558aa' },
-    'modern-oriental': { page: '#f6f2ea', surface: '#fffdf8', text: '#203346', brand: '#a63d32' },
+    'modern-oriental': { page: '#f1ece2', surface: '#fffaf1', text: '#1c302d', brand: '#9f3b30' },
     'neo-minimalist': { page: '#070b14', surface: '#0e1421', text: '#f4f7fb', brand: '#8b5cf6' },
 };
 const routes = [
@@ -1190,6 +1190,7 @@ try {
                                 heroRight: heroBounds.right,
                                 heroBottom: heroBounds.bottom,
                                 quickHeight: quickBounds.height,
+                                quickWidth: quickBounds.width,
                                 quickLeft: quickBounds.left,
                                 quickTop: quickBounds.top,
                                 copyBackground: getComputedStyle(copy).backgroundColor,
@@ -1203,10 +1204,25 @@ try {
                     expect(pair.copyBackground, `${preset}/${width}/home copy has no card`).toBe(
                         'rgba(0, 0, 0, 0)',
                     );
-                    expect(
-                        pair.quickTop,
-                        `${preset}/${width}/home quick links follow artwork`,
-                    ).toBeGreaterThanOrEqual(pair.heroBottom);
+                    if (width >= 1400) {
+                        expect(
+                            Math.abs(pair.heroWidth / pair.quickWidth - 2),
+                            `${preset}/${width}/home 8:4 column ratio`,
+                        ).toBeLessThan(0.01);
+                        expect(
+                            pair.heroRight,
+                            `${preset}/${width}/home approved 8:4 layout`,
+                        ).toBeLessThanOrEqual(pair.quickLeft);
+                        expect(
+                            Math.abs(pair.heroHeight - pair.quickHeight),
+                            `${preset}/${width}/home equal height`,
+                        ).toBeLessThanOrEqual(2);
+                    } else {
+                        expect(
+                            pair.quickTop,
+                            `${preset}/${width}/home narrow desktop stacks`,
+                        ).toBeGreaterThanOrEqual(pair.heroBottom);
+                    }
                     if (requestedContent === 'wide-hero') {
                         expect(pair.imageRatio, `${preset}/${width}/home image decoded`).not.toBeNull();
                         expect(
@@ -1226,7 +1242,7 @@ try {
                                         .top,
                             ),
                         )
-                        .toBe(16);
+                        .toBe(0);
                 }
                 if (name === 'services' && (width === 390 || width === 1440)) {
                     await page.locator('.business-services-page .category-client-plugin-two-factor').click();

@@ -70,7 +70,7 @@ describe('storefront semantic palette', () => {
             resolveStorefrontSkinTreatment(presetId),
         );
         expect(new Set(treatments.map(treatment => treatment.divider)).size).toBe(3);
-        expect(resolveStorefrontSkinTreatment('modern-oriental').displayFont).toContain('PingFang SC');
+        expect(resolveStorefrontSkinTreatment('modern-oriental').displayFont).toContain('Songti SC');
         for (const presetId of ['classic', 'modern-oriental', 'neo-minimalist'] as const) {
             const palette = resolveStorefrontSemanticPalette(presetId);
             const paletteVariables = semanticPaletteCssVariables(palette);
