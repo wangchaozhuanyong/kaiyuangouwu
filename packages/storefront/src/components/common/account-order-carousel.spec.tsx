@@ -12,30 +12,27 @@ describe('account order shortcut carousel', () => {
     let root: ReturnType<typeof createRoot>;
     let width: number;
     let reducedMotion: boolean;
-    let resize: () => void;
-    const disconnect = vi.fn();
+    let firstButtonLeft: number;
     const scrollBy = vi.fn();
     const openOrder = vi.fn();
 
     beforeEach(() => {
         width = 320;
         reducedMotion = false;
-        vi.stubGlobal(
-            'ResizeObserver',
-            class {
-                constructor(callback: () => void) {
-                    resize = callback;
-                }
-                observe = vi.fn();
-                disconnect = disconnect;
-            },
-        );
+        firstButtonLeft = 10;
         vi.stubGlobal('matchMedia', () => ({ matches: reducedMotion }));
-        vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => width);
-        vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(580);
-        vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ width: 90 } as DOMRect);
-        vi.spyOn(window, 'getComputedStyle').mockReturnValue({ columnGap: '8px' } as CSSStyleDeclaration);
-        vi.stubGlobal('scrollBy', undefined);
+        vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+            this: HTMLElement,
+        ) {
+            const index = Number(this.dataset.index);
+            const left = this.tagName === 'NAV' ? 0 : index === 0 ? firstButtonLeft : 10 + index * 88;
+            const right = this.tagName === 'NAV' ? width : left + 80;
+            return { left, right, width: right - left } as DOMRect;
+        });
+        vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+            scrollPaddingInlineStart: '10px',
+            scrollPaddingInlineEnd: '10px',
+        } as CSSStyleDeclaration);
         Object.defineProperty(HTMLElement.prototype, 'scrollBy', { configurable: true, value: scrollBy });
         container = document.createElement('div');
         document.body.append(container);
@@ -44,8 +41,8 @@ describe('account order shortcut carousel', () => {
             root.render(
                 <AccountOrderCarousel isZh>
                     {Array.from({ length: 6 }, (_, index) => (
-                        <button key={index} onClick={openOrder}>
-                            订单 {index + 1}
+                        <button key={index} data-index={index} onClick={openOrder}>
+                            <span>订单 {index + 1}</span>
                         </button>
                     ))}
                 </AccountOrderCarousel>,
@@ -67,44 +64,41 @@ describe('account order shortcut carousel', () => {
         if (!element) throw new Error(`Missing carousel element: ${selector}`);
         return element;
     };
-    const scroller = () => required<HTMLElement>('nav');
-    const previous = () => required<HTMLButtonElement>('[aria-label="向左滑动订单入口"]');
-    const next = () => required<HTMLButtonElement>('[aria-label="向右滑动订单入口"]');
-    const scrollTo = (left: number) =>
-        act(() => {
-            scroller().scrollLeft = left;
-            scroller().dispatchEvent(new Event('scroll'));
-        });
 
-    it('moves by one card with buttons and updates edge controls after native scrolling', () => {
-        expect(scroller().querySelectorAll('button')).toHaveLength(6);
-        expect(previous().disabled).toBe(true);
-        expect(next().disabled).toBe(false);
-        expect(next().getAttribute('aria-controls')).toBe(scroller().id);
-        act(() => next().click());
-        expect(scrollBy).toHaveBeenCalledWith({ left: 98, behavior: 'smooth' });
+    it('keeps native scrolling and order entries without extra controls or hints', () => {
+        const nav = required<HTMLElement>('nav');
+        expect(container.querySelectorAll('button')).toHaveLength(6);
+        expect(container.querySelector('.account-order-carousel-controls')).toBeNull();
+        expect(container.textContent).not.toContain('左右滑动查看');
+        act(() => {
+            nav.scrollLeft = 100;
+            nav.dispatchEvent(new Event('scroll'));
+        });
+        expect(nav.scrollLeft).toBe(100);
+        expect(scrollBy).not.toHaveBeenCalled();
         expect(openOrder).not.toHaveBeenCalled();
-        scrollTo(260);
-        expect(previous().disabled).toBe(false);
-        expect(next().disabled).toBe(true);
-        act(() => previous().click());
-        expect(scrollBy).toHaveBeenLastCalledWith({ left: -98, behavior: 'smooth' });
-        act(() => required<HTMLButtonElement>('nav button').click());
+    });
+
+    it('reveals a partially visible shortcut when its icon is clicked and preserves navigation', () => {
+        act(() => required<HTMLSpanElement>('button[data-index="3"] span').click());
+        expect(scrollBy).toHaveBeenCalledWith({ left: 44, behavior: 'smooth' });
         expect(openOrder).toHaveBeenCalledOnce();
     });
 
-    it('hides unnecessary controls when all entries fit and restores them after resizing', () => {
-        width = 620;
-        act(() => resize());
-        expect(container.querySelector('.account-order-carousel-controls')).toBeNull();
-        width = 320;
-        act(() => resize());
-        expect(next().disabled).toBe(false);
+    it('reveals a shortcut to the left on keyboard focus and respects reduced motion', () => {
+        reducedMotion = true;
+        const button = required<HTMLButtonElement>('button[data-index="0"]');
+        firstButtonLeft = -20;
+        act(() => button.focus());
+        expect(scrollBy).toHaveBeenCalledWith({ left: -30, behavior: 'auto' });
+        expect(openOrder).not.toHaveBeenCalled();
     });
 
-    it('respects reduced motion for button navigation', () => {
-        reducedMotion = true;
-        act(() => next().click());
-        expect(scrollBy).toHaveBeenCalledWith({ left: 98, behavior: 'auto' });
+    it('does not move already visible shortcuts, including when every entry fits', () => {
+        act(() => required<HTMLButtonElement>('button[data-index="0"]').click());
+        width = 620;
+        act(() => required<HTMLButtonElement>('button[data-index="5"]').click());
+        expect(scrollBy).not.toHaveBeenCalled();
+        expect(openOrder).toHaveBeenCalledTimes(2);
     });
 });
