@@ -3099,11 +3099,17 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     }
 
     .category-page .primary-category-switcher {
-        height: 96px;
+        height: auto;
+        min-height: 96px;
         padding-block: 12px;
         border: 0;
-        background: var(--surface);
+        background: transparent;
         box-shadow: none;
+    }
+
+    html[lang='en'] .category-page .primary-category-switcher {
+        height: auto;
+        min-height: 129px;
     }
 
     .category-topbar > .search-trigger {
@@ -3988,6 +3994,8 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 .category-page .primary-category-strip {
     margin: 0 var(--page-section-inset, 16px);
     padding-inline: 0;
+    border-radius: 0;
+    background: transparent;
     gap: 0;
 }
 

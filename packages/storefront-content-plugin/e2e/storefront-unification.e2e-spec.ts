@@ -458,7 +458,9 @@ describe('unified storefront Admin API to Shop API', () => {
                 });
             const before = await order();
             await row.getByRole('button', { name: '下移', exact: true }).click();
-            await browserExpect(admin.getByRole('status').filter({ hasText: '已重新读取核对' })).toBeVisible();
+            await browserExpect(
+                admin.getByRole('status').filter({ hasText: '已重新读取核对' }),
+            ).toBeVisible();
             await first.reload();
             await browserExpect(first.locator('.home-dual-showcase')).toBeVisible();
             expect(Number(await order())).toBeGreaterThan(Number(before));

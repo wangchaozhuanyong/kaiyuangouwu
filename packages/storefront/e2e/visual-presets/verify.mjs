@@ -13,6 +13,7 @@ const requestedPreset = process.env.STOREFRONT_VISUAL_PRESET;
 const requestedRoute = process.env.STOREFRONT_VISUAL_ROUTE;
 const requestedWidth = Number(process.env.STOREFRONT_VISUAL_WIDTH || 0);
 const requestedContent = process.env.STOREFRONT_VISUAL_CONTENT || 'normal';
+const verifyProductNavigation = requestedContent.startsWith('product-navigation');
 const presets = requestedPreset ? [requestedPreset] : ['classic', 'modern-oriental', 'neo-minimalist'];
 const expectedPaletteSignature = {
     classic: { page: '#f1f5f9', surface: '#ffffff', text: '#0f172a', brand: '#3558aa' },
@@ -137,6 +138,29 @@ try {
                 if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.abort();
                 if (url.pathname.includes('shop-api')) {
                     const data = fixtureData(preset, signedIn, requestedContent);
+                    if (verifyProductNavigation) {
+                        data.myCustomerProductActivity = savedProductsActivity;
+                        data.storefrontContentSettings.configuredBlockTypes.push('RECOMMENDATIONS');
+                        data.storefrontContent.push({
+                            ...data.storefrontContent[0],
+                            id: 'qa-product-navigation',
+                            code: 'qa-product-navigation',
+                            type: 'RECOMMENDATIONS',
+                            position: 3,
+                            title: '推荐商品',
+                        });
+                        if (requestedContent === 'product-navigation-ai') {
+                            const product = {
+                                ...data.product,
+                                name: 'ChatGPT Plus',
+                                featuredAsset: null,
+                                assets: [],
+                            };
+                            data.product = product;
+                            data.products.items = [product];
+                            data.storefrontCatalog.items = [product];
+                        }
+                    }
                     if (requestedContent === 'saved-products') {
                         const request = route.request().postDataJSON();
                         const query = String(request.query ?? '');
@@ -1425,6 +1449,53 @@ try {
                 if (name === 'services' && (width === 390 || width === 1440)) {
                     await page.locator('.business-services-page .category-client-plugin-two-factor').click();
                     await expect(page).toHaveURL(/\/two-factor(?:\?|$)/);
+                }
+                if (verifyProductNavigation) {
+                    if (name === 'category' && width >= 1024) {
+                        await page.goto(`${baseUrl}${route}`);
+                    }
+                    const consent = page.getByRole('button', { name: '仅必要功能' });
+                    if (await consent.isVisible()) await consent.click();
+                    if (name === 'category' && width < 1024) {
+                        const strip = page.locator('.primary-category-strip');
+                        await expect(strip).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+                        await expect(strip).toHaveCSS('box-shadow', 'none');
+                        await expect(page.locator('.primary-category-switcher')).toHaveCSS(
+                            'padding-top',
+                            '12px',
+                        );
+                        await expect(page.locator('.primary-category-switcher')).toHaveCSS(
+                            'padding-bottom',
+                            '12px',
+                        );
+                    }
+                    const entry = page.locator('.product-card, .product-row').first();
+                    await expect(entry, `${preset}/${width}/${name} has products`).toBeVisible();
+                    const title = await entry.locator('.product-card-name, .product-row-name').textContent();
+                    const media = entry.locator('.product-card-media, .product-row-image');
+                    await media.scrollIntoViewIfNeeded();
+                    const hit = await media.evaluate(element => {
+                        const rect = element.getBoundingClientRect();
+                        const x = rect.x + rect.width / 2;
+                        const y = rect.y + rect.height / 2;
+                        return {
+                            x,
+                            y,
+                            target: document.elementFromPoint(x, y)?.outerHTML.slice(0, 180),
+                            detailTarget: document
+                                .elementFromPoint(x, y)
+                                ?.matches('.product-card-detail-link, .product-row-detail-link'),
+                        };
+                    });
+                    expect(
+                        hit.detailTarget,
+                        `${preset}/${width}/${name} image reaches detail action: ${hit.target}`,
+                    ).toBe(true);
+                    await page.mouse.click(hit.x, hit.y);
+                    await expect(page).toHaveURL(/\/product\?id=product-1(?:&|$)/);
+                    await expect(
+                        page.getByRole('heading', { name: title, exact: true }).first(),
+                    ).toBeVisible();
                 }
             }
             expect(errors).toEqual([]);
