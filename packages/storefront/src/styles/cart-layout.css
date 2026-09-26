@@ -549,7 +549,3 @@
         box-shadow: var(--shadow-sm);
     }
 }
-
-.cart-flow-steps {
-    display: none;
-}
