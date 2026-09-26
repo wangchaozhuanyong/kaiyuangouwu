@@ -923,7 +923,7 @@ export function HomePage() {
                         >
                             {hasHomepageModule('HERO') && heroCount > 0 && (
                                 <section
-                                    className={`hero${desktop ? ' hero-image-overlay' : ''}${heroCount > 1 ? ' is-swipeable' : ''}`}
+                                    className={`hero hero-image-overlay${heroCount > 1 ? ' is-swipeable' : ''}`}
                                     style={{
                                         order: homepageModuleOrder('HERO'),
                                         aspectRatio: desktop ? heroAspectRatio : undefined,

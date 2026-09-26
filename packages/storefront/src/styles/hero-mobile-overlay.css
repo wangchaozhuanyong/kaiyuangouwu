@@ -1,0 +1,40 @@
+/* The storefront and the Admin iframe import this same mobile composition. */
+@media (max-width: 1023px) {
+    .hero.hero-image-overlay {
+        min-height: 260px;
+    }
+
+    .hero.hero-image-overlay .hero-rich-content {
+        position: relative;
+        top: auto;
+        left: auto;
+        transform: none;
+        width: 100%;
+        min-height: 260px;
+        max-height: none;
+        padding: 24px 20px 40px;
+        gap: 10px;
+        overflow-wrap: anywhere;
+    }
+
+    .hero.hero-image-overlay .hero-rich-title {
+        font-size: 24px;
+        line-height: 1.25;
+    }
+
+    .hero.hero-image-overlay .hero-rich-desc {
+        font-size: 13px;
+        line-height: 1.5;
+    }
+
+    .hero.hero-image-overlay .hero-rich-pill {
+        font-size: 10px;
+        letter-spacing: 0.02em;
+    }
+
+    .hero.hero-image-overlay .hero-rich-cta-btn {
+        padding: 10px 16px;
+        margin-top: 4px;
+        font-size: 13px;
+    }
+}

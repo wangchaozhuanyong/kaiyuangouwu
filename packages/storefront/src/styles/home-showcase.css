@@ -1,4 +1,5 @@
 @import '../../../storefront-content-plugin/src/shared/hero-scene.css';
+@import './hero-mobile-overlay.css';
 
 .hero-pagination {
     position: absolute;
