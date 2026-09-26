@@ -234,7 +234,10 @@ export function useStorefrontBootstrap() {
         vendureLanguageCode,
     ]);
 
-    useStorefrontBrandColors(configQuery.data, visualConfig.presetId);
+    useStorefrontBrandColors(configQuery.data, visualConfig.presetId, {
+        ready: Boolean((configQuery.data && visualConfig.ready) || configQuery.isError),
+        cache: visualConfig.cache,
+    });
 
     const refetchStorefront = useCallback(async () => {
         await Promise.all([productsQuery.refetch(), collectionsQuery.refetch(), configQuery.refetch()]);
