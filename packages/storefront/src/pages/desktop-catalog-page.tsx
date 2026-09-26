@@ -123,6 +123,15 @@ export function DesktopCatalogPage() {
         <main className="desktop-catalog-main">
             <aside className="desktop-catalog-sidebar">
                 <DesktopCategoryNavigation expandChildren />
+                <section className="desktop-catalog-help">
+                    <h2>{isZh ? '需要帮助？' : 'Need help?'}</h2>
+                    <p>
+                        {isZh ? '咨询商品、订单与售后问题' : 'Get help with products, orders and after-sales'}
+                    </p>
+                    <button type="button" onClick={() => runtime.navigate({ name: 'support' })}>
+                        {isZh ? '联系客服' : 'Contact support'}
+                    </button>
+                </section>
             </aside>
             <div className="desktop-catalog-workspace">
                 <header

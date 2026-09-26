@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { SupportContent } from './pages/support-page';
+import { filterSupportFaqs, SupportContent } from './pages/support-page';
 import {
     storefrontSupportChannels,
     supportChannelDetail,
@@ -60,6 +60,18 @@ const supportBlock: StorefrontContentBlock = {
 };
 
 describe('support content', () => {
+    it('searches both questions and answers in the chosen language without exposing another language', () => {
+        const faq = {
+            questionZh: '运费说明',
+            answerZh: '结算时计算',
+            questionEn: 'Shipping',
+            answerEn: 'Calculated at checkout',
+        };
+        expect(filterSupportFaqs([faq], '  CHECKOUT ', 'en')).toEqual([faq]);
+        expect(filterSupportFaqs([faq], '结算', 'zh')).toEqual([faq]);
+        expect(filterSupportFaqs([faq], 'checkout', 'zh')).toEqual([]);
+        expect(filterSupportFaqs([faq], ' ', 'zh')).toEqual([faq]);
+    });
     it('reads service hours from settings and preserves channel order', () => {
         expect(supportPageTitle(supportBlock, 'zh')).toBe('客服配置');
         expect(supportPageTitle(undefined, 'en')).toBe('Customer support');

@@ -6,11 +6,9 @@ import {
     RotateCcw,
     Star,
     Truck,
-    UserRound,
     WalletCards,
 } from 'lucide-react';
 
-import { SafeImage } from '../safe-image';
 import { RouteState } from '../storefront-router';
 import { orderStateLabel } from '../storefront-ui/order-ui';
 import { LegalFooter, SectionIcon } from '../storefront-ui/page-shell';
@@ -105,15 +103,14 @@ export function DesktopAccountPage({
             <h1 className="desktop-account-page-title">{isZh ? '账户概览' : 'Account overview'}</h1>
             <section className="desktop-member-summary" aria-label={isZh ? '账户信息' : 'Account details'}>
                 <div className="desktop-member-identity">
-                    <span className="desktop-member-avatar">
-                        {customer?.avatar?.preview ? (
-                            <SafeImage src={customer.avatar.preview} alt="" />
-                        ) : (
-                            <UserRound aria-hidden="true" />
-                        )}
-                    </span>
                     <div>
-                        <h2>{customer ? name : isZh ? '欢迎来到店铺' : 'Welcome to the store'}</h2>
+                        <h2>
+                            {customer
+                                ? `${isZh ? '你好，' : 'Hello, '}${name}`
+                                : isZh
+                                  ? '欢迎来到店铺'
+                                  : 'Welcome to the store'}
+                        </h2>
                         <button
                             type="button"
                             onClick={() => navigate({ name: customer ? 'account-security' : 'login' })}
@@ -137,36 +134,46 @@ export function DesktopAccountPage({
                     {isZh ? '继续逛逛' : 'Continue shopping'}
                     <ChevronRight />
                 </button>
-                <button
-                    className="desktop-member-asset"
-                    type="button"
-                    onClick={() => navigate({ name: 'coupons' })}
-                >
-                    <strong>{couponCount}</strong>
-                    <span>{isZh ? '优惠券' : 'Coupons'}</span>
-                </button>
-                <button
-                    className="desktop-member-asset"
-                    type="button"
-                    onClick={() => navigate({ name: 'favorites' })}
-                >
-                    <strong>{favoriteProductCount}</strong>
-                    <span>{isZh ? '收藏商品' : 'Favorites'}</span>
-                </button>
-                {referralEnabled && (
+                <div className="desktop-member-assets">
                     <button
                         className="desktop-member-asset"
                         type="button"
-                        onClick={() => navigate({ name: 'referral' })}
+                        onClick={() => navigate({ name: 'coupons' })}
                     >
-                        <strong>
-                            {referralBalance == null
-                                ? '—'
-                                : formatMoney(referralBalance, market.currencyCode, locale)}
-                        </strong>
-                        <span>{isZh ? '返利余额' : 'Referral balance'}</span>
+                        <span className="desktop-member-asset-label">
+                            <WalletCards aria-hidden="true" />
+                            {isZh ? '优惠券' : 'Coupons'}
+                        </span>
+                        <strong>{couponCount}</strong>
+                        <small>{isZh ? '查看活动与使用条件' : 'Offers and conditions'}</small>
                     </button>
-                )}
+                    <button
+                        className="desktop-member-asset"
+                        type="button"
+                        onClick={() => navigate({ name: 'favorites' })}
+                    >
+                        <span className="desktop-member-asset-label">
+                            <Star aria-hidden="true" />
+                            {isZh ? '收藏商品' : 'Favorites'}
+                        </span>
+                        <strong>{favoriteProductCount}</strong>
+                        <small>{isZh ? '收藏喜欢的商品' : 'Your saved products'}</small>
+                    </button>
+                    {referralEnabled && (
+                        <button
+                            className="desktop-member-asset"
+                            type="button"
+                            onClick={() => navigate({ name: 'referral' })}
+                        >
+                            <strong>
+                                {referralBalance == null
+                                    ? '—'
+                                    : formatMoney(referralBalance, market.currencyCode, locale)}
+                            </strong>
+                            <span>{isZh ? '返利余额' : 'Referral balance'}</span>
+                        </button>
+                    )}
+                </div>
             </section>
             <section className="desktop-account-orders" aria-labelledby="desktop-my-orders">
                 <header>
@@ -209,6 +216,21 @@ export function DesktopAccountPage({
                         </button>
                     </p>
                 )}
+            </section>
+            <section
+                className="desktop-account-orders desktop-account-recent"
+                aria-labelledby="desktop-recent-orders"
+            >
+                <header>
+                    <h2 id="desktop-recent-orders">
+                        <SectionIcon kind="history" />
+                        {isZh ? '最近订单' : 'Recent orders'}
+                    </h2>
+                    <button type="button" onClick={() => navigate({ name: 'orders', tab: 'all' })}>
+                        {isZh ? '查看全部' : 'View all'}
+                        <ChevronRight />
+                    </button>
+                </header>
                 {orders.length ? (
                     <div className="desktop-recent-orders">
                         {orders.slice(0, 3).map(order => (
