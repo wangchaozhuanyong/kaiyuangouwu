@@ -20,11 +20,11 @@ function product(overrides: Partial<Product>): Product {
 }
 
 describe('product card subtitle', () => {
-    it('uses the shared skin elevation instead of a dark mobile perimeter', () => {
+    it('uses an inset borderless surface and keeps product images square', () => {
         const stylesheet = readStorefrontStylesheet(['./styles/product-card.css']);
 
         expect(stylesheet).toMatch(
-            /\.product-card\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--product-card-surface, var\(--surface\)\);[^}]*box-shadow:\s*var\(--skin-card-shadow\);/u,
+            /\.product-card\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--product-card-surface, var\(--surface\)\);[^}]*box-shadow:\s*none;/u,
         );
         expect(stylesheet).toContain('aspect-ratio: var(--product-media-ratio);');
         expect(stylesheet).toContain('color: var(--availability-unavailable);');

@@ -1249,6 +1249,12 @@
         gap: 10px;
         width: 100%;
     }
+    .desktop-category-navigation .desktop-local-navigation button > span:last-child {
+        flex: 1;
+        min-width: 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
     .desktop-category-icon {
         display: grid;
         place-items: center;

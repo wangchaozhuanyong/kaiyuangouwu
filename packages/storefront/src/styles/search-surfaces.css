@@ -370,13 +370,6 @@
         display: grid;
         gap: 8px;
     }
-    .search-page .product-list .product-row {
-        padding: 10px;
-        border: 0;
-        border-radius: var(--radius-md);
-        background: var(--surface);
-        box-shadow: var(--shadow-sm);
-    }
     .search-page .search-discovery > .product-section {
         border: 0;
     }

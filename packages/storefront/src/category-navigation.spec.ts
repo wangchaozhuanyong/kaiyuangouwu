@@ -1,11 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import {
-    categoryTargetSelection,
-    centeredHorizontalScrollLeft,
-    compactCategoryLabel,
-} from './category-navigation';
+import { categoryTargetSelection, centeredHorizontalScrollLeft } from './category-navigation';
 import { routePageIdentity } from './storefront-router';
 import { readStorefrontStylesheet } from './test-stylesheet';
 
@@ -62,13 +58,6 @@ describe('category navigation scrolling', () => {
                 { offsetLeft: 160, offsetWidth: 70 },
             ),
         ).toBe(0);
-    });
-});
-
-describe('category navigation labels', () => {
-    it('keeps at most six visible Chinese characters while preserving short labels', () => {
-        expect(compactCategoryLabel('正品烟草')).toBe('正品烟草');
-        expect(compactCategoryLabel('马来西亚特色食品')).toBe('马来西亚特色');
     });
 });
 
@@ -195,7 +184,7 @@ describe('category navigation responsive spacing', () => {
         const activeItemRule = stylesheet.match(/\.subcat-side-item\.is-active\s*\{([^}]*)\}/)?.[1] ?? '';
         const resultsRule = stylesheet.match(/\.category-results\s*\{([^}]*)\}/)?.[1] ?? '';
 
-        expect(layoutRule).toMatch(/--category-results-surface:\s*var\(--surface\);/);
+        expect(layoutRule).toMatch(/--category-results-surface:\s*var\(--bg\);/);
         expect(sidebarRule).toMatch(/background:\s*var\(--soft\);/);
         expect(sidebarRule).toMatch(/border-right:\s*0;/);
         expect(itemRule).not.toMatch(/border-left/);
@@ -203,23 +192,6 @@ describe('category navigation responsive spacing', () => {
         expect(activeItemRule).toMatch(/color:\s*var\(--accent-ink\);/);
         expect(activeItemRule).toMatch(/box-shadow:\s*1px 0 0 var\(--category-results-surface\);/);
         expect(resultsRule).toMatch(/background:\s*var\(--category-results-surface\);/);
-        expect(presetStylesheet).not.toMatch(/--category-results-surface:\s*var\(--bg\);/);
-    });
-
-    it('uses the product row as the only mobile catalog frame', () => {
-        expect(presetStylesheet).toMatch(
-            // eslint-disable-next-line max-len -- This single rule is the mobile product-frame contract.
-            /\.category-page \.category-product-list \.product-row\s*\{[^}]*min-height:\s*96px;[^}]*padding:\s*0;[^}]*overflow:\s*hidden;[^}]*border-radius:\s*var\(--radius-md\);/,
-        );
-        expect(presetStylesheet).toMatch(
-            /\.category-page \.category-product-list \.product-row-image\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*96px;[^}]*border:\s*0;[^}]*border-radius:\s*0;/,
-        );
-        expect(presetStylesheet).toMatch(
-            /\.category-page\s+\.category-product-list\s+\.product-row-image\s+:is\(\.responsive-picture, img, \.image-placeholder\)\s*\{[^}]*border-radius:\s*0;/,
-        );
-        expect(presetStylesheet).toMatch(
-            /\.category-page \.category-product-list \.product-row-content\s*\{[^}]*padding:\s*8px 10px 8px 0;/,
-        );
     });
 
     it('keeps the search bar full width on narrow mobile screens', () => {
@@ -228,25 +200,25 @@ describe('category navigation responsive spacing', () => {
         );
     });
 
-    it('allows long English category labels to wrap without changing Chinese labels', () => {
+    it('allows expanded English category names to grow without clipping', () => {
         expect(stylesheet).toMatch(
             /html\[lang='en'\] \.primary-category-label\s*\{[^}]*height:\s*48px;[^}]*white-space:\s*normal;[^}]*-webkit-line-clamp:\s*4;/,
         );
         expect(stylesheet).toMatch(
-            /html\[lang='en'\] \.all-primary-category-grid button > span:last-child\s*\{[^}]*min-height:\s*60px;[^}]*white-space:\s*normal;[^}]*-webkit-line-clamp:\s*4;/,
+            /html\[lang='en'\] \.all-primary-category-grid button > span:last-child\s*\{[^}]*min-height:\s*60px;[^}]*display:\s*block;[^}]*white-space:\s*normal;/,
         );
         expect(stylesheet).toMatch(
             /html\[lang='en'\] \.primary-categories button\s*\{[^}]*width:\s*80px;[^}]*min-width:\s*80px;[^}]*height:\s*92px;/,
         );
     });
 
-    it('keeps Chinese labels single-line and balances the visible mobile navigation slots', () => {
+    it('allows complete Chinese labels while balancing visible mobile slots', () => {
         const mobileChineseCategoryPrefix =
             String.raw`@media \(max-width:\s*1023px\)[\s\S]*?` +
             String.raw`html:not\(\[lang='en'\]\) \.category-page `;
 
         expect(stylesheet).toMatch(
-            /\.primary-category-label\s*\{[^}]*white-space:\s*nowrap;[^}]*text-overflow:\s*ellipsis;/,
+            /\.category-page \.primary-category-label\s*\{[^}]*height:\s*auto;[^}]*overflow:\s*visible;[^}]*white-space:\s*normal;/,
         );
         expect(stylesheet).toMatch(
             /\.primary-categories button\s*\{[^}]*width:\s*76px;[^}]*min-width:\s*76px;[^}]*max-width:\s*76px;/,

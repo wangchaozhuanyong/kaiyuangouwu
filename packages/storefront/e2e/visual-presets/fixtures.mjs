@@ -380,6 +380,14 @@ function denseCommerceFixture(signedIn) {
     }));
     return {
         products: { items: products, totalItems: products.length },
+        collections: {
+            items: [
+                { ...collection, name: '日常居家与随行生活用品' },
+                { ...collection, id: 'qa-category-gifts', name: '节日礼盒与赠礼组合', children: [] },
+                { ...collection, id: 'qa-category-travel', name: '旅行收纳与户外配件', children: [] },
+            ],
+            totalItems: 3,
+        },
         product: products[0],
         storefrontCatalog: { items: products, totalItems: products.length },
         storefrontCart: {
@@ -1030,8 +1038,7 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true, conte
         },
         imageModelQuotaStatus: [],
         myImageGenerationJobs: { items: [], totalItems: 0 },
-        productReviews: { items: [], totalItems: 0 },
-        productReviewSummary: { averageRating: 0, totalReviews: 0 },
+        storefrontProductReviews: { items: [], totalItems: 0, averageRating: 0 },
         ...(content === 'dense' ? denseCommerceFixture(signedIn) : {}),
         ...(content === 'aftercare' ? aftercareFixture(signedIn) : {}),
         ...(content === 'reviews' ? reviewCenterFixture(signedIn) : {}),

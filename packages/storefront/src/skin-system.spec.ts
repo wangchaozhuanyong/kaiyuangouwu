@@ -197,7 +197,28 @@ describe('storefront skin system', () => {
         const card = stylesheet('./styles/product-card.css');
         expect(card).toContain('aspect-ratio: var(--product-media-ratio)');
         expect(card).toContain('object-fit: contain');
-        expect(card).toContain('border-radius: var(--skin-card-radius) var(--skin-card-radius) 0 0');
+        expect(card).toMatch(/\.product-card-media\s*\{[^}]*border-radius:\s*0;/);
+        expect(card).toContain('padding: var(--product-card-inset)');
+    });
+
+    it('gives product rows one owner and preserves square art without decorative rules', () => {
+        for (const file of [
+            'home-showcase',
+            'ai-product-covers',
+            'desktop-layout',
+            'auth-flow',
+            'search-surfaces',
+        ]) {
+            expect(stylesheet(`./styles/${file}.css`), file).not.toMatch(/\.product-row(?:[\s.{:#>-]|$)/);
+        }
+        const row = stylesheet('./styles/product-row.css');
+        expect(row).toContain('aspect-ratio: var(--product-media-ratio)');
+        expect(row).toContain('object-fit: contain');
+        expect(row).toMatch(
+            /\.product-row\s*\{[^}]*padding:\s*12px;[^}]*overflow:\s*visible;[^}]*border:\s*0;[^}]*box-shadow:\s*none;/,
+        );
+        expect(row).not.toMatch(/border-bottom|#[0-9a-f]{3,8}\b|!important/);
+        expect(row).toMatch(/\.product-row-name\s*\{[^}]*overflow-wrap:\s*anywhere;/);
     });
 
     it('scopes controls to storefront surfaces and themes consent through shared tokens', () => {

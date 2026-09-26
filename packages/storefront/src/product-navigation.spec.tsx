@@ -603,7 +603,7 @@ describe('product image navigation layers', () => {
         expect(descriptionRule).toMatch(/align-self:\s*stretch;/);
     });
 
-    it('ensures product-card provides a unified card frame with background, border-radius and shadow', () => {
+    it('keeps the shared product surface without a decorative outline or shadow', () => {
         const markup = renderToStaticMarkup(
             <ProductCard
                 product={digitalProduct}
@@ -619,7 +619,7 @@ describe('product image navigation layers', () => {
         expect(stylesheet).toMatch(
             /\.product-card\s*\{[^}]*background:\s*var\(--product-card-surface,\s*var\(--surface\)\);/,
         );
-        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*border-radius:\s*var\(--skin-card-radius\);/);
-        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*box-shadow:\s*var\(--skin-card-shadow\);/);
+        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*border-radius:\s*var\(--skin-control-radius\);/);
+        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*box-shadow:\s*none;/);
     });
 });

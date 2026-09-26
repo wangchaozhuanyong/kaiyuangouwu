@@ -1177,15 +1177,6 @@
         grid-template-columns: 74px minmax(0, 1fr);
     }
 
-    .product-row {
-        grid-template-columns: 80px minmax(0, 1fr);
-    }
-
-    .product-row-image {
-        width: 80px;
-        height: 80px;
-    }
-
     .cart-line {
         grid-template-columns: 21px 76px minmax(0, 1fr);
     }
