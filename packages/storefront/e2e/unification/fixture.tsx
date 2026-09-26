@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 
 import { ShopApi } from '../../src/api';
 import { LoginPage, RegisterPage } from '../../src/auth-pages';
+import { DesktopHeader } from '../../src/components/common/desktop-header';
 import { DesktopLayoutContext, useDesktopViewport } from '../../src/desktop-layout';
 import { useStorefrontBrandColors, useStorefrontMetadata } from '../../src/hooks/useStorefrontDocument';
 import { BusinessServicesPage } from '../../src/pages/business-services-page';
@@ -263,77 +264,81 @@ function Fixture() {
     }
     return (
         <StorefrontContext.Provider value={runtime}>
-            <div className="storefront-app">
-                {params.get('stores') && (
-                    <select
-                        aria-label="测试切店"
-                        value={token}
-                        onChange={event => setToken(event.target.value)}
-                    >
-                        {(params.get('stores') ?? '').split(',').map(value => (
-                            <option key={value}>{value}</option>
-                        ))}
-                    </select>
-                )}
-                <div>
-                    <div>
-                        <HomePageContext.Provider
-                            value={{
-                                products: [],
-                                collections: [],
-                                managedContentProducts: [],
-                                bestSellerProducts: [],
-                                recommendationProducts: [],
-                                contentBlocks: blocks,
-                                configuredBlockTypes:
-                                    data?.storefrontContentSettings.configuredBlockTypes ?? [],
-                                heroAutoplayIntervalSeconds:
-                                    data?.storefrontContentSettings.heroAutoplayIntervalSeconds ?? 5,
-                                coupons: [],
-                                flashSales: [],
-                                systemAnnouncements: [],
-                                couponCampaignsLoading: false,
-                                couponCampaignsError: '',
-                                couponLoading: false,
-                                loading: !data && !error,
-                                error,
-                                catalogLoading: false,
-                                catalogError: null,
-                                contentError: '',
-                                language,
-                                locale: language === 'zh' ? 'zh-CN' : 'en-US',
-                                market: {
-                                    code: 'test',
-                                    currencyCode: 'USD',
-                                    countryCode: 'US',
-                                    defaultLanguageCode: 'en',
-                                    locale: 'en-US',
-                                    label: 'Test',
-                                },
-                                storefrontName: params.get('name') ?? 'Test store',
-                                storefrontDescription: '',
-                                storefrontTagline: '',
-                                logoUrl: null,
-                                availableCurrencyCodes: ['USD'],
-                                currencySelectorEnabled: false,
-                                displayCurrencyCode: 'USD',
-                                currencyLoading: false,
-                                onToggleLanguage: () => setLanguage(value => (value === 'zh' ? 'en' : 'zh')),
-                                onCurrencyChange: () => undefined,
-                                onNotifications: () => undefined,
-                                onCategorySelect: () => undefined,
-                                onContentTarget: () => undefined,
-                                onClaimCoupon: () => Promise.resolve(null),
-                                onCouponCampaignsRetry: reload,
-                                onContentRetry: reload,
-                                onRetry: reload,
-                            }}
+            <DesktopLayoutContext.Provider value={desktop}>
+                <div className={`storefront-app${desktop ? ' desktop-store-layout' : ''}`}>
+                    {desktop && <DesktopHeader cartQuantity={0} />}
+                    {params.get('stores') && (
+                        <select
+                            aria-label="测试切店"
+                            value={token}
+                            onChange={event => setToken(event.target.value)}
                         >
-                            <HomePage />
-                        </HomePageContext.Provider>
+                            {(params.get('stores') ?? '').split(',').map(value => (
+                                <option key={value}>{value}</option>
+                            ))}
+                        </select>
+                    )}
+                    <div>
+                        <div>
+                            <HomePageContext.Provider
+                                value={{
+                                    products: [],
+                                    collections: [],
+                                    managedContentProducts: [],
+                                    bestSellerProducts: [],
+                                    recommendationProducts: [],
+                                    contentBlocks: blocks,
+                                    configuredBlockTypes:
+                                        data?.storefrontContentSettings.configuredBlockTypes ?? [],
+                                    heroAutoplayIntervalSeconds:
+                                        data?.storefrontContentSettings.heroAutoplayIntervalSeconds ?? 5,
+                                    coupons: [],
+                                    flashSales: [],
+                                    systemAnnouncements: [],
+                                    couponCampaignsLoading: false,
+                                    couponCampaignsError: '',
+                                    couponLoading: false,
+                                    loading: !data && !error,
+                                    error,
+                                    catalogLoading: false,
+                                    catalogError: null,
+                                    contentError: '',
+                                    language,
+                                    locale: language === 'zh' ? 'zh-CN' : 'en-US',
+                                    market: {
+                                        code: 'test',
+                                        currencyCode: 'USD',
+                                        countryCode: 'US',
+                                        defaultLanguageCode: 'en',
+                                        locale: 'en-US',
+                                        label: 'Test',
+                                    },
+                                    storefrontName: params.get('name') ?? 'Test store',
+                                    storefrontDescription: '',
+                                    storefrontTagline: '',
+                                    logoUrl: null,
+                                    availableCurrencyCodes: ['USD'],
+                                    currencySelectorEnabled: false,
+                                    displayCurrencyCode: 'USD',
+                                    currencyLoading: false,
+                                    onToggleLanguage: () =>
+                                        setLanguage(value => (value === 'zh' ? 'en' : 'zh')),
+                                    onCurrencyChange: () => undefined,
+                                    onNotifications: () => undefined,
+                                    onCategorySelect: () => undefined,
+                                    onContentTarget: () => undefined,
+                                    onClaimCoupon: () => Promise.resolve(null),
+                                    onCouponCampaignsRetry: reload,
+                                    onContentRetry: reload,
+                                    onRetry: reload,
+                                }}
+                            >
+                                <HomePage />
+                            </HomePageContext.Provider>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </DesktopLayoutContext.Provider>
         </StorefrontContext.Provider>
     );
 }

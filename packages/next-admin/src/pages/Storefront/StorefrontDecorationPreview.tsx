@@ -92,13 +92,16 @@ function ClientFrame({
                 if (!response) return;
                 if (!response.ok) throw new Error('预览页面加载失败');
                 const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
-                const entry = doc.querySelector('script[type="module"][src]')?.getAttribute('src');
-                if (
-                    !entry ||
-                    (!entry.includes('storefront-preview-entry.tsx') &&
-                        !entry.includes('/storefrontPreview-'))
-                )
-                    throw new Error('预览入口不可用，请重新构建后台');
+                const hasClientEntry = Array.from(doc.querySelectorAll('script[type="module"][src]')).some(
+                    script => {
+                        const entry = script.getAttribute('src') ?? '';
+                        return (
+                            entry.includes('storefront-preview-entry.tsx') ||
+                            entry.includes('/storefrontPreview-')
+                        );
+                    },
+                );
+                if (!hasClientEntry) throw new Error('预览入口不可用，请重新构建后台');
                 doc.documentElement.dataset.decorationSession = session;
                 if (!controller.signal.aborted)
                     setDocumentHtml('<!doctype html>' + doc.documentElement.outerHTML);

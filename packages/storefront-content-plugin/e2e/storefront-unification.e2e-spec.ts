@@ -430,11 +430,14 @@ describe('unified storefront Admin API to Shop API', () => {
                         `http://127.0.0.1:5300/e2e/unification/index.html?channel=${store.token}&name=Store-${index}`,
                     );
                     if (index < 2) {
-                        await browserExpect(page.locator('.quick-grid button')).toHaveCount(8);
+                        await browserExpect(page.locator('.quick-grid > button')).toHaveCount(
+                            width >= 1024 ? 5 : 8,
+                        );
+                        if (width >= 1024) await page.getByRole('button', { name: '下一组快捷入口' }).click();
                         await browserExpect(page.locator('.quick-grid')).toContainText(`店${index}入口7`);
                         await browserExpect(page.locator('.hero')).toHaveCount(index === 1 ? 1 : 0);
                         await browserExpect(page.locator('.homepage-modules')).not.toContainText('分享海报');
-                        await page.locator('.locale-preferences-trigger').click();
+                        await page.locator('.locale-preferences-trigger:visible').click();
                         await page.getByRole('radio', { name: 'English' }).click();
                         await page.getByRole('button', { name: '保存设置' }).click();
                         await browserExpect(page.locator('.quick-grid')).toContainText(
@@ -791,7 +794,7 @@ describe('unified storefront Admin API to Shop API', () => {
                     );
                     for (const language of ['zh', 'en']) {
                         if (language === 'en') {
-                            await page.locator('.locale-preferences-trigger').click();
+                            await page.locator('.locale-preferences-trigger:visible').click();
                             await page.getByRole('radio', { name: 'English' }).click();
                             await page.getByRole('button', { name: '保存设置' }).click();
                         }
@@ -801,7 +804,10 @@ describe('unified storefront Admin API to Shop API', () => {
                         ).toHaveCount(0);
                         await browserExpect(page.locator('.home-page')).toHaveCount(1);
                         await browserExpect(page.locator('.is-desktop-grouped')).toHaveCount(0);
-                        if (index < 2) await browserExpect(page.locator('.quick-grid button')).toHaveCount(8);
+                        if (index < 2)
+                            await browserExpect(page.locator('.quick-grid > button')).toHaveCount(
+                                width >= 1024 ? 5 : 8,
+                            );
                         await browserExpect(page.locator('details.desktop-store-highlights')).toHaveCount(0);
                         expect(
                             await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
@@ -823,7 +829,12 @@ describe('unified storefront Admin API to Shop API', () => {
     it('saves from the real admin panel, retains failed edits and ignores late responses after channel switching', async () => {
         const vite = await createServer({
             root: fileURLToPath(new URL('../../next-admin', import.meta.url)),
-            server: { host: '127.0.0.1', port: 5301, strictPort: true },
+            server: {
+                host: '127.0.0.1',
+                port: 5301,
+                strictPort: true,
+                proxy: { '/shop-api': 'http://127.0.0.1:5299', '/assets': 'http://127.0.0.1:5299' },
+            },
         });
         const browser = await chromium.launch({ headless: true });
         const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
@@ -1105,7 +1116,12 @@ describe('unified storefront Admin API to Shop API', () => {
         });
         const backend = await createServer({
             root: fileURLToPath(new URL('../../next-admin', import.meta.url)),
-            server: { host: '127.0.0.1', port: 5301, strictPort: true },
+            server: {
+                host: '127.0.0.1',
+                port: 5301,
+                strictPort: true,
+                proxy: { '/shop-api': 'http://127.0.0.1:5299', '/assets': 'http://127.0.0.1:5299' },
+            },
         });
         const browser = await chromium.launch({ headless: true });
         const output = process.env.STOREFRONT_TEST_OUTPUT ?? join(tmpdir(), 'vendure-unified-browser');
@@ -1132,8 +1148,8 @@ describe('unified storefront Admin API to Shop API', () => {
             const pageUrl = `http://127.0.0.1:5300/e2e/unification/index.html?channel=${stores[0].token}&name=MOYAO&page=login`;
             const previewUrl = `http://127.0.0.1:5301/e2e/storefront-visual/index.html?stores=${stores.map(store => store.token).join(',')}&preview=auth`;
             for (const [state, background, accent] of [
-                ['explicit', 'rgb(32, 51, 70)', 'rgb(145, 49, 40)'],
-                ['inherited', 'rgb(255, 250, 241)', 'rgb(145, 49, 40)'],
+                ['explicit', 'rgb(32, 51, 70)', 'rgb(179, 68, 49)'],
+                ['inherited', 'rgb(255, 255, 255)', 'rgb(179, 68, 49)'],
                 ['classic', 'rgb(255, 255, 255)', 'rgb(21, 128, 61)'],
             ]) {
                 if (state === 'inherited')
@@ -1159,13 +1175,15 @@ describe('unified storefront Admin API to Shop API', () => {
                 await page.goto(pageUrl);
                 await preview.goto(previewUrl);
                 await preview.evaluate(() => document.documentElement.classList.add('dark'));
-                await browserExpect(preview.locator('.store-auth-visual + div')).toHaveCSS(
+                const clientFrame = preview.frameLocator('iframe[title="客户端装修效果"]');
+                await browserExpect(clientFrame.locator('.auth-page')).toBeVisible({ timeout: 15000 });
+                await browserExpect(clientFrame.locator('.login-content')).toHaveCSS(
                     'background-color',
-                    state === 'classic' ? 'rgb(255, 255, 255)' : 'rgb(255, 250, 241)',
+                    'rgb(255, 255, 255)',
                 );
-                await browserExpect(preview.locator('.store-auth-visual + div')).toHaveCSS(
+                await browserExpect(clientFrame.locator('.login-content')).toHaveCSS(
                     'color',
-                    state === 'classic' ? 'rgb(15, 23, 42)' : 'rgb(28, 48, 45)',
+                    state === 'classic' ? 'rgb(15, 23, 42)' : 'rgb(32, 52, 50)',
                 );
                 await browserExpect(page.locator('html')).toHaveAttribute(
                     'data-storefront-preset',
@@ -1181,14 +1199,14 @@ describe('unified storefront Admin API to Shop API', () => {
                                 getComputedStyle(element).getPropertyValue('--auth-visual-accent').trim(),
                             ),
                     ).toBe('#a63d32');
-                await browserExpect(preview.locator('.store-auth-visual')).toHaveCSS(
+                await browserExpect(clientFrame.locator('.auth-hero')).toHaveCSS(
                     'background-color',
                     background,
                 );
                 for (const viewport of ['手机', '电脑']) {
                     await preview.setViewportSize({ width: viewport === '手机' ? 390 : 1440, height: 1000 });
                     await preview.getByRole('button', { name: viewport, exact: true }).click();
-                    const img = preview.locator('.store-auth-image img');
+                    const img = clientFrame.locator('.auth-hero img.safe-image');
                     await browserExpect
                         .poll(() =>
                             img.evaluate(
@@ -1198,10 +1216,10 @@ describe('unified storefront Admin API to Shop API', () => {
                         .toBe(true);
                     await browserExpect
                         .poll(() =>
-                            preview.locator('[data-auth-preview-viewport]').evaluate(host => {
-                                const canvas = host.querySelector('.store-auth-visual')?.parentElement;
-                                if (!canvas) return false;
-                                const bounds = host.getBoundingClientRect();
+                            preview.locator('iframe[title="客户端装修效果"]').evaluate(canvas => {
+                                const parent = canvas.parentElement;
+                                if (!parent) return false;
+                                const bounds = parent.getBoundingClientRect();
                                 const content = canvas.getBoundingClientRect();
                                 return (
                                     content.left >= bounds.left - 1 &&
@@ -1211,14 +1229,11 @@ describe('unified storefront Admin API to Shop API', () => {
                             }),
                         )
                         .toBe(true);
-                    expect(
-                        await img.evaluate((value: HTMLImageElement) =>
-                            Math.abs(
-                                value.clientWidth / value.clientHeight -
-                                    value.naturalWidth / value.naturalHeight,
-                            ),
-                        ),
-                    ).toBeLessThan(0.02);
+                    await browserExpect(img).toHaveCSS('object-fit', 'contain');
+                    await browserExpect(clientFrame.locator('html')).toHaveAttribute(
+                        'data-storefront-preset',
+                        state === 'classic' ? 'classic' : 'modern-oriental',
+                    );
                     await preview.screenshot({
                         path: join(
                             output,
@@ -1238,11 +1253,11 @@ describe('unified storefront Admin API to Shop API', () => {
             );
             await browserExpect(page.locator('.auth-hero')).toHaveCSS(
                 'background-color',
-                'rgb(241, 236, 226)',
+                'rgb(243, 244, 240)',
             );
             await browserExpect(page.locator('.wide-action')).toHaveCSS(
                 'background-color',
-                'rgb(145, 49, 40)',
+                'rgb(179, 68, 49)',
             );
             await browserExpect(page.locator('.auth-hero-copy h2')).toHaveCount(0);
             await browserExpect(page.locator('.auth-page')).not.toContainText('MOYAO');
@@ -1390,7 +1405,12 @@ describe('unified storefront Admin API to Shop API', () => {
         });
         const backend = await createServer({
             root: fileURLToPath(new URL('../../next-admin', import.meta.url)),
-            server: { host: '127.0.0.1', port: 5301, strictPort: true },
+            server: {
+                host: '127.0.0.1',
+                port: 5301,
+                strictPort: true,
+                proxy: { '/shop-api': 'http://127.0.0.1:5299', '/assets': 'http://127.0.0.1:5299' },
+            },
         });
         const browser = await chromium.launch({ headless: true });
         const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });

@@ -190,26 +190,34 @@ test.describe('product variant generation', () => {
             timeout: 10_000,
         });
 
+        // Source names are written in zh_Hans. Identify rows by SKU so the English
+        // UI never relies on a cross-language fallback for untranslated names.
+        const client = new VendureAdminClient(page);
+        await client.login();
+        const result = await client.gql(
+            `query ($id: ID!) { product(id: $id) { variants { sku translations { languageCode name } } } }`,
+            { id: productId },
+        );
+        expect(result.product.variants.map((variant: { sku: string }) => variant.sku).sort()).toEqual([
+            'EVTP-MD',
+            'EVTP-SM',
+        ]);
+        for (const variant of result.product.variants) {
+            expect(variant.translations).toContainEqual(expect.objectContaining({ languageCode: 'zh_Hans' }));
+        }
         // Only Small and Medium were created (Large was unchecked)
-        const smallVariantRow = page
-            .locator('table tbody tr')
-            .filter({ hasText: /E2E Variant Test Product Small/i });
+        const variantRows = page.locator('#page-block-product-variants-table table tbody tr');
+        await expect(variantRows).toHaveCount(2);
+        await expect(variantRows.getByText('English name not set', { exact: true })).toHaveCount(2);
+        const smallVariantRow = variantRows.first();
         await smallVariantRow.scrollIntoViewIfNeeded();
         await expect(smallVariantRow).toBeVisible({ timeout: 10_000 });
-        await expect(
-            page.locator('table tbody tr').filter({ hasText: /E2E Variant Test Product Medium/i }),
-        ).toBeVisible();
-
-        // Large should NOT exist as a variant
-        await expect(
-            page.locator('table tbody tr').filter({ hasText: /E2E Variant Test Product Large/i }),
-        ).toHaveCount(0);
 
         // Editing stays in context: the explicit row action opens the SKU workbench drawer.
         const productUrl = page.url();
         await smallVariantRow.getByRole('button', { name: 'Edit', exact: true }).click();
         const editorHeading = page.getByRole('heading', {
-            name: 'E2E Variant Test Product Small',
+            name: 'English name not set',
             exact: true,
         });
         await expect(editorHeading).toBeVisible();

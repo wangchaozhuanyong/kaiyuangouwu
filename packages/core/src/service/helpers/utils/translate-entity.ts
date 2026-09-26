@@ -114,7 +114,10 @@ export function translateEntity<T extends Translatable & VendureEntity>(
             if (strictDisplayLanguage) {
                 const exactFields = exact?.customFields;
                 for (const field of Object.keys(customFields))
-                    translated.customFields[field] = exactFields?.[field] ?? '';
+                    translated.customFields[field] =
+                        exactFields && Object.prototype.hasOwnProperty.call(exactFields, field)
+                            ? exactFields[field]
+                            : '';
                 continue;
             }
             let needsFallback = false;

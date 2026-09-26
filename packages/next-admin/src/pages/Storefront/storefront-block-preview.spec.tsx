@@ -27,7 +27,7 @@ afterEach(async () => {
     state.token = 'fixture';
 });
 
-async function renderPreview() {
+async function renderPreview(development = false) {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const host = document.createElement('div');
     document.body.append(host);
@@ -51,7 +51,8 @@ async function renderPreview() {
         .spyOn(window, 'fetch')
         .mockResolvedValue(
             new Response(
-                '<html><head><link rel="stylesheet" href="/dashboard/assets/client.css"></head><body><div id="root"></div><script type="module" src="/dashboard/assets/storefrontPreview-fixture.js"></script></body></html>',
+                (development ? '<script type="module" src="/@vite/client"></script>' : '') +
+                    '<html><head><link rel="stylesheet" href="/dashboard/assets/client.css"></head><body><div id="root"></div><script type="module" src="/dashboard/assets/storefrontPreview-fixture.js"></script></body></html>',
             ),
         );
     const render = async () => {
@@ -85,6 +86,14 @@ describe('real client decoration preview', () => {
                 .click(),
         );
         expect(frame.width).toBe('1440');
+    });
+
+    it('accepts the client entry after the development server runtime script', async () => {
+        const { host } = await renderPreview(true);
+        expect(host.querySelector('iframe')?.srcdoc).toContain(
+            '/dashboard/assets/storefrontPreview-fixture.js',
+        );
+        expect(host.querySelector('[role="alert"]')).toBeNull();
     });
 
     it('only sends the latest draft to its own iframe with the matching session and origin', async () => {

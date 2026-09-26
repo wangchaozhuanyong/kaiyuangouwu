@@ -155,6 +155,22 @@ describe('translateEntity()', () => {
         expect(Reflect.get(productTranslationEN, 'futureCaption')).toBe('Future English caption');
     });
 
+    it('preserves an explicit null localized custom field without borrowing another language', () => {
+        const nullableProduct = new Product();
+        const english = new ProductTranslation({
+            languageCode: LanguageCode.en,
+            name: 'Product',
+            customFields: { caption: null },
+        });
+        const chinese = new ProductTranslation({
+            languageCode: LanguageCode.zh_Hans,
+            name: '商品',
+            customFields: { caption: '说明' },
+        });
+        nullableProduct.translations = [english, chinese];
+        expect(translateEntity(nullableProduct, LanguageCode.en).customFields.caption).toBeNull();
+    });
+
     it('keeps empty Chinese copy and custom fields empty without modifying source records', () => {
         const chinese = new ProductTranslation({
             languageCode: LanguageCode.zh_Hans,
