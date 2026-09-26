@@ -1499,7 +1499,7 @@ html[lang='en'] .quick-grid b {
     padding: 5px 9px;
     border-radius: 9999px;
     background: var(--paper);
-    color: var(--text);
+    color: var(--skin-foreground);
 }
 
 .category-promotion-visual-copy strong {
