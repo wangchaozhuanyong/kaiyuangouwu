@@ -5,7 +5,7 @@ server {
     ssl_certificate /reviewed/path/fullchain.pem;
     ssl_certificate_key /reviewed/path/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
-    root /opt/vendure/current/packages/storefront/dist-two-factor;
+    root /var/www/kaiyuangouwu-two-factor-current;
     index index.html;
     server_tokens off;
     add_header Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://shop.example.com" always;

@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+    appendFileSync,
+    cpSync,
+    existsSync,
+    mkdirSync,
+    mkdtempSync,
+    readFileSync,
+    rmSync,
+    writeFileSync,
+} from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -11,6 +20,30 @@ import { hasTrustedPullRequest, isTrustedRun } from '../scripts/release-evidence
 import { artifactSourceHash } from './artifact-inputs.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
+export const TWO_FACTOR_DIRECTORY = '.two-factor';
+const storefrontOutputs = ['dist', 'dist-two-factor'];
+
+// Keep the isolated document outside the public storefront routes. Its own
+// origin serves this directory through an independent pointer.
+export function stageFrontend(component, directory, root = process.cwd()) {
+    assert.ok(STATIC_APPS.includes(component));
+    const dist = resolve(root, 'packages', component, 'dist');
+    assert.ok(existsSync(resolve(dist, 'index.html')), 'Missing frontend index');
+    if (component === 'storefront') {
+        const tool = resolve(root, 'packages/storefront/dist-two-factor');
+        assert.ok(existsSync(resolve(tool, 'index.html')), 'Missing isolated 2FA index');
+        assert.ok(existsSync(resolve(tool, 'build-config.json')), 'Missing isolated 2FA build config');
+    }
+    cpSync(dist, directory, { recursive: true });
+    if (component === 'storefront')
+        cpSync(
+            resolve(root, 'packages/storefront/dist-two-factor'),
+            resolve(directory, TWO_FACTOR_DIRECTORY),
+            {
+                recursive: true,
+            },
+        );
+}
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
 const output = (key, value) => {
     if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
@@ -23,6 +56,7 @@ export function frontendFingerprint({ component, tree, sourceHash, node, bun, pl
     return hash(
         JSON.stringify({
             component,
+            ...(component === 'storefront' ? { outputs: storefrontOutputs } : {}),
             source: sourceHash || tree,
             node,
             bun,
@@ -34,9 +68,13 @@ export function frontendFingerprint({ component, tree, sourceHash, node, bun, pl
     );
 }
 export function validateFrontendArtifact(metadata, expected, archive) {
-    assert.ok([1, 2].includes(metadata.version));
+    assert.ok([1, 2, 3].includes(metadata.version));
     assert.equal(metadata.fingerprint, expected.fingerprint, 'Frontend build inputs differ');
     assert.equal(metadata.component, expected.component);
+    if (expected.outputs) {
+        assert.equal(metadata.version, 3, 'Frontend artifact omits isolated 2FA output');
+        assert.deepEqual(metadata.outputs, expected.outputs);
+    }
     if (metadata.version === 1) assert.equal(metadata.tree, expected.tree);
     else {
         assert.match(expected.sourceHash, /^[a-f0-9]{64}$/u);
@@ -59,7 +97,13 @@ function inputs(component) {
     );
     const sourceHash = artifactSourceHash({ component });
     const fingerprint = frontendFingerprint({ component, sourceHash, node, bun, platform, environment });
-    return { component, tree, sourceHash, fingerprint };
+    return {
+        component,
+        tree,
+        sourceHash,
+        fingerprint,
+        ...(component === 'storefront' ? { outputs: storefrontOutputs } : {}),
+    };
 }
 
 export const safeExtractPython = `import pathlib,sys,tarfile
@@ -81,13 +125,17 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     mkdirSync(directory, { recursive: true });
     if (command === 'pack') {
         const archive = resolve(directory, 'frontend.tar.gz');
-        const dist = resolve('packages', component, 'dist');
-        assert.ok(existsSync(resolve(dist, 'index.html')));
-        execFileSync('tar', ['-czf', archive, '-C', dist, '.']);
+        const payload = mkdtempSync(resolve(directory, '.payload-'));
+        try {
+            stageFrontend(component, payload);
+            execFileSync('tar', ['-czf', archive, '-C', payload, '.']);
+        } finally {
+            rmSync(payload, { recursive: true, force: true });
+        }
         writeFileSync(
             resolve(directory, 'metadata.json'),
             JSON.stringify({
-                version: 2,
+                version: component === 'storefront' ? 3 : 2,
                 ...expected,
                 sourceSha: git('rev-parse', 'HEAD'),
                 archiveSha256: hash(readFileSync(archive)),
@@ -133,17 +181,30 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
                 const metadata = JSON.parse(readFileSync(resolve(download, 'metadata.json'), 'utf8'));
                 const archive = resolve(download, 'frontend.tar.gz');
                 validateFrontendArtifact(metadata, expected, readFileSync(archive));
+                rmSync(resolve('packages', component, 'dist'), { recursive: true, force: true });
                 execFileSync('python3', [
                     '-c',
                     safeExtractPython,
                     archive,
                     resolve('packages', component, 'dist'),
                 ]);
+                if (component === 'storefront') {
+                    const tool = resolve('packages', component, 'dist', TWO_FACTOR_DIRECTORY);
+                    assert.ok(existsSync(resolve(tool, 'index.html')), 'Artifact is missing isolated 2FA');
+                    assert.ok(
+                        existsSync(resolve(tool, 'build-config.json')),
+                        'Artifact is missing 2FA config',
+                    );
+                    const toolOutput = resolve('packages', component, 'dist-two-factor');
+                    rmSync(toolOutput, { recursive: true, force: true });
+                    cpSync(tool, toolOutput, { recursive: true });
+                }
                 output('frontend_source_run', candidate);
                 restored = true;
                 break;
             }
         }
         output('restored', restored);
-    } else throw new Error('Expected pack or restore');
+    } else if (command === 'stage') stageFrontend(component, directory);
+    else throw new Error('Expected pack, restore or stage');
 }

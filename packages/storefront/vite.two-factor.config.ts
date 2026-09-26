@@ -6,6 +6,12 @@ import { defineConfig, loadEnv } from 'vite';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), 'VITE_TWO_FACTOR_');
     const parents = (env.VITE_TWO_FACTOR_PARENT_ORIGINS || '').split(',').filter(Boolean);
+    const origin = env.VITE_TWO_FACTOR_ORIGIN || null;
+    if (origin) {
+        const url = new URL(origin);
+        if (url.protocol !== 'https:' || url.origin !== origin || parents.includes(origin))
+            throw new Error('Vault origin must be a separate exact HTTPS origin');
+    }
     for (const parent of parents) {
         const url = new URL(parent);
         if (url.protocol !== 'https:' || url.origin !== parent)
@@ -14,7 +20,20 @@ export default defineConfig(({ mode }) => {
     return {
         root: path.resolve(__dirname, 'two-factor-tool'),
         envDir: __dirname,
-        plugins: [tailwindcss(), react()],
+        plugins: [
+            tailwindcss(),
+            react(),
+            {
+                name: 'two-factor-release-config',
+                generateBundle() {
+                    this.emitFile({
+                        type: 'asset',
+                        fileName: 'build-config.json',
+                        source: JSON.stringify({ version: 1, origin, parents }) + '\n',
+                    });
+                },
+            },
+        ],
         build: {
             outDir: path.resolve(__dirname, 'dist-two-factor'),
             emptyOutDir: true,
