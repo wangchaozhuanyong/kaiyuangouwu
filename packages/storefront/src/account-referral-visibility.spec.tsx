@@ -56,7 +56,6 @@ const overview: MyReferralOverview = {
 
 function renderAccount(
     referralEnabled: boolean,
-    accountHeroImageUrl: string | null = null,
     options: {
         desktop?: boolean;
         prepareClient?: (client: ReturnType<typeof createStorefrontQueryClient>) => void;
@@ -128,7 +127,6 @@ function renderAccount(
                     language: 'zh',
                     storefrontName: '测试商城',
                     logoUrl: null,
-                    accountHeroImageUrl,
                     favoriteProductCount: 0,
                     couponCount: 0,
                     displayCurrencyCode: market.currencyCode,
@@ -149,7 +147,7 @@ function renderAccount(
 }
 
 describe('account referral visibility', () => {
-    it('shows real referral balance beside the two mobile account shortcuts when enabled', () => {
+    it('keeps three shortcuts and a real referral balance when enabled', () => {
         const markup = renderAccount(true);
 
         expect(markup).toContain('account-mobile-header');
@@ -157,32 +155,37 @@ describe('account referral visibility', () => {
         expect(markup).toContain('我的订单中心');
         expect(markup).toContain('返利余额');
         expect(markup).toContain('¥8.8');
-        expect(markup.match(/class="account-hero-asset"/g)).toHaveLength(2);
+        expect(markup).toContain('账户快捷入口');
+        expect(markup).toContain('我的收藏');
+        expect(markup).toContain('优惠券');
+        expect(markup).toContain('推广中心');
         expect(markup).not.toContain('data-page-pending="query"');
     });
 
     it('keeps the shared mobile header off the desktop account layout', () => {
-        expect(renderAccount(true, null, { desktop: true })).not.toContain('account-mobile-header');
+        expect(renderAccount(true, { desktop: true })).not.toContain('account-mobile-header');
     });
 
-    it('uses favorites instead of a nonexistent balance when referral is disabled', () => {
+    it('keeps favorites and marks referral unavailable when disabled', () => {
         const markup = renderAccount(false);
 
         expect(markup).toContain('我的收藏');
         expect(markup).not.toContain('返利余额');
+        expect(markup).toContain('暂未开放');
     });
 
-    it('renders managed account artwork as an image tracked by the shared readiness boundary', () => {
-        const markup = renderAccount(true, 'https://assets.example.com/account-hero.webp');
-
-        expect(markup).toContain('has-custom-background');
-        expect(markup).toContain('account-hero-art');
-        expect(markup).toContain('src="https://assets.example.com/account-hero.webp"');
-        expect(markup).not.toContain('--account-hero-image');
+    it('uses the independent identity card and masks the account address', () => {
+        const markup = renderAccount(true);
+        expect(markup).toContain('account-identity-card');
+        expect(markup).toContain('欢迎回来');
+        expect(markup).toContain('re***@example.com');
+        expect(markup).not.toContain(customer.emailAddress);
+        expect(markup).not.toContain('account-hero-art');
+        expect(markup).not.toContain('has-custom-background');
     });
 
     it.each([false, true])('waits for initial member counts in desktop=%s', desktop => {
-        const markup = renderAccount(true, null, {
+        const markup = renderAccount(true, {
             desktop,
             prepareClient: client =>
                 client.removeQueries({
@@ -197,7 +200,7 @@ describe('account referral visibility', () => {
     });
 
     it('does not gate cached member content during a background refresh', () => {
-        const markup = renderAccount(true, null, {
+        const markup = renderAccount(true, {
             prepareClient: client => void client.invalidateQueries(),
         });
         expect(markup).not.toContain('data-page-pending="query"');

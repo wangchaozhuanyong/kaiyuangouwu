@@ -915,6 +915,26 @@ try {
                         }
                     }
                 }
+                if (name === 'account' && requestedContent === 'aftercare') {
+                    const identity = page.locator('.account-identity');
+                    await expect(identity.locator('.account-identity-assets > button')).toHaveCount(3);
+                    await expect(identity).toContainText('欢迎回来');
+                    await expect(identity).toContainText('推广中心');
+                    await expect(identity.locator('.account-identity-promotion')).toBeVisible();
+                    await expect(identity.locator('.account-identity-details p')).toContainText('***@');
+                    await expect(identity.locator('.account-identity-card')).toHaveCSS(
+                        'background-image',
+                        'linear-gradient(120deg, rgb(23, 51, 73), rgb(40, 83, 105))',
+                    );
+                    await expect(identity.locator('.account-identity-promotion')).toHaveCSS(
+                        'background-color',
+                        'rgb(246, 237, 218)',
+                    );
+                    const box = await identity.boundingBox();
+                    expect(box.x).toBeGreaterThanOrEqual(0);
+                    expect(box.x + box.width).toBeLessThanOrEqual(width + 1);
+                    await expect(page.locator('.account-hero-art')).toHaveCount(0);
+                }
                 if (name === 'support' && requestedContent === 'support') {
                     for (const selector of [
                         '.support-hours-card',

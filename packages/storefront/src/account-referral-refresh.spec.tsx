@@ -61,7 +61,6 @@ describe('cached referral feature refresh', () => {
                                         language: 'zh',
                                         storefrontName: '模拟店',
                                         logoUrl: null,
-                                        accountHeroImageUrl: null,
                                         favoriteProductCount: 0,
                                         couponCount: 0,
                                         onContentTarget: vi.fn(),

@@ -42,7 +42,6 @@ import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { AccountHeroImagePanel } from './AccountHeroImagePanel';
 import { DesktopCategoryBannerPanel } from './DesktopCategoryBannerPanel';
 import {
     StorefrontAuthSettingsPanel,
@@ -57,7 +56,6 @@ import {
     blockTranslation,
     errorText,
     homepageModuleDescriptors,
-    newAccountHeroBlock,
     newContentBlock,
     storefrontBlockInput,
 } from './storefront-content-utils';
@@ -164,7 +162,6 @@ export function StorefrontModule() {
     }, [channelId]);
     /* oxlint-enable react/set-state-in-effect */
     const allBlocks = channelConsistent ? (query.data?.storefrontContentBlocks ?? []) : [];
-    const accountHeroBlock = allBlocks.find(block => block.type === 'ACCOUNT_HERO') ?? null;
     const homepageRows = storefrontHomepageRows(allBlocks);
     const homepageBlocks = homepageRows.flatMap(row => row.blocks);
     const configuredTypes = new Set(homepageBlocks.map(block => block.type));
@@ -379,20 +376,6 @@ export function StorefrontModule() {
         });
     };
 
-    const saveAccountHero = async (asset: StorefrontContentBlock['imageAsset']) => {
-        const block =
-            accountHeroBlock ??
-            newAccountHeroBlock(Math.max(-1, ...allBlocks.map(item => item.position)) + 1);
-        if (!(block.id ? canUpdate : canCreate)) throw new Error('当前账号没有保存商城装修的权限');
-        await runContentAction(async scope => {
-            await persistBlock(
-                { ...block, imageAsset: asset, imageAssetId: asset?.id ?? null, imageUrl: null },
-                block,
-                scope,
-            );
-        }, true);
-    };
-
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
@@ -402,9 +385,7 @@ export function StorefrontModule() {
                             商城装修
                             <FeatureHelpButton topic="storefront.decoration" title="商城装修" />
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            管理当前店铺的皮肤、个人中心图片、首页楼层与双语内容
-                        </p>
+                        <p className="mt-1 text-xs text-slate-500">管理当前店铺的皮肤、首页楼层与双语内容</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <button
@@ -675,19 +656,6 @@ export function StorefrontModule() {
                 <div ref={categoryBannerRef}>
                     <DesktopCategoryBannerPanel />
                 </div>
-                <AccountHeroImagePanel
-                    key={query.data?.activeChannel.id ?? 'loading'}
-                    block={accountHeroBlock}
-                    channelName={query.data ? getChannelDisplayName(query.data.activeChannel) : '当前店铺'}
-                    disabled={
-                        query.loading ||
-                        Boolean(query.error) ||
-                        actionPending ||
-                        !channelConsistent ||
-                        !(accountHeroBlock ? canUpdate : canCreate)
-                    }
-                    onSave={saveAccountHero}
-                />
             </StorefrontSettingsDrawer>
 
             {carouselOpen && (
@@ -782,9 +750,7 @@ function StorefrontSettingsDrawer({
                             装修设置
                             <FeatureHelpButton topic="storefront.decoration" title="装修设置" />
                         </h2>
-                        <p className="mt-1 text-xs text-slate-500">
-                            {channelName} · 管理店铺皮肤和个人中心头图
-                        </p>
+                        <p className="mt-1 text-xs text-slate-500">{channelName} · 管理店铺皮肤与装修选项</p>
                     </div>
                     <button
                         type="button"

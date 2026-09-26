@@ -45,7 +45,9 @@ vi.mock('../../hooks/use-admin-permissions', () => ({
 vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
 vi.mock('./StorefrontVisualPresetPanel', () => ({ StorefrontVisualPresetPanel: () => null }));
 vi.mock('./DesktopCategoryBannerPanel', () => ({ DesktopCategoryBannerPanel: () => null }));
-vi.mock('./AccountHeroImagePanel', () => ({ AccountHeroImagePanel: () => null }));
+vi.mock('./AccountHeroImagePanel', () => ({
+    AccountHeroImagePanel: () => <button>个人中心背景图片设置</button>,
+}));
 vi.mock('./StorefrontAuthSettingsPanel', () => ({ StorefrontAuthSettingsPanel: () => null }));
 vi.mock('./StorefrontBlockEditor', () => ({
     StorefrontBlockEditor: ({
@@ -145,6 +147,17 @@ afterEach(() => {
 });
 
 describe('store scoped verified content writes', () => {
+    it('removes the personal account background editor from store settings', async () => {
+        await render();
+        const settings = Array.from(host.querySelectorAll('button')).find(node =>
+            node.textContent?.includes('设置'),
+        );
+        expect(settings).toBeDefined();
+        await act(async () => settings!.click());
+        expect(host.textContent).not.toContain('个人中心背景图片设置');
+        expect(host.textContent).not.toContain('个人中心头图');
+        expect(host.textContent).toContain('首页楼层');
+    });
     it('does not report enabled when the mutation returns no saved record', async () => {
         mocks.update.mockResolvedValue({ data: null });
         await render();
