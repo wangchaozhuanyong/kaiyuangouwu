@@ -17,6 +17,12 @@
     transition: background-color var(--experience-motion-fast) var(--experience-ease-standard);
 }
 
+/* Managed artwork colors apply to the section; inset product surfaces keep skin contrast. */
+.managed-content-section .product-card {
+    --text: var(--skin-foreground);
+    --muted: color-mix(in srgb, var(--skin-foreground) 72%, transparent);
+}
+
 .product-card-detail-link {
     position: absolute;
     z-index: 1;
