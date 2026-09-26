@@ -765,9 +765,9 @@
 .support-faq-card {
     min-width: 0;
     padding: 18px 20px;
-    border-radius: 16px;
+    border-radius: var(--skin-card-radius);
     background: var(--surface);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--skin-card-shadow);
 }
 
 .support-faq-card h2 {
@@ -1076,5 +1076,55 @@
 @keyframes ai-studio-spin {
     to {
         transform: rotate(360deg);
+    }
+}
+
+.support-faq-search {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 20px;
+    color: var(--muted);
+    font-size: 13px;
+}
+.support-faq-search input {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    color: var(--text);
+    background: var(--surface);
+    font: inherit;
+}
+.support-faq-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 20px;
+}
+.support-faq-pagination button {
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    color: var(--accent-ink);
+    background: var(--control-surface);
+}
+.support-faq-pagination button:disabled {
+    color: var(--muted);
+    cursor: default;
+}
+.support-contact-panel > h2 {
+    margin: 0 0 16px;
+    font-size: 18px;
+}
+.support-workspace,
+.support-contact-panel {
+    min-width: 0;
+}
+@media (max-width: 1023px) {
+    .support-contact-panel {
+        margin-bottom: 20px;
     }
 }

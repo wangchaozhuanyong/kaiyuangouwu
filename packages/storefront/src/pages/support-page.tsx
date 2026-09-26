@@ -106,6 +106,8 @@ export function SupportContent({
     const [qrChannel, setQrChannel] = useState<StorefrontSupportChannel | null>(null);
     const [qrImageFailed, setQrImageFailed] = useState(false);
     const [qrImageRetryKey, setQrImageRetryKey] = useState(0);
+    const [faqSearch, setFaqSearch] = useState('');
+    const [faqPage, setFaqPage] = useState(0);
     const isZh = language === 'zh';
     const service = supportServiceDetails(content, language);
     const channels = storefrontSupportChannels(content);
@@ -117,6 +119,11 @@ export function SupportContent({
             item.questionEn.trim() &&
             item.answerEn.trim(),
     );
+
+    const filteredFaqs = filterSupportFaqs(faqs, faqSearch, language);
+    const faqPageCount = Math.max(1, Math.ceil(filteredFaqs.length / 8));
+    const currentFaqPage = Math.min(faqPage, faqPageCount - 1);
+    const visibleFaqs = filteredFaqs.slice(currentFaqPage * 8, currentFaqPage * 8 + 8);
 
     const openChannel = (channel: StorefrontSupportChannel) => {
         if (channel.key === 'WECHAT') {
@@ -181,111 +188,172 @@ export function SupportContent({
                 </section>
             ) : null}
             {content.subtitle.trim() ? <p className="support-page-intro">{content.subtitle.trim()}</p> : null}
-            <section className="support-hours-card" aria-labelledby="support-hours-title">
-                <div className="support-hours-heading">
-                    <div className="support-hours-title-wrap">
-                        <div className="support-hours-rail" aria-hidden="true">
-                            <Clock3 size={18} />
+            <div className="support-workspace">
+                <div className="support-contact-panel">
+                    <h2>{isZh ? '联系我们' : 'Contact us'}</h2>
+                    <section className="support-hours-card" aria-labelledby="support-hours-title">
+                        <div className="support-hours-heading">
+                            <div className="support-hours-title-wrap">
+                                <div className="support-hours-rail" aria-hidden="true">
+                                    <Clock3 size={18} />
+                                </div>
+                                <h2 id="support-hours-title">
+                                    {isZh ? '客服服务时间' : 'Customer-service hours'}
+                                </h2>
+                            </div>
+                            <span>{service.days}</span>
                         </div>
-                        <h2 id="support-hours-title">{isZh ? '客服服务时间' : 'Customer-service hours'}</h2>
-                    </div>
-                    <span>{service.days}</span>
-                </div>
-                <div className="support-hours-main">
-                    <strong className="support-hours-time">{service.time}</strong>
-                    {service.note ? (
-                        <div className="support-hours-note">
-                            <MessageCircle size={15} aria-hidden="true" />
-                            <p>{service.note}</p>
+                        <div className="support-hours-main">
+                            <strong className="support-hours-time">{service.time}</strong>
+                            {service.note ? (
+                                <div className="support-hours-note">
+                                    <MessageCircle size={15} aria-hidden="true" />
+                                    <p>{service.note}</p>
+                                </div>
+                            ) : null}
                         </div>
-                    ) : null}
-                </div>
-            </section>
+                    </section>
 
-            {channels.length ? (
-                <section
-                    className="support-channel-list"
-                    aria-label={isZh ? '客服联系方式' : 'Support channels'}
-                >
-                    {channels.map(channel => {
-                        const icon = channelIcons[channel.key];
-                        const isWeChat = channel.key === 'WECHAT';
-                        const detail = supportChannelDetail(channel, language);
-                        const disabled = isWeChat
-                            ? !channel.item.imageUrl
-                            : channel.item.targetType === 'NONE' || !channel.item.targetValue;
-                        const rowContent = (
-                            <>
-                                <span className="support-channel-icon" aria-hidden="true">
-                                    <img src={icon} alt="" width={20} height={20} />
-                                </span>
-                                <span className="support-channel-copy">
-                                    <strong>{channel.item.label}</strong>
-                                    {detail ? <small>{detail}</small> : null}
-                                </span>
-                                <span className="support-channel-action">
-                                    {isWeChat ? <QrCode aria-hidden="true" /> : null}
-                                    {isWeChat ? (isZh ? '扫码' : 'Scan') : isZh ? '打开' : 'Open'}
-                                </span>
-                                <ChevronRight className="support-channel-chevron" aria-hidden="true" />
-                            </>
-                        );
-                        return isWeChat ? (
-                            <button
-                                key={channel.item.id}
-                                type="button"
-                                className="support-channel-row"
-                                data-channel={channel.key.toLowerCase()}
-                                disabled={disabled}
-                                aria-label={`${channel.item.label} ${
-                                    isWeChat ? (isZh ? '扫码' : 'Scan') : isZh ? '打开' : 'Open'
-                                }`}
-                                onClick={() => openChannel(channel)}
-                            >
-                                {rowContent}
-                            </button>
-                        ) : (
-                            <a
-                                key={channel.item.id}
-                                className="support-channel-row"
-                                data-channel={channel.key.toLowerCase()}
-                                href={disabled ? undefined : (channel.item.targetValue ?? undefined)}
-                                target="_blank"
-                                rel="noreferrer"
-                                aria-disabled={disabled || undefined}
-                                aria-label={`${channel.item.label} ${isZh ? '打开' : 'Open'}`}
-                            >
-                                {rowContent}
-                            </a>
-                        );
-                    })}
-                </section>
-            ) : (
-                <div className="support-channel-empty">
-                    <Headphones aria-hidden="true" />
-                    <p>{isZh ? '客服联系方式暂未启用' : 'No support channels are enabled yet'}</p>
+                    {channels.length ? (
+                        <section
+                            className="support-channel-list"
+                            aria-label={isZh ? '客服联系方式' : 'Support channels'}
+                        >
+                            {channels.map(channel => {
+                                const icon = channelIcons[channel.key];
+                                const isWeChat = channel.key === 'WECHAT';
+                                const detail = supportChannelDetail(channel, language);
+                                const disabled = isWeChat
+                                    ? !channel.item.imageUrl
+                                    : channel.item.targetType === 'NONE' || !channel.item.targetValue;
+                                const rowContent = (
+                                    <>
+                                        <span className="support-channel-icon" aria-hidden="true">
+                                            <img src={icon} alt="" width={20} height={20} />
+                                        </span>
+                                        <span className="support-channel-copy">
+                                            <strong>{channel.item.label}</strong>
+                                            {detail ? <small>{detail}</small> : null}
+                                        </span>
+                                        <span className="support-channel-action">
+                                            {isWeChat ? <QrCode aria-hidden="true" /> : null}
+                                            {isWeChat ? (isZh ? '扫码' : 'Scan') : isZh ? '打开' : 'Open'}
+                                        </span>
+                                        <ChevronRight
+                                            className="support-channel-chevron"
+                                            aria-hidden="true"
+                                        />
+                                    </>
+                                );
+                                return isWeChat ? (
+                                    <button
+                                        key={channel.item.id}
+                                        type="button"
+                                        className="support-channel-row"
+                                        data-channel={channel.key.toLowerCase()}
+                                        disabled={disabled}
+                                        aria-label={`${channel.item.label} ${
+                                            isWeChat ? (isZh ? '扫码' : 'Scan') : isZh ? '打开' : 'Open'
+                                        }`}
+                                        onClick={() => openChannel(channel)}
+                                    >
+                                        {rowContent}
+                                    </button>
+                                ) : (
+                                    <a
+                                        key={channel.item.id}
+                                        className="support-channel-row"
+                                        data-channel={channel.key.toLowerCase()}
+                                        href={disabled ? undefined : (channel.item.targetValue ?? undefined)}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        aria-disabled={disabled || undefined}
+                                        aria-label={`${channel.item.label} ${isZh ? '打开' : 'Open'}`}
+                                    >
+                                        {rowContent}
+                                    </a>
+                                );
+                            })}
+                        </section>
+                    ) : (
+                        <div className="support-channel-empty">
+                            <Headphones aria-hidden="true" />
+                            <p>{isZh ? '客服联系方式暂未启用' : 'No support channels are enabled yet'}</p>
+                        </div>
+                    )}
                 </div>
-            )}
-
-            {faqs.length > 0 && (
-                <section
-                    className="support-faq-card"
-                    aria-label={isZh ? '常见问题' : 'Frequently asked questions'}
-                >
-                    <h2>{isZh ? '常见问题' : 'Frequently asked questions'}</h2>
-                    <div className="support-faq-list">
-                        {faqs.map(item => (
-                            <details key={item.id} className="support-faq-item">
-                                <summary>
-                                    <span>{isZh ? item.questionZh.trim() : item.questionEn.trim()}</span>
-                                    <ChevronRight aria-hidden="true" />
-                                </summary>
-                                <p>{isZh ? item.answerZh.trim() : item.answerEn.trim()}</p>
-                            </details>
-                        ))}
-                    </div>
-                </section>
-            )}
+                {faqs.length > 0 ? (
+                    <section
+                        className="support-faq-card"
+                        aria-label={isZh ? '常见问题' : 'Frequently asked questions'}
+                    >
+                        <h2>{isZh ? '常见问题' : 'Frequently asked questions'}</h2>
+                        <label className="support-faq-search">
+                            <span>{isZh ? '搜索常见问题' : 'Search frequently asked questions'}</span>
+                            <input
+                                type="search"
+                                value={faqSearch}
+                                onChange={event => {
+                                    setFaqSearch(event.target.value);
+                                    setFaqPage(0);
+                                }}
+                                placeholder={isZh ? '输入问题关键词' : 'Search questions'}
+                            />
+                        </label>
+                        <div className="support-faq-list">
+                            {visibleFaqs.map(item => (
+                                <details key={item.id} className="support-faq-item">
+                                    <summary>
+                                        <span>{isZh ? item.questionZh.trim() : item.questionEn.trim()}</span>
+                                        <ChevronRight aria-hidden="true" />
+                                    </summary>
+                                    <p>{isZh ? item.answerZh.trim() : item.answerEn.trim()}</p>
+                                </details>
+                            ))}
+                        </div>
+                        {!filteredFaqs.length && (
+                            <p role="status">
+                                {isZh
+                                    ? '没有找到相关问题，请联系客服。'
+                                    : 'No matching questions. Please contact support.'}
+                            </p>
+                        )}
+                        {filteredFaqs.length > 0 && (
+                            <nav
+                                className="support-faq-pagination"
+                                aria-label={isZh ? '常见问题分页' : 'FAQ pages'}
+                            >
+                                <button
+                                    type="button"
+                                    disabled={currentFaqPage === 0}
+                                    onClick={() => setFaqPage(currentFaqPage - 1)}
+                                >
+                                    {isZh ? '上一页' : 'Previous'}
+                                </button>
+                                <span aria-live="polite">
+                                    {currentFaqPage + 1} / {faqPageCount}
+                                </span>
+                                <button
+                                    type="button"
+                                    disabled={currentFaqPage + 1 === faqPageCount}
+                                    onClick={() => setFaqPage(currentFaqPage + 1)}
+                                >
+                                    {isZh ? '下一页' : 'Next'}
+                                </button>
+                            </nav>
+                        )}
+                    </section>
+                ) : (
+                    <section className="support-faq-card">
+                        <h2>{isZh ? '常见问题' : 'Frequently asked questions'}</h2>
+                        <p>
+                            {isZh
+                                ? '商家暂未发布常见问题，可通过左侧联系方式咨询。'
+                                : 'No FAQs have been published. Please use the support channels to get help.'}
+                        </p>
+                    </section>
+                )}
+            </div>
 
             <CustomerServiceEvaluationSection
                 key={`${customer?.id ?? 'guest'}:${orderCode ?? 'general'}`}
@@ -357,6 +425,22 @@ export function SupportContent({
             ) : null}
         </div>
     );
+}
+
+export function filterSupportFaqs<
+    T extends { questionZh: string; answerZh: string; questionEn: string; answerEn: string },
+>(items: T[], query: string, language: StorefrontLanguage): T[] {
+    const term = query.trim().toLocaleLowerCase();
+    return term
+        ? items.filter(item =>
+              (language === 'zh'
+                  ? `${item.questionZh} ${item.answerZh}`
+                  : `${item.questionEn} ${item.answerEn}`
+              )
+                  .toLocaleLowerCase()
+                  .includes(term),
+          )
+        : items;
 }
 
 function CustomerServiceEvaluationSection({

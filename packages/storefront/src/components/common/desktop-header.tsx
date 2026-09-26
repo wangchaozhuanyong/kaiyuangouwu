@@ -93,7 +93,10 @@ export function DesktopHeader({
                             name={context.storefrontName}
                             className="proto-brand-badge"
                         />
-                        <span className="proto-brand-text">{context.storefrontName}</span>
+                        <span className="proto-brand-copy">
+                            <span className="proto-brand-text">{context.storefrontName}</span>
+                            <small>{typeof window === 'undefined' ? '' : window.location.hostname}</small>
+                        </span>
                     </Link>
                     <nav className="proto-nav-links" aria-label={isZh ? '主导航' : 'Main navigation'}>
                         {navigationItems.map(item => (
@@ -117,10 +120,9 @@ export function DesktopHeader({
                             aria-label={isZh ? '打开商品搜索' : 'Open product search'}
                             onClick={openSearch}
                         >
-                            <Search aria-hidden="true" />
                             <span>{isZh ? '搜索商品、分类' : 'Search products and categories'}</span>
                             <span className="proto-search-open-action" aria-hidden="true">
-                                {isZh ? '搜索' : 'Search'}
+                                <Search aria-hidden="true" />
                             </span>
                         </button>
                     </div>

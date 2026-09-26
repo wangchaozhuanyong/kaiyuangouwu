@@ -101,8 +101,8 @@ describe('storefront skin system', () => {
         const desktopRow =
             [...stylesheet('./styles/desktop-pages.css').matchAll(/\.desktop-cart-row\s*\{([^}]*)\}/g)]
                 .map(match => match[1])
-                .find(rule => rule.includes('background: var(--module-action-surface);')) ?? '';
-        expect(desktopRow).toContain('background: var(--module-action-surface);');
+                .find(rule => rule.includes('background: transparent;')) ?? '';
+        expect(desktopRow).toContain('background: transparent;');
         expect(desktopRow).toContain('border-top: 0;');
         expect(desktopRow).toContain('border-radius: var(--radius-sm);');
         expect(desktopRow).toContain('box-shadow: none;');

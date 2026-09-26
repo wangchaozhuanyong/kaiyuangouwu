@@ -101,8 +101,8 @@ export function CartGroup({
             {desktop && (
                 <div className="desktop-cart-columns" aria-hidden="true">
                     {(language === 'zh'
-                        ? ['商品信息', '单价', '数量', '商品金额', '操作']
-                        : ['Product', 'Unit price', 'Quantity', 'Amount', 'Actions']
+                        ? ['商品信息', '单价', '数量', '商品金额']
+                        : ['Product', 'Unit price', 'Quantity', 'Amount']
                     ).map(label => (
                         <span key={label}>{label}</span>
                     ))}
@@ -242,24 +242,21 @@ function DesktopCartLine({
                 <button type="button" disabled={loading} onClick={() => onRemove(line.id)}>
                     {isZh ? '删除' : 'Remove'}
                 </button>
-                <details>
-                    <summary>{isZh ? '更多' : 'More'}</summary>
-                    <button
-                        type="button"
-                        disabled={loading}
-                        aria-pressed={pinned}
-                        onClick={() => onPin(line.id, name)}
-                    >
-                        {isZh ? (pinned ? '取消置顶' : '置顶') : pinned ? 'Unpin' : 'Pin'}
-                    </button>
-                    <button
-                        type="button"
-                        disabled={loading || !productId}
-                        onClick={() => productId && void onShare(productId, name)}
-                    >
-                        {isZh ? '分享' : 'Share'}
-                    </button>
-                </details>
+                <button
+                    type="button"
+                    disabled={loading}
+                    aria-pressed={pinned}
+                    onClick={() => onPin(line.id, name)}
+                >
+                    {isZh ? (pinned ? '取消置顶' : '置顶') : pinned ? 'Unpin' : 'Pin'}
+                </button>
+                <button
+                    type="button"
+                    disabled={loading || !productId}
+                    onClick={() => productId && void onShare(productId, name)}
+                >
+                    {isZh ? '分享' : 'Share'}
+                </button>
             </div>
         </article>
     );

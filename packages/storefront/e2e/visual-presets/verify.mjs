@@ -16,7 +16,7 @@ const requestedContent = process.env.STOREFRONT_VISUAL_CONTENT || 'normal';
 const presets = requestedPreset ? [requestedPreset] : ['classic', 'modern-oriental', 'neo-minimalist'];
 const expectedPaletteSignature = {
     classic: { page: '#f1f5f9', surface: '#ffffff', text: '#0f172a', brand: '#3558aa' },
-    'modern-oriental': { page: '#f1ece2', surface: '#fffaf1', text: '#1c302d', brand: '#9f3b30' },
+    'modern-oriental': { page: '#f6f2ea', surface: '#fffdf8', text: '#203346', brand: '#a63d32' },
     'neo-minimalist': { page: '#070b14', surface: '#0e1421', text: '#f4f7fb', brand: '#8b5cf6' },
 };
 const routes = [
@@ -325,6 +325,24 @@ try {
                         expect(Math.abs(section.left)).toBeLessThanOrEqual(1);
                         expect(Math.abs(section.right)).toBeLessThanOrEqual(1);
                     }
+                }
+                if (width >= 1024 && name === 'account' && requestedContent === 'dense') {
+                    const thumbs = page.locator('.desktop-order-product > .responsive-picture');
+                    await expect(thumbs.first()).toBeVisible();
+                    for (const thumb of await thumbs.all()) {
+                        const bounds = await thumb.boundingBox();
+                        expect(bounds.width).toBe(68);
+                        expect(bounds.height).toBe(68);
+                    }
+                }
+                if (width === 1280 && name === 'category') {
+                    const columns = await page
+                        .locator('.desktop-product-grid')
+                        .evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length);
+                    expect(columns).toBe(4);
+                }
+                if (width >= 1024 && ['coupons', 'support'].includes(name)) {
+                    await expect(page.locator('.subpage-header')).toBeHidden();
                 }
                 if (name === 'product' && width >= 1024) {
                     const media = page.locator('.desktop-product-purchase .detail-gallery');
@@ -823,7 +841,23 @@ try {
                         await expect(page.locator(selector).first()).toHaveCSS('border-top-width', '0px');
                     }
                     await page.locator('.support-tag-btn').first().click();
+                    await expect(page.locator('.support-faq-item')).toHaveCount(8);
+                    await expect(
+                        page
+                            .getByRole('navigation', { name: '常见问题分页' })
+                            .getByRole('button', { name: '下一页' }),
+                    ).toBeDisabled();
+                    await expect(page.getByRole('navigation', { name: '常见问题分页' })).toContainText(
+                        '1 / 1',
+                    );
                     await expect(page.locator('.support-tag-btn').first()).toHaveClass(/is-active/);
+                    await page
+                        .getByRole('searchbox', { name: '搜索常见问题' })
+                        .fill('不可能匹配的测试关键词');
+                    await expect(page.locator('.support-faq-item')).toHaveCount(0);
+                    await page.getByRole('searchbox', { name: '搜索常见问题' }).fill('运费');
+                    await expect(page.locator('.support-faq-item')).toHaveCount(1);
+                    await page.getByRole('searchbox', { name: '搜索常见问题' }).fill('');
                     await page.locator('.support-faq-item summary').first().click();
                     await expect(page.locator('.support-faq-item p').first()).toBeVisible();
                 }
@@ -1169,21 +1203,10 @@ try {
                     expect(pair.copyBackground, `${preset}/${width}/home copy has no card`).toBe(
                         'rgba(0, 0, 0, 0)',
                     );
-                    if (width >= 1400) {
-                        expect(
-                            pair.heroRight,
-                            `${preset}/${width}/home hero and quick links do not overlap`,
-                        ).toBeLessThanOrEqual(pair.quickLeft);
-                        expect(
-                            Math.abs(pair.heroHeight - pair.quickHeight),
-                            `${preset}/${width}/home equal height`,
-                        ).toBeLessThanOrEqual(2);
-                    } else {
-                        expect(
-                            pair.quickTop,
-                            `${preset}/${width}/home quick links follow artwork`,
-                        ).toBeGreaterThanOrEqual(pair.heroBottom);
-                    }
+                    expect(
+                        pair.quickTop,
+                        `${preset}/${width}/home quick links follow artwork`,
+                    ).toBeGreaterThanOrEqual(pair.heroBottom);
                     if (requestedContent === 'wide-hero') {
                         expect(pair.imageRatio, `${preset}/${width}/home image decoded`).not.toBeNull();
                         expect(
@@ -1203,7 +1226,7 @@ try {
                                         .top,
                             ),
                         )
-                        .toBe(0);
+                        .toBe(16);
                 }
                 if (name === 'services' && (width === 390 || width === 1440)) {
                     await page.locator('.business-services-page .category-client-plugin-two-factor').click();
