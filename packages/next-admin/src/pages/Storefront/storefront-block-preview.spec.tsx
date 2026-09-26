@@ -114,7 +114,9 @@ describe('carousel draft preview', () => {
         expect(doc.querySelector('.hero-rich-overlay-shade')).toBeNull();
         expect(doc.querySelector('.hero-rich-copy-surface')).not.toBeNull();
         expect(doc.querySelector('.hero-rich-title')?.textContent).toBe('未保存的标题');
-        expect(doc.querySelector('img')?.getAttribute('srcset')).toContain('storefront-hero-fit-960');
+        // Managed images are read by the parent; the opaque iframe must not re-request protected URLs.
+        expect(doc.querySelector('img')?.getAttribute('srcset')).toBeNull();
+        expect(container.querySelector('iframe')?.getAttribute('sandbox')).toBe('');
         expect(doc.querySelector('img')?.getAttribute('sizes')).toBe(
             '(min-width: 1024px) 850px, calc(100vw - 20px)',
         );
