@@ -437,9 +437,8 @@ describe('storefront skin system', () => {
         const addresses = stylesheet('./addresses-page.tsx');
         expect(addresses).toContain("className={selection ? undefined : 'account-mobile-header-action'}");
         const account = stylesheet('./pages/desktop-account-page.tsx');
-        expect(account).toMatch(
-            /className="desktop-member-summary"[\s\S]*className="desktop-account-continue"[\s\S]*<\/section>/,
-        );
+        expect(account).toContain('<AccountIdentity');
+        expect(account).toContain('className="desktop-account-orders"');
         expect(account).not.toContain('className="desktop-account-heading"');
     });
 });
