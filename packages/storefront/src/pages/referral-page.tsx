@@ -265,7 +265,7 @@ export function ReferralPage() {
                                 </strong>
                                 <RewardInfo isZh={isZh} releaseDelayDays={overview.releaseDelayDays} />
                             </div>
-                            <dl className="m-0 grid grid-cols-2 divide-x divide-[var(--line)] rounded-[var(--skin-control-radius)] bg-[var(--soft)] py-3 text-center">
+                            <dl className="m-0 grid grid-cols-2 gap-4 rounded-[var(--skin-control-radius)] bg-[var(--soft)] py-3 text-center">
                                 <div className="min-w-0 px-3">
                                     <dt className="text-xs font-semibold text-[var(--muted)]">
                                         {isZh ? '累计获得' : 'Total earned'}
@@ -306,7 +306,7 @@ export function ReferralPage() {
                         </div>
                         {overview.invitees.length ? (
                             <>
-                                <div className="divide-y divide-[var(--line)]">
+                                <div className="grid gap-2">
                                     {paginatedInvitees.map(invitee => (
                                         <div key={invitee.id} className="flex items-center gap-3 py-3">
                                             <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--accent-soft)] font-bold text-[var(--accent-ink)]">
@@ -364,7 +364,7 @@ export function ReferralPage() {
                         </div>
                         {displayLedger.length ? (
                             <>
-                                <div className="divide-y divide-[var(--line)]">
+                                <div className="grid gap-2">
                                     {paginatedLedger.map(entry => (
                                         <LedgerRow
                                             key={entry.id}
@@ -523,7 +523,7 @@ function ListPagination({
 }) {
     if (totalItems <= 0) return null;
     return (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] pt-3 text-xs text-[var(--muted)]">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 pt-3 text-xs text-[var(--muted)]">
             <span>
                 {isZh
                     ? `共 ${totalItems} 条 · 第 ${currentPage}/${totalPages} 页`

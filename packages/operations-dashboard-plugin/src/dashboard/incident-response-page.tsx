@@ -40,6 +40,15 @@ import {
 import { CheckCircle2, Eye, RefreshCw, ShieldAlert, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 
+import { getSystemLabel } from '../../../common/src/display-localization';
+import {
+    departmentDisplayLabel,
+    eventTypeDisplayLabel,
+    severityDisplayLabel,
+    systemFieldDisplayLabel,
+    systemStatusDisplayLabel,
+} from '../../../common/src/system-display-labels';
+
 import {
     IncidentActionRecord,
     IncidentDetailResult,
@@ -140,7 +149,7 @@ interface OperationDraft {
 }
 
 function IncidentResponsePage() {
-    const { t } = useLingui();
+    const { t, i18n } = useLingui();
     const statusLabels: Record<string, string> = {
         OPEN: t(messages.statusOpen),
         ACKNOWLEDGED: t(messages.statusAcknowledged),
@@ -261,7 +270,12 @@ function IncidentResponsePage() {
                                     'CLOSED',
                                 ].map(value => (
                                     <SelectItem key={value} value={value}>
-                                        {statusLabels[value] ?? value}
+                                        {getSystemLabel(
+                                            value,
+                                            statusLabels,
+                                            i18n.locale.startsWith('zh') ? 'zh' : 'en',
+                                            'status',
+                                        )}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -313,20 +327,25 @@ function IncidentResponsePage() {
                                                     incident.severity === 'P0' ? 'destructive' : 'outline'
                                                 }
                                             >
-                                                {incident.severity}
+                                                {severityDisplayLabel(incident.severity)}
                                             </Badge>
                                             <Badge variant="secondary">
-                                                {statusLabels[incident.incidentStatus] ??
-                                                    incident.incidentStatus}
+                                                {getSystemLabel(
+                                                    incident.incidentStatus,
+                                                    statusLabels,
+                                                    i18n.locale.startsWith('zh') ? 'zh' : 'en',
+                                                    'status',
+                                                )}
                                             </Badge>
                                             <span className="text-xs font-medium text-muted-foreground">
-                                                {incident.ownerDepartmentCode}
+                                                {departmentDisplayLabel(incident.ownerDepartmentCode)}
                                             </span>
                                         </div>
                                         <h3 className="mt-2 font-semibold">{incident.title}</h3>
                                         <p className="mt-1 text-xs text-muted-foreground">
-                                            {incident.eventType} · {incident.occurrenceCount}{' '}
-                                            {t(messages.occurrences)} · {formatDate(incident.lastOccurredAt)}
+                                            {eventTypeDisplayLabel(incident.eventType)} ·{' '}
+                                            {incident.occurrenceCount} {t(messages.occurrences)} ·{' '}
+                                            {formatDate(incident.lastOccurredAt)}
                                         </p>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
@@ -374,8 +393,9 @@ function IncidentResponsePage() {
                                                 <div>
                                                     <p className="font-medium">{action.title}</p>
                                                     <p className="text-xs text-muted-foreground">
-                                                        {action.ownerDepartmentCode} ·{' '}
-                                                        {formatDate(action.dueAt)} · {action.status}
+                                                        {departmentDisplayLabel(action.ownerDepartmentCode)} ·{' '}
+                                                        {formatDate(action.dueAt)} ·{' '}
+                                                        {systemStatusDisplayLabel(action.status)}
                                                     </p>
                                                 </div>
                                                 {action.status === 'OPEN' && (
@@ -410,7 +430,7 @@ function IncidentResponsePage() {
                         {detail.data?.adminIncident.evidence.map(item => (
                             <div key={item.id} className="rounded-lg border p-3">
                                 <div className="flex items-center justify-between gap-3">
-                                    <Badge variant="outline">{item.eventType}</Badge>
+                                    <Badge variant="outline">{eventTypeDisplayLabel(item.eventType)}</Badge>
                                     {item.integrityValid ? (
                                         <span className="flex items-center gap-1 text-xs text-emerald-700">
                                             <ShieldCheck className="size-4" />
@@ -424,7 +444,8 @@ function IncidentResponsePage() {
                                 </div>
                                 <p className="mt-2 text-sm font-medium">{item.summary}</p>
                                 <p className="mt-1 text-xs text-muted-foreground">
-                                    {formatDate(item.occurredAt)} · {item.actorType}
+                                    {formatDate(item.occurredAt)} ·{' '}
+                                    {systemFieldDisplayLabel('actorType', item.actorType)}
                                     {item.actorUserId ? ` ${item.actorUserId}` : ''}
                                 </p>
                                 <pre className="mt-2 overflow-x-auto rounded bg-muted p-2 text-[11px]">
@@ -457,7 +478,7 @@ function OperationDialog({
     submit: () => void;
     pending: boolean;
 }) {
-    const { t } = useLingui();
+    const { t, i18n } = useLingui();
     const operationTitles: Record<Operation, string> = {
         ACKNOWLEDGE: t(messages.acknowledgeTitle),
         RECOVERY: t(messages.recoveryTitle),

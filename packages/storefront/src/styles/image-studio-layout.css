@@ -21,7 +21,7 @@
 .ai-studio-history {
     min-width: 0;
     padding: 16px;
-    border: 1px solid var(--line);
+    border: 0;
     border-radius: var(--radius-md);
     background: var(--paper);
     box-shadow: var(--shadow-sm);
@@ -191,7 +191,7 @@
 }
 
 .ai-studio-setting-trigger + .ai-studio-setting-trigger {
-    border-top: 1px solid var(--line);
+    border-top: 0;
 }
 
 .ai-studio-setting-trigger strong {
@@ -250,7 +250,7 @@
 .ai-studio-settlement-refund {
     grid-column: 1 / -1;
     padding: 12px 0;
-    border-top: 1px solid var(--line);
+    border-top: 0;
     grid-template-columns: 30px minmax(0, 1fr);
 }
 
@@ -315,7 +315,7 @@
     right: auto;
     bottom: 0;
     left: 50%;
-    border-top: 1px solid var(--line);
+    border-top: 0;
     background: var(--paper);
     box-shadow: 0 -6px 20px rgb(34 25 55 / 7%);
     transform: translateX(-50%);
@@ -394,15 +394,20 @@
 }
 
 .ai-studio-history-filters button.is-active {
-    background: var(--paper);
-    color: var(--accent);
-    box-shadow: var(--shadow-sm);
+    background: var(--selection);
+    color: var(--selection-foreground);
+    box-shadow: none;
+}
+
+.ai-studio-history-filters button.is-active:hover:not(:disabled) {
+    background: var(--selection-hover);
+    color: var(--selection-foreground);
 }
 
 .ai-generation-card {
     margin-top: 9px;
     padding: 9px;
-    border: 1px solid var(--line);
+    border: 0;
     border-radius: 14px;
     display: grid;
     grid-template-columns: 96px minmax(0, 1fr);
@@ -433,7 +438,7 @@
     padding: 0;
     position: relative;
     overflow: hidden;
-    border: 1px solid var(--line);
+    border: 0;
     border-radius: 12px;
     display: grid;
     place-items: center;
@@ -1146,7 +1151,7 @@
     padding: 22px 20px 18px;
     position: relative;
     z-index: 1;
-    border: 1px solid var(--line);
+    border: 0;
     border-radius: 18px;
     background: var(--paper);
     box-shadow: 0 24px 70px rgb(23 18 33 / 24%);

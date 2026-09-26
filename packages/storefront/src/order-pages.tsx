@@ -1,7 +1,6 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
-    ArrowLeft,
     Boxes,
     Check,
     ChevronRight,
@@ -27,6 +26,8 @@ import {
 } from 'lucide-react';
 import { FormEvent, MouseEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
+import { fulfillmentStateDisplayLabel, orderStateDisplayLabel } from '../../common/src/display-localization';
+
 import { ShopApi } from './api';
 import { formatBusinessDate } from './business-time';
 import {
@@ -44,6 +45,7 @@ import { PageSkeleton } from './route-loading';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
+import { SubHeader, Subpage } from './storefront-ui/page-shell';
 import { SafeImage } from './storefront-ui/product-display';
 import './styles/checkout-payment-surfaces.css';
 import './styles/logistics.css';
@@ -381,15 +383,6 @@ export function OrdersPage({
                 />
             ) : orders.length ? (
                 <div className={orderPageClassName('order-list')}>
-                    {desktop && (
-                        <div className="desktop-order-columns" aria-hidden="true">
-                            <span>{isZh ? '商品信息' : 'Products'}</span>
-                            <span>{isZh ? '数量' : 'Quantity'}</span>
-                            <span>{isZh ? '订单金额' : 'Order total'}</span>
-                            <span>{isZh ? '订单状态' : 'Status'}</span>
-                            <span>{isZh ? '操作' : 'Actions'}</span>
-                        </div>
-                    )}
                     {orders.map(order => (
                         <OrderCard
                             key={order.id}
@@ -2262,19 +2255,65 @@ function OrderCard({
 
     const formattedTime = order.orderPlacedAt ? formatBusinessDate(locale, order.orderPlacedAt) : '';
 
+    if (desktop) {
+        return (
+            <article className={`order-card order-summary-card ${stateModifier}`}>
+                <header className="order-summary-header">
+                    <span className="order-summary-reference" title={order.code}>
+                        {isZh ? '订单' : 'Order'} {order.code}
+                    </span>
+                    <span className="order-summary-state">{orderStateLabel(order.state, language)}</span>
+                </header>
+                <button className="order-summary-product" type="button" onClick={onOpen}>
+                    <OrderImage order={order} />
+                    <span className="order-summary-copy">
+                        <strong className="order-summary-title" title={firstLineName}>
+                            {firstLineName}
+                        </strong>
+                        <small>
+                            {isZh ? `共 ${order.totalQuantity} 件` : `${order.totalQuantity} items`}
+                            {order.lines.length > 1
+                                ? isZh
+                                    ? ` · ${order.lines.length} 种商品`
+                                    : ` · ${order.lines.length} products`
+                                : ''}
+                        </small>
+                        <span className="order-summary-total">
+                            <small>
+                                {isPendingPayment ? compactCopy.orders.due : isZh ? '实付' : 'Total'}
+                            </small>
+                            <strong>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</strong>
+                        </span>
+                    </span>
+                </button>
+                <footer className="order-summary-footer">
+                    <time className="desktop-order-date" dateTime={order.orderPlacedAt ?? undefined}>
+                        {formattedTime}
+                    </time>
+                    <div className="order-summary-actions">
+                        <button type="button" onClick={onOpen}>
+                            {isZh ? '查看详情' : 'Details'}
+                            <ChevronRight aria-hidden="true" />
+                        </button>
+                        {isPendingPayment && (
+                            <button type="button" className="primary-btn" onClick={onOpen}>
+                                {isZh ? '立即付款' : 'Pay now'}
+                            </button>
+                        )}
+                    </div>
+                </footer>
+            </article>
+        );
+    }
+
     return (
         <article className={orderPageClassName(`order-card ${stateModifier}`)}>
             <header className={orderPageClassName('order-card-header')}>
                 <button type="button" className={orderPageClassName('order-card-store-btn')} onClick={onOpen}>
                     <Store className={orderPageClassName('order-card-store-icon')} aria-hidden="true" />
-                    <strong>{desktop ? `${isZh ? '订单' : 'Order'} ${order.code}` : storefrontName}</strong>
+                    <strong>{storefrontName}</strong>
                     <ChevronRight aria-hidden="true" />
                 </button>
-                {desktop && formattedTime ? (
-                    <time className="desktop-order-date" dateTime={order.orderPlacedAt ?? undefined}>
-                        {formattedTime}
-                    </time>
-                ) : null}
                 <span className={orderPageClassName(`order-state-badge ${stateModifier}`)}>
                     {orderStateLabel(order.state, language)}
                 </span>
@@ -2314,13 +2353,6 @@ function OrderCard({
                     </div>
                 </div>
             </button>
-            {desktop && (
-                <div className="desktop-order-values">
-                    <span>{order.totalQuantity}</span>
-                    <strong>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</strong>
-                    <span>{orderStateLabel(order.state, language)}</span>
-                </div>
-            )}
             <footer className={orderPageClassName('order-card-footer')}>
                 <div className={orderPageClassName('order-total-summary')}>
                     <span className={orderPageClassName('order-total-count')}>
@@ -2436,47 +2468,6 @@ function orderProductPresentation(
         description: hasAdditionalLines ? additionalItemsDescription : presentation.description,
         tags: isZh ? ['数字商品', presentation.tag] : ['Digital item', presentation.tag],
     };
-}
-
-function SubHeader({
-    title,
-    language,
-    onBack,
-    action,
-}: {
-    title: string;
-    language: StorefrontLanguage;
-    onBack: () => void;
-    action?: ReactNode;
-}) {
-    return (
-        <header className={orderPageClassName('topbar subpage-header')}>
-            <button type="button" onClick={onBack} aria-label={language === 'zh' ? '返回' : 'Back'}>
-                <ArrowLeft aria-hidden="true" />
-            </button>
-            <strong>{title}</strong>
-            <span>{action}</span>
-        </header>
-    );
-}
-
-function Subpage({
-    title,
-    language,
-    onBack,
-    children,
-}: {
-    title: string;
-    language: StorefrontLanguage;
-    onBack: () => void;
-    children: ReactNode;
-}) {
-    return (
-        <main className={orderPageClassName('page subpage')}>
-            <SubHeader title={title} language={language} onBack={onBack} />
-            {children}
-        </main>
-    );
 }
 
 function EmptyState({
@@ -2877,48 +2868,9 @@ function afterSalesReasonLabel(reason: AfterSalesReason, language: StorefrontLan
     return labels[reason][language];
 }
 
-function orderStateLabel(state: string, language: StorefrontLanguage): string {
-    if (state === 'TestPaymentSettled') return language === 'zh' ? '测试已付款' : 'Test payment complete';
-    const zh: Record<string, string> = {
-        AddingItems: '待付款',
-        ArrangingPayment: '待付款',
-        PaymentAuthorized: '待发货',
-        PaymentSettled: '待发货',
-        Shipped: '待收货',
-        PartiallyShipped: '部分发货',
-        Delivered: '交易完成',
-        Cancelled: '已取消',
-    };
-    const en: Record<string, string> = {
-        AddingItems: 'Payment pending',
-        ArrangingPayment: 'Payment pending',
-        PaymentAuthorized: 'Preparing shipment',
-        PaymentSettled: 'Preparing shipment',
-        Shipped: 'In transit',
-        PartiallyShipped: 'Partially shipped',
-        Delivered: 'Completed',
-        Cancelled: 'Cancelled',
-    };
-    return (language === 'zh' ? zh : en)[state] ?? state;
-}
+const orderStateLabel = orderStateDisplayLabel;
 
-function fulfillmentStateLabel(state: string, language: StorefrontLanguage): string {
-    const zh: Record<string, string> = {
-        Created: '已创建',
-        Pending: '待发货',
-        Shipped: '运输中',
-        Delivered: '已送达',
-        Cancelled: '已取消',
-    };
-    const en: Record<string, string> = {
-        Created: 'Created',
-        Pending: 'Pending shipment',
-        Shipped: 'In transit',
-        Delivered: 'Delivered',
-        Cancelled: 'Cancelled',
-    };
-    return (language === 'zh' ? zh : en)[state] ?? state;
-}
+const fulfillmentStateLabel = fulfillmentStateDisplayLabel;
 
 function latestOrderFulfillment(
     order: OrderSummary,

@@ -20,6 +20,7 @@ import {
     X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
@@ -754,7 +755,7 @@ function ModelConfigDrawer({
                 </div>
                 {(testResult?.message ?? value.healthMessage) && (
                     <p className="mt-3 text-xs leading-5 text-slate-500">
-                        {testResult?.message ?? value.healthMessage}
+                        {testResult?.message ?? serviceMessageDisplay(value.healthMessage, 'zh')}
                     </p>
                 )}
             </section>
@@ -1368,9 +1369,12 @@ function JobOutputsDialog({
                                             <td className="max-w-64 px-3 py-2">
                                                 <span
                                                     className={`block truncate text-[10px] ${output.errorMessage ? 'text-rose-600' : 'text-slate-400'}`}
-                                                    title={output.errorMessage || undefined}
+                                                    title={
+                                                        serviceMessageDisplay(output.errorMessage, 'zh') ||
+                                                        undefined
+                                                    }
                                                 >
-                                                    {output.errorMessage || '-'}
+                                                    {serviceMessageDisplay(output.errorMessage, 'zh') || '-'}
                                                 </span>
                                             </td>
                                             <td className="whitespace-nowrap px-3 py-2 text-right">

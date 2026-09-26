@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -669,9 +670,9 @@ function DeliveriesTable({
                                 <td className="h-[52px] max-w-64 px-3 py-0">
                                     <span
                                         className="block truncate text-[10px] text-rose-600"
-                                        title={item.lastError ?? ''}
+                                        title={serviceMessageDisplay(item.lastError, 'zh') ?? ''}
                                     >
-                                        {item.lastError ?? '—'}
+                                        {serviceMessageDisplay(item.lastError, 'zh') ?? '—'}
                                     </span>
                                 </td>
                                 <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">

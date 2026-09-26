@@ -27,6 +27,8 @@ import {
 import { CheckCircle2, ClipboardCopy, LoaderCircle, Plus, RefreshCw, Store } from 'lucide-react';
 import { FormEvent, ReactNode, useState } from 'react';
 
+import { systemFieldDisplayLabel } from '../../../common/src/system-display-labels';
+
 import {
     ProvisionStoreResult,
     StoreTemplatesResult,
@@ -378,7 +380,10 @@ function StoreProvisioningPage() {
                                                             <SelectItem key={template.id} value={template.id}>
                                                                 {template.code} ·{' '}
                                                                 {template.defaultCurrencyCode} ·{' '}
-                                                                {template.defaultLanguageCode}
+                                                                {systemFieldDisplayLabel(
+                                                                    'defaultLanguageCode',
+                                                                    template.defaultLanguageCode,
+                                                                )}
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>

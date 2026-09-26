@@ -27,9 +27,14 @@
 }
 
 .address-type-tabs button.is-active {
-    background: var(--surface);
-    color: var(--accent-ink);
-    box-shadow: var(--shadow-sm);
+    background: var(--selection);
+    color: var(--selection-foreground);
+    box-shadow: none;
+}
+
+.address-type-tabs button.is-active:hover:not(:disabled) {
+    background: var(--selection-hover);
+    color: var(--selection-foreground);
 }
 
 .address-type-tabs svg {
@@ -43,9 +48,9 @@
 }
 
 .address-card {
-    margin-top: 0;
+    margin-top: 9px;
     padding: 14px;
-    border-top: 9px solid var(--bg);
+    border-top: 0;
     background: var(--surface);
     color: var(--text);
     min-width: 0;
@@ -125,7 +130,7 @@
 .address-default-toggle input {
     width: 17px;
     height: 17px;
-    accent-color: var(--accent);
+    accent-color: var(--selection);
 }
 
 .address-default-toggle span {
@@ -152,8 +157,8 @@
 
 /* Shared address selection and editing, including the checkout return flow. */
 .address-card.is-selected {
-    box-shadow: inset 3px 0 var(--accent);
-    background: var(--paper);
+    box-shadow: none;
+    background: var(--selection-soft);
 }
 .address-selection-control {
     display: flex;
@@ -166,7 +171,7 @@
 .address-selection-control input {
     width: 18px;
     height: 18px;
-    accent-color: var(--accent);
+    accent-color: var(--selection);
 }
 .addresses-page.is-selecting-address {
     padding-bottom: calc(88px + var(--safe-bottom));
@@ -179,7 +184,7 @@
     bottom: 0;
     padding: 12px 14px calc(12px + var(--safe-bottom));
     background: var(--paper);
-    border-top: 1px solid var(--line);
+    border-top: 0;
     z-index: 2;
 }
 .address-smart-paste {

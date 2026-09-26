@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { isImageAlreadyDecoded } from './safe-image';
+import { ImagePlaceholder, isImageAlreadyDecoded } from './safe-image';
 import { SafeImage } from './storefront-ui/product-display';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -22,6 +22,50 @@ function requiredImage(host: ParentNode): HTMLImageElement {
 }
 
 describe('SafeImage', () => {
+    it.each([
+        ['zh', '图片暂时无法显示'],
+        ['en', 'Image temporarily unavailable'],
+    ] as const)('distinguishes loading, failed and replaced images in %s', (language, label) => {
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() =>
+                root.render(<SafeImage src="/missing-state-image.png" alt="Product" language={language} />),
+            );
+            expect(host.querySelector('[data-image-state=loading]')).not.toBeNull();
+            expect(host.querySelector('.image-status-label')).toBeNull();
+            act(() => {
+                requiredImage(host).dispatchEvent(new Event('error'));
+            });
+            expect(host.querySelector('[data-image-state=error]')).not.toBeNull();
+            expect(host.querySelector('.image-status-label')?.textContent).toBe(label);
+            expect(host.querySelector('[role=img]')?.getAttribute('aria-label')).toContain(label);
+
+            const nextLanguage = language === 'zh' ? 'en' : 'zh';
+            act(() =>
+                root.render(
+                    <SafeImage src="/missing-state-image.png" alt="Product" language={nextLanguage} />,
+                ),
+            );
+            expect(host.querySelector('.image-status-label')?.textContent).not.toBe(label);
+            act(() =>
+                root.render(
+                    <SafeImage src="/replacement-state-image.png" alt="Product" language={language} />,
+                ),
+            );
+            expect(host.querySelector('[data-image-state=loading]')).not.toBeNull();
+            expect(host.querySelector('.image-status-label')).toBeNull();
+        } finally {
+            act(() => root.unmount());
+        }
+    });
+
+    it('keeps compact missing media accessible without fitting copy into a tiny thumbnail', () => {
+        const markup = renderToStaticMarkup(<ImagePlaceholder compact alt="商品" language="zh" />);
+        expect(markup).toContain('商品 · 暂无商品图片');
+        expect(markup).not.toContain('image-status-label');
+    });
+
     it('does not mark a failed decode as loaded or cache a broken image', async () => {
         const decode = vi
             .spyOn(HTMLImageElement.prototype, 'decode')
@@ -232,7 +276,9 @@ describe('SafeImage', () => {
             });
             expect(host.querySelector<HTMLElement>('[data-safe-image=error]')?.style.minHeight).toBe('240px');
             expect(host.querySelector('.safe-image-fallback')).not.toBeNull();
-            expect(host.querySelector('[role=img]')?.getAttribute('aria-label')).toBe('Product');
+            expect(host.querySelector('[role=img]')?.getAttribute('aria-label')).toBe(
+                'Product · 图片暂时无法显示',
+            );
         } finally {
             act(() => root.unmount());
         }

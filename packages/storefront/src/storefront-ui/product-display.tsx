@@ -18,7 +18,7 @@ import { decodeImageElement } from '../image-readiness';
 import { formatDisplayMoney } from '../money-display';
 import { productImage } from '../product-media';
 import { imageSources, StorefrontImageKind } from '../responsive-image';
-import { SafeImage } from '../safe-image';
+import { ImagePlaceholder, SafeImage } from '../safe-image';
 import { CollectionSummary, OrderSummary, Product, ProductVariant } from '../types';
 
 export { productImage } from '../product-media';
@@ -253,9 +253,7 @@ export function ProductImage({
     if (!image || image.includes('placeholder') || image.includes('default-hero')) {
         const { brand } = parseAiProductInfo(product.name, product.description);
         return brand === 'generic' ? (
-            <div className="image-placeholder" aria-hidden="true">
-                <Package />
-            </div>
+            <ImagePlaceholder alt={product.name} />
         ) : (
             <AiProductCover name={product.name} description={product.description} />
         );
@@ -320,21 +318,13 @@ export function ProductVariantImage({ variant, alt }: { variant: ProductVariant;
     if (!image || image.includes('placeholder') || image.includes('default-hero')) {
         const { brand } = parseAiProductInfo(displayName);
         return brand === 'generic' ? (
-            <div className="image-placeholder" aria-hidden="true">
-                <Package />
-            </div>
+            <ImagePlaceholder alt={alt} compact />
         ) : (
             <AiProductCover name={displayName} />
         );
     }
 
-    return image ? (
-        <SafeImage src={image} alt={alt} imageKind="thumbnail" loading="lazy" />
-    ) : (
-        <div className="image-placeholder" aria-hidden="true">
-            <Package />
-        </div>
-    );
+    return <SafeImage src={image} alt={alt} imageKind="thumbnail" loading="lazy" />;
 }
 
 export { isImageAlreadyDecoded, markImageDecoded, SafeImage } from '../safe-image';
@@ -344,9 +334,7 @@ export function OrderImage({ order }: { order: OrderSummary }) {
     return variant ? (
         <ProductVariantImage variant={variant} alt={variant.name} />
     ) : (
-        <div className="image-placeholder" aria-hidden="true">
-            <Package />
-        </div>
+        <ImagePlaceholder compact />
     );
 }
 

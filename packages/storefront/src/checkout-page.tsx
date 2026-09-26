@@ -1,6 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
 import {
-    ArrowLeft,
     ChevronDown,
     ChevronRight,
     CircleCheck,
@@ -29,6 +28,7 @@ import { appliedCouponLabel } from './storefront-coupons';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions, RouteState } from './storefront-router';
 import { CouponSheet } from './storefront-ui/cart-ui';
+import { SubHeader, Subpage } from './storefront-ui/page-shell';
 import { SafeImage } from './storefront-ui/product-display';
 import './styles/checkout-payment-surfaces.css';
 import { checkoutPageStyles, pageClassName } from './tailwind/checkout-page-styles';
@@ -1712,43 +1712,6 @@ function Sheet({
                 {children}
             </section>
         </div>
-    );
-}
-function SubHeader({
-    title,
-    language,
-    onBack,
-}: {
-    title: string;
-    language: StorefrontLanguage;
-    onBack: () => void;
-}) {
-    return (
-        <header className={checkoutPageClassName('topbar subpage-header')}>
-            <button type="button" onClick={onBack} aria-label={language === 'zh' ? '返回' : 'Back'}>
-                <ArrowLeft aria-hidden="true" />
-            </button>
-            <strong>{title}</strong>
-            <span />
-        </header>
-    );
-}
-function Subpage({
-    title,
-    language,
-    onBack,
-    children,
-}: {
-    title: string;
-    language: StorefrontLanguage;
-    onBack: () => void;
-    children: ReactNode;
-}) {
-    return (
-        <main className={checkoutPageClassName('page subpage')}>
-            <SubHeader title={title} language={language} onBack={onBack} />
-            {children}
-        </main>
     );
 }
 function EmptyState({

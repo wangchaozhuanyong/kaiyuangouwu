@@ -184,7 +184,7 @@ describe('business services page', () => {
         const markup = renderPage([navigationBlock('AI 智能服务')]);
 
         expect(markup).toContain('<strong>AI 智能服务</strong>');
-        expect(markup).toContain('business-services-heading-kicker">AI 智能服务</span>');
+        expect(markup).not.toContain('business-services-heading-kicker');
     });
 
     it('renders enabled plugins in the business-services main position', () => {
@@ -210,6 +210,31 @@ describe('business services page', () => {
         expect(renderPage([chineseBlock])).toContain('从这里开始使用店铺工具。');
         expect(renderPage([englishBlock], 'en')).toContain('Services for your business');
         expect(renderPage([englishBlock], 'en')).toContain('Start using store tools here.');
+    });
+
+    it('ignores legacy subtitles and does not add a navigation-name eyebrow on either layout', () => {
+        const block = businessPluginBlock();
+        block.settings = { businessServicesCopyVersion: 1 };
+        block.title = '商家设置的标题';
+        block.body = '商家设置的说明';
+        block.subtitle = '与默认站使用同一插件版本';
+        for (const desktop of [false, true]) {
+            const markup = renderPage([block], 'zh', desktop);
+            expect(markup).toContain('商家设置的标题');
+            expect(markup).toContain('商家设置的说明');
+            expect(markup).not.toContain('与默认站使用同一插件版本');
+            expect(markup).not.toContain('business-services-heading-kicker');
+            expect(renderPage([{ ...block, subtitle: '' }], 'zh', desktop)).not.toContain(
+                'business-services-heading-kicker',
+            );
+            expect(
+                renderPage(
+                    [{ ...block, subtitle: 'Uses the same plugin version as the default site' }],
+                    'en',
+                    desktop,
+                ),
+            ).not.toContain('Uses the same plugin version as the default site');
+        }
     });
 
     it('renders a localized jump action when the managed hero has a URL target', () => {

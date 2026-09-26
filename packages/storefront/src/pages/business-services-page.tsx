@@ -62,7 +62,6 @@ export function BusinessServicesPage() {
     const heroTitle =
         (hasManagedCopy ? clientPluginBlock?.title.trim() : '') ||
         (isZh ? '发现更多商业能力' : 'Discover more business capabilities');
-    const heroKicker = (hasManagedCopy ? clientPluginBlock?.subtitle.trim() : '') || pageTitle;
     const heroDescription =
         (hasManagedCopy ? clientPluginBlock?.body.trim() : '') ||
         (isZh
@@ -115,7 +114,7 @@ export function BusinessServicesPage() {
             )}
             <header className="business-services-heading">
                 <div className="business-services-heading-copy">
-                    <span className="business-services-heading-kicker">{heroKicker}</span>
+                    {/* Only render copy exposed by the business services editor; legacy subtitles are not editable. */}
                     <h1 className="business-services-page-title">
                         {desktop && !hasManagedCopy ? pageTitle : heroTitle}
                     </h1>

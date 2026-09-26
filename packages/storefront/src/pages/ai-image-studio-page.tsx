@@ -23,6 +23,7 @@ import { createPortal } from 'react-dom';
 import '../styles/image-studio.css';
 import '../styles/modals-and-support.css';
 
+import { getSystemLabel, serviceMessageDisplay } from '../../../common/src/display-localization';
 import { ShopApi, ShopApiTimeoutError } from '../api';
 import { isInputMethodKey } from '../input-method';
 import { formatDisplayMoney } from '../money-display';
@@ -2181,7 +2182,7 @@ function GenerationCard({
                     </div>
                 ) : job.errorMessage ? (
                     <span className="ai-generation-error-copy">
-                        {job.errorMessage}
+                        {serviceMessageDisplay(job.errorMessage, language)}
                         {failureSuggestion(job.outputs.find(output => output.failureCode)?.failureCode, isZh)}
                     </span>
                 ) : null}
@@ -2412,7 +2413,7 @@ function GenerationDetail({
                                     <span>{stateLabel(output.state, isZh)}</span>
                                     {output.errorMessage ? (
                                         <small>
-                                            {output.errorMessage}
+                                            {serviceMessageDisplay(output.errorMessage, language)}
                                             {failureSuggestion(output.failureCode, isZh)}
                                         </small>
                                     ) : null}
@@ -2796,7 +2797,7 @@ function stateLabel(state: string, isZh: boolean): string {
         UNKNOWN: 'Checking result',
         CANCELLED: 'Cancelled',
     };
-    return (isZh ? zh : en)[state] ?? state;
+    return getSystemLabel(state, isZh ? zh : en, isZh ? 'zh' : 'en', 'status');
 }
 function quotaRemainingLabel(quota: ImagePromptQuotaStatus['daily']): string {
     return quota.unlimited ? '不限' : `${quota.remaining}/${quota.limit}`;

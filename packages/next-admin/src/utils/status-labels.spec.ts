@@ -36,11 +36,13 @@ describe('status label helpers', () => {
             '模铝科技管理员',
         );
         expect(getRoleLabel(null)).toBe('未分配角色');
+        expect(getRoleLabel('unregistered-system-role')).toBe('自定义角色');
+        expect(getRoleLabel({ code: 'unregistered-system-role' })).toBe('自定义角色');
     });
 
     it('formats system role codes with clear labels', () => {
-        expect(getRoleCodeLabel('__super_admin_role__')).toBe('系统内置 · __super_admin_role__');
-        expect(getRoleCodeLabel('__customer_role__')).toBe('系统内置 · __customer_role__');
+        expect(getRoleCodeLabel('__super_admin_role__')).toBe('系统内置角色');
+        expect(getRoleCodeLabel('__customer_role__')).toBe('系统内置角色');
         expect(getRoleCodeLabel('operator')).toBe('operator');
         expect(getRoleCodeLabel(null)).toBe('');
     });

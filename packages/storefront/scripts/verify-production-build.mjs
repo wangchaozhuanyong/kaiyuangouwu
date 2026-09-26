@@ -3,6 +3,10 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { assertDisplayLocalization } from '../../../scripts/audit-display-localization.mjs';
+
+assertDisplayLocalization();
+
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const distRoot = path.join(packageRoot, 'dist');
 const indexHtml = await readFile(path.join(distRoot, 'index.html'), 'utf8');

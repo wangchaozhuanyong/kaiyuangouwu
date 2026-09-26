@@ -39,6 +39,8 @@ import {
 import { Loader2, RefreshCw, Scale } from 'lucide-react';
 import { useState } from 'react';
 
+import { getSystemLabel } from '../../../common/src/display-localization';
+
 import {
     CatalogInventoryOperationRecord,
     CatalogInventoryReconciliationRecord,
@@ -245,12 +247,20 @@ function CatalogInventoryControlPage() {
                                 <TableBody>
                                     {ledger.map(operation => (
                                         <TableRow key={operation.id}>
-                                            <TableCell className="font-mono text-xs">
+                                            <TableCell
+                                                data-business-reference="inventory-operation"
+                                                className="font-mono text-xs"
+                                            >
                                                 {operation.code}
                                             </TableCell>
                                             <TableCell>
                                                 <Badge variant="outline">
-                                                    {operationLabels[operation.type] ?? operation.type}
+                                                    {getSystemLabel(
+                                                        operation.type,
+                                                        operationLabels,
+                                                        'zh',
+                                                        'type',
+                                                    )}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell>

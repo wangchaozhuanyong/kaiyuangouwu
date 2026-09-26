@@ -151,7 +151,7 @@
     gap: 0;
     margin-top: 16px;
     padding-top: 12px;
-    border-top: 1px solid rgba(255, 253, 248, 0.16);
+    border-top: 0;
 }
 .account-hero-asset {
     display: flex;
@@ -425,9 +425,14 @@
 }
 
 .notification-toolbar button.is-active {
-    border-color: transparent;
-    background: var(--accent-soft);
-    color: var(--accent-ink);
+    border-color: var(--selection);
+    background: var(--selection);
+    color: var(--selection-foreground);
+}
+
+.notification-toolbar button.is-active:hover:not(:disabled) {
+    background: var(--selection-hover);
+    color: var(--selection-foreground);
 }
 
 .notification-toolbar .notification-mark-all {
@@ -829,44 +834,6 @@
     }
     .account-recommendations-single .product-grid {
         grid-template-columns: minmax(0, 1fr);
-    }
-    .account-recommendations-single .product-card {
-        display: grid;
-        grid-template-columns: minmax(112px, 42%) minmax(0, 1fr);
-        grid-template-rows: auto auto minmax(0, 1fr) auto;
-        column-gap: 12px;
-        min-height: 160px;
-        padding: 0 12px 0 0;
-    }
-    .account-recommendations-single .product-card-media {
-        grid-column: 1;
-        grid-row: 1 / span 4;
-        height: 100%;
-        aspect-ratio: auto;
-        border-radius: var(--skin-card-radius) 0 0 var(--skin-card-radius);
-    }
-    .account-recommendations-single
-        .product-card
-        :is(.product-card-name, .product-card-subtitle, .product-card-meta, footer) {
-        grid-column: 2;
-        padding-inline: 0;
-    }
-    .account-recommendations-single .product-card-name {
-        grid-row: 1;
-        margin-top: 12px;
-    }
-    .account-recommendations-single .product-card-subtitle {
-        grid-row: 2;
-        min-height: 0;
-    }
-    .account-recommendations-single .product-card-meta {
-        grid-row: 3;
-        align-self: start;
-    }
-    .account-recommendations-single .product-card footer {
-        grid-row: 4;
-        margin-top: 0;
-        padding-bottom: 12px;
     }
 }
 @media (min-width: 1024px) {

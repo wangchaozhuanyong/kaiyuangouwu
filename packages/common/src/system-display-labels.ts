@@ -1,0 +1,343 @@
+import { getSystemLabel, type DisplayLanguage } from './display-localization';
+
+export const departmentDisplayNames: Readonly<Record<string, { zh: string; en: string }>> = {
+    EXEC: { zh: '总经办与运营调度中心', en: 'Executive Operations' },
+    INTEL: { zh: '市场情报与商业策划部', en: 'Market Intelligence' },
+    PRODUCT: { zh: '商品与定价部', en: 'Product and Pricing' },
+    SUPPLY: { zh: '供应链与库存部', en: 'Supply and Inventory' },
+    DESIGN: { zh: '品牌设计与视觉创意部', en: 'Brand Design' },
+    CONTENT: { zh: '内容与文案部', en: 'Content' },
+    GROWTH: { zh: '全渠道增长运营部', en: 'Growth Operations' },
+    SALES: { zh: '真人销售客服部', en: 'Sales and Support' },
+    FULFILLMENT: { zh: '订单交付与客户成功部', en: 'Fulfillment and Customer Success' },
+    TECH: { zh: '网站技术与自动化部', en: 'Technology and Automation' },
+    DATA_FINANCE: { zh: '数据财务与经营分析部', en: 'Data and Finance' },
+    GOVERNANCE: { zh: '质量合规安全与人工智能治理部', en: 'Governance and Security' },
+};
+
+const severityNames = {
+    P0: '紧急',
+    P1: '高优先级',
+    P2: '普通',
+    P3: '提示',
+    LOW: '低',
+    MEDIUM: '中',
+    HIGH: '高',
+    CRITICAL: '严重',
+};
+const statusNames = {
+    ...{
+        TestPaymentSettled: '测试已付款',
+        TestSettled: '测试付款成功',
+        ALL: '全部状态',
+        ACTIVE: '已启用',
+        INACTIVE: '未启用',
+        ENABLED: '已启用',
+        DISABLED: '已停用',
+        DRAFT: '草稿',
+        PENDING: '待处理',
+        QUEUED: '排队中',
+        RUNNING: '处理中',
+        STARTED: '处理中',
+        RETRYING: '重试中',
+        COMPLETED: '已完成',
+        SUCCEEDED: '已成功',
+        PARTIAL_SUCCESS: '部分成功',
+        FAILED: '失败',
+        ERROR: '错误',
+        CANCELLED: '已取消',
+        UNKNOWN: '结果待确认',
+        CREATED: '已创建',
+        APPROVED: '已批准',
+        REJECTED: '已驳回',
+        PAID: '已支付',
+        AVAILABLE: '可用',
+        SENT: '已发送',
+        REFUNDED: '已退款',
+        SUPERSEDED: '已停用',
+        HEALTHY: '正常',
+        UNHEALTHY: '异常',
+        UNTESTED: '待测试',
+        UNCONFIGURED: '未配置',
+        Created: '已创建',
+        Pending: '待处理',
+        Authorized: '已授权',
+        Settled: '已结算',
+        Declined: '已拒绝',
+        Error: '错误',
+        Cancelled: '已取消',
+        Shipped: '已发货',
+        Delivered: '已交付',
+        Failed: '失败',
+    },
+
+    ACTIVE: '已启用',
+    INACTIVE: '未启用',
+    DEPLETED: '已耗尽',
+    VOID: '已作废',
+    EXPIRED: '已过期',
+    OPEN: '待处理',
+    PENDING: '待处理',
+    RUNNING: '处理中',
+    QUEUED: '排队中',
+    COMPLETED: '已完成',
+    SUCCEEDED: '成功',
+    SUCCESS: '成功',
+    FAILED: '失败',
+    ERROR: '错误',
+    CANCELLED: '已取消',
+    AUTH_ERROR: '认证失败',
+    DISABLED: '已停用',
+    APPROVED: '已批准',
+    REJECTED: '已驳回',
+    CLOSED: '已闭环',
+    IN_REVIEW: '审核中',
+    ACKNOWLEDGED: '已确认',
+    RECOVERY_PENDING: '待恢复验证',
+    REVIEW_PENDING: '待复盘',
+    ACTION_PENDING: '整改中',
+    RETRY: '等待重试',
+    DEAD: '发送失败',
+    SENT: '已发送',
+    SKIPPED: '已跳过',
+    RESOLVED: '已恢复',
+    Created: '已创建',
+    Pending: '待处理',
+    Shipped: '已发货',
+    Delivered: '已交付',
+    Cancelled: '已取消',
+    FREE: '免费',
+    PAID: '付费',
+    MIXED: '免费与付费',
+    RELEASED: '已释放',
+    REFUNDED: '已退款',
+    ACCEPTED: '已接受',
+    PARTIAL_SUCCESS: '部分成功',
+    MANUAL_REVIEW: '待人工复核',
+    NOT_NEEDED: '无需继续处理',
+    CONTACTED: '已联系',
+    NO_RESPONSE: '未联系上',
+    DO_NOT_CONTACT: '已停止联系',
+    pending: '等待中',
+    active: '已激活',
+    blocked: '已阻止',
+    expired: '已过期',
+    deleted: '已删除',
+    initializing: '初始化中',
+    pending_validation: '待验证',
+    pending_issuance: '待签发',
+    pending_deployment: '待部署',
+    moved: '已迁移',
+};
+const eventNames = {
+    'commerce.order.placed': '订单已提交',
+    'commerce.payment.authorized': '支付已授权',
+    'commerce.payment.settled': '支付成功',
+    'commerce.payment.failed': '支付失败',
+    'commerce.payment.declined': '支付被拒绝',
+    'commerce.payment.proof_mismatch': '支付凭证不匹配',
+    'commerce.payment.amount_mismatch': '支付金额不匹配',
+    'commerce.payment.manual_review': '支付待人工复核',
+    'commerce.payment.cancelled': '支付已取消',
+    'commerce.fulfillment.created': '交付已创建',
+    'commerce.fulfillment.shipped': '订单已发货',
+    'commerce.fulfillment.delivered': '订单已送达',
+    'commerce.fulfillment.cancelled': '交付已取消',
+    'commerce.fulfillment.auto_card_failed': '自动卡密交付失败',
+    'commerce.fulfillment.manual_delivery_failed': '人工交付失败',
+    'commerce.fulfillment.manual_delivery_overdue': '人工交付超时',
+    'commerce.refund.pending': '退款待处理',
+    'commerce.refund.settled': '退款已完成',
+    'commerce.refund.failed': '退款失败',
+    'inventory.variant.low': '商品库存不足',
+    'inventory.variant.recovered': '商品库存已恢复',
+    'inventory.auto_card.empty': '卡密库存已耗尽',
+    'system.notification.queue_lag': '通知队列延迟',
+    'system.notification.dead_letter': '通知发送失败',
+    'system.notification.test': '通知测试',
+    'system.database.down': '数据库连接失败',
+    'system.database.recovered': '数据库连接已恢复',
+    'fraud.case.attention': '风险案件待处理',
+    'fraud.case.resolved': '风险案件已恢复',
+    FRAUD_EVALUATION_ALLOWED: '风险评估已通过',
+    FRAUD_CASE_CREATED: '风险案件已创建',
+    FRAUD_CASE_RELEASE: '风险案件已放行',
+    FRAUD_CASE_REJECT: '风险案件已拒绝',
+    CONFIG_APPROVAL_REQUESTED: '配置审批已申请',
+    CONFIG_APPROVAL_EXPIRED: '配置审批已过期',
+    CONFIG_APPROVED: '配置已批准',
+    CONFIG_REJECTED: '配置已驳回',
+    GOVERNANCE_REPORT_GENERATED: '治理报告已生成',
+    'governance.control.anomaly': '治理控制异常',
+    'governance.control.recovered': '治理控制已恢复',
+    REWARD_PENDING: '奖励待生效',
+    REWARD_AVAILABLE: '奖励已获得',
+    REWARD_RELEASED: '奖励已生效',
+    REFUND_CLAWBACK: '退款扣回',
+    SPEND_RESERVED: '订单抵扣',
+    SPEND_CAPTURED: '抵扣已确认',
+    SPEND_REFUNDED: '抵扣退回',
+    WITHDRAWAL_RESERVED: '提款申请',
+    WITHDRAWAL_PAID: '提款已支付',
+    WITHDRAWAL_REJECTED: '提款退回',
+    WITHDRAWAL_CANCELLED: '提款取消',
+    ADMIN_ADJUSTMENT: '人工调整',
+};
+
+export const systemStatusDisplayLabel = (value?: string | null) => getSystemLabel(value, statusNames);
+export const eventTypeDisplayLabel = (value?: string | null) =>
+    getSystemLabel(value, eventNames, 'zh', 'event');
+export const severityDisplayLabel = (value?: string | null) =>
+    getSystemLabel(value, severityNames, 'zh', 'severity');
+
+const paymentMethodLabels: Readonly<Record<string, string>> = {
+    'usdt-trc20': 'USDT 链上支付（TRC20）',
+    'standard-payment': '本地测试支付',
+    'referral-balance': '返利余额抵扣',
+    'bank-transfer': '银行转账',
+    card: '银行卡支付',
+    'credit-card': '银行卡支付',
+    'cash-on-delivery': '货到付款',
+};
+
+/** Shared by the two admin surfaces; custom Chinese method names remain business data. */
+export function paymentMethodDisplayLabel(code?: string | null): string {
+    const value = code?.trim();
+    if (!value) return '未命名支付方式';
+    if (Object.prototype.hasOwnProperty.call(paymentMethodLabels, value)) return paymentMethodLabels[value];
+    if (/(?:^|[-_\s])(demo|dummy|mock|sandbox|test)(?:$|[-_\s])|测试/iu.test(value)) return '内部测试支付';
+    return /\p{Script=Han}/u.test(value) ? value : '其他支付方式';
+}
+export function departmentDisplayLabel(value?: string | null, language: DisplayLanguage = 'zh'): string {
+    const labels = Object.fromEntries(
+        Object.entries(departmentDisplayNames).map(([code, names]) => [
+            code,
+            names[language === 'en' ? 'en' : 'zh'],
+        ]),
+    );
+    return getSystemLabel(value, labels, language, 'department');
+}
+
+const fieldLabels = {
+    matchingStatus: {
+        UNRECONCILED: '尚未核实供应商账单',
+        CROSS_MATCH_REVIEWED: '交叉匹配已审',
+        COST_REVERTED: '费用已更正为未知',
+    },
+    costSource: { UNVERIFIED: '未核实', SUPPLIER_BILLING: '供应商账单审定' },
+    source: {
+        LINK: '邀请链接',
+        POSTER: '邀请海报',
+        CODE: '邀请码',
+        REGISTRATION: '账号注册',
+        GOOGLE_REGISTRATION: '谷歌账户注册',
+        SYSTEM: '系统',
+        CUSTOMER: '客户',
+        ADMIN: '管理员',
+    },
+    type: {
+        IMAGE: '图片',
+        VIDEO: '视频',
+        BINARY: '文件',
+        REFUND_ONLY: '仅退款',
+        RETURN_AND_REFUND: '退货退款',
+        EXCHANGE: '换货',
+        RESHIP: '补发',
+    },
+    actorType: {
+        SYSTEM: '系统',
+        ADMINISTRATOR: '管理员',
+        ADMIN: '管理员',
+        CUSTOMER: '客户',
+        WORKER: '后台任务',
+        SELLER: '商家',
+        AUTOMATION: '自动任务',
+    },
+    stage: {
+        GENERATION: '图片生成',
+        GENERATE: '图片生成',
+        PROMPT_OPTIMIZATION: '提示词优化',
+        PROMPT: '提示词处理',
+        CREATE: '创建任务',
+        POLL: '查询结果',
+        SUBMIT: '提交任务',
+        BILLING: '计费',
+        REFUND: '退款',
+        LEGACY: '历史记录',
+        CLAIMED: '任务已领取',
+        REQUEST_STARTED: '请求已发出',
+        RESPONSE_RECEIVED: '已收到响应',
+        ASSET_STORED: '素材已保存',
+        SETTLED: '已结算',
+        '选择 Key': '选择密钥',
+    },
+    supplierScope: { GENERATION: '图片生成', PROMPT_OPTIMIZATION: '提示词优化', ALL: '全部服务' },
+    headerRequestIdSource: {
+        HEADER: '响应头',
+        BODY: '响应内容',
+        NONE: '未返回',
+        'x-request-id': '请求标识响应头',
+        'request-id': '请求标识响应头',
+        'x-trace-id': '追踪标识响应头',
+    },
+    payoutMethod: {
+        BANK: '银行转账',
+        BANK_TRANSFER: '银行转账',
+        bank: '银行转账',
+        ALIPAY: '支付宝',
+        alipay: '支付宝',
+        WECHAT: '微信支付',
+        USDT: '泰达币转账',
+        usdt: '泰达币转账',
+    },
+    rateSource: {
+        MANUAL: '人工设置',
+        manual: '人工设置',
+        FIXED: '固定汇率',
+        Binance: '币安',
+        BINANCE: '币安',
+        CoinGecko: '行情服务',
+        COINGECKO: '行情服务',
+        'Bank Negara Malaysia': '马来西亚国家银行',
+    },
+    defaultLanguageCode: {
+        zh: '简体中文',
+        zh_Hans: '简体中文',
+        'zh-CN': '简体中文',
+        'zh-TW': '繁体中文',
+        zh_Hant: '繁体中文',
+        en: '英文',
+        'en-US': '英文（美国）',
+        'en-GB': '英文（英国）',
+    },
+} satisfies Readonly<Record<string, Readonly<Record<string, string>>>>;
+
+export function systemFieldDisplayLabel(field: keyof typeof fieldLabels, value?: string | null): string {
+    if (
+        field === 'stage' &&
+        value &&
+        /\p{Script=Han}/u.test(value) &&
+        !Object.prototype.hasOwnProperty.call(fieldLabels.stage, value)
+    )
+        return value;
+    if (field === 'rateSource' && value && /\p{Script=Han}/u.test(value)) return value;
+    return getSystemLabel(value, fieldLabels[field], 'zh', 'type');
+}
+
+export function referralStatusDisplayLabel(value: string): string {
+    return getSystemLabel(
+        value,
+        {
+            PENDING: '待处理',
+            APPROVED: '已批准',
+            PAID: '已打款',
+            REJECTED: '已驳回',
+            CANCELLED: '已取消',
+            AVAILABLE: '已生效',
+            PARTIALLY_REVERSED: '部分扣回',
+            REVERSED: '已扣回',
+        },
+        'zh',
+        'status',
+    );
+}

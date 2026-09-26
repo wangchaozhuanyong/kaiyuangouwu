@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { logoutAdministrator, sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { TechnicalDetails } from '../../components/TechnicalDetails';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
     CREATE_ADMINISTRATOR_MUTATION,
@@ -874,9 +875,9 @@ function MemberEditor({
                                 />
                                 <span>
                                     <strong className="block text-slate-800">{getRoleLabel(role)}</strong>
-                                    <span className="mt-1 block font-mono text-[9px] text-slate-400">
-                                        {getRoleCodeLabel(role.code)}
-                                    </span>
+                                    <TechnicalDetails
+                                        entries={[{ label: '角色标识', value: getRoleCodeLabel(role.code) }]}
+                                    />
                                 </span>
                             </label>
                         ))}

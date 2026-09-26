@@ -22,6 +22,7 @@ import {
     type StorefrontClientPluginPlacement as Placement,
     type StorefrontClientPluginDefinition as PluginDefinition,
 } from '../../../../storefront-content-plugin/src/client-plugin-manifest';
+import { getClientPluginDisplay } from '../../../../storefront-content-plugin/src/shared/client-plugin-display';
 import { channelRequestContext } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -282,12 +283,10 @@ export function ClientPluginsModule() {
                                     <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
                                         {draft.items.map((item, index) => {
                                             const code = pluginCode(item) ?? '';
-                                            const definition = catalog.find(value => value.code === code);
                                             return (
                                                 <InstalledEditor
                                                     key={item.id ?? code}
                                                     item={item}
-                                                    definition={definition}
                                                     index={index}
                                                     count={draft.items.length}
                                                     collections={collectionOptions}
@@ -405,7 +404,9 @@ function PluginCard({
                         <Icon className="h-4 w-4" />
                     </div>
                     <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-[10px] text-slate-400">v{definition.version}</span>
+                        <span className="font-mono text-[10px] text-slate-400">
+                            版本 {definition.version}
+                        </span>
                         <span
                             className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${installed ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
                         >
@@ -413,10 +414,11 @@ function PluginCard({
                         </span>
                     </div>
                 </div>
-                <h3 className="mt-2.5 text-xs font-bold text-slate-900">{definition.name}</h3>
-                <div className="font-mono text-[9px] text-slate-400">{definition.code}</div>
+                <h3 className="mt-2.5 text-xs font-bold text-slate-900">
+                    {getClientPluginDisplay(definition.code).name}
+                </h3>
                 <p className="mt-1.5 text-[11px] leading-4 text-slate-500 line-clamp-2">
-                    {definition.description}
+                    {getClientPluginDisplay(definition.code).description}
                 </p>
             </div>
             <button
@@ -442,7 +444,6 @@ function PluginCard({
 
 function InstalledEditor({
     item,
-    definition,
     index,
     count,
     collections,
@@ -455,7 +456,6 @@ function InstalledEditor({
     onRemove,
 }: {
     item: StorefrontContentItem;
-    definition?: PluginDefinition;
     index: number;
     count: number;
     collections: CollectionResult['collections']['items'];
@@ -478,12 +478,12 @@ function InstalledEditor({
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                         <h3 className="text-xs font-bold text-slate-900">
-                            {definition?.name ?? pluginCode(item) ?? '未知插件'}
+                            {getClientPluginDisplay(pluginCode(item)).name}
                         </h3>
                         <span className="font-mono text-[9px] text-slate-400">顺序 {index + 1}</span>
                     </div>
                     <p className="mt-1 text-[10px] text-slate-400">
-                        {definition?.description ?? '当前版本未登记的插件配置'}
+                        {getClientPluginDisplay(pluginCode(item)).description}
                     </p>
                 </div>
                 <div className="flex shrink-0 gap-1">

@@ -1,15 +1,18 @@
+import { FeatureHelpProvider } from '../../components/FeatureHelp';
 // @vitest-environment jsdom
-
-import { print } from 'graphql';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { FeatureHelpProvider } from '../../components/FeatureHelp';
-import { STOREFRONT_CONTENT_QUERY } from '../../graphql/storefront.graphql';
-import { BlockPreview, HeroBlockPreview } from './storefront-block-preview';
+import { BlockPreview } from './storefront-block-preview';
 import { newContentBlock } from './storefront-content-utils';
 import { contentPublicationLabels, contentPublicationStatus } from './storefront-publication';
 
+const state = vi.hoisted(() => ({
+    token: 'fixture',
+    data: { activeChannel: { id: 'store', code: 'shop', token: 'fixture' } },
+}));
+vi.mock('@apollo/client/react', () => ({ useQuery: () => ({ data: state.data }) }));
+vi.mock('../../apollo', () => ({ ADMIN_API_URL: '/admin-api', getActiveChannelToken: () => state.token }));
 vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -17,251 +20,176 @@ vi.stubGlobal(
         disconnect() {}
     },
 );
-
-const state = vi.hoisted(() => ({
-    data: {
-        activeChannel: { id: 'preview-store', token: 'fixture-token' },
-        storefrontVisualPreset: { presetId: 'modern-oriental' },
-        storefrontPreviewBranding: {
-            channelId: 'preview-store',
-            backgroundColor: '#FFF7F5',
-            primaryColor: '#DC2626',
-        },
-    },
-}));
-vi.mock('@apollo/client/react', () => ({ useQuery: () => ({ data: state.data }) }));
-vi.mock('../../apollo', () => ({ getActiveChannelToken: () => 'fixture-token' }));
-
 const cleanups: Array<() => void> = [];
 afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
-    state.data.storefrontPreviewBranding.channelId = 'preview-store';
-    state.data.storefrontVisualPreset.presetId = 'modern-oriental';
+    vi.restoreAllMocks();
+    state.token = 'fixture';
 });
 
-async function preview() {
+async function renderPreview() {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    const container = document.createElement('div');
-    const root = createRoot(container);
-    const block = newContentBlock('HERO', 0, '测试轮播');
-    block.imageUrl = '/assets/preview/hero.png';
-    block.settings = { themePreset: 'standard', contrastMode: 'high' };
-    block.translations = [
-        { languageCode: 'zh_Hans', title: '  未保存的标题  ', subtitle: '测试', body: '', ctaLabel: '' },
-        { languageCode: 'en', title: 'Draft title', subtitle: 'Preview', body: '', ctaLabel: '' },
-    ];
-    const render = async (language: 'zh_Hans' | 'en' = 'zh_Hans') => {
-        await act(async () =>
-            root.render(
-                <FeatureHelpProvider>
-                    <BlockPreview block={block} language={language} />
-                </FeatureHelpProvider>,
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    cleanups.push(() => {
+        root.unmount();
+        host.remove();
+    });
+    const block = newContentBlock('HERO', 0, '首页横幅');
+    block.enabled = true;
+    block.imageAsset = {
+        id: 'hero',
+        name: 'hero',
+        mimeType: 'image/png',
+        preview: '/assets/hero.png',
+        source: '/assets/hero-original.png',
+        width: 1600,
+        height: 520,
+    };
+    const fetchMock = vi
+        .spyOn(window, 'fetch')
+        .mockResolvedValue(
+            new Response(
+                '<html><head><link rel="stylesheet" href="/dashboard/assets/client.css"></head><body><div id="root"></div><script type="module" src="/dashboard/assets/storefrontPreview-fixture.js"></script></body></html>',
             ),
         );
-        return new DOMParser().parseFromString(container.querySelector('iframe')!.srcdoc, 'text/html');
+    const render = async () => {
+        await act(async () => {
+            root.render(
+                <FeatureHelpProvider>
+                    <BlockPreview block={{ ...block }} language="zh_Hans" />
+                </FeatureHelpProvider>,
+            );
+        });
     };
-    cleanups.push(() => root.unmount());
-    return { block, container, render };
+    await render();
+    return { host, block, render, fetchMock };
 }
 
-describe('carousel draft preview', () => {
-    it('uses the same on-image scene in the saved homepage structure preview', async () => {
-        const container = document.createElement('div');
-        const root = createRoot(container);
-        cleanups.push(() => root.unmount());
-        const block = newContentBlock('HERO', 0, '首页横幅');
-        block.imageAsset = {
-            id: 'hero-1',
-            name: '首页横幅',
-            preview: '/assets/hero-preview.png',
-            source: '/assets/hero-source.png',
-            width: 1600,
-            height: 520,
-        };
-        for (const viewport of ['desktop', 'mobile'] as const) {
-            await act(async () =>
-                root.render(
-                    <FeatureHelpProvider>
-                        <HeroBlockPreview block={block} language="zh_Hans" fixedViewport={viewport} compact />
-                    </FeatureHelpProvider>,
-                ),
-            );
-            const iframe = container.querySelector('iframe')!;
-            const doc = new DOMParser().parseFromString(iframe.srcdoc, 'text/html');
-            expect(container.querySelector('[aria-label="首页横幅预览"]')).not.toBeNull();
-            expect(container.querySelector('button')).toBeNull();
-            expect(doc.querySelector('.hero-image-overlay')).not.toBeNull();
-            expect(iframe.height).toBe(
-                viewport === 'desktop' ? String(Math.ceil(850 / (1600 / 520)) + 24) : '284',
-            );
-            expect(doc.querySelector('img')?.getAttribute('width')).toBe('1600');
-            expect(doc.querySelector('img')?.getAttribute('height')).toBe('520');
-            expect(iframe.width).toBe(viewport === 'desktop' ? '874' : '390');
-        }
-    });
-
-    it('keeps the saved image and on-image draft copy together while copy changes', async () => {
-        const { block, container, render } = await preview();
-        block.imageAsset = {
-            id: 'uploaded-hero',
-            name: '横幅原图',
-            preview: '/assets/preview/hero.png',
-            source: '/assets/source/hero.png',
-            width: 1600,
-            height: 520,
-        };
-        let doc = await render();
-        expect(doc.querySelector('.hero-rich-overlay-shade')).toBeNull();
-        expect(doc.querySelector('.hero-rich-copy-surface')).not.toBeNull();
-        expect(doc.querySelector('.hero-rich-title')?.textContent).toBe('未保存的标题');
-        expect(doc.querySelector('img')?.getAttribute('srcset')).toContain('storefront-hero-fit-960');
-        expect(doc.querySelector('img')?.getAttribute('sizes')).toBe(
-            '(min-width: 1024px) 850px, calc(100vw - 20px)',
+describe('real client decoration preview', () => {
+    it('loads the isolated built client entry, preserves the CSS and uses an actual viewport', async () => {
+        const { host, fetchMock } = await renderPreview();
+        const frame = host.querySelector('iframe')!;
+        expect(fetchMock).toHaveBeenCalledWith(
+            expect.stringContaining('storefront-preview.html'),
+            expect.anything(),
         );
-        expect(doc.querySelector('img')?.getAttribute('width')).toBe('1600');
-        expect(doc.querySelector('img')?.getAttribute('height')).toBe('520');
-        block.settings = { ...block.settings, themePreset: 'bright' };
-        doc = await render();
-        expect(doc.querySelector('.hero-rich-overlay-shade')).toBeNull();
-        expect(doc.querySelector('.hero-rich-title')?.textContent).toBe('未保存的标题');
-        expect(print(STOREFRONT_CONTENT_QUERY)).toMatch(/imageAsset\s*\{[^}]*width\s+height/s);
+        expect(frame.srcdoc).toContain('/dashboard/assets/client.css');
+        expect(frame.srcdoc).toContain('/dashboard/assets/storefrontPreview-fixture.js');
+        expect(frame.srcdoc).not.toContain('hero-editor-desktop');
+        expect(frame.width).toBe('390');
         await act(async () =>
-            Array.from(container.querySelectorAll('button'))
+            Array.from(host.querySelectorAll('button'))
                 .find(button => button.textContent === '电脑')!
                 .click(),
         );
-        const desktopDoc = new DOMParser().parseFromString(
-            container.querySelector('iframe')!.srcdoc,
-            'text/html',
-        );
-        expect(
-            Number(
-                desktopDoc
-                    .querySelector('.hero')
-                    ?.getAttribute('style')
-                    ?.match(/aspect-ratio:\s*([\d.]+)/)?.[1],
-            ),
-        ).toBeCloseTo(1600 / 520);
-        expect(container.querySelector('iframe')?.height).toBe(String(Math.ceil(850 / (1600 / 520)) + 24));
+        expect(frame.width).toBe('1440');
     });
 
-    it('updates copy colors and locale while keeping buttons inert', async () => {
-        const { block, container, render } = await preview();
-        const previous = (await render()).querySelector('.hero-scene-wrapper')!.getAttribute('style');
-        block.backgroundColor = '#312E81';
-        block.textColor = '#FFFFFF';
-        const doc = await render('en');
-        expect(doc.querySelector('.hero-scene-wrapper')!.getAttribute('style')).not.toBe(previous);
-        expect(doc.querySelector('.hero-scene-wrapper')!.getAttribute('style')).toContain(
-            '--hero-copy-background:#312E81',
-        );
-        expect(doc.querySelector('.hero-rich-title')?.textContent).toBe('Draft title');
-        expect(doc.body.style.getPropertyValue('--store-background')).toBeTruthy();
-        expect(doc.body.style.getPropertyValue('--store-foreground')).toBeTruthy();
-        expect(doc.documentElement.dataset.storefrontPreset).toBe('modern-oriental');
-        expect(container.querySelector('iframe')?.getAttribute('sandbox')).toBe('');
-        expect(doc.querySelectorAll('script,a')).toHaveLength(0);
+    it('only sends the latest draft to its own iframe with the matching session and origin', async () => {
+        const { host, block, render } = await renderPreview();
+        const frame = host.querySelector('iframe')!;
+        const doc = new DOMParser().parseFromString(frame.srcdoc, 'text/html');
+        const session = doc.documentElement.dataset.decorationSession;
+        const send = vi.spyOn(frame.contentWindow!, 'postMessage');
+        const event = (source: Window | null, origin: string, previewSession = session) =>
+            new MessageEvent('message', {
+                source,
+                origin,
+                data: { type: 'decoration-ready', session: previewSession },
+            });
+        await act(async () => window.dispatchEvent(event(window, window.location.origin)));
+        await act(async () => window.dispatchEvent(event(frame.contentWindow, 'https://other.example')));
         await act(async () =>
-            Array.from(container.querySelectorAll('button'))
-                .find(b => b.textContent === '电脑')!
-                .click(),
+            window.dispatchEvent(event(frame.contentWindow, window.location.origin, 'other')),
         );
-        expect(container.querySelector('iframe')?.width).toBe('1024');
-        const desktopDoc = new DOMParser().parseFromString(
-            container.querySelector('iframe')!.srcdoc,
-            'text/html',
+        expect(send).not.toHaveBeenCalled();
+        await act(async () => window.dispatchEvent(event(frame.contentWindow, window.location.origin)));
+        expect(send).toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'decoration-draft', channelCode: 'shop' }),
+            window.location.origin,
         );
-        expect(desktopDoc.querySelector('.hero.hero-editor-desktop.hero-image-overlay')).not.toBeNull();
+        block.translations[0].title = '未保存的新标题';
+        await render();
+        expect(send).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                draft: expect.objectContaining({
+                    block: expect.objectContaining({ title: '未保存的新标题' }),
+                }),
+            }),
+            window.location.origin,
+        );
     });
 
-    it('does not inherit another channel palette, inject copy, or render disabled items', async () => {
-        const { block, render } = await preview();
-        state.data.storefrontPreviewBranding.channelId = 'other-store';
-        block.translations[0].title = '<script>alert(1)</script>';
-        block.items = [
-            {
-                id: 'disabled',
-                enabled: false,
-                position: 0,
-                imageAsset: null,
-                imageUrl: null,
-                targetType: 'NONE',
-                targetValue: null,
-                settings: {},
-                translations: [{ languageCode: 'zh_Hans', label: '不应显示', description: '' }],
-            },
-        ];
-        const doc = await render();
-        expect(doc.body.style.getPropertyValue('--store-background')).not.toBe('#FFF7F5');
-        expect(doc.querySelector('script')).toBeNull();
-        expect(doc.querySelector('.hero-rich-title')?.textContent).toBe('<script>alert(1)</script>');
-        expect(doc.querySelector('.hero-stat-badge')).toBeNull();
+    it('removes stale channel previews before exposing another store', async () => {
+        const { host, render } = await renderPreview();
+        expect(host.querySelector('iframe')).not.toBeNull();
+        state.token = 'different-store';
+        await render();
+        expect(host.querySelector('iframe')).toBeNull();
     });
 
-    it('uses the classic palette and saved brand color when that skin is selected', async () => {
-        const { render } = await preview();
-        state.data.storefrontVisualPreset.presetId = 'classic';
-        const doc = await render();
-        expect(doc.body.style.getPropertyValue('--store-background')).toBe('#f1f5f9');
-        expect(doc.body.style.getPropertyValue('--store-primary')).toBe('#dc2626');
-        expect(doc.documentElement.dataset.storefrontPreset).toBe('classic');
-    });
-});
-
-it('previews the support header image and only FAQs that the Shop can publish', async () => {
-    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    const container = document.createElement('div');
-    const root = createRoot(container);
-    cleanups.push(() => root.unmount());
-    const block = newContentBlock('SUPPORT', 0, '客服中心');
-    block.imageAsset = {
-        id: 'support-image',
-        name: '客服页首配图',
-        preview: '/assets/preview/support.png',
-        source: '/assets/source/support.png',
-    };
-    block.settings = {
-        ...block.settings,
-        supportFaqs: [
-            {
-                id: 'delivery',
-                enabled: true,
-                questionZh: '何时发货？',
-                answerZh: '按结算页时效发货。',
-                questionEn: 'When will it ship?',
-                answerEn: 'See the checkout estimate.',
-            },
-            {
-                id: 'draft',
-                enabled: false,
-                questionZh: '草稿问题',
-                answerZh: '草稿答案',
-                questionEn: '',
-                answerEn: '',
-            },
-        ],
-    };
-    const render = async (language: 'zh_Hans' | 'en') =>
-        act(async () =>
-            root.render(
-                <FeatureHelpProvider>
-                    <BlockPreview block={block} language={language} />
-                </FeatureHelpProvider>,
+    it('relays only queries for the selected store without forwarding session credentials', async () => {
+        const { host, fetchMock } = await renderPreview();
+        const frame = host.querySelector('iframe')!;
+        const session = new DOMParser().parseFromString(frame.srcdoc, 'text/html').documentElement.dataset
+            .decorationSession;
+        const send = vi.spyOn(frame.contentWindow!, 'postMessage');
+        fetchMock.mockClear().mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    data: { activeChannel: { id: 'store', code: 'shop' } },
+                }),
+                { status: 200 },
             ),
         );
-    await render('zh_Hans');
-    const image = container.querySelector<HTMLImageElement>('img[alt="客服页首配图预览"]');
-    expect(image?.getAttribute('src')).toBe('/assets/preview/support.png');
-    expect(image?.className).toContain('object-contain');
-    expect(container.querySelector('[aria-label="常见问题预览"]')?.textContent).toContain('何时发货？');
-    expect(container.textContent).not.toContain('草稿问题');
-    await render('en');
-    expect(container.querySelector('[aria-label="FAQ preview"]')?.textContent).toContain(
-        'When will it ship?',
-    );
+        const request = async (query: string) => {
+            await act(async () =>
+                window.dispatchEvent(
+                    new MessageEvent('message', {
+                        origin: window.location.origin,
+                        source: frame.contentWindow,
+                        data: { type: 'decoration-query', id: 'request', session, query, languageCode: 'en' },
+                    }),
+                ),
+            );
+        };
+        await request('mutation Save { logout { success } }');
+        expect(fetchMock).not.toHaveBeenCalled();
+        await request('query Read { activeChannel { id code } }');
+        expect(fetchMock).toHaveBeenCalledWith(
+            expect.objectContaining({ pathname: '/shop-api', search: '?languageCode=en' }),
+            expect.objectContaining({
+                credentials: 'omit',
+                headers: { 'content-type': 'application/json', 'vendure-token': 'fixture' },
+            }),
+        );
+        expect(send).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                type: 'decoration-response',
+                id: 'request',
+                status: 200,
+            }),
+            window.location.origin,
+        );
+        fetchMock.mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    data: { activeChannel: { id: 'other-store', code: 'other' } },
+                }),
+            ),
+        );
+        await request('query Read { activeChannel { id code } }');
+        expect(send).toHaveBeenLastCalledWith(
+            expect.objectContaining({ status: 502 }),
+            window.location.origin,
+        );
+        expect(host.querySelector('[role="alert"]')?.textContent).toContain('当前店铺');
+    });
 });
 
-it('calls content publication published without promising product-dependent floor visibility', () => {
+it('calls publication published without promising product dependent floor visibility', () => {
     const block = newContentBlock('BEST_SELLERS', 0, '热门商品');
     block.enabled = true;
     block.translations = [

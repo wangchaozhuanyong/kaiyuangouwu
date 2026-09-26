@@ -33,6 +33,13 @@ import {
 import { CircleDollarSign, LoaderCircle, RefreshCw, Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { getSystemLabel, serviceMessageDisplay } from '../../../common/src/display-localization';
+import {
+    paymentMethodDisplayLabel,
+    systemFieldDisplayLabel,
+    systemStatusDisplayLabel,
+} from '../../../common/src/system-display-labels';
+
 import {
     CurrencyRateMode,
     CurrencyRoundingMode,
@@ -304,8 +311,11 @@ function StoreCurrencySettingsPage() {
                                                     </Badge>
                                                 </div>
                                                 <HelpText>
-                                                    {configuration?.rateSource ?? '尚未获取'} · 更新于{' '}
-                                                    {formatDate(configuration?.rateUpdatedAt)} ·
+                                                    {systemFieldDisplayLabel(
+                                                        'rateSource',
+                                                        configuration?.rateSource,
+                                                    ) ?? '尚未获取'}{' '}
+                                                    · 更新于 {formatDate(configuration?.rateUpdatedAt)} ·
                                                     换算价格实时生效
                                                 </HelpText>
                                             </div>
@@ -660,7 +670,7 @@ function StorePaymentStats({ stats }: { stats: StorePaymentStatsRecord[] }) {
                     className="rounded-lg border p-4"
                 >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                        <strong>{summary.paymentMethodCode}</strong>
+                        <strong>{paymentMethodDisplayLabel(summary.paymentMethodCode)}</strong>
                         <Badge variant="outline">
                             {summary.currencyCode} · {summary.settledCount} 笔
                         </Badge>
@@ -711,9 +721,11 @@ function StorePaymentDetailList({
                         <div className="flex flex-wrap items-center gap-2">
                             <strong>订单 {detail.orderCode}</strong>
                             <Badge variant={detail.paymentState === 'Settled' ? 'default' : 'outline'}>
-                                {paymentStateLabel(detail.paymentState)}
+                                {systemStatusDisplayLabel(detail.paymentState)}
                             </Badge>
-                            <Badge variant="outline">{detail.paymentMethodCode}</Badge>
+                            <Badge variant="outline">
+                                {paymentMethodDisplayLabel(detail.paymentMethodCode)}
+                            </Badge>
                         </div>
                         <p className="break-all text-sm text-muted-foreground">
                             交易号：{detail.transactionId ?? '暂无'}
@@ -889,7 +901,8 @@ function PaymentIntentList({ intents }: { intents: StoreUsdtPaymentIntentRecord[
                                 原订单金额：{intent.fiatCurrencyCode} {(intent.fiatAmount / 100).toFixed(2)}
                             </span>
                             <span>
-                                汇率：{intent.fiatPerUsdtRate.toFixed(4)}（{intent.rateSource}）
+                                汇率：{intent.fiatPerUsdtRate.toFixed(4)}（
+                                {systemFieldDisplayLabel('rateSource', intent.rateSource)}）
                             </span>
                             <span>收款地址：{intent.receivingAddressMasked}</span>
                             <span>实际到账：{intent.receivedUsdtAmount?.toFixed(6) ?? '未到账'}</span>
@@ -898,7 +911,7 @@ function PaymentIntentList({ intents }: { intents: StoreUsdtPaymentIntentRecord[
                         </div>
                         {intent.failureReason ? (
                             <p className="mb-0 mt-1 text-sm font-semibold text-destructive">
-                                {intent.failureReason}
+                                {serviceMessageDisplay(intent.failureReason, 'zh')}
                             </p>
                         ) : null}
                     </div>
@@ -966,13 +979,16 @@ function formatDate(value: string | null | undefined): string {
 }
 
 function usdtPaymentStatusLabel(status: string): string {
-    return (
+    return getSystemLabel(
+        status,
         {
             PENDING: '等待到账',
             SETTLED: '已确认到账',
             MANUAL_REVIEW: '需要人工复核',
             EXPIRED: '报价已过期',
-        }[status] ?? status
+        },
+        'zh',
+        'status',
     );
 }
 
@@ -986,19 +1002,6 @@ function walletReviewStatusLabel(status: string | undefined): string {
         }[status ?? 'UNCONFIGURED'] ??
         status ??
         '未配置'
-    );
-}
-
-function paymentStateLabel(state: string): string {
-    return (
-        {
-            Created: '已创建',
-            Authorized: '已授权',
-            Settled: '已结算',
-            Declined: '已拒绝',
-            Error: '错误',
-            Cancelled: '已取消',
-        }[state] ?? state
     );
 }
 

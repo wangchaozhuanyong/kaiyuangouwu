@@ -311,16 +311,27 @@
             color 0.15s ease,
             background-color 0.15s ease;
     }
-    .desktop-store-nav :is(a, button):hover,
+    .desktop-store-nav :is(a, button):hover {
+        color: var(--interaction-ink);
+        background: var(--interaction-hover);
+    }
+    .desktop-store-nav :is(a, button):active {
+        background: var(--interaction-pressed);
+        color: var(--interaction-ink);
+    }
     .desktop-store-nav [aria-current='page'],
     .desktop-store-nav [aria-pressed='true'] {
-        color: var(--accent);
-        background: var(--accent-soft);
+        color: var(--selection-foreground);
+        background: var(--selection);
         font-weight: 600;
     }
+    .desktop-store-nav [aria-current='page']:hover:not(:disabled),
+    .desktop-store-nav [aria-pressed='true']:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
+    }
     .desktop-nav-divider {
-        height: 16px;
-        border-left: 1px solid var(--skin-divider);
+        display: none;
     }
     .desktop-store-layout :is(.page, .subpage) {
         min-height: calc(100dvh - var(--desktop-header-height));
@@ -331,17 +342,6 @@
     .desktop-store-layout :is(.topbar, .subpage-header) {
         position: static;
         top: auto;
-    }
-    .desktop-store-layout .subpage-header {
-        justify-content: start;
-        gap: 14px;
-        background: transparent;
-        border-bottom: 0;
-        padding-inline: 0;
-        box-shadow: none;
-    }
-    .desktop-store-layout .subpage-header > strong {
-        flex: none;
     }
     .desktop-store-layout .business-services-empty {
         background: var(--paper, #fff);
@@ -492,11 +492,19 @@
         padding: 10px 24px;
         border-left: 0;
         text-decoration: none;
-        color: var(--muted);
+        color: var(--text);
         font-size: 14px;
+        transition:
+            background-color var(--experience-motion-standard) var(--experience-ease-standard),
+            color var(--experience-motion-standard) var(--experience-ease-standard);
     }
-    .desktop-account-navigation a:hover {
-        color: var(--accent-ink);
+    .desktop-account-group > a:hover {
+        color: var(--interaction-ink);
+        background: var(--interaction-hover);
+    }
+    .desktop-account-group > a:active {
+        background: var(--interaction-pressed);
+        color: var(--interaction-ink);
     }
     .desktop-account-group {
         display: grid;
@@ -524,21 +532,40 @@
         font-weight: 550;
         line-height: 1.4;
     }
-    .desktop-account-group > a > svg {
+    .desktop-account-navigation-icon {
         width: 30px;
         height: 30px;
         flex: none;
         padding: 7px;
         border-radius: var(--skin-control-radius);
-        color: var(--semantic-icon-foreground, var(--accent-ink));
-        background: var(--semantic-icon-background, var(--accent-soft));
+        color: currentColor;
+        background: transparent;
+    }
+    .desktop-account-navigation-state {
+        display: grid;
+        place-items: center;
+        margin-left: auto;
+        opacity: 0;
+        transition: opacity var(--experience-motion-fast) var(--experience-ease-standard);
+    }
+    .desktop-account-navigation-state svg {
+        width: 15px;
+        height: 15px;
+    }
+    .desktop-account-group > a:hover .desktop-account-navigation-state,
+    .desktop-account-group > a[aria-current='page'] .desktop-account-navigation-state {
+        opacity: 1;
     }
     .desktop-account-group > a > span {
         min-width: 0;
     }
     .desktop-account-navigation [aria-current='page'] {
-        color: var(--accent-ink);
-        background: var(--accent-soft);
+        color: var(--selection-foreground);
+        background: var(--selection);
+    }
+    .desktop-account-navigation [aria-current='page']:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-account-page {
         display: flex;
@@ -861,6 +888,10 @@
         height: 68px;
         flex: none;
     }
+    .desktop-order-product > span:not(.responsive-picture) {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
     .desktop-order-product img {
         width: 100%;
         height: 100%;
@@ -996,6 +1027,16 @@
         border-radius: var(--skin-control-radius);
         background: var(--control-surface);
     }
+    .desktop-account-navigation .desktop-account-support[aria-current='page'] {
+        background: var(--selection);
+        color: var(--selection-foreground);
+    }
+    .desktop-account-navigation .desktop-account-support[aria-current='page']:hover {
+        background: var(--selection-hover);
+    }
+    .desktop-account-support[aria-current='page'] :is(strong, small) {
+        color: inherit;
+    }
     .desktop-account-support > span {
         display: grid;
         gap: 2px;
@@ -1023,7 +1064,8 @@
         .desktop-account-help button:hover,
         .desktop-account-support:hover,
         .desktop-delivery-action:hover {
-            background: var(--accent-soft);
+            background: var(--interaction-hover);
+            color: var(--interaction-ink);
             box-shadow: var(--control-elevation);
         }
     }
@@ -1173,7 +1215,6 @@
         object-position: right center;
     }
     .desktop-category-directory-title {
-        display: block;
         padding: 12px 14px 18px;
         font-size: 15px;
         color: var(--text);
@@ -1189,21 +1230,18 @@
     }
     .desktop-catalog-sidebar .desktop-subcategory-sidebar {
         position: static;
-        padding: 4px 0 8px 14px;
+        margin: 8px 0 6px;
+        padding: 8px;
+        border: 0;
+        border-radius: var(--skin-control-radius);
         box-shadow: none;
-        background: transparent;
+        background: var(--soft);
     }
     .desktop-catalog-sidebar .desktop-subcategory-sidebar > strong {
         display: none;
     }
     .desktop-catalog-sidebar .desktop-subcategory-sidebar nav {
-        max-height: 280px;
-        border-left: 1px solid var(--line);
-    }
-    .desktop-catalog-sidebar .desktop-subcategory-sidebar button {
-        min-height: 34px;
-        font-size: 12px;
-        padding: 7px 12px;
+        max-height: min(360px, calc(100dvh - var(--desktop-header-height) - 200px));
     }
 
     .desktop-category-navigation {
@@ -1241,7 +1279,9 @@
         font-size: 14px;
         white-space: nowrap;
     }
-    .desktop-category-navigation .desktop-local-navigation button {
+    .desktop-category-directory-title,
+    .desktop-local-navigation > button,
+    .desktop-category-entry > button {
         display: flex;
         align-items: center;
         gap: 10px;
@@ -1255,30 +1295,46 @@
         flex: 0 0 28px;
         overflow: hidden;
         border-radius: var(--skin-control-radius);
-        background: var(--accent-soft);
-        color: var(--accent-ink);
+        background: transparent;
+        color: currentColor;
     }
-    .desktop-category-icon :is(img, svg) {
+    .desktop-category-icon svg {
         display: block;
         width: 22px;
         height: 22px;
+    }
+    .desktop-category-icon :is(.responsive-picture, img) {
+        display: block;
+        width: 100%;
+        height: 100%;
         object-fit: contain;
     }
     .desktop-category-icon:has(img) {
         background: transparent;
     }
-    .desktop-category-navigation button[aria-pressed='true'] {
-        color: var(--accent-ink);
-        background: var(--accent-soft);
+    .desktop-local-navigation > button[aria-pressed='true'],
+    .desktop-category-entry > button[aria-pressed='true'] {
+        color: var(--selection-foreground);
+        background: var(--selection);
         font-weight: 600;
     }
-    .desktop-category-navigation button:hover {
-        color: var(--accent-ink);
-        background: var(--accent-soft);
+    .desktop-local-navigation > button[aria-pressed='true']:hover:not(:disabled),
+    .desktop-category-entry > button[aria-pressed='true']:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
-    .desktop-category-navigation button[aria-pressed='true']:hover {
-        color: var(--accent-ink);
-        background: var(--control-surface-hover);
+    .desktop-category-navigation button:hover {
+        color: var(--interaction-ink);
+        background: var(--interaction-hover);
+    }
+    .desktop-category-navigation button:active {
+        background: var(--interaction-pressed);
+        color: var(--interaction-ink);
+    }
+    .desktop-local-navigation > button[aria-pressed='true']:hover,
+    .desktop-category-entry > button[aria-pressed='true']:hover {
+        color: var(--selection-foreground);
+        background: var(--selection-hover);
     }
     .desktop-category-status {
         font-size: 13px;
@@ -1313,7 +1369,9 @@
     }
     .desktop-subcategory-sidebar nav {
         display: grid;
-        gap: 4px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        border: 0;
         max-height: calc(100dvh - var(--desktop-header-height) - 110px);
         overflow-y: auto;
         overscroll-behavior: contain;
@@ -1323,26 +1381,57 @@
     .desktop-subcategory-sidebar nav::-webkit-scrollbar {
         display: none;
     }
-    .desktop-subcategory-sidebar button {
+    .desktop-subcategory-sidebar nav > button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
         width: 100%;
-        min-height: 42px;
-        padding: 9px 12px;
+        min-width: 0;
+        min-height: var(--experience-control-min);
+        padding: 10px;
         border: 0;
         border-radius: var(--skin-control-radius);
-        background: transparent;
+        background: var(--surface);
         color: var(--muted);
+        font-size: 13px;
         text-align: left;
         line-height: 1.45;
+        white-space: normal;
         cursor: pointer;
     }
-    .desktop-subcategory-sidebar button:hover {
-        color: var(--accent-ink);
-        background: var(--soft);
+    .desktop-subcategory-sidebar nav > button:first-child {
+        grid-column: 1 / -1;
     }
-    .desktop-category-navigation .desktop-subcategory-sidebar button[aria-pressed='true'] {
-        color: var(--accent-ink);
-        background: var(--accent-soft);
+    .desktop-subcategory-sidebar nav > button > span {
+        display: -webkit-box;
+        min-width: 0;
+        overflow: hidden;
+        overflow-wrap: anywhere;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+    .desktop-subcategory-sidebar nav > button > svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+    }
+    .desktop-subcategory-sidebar nav > button:hover {
+        color: var(--interaction-ink);
+        background: var(--interaction-hover);
+    }
+    .desktop-subcategory-sidebar nav > button:active {
+        background: var(--interaction-pressed);
+        color: var(--interaction-ink);
+    }
+    .desktop-subcategory-sidebar nav > button[aria-pressed='true'] {
+        color: var(--selection-foreground);
+        background: var(--selection);
         font-weight: 600;
+    }
+    .desktop-subcategory-sidebar nav > button[aria-pressed='true']:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-catalog-results {
         min-width: 0;
@@ -1368,7 +1457,6 @@
     }
     .desktop-catalog-heading {
         min-width: 180px;
-        min-height: 40px;
         padding-inline: 10px;
     }
     .desktop-catalog-label {
@@ -1415,14 +1503,22 @@
             color 0.15s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .desktop-sort button:hover {
-        color: var(--accent-ink);
-        background: var(--accent-soft);
+        color: var(--interaction-ink);
+        background: var(--interaction-hover);
+    }
+    .desktop-sort button:active {
+        background: var(--interaction-pressed);
+        color: var(--interaction-ink);
     }
     .desktop-sort button[aria-pressed='true'] {
-        background: var(--surface);
-        color: var(--accent-ink);
+        background: var(--selection);
+        color: var(--selection-foreground);
         font-weight: 600;
         box-shadow: none;
+    }
+    .desktop-sort button[aria-pressed='true']:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-catalog-actions > button {
         display: flex;
@@ -1441,12 +1537,20 @@
             color 0.15s ease;
     }
     .desktop-catalog-actions > button:hover {
-        color: var(--accent-ink);
-        background: var(--accent-soft);
+        color: var(--interaction-ink);
+        background: var(--interaction-hover);
+    }
+    .desktop-catalog-actions > button:active {
+        background: var(--interaction-pressed);
+        color: var(--interaction-ink);
     }
     .desktop-catalog-actions > .is-active {
-        color: var(--accent-foreground);
-        background: var(--accent);
+        color: var(--selection-foreground);
+        background: var(--selection);
+    }
+    .desktop-catalog-actions > .is-active:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-catalog-toolbar svg {
         width: 14px;
@@ -1628,156 +1732,165 @@
     }
     .desktop-store-layout .order-tabs button.is-active,
     .desktop-store-layout .order-tabs button[aria-selected='true'] {
-        color: var(--accent-ink);
-        background: var(--accent-soft);
+        color: var(--selection-foreground);
+        background: var(--selection);
+    }
+    .desktop-store-layout .order-tabs button.is-active:hover:not(:disabled),
+    .desktop-store-layout .order-tabs button[aria-selected='true']:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-store-layout .sort-bar button {
         padding-inline: 12px;
         border-radius: var(--skin-control-radius);
     }
     .desktop-store-layout .sort-bar button.is-active {
-        color: var(--accent-ink);
-        background: var(--accent-soft);
+        color: var(--selection-foreground);
+        background: var(--selection);
+    }
+    .desktop-store-layout .sort-bar button.is-active:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-store-layout .sort-bar button::after {
         content: none;
     }
     .desktop-store-layout .order-list {
-        display: flex;
-        padding: 18px 0 0;
-        gap: 12px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: stretch;
+        padding: 16px 0 0;
+        gap: 16px;
+    }
+    .desktop-store-layout .order-list > :not(.order-card) {
+        grid-column: 1 / -1;
     }
     .desktop-store-layout .orders-page > .empty-state {
         min-height: 240px;
         margin-top: 18px;
         padding: 36px 24px;
     }
-    .desktop-order-columns,
-    .desktop-store-layout .order-card {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 48px 110px 110px 100px;
-        gap: 0 12px;
-    }
-    .desktop-order-columns {
-        min-height: 52px;
-        align-items: center;
-        padding: 14px 24px;
-        background: var(--soft);
-        color: var(--muted);
-        border-radius: 6px;
-        font-size: 14px;
-    }
-    .desktop-order-columns > :not(:first-child) {
-        text-align: center;
-    }
-    .desktop-store-layout .order-card {
+    .desktop-store-layout .order-summary-card {
+        display: flex;
+        flex-direction: column;
         min-width: 0;
-        padding: 20px;
+        gap: 12px;
+        padding: 16px;
         border: 0;
-        border-bottom: 0;
         border-radius: var(--skin-card-radius);
         background: var(--surface);
         box-shadow: var(--skin-card-shadow);
     }
-    .desktop-store-layout .order-card-header {
-        grid-column: 1 / -1;
+    .order-summary-header,
+    .order-summary-footer {
         display: flex;
-        justify-content: flex-start;
+        align-items: center;
+        justify-content: space-between;
         gap: 12px;
-        padding: 0 0 18px;
-        border: 0;
+        min-width: 0;
     }
-    .desktop-store-layout .order-card-header .order-state-badge,
-    .desktop-store-layout .order-card-store-icon {
-        display: none;
-    }
-    .desktop-order-date {
+    .order-summary-reference {
+        min-width: 0;
+        overflow: hidden;
         color: var(--muted);
-        font-size: 13px;
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
-    .desktop-store-layout .order-card-product {
-        grid-column: 1;
-        grid-row: 2;
-        grid-template-columns: 72px minmax(0, 1fr);
+    .order-summary-state {
+        flex: none;
+        color: var(--accent-ink);
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .order-summary-product {
+        display: grid;
+        grid-template-columns: 64px minmax(0, 1fr);
+        align-items: start;
         gap: 12px;
+        min-width: 0;
         padding: 0;
         border: 0;
+        background: transparent;
+        color: var(--text);
+        text-align: left;
+        cursor: pointer;
     }
-    .desktop-store-layout .order-card-product > :is(img, .responsive-picture, .image-placeholder),
-    .desktop-store-layout .order-card-product > .responsive-picture > img {
-        width: 72px;
-        height: 72px;
+    .order-summary-product > :is(img, .responsive-picture, .image-placeholder) {
+        width: 64px;
+        height: 64px;
         border-radius: var(--skin-media-radius);
         overflow: hidden;
     }
-    .desktop-store-layout .order-product-content {
-        height: auto;
-        gap: 8px;
-        align-content: center;
+    .order-summary-product img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
     }
-    .desktop-store-layout .order-product-title {
-        font-size: 14px;
-        white-space: normal;
-        overflow-wrap: anywhere;
-    }
-    .desktop-store-layout .order-product-heading {
-        grid-template-columns: minmax(0, 1fr);
-    }
-    .desktop-store-layout .order-card-product :is(.order-product-price, .order-product-qty) {
-        display: none;
-    }
-    .desktop-store-layout .order-product-spec {
-        font-size: 12px;
-        white-space: normal;
-    }
-    .desktop-order-values {
-        font-size: 16px;
-        grid-column: 2 / 5;
-        grid-row: 2;
+    .order-summary-copy {
         display: grid;
-        grid-template-columns: 48px 110px 110px;
-        gap: 12px;
-        align-items: center;
-        text-align: center;
+        gap: 4px;
+        min-width: 0;
     }
-    .desktop-store-layout .order-card-footer {
-        display: contents;
-    }
-    .desktop-store-layout .order-card-buttons {
-        grid-column: 5;
-        grid-row: 2;
-        display: flex;
-        flex-direction: column-reverse;
-        align-items: stretch;
-        justify-content: center;
-        gap: 6px;
-    }
-    .desktop-store-layout .order-total-summary {
-        grid-column: 1 / -1;
-        grid-row: 3;
-        justify-content: flex-end;
-        margin-top: 24px;
-        padding-top: 20px;
-        border-top: 0;
-    }
-    .desktop-store-layout .order-total-count {
-        margin-right: auto;
-    }
-    .desktop-store-layout .order-total-amount {
-        font-size: 19px;
-        font-weight: 600;
-        color: var(--accent-ink);
-    }
-    .desktop-store-layout .order-btn {
-        min-height: 44px;
-        padding-inline: 14px;
-        border-radius: var(--skin-control-radius);
+    .order-summary-title {
+        display: -webkit-box;
+        min-height: 40px;
+        overflow: hidden;
         font-size: 14px;
-        box-shadow: none;
+        line-height: 20px;
+        overflow-wrap: anywhere;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
     }
-    .desktop-store-layout .order-card .secondary-btn {
-        border-color: transparent;
-        background: transparent;
+    .order-summary-copy small,
+    .desktop-order-date {
+        color: var(--muted);
+        font-size: 12px;
+    }
+    .order-summary-total {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px;
+    }
+    .order-summary-total strong {
+        font-size: 18px;
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+    }
+    .order-summary-footer {
+        margin-top: auto;
+    }
+    .order-summary-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .order-summary-actions button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        min-height: 40px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: var(--skin-control-radius);
+        background: var(--control-surface);
+        color: var(--text);
+        font-size: 13px;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+    .order-summary-actions .primary-btn {
+        background: var(--accent);
+        color: var(--accent-foreground);
+    }
+    .order-summary-actions .primary-btn:hover {
+        background: var(--accent-hover);
+    }
+    .order-summary-actions svg {
+        width: 14px;
+        height: 14px;
     }
 
     .desktop-orders-end {

@@ -17,6 +17,8 @@ import {
 import { PackageCheck, RefreshCw, TriangleAlert, Truck } from 'lucide-react';
 import { useState } from 'react';
 
+import { systemStatusDisplayLabel } from '../../../common/src/system-display-labels';
+
 import {
     FulfillmentDeliveryOrderResult,
     FulfillmentDeliveryStatus,
@@ -154,7 +156,8 @@ export function FulfillmentDeliveryPageBlock({ context }: Readonly<Props>) {
                                             evidence?.status === 'EXCEPTION' ? 'destructive' : 'secondary'
                                         }
                                     >
-                                        {evidence?.status ?? fulfillment.state}
+                                        {systemStatusDisplayLabel(evidence?.status) ??
+                                            systemStatusDisplayLabel(fulfillment.state)}
                                     </Badge>
                                     {evidence?.overdue && (
                                         <Badge variant="outline">{t(messages.overdue)}</Badge>

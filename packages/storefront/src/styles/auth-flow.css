@@ -451,24 +451,6 @@
     font-weight: 600;
 }
 
-.image-placeholder {
-    background: #eef1f0;
-    color: #7f8b87;
-    display: grid;
-    place-items: center;
-}
-
-.image-placeholder svg {
-    width: clamp(24px, 12%, 44px);
-    height: clamp(24px, 12%, 44px);
-    stroke-width: 1.45;
-}
-
-.detail-gallery > .image-placeholder svg {
-    width: 48px;
-    height: 48px;
-}
-
 /* Skeleton loading styles have been extracted to dedicated styles/skeletons.css */
 
 @media (prefers-reduced-motion: reduce) {
@@ -599,7 +581,7 @@
     width: min(calc(100% - 24px), 420px);
     min-height: 72px;
     transform: translateX(-50%);
-    border: 1px solid var(--skin-divider);
+    border: 0;
     border-radius: var(--skin-card-radius);
     background: var(--surface-elevated);
     box-shadow: var(--shadow-md);
@@ -614,12 +596,7 @@
 }
 
 .storefront-update-prompt::before {
-    width: 3px;
-    position: absolute;
-    inset: 10px auto 10px 0;
-    border-radius: 0 3px 3px 0;
-    background: var(--accent);
-    content: '';
+    content: none;
 }
 
 .storefront-update-copy {
@@ -935,7 +912,7 @@
 
 .applied-coupons > div {
     min-height: 48px;
-    border-top: 1px solid var(--line);
+    border-top: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1223,7 +1200,7 @@
     }
 
     .detail-service-bar span + span {
-        border-top: 1px solid var(--line);
+        border-top: 0;
         border-left: 0;
     }
 }
@@ -1419,7 +1396,7 @@
 
 .auth-hero-tags > span:first-child {
     padding-left: 12px;
-    border-left: 1px solid rgb(113 202 255 / 35%);
+    border-left: 0;
 }
 
 .auth-hero-tags > span svg {
@@ -1579,7 +1556,7 @@
         min-height: min(740px, calc(100dvh - 64px));
         margin: 32px auto;
         grid-template-columns: minmax(0, 1.25fr) minmax(390px, 0.75fr);
-        border: 1px solid rgb(45 81 135 / 11%);
+        border: 0;
         border-radius: 20px;
         box-shadow:
             0 30px 90px rgb(37 73 127 / 13%),
@@ -1664,7 +1641,7 @@
 
     .auth-page .auth-hero-tags > span:first-child {
         padding-left: 12px;
-        border-left: 1px solid rgb(113 202 255 / 35%);
+        border-left: 0;
     }
 
     .auth-page .auth-hero-tags > span svg {
@@ -2022,7 +1999,7 @@
 @media (max-width: 1023px) {
     .auth-page .auth-hero-footer {
         padding: 7px 10px 5px;
-        border: 1px solid rgb(151 220 255 / 28%);
+        border: 0;
         border-radius: 14px;
         background: linear-gradient(180deg, rgb(4 28 82 / 58%), rgb(2 14 47 / 84%));
         box-shadow: 0 10px 24px rgb(1 9 31 / 18%);
@@ -2370,18 +2347,13 @@
 .auth-method-divider {
     margin: 18px 0;
     color: var(--auth-muted);
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: center;
-    gap: 12px;
+    text-align: center;
     font-size: 12px;
 }
 
 .auth-method-divider::before,
 .auth-method-divider::after {
-    height: 1px;
-    background: #e2e9f3;
-    content: '';
+    content: none;
 }
 
 .google-auth-button > div:first-child {
@@ -2404,7 +2376,7 @@
 .auth-methods-unavailable {
     margin: 8px 0 0;
     padding: 14px;
-    border: 1px solid #e2e9f3;
+    border: 0;
     border-radius: 12px;
     background: #f8fafc;
     color: var(--auth-muted);

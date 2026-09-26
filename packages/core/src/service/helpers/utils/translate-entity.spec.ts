@@ -133,6 +133,48 @@ describe('translateEntity()', () => {
         expect(translateEntity(product, [LanguageCode.zu, LanguageCode.de]).name).toEqual(PRODUCT_NAME_DE);
     });
 
+    it('never borrows English display fields when an entire Chinese translation is missing', () => {
+        const result = translateEntity(product, [LanguageCode.zh_Hans, LanguageCode.en]);
+        expect(result.languageCode).toBe(LanguageCode.zh_Hans);
+        expect(result.name).toBe('未填写中文名称');
+        expect(result.description).toBe('');
+        expect(result.slug).toBe(productTranslationEN.slug);
+        expect(productTranslationEN.name).toBe(PRODUCT_NAME_EN);
+    });
+
+    it('automatically protects future localized fields while retaining routing identifiers', () => {
+        Object.assign(productTranslationEN, {
+            futureCaption: 'Future English caption',
+            futureButtonLabel: 'Future English button',
+            futureRouteUrl: '/catalog/english-route',
+        });
+        const result = translateEntity(product, [LanguageCode.zh_Hans, LanguageCode.en]);
+        expect(Reflect.get(result, 'futureCaption')).toBe('');
+        expect(Reflect.get(result, 'futureButtonLabel')).toBe('');
+        expect(Reflect.get(result, 'futureRouteUrl')).toBe('/catalog/english-route');
+        expect(Reflect.get(productTranslationEN, 'futureCaption')).toBe('Future English caption');
+    });
+
+    it('keeps empty Chinese copy and custom fields empty without modifying source records', () => {
+        const chinese = new ProductTranslation({
+            languageCode: LanguageCode.zh_Hans,
+            name: '中文商品',
+            slug: '',
+            description: '',
+        });
+        chinese.customFields = { caption: '' };
+        productTranslationEN.customFields = { caption: 'English caption' };
+        product.customFields = { caption: 'Original value' };
+        product.translations.push(chinese);
+        const result = translateEntity(product, [LanguageCode.zh_Hans, LanguageCode.en]);
+        expect(result.name).toBe('中文商品');
+        expect(result.description).toBe('');
+        expect(result.customFields.caption).toBe('');
+        expect(product.customFields.caption).toBe('Original value');
+        expect(chinese.customFields.caption).toBe('');
+        expect(productTranslationEN.customFields.caption).toBe('English caption');
+    });
+
     describe('field-level fallback for empty values', () => {
         it('should fall back to default language for empty string fields', () => {
             productTranslationEN.name = PRODUCT_NAME_EN;
@@ -212,11 +254,11 @@ describe('translateEntity()', () => {
             const result = translateEntity(product, LanguageCode.en);
 
             expect(result.languageCode).toBe(LanguageCode.en);
-            expect(result.name).toBe('');
+            expect(result.name).toBe('English name not set');
             expect(result.slug).toBe('');
         });
 
-        it('should fall back to other translations when default language has empty values and is not first', () => {
+        it('must keep English display copy in English when its fields are empty', () => {
             // EN is DEFAULT_LANGUAGE_CODE but DE is translations[0] — DE should be used as fallback
             productTranslationEN.name = '';
             productTranslationDE.name = PRODUCT_NAME_DE;
@@ -225,7 +267,7 @@ describe('translateEntity()', () => {
             const result = translateEntity(product, LanguageCode.en);
 
             expect(result.languageCode).toBe(LanguageCode.en);
-            expect(result.name).toBe(PRODUCT_NAME_DE);
+            expect(result.name).toBe('English name not set');
         });
 
         it('should fall back to first available translation if default also has empty values', () => {
@@ -426,6 +468,19 @@ describe('translateDeep()', () => {
         const result = translateDeep(product, [LanguageCode.en, LanguageCode.en]);
 
         expect(result).toHaveProperty('name', PRODUCT_NAME_EN);
+    });
+
+    it('applies the same Chinese-only display rule to nested variants and product options', () => {
+        const result = translateDeep(
+            product,
+            [LanguageCode.zh_Hans, LanguageCode.en],
+            ['variants', ['variants', 'options']],
+        );
+        expect(result.name).toBe('未填写中文名称');
+        expect(result.variants[0].name).toBe('未填写中文名称');
+        expect(result.variants[0].options[0].name).toBe('未填写中文名称');
+        expect(product.name).toBeUndefined();
+        expect(productVariantTranslation.name).toBe(VARIANT_NAME_EN);
     });
 
     it('should not throw if root entity has no translations', () => {

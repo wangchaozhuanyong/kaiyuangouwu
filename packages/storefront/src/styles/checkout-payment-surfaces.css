@@ -34,20 +34,7 @@
 .address-form input:hover,
 .form-grid select:hover,
 .address-form select:hover {
-    border-color: #c6ccca;
-}
-
-.form-grid input:focus,
-.form-grid input:focus-visible,
-.address-form input:focus,
-.address-form input:focus-visible,
-.form-grid select:focus,
-.form-grid select:focus-visible,
-.address-form select:focus,
-.address-form select:focus-visible {
-    outline: 0 !important;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+    border-color: var(--line-strong);
 }
 
 .field-wide {
@@ -313,7 +300,7 @@
 
 .payment-method-list label.is-selected {
     border-color: var(--accent);
-    background: #fff9f8;
+    background: var(--selection-soft);
 }
 
 .payment-method-list input {

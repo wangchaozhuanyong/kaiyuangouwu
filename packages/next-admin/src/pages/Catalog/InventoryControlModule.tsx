@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { AlertTriangle, RefreshCw, Scale, X } from 'lucide-react';
 import { useState } from 'react';
+import { getSystemLabel } from '../../../../common/src/display-localization';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -193,9 +194,19 @@ export function InventoryControlModule() {
                                 <tbody className="divide-y">
                                     {ledger.map(operation => (
                                         <tr key={operation.id}>
-                                            <td className="px-4 py-3 font-mono">{operation.code}</td>
+                                            <td
+                                                data-business-reference="inventory-operation"
+                                                className="px-4 py-3 font-mono"
+                                            >
+                                                {operation.code}
+                                            </td>
                                             <td className="px-4 py-3">
-                                                {operationLabels[operation.type] ?? operation.type}
+                                                {getSystemLabel(
+                                                    operation.type,
+                                                    operationLabels,
+                                                    'zh',
+                                                    'type',
+                                                )}
                                             </td>
                                             <td className="px-4 py-3">
                                                 {operation.lines.map(line => (

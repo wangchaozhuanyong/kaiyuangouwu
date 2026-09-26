@@ -154,34 +154,7 @@
     .desktop-store-layout .homepage-modules .home-intro-grid .home-trust-bar {
         grid-column: 1 / -1;
         grid-row: 2;
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
-        padding: 18px;
-        border: 0;
-        border-radius: var(--skin-card-radius);
-        background: var(--paper, #fff);
-        box-shadow: var(--skin-card-shadow);
-        align-content: center;
         margin: 0;
-    }
-    .desktop-store-layout .home-intro-grid .home-trust-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 10px;
-        border-radius: var(--skin-control-radius);
-        background: color-mix(in srgb, var(--soft, #f8fafc) 60%, transparent);
-        font-size: 12px;
-        font-weight: 500;
-        line-height: 1.4;
-        color: var(--text, #334155);
-    }
-    .desktop-store-layout .home-intro-grid .trust-icon {
-        width: 15px;
-        height: 15px;
-        flex: none;
-        color: var(--accent);
     }
     .desktop-store-layout .home-page .hero-rich-content {
         width: min(450px, calc(100% - 170px));
@@ -452,9 +425,6 @@
     }
     .desktop-store-layout .home-page .flash-sale-section {
         position: relative;
-    }
-    .desktop-store-layout .home-page .flash-sale-countdown {
-        margin: -8px 0 18px;
     }
     .desktop-store-layout .home-page .flash-sale-grid {
         display: grid;
@@ -740,13 +710,21 @@
             background-color 0.18s ease;
     }
     .proto-nav-link:hover {
-        color: var(--text);
-        background: var(--control-surface-hover);
+        color: var(--interaction-ink);
+        background: var(--interaction-hover);
+    }
+    .proto-nav-link:active {
+        background: var(--interaction-pressed);
+        color: var(--interaction-ink);
     }
     .proto-nav-link.is-active {
-        color: var(--accent-ink, #c084fc);
-        background: var(--accent-soft);
+        color: var(--selection-foreground);
+        background: var(--selection);
         font-weight: 700;
+    }
+    .proto-nav-link.is-active:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
 
     /* Center Search Bar */
@@ -904,19 +882,29 @@
         flex-shrink: 0;
     }
     .proto-header-right > .proto-header-action:is([aria-current='page'], [aria-expanded='true']) {
-        background: var(--accent-soft);
-        color: var(--accent-ink);
+        background: var(--selection);
+        color: var(--selection-foreground);
     }
     @media (hover: hover) and (pointer: fine) {
         .proto-header-right > .proto-header-action:hover {
-            background: var(--control-surface-hover);
-            color: var(--text);
+            background: var(--interaction-hover);
+            color: var(--interaction-ink);
             box-shadow: var(--control-elevation-hover);
+        }
+        .proto-header-right > .proto-header-action:active {
+            background: var(--interaction-pressed);
+            color: var(--interaction-ink);
         }
     }
     @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
         .proto-header-right > .proto-header-action:hover {
             transform: translateY(-1px);
+            background: var(--interaction-hover);
+            color: var(--interaction-ink);
+        }
+        .proto-header-right > .proto-header-action:active {
+            background: var(--interaction-pressed);
+            color: var(--interaction-ink);
         }
         .proto-header-right > .proto-header-action:active {
             transform: translateY(1px);

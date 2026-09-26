@@ -59,6 +59,37 @@ describe('product editor source projection', () => {
         });
     });
 
+    it('keeps missing Chinese editor values empty instead of copying the first English record', () => {
+        const draft = productEditorDraft(
+            {
+                ...product,
+                name: 'English fallback',
+                description: 'English copy',
+                translations: [
+                    {
+                        id: 'en',
+                        languageCode: 'en',
+                        name: 'English name',
+                        description: 'English description',
+                        slug: 'english-slug',
+                    },
+                ],
+                variants: [
+                    {
+                        ...product.variants[0],
+                        translations: [{ languageCode: 'en', name: 'English variant' }],
+                    },
+                ],
+            },
+            null,
+            [],
+        );
+        expect(draft.productName).toBe('');
+        expect(draft.description).toBe('');
+        expect(draft.variants[0].name).toBe('');
+        expect(draft.slug).toBe(product.slug);
+    });
+
     it('applies store fulfillment mode and preserves products without variants', () => {
         const draft = productEditorDraft({ ...product, variants: [] }, 'digital', []);
         expect(draft.fulfillmentType).toBe('digital');

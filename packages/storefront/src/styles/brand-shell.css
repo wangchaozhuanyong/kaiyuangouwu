@@ -85,11 +85,7 @@ img.brand-mark {
 }
 
 .topbar-capsule-divider {
-    width: 1px;
-    height: 14px;
-    background: var(--line);
-    flex: none;
-    opacity: 0.85;
+    display: none;
 }
 
 .currency-select {
@@ -262,7 +258,7 @@ img.brand-mark {
         justify-content: space-between;
         gap: 8px;
         padding: 8px var(--page-section-inset);
-        border-bottom: 1px solid var(--line);
+        border-bottom: 0;
         background: var(--bg);
     }
     .mobile-page-heading,

@@ -264,7 +264,7 @@ export function BusinessServicesCopyModule() {
                                         key={language}
                                         className="space-y-3 rounded-lg border border-slate-200 p-4"
                                     >
-                                        <strong className="text-xs">{zh ? '中文' : 'English'}</strong>
+                                        <strong className="text-xs">{zh ? '中文' : '英文'}</strong>
                                         <Field label={`标题 ${translation.title.length}/${zh ? 40 : 80}`}>
                                             <input
                                                 value={translation.title}
@@ -357,20 +357,14 @@ export function BusinessServicesCopyModule() {
                                     className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
                                 >
                                     <option value="zh_Hans">中文</option>
-                                    <option value="en">English</option>
+                                    <option value="en">英文</option>
                                 </select>
                             </div>
                             <div
                                 className={`relative isolate mt-5 grid gap-5 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 to-violet-950 p-7 text-white shadow-lg ${previewImage ? 'sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] sm:items-center' : ''}`}
                             >
                                 <div className="min-w-0 [overflow-wrap:anywhere]">
-                                    <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-violet-300">
-                                        {preview.subtitle?.trim() ||
-                                            (previewLanguage === 'zh_Hans'
-                                                ? '智能服务'
-                                                : 'Intelligent services')}
-                                    </span>
-                                    <h3 className="mt-4 text-2xl font-bold leading-tight">
+                                    <h3 className="text-2xl font-bold leading-tight">
                                         {preview.title || '—'}
                                     </h3>
                                     <p className="mt-3 text-sm leading-6 text-slate-300">

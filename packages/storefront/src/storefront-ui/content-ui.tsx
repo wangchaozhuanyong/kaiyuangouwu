@@ -3,7 +3,6 @@ import {
     Check,
     ChevronRight,
     CircleCheck,
-    Clock3,
     Download,
     Flame,
     Headphones,
@@ -291,16 +290,21 @@ export function FlashSaleSection({
                 kind="flash-sale"
                 title={title}
                 subtitle={subtitle}
+                titleAccessory={
+                    countdown ? (
+                        <span
+                            className="flash-sale-countdown"
+                            role="timer"
+                            aria-label={`${isZh ? '距结束' : 'Ends in'} ${countdown}`}
+                        >
+                            <span className="flash-sale-countdown-label">{isZh ? '距结束' : 'Ends in'}</span>
+                            <strong>{countdown}</strong>
+                        </span>
+                    ) : undefined
+                }
                 action={onMore ? (isZh ? '更多' : 'More') : undefined}
                 onAction={onMore}
             />
-            {countdown ? (
-                <div className="flash-sale-countdown" role="timer">
-                    <Clock3 aria-hidden="true" />
-                    <span>{isZh ? '距结束' : 'Ends in'}</span>
-                    <strong>{countdown}</strong>
-                </div>
-            ) : null}
             <div
                 className={`flash-sale-grid${layout === 'grid' ? ' is-expanded' : ''}`}
                 aria-label={

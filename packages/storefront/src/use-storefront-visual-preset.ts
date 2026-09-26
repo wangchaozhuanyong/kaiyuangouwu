@@ -9,6 +9,7 @@ import {
 
 import { type ShopApi } from './api';
 import { storefrontQueryKeys } from './query-client';
+import { storefrontPreviewParameters } from './storefront-preview-parameters';
 import { type MarketConfig } from './types';
 
 export function applyStorefrontVisualPreset(root: HTMLElement, value: unknown): () => void {
@@ -35,7 +36,9 @@ export function useStorefrontVisualPreset(
     // The preview iframe is remounted for a skin switch; internal SPA navigation
     // must not discard its selected skin when the route drops query parameters.
     const [previewPreset] = useState(() =>
-        typeof window === 'undefined' ? null : readStorefrontPreviewPreset(window.location.search),
+        typeof window === 'undefined'
+            ? null
+            : readStorefrontPreviewPreset(storefrontPreviewParameters().toString()),
     );
     const query = useQuery({
         queryKey: [

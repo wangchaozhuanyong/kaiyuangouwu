@@ -76,10 +76,10 @@ export function BrowsingHistoryPage() {
                     title={isZh ? '浏览足迹' : 'Browsing history'}
                     language={language}
                     onBack={goBack}
+                    actionVisibility="mobile"
                     action={
                         productIds.length ? (
                             <button
-                                className="account-mobile-header-action"
                                 type="button"
                                 onClick={onClear}
                                 aria-label={isZh ? '清空浏览足迹' : 'Clear browsing history'}

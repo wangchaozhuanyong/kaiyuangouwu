@@ -70,7 +70,7 @@ export function LanguageSwitch({
                 onClick={() => onChange('en')}
                 className={`rounded-md px-3 py-1.5 ${value === 'en' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-500'}`}
             >
-                English
+                英文
             </button>
         </div>
     );

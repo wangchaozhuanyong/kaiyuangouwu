@@ -1,6 +1,11 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { AlertTriangle, CheckCircle2, FileClock, Gavel, RefreshCw, ShieldCheck, ShieldX } from 'lucide-react';
 import { useState } from 'react';
+import {
+    eventTypeDisplayLabel,
+    severityDisplayLabel,
+    systemStatusDisplayLabel,
+} from '../../../../common/src/system-display-labels';
 
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -244,7 +249,8 @@ export function GovernanceRiskPanel() {
                             <div className="flex flex-wrap items-start justify-between gap-2">
                                 <div>
                                     <p className="font-bold text-slate-900">
-                                        {item.caseCode} · {item.severity} · {item.status}
+                                        {item.caseCode} · {severityDisplayLabel(item.severity)} ·{' '}
+                                        {systemStatusDisplayLabel(item.status)}
                                     </p>
                                     <p className="mt-1 text-slate-500">
                                         订单 {item.orderId ?? item.subjectId} · 评分 {item.riskScore} · 截止{' '}
@@ -365,7 +371,7 @@ export function GovernanceRiskPanel() {
                         {data?.governanceAuditEntries.items.map(item => (
                             <div key={item.id} className="rounded-lg border border-slate-100 p-3 text-xs">
                                 <p className="font-semibold text-slate-800">
-                                    #{item.sequence} {item.eventType}
+                                    #{item.sequence} {eventTypeDisplayLabel(item.eventType)}
                                 </p>
                                 <p className="mt-1 text-slate-500">
                                     {item.resourceType} {item.resourceId} · {item.actorLabel}

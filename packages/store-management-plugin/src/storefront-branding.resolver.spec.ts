@@ -58,8 +58,26 @@ describe('StorefrontBrandingShopResolver', () => {
             },
         } as any);
 
-        expect(result).toMatchObject({ name: 'store', description: '' });
+        expect(result).toMatchObject({ name: 'English name not set', description: '' });
         expect(result).not.toHaveProperty('internalNote');
+    });
+
+    it('does not borrow English branding or internal channel codes for missing Chinese branding', async () => {
+        const resolver = createResolver({
+            descriptionZh: '',
+            descriptionEn: 'English description',
+            taglineZh: '',
+            taglineEn: 'English tagline',
+        });
+        const result = await resolver.storefrontBranding({
+            channelId: 'channel-1',
+            languageCode: 'zh_Hans',
+            channel: {
+                code: 'internal-store-code',
+                customFields: { storefrontNameZh: '', storefrontNameEn: 'English Store' },
+            },
+        } as any);
+        expect(result).toMatchObject({ name: '未填写中文名称', description: '', tagline: '' });
     });
 
     it('keeps an uploaded SVG logo as a vector asset', async () => {

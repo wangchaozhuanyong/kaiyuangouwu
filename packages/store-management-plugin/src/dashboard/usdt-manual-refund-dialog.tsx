@@ -17,6 +17,8 @@ import {
 import { LoaderCircle, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
 
+import { systemStatusDisplayLabel } from '../../../common/src/system-display-labels';
+
 import {
     RecordStoreUsdtManualRefundResult,
     StorePaymentDetailRecord,
@@ -233,7 +235,11 @@ export function UsdtManualRefundList({ refunds }: { refunds: StoreUsdtManualRefu
                             <strong>
                                 {refund.channelCode} · 订单 {refund.orderCode}
                             </strong>
-                            <Badge>{refund.state === 'Settled' ? '已结算退款' : refund.state}</Badge>
+                            <Badge>
+                                {refund.state === 'Settled'
+                                    ? '已结算退款'
+                                    : systemStatusDisplayLabel(refund.state)}
+                            </Badge>
                             <Badge variant="outline">{refund.network}</Badge>
                         </div>
                         <p className="break-all text-muted-foreground">退款交易：{refund.transactionId}</p>

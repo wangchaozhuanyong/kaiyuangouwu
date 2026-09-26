@@ -249,15 +249,24 @@
         text-decoration: none;
         cursor: pointer;
     }
-    .desktop-local-navigation :is(button, a):hover,
-    .desktop-local-navigation [aria-pressed='true'],
-    .desktop-local-navigation [aria-current='page'] {
-        color: var(--accent);
+    .desktop-local-navigation :is(button, a):hover {
+        color: var(--interaction-ink);
+        background: var(--interaction-hover);
+    }
+    .desktop-local-navigation :is(button, a):active {
+        background: var(--interaction-pressed);
+        color: var(--interaction-ink);
     }
     .desktop-local-navigation [aria-pressed='true'],
     .desktop-local-navigation [aria-current='page'] {
-        background: var(--accent-soft);
+        background: var(--selection);
         font-weight: 600;
+        color: var(--selection-foreground);
+    }
+    .desktop-local-navigation [aria-pressed='true']:hover:not(:disabled),
+    .desktop-local-navigation [aria-current='page']:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-account-navigation {
         width: 100%;
@@ -281,8 +290,12 @@
         cursor: pointer;
     }
     .desktop-subcategories [aria-pressed='true'] {
-        color: var(--accent);
-        background: color-mix(in srgb, var(--accent) 8%, var(--paper));
+        color: var(--selection-foreground);
+        background: var(--selection);
+    }
+    .desktop-subcategories [aria-pressed='true']:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-category-status {
         margin: 12px 0;
@@ -341,15 +354,23 @@
     }
     .desktop-sort button:hover {
         border-color: var(--accent);
-        color: var(--accent);
-        background: color-mix(in srgb, var(--accent) 5%, var(--paper, #fff));
+        color: var(--interaction-ink);
+        background: var(--interaction-hover);
+    }
+    .desktop-sort button:active {
+        background: var(--interaction-pressed);
+        color: var(--interaction-ink);
     }
     .desktop-sort button[aria-pressed='true'] {
-        background: var(--accent);
-        border-color: var(--accent);
-        color: #ffffff;
+        background: var(--selection);
+        border-color: var(--selection);
+        color: var(--selection-foreground);
         font-weight: 600;
-        box-shadow: 0 2px 8px -1px color-mix(in srgb, var(--accent) 35%, transparent);
+        box-shadow: none;
+    }
+    .desktop-sort button[aria-pressed='true']:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-stock-filter {
         display: flex;
@@ -377,7 +398,12 @@
         cursor: pointer;
     }
     .desktop-catalog-toolbar > button.is-active {
-        color: var(--accent);
+        color: var(--selection-foreground);
+        background: var(--selection);
+    }
+    .desktop-catalog-toolbar > button.is-active:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-catalog-toolbar svg {
         width: 16px;
@@ -552,18 +578,6 @@
     }
 
     /* Desktop pages share a clear heading and a restrained surface hierarchy. */
-    .has-desktop-catalog .subpage-header {
-        top: var(--desktop-header-height);
-        grid-template-columns: 44px minmax(0, 1fr) 44px;
-        gap: 12px;
-        padding-inline: 0;
-    }
-    .has-desktop-catalog .subpage-header > strong {
-        justify-self: start;
-        text-align: left;
-        font-size: 22px;
-        font-weight: 600;
-    }
     .has-desktop-catalog .cart-topbar {
         height: 88px;
         padding: 0;
@@ -621,7 +635,7 @@
         min-width: 0;
         padding: 8px;
         border: 0;
-        border-left: 1px solid var(--line);
+        border-left: 0;
         border-radius: 0;
         background: transparent;
         box-shadow: none;
@@ -731,7 +745,7 @@
         color: var(--text);
         cursor: pointer;
     }
-    .desktop-account-order-product > :is(img, picture, .image-placeholder) {
+    .desktop-account-order-product > :is(img, picture, .responsive-picture, .image-placeholder) {
         flex: none;
         width: 88px;
         height: 88px;
@@ -743,8 +757,9 @@
         height: 100%;
         object-fit: contain;
     }
-    .desktop-account-order-product > span {
+    .desktop-account-order-product > span:not(.responsive-picture) {
         min-width: 0;
+        overflow-wrap: anywhere;
     }
     .desktop-account-order-product strong {
         display: block;
@@ -994,8 +1009,12 @@
     }
     .has-desktop-catalog .orders-page .order-tabs button[aria-pressed='true'] {
         border: 0;
-        background: var(--accent-soft);
-        color: var(--accent-ink);
+        background: var(--selection);
+        color: var(--selection-foreground);
+    }
+    .has-desktop-catalog .orders-page .order-tabs button[aria-pressed='true']:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
 
     @media (max-width: 1279px) {

@@ -1,7 +1,7 @@
-import { Package } from 'lucide-react';
 import { useState } from 'react';
 
 import { productGalleryAssets } from '../product-media';
+import { ImagePlaceholder } from '../safe-image';
 import { Asset, Product, StorefrontLanguage } from '../types';
 
 import { prefetchStorefrontImage, SafeImage, scheduleIdleWork } from './product-display';
@@ -41,14 +41,13 @@ function GalleryImages({
                         src={assets[activeImage].preview}
                         alt={`${productName} ${activeImage + 1}`}
                         imageKind="detail"
+                        language={language}
                         loading="eager"
                         fetchPriority="high"
                         onLoad={prefetchAdjacentGalleryImages}
                     />
                 ) : (
-                    <div className="image-placeholder" aria-hidden="true">
-                        <Package />
-                    </div>
+                    <ImagePlaceholder alt={productName} language={language} />
                 )}
                 {assets.length > 1 && (
                     <div className="gallery-dots">

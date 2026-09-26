@@ -184,7 +184,7 @@ describe('category navigation responsive spacing', () => {
         );
     });
 
-    it('connects the active mobile subcategory to the product area without vertical dividers', () => {
+    it('distinguishes the active mobile subcategory without decorative dividers', () => {
         const layoutRule = stylesheet.match(/\.category-layout\s*\{([^}]*)\}/)?.[1] ?? '';
         const sidebarRule = stylesheet.match(/\.category-subcat-sidebar\s*\{([^}]*)\}/)?.[1] ?? '';
         const itemRule = stylesheet.match(/\.subcat-side-item\s*\{([^}]*)\}/)?.[1] ?? '';
@@ -194,9 +194,9 @@ describe('category navigation responsive spacing', () => {
         expect(layoutRule).toMatch(/--category-results-surface:\s*var\(--surface\);/);
         expect(sidebarRule).toMatch(/border-right:\s*0;/);
         expect(itemRule).not.toMatch(/border-left/);
-        expect(activeItemRule).toMatch(/background:\s*var\(--category-results-surface\);/);
-        expect(activeItemRule).toMatch(/color:\s*var\(--accent-ink\);/);
-        expect(activeItemRule).toMatch(/box-shadow:\s*1px 0 0 var\(--category-results-surface\);/);
+        expect(activeItemRule).toMatch(/background:\s*var\(--selection\);/);
+        expect(activeItemRule).toMatch(/color:\s*var\(--selection-foreground\);/);
+        expect(activeItemRule).toMatch(/box-shadow:\s*none;/);
         expect(resultsRule).toMatch(/background:\s*var\(--category-results-surface\);/);
         expect(presetStylesheet).toMatch(
             /\.category-page \.category-layout\s*\{[^}]*--category-results-surface:\s*var\(--bg\);/,

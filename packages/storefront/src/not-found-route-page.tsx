@@ -1,5 +1,6 @@
-import { ArrowLeft, House, LayoutGrid, Navigation } from 'lucide-react';
+import { House, LayoutGrid, Navigation } from 'lucide-react';
 
+import { SubHeader } from './storefront-ui/page-shell';
 import { useStorefront } from './StorefrontContext';
 
 export function NotFoundRoutePage() {
@@ -8,13 +9,11 @@ export function NotFoundRoutePage() {
 
     return (
         <main className="page subpage not-found-page">
-            <header className="topbar subpage-header">
-                <button type="button" onClick={runtime.goBack} aria-label={isZh ? '返回' : 'Back'}>
-                    <ArrowLeft aria-hidden="true" />
-                </button>
-                <strong>{isZh ? '页面未找到' : 'Page not found'}</strong>
-                <span />
-            </header>
+            <SubHeader
+                title={isZh ? '页面未找到' : 'Page not found'}
+                language={runtime.language}
+                onBack={runtime.goBack}
+            />
             <section className="not-found-content">
                 <span className="not-found-code" aria-hidden="true">
                     404

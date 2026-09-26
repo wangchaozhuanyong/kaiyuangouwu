@@ -422,11 +422,12 @@ describe('HomePage localized trust bar layout', () => {
         expect(markup).toContain('服务7');
     });
 
-    it('uses the compact single-row layout for short Chinese labels', () => {
+    it('keeps short managed labels without inventing descriptions', () => {
         const markup = renderHome({ contentBlocks: [trustBarBlock] });
 
         expect(markup).toContain('class="home-trust-bar"');
         expect(markup).not.toContain('home-trust-bar has-long-copy');
+        expect(markup).not.toContain('home-trust-description');
     });
 
     it('uses professional compact English labels without forcing a wrapping layout', () => {
@@ -446,10 +447,10 @@ describe('HomePage localized trust bar layout', () => {
 
         expect(markup).toContain('class="home-trust-bar"');
         expect(markup).not.toContain('home-trust-bar has-long-copy');
-        expect(markup).toContain('class="home-trust-label">Tracking</span>');
-        expect(markup).toContain('class="home-trust-label">Pricing</span>');
-        expect(markup).toContain('class="home-trust-label">Security</span>');
-        expect(markup).toContain('class="home-trust-label">Support</span>');
+        expect(markup).toContain('class="home-trust-label">Tracking</strong>');
+        expect(markup).toContain('class="home-trust-label">Pricing</strong>');
+        expect(markup).toContain('class="home-trust-label">Security</strong>');
+        expect(markup).toContain('class="home-trust-label">Support</strong>');
     });
 
     it('uses a wrapping layout for long merchant-managed labels in any language', () => {
@@ -472,12 +473,40 @@ describe('HomePage localized trust bar layout', () => {
         const stylesheet = readStorefrontStylesheet();
 
         expect(markup).toContain('class="home-trust-bar has-long-copy"');
-        expect(stylesheet).toMatch(
-            /\.home-trust-bar\.has-long-copy\s*\{[^}]*grid-template-columns:\s*repeat\(2,/,
+        expect(stylesheet).toMatch(/\.home-trust-bar\s*\{[^}]*grid-template-columns:\s*repeat\(2,/);
+        expect(stylesheet).toMatch(/\.home-trust-label\s*\{[^}]*overflow-wrap:\s*anywhere;/);
+    });
+
+    it('renders saved descriptions and imagery while excluding disabled and empty items', () => {
+        const markup = renderHome(
+            {
+                contentBlocks: [
+                    {
+                        ...trustBarBlock,
+                        items: [
+                            { ...trustBarBlock.items[0], enabled: false, label: '不应显示的停用条目' },
+                            { ...trustBarBlock.items[1], label: '   ', description: '   ' },
+                            {
+                                ...trustBarBlock.items[2],
+                                label: '后台配置的保障标题',
+                                description: '后台配置的保障说明',
+                                imageUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>',
+                            },
+                        ],
+                    },
+                ],
+            },
+            true,
         );
-        expect(stylesheet).toMatch(
-            /\.home-trust-bar\.has-long-copy \.home-trust-item\s*\{[^}]*white-space:\s*normal;/,
-        );
+        expect(markup.match(/class="home-trust-item"/g)).toHaveLength(1);
+        expect(markup).toContain('后台配置的保障标题');
+        expect(markup).toContain('class="home-trust-description">后台配置的保障说明');
+        expect(markup).toContain('data:image/svg+xml');
+        expect(markup).not.toContain('不应显示的停用条目');
+        for (const claim of ['假一赔十', '全马免运费', '次日达', '持牌资质'])
+            expect(markup).not.toContain(claim);
+        const emptyMarkup = renderHome({ contentBlocks: [{ ...trustBarBlock, items: [] }] }, true);
+        expect(emptyMarkup).not.toContain('home-trust-bar');
     });
 
     it('applies the balanced marketplace treatment only when managed content opts in', () => {

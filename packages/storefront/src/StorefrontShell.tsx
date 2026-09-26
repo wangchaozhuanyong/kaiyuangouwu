@@ -15,6 +15,7 @@ import { type useStorefrontAppState } from './hooks/useStorefrontAppState';
 import { PageReadinessBoundary } from './page-readiness';
 import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { isBrowsingStorefrontRoute, isPublicStorefrontRoute } from './storefront-access';
+import { storefrontPreviewParameters } from './storefront-preview-parameters';
 import { routeHref, storefrontRouteNames, type RouteName } from './storefront-router';
 import { StorefrontTrafficPreference } from './storefront-ui/storefront-traffic-preference';
 import { StorefrontContext } from './StorefrontContext';
@@ -39,7 +40,7 @@ const PREVIEW_CUSTOMER: ActiveCustomer = {
 export function StorefrontShell({ state }: StorefrontShellProps) {
     const desktop = useDesktopViewport();
     // Preview identity belongs to this iframe document, not a changing route query string.
-    const [previewParameters] = useState(() => new URLSearchParams(window.location.search));
+    const [previewParameters] = useState(storefrontPreviewParameters);
     const previewEmbedded = previewParameters.get('storefrontPreviewEmbedded') === '1';
     const previewScenario = previewEmbedded ? previewParameters.get('storefrontPreviewScenario') : null;
     const previewSession = previewEmbedded ? previewParameters.get('storefrontPreviewSession') : null;

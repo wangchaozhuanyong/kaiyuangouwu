@@ -1,8 +1,7 @@
-import { LayoutGrid } from 'lucide-react';
+import { Check, LayoutGrid } from 'lucide-react';
 
 import { catalogInputFromRoute, catalogRouteWithChanges } from '../../catalog-route-query';
 import { RouteState } from '../../storefront-router';
-import { SectionIcon } from '../../storefront-ui/page-shell';
 import { collectionImage, SafeImage } from '../../storefront-ui/product-display';
 import { useStorefront } from '../../StorefrontContext';
 import { CollectionSummary, Product, StorefrontLanguage } from '../../types';
@@ -39,9 +38,11 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
             aria-label={isZh ? '商品分类' : 'Product categories'}
         >
             {expandChildren && (
-                <strong className="desktop-category-directory-title section-header-title-row">
-                    <SectionIcon kind="categories" />
-                    {isZh ? '全部分类目录' : 'All categories'}
+                <strong className="desktop-category-directory-title">
+                    <span className="desktop-category-icon" aria-hidden="true">
+                        <LayoutGrid />
+                    </span>
+                    <span>{isZh ? '全部分类目录' : 'All categories'}</span>
                 </strong>
             )}
             <div className="desktop-category-row">
@@ -87,7 +88,7 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
                                                 src={image}
                                                 alt=""
                                                 imageKind="icon"
-                                                sizes="32px"
+                                                sizes="28px"
                                                 loading="eager"
                                             />
                                         ) : (
@@ -138,17 +139,25 @@ export function DesktopSubcategoryNavigation() {
         <aside className="desktop-subcategory-sidebar" aria-label={isZh ? '子分类' : 'Subcategories'}>
             <strong>{activeCollection.name}</strong>
             <nav aria-label={isZh ? `选择${activeCollection.name}分类` : `Choose ${activeCollection.name}`}>
-                <button type="button" aria-pressed={!activeChild} onClick={() => update({ childId: 'all' })}>
-                    {isZh ? `全部${activeCollection.name}` : `All ${activeCollection.name}`}
+                <button
+                    type="button"
+                    title={isZh ? `全部${activeCollection.name}` : `All ${activeCollection.name}`}
+                    aria-pressed={!activeChild}
+                    onClick={() => update({ childId: 'all' })}
+                >
+                    <span>{isZh ? `全部${activeCollection.name}` : `All ${activeCollection.name}`}</span>
+                    {!activeChild ? <Check aria-hidden="true" /> : null}
                 </button>
                 {activeCollection.children.map(child => (
                     <button
                         key={child.id}
                         type="button"
+                        title={child.name}
                         aria-pressed={activeChild?.id === child.id}
                         onClick={() => update({ childId: child.id })}
                     >
-                        {child.name}
+                        <span>{child.name}</span>
+                        {activeChild?.id === child.id ? <Check aria-hidden="true" /> : null}
                     </button>
                 ))}
             </nav>

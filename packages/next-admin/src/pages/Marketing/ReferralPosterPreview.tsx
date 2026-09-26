@@ -79,7 +79,7 @@ export function ReferralPosterPreview({
                             onChange={event => setLanguage(event.target.value as 'zh' | 'en')}
                         >
                             <option value="zh">中文</option>
-                            <option value="en">English</option>
+                            <option value="en">英文</option>
                         </select>
                     </label>
                     <label className="flex gap-1">

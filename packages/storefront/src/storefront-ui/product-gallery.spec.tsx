@@ -108,7 +108,15 @@ describe('ProductGallery interactions', () => {
         render({ ...product, featuredAsset: null, assets: [] });
         expect(container.querySelector('img')).toBeNull();
         expect(container.querySelector('.image-placeholder')).not.toBeNull();
+        expect(container.querySelector('.image-status-label')?.textContent).toBe('暂无商品图片');
         expect(container.querySelector('.gallery-count')).toBeNull();
+
+        act(() =>
+            root.render(
+                <ProductGallery product={{ ...product, featuredAsset: null, assets: [] }} language="en" />,
+            ),
+        );
+        expect(container.querySelector('.image-status-label')?.textContent).toBe('No product image');
 
         render({ ...product, assets: [] });
         expectImage(cover.preview, 1);

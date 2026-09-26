@@ -12,19 +12,16 @@ describe('global button foreground styles', () => {
         expect(globalButtonRule?.[1]).not.toMatch(/(?:^|;)\s*color\s*:/);
     });
 
-    it('uses the semantic focus color for text controls without a red outline', () => {
-        const boxShadow = 'box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus, #3b82f6) 22%, transparent)';
-        const boxShadowIndex = stylesheet.indexOf(boxShadow);
-        const focusDeclarations = stylesheet.slice(
-            stylesheet.lastIndexOf('{', boxShadowIndex),
-            stylesheet.indexOf('}', boxShadowIndex),
-        );
+    it('uses a visible semantic focus outline for text controls', () => {
+        const focusDeclarations = stylesheet.match(
+            /textarea,\s*select\s*\):focus-visible\s*\{([^}]*)\}/,
+        )?.[1];
 
-        expect(boxShadowIndex).toBeGreaterThan(-1);
-        expect(focusDeclarations).toContain('outline: none !important');
+        expect(focusDeclarations).toBeDefined();
+        expect(focusDeclarations).toContain('outline: var(--experience-focus-width) solid var(--focus)');
+        expect(focusDeclarations).toContain('outline-offset: var(--experience-focus-offset)');
         expect(focusDeclarations).toContain('border-color: var(--focus, #3b82f6)');
-        expect(focusDeclarations).toContain(boxShadow);
-        expect(focusDeclarations).not.toContain('red');
+        expect(focusDeclarations).not.toContain('outline: none');
     });
 
     it('keeps a visible keyboard outline on native selection controls and buttons', () => {
