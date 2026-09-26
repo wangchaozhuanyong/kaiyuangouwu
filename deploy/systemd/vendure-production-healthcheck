@@ -87,7 +87,7 @@ check_restore_evidence() {
     local configured_rto="$2"
     local offsite_required="$3"
     local failure_prefix="$4"
-    local completed_at completed_epoch duration recorded_rto source
+    local completed_at completed_epoch duration recorded_rto source observed_epoch
     if [[ ! -s "${evidence}" ]] || ! jq -e . "${evidence}" >/dev/null 2>&1; then
         failures+=("${failure_prefix}-missing-or-invalid")
         return
@@ -97,8 +97,11 @@ check_restore_evidence() {
     duration="$(jq -er '.durationSeconds' "${evidence}" 2>/dev/null || true)"
     recorded_rto="$(jq -er '.rtoSeconds' "${evidence}" 2>/dev/null || true)"
     source="$(jq -er '.source' "${evidence}" 2>/dev/null || true)"
+    # A scheduled drill can publish its receipt while earlier checks are running.
+    # Compare it with the time of this observation, not the service start time.
+    observed_epoch="$(date +%s)"
     if [[ ! "${completed_epoch}" =~ ^[0-9]+$ ]] ||
-        ((current_epoch - completed_epoch < 0 || current_epoch - completed_epoch > maximum_restore_drill_age_seconds)); then
+        ((observed_epoch - completed_epoch < 0 || observed_epoch - completed_epoch > maximum_restore_drill_age_seconds)); then
         failures+=("${failure_prefix}-missing-or-stale")
     elif [[ ! "${duration}" =~ ^[0-9]+$ || ! "${recorded_rto}" =~ ^[0-9]+$ ]] ||
         ((duration > configured_rto || recorded_rto != configured_rto)); then
