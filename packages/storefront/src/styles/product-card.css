@@ -189,12 +189,6 @@
         padding-bottom: 16px;
     }
 
-    .product-card-media {
-        width: calc(100% - 2 * var(--product-card-inset));
-        margin: var(--product-card-inset) var(--product-card-inset) 0;
-        border-radius: var(--skin-media-radius);
-    }
-
     .product-card-name {
         margin-top: 14px;
         font-size: 15px;

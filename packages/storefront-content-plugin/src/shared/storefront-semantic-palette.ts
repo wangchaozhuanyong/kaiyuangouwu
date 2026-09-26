@@ -216,14 +216,14 @@ function resolveClassicPalette(brand: StorefrontBrandPaletteInput): StorefrontSe
 
 const FIXED_PALETTES: Record<Exclude<StorefrontVisualPresetId, 'classic'>, StorefrontSemanticPalette> = {
     'modern-oriental': {
-        page: '#f6f2ea',
-        surface: '#fffdf8',
+        page: '#f1ece2',
+        surface: '#fffaf1',
         elevated: '#fffdf8',
-        subtle: '#f6f2ea',
-        text: '#203346',
-        muted: '#706e68',
-        brand: '#a63d32',
-        accent: '#a63d32',
+        subtle: '#e8dfd0',
+        text: '#1c302d',
+        muted: '#5b645d',
+        brand: '#9f3b30',
+        accent: '#913128',
         accentHover: '#74251f',
         accentSoft: '#f1ddd3',
         accentInk: '#873027',
@@ -272,10 +272,9 @@ const SKIN_TREATMENTS: Record<StorefrontVisualPresetId, StorefrontSkinTreatment>
         headerShadow: '0 2px 10px rgba(15, 23, 42, 0.04)',
     },
     'modern-oriental': {
-        divider: '#ded5c6',
-        displayFont:
-            "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
-        cardRadius: '18px',
+        divider: '#ded2c0',
+        displayFont: "'Songti SC', 'STSong', 'Noto Serif CJK SC', 'SimSun', Georgia, serif",
+        cardRadius: '14px',
         heroRadius: '18px',
         controlRadius: '8px',
         mediaRadius: '10px',

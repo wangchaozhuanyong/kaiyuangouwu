@@ -38,13 +38,13 @@ html[data-storefront-preset] {
     --coupon-emerald-ink: #326457;
 }
 html[data-storefront-preset='modern-oriental'] {
-    --oriental-gold: #a58b58;
+    --oriental-gold: #b08a4a;
     --studio-accent: var(--accent);
     --studio-accent-hover: var(--accent-hover);
     --studio-accent-ink: var(--accent-ink);
     --studio-accent-soft: var(--accent-soft);
     --studio-line: var(--line);
-    --account-hero-bg: linear-gradient(135deg, #1c2b3a 0%, #142630 100%);
+    --account-hero-bg: linear-gradient(135deg, #172b29 0%, #294940 100%);
 }
 html[data-storefront-preset='neo-minimalist'] {
     --coupon-rose-ink: #e99084;

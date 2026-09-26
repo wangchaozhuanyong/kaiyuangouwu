@@ -348,7 +348,7 @@ export function SupportContent({
                         <h2>{isZh ? '常见问题' : 'Frequently asked questions'}</h2>
                         <p>
                             {isZh
-                                ? '商家暂未发布常见问题，可通过左侧联系方式咨询。'
+                                ? '商家暂未发布常见问题，可通过客服联系方式咨询。'
                                 : 'No FAQs have been published. Please use the support channels to get help.'}
                         </p>
                     </section>

@@ -1132,8 +1132,8 @@ describe('unified storefront Admin API to Shop API', () => {
             const pageUrl = `http://127.0.0.1:5300/e2e/unification/index.html?channel=${stores[0].token}&name=MOYAO&page=login`;
             const previewUrl = `http://127.0.0.1:5301/e2e/storefront-visual/index.html?stores=${stores.map(store => store.token).join(',')}&preview=auth`;
             for (const [state, background, accent] of [
-                ['explicit', 'rgb(32, 51, 70)', 'rgb(166, 61, 50)'],
-                ['inherited', 'rgb(255, 253, 248)', 'rgb(166, 61, 50)'],
+                ['explicit', 'rgb(32, 51, 70)', 'rgb(145, 49, 40)'],
+                ['inherited', 'rgb(255, 250, 241)', 'rgb(145, 49, 40)'],
                 ['classic', 'rgb(255, 255, 255)', 'rgb(21, 128, 61)'],
             ]) {
                 if (state === 'inherited')
@@ -1161,11 +1161,11 @@ describe('unified storefront Admin API to Shop API', () => {
                 await preview.evaluate(() => document.documentElement.classList.add('dark'));
                 await browserExpect(preview.locator('.store-auth-visual + div')).toHaveCSS(
                     'background-color',
-                    state === 'classic' ? 'rgb(255, 255, 255)' : 'rgb(255, 253, 248)',
+                    state === 'classic' ? 'rgb(255, 255, 255)' : 'rgb(255, 250, 241)',
                 );
                 await browserExpect(preview.locator('.store-auth-visual + div')).toHaveCSS(
                     'color',
-                    state === 'classic' ? 'rgb(15, 23, 42)' : 'rgb(32, 51, 70)',
+                    state === 'classic' ? 'rgb(15, 23, 42)' : 'rgb(28, 48, 45)',
                 );
                 await browserExpect(page.locator('html')).toHaveAttribute(
                     'data-storefront-preset',
@@ -1238,11 +1238,11 @@ describe('unified storefront Admin API to Shop API', () => {
             );
             await browserExpect(page.locator('.auth-hero')).toHaveCSS(
                 'background-color',
-                'rgb(246, 242, 234)',
+                'rgb(241, 236, 226)',
             );
             await browserExpect(page.locator('.wide-action')).toHaveCSS(
                 'background-color',
-                'rgb(166, 61, 50)',
+                'rgb(145, 49, 40)',
             );
             await browserExpect(page.locator('.auth-hero-copy h2')).toHaveCount(0);
             await browserExpect(page.locator('.auth-page')).not.toContainText('MOYAO');
