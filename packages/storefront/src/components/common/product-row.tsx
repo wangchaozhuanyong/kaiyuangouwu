@@ -2,15 +2,10 @@ import { ChevronRight } from 'lucide-react';
 
 import { productListingAvailability } from '../../product-availability';
 import { lowestPricedProductVariant } from '../../product-pricing';
-import {
-    prefetchProductAsset,
-    PriceDisplay,
-    ProductImage,
-    resolveProductSubtitle,
-} from '../../storefront-ui/product-display';
+import { PriceDisplay, ProductImage, resolveProductSubtitle } from '../../storefront-ui/product-display';
 import { MarketConfig, Product, StorefrontLanguage } from '../../types';
 
-// TODO: Fix internal imports later
+import { ProductDetailLink } from './product-detail-link';
 
 export interface ProductRowSmartInfo {
     primary: string;
@@ -107,18 +102,12 @@ export function ProductRow({
     const smartInfo = buildProductRowSmartInfo(product, language);
     const subtitle = resolveProductSubtitle(product, 48);
     return (
-        <article
-            className={`product-row${layout === 'catalog' ? ' product-catalog-card' : ''}`}
-            onPointerEnter={() => prefetchProductAsset(product)}
-            onPointerDown={() => prefetchProductAsset(product)}
-            onFocus={() => prefetchProductAsset(product)}
+        <ProductDetailLink
+            className={`product-row product-row-detail-link${layout === 'catalog' ? ' product-catalog-card' : ''}`}
+            product={product}
+            language={language}
+            onOpen={onOpen}
         >
-            <button
-                type="button"
-                className="product-row-detail-link"
-                onClick={onOpen}
-                aria-label={`${isZh ? '查看' : 'View'} ${product.name}`}
-            />
             <div className="product-row-image">
                 <ProductImage product={product} />
             </div>
@@ -158,6 +147,6 @@ export function ProductRow({
                     <ChevronRight aria-hidden="true" />
                 </span>
             ) : null}
-        </article>
+        </ProductDetailLink>
     );
 }

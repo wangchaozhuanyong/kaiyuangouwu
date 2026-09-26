@@ -602,3 +602,16 @@ export function fromLocalDateTime(value: string): string | null {
 export function errorText(error: unknown): string {
     return toUserFacingError(error, '店铺内容操作失败，请稍后重试');
 }
+
+export function storefrontBlockTypeLabel(type: string): string {
+    return (
+        [...homepageModuleDescriptors, ...contentModuleDescriptors].find(item => item.type === type)?.name ??
+        '自定义内容'
+    );
+}
+
+export function storefrontBlockDisplayName(
+    block: Pick<StorefrontContentBlock, 'type' | 'internalName'>,
+): string {
+    return block.internalName?.trim() || storefrontBlockTypeLabel(block.type);
+}

@@ -1704,7 +1704,7 @@ describe('Product resolver', () => {
                 });
 
                 expect(createProductVariants.length).toBe(1);
-                expect(createProductVariants[0]?.name).toBe('Ananas Klein');
+                expect(createProductVariants[0]?.name).toBe('English name not set');
 
                 const { product } = await adminClient.query(
                     getProductWithVariantsDocument,
@@ -1715,6 +1715,12 @@ describe('Product resolver', () => {
                 );
 
                 expect(product?.variants.length).toBe(1);
+                const german = await adminClient.query(
+                    getProductWithVariantsDocument,
+                    { id: createProduct.id },
+                    { languageCode: LanguageCode.de },
+                );
+                expect(german.product?.variants[0]?.name).toBe('Ananas Klein');
             });
 
             // https://github.com/vendurehq/vendure/issues/1631

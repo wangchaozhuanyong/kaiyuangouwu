@@ -1,3 +1,4 @@
+import { serviceMessageDisplay } from '../../../../../common/src/display-localization';
 import { PageSizeSelect } from '../../../components/PageSizeSelect';
 import { usePageSize } from '../../../hooks/use-page-size';
 /* eslint-disable max-lines -- the import workbench keeps its state machine and review UI in one lazy chunk */
@@ -579,8 +580,7 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
                     )}
                     {!canUpdate && (
                         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">
-                            当前角色可创建和查看导入预览，但没有 <code>UpdateCatalogImport</code>{' '}
-                            权限，无法处理冲突或确认执行。
+                            当前角色可创建和查看导入预览，但没有 “更新商品导入” 权限，无法处理冲突或确认执行。
                         </div>
                     )}
 
@@ -1246,7 +1246,11 @@ function JobWorkspace({
                     />
                 )}
                 {running && <ProgressBar label="后台导入中" value={job.progress} className="mt-4" />}
-                {job.errorMessage && <InlineAlert className="mt-4">{job.errorMessage}</InlineAlert>}
+                {job.errorMessage && (
+                    <InlineAlert className="mt-4">
+                        {serviceMessageDisplay(job.errorMessage, 'zh')}
+                    </InlineAlert>
+                )}
             </section>
 
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

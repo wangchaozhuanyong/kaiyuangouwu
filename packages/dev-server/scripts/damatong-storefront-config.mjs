@@ -937,17 +937,11 @@ export function buildDamatongContentBlocks({
                 syncedFromChannel: sourceChannelCode,
             },
             translations: [
-                translation(
-                    'zh_Hans',
-                    '大马通 AI 服务',
-                    '与默认站使用同一插件版本',
-                    '在这里使用已开放的 AI 工具与数字服务。',
-                    '',
-                ),
+                translation('zh_Hans', '大马通 AI 服务', '', '在这里使用已开放的 AI 工具与数字服务。', ''),
                 translation(
                     'en',
                     'Damatong AI services',
-                    'Uses the same plugin version as the default site',
+                    '',
                     'Use the AI tools and digital services enabled for this store.',
                     '',
                 ),

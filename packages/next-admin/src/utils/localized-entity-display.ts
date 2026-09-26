@@ -11,6 +11,7 @@ export interface EntityTranslation {
 }
 
 export interface LocalizedEntity {
+    languageCode?: string | null;
     name?: string | null;
     description?: string | null;
     translations?: readonly EntityTranslation[] | null;
@@ -28,9 +29,11 @@ function translatedField(
     const value = exact?.[field]?.trim();
     if (value) return value;
 
-    // Legacy records and lightweight queries can omit the translations array. In that case the
-    // API-level `languageCode` is the source of truth and the resolved field is safe to display.
-    if (translations.length === 0) return entity[field]?.trim() ?? '';
+    // Request language alone is insufficient: Vendure can resolve a missing translation using
+    // another language. Only explicit response-language metadata can justify a resolved field.
+    if (entity.translations == null && normalizeAdminDisplayLanguage(entity.languageCode) === languageCode) {
+        return entity[field]?.trim() ?? '';
+    }
 
     // Never silently borrow the other language when translations were explicitly returned.
     return '';

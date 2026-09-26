@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, type ReactNode } from 'react';
+import { act, useState, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StorefrontContentBlock, StorefrontContentResult } from '../../graphql/storefront.graphql';
@@ -60,7 +60,12 @@ vi.mock('./StorefrontBlockEditor', () => ({
         </button>
     ),
 }));
-vi.mock('./storefront-block-preview', () => ({ HeroBlockPreview: () => null }));
+vi.mock('./StorefrontDecorationPreview', () => ({
+    StorefrontDecorationPreview: ({ language }: { language: string }) => {
+        const [instance] = useState(() => crypto.randomUUID());
+        return <section data-client-preview={instance} data-language={language} />;
+    },
+}));
 vi.mock('./StorefrontFloorList', () => ({
     StorefrontFloorList: ({
         rows,
@@ -265,61 +270,35 @@ describe('policy and support configuration uses verified writes as well', () => 
     );
 });
 
-it('filters the structure preview by the selected publication language', async () => {
+it('forwards the selected publication language to the actual client preview', async () => {
     current = data('a', true);
     current.storefrontContentBlocks[0].translations = [current.storefrontContentBlocks[0].translations[0]];
     await render();
-    const section = Array.from(host.querySelectorAll('section')).find(section =>
-        section.querySelector('h2')?.textContent?.includes('结构预览'),
-    )!;
-    expect(section.textContent).not.toContain('暂无可展示楼层');
+    const preview = host.querySelector('[data-client-preview]');
+    expect(preview?.getAttribute('data-language')).toBe('zh_Hans');
     const select = host.querySelector<HTMLSelectElement>('select[aria-label="预览语言"]')!;
     await act(async () => {
         select.value = 'en';
         select.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    expect(section.textContent).toContain('暂无可展示楼层');
+    expect(preview?.getAttribute('data-language')).toBe('en');
 });
 
-it('limits the structure preview to the same two cards in saved order without hiding the floor for an incomplete extra card', async () => {
+it('refreshes the saved client preview after a verified content revision', async () => {
     current = data('a', true);
-    current.storefrontContentBlocks[0].items = [
-        {
-            ...item,
-            id: 'second',
-            position: 2,
-            translations: [
-                { languageCode: 'zh_Hans', label: '第二张卡片', description: '' },
-                item.translations[1],
-            ],
-        },
-        {
-            ...item,
-            id: 'extra',
-            position: 3,
-            translations: [{ languageCode: 'zh_Hans', label: '备用卡片', description: '' }],
-        },
-        {
-            ...item,
-            id: 'first',
-            position: 1,
-            translations: [
-                { languageCode: 'zh_Hans', label: '第一张卡片', description: '' },
-                item.translations[1],
-            ],
-        },
-    ];
     await render();
-    const section = Array.from(host.querySelectorAll('section')).find(section =>
-        section.querySelector('h2')?.textContent?.includes('结构预览'),
-    )!;
-    expect(section.textContent).toMatch(/第一张卡片[\s\S]*第二张卡片/);
-    expect(section.textContent).not.toContain('备用卡片');
-    const select = host.querySelector<HTMLSelectElement>('select[aria-label="预览语言"]')!;
-    await act(async () => {
-        select.value = 'en';
-        select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    expect(section.textContent).not.toContain('暂无可展示楼层');
-    expect(section.querySelectorAll('article > div > div .grid > div')).toHaveLength(2);
+    const instance = host.querySelector('[data-client-preview]')?.getAttribute('data-client-preview');
+    expect(instance).toBeTruthy();
+    current = {
+        ...current,
+        storefrontContentBlocks: current.storefrontContentBlocks.map(block => ({
+            ...block,
+            updatedAt: '2026-09-26T10:00:00Z',
+            position: block.position + 1,
+        })),
+    };
+    await render();
+    expect(host.querySelector('[data-client-preview]')?.getAttribute('data-client-preview')).not.toBe(
+        instance,
+    );
 });

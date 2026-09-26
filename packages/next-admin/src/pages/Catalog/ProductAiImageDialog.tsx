@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { Camera, Check, LoaderCircle, RefreshCw, Sparkles, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { getSystemLabel, serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { uploadAdminFile } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -228,7 +229,7 @@ export function ProductAiImageDialog({
                             </p>
                         ) : config && !config.enabled ? (
                             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
-                                {config.unavailableReason}
+                                {serviceMessageDisplay(config.unavailableReason, 'zh')}
                                 {isSuperAdmin && (
                                     <a href="/plugins/ai-settings" className="ml-2 font-bold underline">
                                         前往配置
@@ -364,7 +365,7 @@ export function ProductAiImageDialog({
                             <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
                                 <div className="mb-3 flex items-center justify-between text-xs">
                                     <span className="font-bold text-slate-700 dark:text-slate-300">
-                                        {statusText[selectedJob.state] ?? selectedJob.state}
+                                        {getSystemLabel(selectedJob.state, statusText, 'zh', 'status')}
                                     </span>
                                     {!TERMINAL_STATES.has(selectedJob.state) && (
                                         <LoaderCircle className="h-4 w-4 animate-spin text-violet-600 dark:text-violet-400" />
@@ -378,8 +379,11 @@ export function ProductAiImageDialog({
                                     />
                                 ) : (
                                     <div className="flex aspect-square max-h-[260px] items-center justify-center rounded-lg bg-slate-50 px-6 text-center text-sm text-slate-500 dark:bg-slate-900/60 dark:text-slate-400">
-                                        {selectedJob.errorMessage ||
-                                            selectedJob.outputs[0]?.errorMessage ||
+                                        {serviceMessageDisplay(selectedJob.errorMessage, 'zh') ||
+                                            serviceMessageDisplay(
+                                                selectedJob.outputs[0]?.errorMessage,
+                                                'zh',
+                                            ) ||
                                             '任务会在后台继续，关闭后可从最近任务恢复'}
                                     </div>
                                 )}
@@ -423,7 +427,7 @@ export function ProductAiImageDialog({
                                             {job.productName || '未命名商品'}
                                         </span>
                                         <span className="ml-3 shrink-0 text-slate-500 dark:text-slate-400">
-                                            {statusText[job.state] ?? job.state}
+                                            {getSystemLabel(job.state, statusText, 'zh', 'status')}
                                         </span>
                                     </button>
                                 ))}

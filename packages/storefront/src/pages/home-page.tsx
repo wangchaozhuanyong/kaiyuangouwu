@@ -45,6 +45,7 @@ import { lowestPricedProductVariant } from '../product-pricing';
 import { PageSkeleton } from '../route-loading';
 import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-coupons';
 import { HomePageContext } from '../storefront-page-contexts';
+import { storefrontPreviewParameters } from '../storefront-preview-parameters';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import {
     aggregateFlashSaleProducts,
@@ -529,6 +530,15 @@ export function HomePage() {
     const [openNoticeId, setOpenNoticeId] = useState<string | null>(null);
     const [heroGestureActive, setHeroGestureActive] = useState(false);
     const [heroAutoplayStopped, setHeroAutoplayStopped] = useState(false);
+    useEffect(() => {
+        const focusId = storefrontPreviewParameters().get('storefrontPreviewBlockId');
+        if (!focusId) return;
+        const index = managedHeroes.findIndex(block => block.id === focusId);
+        if (index >= 0) {
+            setHeroIndex(index);
+            setHeroAutoplayStopped(true);
+        }
+    }, [managedHeroes]);
     const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
     const [pageVisible, setPageVisible] = useState(true);
     const heroGestureRef = useRef({
@@ -814,12 +824,23 @@ export function HomePage() {
         !configuredBlockTypes.includes('TRUST_BAR') &&
         heroCount > 0 &&
         quickLinks.length > 0;
+    const trustIconTones = ['security', 'coupon', 'mail', 'support'] as const;
+    const fallbackLabels = isZh
+        ? ['商品信息', '订单可查', '帮助中心', '账户服务']
+        : ['Products', 'Orders', 'Help center', 'Account'];
     const trustItems = desktopServiceFallback
-        ? isZh
-            ? ['商品信息', '订单可查', '帮助中心', '账户服务']
-            : ['Products', 'Orders', 'Help center', 'Account']
-        : (trustBlock?.items ?? []).map(item => item.label);
-    const trustBarHasLongCopy = trustItems.some(label => Array.from(label.trim()).length > (isZh ? 4 : 10));
+        ? fallbackLabels.map((label, index) => ({
+              id: `service-${index}`,
+              label,
+              description: '',
+              imageUrl: null,
+          }))
+        : (trustBlock?.items ?? [])
+              .filter(item => item.enabled && (item.label.trim() || item.description.trim()))
+              .sort((first, second) => first.position - second.position);
+    const trustBarHasLongCopy = trustItems.some(
+        item => Array.from(item.label.trim()).length > (isZh ? 4 : 10),
+    );
     const colorfulTrustBar = isColorfulHomepageStyle(trustBlock?.settings?.visualStyle);
     const colorfulQuickLinks = isColorfulHomepageStyle(quickBlock?.settings?.visualStyle);
 
@@ -1053,12 +1074,40 @@ export function HomePage() {
                                     }}
                                     aria-label={isZh ? '服务信息' : 'Service information'}
                                 >
-                                    {trustItems.map((label, index) => {
+                                    {trustItems.map((item, index) => {
                                         const TrustIcon = trustIcons[index % trustIcons.length];
                                         return (
-                                            <div className="home-trust-item" key={`${label}-${index}`}>
-                                                <TrustIcon className="trust-icon" aria-hidden="true" />
-                                                <span className="home-trust-label">{label}</span>
+                                            <div className="home-trust-item" key={item.id}>
+                                                <span
+                                                    className="home-trust-icon"
+                                                    data-icon-tone={
+                                                        trustIconTones[index % trustIconTones.length]
+                                                    }
+                                                    aria-hidden="true"
+                                                >
+                                                    {item.imageUrl?.trim() ? (
+                                                        <SafeImage
+                                                            src={item.imageUrl}
+                                                            alt=""
+                                                            imageKind="icon"
+                                                            sizes={desktop ? '48px' : '36px'}
+                                                        />
+                                                    ) : (
+                                                        <TrustIcon className="trust-icon" />
+                                                    )}
+                                                </span>
+                                                <span className="home-trust-copy">
+                                                    {item.label.trim() && (
+                                                        <strong className="home-trust-label">
+                                                            {item.label}
+                                                        </strong>
+                                                    )}
+                                                    {item.description.trim() && (
+                                                        <span className="home-trust-description">
+                                                            {item.description}
+                                                        </span>
+                                                    )}
+                                                </span>
                                             </div>
                                         );
                                     })}

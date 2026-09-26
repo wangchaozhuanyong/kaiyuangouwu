@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { systemStatusDisplayLabel } from '../../../../common/src/system-display-labels';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -1669,7 +1670,9 @@ export function InventoryWarehouseModule() {
                                                         ? '—'
                                                         : `${lot.currencyCode} ${(lot.purchaseCostMicrounits / 1_000).toFixed(3)}`}
                                                 </td>
-                                                <td className="whitespace-nowrap px-3 py-0">{lot.state}</td>
+                                                <td className="whitespace-nowrap px-3 py-0">
+                                                    {systemStatusDisplayLabel(lot.state)}
+                                                </td>
                                                 <td className="whitespace-nowrap px-3 py-0">
                                                     <button
                                                         type="button"

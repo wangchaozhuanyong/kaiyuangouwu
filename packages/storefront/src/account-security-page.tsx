@@ -1,7 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
 import {
     AlertTriangle,
-    ArrowLeft,
     Camera,
     ChevronRight,
     Download,
@@ -21,11 +20,14 @@ import {
 } from 'lucide-react';
 import { ChangeEvent, ReactNode, useEffect, useRef, useState } from 'react';
 
+import { serviceMessageDisplay } from '../../common/src/display-localization';
+
 import './styles/account-security.css';
 
 import { SafeImage } from './safe-image';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
+import { SubHeader, Subpage } from './storefront-ui/page-shell';
 import {
     ActiveCustomer,
     CustomerAvatarHistoryEntry,
@@ -704,7 +706,10 @@ export function AccountSecurityPage({
                                     <span className="security-item-subtitle">
                                         {activeClosure.status === 'BLOCKED' ||
                                         activeClosure.status === 'FAILED'
-                                            ? activeClosure.lastError ||
+                                            ? serviceMessageDisplay(
+                                                  activeClosure.lastError,
+                                                  isZh ? 'zh' : 'en',
+                                              ) ||
                                               (isZh ? '正在等待业务处理' : 'Waiting for operational review')
                                             : activeClosure.dueAt
                                               ? isZh
@@ -957,45 +962,6 @@ function formatAvatarRetentionDate(value: string, language: StorefrontLanguage):
         month: 'short',
         day: 'numeric',
     }).format(date);
-}
-
-function SubHeader({
-    title,
-    language,
-    onBack,
-}: {
-    title: string;
-    language: StorefrontLanguage;
-    onBack: () => void;
-}) {
-    return (
-        <header className="topbar subpage-header">
-            <button type="button" onClick={onBack} aria-label={language === 'zh' ? '返回' : 'Back'}>
-                <ArrowLeft aria-hidden="true" />
-            </button>
-            <strong>{title}</strong>
-            <span />
-        </header>
-    );
-}
-
-function Subpage({
-    title,
-    language,
-    onBack,
-    children,
-}: {
-    title: string;
-    language: StorefrontLanguage;
-    onBack: () => void;
-    children: ReactNode;
-}) {
-    return (
-        <main className="page subpage">
-            <SubHeader title={title} language={language} onBack={onBack} />
-            {children}
-        </main>
-    );
 }
 
 function EmptyState({

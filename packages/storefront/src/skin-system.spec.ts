@@ -16,6 +16,120 @@ function presetRootBlock(source: string, presetId: string): string {
 }
 
 describe('storefront skin system', () => {
+    it('rejects decorative separators throughout client CSS, utility maps and components', () => {
+        const files: string[] = [];
+        const visit = (directory: string) => {
+            for (const entry of readdirSync(directory, { withFileTypes: true })) {
+                const file = path.join(directory, entry.name);
+                if (entry.isDirectory()) visit(file);
+                else if (/\.(?:css|tsx?)$/.test(file) && !/\.spec\.|routeTree\.gen/.test(file)) {
+                    files.push(file);
+                }
+            }
+        };
+        visit(__dirname);
+        visit(path.resolve(__dirname, '../../storefront-content-plugin/src/shared'));
+        const findings: string[] = [];
+        for (const file of files) {
+            const source = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+            if (file.endsWith('.css')) {
+                for (const [, selector, body] of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+                    for (const declaration of body.split(';')) {
+                        const border = declaration.match(
+                            /^\s*border-(top|bottom|left|right|block|inline)(?:-(?:start|end))?(?:-width)?\s*:\s*(.+)$/,
+                        );
+                        if (!border || /^(?:0(?:px)?|none)(?:\s|$)/.test(border[2].trim())) continue;
+                        // The quantity stepper's seams identify its editable value between +/- controls.
+                        if (
+                            selector.trim() === '.detail-quantity-controls output' &&
+                            border[1] === 'inline'
+                        ) {
+                            continue;
+                        }
+                        findings.push(`${file}: ${selector.trim()} ${declaration.trim()}`);
+                    }
+                    const thinWidth = /(?:^|;)\s*width:\s*[1-4]px\s*;/.test(body);
+                    const thinHeight = /(?:^|;)\s*height:\s*[1-4]px\s*;/.test(body);
+                    if (
+                        (thinWidth || thinHeight) &&
+                        !(thinWidth && thinHeight) &&
+                        /(?:^|;)\s*background(?:-color)?:/.test(body) &&
+                        !/display:\s*none|content:\s*none/.test(body) &&
+                        !new Set([
+                            '.price-range-inputs > i',
+                            '.page-readiness-progress',
+                            '.route-transition-track',
+                            '.ai-generation-progress progress',
+                        ]).has(selector.trim())
+                    ) {
+                        findings.push(`${file}: ${selector.trim()} draws a thin background divider`);
+                    }
+                }
+            } else {
+                const utilityBorders = source.matchAll(
+                    /\[border-(?:top|bottom|left|right|block|inline)(?:-(?:start|end))?:([^\]]+)\]/g,
+                );
+                for (const match of utilityBorders) {
+                    if (!/^(?:0|none)$/.test(match[1])) findings.push(`${file}: ${match[0]}`);
+                }
+                for (const match of source.matchAll(
+                    /(?:^|[\s"'`])((?:[a-z-]+:)*(?:divide-[xy](?:-\d+)?|border-[tblrxy](?:-\d+)?))(?=[\s"'`])/g,
+                )) {
+                    if (!/-0$/.test(match[1])) findings.push(`${file}: ${match[1]}`);
+                }
+                for (const match of source.matchAll(
+                    /(?:^|[\s"'`])((?:[a-z-]+:)*(?:[hw]-px|[hw]-\[[12]px\]|\[(?:height|width):[12]px\]))(?=[\s"'`])/g,
+                )) {
+                    findings.push(`${file}: ${match[1]} draws a thin utility divider`);
+                }
+                for (const match of source.matchAll(
+                    /border(?:Top|Bottom|Left|Right)(?:Width)?\s*:\s*(['"])([^'"]+)\1/g,
+                )) {
+                    if (!/^(?:0(?:px)?|none)(?:\s|$)/.test(match[2])) findings.push(`${file}: ${match[0]}`);
+                }
+                if (/<hr(?:\s|\/|>)/.test(source)) findings.push(`${file}: standalone horizontal rule`);
+            }
+        }
+        expect(findings).toEqual([]);
+    });
+
+    it('keeps one page header implementation and one responsive spacing owner', () => {
+        const visit = (directory: string) => {
+            for (const entry of readdirSync(directory, { withFileTypes: true })) {
+                const file = path.join(directory, entry.name);
+                if (entry.isDirectory()) visit(file);
+                else if (/\.tsx?$/.test(file) && !/\.spec\.|routeTree\.gen/.test(file)) {
+                    if (file === path.join(__dirname, 'storefront-ui/page-shell.tsx')) continue;
+                    expect(readFileSync(file, 'utf8'), file).not.toMatch(
+                        /function\s+(?:SubHeader|Subpage)\(/,
+                    );
+                } else if (
+                    file.endsWith('.css') &&
+                    file !== path.join(__dirname, 'styles/subpage-content.css')
+                ) {
+                    const source = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+                    for (const [, selector, body] of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+                        if (
+                            !selector.trim().endsWith('.subpage-header') ||
+                            selector.includes('.product-detail-page')
+                        )
+                            continue;
+                        expect(body, `${file}: ${selector}`).not.toMatch(
+                            /(?:^|;)\s*(?:height|min-height|margin|padding(?:-top)?):/,
+                        );
+                    }
+                }
+            }
+        };
+        visit(__dirname);
+        expect(stylesheet('./styles/subpage-content.css')).toMatch(
+            /\.desktop-store-layout \.page\.subpage > \.subpage-header\s*\{[^}]*height:\s*auto;/,
+        );
+        expect(stylesheet('./styles/home-showcase.css')).not.toMatch(
+            /\.category-navigation-shell > \.topbar\.category-topbar\s*\{[^}]*padding-top:\s*72px;/,
+        );
+    });
+
     it('allows only root token declarations in the skin adapter, never component or responsive overrides', () => {
         const source = stylesheet('./styles/visual-presets.css').replace(/\/\*[\s\S]*?\*\//g, '');
         expect(source).not.toMatch(/@|!important|--color-/);
@@ -430,12 +544,9 @@ describe('storefront skin system', () => {
         expect(pages).toMatch(/\.cart-summary-panel\s*\{[^}]*position:\s*sticky;/);
         expect(pages).toContain('.desktop-account-workbench-toolbar');
         expect(pages).toContain('.address-workbench-toolbar');
-        expect(pages).toMatch(
-            /\.desktop-store-layout\s+\.desktop-account-layout\s+\.addresses-page:has\(\.address-workbench-toolbar\)\s+> \.subpage-header/,
-        );
         expect(pages).not.toContain('.addresses-page > .subpage-header');
         const addresses = stylesheet('./addresses-page.tsx');
-        expect(addresses).toContain("className={selection ? undefined : 'account-mobile-header-action'}");
+        expect(addresses).toContain("actionVisibility={selection ? 'all' : 'mobile'}");
         const account = stylesheet('./pages/desktop-account-page.tsx');
         expect(account).toMatch(
             /className="desktop-member-summary"[\s\S]*className="desktop-account-continue"[\s\S]*<\/section>/,

@@ -1,4 +1,5 @@
 import { Query, Resolver } from '@nestjs/graphql';
+import { getLocalizedMetadata } from '@vendure/common/lib/display-localization';
 import { isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import type { Asset } from '@vendure/core';
 import {
@@ -40,18 +41,22 @@ export class StorefrontBrandingShopResolver {
 
         const customFields = (ctx.channel.customFields ?? {}) as StorefrontChannelFields;
         const isChinese = String(ctx.languageCode).toLowerCase().startsWith('zh');
-        const name = isChinese
-            ? customFields.storefrontNameZh || customFields.storefrontNameEn || ctx.channel.code
-            : isUsableEnglishTranslation(customFields.storefrontNameEn)
-              ? customFields.storefrontNameEn
-              : ctx.channel.code;
+        const name = getLocalizedMetadata(
+            {
+                zh: customFields.storefrontNameZh,
+                en: isUsableEnglishTranslation(customFields.storefrontNameEn)
+                    ? customFields.storefrontNameEn
+                    : null,
+            },
+            isChinese ? 'zh' : 'en',
+        );
         const description = isChinese
-            ? profile?.descriptionZh || profile?.descriptionEn || ''
+            ? profile?.descriptionZh?.trim() || ''
             : isUsableEnglishTranslation(profile?.descriptionEn)
               ? profile.descriptionEn
               : '';
         const tagline = isChinese
-            ? profile?.taglineZh || profile?.taglineEn || ''
+            ? profile?.taglineZh?.trim() || ''
             : isUsableEnglishTranslation(profile?.taglineEn)
               ? profile.taglineEn
               : '';

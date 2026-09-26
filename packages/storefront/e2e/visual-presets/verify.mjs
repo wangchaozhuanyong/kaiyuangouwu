@@ -900,6 +900,98 @@ try {
                         ).toBeGreaterThanOrEqual(4.5);
                     }
                 }
+                if (width >= 1024 && name === 'orders') {
+                    const cards = page.locator('.order-summary-card');
+                    if (await cards.count()) {
+                        await expect(page.locator('.order-list')).toHaveCSS('display', 'grid');
+                        if ((await cards.count()) >= 2) {
+                            const first = await cards.nth(0).boundingBox();
+                            const second = await cards.nth(1).boundingBox();
+                            expect(second?.x).toBeGreaterThan(first.x);
+                            expect(second?.y).toBe(first.y);
+                        }
+                        await expect(page.locator('.desktop-order-columns')).toHaveCount(0);
+                    }
+                }
+                if (width >= 1024) {
+                    const pageEntrance = await page.evaluate(() => {
+                        const root = document.querySelector('#storefront-content > main.page');
+                        if (!root) return null;
+                        const header = root.querySelector(':scope > .subpage-header');
+                        const visible = element => {
+                            if (!element || !element.getClientRects().length) return false;
+                            const bounds = element.getBoundingClientRect();
+                            return (
+                                bounds.width > 1 &&
+                                bounds.height > 1 &&
+                                getComputedStyle(element).visibility !== 'hidden'
+                            );
+                        };
+                        const first = [...root.children].find(
+                            element => element !== header && visible(element),
+                        );
+                        const rail = document.querySelector('.desktop-account-navigation');
+                        return {
+                            account: !!rail,
+                            headerVisible: !!visible(header),
+                            desktopActions: header?.hasAttribute('data-desktop-actions') ?? false,
+                            headerHeight: visible(header) ? header.getBoundingClientRect().height : 0,
+                            firstTop: first?.getBoundingClientRect().top ?? null,
+                            railTop: rail?.getBoundingClientRect().top ?? null,
+                        };
+                    });
+                    if (pageEntrance) {
+                        expect(
+                            pageEntrance.headerHeight,
+                            `${preset}/${width}/${name} compact page header`,
+                        ).toBeLessThanOrEqual(56);
+                        if (pageEntrance.account && !pageEntrance.desktopActions) {
+                            expect(
+                                pageEntrance.headerVisible,
+                                `${preset}/${width}/${name} no empty header row`,
+                            ).toBe(false);
+                            if (pageEntrance.firstTop !== null) {
+                                expect(
+                                    Math.abs(pageEntrance.firstTop - pageEntrance.railTop),
+                                    `${preset}/${width}/${name} content aligns with account rail`,
+                                ).toBeLessThanOrEqual(16);
+                            }
+                        }
+                    }
+                }
+                if (name === 'order-detail') {
+                    const separators = page.locator(
+                        '.order-detail-products > header, .order-detail-products article',
+                    );
+                    for (const separator of await separators.all()) {
+                        await expect(separator).toHaveCSS('border-bottom-width', '0px');
+                    }
+                }
+                if (width >= 1024 && name === 'order-detail') {
+                    await expect(page.locator('.order-detail-page > .subpage-header')).toBeHidden();
+                    const status = await page.locator('.order-status').boundingBox();
+                    const rail = await page.locator('.desktop-account-navigation').boundingBox();
+                    expect(
+                        Math.abs(status.y - rail.y),
+                        'order detail starts beside the account rail',
+                    ).toBeLessThanOrEqual(1);
+                }
+                if (width >= 1024 && name === 'account') {
+                    // Account order thumbnails must constrain the SafeImage frame, not only its img.
+                    const thumbnails = page.locator(
+                        '.desktop-order-product > :is(.responsive-picture, .image-placeholder)',
+                    );
+                    if (['dense', 'notifications'].includes(requestedContent)) {
+                        await expect(thumbnails).toHaveCount(3);
+                    }
+                    for (const thumbnail of await thumbnails.all()) {
+                        const box = await thumbnail.boundingBox();
+                        expect(box?.width, `${preset}/${width}/account order thumbnail width`).toBe(68);
+                        expect(box?.height, `${preset}/${width}/account order thumbnail height`).toBe(68);
+                        const image = thumbnail.locator('img');
+                        if (await image.count()) await expect(image).toHaveCSS('object-fit', 'contain');
+                    }
+                }
                 if (width < 1024 && name === 'account') {
                     await expect(page.locator('.account-page .account-section').first()).toHaveCSS(
                         'border-bottom-width',
@@ -1617,6 +1709,33 @@ try {
                         )
                         .toBe(0);
                 }
+                // A single click on painted media must navigate. Do not click an invisible
+                // overlay, force the action or retry it: those hide missed image clicks.
+                const productLinks = page.locator('.product-card-detail-link, .product-row-detail-link');
+                if (await productLinks.count()) {
+                    const sourceUrl = page.url();
+                    const firstLink = productLinks.first();
+                    const href = await firstLink.getAttribute('href');
+                    expect(href).toMatch(/^\/product\?id=/u);
+                    const destination = new URL(href, sourceUrl).href;
+                    const targets = [
+                        'img, .image-placeholder, .ai-product-cover',
+                        '.product-card-name, .product-row-name',
+                        '.product-card-price, .product-row-price',
+                    ];
+                    for (const target of targets) {
+                        await firstLink.locator(target).first().click();
+                        await expect(page).toHaveURL(destination);
+                        await page.goBack();
+                        await expect(page).toHaveURL(sourceUrl);
+                        await expect(firstLink).toBeVisible();
+                    }
+                    await firstLink.press('Enter');
+                    await expect(page).toHaveURL(destination);
+                    await page.goBack();
+                    await expect(page).toHaveURL(sourceUrl);
+                }
+
                 if (name === 'services' && (width === 390 || width === 1440)) {
                     await page.locator('.business-services-page .category-client-plugin-two-factor').click();
                     await expect(page).toHaveURL(/\/two-factor(?:\?|$)/);

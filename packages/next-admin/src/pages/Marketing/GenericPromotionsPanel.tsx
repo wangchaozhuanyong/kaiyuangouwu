@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { Edit3, Plus, RefreshCw, Save, Settings2, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { getLocalizedEntityTranslation } from '../../utils/localized-entity-display';
 
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
@@ -468,7 +469,7 @@ function OperationList({
                                     onClick={() =>
                                         onChange(values.filter((_, itemIndex) => itemIndex !== index))
                                     }
-                                    aria-label={`删除 ${operation.code}`}
+                                    aria-label={'删除规则'}
                                     className="text-rose-600"
                                 >
                                     <Trash2 className="h-4 w-4" />
@@ -581,11 +582,11 @@ function validateOperations(values: OperationValue[], definitions: OperationDefi
     });
 }
 function detailToDraft(value: NonNullable<GenericPromotionDetailData['promotion']>): PromotionDraft {
-    const translation = value.translations[0];
+    const translation = getLocalizedEntityTranslation(value.translations);
     return {
         id: value.id,
-        name: translation?.name ?? value.name,
-        description: translation?.description ?? value.description,
+        name: translation?.name ?? '',
+        description: translation?.description ?? '',
         enabled: value.enabled,
         couponCode: value.couponCode ?? '',
         startsAt: dateInput(value.startsAt),

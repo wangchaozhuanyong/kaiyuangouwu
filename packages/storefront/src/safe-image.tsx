@@ -1,8 +1,52 @@
-import { Package } from 'lucide-react';
-import { ImgHTMLAttributes, useLayoutEffect, useRef, useState } from 'react';
+import { ImageOff } from 'lucide-react';
+import { ImgHTMLAttributes, useContext, useLayoutEffect, useRef, useState } from 'react';
 
 import { decodeImageElement, IMAGE_WAIT_EXPIRED_EVENT, imageCandidateIdentity } from './image-readiness';
 import { imageSources, StorefrontImageKind, storefrontPlaceholderUrl } from './responsive-image';
+import { StorefrontContext } from './StorefrontContext';
+import { StorefrontLanguage } from './types';
+
+export function ImagePlaceholder({
+    state = 'missing',
+    alt = '',
+    compact = false,
+    language,
+}: {
+    state?: 'missing' | 'loading' | 'error' | 'timeout';
+    alt?: string;
+    compact?: boolean;
+    language?: StorefrontLanguage;
+}) {
+    const runtime = useContext(StorefrontContext);
+    const isZh = (language ?? runtime?.language ?? 'zh') === 'zh';
+    const loading = state === 'loading';
+    const label =
+        state === 'missing'
+            ? isZh
+                ? '暂无商品图片'
+                : 'No product image'
+            : isZh
+              ? '图片暂时无法显示'
+              : 'Image temporarily unavailable';
+    return (
+        <span
+            className="image-placeholder image-status"
+            data-image-state={state}
+            role={loading ? undefined : 'img'}
+            aria-label={loading ? undefined : [alt, label].filter(Boolean).join(' · ')}
+            aria-hidden={loading ? true : undefined}
+        >
+            {loading ? (
+                <span className="image-status-loading" />
+            ) : (
+                <span className="image-status-content" aria-hidden="true">
+                    <ImageOff />
+                    {!compact && <span className="image-status-label">{label}</span>}
+                </span>
+            )}
+        </span>
+    );
+}
 
 export type SafeImageProps = {
     src: string;
@@ -12,6 +56,7 @@ export type SafeImageProps = {
     frameClassName?: string;
     alt: string;
     imageKind?: StorefrontImageKind;
+    language?: StorefrontLanguage;
     onImageReady?: (image: HTMLImageElement) => void;
 } & Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt' | 'onError'>;
 
@@ -70,6 +115,7 @@ function SafeImageSource({
     frameClassName,
     alt,
     imageKind,
+    language,
     onLoad,
     onImageReady,
     className,
@@ -202,10 +248,17 @@ function SafeImageSource({
         >
             <span
                 className="safe-image-fallback"
-                aria-hidden="true"
+                aria-hidden={failed || timedOut ? undefined : true}
                 style={placeholder ? { backgroundImage: `url(${JSON.stringify(placeholder)})` } : undefined}
             >
-                {!placeholder && showFallbackIcon && <Package />}
+                {!placeholder && showFallbackIcon && (
+                    <ImagePlaceholder
+                        state={failed ? 'error' : timedOut ? 'timeout' : 'loading'}
+                        alt={alt}
+                        compact={imageKind === 'thumbnail' || imageKind === 'icon'}
+                        language={language}
+                    />
+                )}
             </span>
             {!failed ? (
                 <img
@@ -225,8 +278,8 @@ function SafeImageSource({
             ) : (
                 <span
                     className="safe-image-unavailable"
-                    role={alt ? 'img' : undefined}
-                    aria-label={alt || undefined}
+                    role={alt && (!showFallbackIcon || placeholder) ? 'img' : undefined}
+                    aria-label={alt && (!showFallbackIcon || placeholder) ? alt : undefined}
                 />
             )}
         </span>

@@ -133,7 +133,7 @@ describe('AiImageAccessModule credential controls', () => {
         const panel = await openProvider(backup.name);
         expect(panel.className).toContain('justify-end');
         expect(panel.getAttribute('aria-label')).toBe(`设置服务商：${backup.name}`);
-        expect(panel.textContent).toContain('API Base URL');
+        expect(panel.textContent).toContain('接口基础地址');
         expect(panel.textContent).toContain('保存凭据');
 
         await act(async () => {

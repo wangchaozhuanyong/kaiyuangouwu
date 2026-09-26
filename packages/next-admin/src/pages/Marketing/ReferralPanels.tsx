@@ -1,6 +1,7 @@
 import { useMutation } from '@apollo/client/react';
 import { Edit3, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { eventTypeDisplayLabel, systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     DELETE_REFERRAL_POSTER_MUTATION,
@@ -299,7 +300,7 @@ export function PromotersPanel({
                                 <Td>
                                     <span className="font-mono text-blue-600">{item.inviteCodeSnapshot}</span>
                                 </Td>
-                                <Td>{item.source || '—'}</Td>
+                                <Td>{systemFieldDisplayLabel('source', item.source)}</Td>
                                 <Td>{formatDateTime(item.boundAt)}</Td>
                                 <Td>{formatDateTime(item.firstPaidOrderAt)}</Td>
                             </tr>
@@ -529,7 +530,7 @@ export function LedgerPanel({
                                 </Td>
                                 <Td>
                                     <span className="font-mono text-[10px] font-bold text-slate-700">
-                                        {item.eventType}
+                                        {eventTypeDisplayLabel(item.eventType)}
                                     </span>
                                 </Td>
                                 <Td>

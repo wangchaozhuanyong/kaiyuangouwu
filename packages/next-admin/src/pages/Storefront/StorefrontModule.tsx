@@ -9,18 +9,15 @@ import {
     Image as ImageIcon,
     LayoutGrid,
     LoaderCircle,
-    Monitor,
     Palette,
     Pencil,
     Plus,
     RefreshCw,
-    Smartphone,
     Trash2,
     X,
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { publishedContentItems } from '../../../../storefront-content-plugin/src/content-publication';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -50,16 +47,18 @@ import {
     type StorefrontStoreAuthSettingsInput,
 } from './StorefrontAuthSettingsPanel';
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
+import { StorefrontDecorationPreview } from './StorefrontDecorationPreview';
 import { StorefrontFloorList } from './StorefrontFloorList';
 import { StorefrontVisualPresetPanel } from './StorefrontVisualPresetPanel';
-import { HeroBlockPreview } from './storefront-block-preview';
 import {
     blockTranslation,
     errorText,
     homepageModuleDescriptors,
     newAccountHeroBlock,
     newContentBlock,
+    storefrontBlockDisplayName,
     storefrontBlockInput,
+    storefrontBlockTypeLabel,
 } from './storefront-content-utils';
 import { contentPublicationLabels, contentPublicationStatus } from './storefront-publication';
 
@@ -74,7 +73,6 @@ import {
 
 import { verifyContentChannel, verifyContentOrder, verifySavedBlock } from './storefront-save-verification';
 
-type Viewport = 'MOBILE' | 'DESKTOP';
 type ContentActionScope = {
     context: ReturnType<typeof channelRequestContext>;
     reread: () => Promise<StorefrontContentResult>;
@@ -89,7 +87,6 @@ export function StorefrontModule() {
     const canDelete = hasAnyPermission(['DeleteStorefrontContent']);
     const canEditPlatformGoogle = hasAnyPermission(['SuperAdmin']);
     const [previewLanguage, setPreviewLanguage] = useState<StorefrontLanguageCode>('zh_Hans');
-    const [viewport, setViewport] = useState<Viewport>('MOBILE');
     const [carouselOpen, setCarouselOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(
         new URLSearchParams(location.search).get('panel') === 'desktop-category-banners',
@@ -601,57 +598,28 @@ export function StorefrontModule() {
                     </section>
                 </div>
 
-                <section className="min-h-[680px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100 xl:sticky xl:top-0 xl:self-start">
-                    <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-                        <div>
-                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                                结构预览
-                                <FeatureHelpButton topic="storefront.structure-preview" title="结构预览" />
-                            </h2>
-                            <p className="mt-1 text-[10px] text-slate-400">
-                                按已保存的发布状态、顺序和语言预览；商品数据和精确样式以客户端为准
-                            </p>
-                        </div>
-                        <div className="flex flex-wrap rounded-lg bg-slate-100 p-1 text-[11px] font-bold">
-                            <select
-                                aria-label="预览语言"
-                                value={previewLanguage}
-                                onChange={event =>
-                                    setPreviewLanguage(event.target.value as StorefrontLanguageCode)
-                                }
-                                className="rounded-md bg-white px-2 text-slate-700"
-                            >
-                                <option value="zh_Hans">中文</option>
-                                <option value="en">English</option>
-                            </select>
-                            <button
-                                type="button"
-                                onClick={() => setViewport('MOBILE')}
-                                className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 ${viewport === 'MOBILE' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-500'}`}
-                            >
-                                <Smartphone className="h-3.5 w-3.5" />
-                                手机
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setViewport('DESKTOP')}
-                                className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 ${viewport === 'DESKTOP' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-500'}`}
-                            >
-                                <Monitor className="h-3.5 w-3.5" />
-                                电脑
-                            </button>
-                        </div>
-                    </div>
-                    <StorefrontPreview
-                        blocks={allBlocks.filter(
-                            block =>
-                                isHomepageBlock(block) &&
-                                contentPublicationStatus(block, undefined, previewLanguage) === 'PUBLISHED',
-                        )}
-                        viewport={viewport}
+                <aside className="min-w-0 xl:sticky xl:top-0 xl:self-start">
+                    <label className="mb-3 flex items-center justify-end gap-2 text-xs text-slate-600">
+                        预览语言
+                        <select
+                            aria-label="预览语言"
+                            value={previewLanguage}
+                            onChange={event =>
+                                setPreviewLanguage(event.target.value as StorefrontLanguageCode)
+                            }
+                            className="rounded-md border border-slate-200 bg-white px-2 py-1"
+                        >
+                            <option value="zh_Hans">中文</option>
+                            <option value="en">英文</option>
+                        </select>
+                    </label>
+                    <StorefrontDecorationPreview
+                        key={allBlocks
+                            .map(block => `${block.id}:${block.updatedAt}:${block.position}:${block.enabled}`)
+                            .join('|')}
                         language={previewLanguage}
                     />
-                </section>
+                </aside>
             </main>
 
             <StorefrontSettingsDrawer
@@ -1064,41 +1032,6 @@ function CarouselInterval({
     );
 }
 
-function CarouselPreview({
-    blocks,
-    desktop,
-    language,
-}: {
-    blocks: StorefrontContentBlock[];
-    desktop: boolean;
-    language: StorefrontLanguageCode;
-}) {
-    const [selected, setSelected] = useState<string | null>(null);
-    const active = blocks.find(block => (block.id ?? block.code) === selected) ?? blocks[0];
-    return (
-        <section aria-label="首页轮播预览" className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-                <span className="text-[11px] font-bold text-slate-700">首页轮播 · {blocks.length} 张</span>
-                <div className="flex flex-wrap gap-1">
-                    {blocks.map((block, index) => (
-                        <button
-                            key={block.id ?? block.code}
-                            type="button"
-                            aria-label={`预览第 ${index + 1} 张轮播图`}
-                            aria-pressed={block === active}
-                            onClick={() => setSelected(block.id ?? block.code)}
-                            className={`min-h-7 min-w-7 rounded-md px-2 text-[10px] font-bold ${block === active ? 'bg-blue-600 text-white' : 'bg-white text-slate-600'}`}
-                        >
-                            {index + 1}
-                        </button>
-                    ))}
-                </div>
-            </div>
-            <PreviewBlock block={active} desktop={desktop} language={language} />
-        </section>
-    );
-}
-
 function BlockRow({
     block,
     index,
@@ -1128,7 +1061,7 @@ function BlockRow({
     const scheduled = status !== 'PUBLISHED' && block.enabled;
     return (
         <article
-            aria-label={block.internalName || block.code}
+            aria-label={storefrontBlockDisplayName(block)}
             className="flex flex-wrap items-center gap-3 p-4 hover:bg-slate-50"
         >
             {dragHandle}
@@ -1146,13 +1079,13 @@ function BlockRow({
             <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                     <h3
-                        title={block.internalName || block.code}
+                        title={storefrontBlockDisplayName(block)}
                         className="truncate text-xs font-bold text-slate-900"
                     >
-                        {block.internalName || block.code}
+                        {storefrontBlockDisplayName(block)}
                     </h3>
                     <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] text-slate-500">
-                        {block.type}
+                        {storefrontBlockTypeLabel(block.type)}
                     </span>
                     <span
                         className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${block.enabled ? (scheduled ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700') : 'bg-slate-100 text-slate-400'}`}
@@ -1200,135 +1133,6 @@ function BlockRow({
                     icon={Trash2}
                     danger
                 />
-            </div>
-        </article>
-    );
-}
-
-function StorefrontPreview({
-    blocks,
-    viewport,
-    language,
-}: {
-    blocks: StorefrontContentBlock[];
-    viewport: Viewport;
-    language: StorefrontLanguageCode;
-}) {
-    return (
-        <div className="flex min-h-[620px] justify-center overflow-y-auto p-5 sm:p-8">
-            <div
-                className={`overflow-hidden bg-white shadow-xl transition-all ${viewport === 'MOBILE' ? 'w-[375px] rounded-[2rem] border-[8px] border-slate-800' : 'w-full max-w-5xl rounded-xl border border-slate-300'}`}
-            >
-                <div
-                    className={`${viewport === 'MOBILE' ? 'h-9' : 'h-12'} flex items-center justify-center border-b border-slate-100 text-xs font-bold text-slate-800`}
-                >
-                    {viewport === 'MOBILE' ? '当前店铺' : '商城首页楼层结构'}
-                </div>
-                <div className="space-y-2 bg-slate-50 p-2">
-                    {storefrontHomepageRows(blocks).map(row =>
-                        row.key === 'carousel' ? (
-                            <CarouselPreview
-                                key={row.key}
-                                blocks={row.blocks}
-                                desktop={viewport === 'DESKTOP'}
-                                language={language}
-                            />
-                        ) : (
-                            <PreviewBlock
-                                key={row.key}
-                                block={row.blocks[0]}
-                                desktop={viewport === 'DESKTOP'}
-                                language={language}
-                            />
-                        ),
-                    )}
-                    {!blocks.length && (
-                        <div className="flex min-h-96 flex-col items-center justify-center text-center">
-                            <LayoutGrid className="h-8 w-8 text-slate-300" />
-                            <h3 className="mt-3 text-sm font-bold text-slate-700">暂无可展示楼层</h3>
-                            <p className="mt-1 max-w-xs text-xs leading-5 text-slate-400">
-                                启用并完成楼层配置后，预览将按真实顺序展示。
-                            </p>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function PreviewBlock({
-    block,
-    desktop,
-    language,
-}: {
-    block: StorefrontContentBlock;
-    desktop: boolean;
-    language: StorefrontLanguageCode;
-}) {
-    if (block.type === 'HERO') {
-        return (
-            <HeroBlockPreview
-                block={block}
-                language={language}
-                fixedViewport={desktop ? 'desktop' : 'mobile'}
-                compact
-            />
-        );
-    }
-    const copy = blockTranslation(block, language);
-    const image = block.imageAsset?.preview ?? block.imageUrl;
-    const items = publishedContentItems(block);
-    const productAutomation = ['COUPONS', 'FLASH_SALE', 'BEST_SELLERS', 'RECOMMENDATIONS'].includes(
-        block.type,
-    );
-    return (
-        <article
-            className={`overflow-hidden rounded-xl border border-slate-200 bg-white ${desktop ? 'p-5' : 'p-3'}`}
-        >
-            <div
-                className={`flex gap-4 ${desktop && ['HERO', 'CATEGORY_AD', 'STORY'].includes(block.type) ? 'items-center' : 'flex-col'}`}
-            >
-                {image && (
-                    <img
-                        src={image}
-                        alt={copy.title}
-                        className={`${desktop ? 'max-h-64 min-w-0 flex-1' : 'max-h-44 w-full'} rounded-lg object-cover`}
-                    />
-                )}
-                <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                        <span className="rounded bg-blue-50 px-1.5 py-0.5 font-mono text-[9px] text-blue-700">
-                            {block.type}
-                        </span>
-                        {productAutomation && (
-                            <span className="text-[9px] text-slate-400">内容由真实业务数据自动生成</span>
-                        )}
-                    </div>
-                    <h3 className={`${desktop ? 'mt-3 text-xl' : 'mt-2 text-sm'} font-bold text-slate-900`}>
-                        {copy.title}
-                    </h3>
-                    {copy.subtitle && <p className="mt-1 text-xs text-slate-500">{copy.subtitle}</p>}
-                    {copy.body && (
-                        <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-[11px] leading-5 text-slate-600">
-                            {copy.body}
-                        </p>
-                    )}
-                    {items.length > 0 && (
-                        <div
-                            className={`mt-3 grid gap-2 ${desktop && block.type !== 'CORE_CATEGORIES' ? 'grid-cols-4' : 'grid-cols-2'}`}
-                        >
-                            {items.map((item, index) => (
-                                <div key={item.id ?? index} className="rounded-lg bg-slate-50 p-2">
-                                    <div className="truncate text-[10px] font-bold text-slate-700">
-                                        {item.translations.find(value => value.languageCode === language)
-                                            ?.label ?? ''}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
             </div>
         </article>
     );

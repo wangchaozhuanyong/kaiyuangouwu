@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 
 import { ShopApi } from '../api';
 import { storefrontVisitorId } from '../referral-attribution';
+import { storefrontPreviewParameters } from '../storefront-preview-parameters';
 import {
     createStorefrontTrafficTracker,
     shouldTrackStorefrontTraffic,
@@ -19,7 +20,7 @@ export function useStorefrontTraffic(input: {
     const tracker = useRef(createStorefrontTrafficTracker());
     const { api, channel, location, customerId, enabled } = input;
     useEffect(() => {
-        if (!enabled) return;
+        if (!enabled || storefrontPreviewParameters().get('storefrontPreviewEmbedded') === '1') return;
         const record = () => {
             if (
                 !shouldTrackStorefrontTraffic({

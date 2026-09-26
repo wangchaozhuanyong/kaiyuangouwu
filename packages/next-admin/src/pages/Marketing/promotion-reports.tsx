@@ -1,4 +1,6 @@
 import { Download } from 'lucide-react';
+import { getSystemLabel } from '../../../../common/src/display-localization';
+import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     CouponDailyMetricRecord,
@@ -304,7 +306,7 @@ export function CouponLedger({
                                         </td>
                                         <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                             <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
-                                                {ledgerLabels[item.eventType] ?? item.eventType}
+                                                {getSystemLabel(item.eventType, ledgerLabels, 'zh', 'event')}
                                             </span>
                                         </td>
                                         <td className="h-[52px] max-w-52 px-3 py-0 font-medium text-slate-900">
@@ -331,7 +333,7 @@ export function CouponLedger({
                                                 : formatMoney(item.discountAmount, currencyCode)}
                                         </td>
                                         <td className="h-[52px] whitespace-nowrap px-3 py-0 text-slate-500">
-                                            {item.actorType}
+                                            {systemFieldDisplayLabel('actorType', item.actorType)}
                                         </td>
                                         <td
                                             className="h-[52px] max-w-52 truncate px-3 py-0 text-slate-500"

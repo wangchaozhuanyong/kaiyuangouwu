@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { Boxes, CalendarClock, CircleDollarSign, PackageOpen, Plus, RefreshCw, Save, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { systemStatusDisplayLabel } from '../../../../common/src/system-display-labels';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -462,7 +463,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                                 ? '—'
                                                 : `${workspace.currencyCode} ${(lot.purchaseCostMicrounits / 1_000).toFixed(3)}`}
                                         </td>
-                                        <td className="px-3 py-3">{lot.state}</td>
+                                        <td className="px-3 py-3">{systemStatusDisplayLabel(lot.state)}</td>
                                         <td className="px-3 py-3">
                                             <button
                                                 type="button"

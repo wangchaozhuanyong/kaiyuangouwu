@@ -710,7 +710,7 @@ export function PosterEditor({
                             onChange={serviceTextZh => setDraft({ ...draft, serviceTextZh })}
                         />
                         <TextField
-                            label="English service text"
+                            label="英文服务文案"
                             value={draft.serviceTextEn}
                             onChange={serviceTextEn => setDraft({ ...draft, serviceTextEn })}
                         />

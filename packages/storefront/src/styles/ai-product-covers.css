@@ -309,10 +309,15 @@
 }
 
 .sort-bar button.is-active {
-    background: var(--accent-soft);
+    background: var(--selection);
     border-radius: var(--skin-control-radius);
-    color: var(--accent-ink);
+    color: var(--selection-foreground);
     font-weight: 700;
+}
+
+.sort-bar button.is-active:hover:not(:disabled) {
+    background: var(--selection-hover);
+    color: var(--selection-foreground);
 }
 
 .sort-bar button:disabled {
@@ -326,7 +331,7 @@
     display: grid;
     grid-template-columns: 90px minmax(0, 1fr);
     gap: 10px;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 0;
 }
 
 .load-more-button {
@@ -440,17 +445,27 @@
 }
 
 .price-presets button:hover {
-    background: var(--control-surface-hover);
-    color: var(--text);
+    background: var(--interaction-hover);
+    color: var(--interaction-ink);
     border-color: transparent;
 }
 
+.price-presets button:active {
+    background: var(--interaction-pressed);
+    color: var(--interaction-ink);
+}
+
 .price-presets button.is-active {
-    border-color: var(--text);
-    background: var(--accent-soft);
-    color: var(--accent-ink);
+    border-color: var(--selection);
+    background: var(--selection);
+    color: var(--selection-foreground);
     font-weight: 700;
     box-shadow: none;
+}
+
+.price-presets button.is-active:hover:not(:disabled) {
+    background: var(--selection-hover);
+    color: var(--selection-foreground);
 }
 
 .sheet-actions .reset-filter-button {
@@ -654,17 +669,27 @@
 }
 
 .segmented-options button:hover {
-    background: var(--control-surface-hover);
-    color: var(--text);
+    background: var(--interaction-hover);
+    color: var(--interaction-ink);
     border-color: transparent;
 }
 
+.segmented-options button:active {
+    background: var(--interaction-pressed);
+    color: var(--interaction-ink);
+}
+
 .segmented-options button.is-active {
-    border-color: var(--text);
-    background: var(--accent-soft);
-    color: var(--accent-ink);
+    border-color: var(--selection);
+    background: var(--selection);
+    color: var(--selection-foreground);
     font-weight: 700;
     box-shadow: none;
+}
+
+.segmented-options button.is-active:hover:not(:disabled) {
+    background: var(--selection-hover);
+    color: var(--selection-foreground);
 }
 
 .filter-stock-card input,
@@ -900,7 +925,7 @@
 .invalid-cart-lines > div article {
     min-height: 68px;
     padding: 9px 12px;
-    border-top: 1px solid var(--line);
+    border-top: 0;
     display: grid;
     grid-template-columns: 48px minmax(0, 1fr) auto;
     align-items: center;
@@ -1013,9 +1038,14 @@
 }
 
 .coupon-center-tabs button.is-active {
-    background: var(--accent-soft);
-    color: var(--accent-ink);
+    background: var(--selection);
+    color: var(--selection-foreground);
     font-weight: var(--font-weight-semibold);
+}
+
+.coupon-center-tabs button.is-active:hover:not(:disabled) {
+    background: var(--selection-hover);
+    color: var(--selection-foreground);
 }
 
 .coupon-center-tabs small {
@@ -1283,7 +1313,7 @@
 .coupon-center-instructions dl > div {
     min-height: 36px;
     padding: 8px 0;
-    border-bottom: 1px solid var(--line-subtle);
+    border-bottom: 0;
     display: grid;
     grid-template-columns: 72px minmax(0, 1fr);
     align-items: center;
@@ -1816,7 +1846,7 @@
 
 .product-review-list {
     margin-top: 12px;
-    border: 1px solid var(--line);
+    border: 0;
     border-radius: 8px;
     overflow: hidden;
 }

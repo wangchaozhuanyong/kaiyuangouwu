@@ -20,6 +20,11 @@ vi.mock('../../apollo', () => ({
 vi.mock('../../hooks/use-admin-permissions', () => ({
     useAdminPermissions: () => ({ hasAnyPermission: () => true }),
 }));
+vi.mock('./StorefrontDecorationPreview', () => ({
+    StorefrontDecorationPreview: (props: { presetId: string; fixedViewport: string }) => (
+        <div data-real-client-preview data-preset={props.presetId} data-viewport={props.fixedViewport} />
+    ),
+}));
 vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -98,11 +103,9 @@ describe('fixed desktop layout skin settings', () => {
             button => button.textContent === '预览效果',
         );
         act(() => previewButton!.click());
-        const iframe = host.querySelector('iframe');
-        expect(iframe?.src).toContain('storefrontPreviewPreset=classic');
-        expect(iframe?.src).toContain('storefrontPreviewEmbedded=1');
-        expect(iframe?.style.backgroundColor).toBe('rgb(241, 245, 249)');
-        expect(iframe?.srcdoc).toBe('');
+        const preview = host.querySelector('[data-real-client-preview]');
+        expect(preview?.getAttribute('data-preset')).toBe('classic');
+        expect(preview?.getAttribute('data-viewport')).toBe('mobile');
         expect(mocks.save).not.toHaveBeenCalled();
     });
 

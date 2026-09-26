@@ -73,26 +73,6 @@
     .desktop-store-layout :is(.page, .subpage) {
         animation: none;
     }
-    .desktop-store-layout .subpage-header > span:has(button) {
-        display: flex;
-        width: auto;
-        height: auto;
-        flex: none;
-    }
-    .desktop-store-layout .subpage-header > span > button {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        width: auto;
-        height: 40px;
-        padding: 0 14px;
-        white-space: nowrap;
-        color: var(--accent);
-        border: 0;
-        background: var(--control-surface);
-        border-radius: var(--skin-control-radius);
-    }
     .desktop-store-layout .legal-page > .subpage-header > span {
         margin-left: auto;
     }
@@ -113,53 +93,6 @@
     }
 
     /* Page headings, empty states and dialogs have one desktop treatment. */
-    .desktop-store-layout .page.referral-page > .subpage-header {
-        display: none;
-    }
-    .desktop-store-layout :where(.page.subpage:not(.referral-page)) > .subpage-header {
-        display: flex;
-        position: static;
-        width: 100%;
-        height: 76px;
-        min-height: 76px;
-        margin: 0 0 24px;
-        padding: 0;
-        gap: 14px;
-        border: 0;
-        border-bottom: 0;
-        background: transparent;
-        box-shadow: none;
-        color: var(--text);
-    }
-    .desktop-store-layout .subpage-header :is(h1, strong) {
-        display: block;
-        flex: 1;
-        text-align: left;
-        font-size: 24px;
-        font-weight: 500;
-        opacity: 1;
-    }
-    .desktop-store-layout .subpage-header > button {
-        position: static;
-        display: flex;
-        flex: none;
-        align-items: center;
-        justify-content: center;
-        gap: 7px;
-        width: auto;
-        min-width: 32px;
-        min-height: 36px;
-        height: auto;
-        padding: 6px;
-        background: transparent;
-        border: 0;
-        border-radius: 0;
-        color: var(--muted);
-    }
-    .desktop-store-layout .subpage-header button svg {
-        width: 20px;
-        height: 20px;
-    }
     .desktop-control-label {
         display: inline;
         color: var(--accent-ink);
@@ -216,11 +149,6 @@
         padding-bottom: 48px;
         background: transparent;
     }
-    .desktop-store-layout .page.subpage:has(> .ai-studio-workflow) > .subpage-header {
-        height: 52px;
-        min-height: 52px;
-        margin-bottom: 16px;
-    }
     .desktop-store-layout .ai-studio-shell.ai-studio-workflow {
         padding: 0;
         background: transparent;
@@ -243,8 +171,12 @@
         border-radius: calc(var(--skin-control-radius) - 2px);
     }
     .desktop-store-layout .ai-studio-view-tabs button[aria-selected='true'] {
-        color: var(--accent-ink);
-        background: var(--accent-soft);
+        color: var(--selection-foreground);
+        background: var(--selection);
+    }
+    .desktop-store-layout .ai-studio-view-tabs button[aria-selected='true']:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-store-layout .ai-studio-view-tabs button[aria-selected='true']::after {
         content: none;
@@ -336,9 +268,7 @@
         height: 17px;
     }
     .desktop-store-layout .desktop-product-toolbar-divider {
-        width: 1px;
-        height: 14px;
-        background: var(--skin-divider);
+        display: none;
     }
     .desktop-store-layout .desktop-product-toolbar-current {
         overflow: hidden;
@@ -433,12 +363,21 @@
         transition: background-color 140ms ease;
     }
     .desktop-product-buying .detail-options button:hover {
-        background: var(--control-surface-hover);
+        background: var(--interaction-hover);
+        color: var(--interaction-ink);
+    }
+    .desktop-product-buying .detail-options button:active {
+        background: var(--interaction-pressed);
+        color: var(--interaction-ink);
     }
     .desktop-product-buying .detail-options button.is-active {
-        color: var(--accent-ink);
-        background: var(--accent-soft);
-        box-shadow: inset 0 0 0 1px var(--accent);
+        color: var(--selection-foreground);
+        background: var(--selection);
+        box-shadow: none;
+    }
+    .desktop-product-buying .detail-options button.is-active:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-product-buying .detail-quantity {
         box-shadow: none;
@@ -1070,33 +1009,6 @@
         margin-inline: 0;
     }
 
-    /* The desktop account rail already names and marks the active destination.
-       Repeating that label in the content pane wastes a full row. Keep only
-       real page actions; phones still retain the shared back/title header. */
-    .desktop-account-layout .page.subpage > .subpage-header {
-        height: auto;
-        min-height: 0;
-        margin: 0 0 16px;
-        justify-content: flex-end;
-    }
-    .desktop-account-layout .page.subpage > .subpage-header:not(:has(> span > *)) {
-        display: none;
-    }
-    .desktop-account-layout .subpage-header .account-mobile-header-action {
-        display: none;
-    }
-    .desktop-account-layout .subpage-header > :is(button:first-child, strong) {
-        display: none;
-    }
-    .desktop-account-layout .subpage-header > span {
-        margin-left: auto;
-    }
-    .desktop-account-layout .subpage-header > span:empty {
-        display: none;
-    }
-    .desktop-account-layout .subpage-header > button:last-child:not(:first-child) {
-        color: var(--accent);
-    }
     .desktop-account-layout :is(.favorites-page, .history-page) .product-section {
         margin: 0;
         padding: 0;
@@ -1128,12 +1040,21 @@
         color: var(--text);
     }
     .history-periods button:hover {
-        background: var(--control-surface-hover);
+        background: var(--interaction-hover);
+        color: var(--interaction-ink);
+    }
+    .history-periods button:active {
+        background: var(--interaction-pressed);
+        color: var(--interaction-ink);
     }
     .history-periods button[aria-pressed='true'] {
-        background: var(--accent-soft);
-        color: var(--accent-ink);
+        background: var(--selection);
+        color: var(--selection-foreground);
         font-weight: var(--font-weight-semibold);
+    }
+    .history-periods button[aria-pressed='true']:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-account-workbench-toolbar > div {
         min-width: 0;
@@ -1244,9 +1165,13 @@
         border-bottom: 0;
     }
     .desktop-store-layout .address-type-tabs button.is-active {
-        color: var(--accent-ink);
-        background: var(--accent-soft);
+        color: var(--selection-foreground);
+        background: var(--selection);
         border-bottom: 0;
+    }
+    .desktop-store-layout .address-type-tabs button.is-active:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-store-layout .address-workbench-toolbar {
         min-height: 64px;
@@ -1262,12 +1187,6 @@
     }
     .desktop-store-layout .address-workbench-toolbar > .desktop-address-add {
         margin-left: auto;
-    }
-    .desktop-store-layout
-        .desktop-account-layout
-        .addresses-page:has(.address-workbench-toolbar)
-        > .subpage-header {
-        display: none;
     }
     .desktop-store-layout .address-form {
         display: grid;
@@ -1309,7 +1228,7 @@
     }
     .desktop-store-layout .security-card-list {
         display: grid;
-        gap: 0;
+        gap: 8px;
         border: 0;
         box-shadow: none;
         background: transparent;
@@ -1325,7 +1244,7 @@
         .security-card-list
         > :is(.security-item-btn, .security-item-static)
         + :is(.security-item-btn, .security-item-static) {
-        border-top: 1px solid var(--line-subtle);
+        border-top: 0;
     }
     .desktop-store-layout .security-action-group {
         grid-column: 1 / -1;
@@ -1381,8 +1300,12 @@
     }
     .desktop-store-layout .coupon-center-tabs .is-active {
         border-bottom: 0;
-        background: var(--accent-soft);
-        color: var(--accent-ink);
+        background: var(--selection);
+        color: var(--selection-foreground);
+    }
+    .desktop-store-layout .coupon-center-tabs .is-active:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-store-layout .coupon-center-panel {
         margin: 0;
@@ -1500,7 +1423,7 @@
         min-height: 102px;
         padding: 18px 4px;
         border-radius: 0;
-        border-bottom: 1px solid var(--line-subtle);
+        border-bottom: 0;
         background: transparent;
         box-shadow: none;
     }
@@ -1531,9 +1454,13 @@
         cursor: pointer;
     }
     .desktop-store-layout .review-center-toolbar button[aria-selected='true'] {
-        background: var(--accent-soft);
-        color: var(--accent-ink);
+        background: var(--selection);
+        color: var(--selection-foreground);
         font-weight: 700;
+    }
+    .desktop-store-layout .review-center-toolbar button[aria-selected='true']:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .desktop-store-layout .review-center-section[hidden] {
         display: none;
@@ -1584,9 +1511,6 @@
         min-width: 0;
         gap: 20px;
     }
-    .desktop-store-layout .order-detail-page > .subpage-header {
-        margin: 0;
-    }
     .desktop-store-layout .order-status {
         padding: 24px;
         margin: 0;
@@ -1618,6 +1542,10 @@
         width: 100%;
         height: 100%;
         object-fit: contain;
+    }
+    .desktop-store-layout .order-detail-products article > div strong {
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
     .desktop-order-purchase-row {
         display: grid;
@@ -1910,14 +1838,14 @@
         width: 100%;
         margin: 0;
         padding: 14px;
-        border: 1px solid var(--line);
+        border: 0;
         border-radius: var(--skin-card-radius);
         background: var(--surface, var(--paper));
         box-shadow: var(--skin-card-shadow);
     }
     .desktop-store-layout .legal-document-navigation h2 {
         padding: 0 0 12px;
-        border-bottom: 1px solid var(--line);
+        border-bottom: 0;
     }
     .desktop-store-layout .legal-document-navigation nav {
         grid-template-columns: 1fr;
@@ -1928,11 +1856,17 @@
         background: transparent;
     }
     .desktop-store-layout .legal-document-navigation button:hover {
-        background: var(--control-surface-hover);
+        background: var(--interaction-hover);
+        color: var(--interaction-ink);
+    }
+    .desktop-store-layout .legal-document-navigation button:active {
+        background: var(--interaction-pressed);
+        color: var(--interaction-ink);
     }
     .desktop-store-layout .legal-document-navigation button.is-active,
     .desktop-store-layout .legal-document-navigation button.is-active:hover {
-        background: var(--accent-soft);
+        background: var(--selection);
+        color: var(--selection-foreground);
     }
     .desktop-store-layout .legal-managed-content {
         width: 100%;

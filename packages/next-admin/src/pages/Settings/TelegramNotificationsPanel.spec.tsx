@@ -178,8 +178,9 @@ describe('TelegramNotificationsPanel', () => {
 
         expect(html).toContain('Telegram 连接与策略');
         expect(html).toContain('12 成功 · 1 失败');
-        expect(html).toContain('system.database.down');
-        expect(html).toContain('GOVERNANCE · GOVERNANCE 部门');
+        expect(html).toContain('数据库连接失败');
+        expect(html).toContain('GOVERNANCE 部门');
+        expect(html).not.toContain('>GOVERNANCE<');
         expect(html).toContain('配置变更审计');
         expect(html).toContain('事故响应与闭环');
         expect(html).toContain('确认接手');
@@ -190,8 +191,8 @@ describe('TelegramNotificationsPanel', () => {
     it('keeps P0 escalation and action controls locked', () => {
         const html = renderPanel();
 
-        expect(html).toMatch(/aria-label="system\.database\.down 升级部门"[^>]*disabled/u);
-        expect(html).toMatch(/aria-label="system\.database\.down 需要处理"[^>]*disabled/u);
+        expect(html).toMatch(/aria-label="数据库连接失败 升级部门"[^>]*disabled/u);
+        expect(html).toMatch(/aria-label="数据库连接失败 需要处理"[^>]*disabled/u);
     });
 });
 

@@ -12,6 +12,13 @@ import {
     X,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import { getSystemLabel, serviceMessageDisplay } from '../../../../common/src/display-localization';
+import {
+    departmentDisplayLabel,
+    eventTypeDisplayLabel,
+    severityDisplayLabel,
+    systemStatusDisplayLabel,
+} from '../../../../common/src/system-display-labels';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 
@@ -286,13 +293,13 @@ export function TelegramNotificationsPanel() {
                     tone={config.enabled ? 'green' : 'slate'}
                 />
                 <Metric
-                    label="Bot Token"
+                    label="机器人令牌"
                     value={config.tokenConfigured ? '已配置' : '未配置'}
                     detail="仅从服务端环境变量读取"
                     tone={config.tokenConfigured ? 'green' : 'rose'}
                 />
                 <Metric
-                    label="Worker"
+                    label="后台任务"
                     value={runtime.running ? '运行中' : '未检测到'}
                     detail={runtime.processed + ' 成功 · ' + runtime.failures + ' 失败'}
                     tone={runtime.running ? 'green' : 'amber'}
@@ -361,7 +368,7 @@ export function TelegramNotificationsPanel() {
                         checked={draft.enabled}
                         onChange={enabled => setDraft({ ...draft, enabled })}
                     />
-                    <Field label="Chat ID" hint={'来源：' + sourceLabel(config.chatIdSource)}>
+                    <Field label="群聊编号" hint={'来源：' + sourceLabel(config.chatIdSource)}>
                         <input
                             value={draft.chatId ?? ''}
                             onChange={event => setDraft({ ...draft, chatId: event.target.value || null })}
@@ -472,10 +479,10 @@ export function TelegramNotificationsPanel() {
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                         <strong className="text-slate-800">连接状态</strong>
                         <span className={config.tokenConfigured ? badgeGreen : badgeRose}>
-                            Token {config.tokenConfigured ? '已配置' : '未配置'}
+                            机器人令牌 {config.tokenConfigured ? '已配置' : '未配置'}
                         </span>
                         <span className={config.chatId ? badgeGreen : badgeRose}>
-                            Chat ID {config.chatId ? '已配置' : '未配置'}
+                            群聊编号 {config.chatId ? '已配置' : '未配置'}
                         </span>
                         {config.botUsername && <span className={badgeBlue}>@{config.botUsername}</span>}
                         {config.lastConnectionAt && (
@@ -546,7 +553,7 @@ export function TelegramNotificationsPanel() {
                 </div>
                 <div className="grid gap-3 border-b border-slate-100 p-4 sm:grid-cols-2 xl:grid-cols-4">
                     {routing.departments.map(department => (
-                        <Field key={department.code} label={department.code + ' · ' + department.nameZh}>
+                        <Field key={department.nameZh} label={department.nameZh}>
                             <input
                                 value={draft.departmentMentions[department.code] ?? ''}
                                 onChange={event =>
@@ -574,7 +581,7 @@ export function TelegramNotificationsPanel() {
                                 <th className="px-4 py-3">协作</th>
                                 <th className="px-4 py-3">升级</th>
                                 <th className="px-4 py-3">需处理</th>
-                                <th className="px-4 py-3">SLA</th>
+                                <th className="px-4 py-3">处理时限</th>
                                 <th className="px-4 py-3">处理建议</th>
                                 <th className="px-4 py-3 text-right">路由操作</th>
                             </tr>
@@ -599,18 +606,23 @@ export function TelegramNotificationsPanel() {
                                 const actionRequired =
                                     override?.actionRequired ?? route.defaultActionRequired;
                                 return (
-                                    <tr key={route.eventType} className="hover:bg-slate-50">
+                                    <tr
+                                        key={eventTypeDisplayLabel(route.eventType)}
+                                        className="hover:bg-slate-50"
+                                    >
                                         <td className="px-4 py-3 font-mono text-[10px] text-slate-700">
-                                            {route.eventType}
+                                            {eventTypeDisplayLabel(route.eventType)}
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className={severityBadge(route.severity)}>
-                                                {route.severity}
+                                                {severityDisplayLabel(route.severity)}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3">
                                             <select
-                                                aria-label={route.eventType + ' 主责部门'}
+                                                aria-label={
+                                                    eventTypeDisplayLabel(route.eventType) + ' 主责部门'
+                                                }
                                                 value={owner}
                                                 onChange={event =>
                                                     updateRouteOverride(route.eventType, {
@@ -620,8 +632,8 @@ export function TelegramNotificationsPanel() {
                                                 className={compactInputClass}
                                             >
                                                 {routing.departments.map(department => (
-                                                    <option key={department.code} value={department.code}>
-                                                        {department.code}
+                                                    <option key={department.nameZh} value={department.nameZh}>
+                                                        {department.nameZh}
                                                     </option>
                                                 ))}
                                             </select>
@@ -629,7 +641,9 @@ export function TelegramNotificationsPanel() {
                                         <td className="px-4 py-3">
                                             <select
                                                 multiple
-                                                aria-label={route.eventType + ' 协作部门'}
+                                                aria-label={
+                                                    eventTypeDisplayLabel(route.eventType) + ' 协作部门'
+                                                }
                                                 value={collaborators}
                                                 onChange={event =>
                                                     updateRouteOverride(route.eventType, {
@@ -644,15 +658,20 @@ export function TelegramNotificationsPanel() {
                                                 {routing.departments
                                                     .filter(department => department.code !== owner)
                                                     .map(department => (
-                                                        <option key={department.code} value={department.code}>
-                                                            {department.code}
+                                                        <option
+                                                            key={department.nameZh}
+                                                            value={department.nameZh}
+                                                        >
+                                                            {department.nameZh}
                                                         </option>
                                                     ))}
                                             </select>
                                         </td>
                                         <td className="px-4 py-3">
                                             <select
-                                                aria-label={route.eventType + ' 升级部门'}
+                                                aria-label={
+                                                    eventTypeDisplayLabel(route.eventType) + ' 升级部门'
+                                                }
                                                 value={escalation ?? ''}
                                                 disabled={route.severity === 'P0'}
                                                 onChange={event =>
@@ -664,15 +683,17 @@ export function TelegramNotificationsPanel() {
                                             >
                                                 <option value="">不升级</option>
                                                 {routing.departments.map(department => (
-                                                    <option key={department.code} value={department.code}>
-                                                        {department.code}
+                                                    <option key={department.nameZh} value={department.nameZh}>
+                                                        {department.nameZh}
                                                     </option>
                                                 ))}
                                             </select>
                                         </td>
                                         <td className="px-4 py-3">
                                             <input
-                                                aria-label={route.eventType + ' 需要处理'}
+                                                aria-label={
+                                                    eventTypeDisplayLabel(route.eventType) + ' 需要处理'
+                                                }
                                                 type="checkbox"
                                                 checked={actionRequired}
                                                 disabled={route.severity === 'P0' || route.severity === 'P1'}
@@ -685,7 +706,10 @@ export function TelegramNotificationsPanel() {
                                         </td>
                                         <td className="px-4 py-3">
                                             <input
-                                                aria-label={route.eventType + ' SLA 分钟'}
+                                                aria-label={
+                                                    eventTypeDisplayLabel(route.eventType) +
+                                                    ' 处理时限（分钟）'
+                                                }
                                                 type="number"
                                                 min={route.severity === 'P0' ? 0 : 1}
                                                 disabled={route.severity === 'P0'}
@@ -747,20 +771,21 @@ export function TelegramNotificationsPanel() {
                                 <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
                                         <span className={severityBadge(incident.severity)}>
-                                            {incident.severity}
+                                            {severityDisplayLabel(incident.severity)}
                                         </span>
                                         <span className={incidentStatusBadge(incident.incidentStatus)}>
                                             {incidentStatusLabel(incident.incidentStatus)}
                                         </span>
                                         <span className="text-[10px] font-bold text-slate-500">
-                                            {incident.ownerDepartmentCode}
+                                            {departmentDisplayLabel(incident.ownerDepartmentCode)}
                                         </span>
                                     </div>
                                     <h3 className="mt-2 text-sm font-bold text-slate-900">
                                         {incident.title}
                                     </h3>
                                     <p className="mt-1 font-mono text-[10px] text-slate-400">
-                                        {incident.eventType} · 发生 {incident.occurrenceCount} 次 · 最近{' '}
+                                        {eventTypeDisplayLabel(incident.eventType)} · 发生{' '}
+                                        {incident.occurrenceCount} 次 · 最近{' '}
                                         {formatDateTime(incident.lastOccurredAt)}
                                     </p>
                                     {incident.rootCause && (
@@ -826,8 +851,9 @@ export function TelegramNotificationsPanel() {
                                             <div>
                                                 <strong className="text-slate-800">{action.title}</strong>
                                                 <p className="mt-1 text-[10px] text-slate-500">
-                                                    {action.ownerDepartmentCode} · 截止{' '}
-                                                    {formatDateTime(action.dueAt)} · {action.status}
+                                                    {departmentDisplayLabel(action.ownerDepartmentCode)} ·
+                                                    截止 {formatDateTime(action.dueAt)} ·{' '}
+                                                    {systemStatusDisplayLabel(action.status)}
                                                 </p>
                                             </div>
                                             {action.status === 'OPEN' && (
@@ -908,28 +934,31 @@ export function TelegramNotificationsPanel() {
                                             {delivery.title}
                                         </strong>
                                         <code className="mt-1 block truncate text-[9px] text-slate-400">
-                                            {delivery.eventType}
+                                            {eventTypeDisplayLabel(delivery.eventType)}
                                         </code>
                                     </td>
                                     <td className="px-4 py-3">
                                         <span className={severityBadge(delivery.severity)}>
-                                            {delivery.severity}
+                                            {severityDisplayLabel(delivery.severity)}
                                         </span>
                                     </td>
                                     <td className="px-4 py-3 font-bold text-slate-700">
-                                        {delivery.ownerDepartmentCode}
+                                        {departmentDisplayLabel(delivery.ownerDepartmentCode)}
                                     </td>
                                     <td className="px-4 py-3">
                                         <span className={statusBadge(delivery.deliveryStatus)}>
-                                            {delivery.deliveryStatus}
+                                            {systemStatusDisplayLabel(delivery.deliveryStatus)}
                                         </span>
                                     </td>
                                     <td className="px-4 py-3 text-slate-600">
                                         {delivery.attempts}/{delivery.maxAttempts}
                                     </td>
                                     <td className="max-w-72 px-4 py-3 text-[10px] text-rose-700">
-                                        <span className="block truncate" title={delivery.lastError ?? ''}>
-                                            {delivery.lastError ?? '—'}
+                                        <span
+                                            className="block truncate"
+                                            title={serviceMessageDisplay(delivery.lastError, 'zh') ?? ''}
+                                        >
+                                            {serviceMessageDisplay(delivery.lastError, 'zh') ?? '—'}
                                         </span>
                                     </td>
                                     <td className="px-4 py-3 text-right">
@@ -1050,8 +1079,11 @@ export function TelegramNotificationsPanel() {
                                                     className={inputClass}
                                                 >
                                                     {routing.departments.map(department => (
-                                                        <option key={department.code} value={department.code}>
-                                                            {department.code} · {department.nameZh}
+                                                        <option
+                                                            key={department.nameZh}
+                                                            value={department.nameZh}
+                                                        >
+                                                            {department.nameZh}
                                                         </option>
                                                     ))}
                                                 </select>
@@ -1140,7 +1172,8 @@ function draftFromConfig(config: TelegramNotificationConfigRecord): Draft {
 }
 
 function incidentStatusLabel(status: string): string {
-    return (
+    return getSystemLabel(
+        status,
         {
             OPEN: '待确认',
             ACKNOWLEDGED: '处理中',
@@ -1148,7 +1181,9 @@ function incidentStatusLabel(status: string): string {
             REVIEW_PENDING: '待复盘',
             ACTION_PENDING: '整改中',
             CLOSED: '已闭环',
-        }[status] ?? status
+        },
+        'zh',
+        'status',
     );
 }
 

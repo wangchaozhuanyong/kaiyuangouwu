@@ -55,7 +55,7 @@ export interface BottomNavigationItem {
     activeColor: string;
 }
 
-const activeColors = Array.from({ length: 5 }, () => 'var(--accent-ink)');
+const activeColors = Array.from({ length: 5 }, () => 'var(--interaction-ink)');
 
 const targetIcons: Record<
     NavigationTargetPath,
@@ -177,7 +177,7 @@ export function BottomNavigation({
 
     return (
         <nav
-            className="storefront-bottom-nav fixed bottom-0 left-1/2 z-40 grid h-[calc(var(--bottom-navigation-height)+env(safe-area-inset-bottom,0px))] w-full max-w-[430px] border-t border-[var(--line)] bg-[color-mix(in_srgb,var(--paper)_96%,transparent)] px-2 pb-[calc(8px+env(safe-area-inset-bottom,0px))] pt-1.5 shadow-[var(--shadow-sm)] backdrop-blur-md lg:top-0 lg:bottom-auto lg:h-[72px] lg:max-w-[560px] lg:border-t-0 lg:bg-transparent lg:shadow-none lg:backdrop-blur-none"
+            className="storefront-bottom-nav fixed bottom-0 left-1/2 z-40 grid h-[calc(var(--bottom-navigation-height)+env(safe-area-inset-bottom,0px))] w-full max-w-[430px] border-0 bg-[color-mix(in_srgb,var(--paper)_96%,transparent)] px-2 pb-[calc(8px+env(safe-area-inset-bottom,0px))] pt-1.5 shadow-[var(--shadow-sm)] backdrop-blur-md lg:top-0 lg:bottom-auto lg:h-[72px] lg:max-w-[560px] lg:border-t-0 lg:bg-transparent lg:shadow-none lg:backdrop-blur-none"
             style={{ gridTemplateColumns: 'repeat(' + items.length + ', minmax(0, 1fr))' }}
             aria-label={isZh ? '主导航' : 'Main navigation'}
         >
@@ -192,8 +192,8 @@ export function BottomNavigation({
                     <a
                         key={item.key}
                         className={cn(
-                            'flex w-[56px] min-w-[56px] flex-col items-center justify-center justify-self-center rounded-xl border-0 bg-transparent p-0.5 text-[var(--muted)] transition-transform active:scale-95 lg:w-[96px] lg:min-w-[96px] lg:gap-[3px] lg:hover:bg-slate-100 lg:hover:text-slate-900',
-                            isActive && 'font-bold text-[var(--text)] lg:hover:bg-transparent',
+                            'flex w-[56px] min-w-[56px] flex-col items-center justify-center justify-self-center rounded-xl border-0 bg-transparent p-0.5 text-[var(--muted)] transition-colors active:bg-[var(--interaction-pressed)] motion-safe:active:scale-95 lg:w-[96px] lg:min-w-[96px] lg:gap-[3px] hover:bg-[var(--interaction-hover)] hover:text-[var(--interaction-ink)]',
+                            isActive && 'font-bold text-[var(--interaction-ink)]',
                         )}
                         aria-current={isActive ? 'page' : undefined}
                         aria-label={item.label}
@@ -216,12 +216,17 @@ export function BottomNavigation({
                         onMouseEnter={preloadTarget}
                         onTouchStart={preloadTarget}
                     >
-                        <span className="relative flex h-[24px] w-[26px] items-center justify-center">
+                        <span
+                            className={cn(
+                                'relative flex h-[30px] w-[42px] items-center justify-center rounded-lg',
+                                isActive && 'bg-[var(--interaction-hover)]',
+                            )}
+                        >
                             {item.iconUrl ? (
                                 <SafeImage
                                     className={cn(
-                                        'size-6 object-contain transition-transform duration-200',
-                                        isActive && 'scale-[1.15] drop-shadow-sm',
+                                        'size-6 object-contain motion-safe:transition-transform duration-200',
+                                        isActive && 'motion-safe:scale-[1.08]',
                                     )}
                                     src={item.iconUrl}
                                     alt=""
@@ -229,8 +234,8 @@ export function BottomNavigation({
                             ) : (
                                 <Icon
                                     className={cn(
-                                        'size-6 transition-transform duration-200',
-                                        isActive && 'scale-[1.15] drop-shadow-sm',
+                                        'size-6 motion-safe:transition-transform duration-200',
+                                        isActive && 'motion-safe:scale-[1.08]',
                                     )}
                                     style={{ color: isActive ? item.activeColor : 'var(--muted)' }}
                                 />

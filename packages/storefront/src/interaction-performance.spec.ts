@@ -38,7 +38,9 @@ describe('shared interaction performance contract', () => {
     });
 
     it('keeps layout, focus and motion foundations independent from skin expression', () => {
-        const source = readFileSync(path.join(__dirname, 'styles.css'), 'utf8');
+        const entry = readFileSync(path.join(__dirname, 'styles.css'), 'utf8');
+        expect(entry).toContain("@import './styles/experience-foundations.css'");
+        const source = readFileSync(path.join(stylesDirectory, 'experience-foundations.css'), 'utf8');
 
         for (const token of [
             '--experience-content-max',

@@ -64,6 +64,45 @@ describe('next-admin extension registry', () => {
         expect(getNextAdminDashboardAlerts().map(item => item.id)).toEqual(['early-alert', 'late-alert']);
     });
 
+    it('uses translated registration metadata and prevents future English-only extensions from leaking', () => {
+        defineNextAdminExtension({
+            id: 'future-extension',
+            routes: [
+                {
+                    id: 'future',
+                    path: '/plugins/future',
+                    title: 'Future plugin',
+                    component: Component,
+                    navItem: { label: 'Future plugin', sectionId: 'plugins' },
+                },
+            ],
+            dashboardWidgets: [
+                {
+                    id: 'future-widget',
+                    title: 'Future widget',
+                    description: 'English only',
+                    component: Component,
+                },
+            ],
+        });
+        expect(getNextAdminExtensionRoute('/plugins/future')?.title).toBe('扩展功能');
+        expect(getNextAdminExtensionRoute('/plugins/future')?.navItem?.label).toBe('扩展功能');
+        expect(getNextAdminDashboardWidgets()[0].description).toBeUndefined();
+        defineNextAdminExtension({
+            id: 'localized',
+            routes: [
+                {
+                    id: 'localized',
+                    path: '/plugins/localized',
+                    title: 'English title',
+                    titleTranslations: { zh_Hans: '中文扩展' },
+                    component: Component,
+                },
+            ],
+        });
+        expect(getNextAdminExtensionRoute('/plugins/localized')?.title).toBe('中文扩展');
+    });
+
     it('rejects duplicate extension ids and route paths', () => {
         defineNextAdminExtension({
             id: 'example',

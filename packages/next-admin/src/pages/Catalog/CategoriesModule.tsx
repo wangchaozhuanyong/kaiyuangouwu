@@ -68,6 +68,7 @@ import {
     configurableOperationLabel,
     serializeConfigurableListValue,
 } from '../../utils/configurable-operation-localization';
+import { getLocalizedEntityTranslation } from '../../utils/localized-entity-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { CategoryImageField, type CategoryImageAsset } from './CategoryImageField';
 import { OptionGroupProductsDialog } from './OptionGroupProductsDialog';
@@ -146,11 +147,10 @@ const SOURCE_LANGUAGE_CODE = 'zh_Hans';
 const OPTION_GROUP_PAGE_SIZE = 20;
 
 const getSourceTranslation = (item: { translations: TranslationItem[] }) =>
-    item.translations.find(translation => translation.languageCode === SOURCE_LANGUAGE_CODE) ??
-    item.translations[0];
+    getLocalizedEntityTranslation(item.translations, SOURCE_LANGUAGE_CODE);
 
 const getSourceName = (item: { name: string; translations: TranslationItem[] }) =>
-    getSourceTranslation(item)?.name || item.name;
+    getSourceTranslation(item)?.name ?? '';
 
 const splitValues = (value: string) =>
     value
@@ -647,10 +647,7 @@ export function CategoriesModule() {
                                         languageCode,
                                         name,
                                         slug: code,
-                                        description:
-                                            getSourceTranslation(editingItem)?.description ||
-                                            editingItem.description ||
-                                            '',
+                                        description: getSourceTranslation(editingItem)?.description ?? '',
                                         customFields: localizedCustomFieldInputFromValues(
                                             collectionCustomFields,
                                             customFieldValues,
@@ -1711,7 +1708,7 @@ function CollectionFiltersEditor({
                                         onChange(values.filter((_, index) => index !== operationIndex))
                                     }
                                     className="text-rose-600"
-                                    aria-label={`删除筛选规则 ${operation.code}`}
+                                    aria-label={`删除筛选规则 ${configurableOperationLabel(definitions.find(item => item.code === operation.code) ?? { code: operation.code, description: '', args: [] })}`}
                                 >
                                     <Trash2 className="h-4 w-4" />
                                 </button>

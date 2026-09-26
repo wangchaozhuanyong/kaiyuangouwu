@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
+import { storefrontClientPluginCatalog } from '../../../storefront-content-plugin/src/client-plugin-manifest';
+import { fixtureData } from '../../../storefront/e2e/visual-presets/fixtures.mjs';
 import type { ShopApi } from '../../../storefront/src/api';
 import { useStorefrontPublicData } from '../../../storefront/src/hooks/useStorefrontPublicData';
 import { HomeDualCategoryShowcase } from '../../../storefront/src/storefront-ui/content-ui';
@@ -11,10 +13,12 @@ import type { StorefrontContentBlock as ClientBlock } from '../../../storefront/
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
 import { AdminPermissionsProvider } from '../../src/components/admin-permissions-context';
 import '../../src/index.css';
+import { ClientPluginsModule } from '../../src/pages/Plugins/ClientPluginsModule';
 import { BusinessServicesCopyModule } from '../../src/pages/Storefront/BusinessServicesCopyModule';
 import { StorefrontContentModule } from '../../src/pages/Storefront/StorefrontContentModule';
 import { StorefrontModule } from '../../src/pages/Storefront/StorefrontModule';
 import { newContentBlock } from '../../src/pages/Storefront/storefront-content-utils';
+import { decorationDraft } from '../../src/pages/Storefront/storefront-decoration-model';
 import { contentPublicationStatus } from '../../src/pages/Storefront/storefront-publication';
 
 // Isolated browser fixture. No HTTP link, account, or store data is used.
@@ -58,6 +62,44 @@ let blocks = params.has('empty')
           imageAsset: type === 'HERO' ? asset : null,
           imageUrl: type === 'HERO' ? asset.preview : null,
       }));
+if (params.has('plugins')) {
+    const pluginBlock = newContentBlock('CLIENT_PLUGINS', 10_001, '客户端插件配置');
+    blocks.push({
+        ...pluginBlock,
+        __typename: 'StorefrontContentBlock',
+        id: 'client-plugins',
+        code: 'storefront-client-plugins',
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-09-01T00:00:00Z',
+        enabled: true,
+        imageAsset: null,
+        imageUrl: null,
+        items: storefrontClientPluginCatalog.map((definition, index) => ({
+            id: definition.code,
+            enabled: true,
+            position: index,
+            imageUrl: null,
+            targetType: 'NONE',
+            translations: [],
+            settings: {
+                pluginCode: definition.code,
+                placement: definition.defaultPlacement,
+                categoryScope: 'ALL',
+                categoryIds: [],
+                includeChildren: true,
+            },
+        })),
+    });
+    if (params.has('unknown-plugin'))
+        blocks[blocks.length - 1].items.push({
+            ...blocks[blocks.length - 1].items[0],
+            id: 'future-plugin',
+            settings: {
+                ...blocks[blocks.length - 1].items[0].settings,
+                pluginCode: 'future-english-internal-plugin-key',
+            },
+        });
+}
 if (params.has('services')) {
     blocks.push({
         ...newContentBlock('CLIENT_PLUGINS', 10_001, '客户端插件配置'),
@@ -276,6 +318,31 @@ const channel = params.has('platform-channel')
           customFields: null,
       }
     : storeChannel;
+// Public Shop responses for the isolated parity exercise. No real store is contacted.
+if (params.has('parity')) {
+    asset.preview = '/assets/fixture-carousel.svg';
+    replacementAsset.preview = '/assets/replacement-carousel.svg';
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+        const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+        if (url.pathname === '/shop-api') {
+            const data = fixtureData(params.get('preset') ?? 'classic', false);
+            data.activeChannel = { ...data.activeChannel, id: channel.id, code: channel.code };
+            data.storefrontVisualPreset.channelId = channel.id;
+            data.storefrontContent = blocks
+                .map(block =>
+                    decorationDraft(block, url.searchParams.get('languageCode') === 'en' ? 'en' : 'zh_Hans'),
+                )
+                .filter(draft => draft.visible)
+                .map(draft => draft.block);
+            return new Response(JSON.stringify({ data }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            });
+        }
+        return nativeFetch(input, init);
+    };
+}
 const otherChannel = {
     __typename: 'Channel',
     id: 'other-fixture',
@@ -296,13 +363,33 @@ const client = new ApolloClient({
                         const mutation = /Create|Update|Delete|Reorder/.test(name);
                         if (mutation && faults.write) throw new Error('模拟保存失败，请重试');
                         let data: Record<string, unknown>;
-                        if (name === 'NextAdminStorefrontContent') {
+                        if (name === 'NextAdminStorefrontPluginCollections') {
+                            data = {
+                                collections: { items: [], totalItems: 0 },
+                                selectedCollections: { items: [], totalItems: 0 },
+                            };
+                        } else if (name === 'NextAdminStorefrontContent') {
                             if (faults.read) throw new Error('模拟内容读取失败');
                             data = {
                                 activeChannel: channel,
                                 storefrontContentSettings: settings(),
                                 storefrontContentBlocks: blocks,
+                                storefrontAuthConfiguration: {
+                                    emailPasswordEnabled: true,
+                                    emailAutoRegistrationEnabled: false,
+                                    emailQuickRegistrationEnabled: false,
+                                    googleOverrideEnabled: false,
+                                    storeGoogleEnabled: false,
+                                    storeGoogleClientId: null,
+                                    platformGoogleEnabled: false,
+                                    platformGoogleClientId: null,
+                                    effectiveGoogleEnabled: false,
+                                    effectiveGoogleClientId: null,
+                                    googleConfigurationSource: 'DISABLED',
+                                },
                             };
+                        } else if (name === 'NextAdminStorefrontPreviewUrl') {
+                            data = { activeChannel: channel, storeProfiles: [] };
                         } else if (name === 'NextAdminStorefrontVisualPreset') {
                             data = {
                                 activeChannel: channel,
@@ -436,6 +523,30 @@ const client = new ApolloClient({
                                     next,
                             };
                         } else throw new Error(`Unexpected fixture operation: ${name}`);
+                        const normalizeBlock = (block: (typeof blocks)[number]) => ({
+                            ...block,
+                            ...block.translations[0],
+                            id: block.id,
+                            translations: block.translations.map((translation, index) => ({
+                                ...translation,
+                                id: translation.id ?? `translation-${block.id}-${index}`,
+                            })),
+                            items: block.items.map((item, index) => ({
+                                ...item,
+                                ...item.translations[0],
+                                id: item.id ?? `item-${block.id}-${index}`,
+                                translations: item.translations.map((translation, languageIndex) => ({
+                                    ...translation,
+                                    id: translation.id ?? `item-translation-${index}-${languageIndex}`,
+                                })),
+                            })),
+                        });
+                        for (const key of ['storefrontContentBlocks', 'reorderStorefrontContentBlocks']) {
+                            if (Array.isArray(data[key])) data[key] = data[key].map(normalizeBlock);
+                        }
+                        for (const key of ['updateStorefrontContentBlock', 'createStorefrontContentBlock']) {
+                            if (data[key]) data[key] = normalizeBlock(data[key] as (typeof blocks)[number]);
+                        }
                         observer.next({ data: structuredClone(data) });
                         observer.complete();
                     } catch (error) {
@@ -476,7 +587,9 @@ createRoot(document.getElementById('root')!).render(
                         }
                     >
                         <div style={{ height: 'calc(100dvh - 32px)' }}>
-                            {params.has('services') ? (
+                            {params.has('plugins') ? (
+                                <ClientPluginsModule />
+                            ) : params.has('services') ? (
                                 <BusinessServicesCopyModule />
                             ) : params.has('support') || params.has('announcements') ? (
                                 <StorefrontContentModule />

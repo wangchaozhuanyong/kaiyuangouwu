@@ -42,6 +42,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { getClientPluginDisplay } from '../shared/client-plugin-display';
+
 import {
     CLIENT_PLUGIN_BLOCK_CODE,
     ClientPluginCategoryRule,
@@ -277,12 +279,8 @@ function StorefrontClientPluginPage() {
                                     <InstalledPluginEditor
                                         key={item.id ?? code ?? `client-plugin-${index}`}
                                         code={code}
-                                        name={definition?.name ?? item.label ?? code}
-                                        description={
-                                            definition?.description ??
-                                            item.description ??
-                                            '当前版本未登记的插件'
-                                        }
+                                        name={getClientPluginDisplay(code).name}
+                                        description={getClientPluginDisplay(code).description}
                                         version={definition?.version}
                                         placement={placement}
                                         categoryRule={categoryRule}
@@ -358,15 +356,16 @@ function PluginCatalogCard({
                     <Icon className="size-5" aria-hidden="true" />
                 </span>
                 <div className="flex items-center gap-2">
-                    <Badge variant="outline">v{definition.version}</Badge>
+                    <Badge variant="outline">版本 {definition.version}</Badge>
                     <Badge variant={disabled ? 'outline' : installed ? 'default' : 'secondary'}>
                         {disabled ? '状态未知' : installed ? '已添加' : '可添加'}
                     </Badge>
                 </div>
             </div>
-            <strong>{definition.name}</strong>
-            <span className="mt-1 text-xs text-muted-foreground">{definition.code}</span>
-            <p className="mt-3 flex-1 text-sm text-muted-foreground">{definition.description}</p>
+            <strong>{getClientPluginDisplay(definition.code).name}</strong>
+            <p className="mt-3 flex-1 text-sm text-muted-foreground">
+                {getClientPluginDisplay(definition.code).description}
+            </p>
             <Button
                 type="button"
                 className="mt-4 w-full"

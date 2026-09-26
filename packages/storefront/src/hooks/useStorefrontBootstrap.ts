@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 
 import { ShopApi } from '../api';
 import { CartController } from '../cart/cart-controller';
@@ -15,6 +15,7 @@ import {
 import { configureMoneyDisplay } from '../money-display';
 import { storefrontQueryKeys } from '../query-client';
 import { captureReferralAttribution } from '../referral-attribution';
+import { storefrontPreviewParameters } from '../storefront-preview-parameters';
 import { readStoredStrings, scopedStorageKey } from '../storefront-storage';
 import {
     DEFAULT_STOREFRONT_NAMES,
@@ -36,7 +37,7 @@ import { useStorefrontPublicData } from './useStorefrontPublicData';
 
 function previewLanguage(fallback: StorefrontLanguage): StorefrontLanguage {
     if (typeof window === 'undefined') return fallback;
-    const parameters = new URLSearchParams(window.location.search);
+    const parameters = storefrontPreviewParameters();
     if (parameters.get('storefrontPreviewEmbedded') !== '1') return fallback;
     return parameters.get('storefrontPreviewLanguage') === 'en' ? 'en' : 'zh';
 }
@@ -233,7 +234,14 @@ export function useStorefrontBootstrap() {
         vendureLanguageCode,
     ]);
 
-    useStorefrontBrandColors(configQuery.data, visualConfig.presetId);
+    useStorefrontBrandColors(configQuery.data, visualConfig.presetId, {
+        ready: Boolean((configQuery.data && visualConfig.ready) || configQuery.isError),
+        cache: visualConfig.cache,
+    });
+    useLayoutEffect(() => {
+        // React Query pauses requests offline; keep the existing offline/retry UI visible.
+        if (configQuery.isPaused) document.documentElement.removeAttribute('data-storefront-theme-pending');
+    }, [configQuery.isPaused]);
 
     const refetchStorefront = useCallback(async () => {
         await Promise.all([productsQuery.refetch(), collectionsQuery.refetch(), configQuery.refetch()]);

@@ -190,7 +190,8 @@ describe('iCloud admin save interactions against the server schema', () => {
             await vi.waitFor(() => expect(document.body.textContent).toContain('认证失败'));
         });
         expect(document.body.textContent).not.toContain('密码错误');
-        expect(document.querySelector('[title="Authentication failed"]')).toBeTruthy();
+        expect(document.querySelector('[title="Authentication failed"]')).toBeNull();
+        expect(document.body.textContent).toContain('服务暂时不可用，请稍后重试');
 
         fixture.state.primary = {
             ...fixture.state.primary,
@@ -201,7 +202,8 @@ describe('iCloud admin save interactions against the server schema', () => {
         await act(async () => {
             await vi.waitFor(() => expect(document.body.textContent).toContain('同步异常'));
         });
-        expect(document.querySelector('[title="connect ETIMEDOUT"]')).toBeTruthy();
+        expect(document.querySelector('[title="connect ETIMEDOUT"]')).toBeNull();
+        expect(document.body.textContent).toContain('服务暂时不可用，请稍后重试');
     });
     it('separates a committed save from failed readback and retries only queries', async () => {
         await editVirtual();

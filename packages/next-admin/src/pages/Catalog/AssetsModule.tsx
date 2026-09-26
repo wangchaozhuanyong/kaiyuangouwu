@@ -18,6 +18,7 @@ import {
     X,
 } from 'lucide-react';
 import { useDeferredValue, useMemo, useRef, useState } from 'react';
+import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 import { sensitiveActionContext, uploadAdminFiles } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -609,7 +610,7 @@ export function AssetsModule() {
                                                 <span>
                                                     {asset.width && asset.height
                                                         ? asset.width + '×' + asset.height
-                                                        : asset.type}
+                                                        : systemFieldDisplayLabel('type', asset.type)}
                                                 </span>
                                                 <span>{formatFileSize(asset.fileSize)}</span>
                                             </div>

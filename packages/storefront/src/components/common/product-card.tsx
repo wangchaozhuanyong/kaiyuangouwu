@@ -2,15 +2,11 @@ import { Heart } from 'lucide-react';
 
 import { productListingAvailability } from '../../product-availability';
 import { lowestPricedProductVariant } from '../../product-pricing';
-import {
-    prefetchProductAsset,
-    PriceDisplay,
-    ProductImage,
-    resolveProductSubtitle,
-} from '../../storefront-ui/product-display';
+import { PriceDisplay, ProductImage, resolveProductSubtitle } from '../../storefront-ui/product-display';
 import { MarketConfig, Product, StorefrontLanguage } from '../../types';
 
 import '../../styles/product-card.css';
+import { ProductDetailLink } from './product-detail-link';
 import { buildProductRowSmartInfo } from './product-row';
 
 export function ProductCard({
@@ -41,19 +37,49 @@ export function ProductCard({
     const smartInfo = buildProductRowSmartInfo(product, language);
 
     return (
-        <article
-            className="product-card"
-            onPointerEnter={() => prefetchProductAsset(product)}
-            onPointerDown={() => prefetchProductAsset(product)}
-            onFocus={() => prefetchProductAsset(product)}
-        >
-            <button
+        <article className="product-card">
+            <ProductDetailLink
                 className="product-card-detail-link"
-                type="button"
-                onClick={onOpen}
-                aria-label={`${isZh ? '查看' : 'View'} ${product.name}`}
+                product={product}
+                language={language}
+                onOpen={onOpen}
                 title={[product.name, subtitle].filter(Boolean).join(' · ')}
-            />
+            >
+                <div className="product-card-media">
+                    <ProductImage
+                        product={product}
+                        loading={priority ? 'eager' : 'lazy'}
+                        fetchPriority={priority ? 'high' : 'auto'}
+                        sizes={imageSizes}
+                    />
+                </div>
+
+                <div className="product-card-content">
+                    <strong className="product-card-name">{product.name}</strong>
+                    {subtitle ? <span className="product-card-subtitle">{subtitle}</span> : null}
+                    <div className="product-card-meta">
+                        <span className="product-card-delivery">{smartInfo.primary}</span>
+                        {smartInfo.secondary ? <span>{smartInfo.secondary}</span> : null}
+                    </div>
+
+                    <footer>
+                        <div className="product-card-price">
+                            {variant ? (
+                                <PriceDisplay
+                                    value={variant.priceWithTax}
+                                    currency={variant.currencyCode}
+                                    locale={locale}
+                                />
+                            ) : (
+                                '--'
+                            )}
+                        </div>
+                        <small className={`product-card-stock${availability.soldOut ? ' is-sold-out' : ''}`}>
+                            {stockLabel}
+                        </small>
+                    </footer>
+                </div>
+            </ProductDetailLink>
 
             {onFavorite && (
                 <button
@@ -74,39 +100,6 @@ export function ProductCard({
                     <Heart fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" />
                 </button>
             )}
-
-            <div className="product-card-media">
-                <ProductImage
-                    product={product}
-                    loading={priority ? 'eager' : 'lazy'}
-                    fetchPriority={priority ? 'high' : 'auto'}
-                    sizes={imageSizes}
-                />
-            </div>
-
-            <strong className="product-card-name">{product.name}</strong>
-            {subtitle ? <span className="product-card-subtitle">{subtitle}</span> : null}
-            <div className="product-card-meta">
-                <span className="product-card-delivery">{smartInfo.primary}</span>
-                {smartInfo.secondary ? <span>{smartInfo.secondary}</span> : null}
-            </div>
-
-            <footer>
-                <div className="product-card-price">
-                    {variant ? (
-                        <PriceDisplay
-                            value={variant.priceWithTax}
-                            currency={variant.currencyCode}
-                            locale={locale}
-                        />
-                    ) : (
-                        '--'
-                    )}
-                </div>
-                <small className={`product-card-stock${availability.soldOut ? ' is-sold-out' : ''}`}>
-                    {stockLabel}
-                </small>
-            </footer>
         </article>
     );
 }

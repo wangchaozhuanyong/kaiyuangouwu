@@ -794,7 +794,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /PRODUCTION_API_READY phase=post-switch attempts=/u);
     assert.match(script, /PRODUCTION_AI_HEALTH_READY attempts=/u);
     assert.match(script, /vendure-production-healthcheck\.timer/u);
-    assert.match(script, /systemctl start vendure-production-healthcheck\.service/u);
+    assert.match(script, /systemctl restart vendure-production-healthcheck\.service/u);
     assert.match(script, /rollback 1/u);
     assert.match(script, /9>&-/u);
     assert.match(script, /PRODUCTION_DEPLOY_OK/u);

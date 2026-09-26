@@ -1,3 +1,7 @@
+import {
+    fulfillmentStateDisplayLabel,
+    orderStateDisplayLabel,
+} from '../../../common/src/display-localization';
 import { formatBusinessDate } from '../business-time';
 import { OrderTab } from '../storefront-router';
 import {
@@ -123,47 +127,9 @@ export function addressText(address: CustomerAddress): string {
         .join(' ');
 }
 
-export function orderStateLabel(state: string, language: StorefrontLanguage): string {
-    const zh: Record<string, string> = {
-        AddingItems: '待付款',
-        ArrangingPayment: '待付款',
-        PaymentAuthorized: '待发货',
-        PaymentSettled: '待发货',
-        Shipped: '待收货',
-        PartiallyShipped: '部分发货',
-        Delivered: '交易完成',
-        Cancelled: '已取消',
-    };
-    const en: Record<string, string> = {
-        AddingItems: 'Payment pending',
-        ArrangingPayment: 'Payment pending',
-        PaymentAuthorized: 'Preparing shipment',
-        PaymentSettled: 'Preparing shipment',
-        Shipped: 'In transit',
-        PartiallyShipped: 'Partially shipped',
-        Delivered: 'Completed',
-        Cancelled: 'Cancelled',
-    };
-    return (language === 'zh' ? zh : en)[state] ?? state;
-}
+export const orderStateLabel = orderStateDisplayLabel;
 
-export function fulfillmentStateLabel(state: string, language: StorefrontLanguage): string {
-    const zh: Record<string, string> = {
-        Created: '已创建',
-        Pending: '待发货',
-        Shipped: '运输中',
-        Delivered: '已送达',
-        Cancelled: '已取消',
-    };
-    const en: Record<string, string> = {
-        Created: 'Created',
-        Pending: 'Pending shipment',
-        Shipped: 'In transit',
-        Delivered: 'Delivered',
-        Cancelled: 'Cancelled',
-    };
-    return (language === 'zh' ? zh : en)[state] ?? state;
-}
+export const fulfillmentStateLabel = fulfillmentStateDisplayLabel;
 
 export function orderStatesForTab(tab: OrderTab): string[] | undefined {
     if (tab === 'pending') return ['AddingItems', 'ArrangingPayment'];

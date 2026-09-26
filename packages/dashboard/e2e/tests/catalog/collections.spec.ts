@@ -214,21 +214,29 @@ test.describe('Product group hierarchy workflow', () => {
         await sheet.getByLabel('Product group name').fill(CHILD_NAME);
         await sheet.getByRole('button', { name: 'Create product group' }).click();
         await expect(sheet).toBeHidden();
-        await expect(page.getByText(CHILD_NAME, { exact: true })).toBeVisible({ timeout: 10_000 });
 
         const client = new VendureAdminClient(page);
         await client.login();
-        const { collections } = await client.gql(
-            `query ($name: String!) {
-                collections(options: { filter: { name: { eq: $name } } }) {
-                    items { id parent { id } }
+        const { collection } = await client.gql(
+            `query ($id: ID!) {
+                collection(id: $id) {
+                    children { id name translations { languageCode name } parent { id } }
                 }
             }`,
-            { name: CHILD_NAME },
+            { id: parentId },
         );
-        const child = collections.items[0];
+        const child = collection.children.find(
+            (item: { translations: Array<{ languageCode: string; name: string }> }) =>
+                item.translations.some(
+                    translation => translation.languageCode === 'zh_Hans' && translation.name === CHILD_NAME,
+                ),
+        );
+        expect(child).toBeDefined();
         childId = child.id as string;
         expect(child.parent.id).toBe(parentId);
+        // Quick-create writes Chinese source content; the English list must not borrow that translation.
+        expect(child.name).toBe('English name not set');
+        await expect(page.getByText('English name not set', { exact: true }).first()).toBeVisible();
     });
 });
 
@@ -330,8 +338,35 @@ createCrudTestSuite({
     createFromList: async page => {
         const sheet = page.locator('[data-collection-quick-create]');
         await sheet.getByLabel('Product group name').fill('E2E Test Collection');
+        const createdResponse = page.waitForResponse(
+            response =>
+                response.url().includes('/admin-api') &&
+                response.request().postData()?.includes('CreateCollection') === true,
+        );
         await sheet.getByRole('button', { name: 'Create product group' }).click();
         await expect(sheet).toBeHidden();
+        const created = (await (await createdResponse).json()).data.createCollection;
+        // Quick creation stores the Chinese source. This English CRUD suite needs
+        // an explicit English translation before testing English search and editing.
+        const client = new VendureAdminClient(page);
+        await client.login();
+        await client.gql(
+            `mutation ($input: UpdateCollectionInput!) { updateCollection(input: $input) { id } }`,
+            {
+                input: {
+                    id: created.id,
+                    translations: [
+                        {
+                            languageCode: 'en',
+                            name: 'E2E Test Collection',
+                            slug: 'e2e-test-collection-en',
+                            description: '',
+                        },
+                    ],
+                },
+            },
+        );
+        await page.reload();
         await expect(page.getByText('E2E Test Collection', { exact: true })).toBeVisible({
             timeout: 10_000,
         });

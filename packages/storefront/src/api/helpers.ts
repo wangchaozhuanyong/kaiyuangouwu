@@ -1,4 +1,5 @@
 import { productAvailability } from '../product-availability';
+import { storefrontDocumentUrl } from '../storefront-preview-parameters';
 import {
     Product,
     StorefrontAuthSettings,
@@ -46,8 +47,9 @@ export interface ErrorResult {
 
 export function authTokenStorageKey(marketCode: string): string | null {
     if (typeof window === 'undefined') return null;
-    const apiUrl = new URL(API_URL, window.location.href);
-    if (apiUrl.origin === window.location.origin) return null;
+    const documentUrl = storefrontDocumentUrl();
+    const apiUrl = new URL(API_URL, documentUrl);
+    if (apiUrl.origin === new URL(documentUrl).origin) return null;
     return `${AUTH_TOKEN_STORAGE_PREFIX}:${apiUrl.origin}${apiUrl.pathname}:${marketCode}`;
 }
 
@@ -157,7 +159,7 @@ export function createRequestSignal(external?: AbortSignal, timeoutMs?: number) 
 }
 
 export function storefrontRealtimeUrl(): string {
-    const url = new URL(API_URL, window.location.href);
+    const url = new URL(API_URL, storefrontDocumentUrl());
     url.search = '';
     url.hash = '';
     url.pathname = url.pathname.replace(/\/shop-api\/?$/u, '/storefront-realtime/events');

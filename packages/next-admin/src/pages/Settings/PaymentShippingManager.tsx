@@ -519,13 +519,9 @@ function MethodEditorDialog({
         item?.code ?? (initialTestPayment ? `controlled-test-payment-${data.activeChannel.id}` : ''),
     );
     const [name, setName] = useState(
-        selectedTranslation?.name ??
-            (!item?.translations.length ? item?.name : '') ??
-            (initialTestPayment ? '测试支付' : ''),
+        selectedTranslation?.name ?? (item ? '' : initialTestPayment ? '测试支付' : ''),
     );
-    const [description, setDescription] = useState(
-        selectedTranslation?.description ?? (!item?.translations.length ? item?.description : '') ?? '',
-    );
+    const [description, setDescription] = useState(selectedTranslation?.description ?? '');
     const [enabled, setEnabled] = useState(
         state.kind === 'payment' ? (state.item?.enabled ?? !initialTestPayment) : true,
     );
