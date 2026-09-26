@@ -9,6 +9,83 @@ import { triggerSql, validateTriggerRows } from '../../../deploy/prepare-mysql-a
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
+void test('restore receipts published during health checks use the observation time without relaxing expiry', async () => {
+    const source = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-production-healthcheck'),
+        'utf8',
+    );
+    const check = source.match(/check_restore_evidence\(\) \{[\s\S]*?\n\}/u)?.[0];
+    assert.ok(check);
+    const script = `
+set -Eeuo pipefail
+current_epoch=999950
+maximum_restore_drill_age_seconds=777600
+failures=()
+jq() {
+    case "$2" in
+        .) return 0 ;;
+        .completedAt) printf 'fixture-time\\n' ;;
+        .durationSeconds) printf '30\\n' ;;
+        .rtoSeconds) printf '14400\\n' ;;
+        .source) printf 'offsite\\n' ;;
+        *) return 1 ;;
+    esac
+}
+date() {
+    if [[ "$*" == '+%s' ]]; then printf '1000000\\n';
+    else printf '%s\\n' "$MOCK_COMPLETED"; fi
+}
+${check}
+check_restore_evidence "$1" 14400 true restore-drill
+printf '%s\\n' "\${failures[@]-}"
+`;
+    for (const [completed, failure] of [
+        ['999975', ''],
+        ['222400', ''],
+        ['222399', 'restore-drill-missing-or-stale'],
+        ['1000001', 'restore-drill-missing-or-stale'],
+        ['invalid', 'restore-drill-missing-or-stale'],
+    ]) {
+        const result = spawnSync('bash', ['-c', script, '--', fileURLToPath(import.meta.url)], {
+            encoding: 'utf8',
+            env: { ...process.env, MOCK_COMPLETED: completed },
+        });
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(result.stdout.trim(), failure, completed);
+    }
+});
+
+void test('deployment refreshes expired restore receipts even after a previously successful drill', async () => {
+    const source = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
+    const recent = source.match(/restore_drill_evidence_recent\(\) \{[\s\S]*?\n\}/u)?.[0];
+    assert.ok(recent);
+    assert.match(source, /if ! restore_drill_evidence_recent \|\|/u);
+    assert.match(source, /restore_drill_evidence_recent \|\| fail/u);
+    const script = `
+set -Eeuo pipefail
+sudo() { printf 'fixture-time\\n'; }
+date() {
+    if [[ "$*" == '+%s' ]]; then printf '1000000\\n';
+    else printf '%s\\n' "$MOCK_COMPLETED"; fi
+}
+${recent}
+restore_drill_evidence_recent
+`;
+    for (const [completed, expected] of [
+        ['999975', 0],
+        ['222400', 0],
+        ['222399', 1],
+        ['1000001', 1],
+        ['invalid', 1],
+    ]) {
+        const result = spawnSync('bash', ['-c', script], {
+            encoding: 'utf8',
+            env: { ...process.env, MOCK_COMPLETED: completed },
+        });
+        assert.equal(result.status, expected, `${completed}: ${result.stderr}`);
+    }
+});
+
 void test('production audit triggers are prepared through the local root socket without broadening the app account', async () => {
     assert.equal(
         triggerSql('administrator_permission_audit_no_update', 'UPDATE', 'vendure-production'),
