@@ -851,7 +851,6 @@ export function HomePage() {
                 storefrontName={storefrontName}
                 logoUrl={logoUrl}
                 language={language}
-                marketLabel={market.label}
                 displayCurrencyCode={displayCurrencyCode}
                 availableCurrencyCodes={
                     currencySelectorEnabled ? availableCurrencyCodes : [displayCurrencyCode]
@@ -1260,7 +1259,6 @@ export function HomePage() {
                             >
                                 <FlashSaleSection
                                     title={flashSaleBlock?.title || (isZh ? '限时秒杀' : 'Flash sale')}
-                                    subtitle={flashSaleBlock?.subtitle || undefined}
                                     items={flashSaleItems}
                                     locale={locale}
                                     language={language}

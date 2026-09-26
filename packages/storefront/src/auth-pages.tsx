@@ -192,9 +192,7 @@ function isInvalidCredentials(error: unknown): boolean {
 
 function googleAuthErrorMessage(error: unknown, language: StorefrontLanguage): string {
     if (error instanceof ShopApiError && error.authenticationError === 'STOREFRONT_GOOGLE_AUTH_UNAVAILABLE') {
-        return language === 'zh'
-            ? '当前店铺尚未完成 Google 登录配置'
-            : 'Google sign-in is not configured for this store';
+        return language === 'zh' ? 'Google 登录尚未配置' : 'Google sign-in is not configured';
     }
     return language === 'zh' ? 'Google 登录失败，请重试' : 'Google sign-in failed. Try again';
 }
@@ -478,9 +476,7 @@ export function LoginPage({
                     ) : null}
                     {!authSettings.emailPasswordEnabled && !googleAvailable ? (
                         <p className="auth-methods-unavailable" role="status">
-                            {isZh
-                                ? '当前店铺暂未开启登录方式'
-                                : 'No sign-in method is enabled for this store'}
+                            {isZh ? '暂未开启登录方式' : 'No sign-in method is enabled'}
                         </p>
                     ) : null}
                     <p className="auth-switch">
@@ -890,9 +886,7 @@ export function RegisterPage({
                     ) : null}
                     {!authSettings.emailPasswordEnabled && !googleAvailable ? (
                         <p className="auth-methods-unavailable" role="status">
-                            {isZh
-                                ? '当前店铺暂未开启注册方式'
-                                : 'No registration method is enabled for this store'}
+                            {isZh ? '暂未开启注册方式' : 'No registration method is enabled'}
                         </p>
                     ) : null}
                     <p className="auth-switch">

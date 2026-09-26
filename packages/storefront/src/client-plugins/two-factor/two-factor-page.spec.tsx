@@ -10,6 +10,8 @@ import { TwoFactorPage } from './two-factor-page';
 
 const storageState = vi.hoisted(() => ({
     available: false,
+    exists: false,
+    unlocked: false,
     accounts: [] as TwoFactorAccount[],
 }));
 
@@ -17,12 +19,12 @@ vi.mock('./use-browser-vault', () => ({
     useBrowserVault: () => ({
         accounts: storageState.accounts,
         available: storageState.available,
-        exists: false,
+        exists: storageState.exists,
         legacy: false,
-        unlocked: false,
+        unlocked: storageState.unlocked,
         busy: false,
         error: false,
-        canWrite: true,
+        canWrite: !storageState.exists || storageState.unlocked,
         save: vi.fn().mockResolvedValue(true),
         lock: vi.fn(),
         open: vi.fn(),
@@ -56,6 +58,8 @@ describe('TwoFactorPage', () => {
 
     beforeEach(() => {
         storageState.available = false;
+        storageState.exists = false;
+        storageState.unlocked = false;
         storageState.accounts = [];
         container = document.createElement('div');
         document.body.appendChild(container);
@@ -159,7 +163,7 @@ describe('TwoFactorPage', () => {
         const secretLabel = container.querySelector<HTMLLabelElement>(
             'label[for="storefront-two-factor-secret"]',
         );
-        expect(secretLabel?.classList.contains('sr-only')).toBe(true);
+        expect(secretLabel?.classList.contains('sr-only')).toBe(false);
         expect(container.querySelector('#storefront-two-factor-query-description')).toBeNull();
         expect(container.querySelector('#storefront-two-factor-privacy-details')).toBeNull();
 
@@ -265,7 +269,7 @@ describe('TwoFactorPage', () => {
         });
 
         const headerTitle = [...container.querySelectorAll<HTMLHeadingElement>('h2')].find(h2 =>
-            h2.textContent?.includes('2FA 账号列表'),
+            h2.textContent?.includes('已保存账号'),
         );
         expect(headerTitle).toBeDefined();
 
@@ -295,5 +299,64 @@ describe('TwoFactorPage', () => {
         expect(batchBtn?.className).toContain('whitespace-nowrap');
         expect(addBtn?.className).toContain('shrink-0');
         expect(addBtn?.className).toContain('whitespace-nowrap');
+    });
+
+    it('keeps locked accounts separate from temporary queries and does not claim the vault is empty', async () => {
+        storageState.available = true;
+        storageState.exists = true;
+        await act(async () => {
+            root.render(
+                <TwoFactorPage
+                    customer={customer}
+                    language="zh"
+                    onBack={vi.fn()}
+                    onSignIn={vi.fn()}
+                    onNotify={vi.fn()}
+                />,
+            );
+            await Promise.resolve();
+        });
+        const query = container.querySelector('.two-factor-query');
+        const accounts = container.querySelector('.two-factor-accounts');
+        expect(query?.querySelector('.two-factor-vault')).toBeNull();
+        expect(accounts?.querySelector('[data-vault-state="locked"]')).not.toBeNull();
+        expect(accounts?.textContent).not.toContain('0 / 100');
+        expect(accounts?.querySelector('.two-factor-empty')).toBeNull();
+        expect(accounts?.querySelector('.two-factor-account-form')).toBeNull();
+        expect(
+            [...(accounts?.querySelectorAll('button') ?? [])].some(button =>
+                button.textContent?.includes('添加账号'),
+            ),
+        ).toBe(false);
+        expect(container.querySelector('[role="alert"]')).toBeNull();
+        const secret = query?.querySelector<HTMLInputElement>('input');
+        act(() => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+                secret,
+                'JBSWY3DPEHPK3PXP',
+            );
+            secret?.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        await act(async () => {
+            secret?.form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            await Promise.resolve();
+        });
+        expect(query?.textContent).toContain('123 456');
+        expect(query?.textContent).toContain('复制');
+        expect(query?.textContent).not.toContain('保存到列表');
+        const unlock = [...(query?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find(
+            button => button.textContent === '去解锁',
+        );
+        await act(async () => {
+            unlock?.click();
+            await Promise.resolve();
+        });
+        expect(container.querySelector('.two-factor-workspace')?.getAttribute('data-view')).toBe('accounts');
+        expect(document.activeElement).toBe(accounts?.querySelector('input[type="password"]'));
+        const queryTab = container.querySelector<HTMLButtonElement>('#two-factor-query-tab');
+        act(() => queryTab?.click());
+        expect(queryTab?.getAttribute('aria-selected')).toBe('true');
+        expect(secret?.value).toBe('JBSWY3DPEHPK3PXP');
+        expect(query?.textContent).toContain('123 456');
     });
 });

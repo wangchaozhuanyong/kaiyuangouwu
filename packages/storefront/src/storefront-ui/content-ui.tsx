@@ -263,7 +263,6 @@ export function aggregateFlashSaleProducts(items: StorefrontFlashSaleItem[]): St
 
 export function FlashSaleSection({
     title,
-    subtitle,
     items,
     locale,
     language,
@@ -273,7 +272,6 @@ export function FlashSaleSection({
     layout = 'carousel',
 }: {
     title: string;
-    subtitle?: string;
     items: Array<StorefrontFlashSaleItem | StorefrontFlashSaleProduct>;
     locale: string;
     language: StorefrontLanguage;
@@ -290,7 +288,6 @@ export function FlashSaleSection({
             <SectionHeader
                 kind="flash-sale"
                 title={title}
-                subtitle={subtitle}
                 titleAccessory={
                     countdown ? (
                         <span
@@ -448,11 +445,6 @@ export function FlashSalePage({
             {items.length ? (
                 <FlashSaleSection
                     title={isZh ? '限时秒杀' : 'Flash sale'}
-                    subtitle={
-                        isZh
-                            ? `共 ${items.length} 件，活动价格会在购物车和结算页自动生效`
-                            : `${items.length} items · Sale prices apply automatically in cart and checkout`
-                    }
                     items={items}
                     locale={locale}
                     language={language}

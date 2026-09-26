@@ -20,7 +20,6 @@ import {
     productAvailabilityLabel,
     variantCanIncreaseQuantity,
 } from '../product-availability';
-import { productGalleryAssets } from '../product-media';
 import { lowestPricedProductVariant } from '../product-pricing';
 import { ProductReviewsSection } from '../review-pages';
 import { sanitizeProductDescription } from '../rich-text';
@@ -29,7 +28,7 @@ import { bestProductCouponPrice } from '../storefront-coupons';
 import { ProductDetailPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import { SubHeader } from '../storefront-ui/page-shell';
-import { formatMoney, SafeImage } from '../storefront-ui/product-display';
+import { formatMoney } from '../storefront-ui/product-display';
 import { ProductGallery } from '../storefront-ui/product-gallery';
 import { ProductSection } from '../storefront-ui/product-section';
 import '../styles/product-detail-surfaces.css';
@@ -142,7 +141,6 @@ export function ProductDetailPage() {
                   currencyCode: displayedCurrencyCode,
               })
             : null;
-    const assets = productGalleryAssets(product);
     const isDigital =
         (product.customFields?.fulfillmentType ?? variant?.customFields.fulfillmentType) === 'digital';
     const digitalDeliveryMode: DigitalDeliveryMode =
@@ -168,7 +166,7 @@ export function ProductDetailPage() {
                 Number(a.collections.some(collection => collectionIds.has(collection.id))),
         )
         .slice(0, 4);
-    const descriptionHtml = sanitizeProductDescription(product.description);
+    const descriptionHtml = sanitizeProductDescription(product.description, { textOnly: true });
     const [posterOpen, setPosterOpen] = useState(false);
     const shareProduct = () => {
         setPosterOpen(true);
@@ -685,16 +683,6 @@ export function ProductDetailPage() {
                                 ? '商品详细信息由商家后台维护。'
                                 : 'Product information is managed by the merchant.'}
                         </p>
-                    )}
-                    {assets[0] && (
-                        <SafeImage
-                            src={assets[0].preview}
-                            alt={isZh ? `${product.name}细节展示` : `${product.name} details`}
-                            imageKind="detail"
-                            frameClassName="detail-description-media"
-                            sizes="(min-width: 1024px) 790px, 100vw"
-                            loading="lazy"
-                        />
                     )}
                 </section>
             )}

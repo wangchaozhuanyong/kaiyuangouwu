@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Languages, LoaderCircle, MapPin, WalletCards } from 'lucide-react';
+import { Check, ChevronDown, Languages, LoaderCircle, WalletCards } from 'lucide-react';
 import { useState } from 'react';
 
 import { Sheet } from '../../storefront-ui/page-shell';
@@ -47,7 +47,6 @@ export function LocalePreferencesSheet({
     currencyCodes,
     selectedCurrencyCode,
     currencyLoading,
-    marketLabel,
     onToggleLanguage,
     onSelectCurrency,
     onClose,
@@ -56,7 +55,6 @@ export function LocalePreferencesSheet({
     currencyCodes: string[];
     selectedCurrencyCode: string;
     currencyLoading: boolean;
-    marketLabel: string;
     onToggleLanguage: () => void;
     onSelectCurrency: (currencyCode: string) => void | Promise<void>;
     onClose: () => void;
@@ -90,14 +88,6 @@ export function LocalePreferencesSheet({
             initialFocus="dialog"
         >
             <div className="locale-preferences-content" aria-busy={saving || currencyLoading}>
-                <div className="locale-preferences-market">
-                    <MapPin aria-hidden="true" />
-                    <span>
-                        <small>{isZh ? '当前店铺' : 'Current storefront'}</small>
-                        <strong>{marketLabel}</strong>
-                    </span>
-                </div>
-
                 <fieldset className="locale-preferences-fieldset">
                     <legend>
                         <Languages aria-hidden="true" />

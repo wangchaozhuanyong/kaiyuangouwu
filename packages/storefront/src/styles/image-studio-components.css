@@ -943,34 +943,35 @@
 
 /* Approved image-first workflow. Scoped so detail sheets and other pages retain their styles. */
 .page.subpage:has(> .ai-studio-workflow) {
-    background: var(--surface, #fff);
+    background: var(--bg);
 }
 
 .ai-studio-shell.ai-studio-workflow {
-    --shadow-sm: none;
     width: 100%;
-    padding: 0 20px 32px;
+    padding: 16px 16px 32px;
     display: block;
     color: var(--text);
-    background: var(--surface, #fff);
+    background: var(--bg);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-view-tabs {
-    margin: 0 -20px 24px;
-    padding: 0 20px;
+    margin: 0 0 16px;
+    padding: 4px;
     position: sticky;
-    top: 52px;
+    top: 60px;
     z-index: var(--layer-sticky);
-    border-bottom: 0;
+    border: 0;
+    border-radius: var(--skin-control-radius);
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
     background: var(--surface, #fff);
 }
 
 .ai-studio-view-tabs button {
     border-radius: var(--skin-control-radius);
-    min-height: 52px;
-    padding: 12px 8px;
+    min-height: 44px;
+    padding: 10px 8px;
     position: relative;
     border: 0;
     background: transparent;
@@ -996,13 +997,13 @@
 .ai-studio-shell.ai-studio-workflow .ai-studio-create-panel {
     padding-bottom: calc(82px + env(safe-area-inset-bottom, 0px));
     display: grid;
-    gap: 24px;
+    gap: 16px;
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-controls {
     min-width: 0;
     display: grid;
-    gap: 24px;
+    gap: 16px;
 }
 
 .ai-studio-shell.ai-studio-workflow
@@ -1013,7 +1014,8 @@
         .ai-studio-history,
         .ai-studio-model-grid,
         .ai-studio-option-row,
-        .ai-studio-settlement-summary
+        .ai-studio-settlement-summary,
+        .ai-studio-settlement
     ) {
     min-width: 0;
     padding: 0;
@@ -1023,12 +1025,17 @@
     box-shadow: none;
 }
 
-.ai-studio-shell.ai-studio-workflow :is(.ai-studio-options, .ai-studio-checkout) {
-    padding-top: 20px;
-    border-top: 0;
+.ai-studio-shell.ai-studio-workflow
+    :is(.ai-studio-composer, .ai-studio-options, .ai-studio-checkout, .ai-studio-history-toolbar) {
+    padding: 20px;
+    border: 0;
+    border-radius: var(--skin-card-radius);
+    background: var(--surface);
+    box-shadow: var(--skin-card-shadow);
 }
 
-.ai-studio-shell.ai-studio-workflow :is(.ai-studio-options h3, .ai-studio-history h3) {
+.ai-studio-shell.ai-studio-workflow
+    :is(.ai-studio-composer h3, .ai-studio-options h3, .ai-studio-checkout h3, .ai-studio-history h3) {
     margin: 0 0 12px;
     display: block;
     font-size: 17px;
@@ -1039,7 +1046,7 @@
 .ai-studio-shell.ai-studio-workflow .ai-studio-prompt-wrap {
     margin: 0;
     border: 1px solid transparent;
-    border-radius: 12px;
+    border-radius: var(--skin-control-radius);
     background: var(--soft);
     box-shadow: none;
 }
@@ -1205,7 +1212,7 @@
 .ai-studio-shell.ai-studio-workflow .ai-studio-option-row {
     margin-top: 18px;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0;
+    gap: 8px;
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-setting-trigger {
@@ -1213,11 +1220,12 @@
     min-height: 64px;
     padding: 4px 10px !important;
     border: 0;
+    border-radius: var(--skin-control-radius);
     display: grid;
     grid-template-columns: minmax(0, 1fr) 14px;
     justify-content: start;
     gap: 6px 3px;
-    background: transparent;
+    background: var(--soft);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-setting-trigger + .ai-studio-setting-trigger {
@@ -1298,6 +1306,10 @@
     accent-color: var(--accent);
 }
 
+.ai-studio-shell.ai-studio-workflow .ai-studio-low-balance {
+    border: 0;
+}
+
 .ai-studio-shell.ai-studio-workflow .ai-studio-fixed-generate {
     width: min(520px, 100%);
     min-height: 76px;
@@ -1308,7 +1320,7 @@
     gap: 12px;
     border-top: 0;
     background: var(--surface, #fff);
-    box-shadow: none;
+    box-shadow: var(--skin-card-shadow);
 }
 
 .ai-studio-hold-amount {
@@ -1342,7 +1354,8 @@
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-history {
-    display: block;
+    display: grid;
+    gap: 16px;
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-history-heading h3 {
@@ -1359,12 +1372,12 @@
 .ai-studio-shell.ai-studio-workflow .ai-studio-history-filters {
     width: 100%;
     min-width: 0;
-    margin: 12px 0 18px;
+    margin: 12px 0 0;
     padding: 0;
     border: 0;
     border-radius: 0;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
+    gap: 4px;
     background: transparent;
 }
 
@@ -1392,17 +1405,16 @@
 
 .ai-studio-shell.ai-studio-workflow .ai-generation-card {
     min-height: 0;
-    margin: 0 0 24px;
-    padding: 0 0 20px;
+    margin: 0;
+    padding: 16px;
     border: 0;
-    border-bottom: 0;
-    border-radius: 0;
+    border-radius: var(--skin-card-radius);
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
     gap: 12px;
-    background: transparent;
-    box-shadow: none;
+    background: var(--surface);
+    box-shadow: var(--skin-card-shadow);
     transform: none;
 }
 
@@ -1516,12 +1528,36 @@
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-empty {
-    padding: 48px 16px;
+    margin: 0;
+    padding: 40px 20px;
     border: 0;
+    border-radius: var(--skin-card-radius);
     display: grid;
     justify-items: center;
-    gap: 20px;
+    gap: 12px;
+    background: var(--surface);
     line-height: 1.6;
+}
+
+.ai-studio-empty-icon {
+    width: 32px;
+    height: 32px;
+    color: var(--accent);
+    stroke-width: 1.5;
+}
+
+.ai-studio-empty :is(h4, p) {
+    margin: 0;
+}
+
+.ai-studio-empty h4 {
+    color: var(--text);
+    font-size: 16px;
+}
+
+.ai-studio-empty p {
+    max-width: 32ch;
+    font-size: 13px;
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-empty button {
@@ -1529,8 +1565,9 @@
     padding: 10px 16px;
     border: 0;
     border-radius: 8px;
-    background: var(--accent-soft);
-    color: var(--accent);
+    margin-top: 4px;
+    background: var(--accent);
+    color: #fff;
 }
 
 .ai-studio-shell.ai-studio-workflow > .ai-studio-error {
@@ -1546,23 +1583,24 @@
     outline-offset: 3px;
 }
 
-@media (min-width: 960px) {
+@media (min-width: 1024px) {
     .ai-studio-shell.ai-studio-workflow {
-        padding: 0 28px 40px;
+        padding: 20px 28px 40px;
     }
 
     .ai-studio-shell.ai-studio-workflow .ai-studio-view-tabs {
-        margin-right: -28px;
-        margin-left: -28px;
-        padding: 0 28px;
-        top: 72px;
+        width: fit-content;
+        margin-right: 0;
+        margin-left: 0;
+        padding: 4px;
+        top: 80px;
         grid-template-columns: repeat(2, minmax(120px, 180px));
     }
 
     .ai-studio-shell.ai-studio-workflow .ai-studio-create-panel {
         padding-bottom: 0;
         grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
-        gap: 40px;
+        gap: 24px;
         align-items: start;
     }
 
@@ -1572,20 +1610,30 @@
     }
 
     .ai-studio-shell.ai-studio-workflow .ai-studio-options {
-        padding-top: 0;
+        margin-top: 0;
         border-top: 0;
+    }
+
+    .ai-studio-shell.ai-studio-workflow
+        .ai-studio-options
+        > :is(.ai-studio-model-grid, .ai-studio-option-row) {
+        display: none;
     }
 
     .ai-studio-shell.ai-studio-workflow .ai-studio-fixed-generate {
         width: 100%;
-        padding: 0;
+        margin: 0;
+        padding: 16px 20px;
         border: 0;
+        border-radius: var(--skin-card-radius);
+        box-shadow: var(--skin-card-shadow);
     }
 
     .ai-studio-shell.ai-studio-workflow .ai-studio-history {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0 28px;
+        gap: 20px;
+        align-content: start;
     }
 
     .ai-studio-shell.ai-studio-workflow .ai-studio-history > :not(.ai-generation-card) {
@@ -1594,6 +1642,28 @@
 
     .ai-studio-shell.ai-studio-workflow .ai-studio-history-filters {
         width: min(440px, 100%);
+    }
+}
+
+@media (max-width: 359px) {
+    .ai-studio-shell.ai-studio-workflow {
+        padding-right: 12px;
+        padding-left: 12px;
+    }
+
+    .ai-studio-shell.ai-studio-workflow
+        :is(.ai-studio-composer, .ai-studio-options, .ai-studio-checkout, .ai-studio-history-toolbar) {
+        padding: 16px;
+    }
+
+    .ai-studio-shell.ai-studio-workflow .ai-studio-option-row {
+        gap: 6px;
+    }
+
+    .ai-studio-shell.ai-studio-workflow .ai-studio-fixed-generate {
+        grid-template-columns: minmax(0, 1fr) minmax(140px, 1.4fr);
+        padding-right: 16px;
+        padding-left: 16px;
     }
 }
 

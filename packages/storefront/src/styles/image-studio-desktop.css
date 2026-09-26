@@ -170,10 +170,10 @@
         width: 100%;
         min-height: 38px;
         padding: 9px 28px 9px 10px;
-        border: 1px solid var(--line);
-        border-radius: 7px;
+        border: 1px solid transparent;
+        border-radius: var(--skin-control-radius);
         appearance: none;
-        background: transparent;
+        background: var(--soft);
         color: var(--text);
         font: inherit;
         font-weight: var(--font-weight-normal);
@@ -233,14 +233,15 @@
     .ai-studio-desktop-field label > span {
         min-height: 50px;
         padding: 8px 4px;
-        border: 1px solid var(--line);
-        border-radius: 7px;
+        border: 1px solid transparent;
+        border-radius: var(--skin-control-radius);
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         gap: 6px;
         color: var(--muted);
+        background: var(--soft);
         font-size: 12px;
         line-height: 1.2;
     }

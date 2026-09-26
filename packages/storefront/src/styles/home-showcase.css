@@ -2123,6 +2123,16 @@ html[lang='en'] .quick-grid b {
     }
 }
 
+@media (max-width: 359px) {
+    .flash-sale-section .section-header {
+        gap: 6px;
+    }
+    .flash-sale-countdown {
+        padding-inline: 4px;
+        gap: 3px;
+    }
+}
+
 .flash-sale-grid {
     display: grid;
     grid-template-columns: none;
@@ -3105,11 +3115,6 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         border: 0;
         background: transparent;
         box-shadow: none;
-    }
-
-    html[lang='en'] .category-page .primary-category-switcher {
-        height: auto;
-        min-height: 129px;
     }
 
     .category-topbar > .search-trigger {

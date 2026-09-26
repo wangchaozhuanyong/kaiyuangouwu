@@ -87,7 +87,7 @@ try {
         expect(geometry.image.y).toBe(geometry.allImage.y);
         expect(geometry.sort.y - geometry.switcher.y - geometry.switcher.height).toBe(12);
         expect(geometry.product.y - geometry.sort.y - geometry.sort.height).toBe(12);
-        expect(geometry.headerBackground).toBe(geometry.rowBackground);
+        expect(geometry.rowBackground).toBe('rgba(0, 0, 0, 0)');
         expect(geometry.overflow).toBeLessThanOrEqual(1);
         for (const key of ['strip', 'sort', 'product']) expect(geometry[key].x).toBe(16);
         if (language === 'zh') expect(geometry.first.width).toBeCloseTo(geometry.all.width, 0);

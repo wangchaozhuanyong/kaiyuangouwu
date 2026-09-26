@@ -982,21 +982,22 @@ img {
     margin: 8px 12px 10px;
     min-height: 44px;
     padding: 7px 14px;
-    border: 1px solid color-mix(in srgb, var(--warning) 28%, var(--line));
+    border: 0;
     border-radius: var(--radius-sm, 8px);
     background: var(--surface);
-    color: var(--warning);
+    color: var(--text);
     display: flex;
     align-items: center;
     gap: 8px;
     text-align: left;
     font-size: 12.5px;
-    box-shadow: 0 1px 4px color-mix(in srgb, var(--warning) 8%, transparent);
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
 }
 
 .notice-strip:hover {
-    border-color: color-mix(in srgb, var(--warning) 48%, var(--line));
-    background: var(--surface);
+    background: var(--soft);
 }
 
 .notice-strip:focus-visible {
@@ -1008,11 +1009,11 @@ img {
     width: 15px;
     height: 15px;
     margin-left: auto;
-    color: var(--warning);
+    color: var(--muted);
 }
 
 .notice-strip svg:first-child {
-    color: var(--warning);
+    color: var(--accent);
     width: 16px;
     height: 16px;
     flex-shrink: 0;

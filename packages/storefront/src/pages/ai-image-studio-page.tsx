@@ -1222,6 +1222,7 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                         hidden={activeView !== 'CREATE'}
                     >
                         <section className="ai-studio-composer">
+                            <h3>{isZh ? '图片描述' : 'Image description'}</h3>
                             <label className="sr-only" htmlFor={`${viewId}-prompt`}>
                                 {isZh ? '描述你想生成的图片' : 'Describe the image you want to create'}
                             </label>
@@ -1562,6 +1563,7 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                             aria-label={isZh ? '生成参数与结算' : 'Generation settings and checkout'}
                         >
                             <section className="ai-studio-options">
+                                <h3>{isZh ? '生成设置' : 'Generation settings'}</h3>
                                 <ImageStudioDesktopSettings
                                     isZh={isZh}
                                     models={config.models}
@@ -1579,7 +1581,6 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                                     onResolutionChange={selectResolution}
                                     onQuantityChange={setQuantity}
                                 />
-                                <h3>{isZh ? '选择生成方案' : 'Choose a generation option'}</h3>
                                 <div
                                     className="ai-studio-model-grid"
                                     role="radiogroup"
@@ -1643,6 +1644,7 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                             </section>
 
                             <section className="ai-studio-checkout">
+                                <h3>{isZh ? '费用确认' : 'Review costs'}</h3>
                                 <div className="ai-studio-settlement">
                                     <div className="ai-studio-settlement-summary">
                                         <div className="ai-studio-settlement-amount">
@@ -1745,43 +1747,47 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                         aria-labelledby={`${viewId}-HISTORY-tab`}
                         hidden={activeView !== 'HISTORY'}
                     >
-                        <div className="ai-studio-history-heading">
-                            <div>
-                                <h3>{isZh ? '我的生成记录' : 'My generations'}</h3>
-                                <button
-                                    type="button"
-                                    className="ai-studio-history-info"
-                                    aria-label={isZh ? '查看生成记录说明' : 'View generation history details'}
-                                    onClick={() => setHistoryInfoOpen(true)}
-                                >
-                                    <Info />
+                        <div className="ai-studio-history-toolbar">
+                            <div className="ai-studio-history-heading">
+                                <div>
+                                    <h3>{isZh ? '我的生成记录' : 'My generations'}</h3>
+                                    <button
+                                        type="button"
+                                        className="ai-studio-history-info"
+                                        aria-label={
+                                            isZh ? '查看生成记录说明' : 'View generation history details'
+                                        }
+                                        onClick={() => setHistoryInfoOpen(true)}
+                                    >
+                                        <Info />
+                                    </button>
+                                </div>
+                                <button type="button" onClick={() => void load()}>
+                                    <RefreshCw />
+                                    {isZh ? '刷新' : 'Refresh'}
                                 </button>
                             </div>
-                            <button type="button" onClick={() => void load()}>
-                                <RefreshCw />
-                                {isZh ? '刷新' : 'Refresh'}
-                            </button>
-                        </div>
-                        <div className="ai-studio-history-filters" role="tablist">
-                            {(
-                                [
-                                    ['ALL', isZh ? '全部' : 'All'],
-                                    ['SUCCESS', isZh ? '已完成' : 'Completed'],
-                                    ['PROCESSING', isZh ? '生成中' : 'Processing'],
-                                    ['FAILED', isZh ? '失败' : 'Failed'],
-                                ] as Array<[HistoryFilter, string]>
-                            ).map(([value, label]) => (
-                                <button
-                                    type="button"
-                                    key={value}
-                                    role="tab"
-                                    aria-selected={historyFilter === value}
-                                    className={historyFilter === value ? 'is-active' : ''}
-                                    onClick={() => setHistoryFilter(value)}
-                                >
-                                    {label}
-                                </button>
-                            ))}
+                            <div className="ai-studio-history-filters" role="tablist">
+                                {(
+                                    [
+                                        ['ALL', isZh ? '全部' : 'All'],
+                                        ['SUCCESS', isZh ? '已完成' : 'Completed'],
+                                        ['PROCESSING', isZh ? '生成中' : 'Processing'],
+                                        ['FAILED', isZh ? '失败' : 'Failed'],
+                                    ] as Array<[HistoryFilter, string]>
+                                ).map(([value, label]) => (
+                                    <button
+                                        type="button"
+                                        key={value}
+                                        role="tab"
+                                        aria-selected={historyFilter === value}
+                                        className={historyFilter === value ? 'is-active' : ''}
+                                        onClick={() => setHistoryFilter(value)}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                         {filteredJobs.length ? (
                             filteredJobs.map(job => (
@@ -1807,13 +1813,23 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                             ))
                         ) : (
                             <div className="ai-studio-empty">
-                                {jobs.length
-                                    ? isZh
-                                        ? '当前筛选下暂无记录。'
-                                        : 'No records match this filter.'
-                                    : isZh
-                                      ? '还没有生成记录，去创作页输入一句描述开始。'
-                                      : 'No generations yet. Start with a prompt in Create.'}
+                                <ImagePlus className="ai-studio-empty-icon" aria-hidden="true" />
+                                <h4>
+                                    {jobs.length
+                                        ? isZh
+                                            ? '当前筛选下暂无记录。'
+                                            : 'No records match this filter.'
+                                        : isZh
+                                          ? '还没有生成记录'
+                                          : 'No generations yet'}
+                                </h4>
+                                {!jobs.length ? (
+                                    <p>
+                                        {isZh
+                                            ? '输入一句图片描述，开始你的第一次创作。'
+                                            : 'Start your first creation with an image description.'}
+                                    </p>
+                                ) : null}
                                 {!jobs.length ? (
                                     <button type="button" onClick={() => showView('CREATE', true)}>
                                         {isZh ? '去创作' : 'Create an image'}
