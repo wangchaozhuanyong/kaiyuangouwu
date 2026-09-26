@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
     currentStorefrontAssetFingerprint,
@@ -8,6 +8,8 @@ import {
 } from './storefront-version';
 
 const baseUrl = 'https://shop.example.com/category';
+
+afterEach(() => vi.useRealTimers());
 
 describe('storefront version detection', () => {
     it('creates a stable fingerprint from versioned JavaScript and CSS assets', () => {
@@ -80,7 +82,64 @@ describe('storefront version detection', () => {
                 cache: 'no-store',
                 credentials: 'same-origin',
                 headers: { accept: 'text/html' },
+                signal: expect.any(AbortSignal),
             },
         );
+    });
+
+    it('aborts a stalled version request so the next check can run', async () => {
+        vi.useFakeTimers();
+        let requestSignal: AbortSignal | null | undefined;
+        const fetchImpl = vi.fn<typeof fetch>((_input, init) => {
+            requestSignal = init?.signal;
+            return new Promise((_resolve, reject) => {
+                requestSignal?.addEventListener(
+                    'abort',
+                    () => reject(new DOMException('Aborted', 'AbortError')),
+                    { once: true },
+                );
+            });
+        });
+        const result = fetchStorefrontAssetFingerprint({ baseUrl, fetchImpl }).catch(error => error);
+        await vi.advanceTimersByTimeAsync(5_001);
+
+        expect(requestSignal?.aborted).toBe(true);
+        expect(await result).toBeInstanceOf(DOMException);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('cancels an unread error response instead of leaving its body streaming', async () => {
+        vi.useFakeTimers();
+        const cancel = vi.fn();
+        const body = new ReadableStream<Uint8Array>({ cancel });
+        const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { status: 503 }));
+
+        await expect(fetchStorefrontAssetFingerprint({ baseUrl, fetchImpl })).resolves.toBeNull();
+        expect(cancel).toHaveBeenCalledOnce();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('cancels an in-flight check when its caller is disposed', async () => {
+        const controller = new AbortController();
+        let requestSignal: AbortSignal | null | undefined;
+        const fetchImpl = vi.fn<typeof fetch>((_input, init) => {
+            requestSignal = init?.signal;
+            return new Promise((_resolve, reject) => {
+                requestSignal?.addEventListener(
+                    'abort',
+                    () => reject(new DOMException('Aborted', 'AbortError')),
+                    { once: true },
+                );
+            });
+        });
+        const result = fetchStorefrontAssetFingerprint({
+            baseUrl,
+            fetchImpl,
+            signal: controller.signal,
+        }).catch(error => error);
+        controller.abort();
+
+        expect(requestSignal?.aborted).toBe(true);
+        expect(await result).toBeInstanceOf(DOMException);
     });
 });

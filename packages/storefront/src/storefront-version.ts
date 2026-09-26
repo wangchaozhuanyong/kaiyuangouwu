@@ -1,12 +1,16 @@
+import { createRequestSignal } from './api/helpers';
+
 const VERSIONED_ASSET_PATH = /\/assets\/[^/?#]+\.(?:css|js)$/i;
 
 export const STOREFRONT_VERSION_CHECK_INTERVAL_MS = 60_000;
+const STOREFRONT_VERSION_CHECK_TIMEOUT_MS = 5_000;
 
 export interface StorefrontVersionFetchOptions {
     baseUrl?: string;
     fetchImpl?: typeof fetch;
     indexPath?: string;
     now?: () => number;
+    signal?: AbortSignal;
 }
 
 export function storefrontAssetFingerprint(references: Iterable<string>, baseUrl: string): string | null {
@@ -55,11 +59,20 @@ export async function fetchStorefrontAssetFingerprint(
     const baseUrl = options.baseUrl ?? window.location.href;
     const indexUrl = new URL(options.indexPath ?? '/index.html', baseUrl);
     indexUrl.searchParams.set('__storefront_version', String((options.now ?? Date.now)()));
-    const response = await (options.fetchImpl ?? fetch)(indexUrl, {
-        cache: 'no-store',
-        credentials: 'same-origin',
-        headers: { accept: 'text/html' },
-    });
-    if (!response.ok) return null;
-    return extractStorefrontAssetFingerprint(await response.text(), baseUrl);
+    const request = createRequestSignal(options.signal, STOREFRONT_VERSION_CHECK_TIMEOUT_MS);
+    try {
+        const response = await (options.fetchImpl ?? fetch)(indexUrl, {
+            cache: 'no-store',
+            credentials: 'same-origin',
+            headers: { accept: 'text/html' },
+            signal: request.signal,
+        });
+        if (!response.ok) {
+            await response.body?.cancel();
+            return null;
+        }
+        return extractStorefrontAssetFingerprint(await response.text(), baseUrl);
+    } finally {
+        request.cleanup();
+    }
 }
