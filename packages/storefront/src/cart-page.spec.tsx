@@ -255,7 +255,7 @@ describe('CartPage guest cart', () => {
 
         expect(markup).toContain('顺手带一件');
         expect(markup).toContain('class="section-header has-end-subtitle"');
-        expect(markup).toContain('class="section-header-end-subtitle">从当前店铺继续挑选</p>');
+        expect(markup).toContain('class="section-header-end-subtitle">继续挑选好物</p>');
     });
 
     it('uses one responsive cart workspace and keeps the coupon in the checkout summary', () => {

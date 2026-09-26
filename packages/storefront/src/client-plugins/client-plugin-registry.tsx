@@ -47,7 +47,7 @@ function CouponEntryPlugin({ language, onNavigate }: Readonly<ClientPluginCompon
             </span>
             <span className="category-client-plugin-copy">
                 <strong>{isZh ? '先领券，再选购' : 'Claim a coupon first'}</strong>
-                <span>{isZh ? '查看当前店铺可领取的优惠券' : 'See coupons available in this store'}</span>
+                <span>{isZh ? '查看可领取的优惠券' : 'See available coupons'}</span>
             </span>
             <span className="category-client-plugin-action">{isZh ? '去领券' : 'View'}</span>
         </button>

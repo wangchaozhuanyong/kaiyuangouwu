@@ -50,22 +50,6 @@ function GalleryImages({
                         <Package />
                     </div>
                 )}
-                {assets.length > 1 && (
-                    <div className="gallery-dots">
-                        {assets.map((asset, index) => (
-                            <button
-                                type="button"
-                                key={asset.id}
-                                className={index === activeImage ? 'is-active' : undefined}
-                                onClick={() => setActiveImage(index)}
-                                aria-label={
-                                    isZh ? `查看第${index + 1}张商品图` : `View product image ${index + 1}`
-                                }
-                                aria-current={index === activeImage}
-                            />
-                        ))}
-                    </div>
-                )}
                 {!!assets.length && (
                     <span className="gallery-count">
                         {activeImage + 1} / {assets.length}

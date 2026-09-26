@@ -56,6 +56,10 @@ describe('ProductGallery interactions', () => {
     it('selects other images without blurry placeholders and keeps selection on unchanged data refetches', () => {
         render(product);
         expectImage(cover.preview, 1);
+        const gallery = container.querySelector('.detail-gallery');
+        const thumbnails = container.querySelector('.detail-gallery-thumbnails');
+        expect(gallery?.nextElementSibling).toBe(thumbnails);
+        expect(gallery?.querySelector('button')).toBeNull();
         selectSecondImage();
         expectImage(detail.preview, 2);
         expect(container.querySelector('[aria-current="true"]')?.getAttribute('aria-label')).toBe(
@@ -82,7 +86,7 @@ describe('ProductGallery interactions', () => {
         const replacement = { id: 'replacement', preview: '/assets/preview/new-cover.png' };
         render({ ...product, featuredAsset: replacement });
         expectImage(replacement.preview, 1);
-        expect(container.querySelectorAll('.gallery-dots button')).toHaveLength(3);
+        expect(container.querySelectorAll('.detail-gallery-thumbnails button')).toHaveLength(3);
     });
 
     it('returns to the cover when the selected image is removed instead of leaving an invalid index', () => {
@@ -90,7 +94,7 @@ describe('ProductGallery interactions', () => {
         selectSecondImage();
         render({ ...product, assets: [cover] });
         expectImage(cover.preview, 1);
-        expect(container.querySelector('.gallery-dots')).toBeNull();
+        expect(container.querySelector('.detail-gallery-thumbnails')).toBeNull();
     });
 
     it('refreshes the image without a blurry placeholder when an asset keeps its ID but changes preview', () => {

@@ -617,10 +617,10 @@ export function PaymentPage({
                                     isZh
                                         ? isTestMode
                                             ? '当前没有可用的本地测试支付方式'
-                                            : '当前店铺尚未接入支付方式，订单已保留'
+                                            : '暂未接入支付方式，订单已保留'
                                         : isTestMode
                                           ? 'No local test payment method is available'
-                                          : 'No payment provider is configured for this store. Your order is preserved.'
+                                          : 'No payment provider is configured. Your order is preserved.'
                                 }
                                 action={isZh ? '重试' : 'Retry'}
                                 onAction={() => void methodsQuery.refetch()}

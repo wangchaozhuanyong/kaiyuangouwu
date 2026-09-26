@@ -328,7 +328,7 @@ export function DesktopUnifiedHome({
                                     ? '当前筛选下没有商品'
                                     : 'No products match these filters'
                                 : isZh
-                                  ? '当前店铺暂无上架商品'
+                                  ? '暂无上架商品'
                                   : 'No products are available yet'}
                         </strong>
                         {products.length > 0 && (

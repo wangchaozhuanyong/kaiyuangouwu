@@ -47,6 +47,14 @@ const PRODUCT_DESCRIPTION_OPTIONS: IFilterXSSOptions = {
     stripIgnoreTagBody: STRIP_UNSAFE_CONTENT_TAGS,
 };
 
+const PRODUCT_DESCRIPTION_TEXT_OPTIONS: IFilterXSSOptions = {
+    ...PRODUCT_DESCRIPTION_OPTIONS,
+    allowList: Object.fromEntries(
+        Object.entries(PRODUCT_DESCRIPTION_ALLOW_LIST).filter(([tag]) => tag !== 'img'),
+    ),
+    stripIgnoreTagBody: [...STRIP_UNSAFE_CONTENT_TAGS, 'video', 'audio', 'picture'],
+};
+
 const PLAIN_TEXT_OPTIONS: IFilterXSSOptions = {
     allowList: {},
     stripIgnoreTag: true,
@@ -58,9 +66,16 @@ const BLOCK_BOUNDARY_PATTERN =
 const IMAGE_TAG_PATTERN = /<img\b[^>]*>/gi;
 const IMAGE_SOURCE_PATTERN = /(\bsrc=)(["'])(.*?)\2/i;
 
-export function sanitizeProductDescription(value: string | null | undefined): string {
+export function sanitizeProductDescription(
+    value: string | null | undefined,
+    { textOnly = false }: { textOnly?: boolean } = {},
+): string {
     if (!value?.trim()) return '';
-    const sanitized = filterXSS(value.trim(), PRODUCT_DESCRIPTION_OPTIONS);
+    const sanitized = filterXSS(
+        value.trim(),
+        textOnly ? PRODUCT_DESCRIPTION_TEXT_OPTIONS : PRODUCT_DESCRIPTION_OPTIONS,
+    );
+    if (textOnly) return sanitized.replace(/<(p|figure)>\s*<\/\1>/gi, '').trim();
     return sanitized.replace(IMAGE_TAG_PATTERN, imageTag => {
         const sourceMatch = imageTag.match(IMAGE_SOURCE_PATTERN);
         if (!sourceMatch) return '';

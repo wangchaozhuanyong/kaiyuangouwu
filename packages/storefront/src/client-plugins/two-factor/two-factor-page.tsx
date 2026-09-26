@@ -7,7 +7,6 @@ import {
     Copy,
     Eye,
     EyeOff,
-    KeyRound,
     LockKeyhole,
     MoreHorizontal,
     Pencil,
@@ -21,6 +20,7 @@ import type { FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActiveCustomer, StorefrontLanguage } from '../../types';
 import type { BatchImportErrorCode } from './batch-parser';
+import './two-factor-page.css';
 import type { TwoFactorAccount } from './types';
 
 import { Sheet, Subpage } from '../../storefront-ui/page-shell';
@@ -58,6 +58,8 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
     const [querying, setQuerying] = useState(false);
     const [showQuickDescription, setShowQuickDescription] = useState(false);
     const [showPrivacyDetails, setShowPrivacyDetails] = useState(false);
+    const [activeView, setActiveView] = useState<'QUERY' | 'ACCOUNTS'>('QUERY');
+    const focusVaultOnOpen = useRef(false);
     const [showAccountForm, setShowAccountForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [projectName, setProjectName] = useState('');
@@ -92,6 +94,12 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
     }, []);
     const vault = useBrowserVault(ownerId, clearSensitiveState);
     const { accounts, canWrite: storageAvailable } = vault;
+    const accountsLocked = vault.exists && !vault.unlocked;
+    useEffect(() => {
+        if (activeView !== 'ACCOUNTS' || !focusVaultOnOpen.current) return;
+        focusVaultOnOpen.current = false;
+        document.querySelector<HTMLInputElement>('.two-factor-vault input[type="password"]')?.focus();
+    }, [activeView]);
     const persistAccounts = vault.save;
     useEffect(
         () => () => {
@@ -207,6 +215,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
     };
 
     const openAccountForm = (account?: TwoFactorAccount, defaultSecret = '') => {
+        setActiveView('ACCOUNTS');
         setEditingId(account?.id ?? null);
         setProjectName(account?.projectName ?? '');
         setAccountSecret(account?.secret ?? defaultSecret);
@@ -318,89 +327,97 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
 
     return (
         <Subpage title={copy.title} language={language} onBack={onBack}>
-            <div className="desktop-two-factor-content mx-auto grid w-full max-w-6xl gap-4 px-3 pb-10 pt-3 lg:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)] lg:items-start lg:px-6">
-                <section className="two-factor-query min-w-0 rounded-[var(--skin-card-radius,16px)] border-0 bg-[var(--surface)] p-4 lg:col-start-1 lg:row-start-1 lg:p-7">
-                    <VaultControls
-                        key={`${ownerId}-${vault.unlocked}-${vault.exists}-${sensitiveRevision.current}`}
-                        vault={vault}
-                        isZh={isZh}
-                    />
-                    <div className="flex items-start gap-3">
-                        <span className="grid size-11 shrink-0 place-items-center rounded-[var(--skin-control-radius,10px)] bg-[var(--accent-soft)] text-[var(--accent-ink)]">
-                            <KeyRound className="size-5" aria-hidden="true" />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                                <h1 className="m-0 text-xl font-black text-[var(--text)]">
-                                    {copy.quickQuery}
-                                </h1>
-                                <button
-                                    className={descriptionToggleClass}
-                                    type="button"
-                                    aria-expanded={showQuickDescription}
-                                    aria-controls="storefront-two-factor-query-description"
-                                    onClick={() => setShowQuickDescription(value => !value)}
-                                >
-                                    {showQuickDescription ? copy.hideDescription : copy.viewDescription}
-                                    <ChevronDown
-                                        className={`size-4 transition-transform ${showQuickDescription ? 'rotate-180' : ''}`}
-                                        aria-hidden="true"
-                                    />
-                                </button>
-                            </div>
-                            {showQuickDescription ? (
-                                <p
-                                    id="storefront-two-factor-query-description"
-                                    className="mb-0 mt-2 text-sm leading-6 text-[var(--muted)]"
-                                >
-                                    {copy.description}
-                                </p>
-                            ) : null}
-                        </div>
-                    </div>
-                    <form className="mt-5 grid gap-3" onSubmit={event => void queryCode(event)}>
-                        <label className="sr-only" htmlFor="storefront-two-factor-secret">
-                            {copy.secret}
-                        </label>
-                        <input
-                            id="storefront-two-factor-secret"
-                            className="min-h-12 w-full rounded-[var(--skin-control-radius,10px)] border border-[var(--line)] bg-[var(--surface)] px-3 font-mono text-sm outline-none transition focus:border-[var(--focus)] focus:ring-4 focus:ring-[var(--accent-soft)]"
-                            type="password"
-                            maxLength={1024}
-                            autoComplete="off"
-                            spellCheck={false}
-                            value={quickInput}
-                            placeholder={copy.secretPlaceholder}
-                            onChange={event => {
-                                setQuickInput(event.target.value);
-                                setQuickSecret(null);
-                                setQuickCode(null);
-                                setQuickError('');
-                            }}
-                        />
-                        {quickError ? (
-                            <p className="m-0 text-sm font-semibold text-[var(--danger)]" role="alert">
-                                {quickError}
-                            </p>
-                        ) : null}
-                        <div className="grid grid-cols-2 gap-2 sm:flex">
+            <div
+                className="desktop-two-factor-content two-factor-workspace"
+                data-view={activeView.toLowerCase()}
+            >
+                <div
+                    className="two-factor-view-tabs"
+                    role="tablist"
+                    aria-label={isZh ? '2FA 工具页面' : '2FA tool views'}
+                    onKeyDown={event => {
+                        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                        event.preventDefault();
+                        const next =
+                            event.key === 'Home'
+                                ? 'QUERY'
+                                : event.key === 'End'
+                                  ? 'ACCOUNTS'
+                                  : activeView === 'QUERY'
+                                    ? 'ACCOUNTS'
+                                    : 'QUERY';
+                        setActiveView(next);
+                        document.getElementById(`two-factor-${next.toLowerCase()}-tab`)?.focus();
+                    }}
+                >
+                    {(['QUERY', 'ACCOUNTS'] as const).map(view => (
+                        <button
+                            key={view}
+                            type="button"
+                            role="tab"
+                            id={`two-factor-${view.toLowerCase()}-tab`}
+                            aria-controls={`two-factor-${view.toLowerCase()}-panel`}
+                            aria-selected={activeView === view}
+                            tabIndex={activeView === view ? 0 : -1}
+                            onClick={() => setActiveView(view)}
+                        >
+                            {view === 'QUERY' ? copy.quickQuery : copy.savedAccounts}
+                        </button>
+                    ))}
+                </div>
+                <section
+                    className="two-factor-query"
+                    id="two-factor-query-panel"
+                    role="tabpanel"
+                    aria-labelledby="two-factor-query-tab"
+                >
+                    <h2>{copy.quickQuery}</h2>
+                    <p className="two-factor-intro">
+                        {isZh
+                            ? '粘贴密钥，即可在本机生成动态码。'
+                            : 'Paste a secret to generate a code locally.'}
+                    </p>
+                    <form className="two-factor-quick-form" onSubmit={event => void queryCode(event)}>
+                        <label htmlFor="storefront-two-factor-secret">{copy.secret}</label>
+                        <div className="two-factor-secret-field">
+                            <input
+                                id="storefront-two-factor-secret"
+                                className={`${inputClass} font-mono`}
+                                type="password"
+                                maxLength={1024}
+                                autoComplete="off"
+                                spellCheck={false}
+                                value={quickInput}
+                                placeholder={copy.secretPlaceholder}
+                                onChange={event => {
+                                    setQuickInput(event.target.value);
+                                    setQuickSecret(null);
+                                    setQuickCode(null);
+                                    setQuickError('');
+                                }}
+                            />
                             <button
-                                className={secondaryButtonClass}
+                                className="two-factor-paste"
                                 type="button"
                                 onClick={() => void pasteSecret()}
                             >
                                 <ClipboardPaste className="size-4" aria-hidden="true" />
                                 {copy.paste}
                             </button>
-                            <button
-                                className={primaryButtonClass}
-                                type="submit"
-                                disabled={!quickInput.trim() || querying}
-                            >
-                                <Search className="size-4" aria-hidden="true" />
-                                {querying ? copy.querying : copy.query}
-                            </button>
                         </div>
+                        {quickError ? (
+                            <p className="m-0 text-sm font-semibold text-[var(--danger)]" role="alert">
+                                {quickError}
+                            </p>
+                        ) : null}
+                        <button
+                            className={primaryButtonClass}
+                            type="submit"
+                            disabled={!quickInput.trim() || querying}
+                        >
+                            <Search className="size-4" aria-hidden="true" />
+                            {querying ? copy.querying : copy.query}
+                        </button>
                     </form>
 
                     {quickCode ? (
@@ -423,23 +440,68 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                                         <Copy className="size-4" aria-hidden="true" />
                                         {copy.copy}
                                     </button>
-                                    <button
-                                        className={secondaryButtonClass}
-                                        type="button"
-                                        disabled={!storageAvailable}
-                                        onClick={() => quickSecret && openAccountForm(undefined, quickSecret)}
-                                    >
-                                        <Plus className="size-4" aria-hidden="true" />
-                                        {copy.save}
-                                    </button>
+                                    {!accountsLocked ? (
+                                        <button
+                                            className={secondaryButtonClass}
+                                            type="button"
+                                            disabled={!storageAvailable}
+                                            onClick={() =>
+                                                quickSecret && openAccountForm(undefined, quickSecret)
+                                            }
+                                        >
+                                            <Plus className="size-4" aria-hidden="true" />
+                                            {copy.save}
+                                        </button>
+                                    ) : null}
                                 </div>
                             </div>
                             <Countdown seconds={secondsRemaining} label={copy.seconds} />
                         </div>
                     ) : null}
+                    {accountsLocked ? (
+                        <div className="two-factor-lock-notice">
+                            <LockKeyhole className="size-4" aria-hidden="true" />
+                            <span>{isZh ? '已保存账号处于锁定状态' : 'Saved accounts are locked'}</span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (activeView === 'ACCOUNTS') {
+                                        document
+                                            .querySelector<HTMLInputElement>(
+                                                '.two-factor-vault input[type="password"]',
+                                            )
+                                            ?.focus();
+                                        return;
+                                    }
+                                    focusVaultOnOpen.current = true;
+                                    setActiveView('ACCOUNTS');
+                                }}
+                            >
+                                {isZh ? '去解锁' : 'Unlock'}
+                            </button>
+                        </div>
+                    ) : null}
                 </section>
 
-                <aside className="two-factor-privacy min-w-0 px-4 lg:col-start-1 lg:row-start-2 lg:px-7">
+                <aside className="two-factor-privacy">
+                    <button
+                        className={descriptionToggleClass}
+                        type="button"
+                        aria-expanded={showQuickDescription}
+                        aria-controls="storefront-two-factor-query-description"
+                        onClick={() => setShowQuickDescription(value => !value)}
+                    >
+                        {showQuickDescription ? copy.hideDescription : copy.viewDescription}
+                        <ChevronDown
+                            className={`size-4 ${showQuickDescription ? 'rotate-180' : ''}`}
+                            aria-hidden="true"
+                        />
+                    </button>
+                    {showQuickDescription ? (
+                        <p id="storefront-two-factor-query-description" className="two-factor-intro">
+                            {copy.description}
+                        </p>
+                    ) : null}
                     <button
                         className="flex min-h-11 w-full items-center justify-between gap-3 rounded-[var(--skin-control-radius,10px)] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
                         type="button"
@@ -448,12 +510,12 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                         onClick={() => setShowPrivacyDetails(value => !value)}
                     >
                         <span className="flex items-center gap-2">
-                            <ShieldCheck className="size-5 text-[var(--success)]" aria-hidden="true" />
+                            <ShieldCheck className="size-5 text-[var(--muted)]" aria-hidden="true" />
                             <span className="text-base font-black text-[var(--text)]">
                                 {copy.privacyTitle}
                             </span>
                         </span>
-                        <span className="flex shrink-0 items-center gap-1 text-sm font-extrabold text-[var(--success)]">
+                        <span className="flex shrink-0 items-center gap-1 text-sm text-[var(--muted)]">
                             {showPrivacyDetails ? copy.collapse : copy.expand}
                             <ChevronDown
                                 className={`size-4 transition-transform ${showPrivacyDetails ? 'rotate-180' : ''}`}
@@ -496,274 +558,288 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                             </p>
                         </div>
                     ) : null}
-                    {!storageAvailable ? (
-                        <p className="mb-0 mt-3 text-sm font-semibold text-[var(--danger)]" role="alert">
-                            {copy.storageUnavailable}
-                        </p>
-                    ) : null}
                 </aside>
 
-                <section className="two-factor-accounts min-w-0 p-4 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:p-7">
+                <section
+                    className="two-factor-accounts"
+                    id="two-factor-accounts-panel"
+                    role="tabpanel"
+                    aria-labelledby="two-factor-accounts-tab"
+                >
                     <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
                         <div className="min-w-0">
                             <h2 className="m-0 text-base sm:text-lg max-[350px]:text-sm font-black text-[var(--text)] whitespace-nowrap">
                                 {copy.accountList}
                             </h2>
-                            <p className="mb-0 mt-0.5 sm:mt-1 text-xs font-semibold text-[var(--muted)] whitespace-nowrap">
-                                {accounts.length} / {MAX_TWO_FACTOR_ACCOUNTS}
-                            </p>
+                            {!accountsLocked ? (
+                                <p className="mb-0 mt-0.5 sm:mt-1 text-xs font-semibold text-[var(--muted)] whitespace-nowrap">
+                                    {accounts.length} / {MAX_TWO_FACTOR_ACCOUNTS}
+                                </p>
+                            ) : null}
                         </div>
-                        <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
-                            <button
-                                className={headerSecondaryButtonClass}
-                                type="button"
-                                disabled={!storageAvailable}
-                                onClick={() => setShowBatchImport(value => !value)}
-                            >
-                                <Upload className="size-3.5 sm:size-4 shrink-0" aria-hidden="true" />
-                                {copy.batchImport}
-                            </button>
-                            <button
-                                className={headerPrimaryButtonClass}
-                                type="button"
-                                disabled={!storageAvailable}
-                                onClick={() => openAccountForm()}
-                            >
-                                <Plus className="size-3.5 sm:size-4 shrink-0" aria-hidden="true" />
-                                {copy.addAccount}
-                            </button>
-                        </div>
+                        {!accountsLocked ? (
+                            <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+                                <button
+                                    className={headerSecondaryButtonClass}
+                                    type="button"
+                                    disabled={!storageAvailable}
+                                    onClick={() => setShowBatchImport(value => !value)}
+                                >
+                                    <Upload className="size-3.5 sm:size-4 shrink-0" aria-hidden="true" />
+                                    {copy.batchImport}
+                                </button>
+                                <button
+                                    className={headerPrimaryButtonClass}
+                                    type="button"
+                                    disabled={!storageAvailable}
+                                    onClick={() => openAccountForm()}
+                                >
+                                    <Plus className="size-3.5 sm:size-4 shrink-0" aria-hidden="true" />
+                                    {copy.addAccount}
+                                </button>
+                            </div>
+                        ) : null}
                     </div>
 
-                    {showAccountForm ? (
-                        <form
-                            className="two-factor-account-form mt-6 grid gap-3 md:grid-cols-2"
-                            onSubmit={event => void saveAccount(event)}
-                        >
-                            <label className="grid gap-1.5 text-sm font-bold text-[var(--text)]">
-                                {copy.projectName}
-                                <input
-                                    className={inputClass}
-                                    maxLength={80}
-                                    value={projectName}
-                                    onChange={event => setProjectName(event.target.value)}
-                                />
-                            </label>
-                            <label className="grid gap-1.5 text-sm font-bold text-[var(--text)]">
-                                {copy.secret}
-                                <input
-                                    className={`${inputClass} font-mono`}
-                                    type="password"
-                                    maxLength={1024}
-                                    autoComplete="off"
-                                    spellCheck={false}
-                                    value={accountSecret}
-                                    onChange={event => setAccountSecret(event.target.value)}
-                                />
-                            </label>
-                            {accountError ? (
-                                <p
-                                    className="m-0 text-sm font-semibold text-[var(--danger)] md:col-span-2"
-                                    role="alert"
+                    <VaultControls
+                        key={`${ownerId}-${vault.unlocked}-${vault.exists}-${sensitiveRevision.current}`}
+                        vault={vault}
+                        isZh={isZh}
+                    />
+                    {!accountsLocked ? (
+                        <>
+                            {showAccountForm ? (
+                                <form
+                                    className="two-factor-account-form mt-6 grid gap-3 md:grid-cols-2"
+                                    onSubmit={event => void saveAccount(event)}
                                 >
-                                    {accountError}
-                                </p>
+                                    <label className="grid gap-1.5 text-sm font-bold text-[var(--text)]">
+                                        {copy.projectName}
+                                        <input
+                                            className={inputClass}
+                                            maxLength={80}
+                                            value={projectName}
+                                            onChange={event => setProjectName(event.target.value)}
+                                        />
+                                    </label>
+                                    <label className="grid gap-1.5 text-sm font-bold text-[var(--text)]">
+                                        {copy.secret}
+                                        <input
+                                            className={`${inputClass} font-mono`}
+                                            type="password"
+                                            maxLength={1024}
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                            value={accountSecret}
+                                            onChange={event => setAccountSecret(event.target.value)}
+                                        />
+                                    </label>
+                                    {accountError ? (
+                                        <p
+                                            className="m-0 text-sm font-semibold text-[var(--danger)] md:col-span-2"
+                                            role="alert"
+                                        >
+                                            {accountError}
+                                        </p>
+                                    ) : null}
+                                    <div className="flex flex-wrap gap-2 md:col-span-2">
+                                        <button className={primaryButtonClass} type="submit">
+                                            {editingId ? copy.update : copy.addAccount}
+                                        </button>
+                                        <button
+                                            className={secondaryButtonClass}
+                                            type="button"
+                                            onClick={() => {
+                                                setShowAccountForm(false);
+                                                setAccountSecret('');
+                                                setProjectName('');
+                                            }}
+                                        >
+                                            {copy.cancel}
+                                        </button>
+                                    </div>
+                                </form>
                             ) : null}
-                            <div className="flex flex-wrap gap-2 md:col-span-2">
-                                <button className={primaryButtonClass} type="submit">
-                                    {editingId ? copy.update : copy.addAccount}
-                                </button>
-                                <button
-                                    className={secondaryButtonClass}
-                                    type="button"
-                                    onClick={() => {
-                                        setShowAccountForm(false);
-                                        setAccountSecret('');
-                                        setProjectName('');
-                                    }}
-                                >
-                                    {copy.cancel}
-                                </button>
-                            </div>
-                        </form>
-                    ) : null}
 
-                    {showBatchImport ? (
-                        <div className="two-factor-batch-form mt-6">
-                            <label
-                                className="grid gap-1.5 text-sm font-bold text-[var(--text)]"
-                                htmlFor="storefront-two-factor-batch"
-                            >
-                                {copy.batchFormat}
-                                <textarea
-                                    id="storefront-two-factor-batch"
-                                    className={`${inputClass} min-h-36 resize-y font-mono`}
-                                    maxLength={MAX_BATCH_CHARACTERS}
-                                    autoComplete="off"
-                                    spellCheck={false}
-                                    value={batchInput}
-                                    placeholder={copy.batchPlaceholder}
-                                    onChange={event => {
-                                        setBatchInput(event.target.value);
-                                        setBatchValidated(false);
-                                    }}
-                                />
-                            </label>
-                            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold">
-                                <span className="text-[var(--success)]">
-                                    {copy.validRows}: {batchResult.accounts.length}
-                                </span>
-                                <span className="text-[var(--danger)]">
-                                    {copy.invalidRows}: {batchResult.errors.length}
-                                </span>
-                            </div>
-                            {batchValidated && batchResult.errors.length ? (
-                                <ul
-                                    className="mb-0 mt-3 max-h-36 overflow-y-auto pl-5 text-sm text-[var(--danger)]"
-                                    role="alert"
-                                >
-                                    {batchResult.errors.map(error => (
-                                        <li key={`${error.lineNumber}-${error.code}`}>
-                                            {copy.line} {error.lineNumber}:{' '}
-                                            {batchErrorLabel(error.code, copy)}
-                                        </li>
-                                    ))}
-                                </ul>
-                            ) : null}
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                <button
-                                    className={primaryButtonClass}
-                                    type="button"
-                                    disabled={!batchInput.trim()}
-                                    onClick={() => void importAccounts()}
-                                >
-                                    {copy.importAccounts}
-                                </button>
-                                <button
-                                    className={secondaryButtonClass}
-                                    type="button"
-                                    onClick={() => {
-                                        setShowBatchImport(false);
-                                        setBatchInput('');
-                                    }}
-                                >
-                                    {copy.cancel}
-                                </button>
-                            </div>
-                        </div>
-                    ) : null}
-
-                    {accounts.length ? (
-                        <div className="mt-5 flex flex-wrap items-center gap-2">
-                            <label className="relative min-w-0 flex-1" aria-label={copy.search}>
-                                <Search
-                                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--muted)]"
-                                    aria-hidden="true"
-                                />
-                                <input
-                                    className={`${inputClass} pl-9`}
-                                    value={search}
-                                    placeholder={copy.search}
-                                    onChange={event => setSearch(event.target.value)}
-                                />
-                            </label>
-                            <button
-                                className={`${secondaryButtonClass} text-[var(--danger)]`}
-                                type="button"
-                                disabled={!storageAvailable}
-                                onClick={() => {
-                                    setDeletionError(false);
-                                    setDeletion('all');
-                                }}
-                            >
-                                <Trash2 className="size-4" />
-                                {copy.clearAll}
-                            </button>
-                        </div>
-                    ) : null}
-
-                    {!accounts.length ? (
-                        <div className="two-factor-empty mt-5 grid min-h-48 place-items-center py-6 text-center">
-                            <div>
-                                <KeyRound className="mx-auto size-8 text-[var(--muted)]" aria-hidden="true" />
-                                <strong className="mt-3 block text-[var(--text)]">{copy.emptyTitle}</strong>
-                                <p className="mb-0 mt-1 text-sm text-[var(--muted)]">
-                                    {copy.emptyDescription}
-                                </p>
-                            </div>
-                        </div>
-                    ) : !visibleAccounts.length ? (
-                        <p className="two-factor-empty mt-5 py-8 text-center text-sm text-[var(--muted)]">
-                            {copy.noSearchResults}
-                        </p>
-                    ) : (
-                        <div className="two-factor-account-grid mt-4 grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-3">
-                            {visibleAccounts.map(account => {
-                                const revealed = revealedIds.has(account.id);
-                                const code = codes[account.id];
-                                return (
-                                    <article
-                                        className="two-factor-account rounded-[var(--skin-card-radius,16px)] bg-[var(--surface)] p-4"
-                                        key={account.id}
+                            {showBatchImport ? (
+                                <div className="two-factor-batch-form mt-6">
+                                    <label
+                                        className="grid gap-1.5 text-sm font-bold text-[var(--text)]"
+                                        htmlFor="storefront-two-factor-batch"
                                     >
-                                        <div className="flex min-h-9 items-center gap-2">
-                                            <div className="flex min-w-0 flex-1 items-baseline gap-2 overflow-hidden">
-                                                <h3
-                                                    className="m-0 max-w-[45%] shrink-0 truncate text-sm font-black text-[var(--text)]"
-                                                    title={account.projectName}
-                                                >
-                                                    {account.projectName}
-                                                </h3>
-                                                <code className="min-w-0 truncate text-[11px] text-[var(--muted)]">
-                                                    {maskSecret(account.secret)}
-                                                </code>
-                                            </div>
-                                            <AccountMoreMenu
-                                                account={account}
-                                                copy={copy}
-                                                now={now}
-                                                revealed={revealed}
-                                                onToggleSecret={() =>
-                                                    setRevealedIds(current =>
-                                                        toggleSetValue(current, account.id),
-                                                    )
-                                                }
-                                                onEdit={() => openAccountForm(account)}
-                                                onDelete={() => {
-                                                    setDeletionError(false);
-                                                    setDeletion({
-                                                        id: account.id,
-                                                        projectName: account.projectName,
-                                                    });
-                                                }}
-                                            />
-                                        </div>
-                                        <div className="two-factor-account-code mt-2 flex min-h-12 items-center gap-2">
-                                            <div className="min-w-[6.9rem] shrink-0">
-                                                <span className="sr-only">{copy.dynamicCode}</span>
-                                                <p className="m-0 whitespace-nowrap font-mono text-[1.35rem] font-black leading-none tracking-[0.12em] text-[var(--text)] tabular-nums">
-                                                    {code ? formatTotpCode(code) : '--- ---'}
-                                                </p>
-                                            </div>
-                                            <CompactCountdown
-                                                seconds={secondsRemaining}
-                                                label={copy.seconds}
-                                            />
-                                            <button
-                                                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-[var(--skin-control-radius,10px)] bg-[var(--control-surface,var(--soft))] px-2 text-xs font-bold text-[var(--text)] transition-colors hover:bg-[var(--control-surface-hover,var(--accent-soft))] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
-                                                type="button"
-                                                disabled={!code}
-                                                onClick={() => void copyAccountCode(account)}
+                                        {copy.batchFormat}
+                                        <textarea
+                                            id="storefront-two-factor-batch"
+                                            className={`${inputClass} min-h-36 resize-y font-mono`}
+                                            maxLength={MAX_BATCH_CHARACTERS}
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                            value={batchInput}
+                                            placeholder={copy.batchPlaceholder}
+                                            onChange={event => {
+                                                setBatchInput(event.target.value);
+                                                setBatchValidated(false);
+                                            }}
+                                        />
+                                    </label>
+                                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold">
+                                        <span className="text-[var(--success)]">
+                                            {copy.validRows}: {batchResult.accounts.length}
+                                        </span>
+                                        <span className="text-[var(--danger)]">
+                                            {copy.invalidRows}: {batchResult.errors.length}
+                                        </span>
+                                    </div>
+                                    {batchValidated && batchResult.errors.length ? (
+                                        <ul
+                                            className="mb-0 mt-3 max-h-36 overflow-y-auto pl-5 text-sm text-[var(--danger)]"
+                                            role="alert"
+                                        >
+                                            {batchResult.errors.map(error => (
+                                                <li key={`${error.lineNumber}-${error.code}`}>
+                                                    {copy.line} {error.lineNumber}:{' '}
+                                                    {batchErrorLabel(error.code, copy)}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : null}
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        <button
+                                            className={primaryButtonClass}
+                                            type="button"
+                                            disabled={!batchInput.trim()}
+                                            onClick={() => void importAccounts()}
+                                        >
+                                            {copy.importAccounts}
+                                        </button>
+                                        <button
+                                            className={secondaryButtonClass}
+                                            type="button"
+                                            onClick={() => {
+                                                setShowBatchImport(false);
+                                                setBatchInput('');
+                                            }}
+                                        >
+                                            {copy.cancel}
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : null}
+
+                            {accounts.length ? (
+                                <div className="mt-5 flex flex-wrap items-center gap-2">
+                                    <label className="relative min-w-0 flex-1" aria-label={copy.search}>
+                                        <Search
+                                            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--muted)]"
+                                            aria-hidden="true"
+                                        />
+                                        <input
+                                            className={`${inputClass} pl-9`}
+                                            value={search}
+                                            placeholder={copy.search}
+                                            onChange={event => setSearch(event.target.value)}
+                                        />
+                                    </label>
+                                    <button
+                                        className={`${secondaryButtonClass} text-[var(--danger)]`}
+                                        type="button"
+                                        disabled={!storageAvailable}
+                                        onClick={() => {
+                                            setDeletionError(false);
+                                            setDeletion('all');
+                                        }}
+                                    >
+                                        <Trash2 className="size-4" />
+                                        {copy.clearAll}
+                                    </button>
+                                </div>
+                            ) : null}
+
+                            {!accounts.length ? (
+                                <div className="two-factor-empty mt-5 grid place-items-center py-6 text-center">
+                                    <div>
+                                        <strong className="mt-3 block text-[var(--text)]">
+                                            {copy.emptyTitle}
+                                        </strong>
+                                        <p className="mb-0 mt-1 text-sm text-[var(--muted)]">
+                                            {copy.emptyDescription}
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : !visibleAccounts.length ? (
+                                <p className="two-factor-empty mt-5 py-8 text-center text-sm text-[var(--muted)]">
+                                    {copy.noSearchResults}
+                                </p>
+                            ) : (
+                                <div className="two-factor-account-grid mt-4 grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-3">
+                                    {visibleAccounts.map(account => {
+                                        const revealed = revealedIds.has(account.id);
+                                        const code = codes[account.id];
+                                        return (
+                                            <article
+                                                className="two-factor-account min-w-0 py-4"
+                                                key={account.id}
                                             >
-                                                <Copy className="size-4" aria-hidden="true" />
-                                                {copy.copy}
-                                            </button>
-                                        </div>
-                                    </article>
-                                );
-                            })}
-                        </div>
-                    )}
+                                                <div className="flex min-h-9 items-center gap-2">
+                                                    <div className="flex min-w-0 flex-1 items-baseline gap-2 overflow-hidden">
+                                                        <h3
+                                                            className="m-0 max-w-[45%] shrink-0 truncate text-sm font-black text-[var(--text)]"
+                                                            title={account.projectName}
+                                                        >
+                                                            {account.projectName}
+                                                        </h3>
+                                                        <code className="min-w-0 truncate text-[11px] text-[var(--muted)]">
+                                                            {maskSecret(account.secret)}
+                                                        </code>
+                                                    </div>
+                                                    <AccountMoreMenu
+                                                        account={account}
+                                                        copy={copy}
+                                                        now={now}
+                                                        revealed={revealed}
+                                                        onToggleSecret={() =>
+                                                            setRevealedIds(current =>
+                                                                toggleSetValue(current, account.id),
+                                                            )
+                                                        }
+                                                        onEdit={() => openAccountForm(account)}
+                                                        onDelete={() => {
+                                                            setDeletionError(false);
+                                                            setDeletion({
+                                                                id: account.id,
+                                                                projectName: account.projectName,
+                                                            });
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div className="two-factor-account-code mt-2 flex min-h-12 items-center gap-2">
+                                                    <div className="min-w-[6.9rem] shrink-0">
+                                                        <span className="sr-only">{copy.dynamicCode}</span>
+                                                        <p className="m-0 whitespace-nowrap font-mono text-[1.35rem] font-black leading-none tracking-[0.12em] text-[var(--text)] tabular-nums">
+                                                            {code ? formatTotpCode(code) : '--- ---'}
+                                                        </p>
+                                                    </div>
+                                                    <CompactCountdown
+                                                        seconds={secondsRemaining}
+                                                        label={copy.seconds}
+                                                    />
+                                                    <button
+                                                        className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-[var(--skin-control-radius,10px)] bg-[var(--control-surface,var(--soft))] px-2 text-xs font-bold text-[var(--text)] transition-colors hover:bg-[var(--control-surface-hover,var(--accent-soft))] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+                                                        type="button"
+                                                        disabled={!code}
+                                                        onClick={() => void copyAccountCode(account)}
+                                                    >
+                                                        <Copy className="size-4" aria-hidden="true" />
+                                                        {copy.copy}
+                                                    </button>
+                                                </div>
+                                            </article>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </>
+                    ) : null}
                 </section>
             </div>
             {deletion ? (
@@ -811,7 +887,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
 }
 
 const inputClass =
-    'min-h-11 w-full rounded-[var(--skin-control-radius,10px)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm outline-none transition focus:border-[var(--focus)] focus:ring-4 focus:ring-[var(--accent-soft)]';
+    'min-h-11 w-full rounded-[var(--skin-control-radius,10px)] border border-transparent bg-[var(--soft)] px-3 py-2 text-sm outline-none transition focus:border-[var(--focus)] focus:ring-4 focus:ring-[var(--accent-soft)]';
 const primaryButtonClass =
     'inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--skin-control-radius,10px)] bg-[var(--accent)] px-4 text-sm font-extrabold text-[var(--accent-foreground)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]';
 const secondaryButtonClass =
@@ -1021,7 +1097,8 @@ function copyFor(language: StorefrontLanguage) {
     const isZh = language === 'zh';
     return {
         title: isZh ? '2FA 动态码' : '2FA codes',
-        quickQuery: isZh ? '查询 2FA 动态码' : 'Query a 2FA code',
+        quickQuery: isZh ? '快速查询' : 'Quick query',
+        savedAccounts: isZh ? '已保存账号' : 'Saved accounts',
         description: isZh
             ? '粘贴 Base32 密钥即可在本机生成验证码，密钥不会上传到服务器。'
             : 'Paste a Base32 secret to generate a code locally. The secret is never uploaded.',
@@ -1051,7 +1128,7 @@ function copyFor(language: StorefrontLanguage) {
         storageUnavailable: isZh
             ? '请先解锁已保存的账号；仍可临时查询验证码。'
             : 'Unlock saved accounts first. Temporary code queries remain available.',
-        accountList: isZh ? '2FA 账号列表' : '2FA account list',
+        accountList: isZh ? '已保存账号' : 'Saved accounts',
         batchImport: isZh ? '批量导入' : 'Bulk import',
         addAccount: isZh ? '添加账号' : 'Add account',
         projectName: isZh ? '项目名称' : 'Project name',

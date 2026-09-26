@@ -264,7 +264,6 @@ export function aggregateFlashSaleProducts(items: StorefrontFlashSaleItem[]): St
 
 export function FlashSaleSection({
     title,
-    subtitle,
     items,
     locale,
     language,
@@ -274,7 +273,6 @@ export function FlashSaleSection({
     layout = 'carousel',
 }: {
     title: string;
-    subtitle?: string;
     items: Array<StorefrontFlashSaleItem | StorefrontFlashSaleProduct>;
     locale: string;
     language: StorefrontLanguage;
@@ -291,17 +289,22 @@ export function FlashSaleSection({
             <SectionHeader
                 kind="flash-sale"
                 title={title}
-                subtitle={subtitle}
                 action={onMore ? (isZh ? '更多' : 'More') : undefined}
                 onAction={onMore}
+                endContent={
+                    countdown ? (
+                        <div
+                            className="flash-sale-countdown"
+                            role="timer"
+                            aria-label={isZh ? '距结束' : 'Ends in'}
+                        >
+                            <Clock3 aria-hidden="true" />
+                            <span className="flash-sale-countdown-label">{isZh ? '距结束' : 'Ends in'}</span>
+                            <strong>{countdown}</strong>
+                        </div>
+                    ) : null
+                }
             />
-            {countdown ? (
-                <div className="flash-sale-countdown" role="timer">
-                    <Clock3 aria-hidden="true" />
-                    <span>{isZh ? '距结束' : 'Ends in'}</span>
-                    <strong>{countdown}</strong>
-                </div>
-            ) : null}
             <div
                 className={`flash-sale-grid${layout === 'grid' ? ' is-expanded' : ''}`}
                 aria-label={
@@ -444,11 +447,6 @@ export function FlashSalePage({
             {items.length ? (
                 <FlashSaleSection
                     title={isZh ? '限时秒杀' : 'Flash sale'}
-                    subtitle={
-                        isZh
-                            ? `共 ${items.length} 件，活动价格会在购物车和结算页自动生效`
-                            : `${items.length} items · Sale prices apply automatically in cart and checkout`
-                    }
                     items={items}
                     locale={locale}
                     language={language}

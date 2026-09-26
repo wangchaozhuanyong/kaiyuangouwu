@@ -168,7 +168,6 @@ export function DesktopHeader({
                     }
                     selectedCurrencyCode={context.displayCurrencyCode}
                     currencyLoading={context.cartLoading}
-                    marketLabel={context.market.label}
                     onToggleLanguage={context.toggleLanguage}
                     onSelectCurrency={context.switchCurrency}
                     onClose={() => setPreferencesOpen(false)}

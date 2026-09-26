@@ -269,6 +269,7 @@ export function SectionHeader({
     icon,
     subtitlePlacement = 'below',
     kind,
+    endContent,
 }: {
     title?: string;
     subtitle?: string;
@@ -278,6 +279,7 @@ export function SectionHeader({
     icon?: ReactNode;
     subtitlePlacement?: 'below' | 'end';
     kind?: SectionKind;
+    endContent?: ReactNode;
 }) {
     const resolvedIcon = icon ?? getSectionIcon(title);
     const subtitleAtEnd = subtitlePlacement === 'end';
@@ -307,6 +309,7 @@ export function SectionHeader({
                 ) : (
                     <h2 className="section-header-center-label">{centerLabel}</h2>
                 ))}
+            {endContent}
             {action && (
                 <button type="button" className="section-header-action-btn" onClick={onAction}>
                     <span>{action}</span>

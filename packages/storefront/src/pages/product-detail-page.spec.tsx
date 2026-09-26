@@ -32,9 +32,9 @@ const product = {
     createdAt: '2026-09-25T00:00:00.000Z',
     name: '真实商品',
     slug: 'real-product',
-    description: '后台商品说明',
+    description: '<p>后台商品说明</p><p><img src="/assets/preview/detail.png"></p>',
     assets: [],
-    featuredAsset: null,
+    featuredAsset: { id: 'cover', preview: '/assets/preview/cover.png' },
     collections: [{ id: 'category-1', name: '分类', slug: 'category', parentId: '' }],
     variants: [
         {
@@ -106,11 +106,14 @@ describe('desktop product purchase controls', () => {
         );
         const button = (label: string) =>
             Array.from(host.querySelectorAll('button')).find(item => item.textContent?.trim() === label);
+        expect(host.querySelector('.detail-description')?.textContent).toContain('后台商品说明');
+        expect(host.querySelector('.detail-description img')).toBeNull();
+        expect(host.querySelector('.detail-gallery img')).not.toBeNull();
         const summary = host.querySelector('.detail-summary');
         expect(summary?.firstElementChild?.tagName).toBe('H1');
         expect(summary?.firstElementChild?.textContent).toBe(product.name);
         expect(summary?.textContent).not.toContain(product.description);
-        expect(host.querySelector('.detail-rich-text')?.textContent).toBe(product.description);
+        expect(host.querySelector('.detail-rich-text')?.textContent).toContain('后台商品说明');
         act(() => host.querySelector<HTMLButtonElement>('[aria-label="增加数量"]')?.click());
         act(() => host.querySelector<HTMLButtonElement>('[aria-label="增加数量"]')?.click());
         expect(host.querySelector('.detail-quantity output')?.textContent).toBe('3');

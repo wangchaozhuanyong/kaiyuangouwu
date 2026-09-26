@@ -130,7 +130,11 @@ try {
             let signedIn = true;
             const notificationReadKeys = new Set(['ORDER:notification-order-0:2026-09-23T08:00:00.000Z']);
             page.on('pageerror', error => errors.push(error.message));
-            if (requestedContent === 'product-detail') {
+            if (
+                ['product-detail', 'mail-query-surfaces'].includes(requestedContent) ||
+                requestedContent.startsWith('image-studio-') ||
+                requestedContent === 'planned-fixes'
+            ) {
                 await page.addInitScript(() => localStorage.setItem('storefront-analytics-opt-out:v1', '1'));
             }
             await page.route('**/*', async route => {
@@ -396,16 +400,43 @@ try {
                         `${preset}/${width}/product price surface`,
                     ).not.toBe('rgba(0, 0, 0, 0)');
                     const description = page.locator('.detail-description');
-                    const descriptionMedia = description.locator('.detail-description-media');
-                    await expect(descriptionMedia).toBeVisible();
-                    const [descriptionBox, descriptionMediaBox] = await Promise.all([
+                    await expect(description.locator('img, video, audio, iframe')).toHaveCount(0);
+                    const [descriptionBox, tabsBox] = await Promise.all([
                         description.boundingBox(),
-                        descriptionMedia.boundingBox(),
+                        page.locator('.detail-content-tabs').boundingBox(),
                     ]);
-                    expect(
-                        (descriptionMediaBox?.width ?? 0) / (descriptionBox?.width ?? 1),
-                        `${preset}/${width}/product description media fill`,
-                    ).toBeGreaterThanOrEqual(0.84);
+                    expect(Math.abs(descriptionBox.x - tabsBox.x)).toBeLessThanOrEqual(1);
+                    expect(Math.abs(descriptionBox.width - tabsBox.width)).toBeLessThanOrEqual(1);
+                }
+                if (name === 'product') {
+                    const gallery = page.locator('.detail-gallery');
+                    const thumbnails = page.locator('.detail-gallery-thumbnails');
+                    await expect(
+                        page.locator('.detail-description img, .detail-description video'),
+                    ).toHaveCount(0);
+                    if (requestedContent === 'product-detail') {
+                        await expect(thumbnails.locator('button')).toHaveCount(2);
+                        await expect(thumbnails).toBeVisible();
+                        const [galleryBox, thumbnailsBox] = await Promise.all([
+                            gallery.boundingBox(),
+                            thumbnails.boundingBox(),
+                        ]);
+                        expect(thumbnailsBox.y).toBeGreaterThanOrEqual(galleryBox.y + galleryBox.height);
+                        const originalSource = await gallery.locator('img').getAttribute('src');
+                        const second = thumbnails.getByRole('button', { name: '查看第2张商品图' });
+                        await second.click();
+                        await expect(second).toHaveAttribute('aria-current', 'true');
+                        await expect(gallery.locator('img')).not.toHaveAttribute('src', originalSource);
+                        await expect(page.locator('.gallery-count')).toHaveText('2 / 2');
+                        const first = thumbnails.getByRole('button', { name: '查看第1张商品图' });
+                        await first.focus();
+                        await page.keyboard.press('Enter');
+                        await expect(gallery.locator('img')).toHaveAttribute('src', originalSource);
+                        await expect(first).toHaveAttribute('aria-current', 'true');
+                        await expect(page.locator('.detail-rich-text')).toContainText('商品文字与参数');
+                    } else {
+                        await expect(thumbnails).toHaveCount(0);
+                    }
                 }
                 if (name === 'login' || name === 'register') {
                     await expect(page.locator('.auth-form-heading')).toBeVisible();
@@ -828,31 +859,6 @@ try {
                             'border-top-width',
                             '0px',
                         );
-                        const image = page.locator('.detail-description-media > img');
-                        await expect(image).toHaveJSProperty('naturalWidth', 700);
-                        const richMedia = await page.evaluate(() => {
-                            const card = document
-                                .querySelector('.detail-description')
-                                .getBoundingClientRect();
-                            const imageRect = document
-                                .querySelector('.detail-description-media > img')
-                                .getBoundingClientRect();
-                            const figure = document
-                                .querySelector('.detail-rich-text figure')
-                                .getBoundingClientRect();
-                            return {
-                                imageLeft: imageRect.left - card.left,
-                                imageRight: card.right - imageRect.right,
-                                imageRatio: imageRect.height / imageRect.width,
-                                figureLeft: figure.left - card.left,
-                                figureRight: card.right - figure.right,
-                            };
-                        });
-                        expect(richMedia.imageLeft).toBeGreaterThanOrEqual(14);
-                        expect(richMedia.imageRight).toBeGreaterThanOrEqual(14);
-                        expect(richMedia.imageRatio).toBeGreaterThan(1.6);
-                        expect(richMedia.figureLeft).toBeGreaterThanOrEqual(14);
-                        expect(richMedia.figureRight).toBeGreaterThanOrEqual(14);
                     }
                 }
                 if (width < 1024 && name === 'cart') {
@@ -1230,6 +1236,290 @@ try {
                     await expect(page.locator('.history-page .product-card')).toHaveCount(0);
                     await periods.getByRole('button', { name: '全部', exact: true }).click();
                     await expect(page.locator('.history-page .product-card')).toHaveCount(2);
+                }
+                if (
+                    requestedContent === 'locale-preferences' &&
+                    ['home', 'account', 'services'].includes(name)
+                ) {
+                    await page.locator('.locale-preferences-trigger:visible').first().click();
+                    const preferences = page.locator('.locale-preferences-sheet');
+                    await expect(preferences).toBeVisible();
+                    await expect(preferences.locator('.locale-preferences-market')).toHaveCount(0);
+                    await expect(preferences).not.toContainText(/当前店铺|Current storefront/);
+                    await expect(preferences.getByRole('radiogroup')).toHaveCount(2);
+                    await preferences.getByRole('radio', { name: 'English', exact: true }).click();
+                    await expect(
+                        preferences.getByRole('radio', { name: 'English', exact: true }),
+                    ).toHaveAttribute('aria-checked', 'true');
+                    await preferences.getByRole('radio', { name: '简体中文', exact: true }).click();
+                    await expect(
+                        preferences.getByRole('button', { name: '保存设置', exact: true }),
+                    ).toBeEnabled();
+                    await page.screenshot({
+                        path: path.join(output, `${preset}-${width}-${name}-locale-preferences.png`),
+                        fullPage: false,
+                        animations: 'disabled',
+                    });
+                    await preferences.getByRole('button', { name: '保存设置', exact: true }).click();
+                    await expect(preferences).toHaveCount(0);
+                }
+                if (requestedContent === 'flash-sale-heading' && ['home', 'flash-sale'].includes(name)) {
+                    const flashSale = page.locator('.flash-sale-section');
+                    const heading = flashSale.locator('.section-header');
+                    const timer = heading.getByRole('timer');
+                    await heading.evaluate(element => element.scrollIntoView({ block: 'center' }));
+                    await expect(heading.locator('p')).toHaveCount(0);
+                    await expect(flashSale).not.toContainText('不应显示的秒杀副标题');
+                    await expect(timer).toContainText(/\d{3}/);
+                    expect(
+                        await heading
+                            .locator('h2')
+                            .evaluate(element => element.scrollWidth <= element.clientWidth),
+                    ).toBe(true);
+                    const [headingBox, titleBox, timerBox] = await Promise.all([
+                        heading.boundingBox(),
+                        heading.locator('h2').boundingBox(),
+                        timer.boundingBox(),
+                    ]);
+                    expect(timerBox.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width);
+                    expect(
+                        Math.abs(titleBox.y + titleBox.height / 2 - timerBox.y - timerBox.height / 2),
+                    ).toBeLessThanOrEqual(1);
+                    expect(timerBox.x + timerBox.width).toBeLessThanOrEqual(headingBox.x + headingBox.width);
+                    if (name === 'flash-sale') {
+                        expect(
+                            headingBox.x + headingBox.width - timerBox.x - timerBox.width,
+                        ).toBeLessThanOrEqual(4);
+                    }
+                    await heading.screenshot({
+                        path: path.join(output, `${preset}-${width}-${name}-flash-heading.png`),
+                        animations: 'disabled',
+                    });
+                }
+                if (requestedContent === 'mail-query-surfaces' && name === 'mail-query') {
+                    const mailQuery = page.locator('.mail-query-page');
+                    for (const selector of [
+                        '.top-nav',
+                        '.nav-status',
+                        '.hero-badge',
+                        '.query-card',
+                        '.paste-btn',
+                        '.faq-section',
+                        '.faq-item',
+                    ]) {
+                        for (const surface of await mailQuery.locator(selector).all()) {
+                            await expect(surface).toHaveCSS('border-bottom-width', '0px');
+                        }
+                    }
+                    await page.screenshot({
+                        path: path.join(output, `${preset}-${width}-mail-query-surfaces.png`),
+                        fullPage: true,
+                        animations: 'disabled',
+                    });
+                    await mailQuery.locator('#queryBtn').click();
+                    await expect(mailQuery.locator('.toast-msg.error')).toBeVisible();
+                    const input = mailQuery.locator('#codeInput');
+                    await input.fill('BUY-LOCAL-QA01');
+                    await input.focus();
+                    await expect(input).not.toHaveCSS('box-shadow', 'none');
+                    await input.press('Enter');
+                    await expect(mailQuery.locator('.mail-card')).toHaveCount(1);
+                    await expect(mailQuery.locator('.otp-banner')).toContainText('123456');
+                    for (const selector of ['.result-summary-card', '.mail-card', '.otp-banner']) {
+                        await expect(mailQuery.locator(selector)).toHaveCSS('border-top-width', '0px');
+                    }
+                    await page.screenshot({
+                        path: path.join(output, `${preset}-${width}-mail-query-results.png`),
+                        fullPage: true,
+                        animations: 'disabled',
+                    });
+                }
+                if (requestedContent.startsWith('image-studio-') && name === 'image-studio') {
+                    const studio = page.locator('.ai-studio-workflow');
+                    const create = studio.locator('.ai-studio-create-panel');
+                    const history = studio.locator('.ai-studio-history');
+                    await expect(create).toBeVisible();
+                    await expect(studio.locator('.ai-studio-controls')).toHaveCSS('box-shadow', 'none');
+                    await expect(studio.locator('.ai-studio-controls')).toHaveCSS(
+                        'background-color',
+                        'rgba(0, 0, 0, 0)',
+                    );
+                    await expect(studio.locator('.ai-studio-hold-amount strong')).toHaveText('MYR 0.3');
+                    await expect(studio.locator('.ai-studio-settlement-amount strong')).toHaveText(
+                        requestedContent === 'image-studio-records' ? 'MYR 0' : 'MYR 10',
+                    );
+                    for (const selector of [
+                        '.ai-studio-view-tabs',
+                        '.ai-studio-composer',
+                        '.ai-studio-options',
+                        '.ai-studio-checkout',
+                        '.ai-studio-option-row',
+                        '.ai-studio-settlement-summary',
+                        '.ai-studio-settlement',
+                    ]) {
+                        await expect(studio.locator(selector)).toHaveCSS('border-top-width', '0px');
+                    }
+                    const generate = studio.getByRole('button', { name: '开始生成', exact: true });
+                    if (requestedContent === 'image-studio-records') {
+                        await expect(studio.locator('.ai-studio-low-balance')).toBeVisible();
+                        await expect(generate).toBeDisabled();
+                    }
+                    if (width < 1024) {
+                        for (const trigger of await studio.locator('.ai-studio-setting-trigger').all()) {
+                            await expect(trigger).toHaveCSS('border-left-width', '0px');
+                        }
+                        await studio.getByRole('button', { name: /生成张数/ }).click();
+                        await page
+                            .locator('.ai-studio-setting-sheet')
+                            .getByRole('radio', { name: '2 张', exact: true })
+                            .click();
+                    } else {
+                        await expect(studio.locator('.ai-studio-model-grid')).toBeHidden();
+                        await expect(studio.locator('.ai-studio-option-row')).toBeHidden();
+                        await studio.locator('.ai-studio-desktop-quantity select').selectOption('2');
+                    }
+                    await expect(studio.locator('.ai-studio-hold-amount strong')).toHaveText('MYR 0.6');
+                    await studio.locator('.ai-studio-composer h3').click();
+                    await page.screenshot({
+                        path: path.join(output, `${preset}-${width}-image-studio-create.png`),
+                        fullPage: true,
+                        animations: 'disabled',
+                    });
+                    await studio.getByRole('tab', { name: '生成记录', exact: true }).click();
+                    await expect(create).toBeHidden();
+                    await expect(history).toBeVisible();
+                    await expect(history).toHaveCSS('box-shadow', 'none');
+                    await expect(history).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+                    await expect(history.locator('.ai-studio-history-toolbar')).toHaveCSS(
+                        'border-top-width',
+                        '0px',
+                    );
+                    if (requestedContent === 'image-studio-records') {
+                        await expect(history.locator('.ai-generation-card')).toHaveCount(2);
+                        for (const card of await history.locator('.ai-generation-card').all()) {
+                            await expect(card).toHaveCSS('border-bottom-width', '0px');
+                        }
+                        await history.getByRole('tab', { name: '已完成', exact: true }).click();
+                        await expect(history.locator('.ai-generation-card')).toHaveCount(1);
+                        await expect(history.locator('.ai-generation-card')).toContainText('实付 MYR 0.3');
+                        await history.getByRole('tab', { name: '失败', exact: true }).click();
+                        await expect(history.locator('.ai-generation-card')).toHaveCount(1);
+                        await expect(history.locator('.ai-generation-card')).toContainText('已释放 MYR 0.3');
+                        await history.getByRole('tab', { name: '全部', exact: true }).click();
+                    } else {
+                        await expect(history.locator('.ai-studio-empty h4')).toHaveText('还没有生成记录');
+                        await history.getByRole('button', { name: '去创作', exact: true }).click();
+                        await expect(create).toBeVisible();
+                        await expect(studio.locator('.ai-studio-hold-amount strong')).toHaveText('MYR 0.6');
+                        await studio.getByRole('tab', { name: '生成记录', exact: true }).click();
+                    }
+                    await history.locator('h3').click();
+                    await page.screenshot({
+                        path: path.join(output, `${preset}-${width}-image-studio-history.png`),
+                        fullPage: true,
+                        animations: 'disabled',
+                    });
+                    expect(
+                        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+                    ).toBe(true);
+                }
+                if (requestedContent === 'planned-fixes' && name === 'account' && width < 1024) {
+                    const services = page.locator('.account-service-grid');
+                    await expect(services.locator(':scope > button')).toHaveCount(8);
+                    const rows = await services
+                        .locator(':scope > button')
+                        .evaluateAll(buttons =>
+                            buttons.map(button => Math.round(button.getBoundingClientRect().top)),
+                        );
+                    expect(new Set(rows).size).toBe(2);
+                    await services.screenshot({
+                        path: path.join(output, `${preset}-${width}-account-eight-services.png`),
+                        animations: 'disabled',
+                    });
+                    await services.getByRole('button', { name: '浏览足迹', exact: true }).click();
+                    await expect(page).toHaveURL(/\/history(?:\?|$)/);
+                    await expect(page.locator('.history-page')).toBeVisible();
+                }
+                if (requestedContent === 'planned-fixes' && name === 'two-factor') {
+                    const workspace = page.locator('.two-factor-workspace');
+                    const query = workspace.locator('.two-factor-query');
+                    const accounts = workspace.locator('.two-factor-accounts');
+                    const tabs = workspace.locator('.two-factor-view-tabs');
+                    await expect(query).toBeVisible();
+                    await expect(query.locator('.two-factor-vault')).toHaveCount(0);
+                    if (width < 1024) await expect(accounts).toBeHidden();
+                    else await expect(accounts).toBeVisible();
+                    await query.locator('h2').click();
+                    await page.screenshot({
+                        path: path.join(output, `${preset}-${width}-two-factor-query.png`),
+                        fullPage: true,
+                        animations: 'disabled',
+                    });
+                    const quickSecret = query.locator('#storefront-two-factor-secret');
+                    await quickSecret.fill('invalid');
+                    await query.getByRole('button', { name: '查询动态码', exact: true }).click();
+                    await expect(query.locator('[role="alert"]')).toBeVisible();
+                    // Public TOTP example and disposable local vault; never a real account or credential.
+                    await quickSecret.fill('JBSWY3DPEHPK3PXP');
+                    await query.getByRole('button', { name: '查询动态码', exact: true }).click();
+                    await expect(query.locator('.two-factor-query-result p')).toHaveText(/^\d{3} \d{3}$/);
+                    if (width < 1024)
+                        await tabs.getByRole('tab', { name: '已保存账号', exact: true }).click();
+                    const vault = accounts.locator('.two-factor-vault');
+                    await vault.getByRole('button', { name: '启用加密保存', exact: true }).click();
+                    const passphrase = 'Local-QA-only-passphrase-2026';
+                    const passwords = vault.locator('input[type="password"]');
+                    await passwords.nth(0).fill(passphrase);
+                    await passwords.nth(1).fill(passphrase);
+                    await vault.locator('button[type="submit"]').click();
+                    await expect(vault).toHaveAttribute('data-vault-state', 'unlocked');
+                    await expect(accounts.locator('.two-factor-empty')).toBeVisible();
+                    await accounts.getByRole('button', { name: '添加账号', exact: true }).click();
+                    const form = accounts.locator('.two-factor-account-form');
+                    await form.locator('input').nth(0).fill('本地验收示例账号');
+                    await form.locator('input').nth(1).fill('JBSWY3DPEHPK3PXP');
+                    await form.locator('button[type="submit"]').click();
+                    await expect(accounts.locator('.two-factor-account')).toHaveCount(1);
+                    await expect(accounts.locator('.two-factor-account-code p')).toHaveText(/^\d{3} \d{3}$/);
+                    await accounts.locator('h2').click();
+                    await page.screenshot({
+                        path: path.join(output, `${preset}-${width}-two-factor-accounts.png`),
+                        fullPage: true,
+                        animations: 'disabled',
+                    });
+                    await vault.getByRole('button', { name: '立即上锁', exact: true }).click();
+                    await expect(vault).toHaveAttribute('data-vault-state', 'locked');
+                    await expect(accounts.locator('.two-factor-empty')).toHaveCount(0);
+                    await expect(accounts.locator('.two-factor-account')).toHaveCount(0);
+                    await expect(accounts).not.toContainText('0 / 100');
+                    await expect(accounts.getByRole('button', { name: '添加账号', exact: true })).toHaveCount(
+                        0,
+                    );
+                    await accounts.locator('h2').click();
+                    await page.screenshot({
+                        path: path.join(output, `${preset}-${width}-two-factor-locked.png`),
+                        fullPage: true,
+                        animations: 'disabled',
+                    });
+                    if (width < 1024) await tabs.getByRole('tab', { name: '快速查询', exact: true }).click();
+                    await expect(query).toBeVisible();
+                    await expect(query.locator('.two-factor-lock-notice')).toBeVisible();
+                    await quickSecret.fill('JBSWY3DPEHPK3PXP');
+                    await query.getByRole('button', { name: '查询动态码', exact: true }).click();
+                    await expect(query.locator('.two-factor-query-result p')).toHaveText(/^\d{3} \d{3}$/);
+                    await expect(query.getByRole('button', { name: '复制', exact: true })).toBeEnabled();
+                    await expect(query.getByRole('button', { name: '保存到列表', exact: true })).toHaveCount(
+                        0,
+                    );
+                    await query.getByRole('button', { name: '去解锁', exact: true }).click();
+                    await expect(vault.locator('input[type="password"]')).toBeFocused();
+                    await vault.locator('input[type="password"]').fill(passphrase);
+                    await vault.getByRole('button', { name: '解锁账号', exact: true }).click();
+                    await expect(vault).toHaveAttribute('data-vault-state', 'unlocked');
+                    await expect(accounts.locator('.two-factor-account')).toHaveCount(1);
+                    expect(
+                        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+                    ).toBe(true);
                 }
                 results.push({
                     preset,
