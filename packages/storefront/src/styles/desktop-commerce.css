@@ -1173,8 +1173,10 @@
         object-position: right center;
     }
     .desktop-category-directory-title {
-        display: block;
-        padding: 12px 14px 18px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
         font-size: 15px;
         color: var(--text);
     }
@@ -1234,8 +1236,8 @@
         border-radius: var(--skin-control-radius);
         background: transparent;
         color: var(--muted);
-        padding: 7px 14px;
-        min-height: 40px;
+        padding: 8px 14px;
+        min-height: 44px;
         flex: none;
         cursor: pointer;
         font-size: 14px;
@@ -1258,10 +1260,16 @@
         background: var(--accent-soft);
         color: var(--accent-ink);
     }
-    .desktop-category-icon :is(img, svg) {
+    .desktop-category-icon svg {
         display: block;
         width: 22px;
         height: 22px;
+        object-fit: contain;
+    }
+    .desktop-category-icon :is(img, .responsive-picture) {
+        display: block;
+        width: 100%;
+        height: 100%;
         object-fit: contain;
     }
     .desktop-category-icon:has(img) {

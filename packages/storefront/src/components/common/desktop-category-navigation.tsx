@@ -1,8 +1,9 @@
 import { LayoutGrid } from 'lucide-react';
 
+import allCategoriesIcon from '../../assets/icons/catalog-directory-color.webp';
+import allProductsIcon from '../../assets/icons/catalog-products-color.webp';
 import { catalogInputFromRoute, catalogRouteWithChanges } from '../../catalog-route-query';
 import { RouteState } from '../../storefront-router';
-import { SectionIcon } from '../../storefront-ui/page-shell';
 import { collectionImage, SafeImage } from '../../storefront-ui/product-display';
 import { useStorefront } from '../../StorefrontContext';
 import { CollectionSummary, Product, StorefrontLanguage } from '../../types';
@@ -39,9 +40,11 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
             aria-label={isZh ? '商品分类' : 'Product categories'}
         >
             {expandChildren && (
-                <strong className="desktop-category-directory-title section-header-title-row">
-                    <SectionIcon kind="categories" />
-                    {isZh ? '全部分类目录' : 'All categories'}
+                <strong className="desktop-category-directory-title">
+                    <span className="desktop-category-icon" aria-hidden="true">
+                        <img src={allCategoriesIcon} width={28} height={28} alt="" decoding="async" />
+                    </span>
+                    <span>{isZh ? '全部分类目录' : 'All categories'}</span>
                 </strong>
             )}
             <div className="desktop-category-row">
@@ -58,7 +61,7 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
                         onClick={clearFilters}
                     >
                         <span className="desktop-category-icon" aria-hidden="true">
-                            <LayoutGrid />
+                            <img src={allProductsIcon} width={28} height={28} alt="" decoding="async" />
                         </span>
                         <span>{isZh ? '全部商品' : 'All products'}</span>
                     </button>
