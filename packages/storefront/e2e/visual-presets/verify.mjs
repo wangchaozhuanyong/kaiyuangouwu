@@ -326,6 +326,24 @@ try {
                         expect(Math.abs(section.right)).toBeLessThanOrEqual(1);
                     }
                 }
+                if (width >= 1024 && name === 'account' && requestedContent === 'dense') {
+                    const thumbs = page.locator('.desktop-order-product > .responsive-picture');
+                    await expect(thumbs.first()).toBeVisible();
+                    for (const thumb of await thumbs.all()) {
+                        const bounds = await thumb.boundingBox();
+                        expect(bounds.width).toBe(68);
+                        expect(bounds.height).toBe(68);
+                    }
+                }
+                if (width === 1280 && name === 'category') {
+                    const columns = await page
+                        .locator('.desktop-product-grid')
+                        .evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length);
+                    expect(columns).toBe(4);
+                }
+                if (width >= 1024 && ['coupons', 'support'].includes(name)) {
+                    await expect(page.locator('.subpage-header')).toBeHidden();
+                }
                 if (name === 'product' && width >= 1024) {
                     const media = page.locator('.desktop-product-purchase .detail-gallery');
                     await expect(media).toBeVisible();
@@ -652,6 +670,32 @@ try {
                     ).toBe(width < 1024 ? 52 : 72);
                 }
                 if (name === 'home' && width < 1024) {
+                    const overlay = await page.locator('.hero').evaluate(hero => {
+                        const image = hero.querySelector('.hero-rich-backdrop');
+                        const copy = hero.querySelector('.hero-rich-content');
+                        const action = hero.querySelector('.hero-rich-cta-btn');
+                        return {
+                            image: image.getBoundingClientRect().toJSON(),
+                            title: hero.querySelector('.hero-rich-title').getBoundingClientRect().toJSON(),
+                            action: action.getBoundingClientRect().toJSON(),
+                            copyBackground: getComputedStyle(copy).backgroundColor,
+                            loaded: image.complete && image.naturalWidth > 0,
+                        };
+                    });
+                    expect(overlay.loaded, `${preset}/${width}/home image decoded`).toBe(true);
+                    expect(overlay.copyBackground, `${preset}/${width}/home no separate copy panel`).toBe(
+                        'rgba(0, 0, 0, 0)',
+                    );
+                    for (const element of [overlay.title, overlay.action]) {
+                        expect(element.left).toBeGreaterThanOrEqual(overlay.image.left);
+                        expect(element.top).toBeGreaterThanOrEqual(overlay.image.top);
+                        expect(element.right).toBeLessThanOrEqual(overlay.image.right + 1);
+                        expect(element.bottom).toBeLessThanOrEqual(overlay.image.bottom - 28);
+                    }
+                    expect(
+                        overlay.action.height,
+                        `${preset}/${width}/home touch target`,
+                    ).toBeGreaterThanOrEqual(44);
                     for (const selector of [
                         '.home-page .notice-strip',
                         '.home-page .hero',
@@ -855,7 +899,23 @@ try {
                         await expect(page.locator(selector).first()).toHaveCSS('border-top-width', '0px');
                     }
                     await page.locator('.support-tag-btn').first().click();
+                    await expect(page.locator('.support-faq-item')).toHaveCount(8);
+                    await expect(
+                        page
+                            .getByRole('navigation', { name: '常见问题分页' })
+                            .getByRole('button', { name: '下一页' }),
+                    ).toBeDisabled();
+                    await expect(page.getByRole('navigation', { name: '常见问题分页' })).toContainText(
+                        '1 / 1',
+                    );
                     await expect(page.locator('.support-tag-btn').first()).toHaveClass(/is-active/);
+                    await page
+                        .getByRole('searchbox', { name: '搜索常见问题' })
+                        .fill('不可能匹配的测试关键词');
+                    await expect(page.locator('.support-faq-item')).toHaveCount(0);
+                    await page.getByRole('searchbox', { name: '搜索常见问题' }).fill('运费');
+                    await expect(page.locator('.support-faq-item')).toHaveCount(1);
+                    await page.getByRole('searchbox', { name: '搜索常见问题' }).fill('');
                     await page.locator('.support-faq-item summary').first().click();
                     await expect(page.locator('.support-faq-item p').first()).toBeVisible();
                 }
@@ -1188,6 +1248,7 @@ try {
                                 heroRight: heroBounds.right,
                                 heroBottom: heroBounds.bottom,
                                 quickHeight: quickBounds.height,
+                                quickWidth: quickBounds.width,
                                 quickLeft: quickBounds.left,
                                 quickTop: quickBounds.top,
                                 copyBackground: getComputedStyle(copy).backgroundColor,
@@ -1204,8 +1265,12 @@ try {
                     );
                     if (width >= 1400) {
                         expect(
+                            Math.abs(pair.heroWidth / pair.quickWidth - 2),
+                            `${preset}/${width}/home 8:4 column ratio`,
+                        ).toBeLessThan(0.01);
+                        expect(
                             pair.heroRight,
-                            `${preset}/${width}/home hero and quick links do not overlap`,
+                            `${preset}/${width}/home approved 8:4 layout`,
                         ).toBeLessThanOrEqual(pair.quickLeft);
                         expect(
                             Math.abs(pair.heroHeight - pair.quickHeight),
@@ -1214,7 +1279,7 @@ try {
                     } else {
                         expect(
                             pair.quickTop,
-                            `${preset}/${width}/home quick links follow artwork`,
+                            `${preset}/${width}/home narrow desktop stacks`,
                         ).toBeGreaterThanOrEqual(pair.heroBottom);
                     }
                     if (requestedContent === 'wide-hero') {

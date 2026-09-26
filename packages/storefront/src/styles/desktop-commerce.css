@@ -399,13 +399,13 @@
     }
     .desktop-store-layout .product-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         column-gap: 20px;
         row-gap: 24px;
     }
     @media (min-width: 1280px) {
         .desktop-store-layout .product-grid {
-            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             column-gap: 20px;
             row-gap: 24px;
         }
@@ -595,13 +595,21 @@
         height: 16px;
     }
     .desktop-member-summary {
-        display: flex;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
         padding: 24px;
         gap: 16px;
         background: var(--paper, #fff);
         border-radius: var(--skin-card-radius);
         box-shadow: var(--skin-card-shadow);
+    }
+    .desktop-member-assets {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+        margin-top: 8px;
     }
     .desktop-member-identity {
         display: flex;
@@ -677,13 +685,25 @@
     .desktop-member-asset {
         display: grid;
         gap: 8px;
-        justify-items: center;
-        min-width: 96px;
-        padding: 12px 20px;
+        justify-items: start;
+        min-width: 0;
+        padding: 20px;
         border: 0;
-        border-left: 0;
         border-radius: var(--skin-control-radius);
         background: var(--soft);
+    }
+    .desktop-member-asset-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .desktop-member-asset-label svg {
+        width: 18px;
+        height: 18px;
+    }
+    .desktop-member-asset small {
+        color: var(--muted);
+        font-size: 12px;
     }
     .desktop-member-asset strong {
         color: var(--accent-ink);
@@ -705,7 +725,7 @@
         grid-template-columns: repeat(5, minmax(0, 1fr));
         margin-top: 22px;
         gap: 10px;
-        padding-bottom: 22px;
+        padding-bottom: 0;
         border-bottom: 0;
     }
     .desktop-order-statuses button {
@@ -806,6 +826,9 @@
         background: none;
         color: var(--accent-ink);
     }
+    .desktop-recent-orders {
+        margin-top: 18px;
+    }
     .desktop-recent-orders article {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 90px 100px 84px;
@@ -833,7 +856,7 @@
         gap: 16px;
         min-width: 0;
     }
-    .desktop-order-product > :is(img, picture, .image-placeholder) {
+    .desktop-order-product > :is(img, picture, .responsive-picture, .image-placeholder) {
         width: 68px;
         height: 68px;
         flex: none;
@@ -870,6 +893,19 @@
         min-height: 94px;
         padding-top: 18px;
     }
+    .desktop-delivery-summary > :is(.responsive-picture, .image-placeholder) {
+        flex: none;
+        width: 68px;
+        height: 68px;
+    }
+    .desktop-delivery-summary img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+    .desktop-delivery-summary > div {
+        min-width: 0;
+    }
     .desktop-delivery-summary > svg {
         color: var(--muted);
         width: 30px;
@@ -888,8 +924,8 @@
         gap: 10px;
     }
     .desktop-delivery-summary .safe-image-frame {
-        width: 80px;
-        height: 80px;
+        width: 68px;
+        height: 68px;
         flex: none;
         border-radius: var(--skin-control-radius);
         overflow: hidden;
@@ -999,7 +1035,7 @@
         padding: 0;
     }
     .desktop-account-page .desktop-account-recommendations .product-grid {
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 16px;
     }
     .desktop-account-page .section-header h2 {
@@ -1016,7 +1052,7 @@
     /* Catalog filters are desktop controls; products retain complete square images. */
     .desktop-catalog-main {
         display: grid;
-        grid-template-columns: clamp(220px, 20vw, 280px) minmax(0, 1fr);
+        grid-template-columns: 220px minmax(0, 1fr);
         align-items: start;
         gap: 20px;
         padding-block: 20px 48px;
@@ -1025,6 +1061,31 @@
         position: sticky;
         top: calc(var(--desktop-header-height) + 20px);
         min-width: 0;
+    }
+    .desktop-catalog-help {
+        padding: 20px;
+        margin-top: 20px;
+        background: var(--surface);
+        border-radius: var(--skin-card-radius);
+        box-shadow: var(--skin-card-shadow);
+    }
+    .desktop-catalog-help h2 {
+        margin: 0 0 10px;
+        font-size: 15px;
+    }
+    .desktop-catalog-help p {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+    }
+    .desktop-catalog-help button {
+        margin-top: 12px;
+        min-height: 44px;
+        border: 0;
+        padding: 8px 12px;
+        border-radius: var(--skin-control-radius);
+        color: var(--accent-ink);
+        background: var(--accent-soft);
     }
     .desktop-catalog-workspace {
         min-width: 0;
@@ -1207,8 +1268,8 @@
         background: transparent;
     }
     .desktop-category-navigation button[aria-pressed='true'] {
-        color: var(--accent-foreground);
-        background: var(--accent);
+        color: var(--accent-ink);
+        background: var(--accent-soft);
         font-weight: 600;
     }
     .desktop-category-navigation button:hover {
@@ -1216,8 +1277,8 @@
         background: var(--accent-soft);
     }
     .desktop-category-navigation button[aria-pressed='true']:hover {
-        color: var(--accent-foreground);
-        background: var(--accent-hover);
+        color: var(--accent-ink);
+        background: var(--control-surface-hover);
     }
     .desktop-category-status {
         font-size: 13px;
@@ -1441,7 +1502,7 @@
     }
     .desktop-product-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 28px 20px;
     }
     .desktop-catalog-results > .empty-state {
@@ -1766,7 +1827,7 @@
             gap: 0 24px;
         }
         .desktop-product-grid {
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
         }
         .desktop-account-layout {
             grid-template-columns: 240px minmax(0, 1fr);

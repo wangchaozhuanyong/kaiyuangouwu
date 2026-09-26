@@ -106,16 +106,15 @@
 }
 
 .product-card-subtitle {
-    display: -webkit-box;
+    display: block;
     margin-top: 4px;
-    min-height: 3em;
+    min-height: 1.5em;
     overflow: hidden;
     color: var(--muted);
     font-size: 12px;
     line-height: 1.5;
-    overflow-wrap: anywhere;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .product-card-meta {
@@ -196,45 +195,5 @@
 
     .product-card-subtitle {
         font-size: 13px;
-    }
-
-    .desktop-account-recommendations .product-card {
-        display: grid;
-        grid-template-columns: minmax(136px, 32%) minmax(0, 1fr);
-        grid-template-rows: auto auto minmax(0, 1fr) auto;
-        column-gap: 16px;
-        min-height: 184px;
-        padding: 0 16px 0 0;
-    }
-    .desktop-account-recommendations .product-card-media {
-        grid-column: 1;
-        grid-row: 1 / span 4;
-        height: 100%;
-        aspect-ratio: auto;
-        border-radius: var(--skin-card-radius) 0 0 var(--skin-card-radius);
-    }
-    .desktop-account-recommendations
-        .product-card
-        :is(.product-card-name, .product-card-subtitle, .product-card-meta, footer) {
-        grid-column: 2;
-        padding-inline: 0;
-    }
-    .desktop-account-recommendations .product-card-name {
-        grid-row: 1;
-        margin-top: 16px;
-        font-size: 15px;
-    }
-    .desktop-account-recommendations .product-card-subtitle {
-        grid-row: 2;
-        min-height: 0;
-    }
-    .desktop-account-recommendations .product-card-meta {
-        grid-row: 3;
-        align-self: start;
-    }
-    .desktop-account-recommendations .product-card footer {
-        grid-row: 4;
-        margin-top: 0;
-        padding-bottom: 16px;
     }
 }

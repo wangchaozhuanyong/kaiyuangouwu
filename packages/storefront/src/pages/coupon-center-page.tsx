@@ -181,270 +181,291 @@ export function CouponCenterPage() {
     const shopNow = () => navigateTo({ name: 'category' });
 
     return (
-        <Subpage title={isZh ? '优惠券中心' : 'Coupon center'} language={language} onBack={goBack}>
-            <nav className="coupon-center-tabs" aria-label={isZh ? '优惠券分类' : 'Coupon categories'}>
-                {tabs.map(tab => (
-                    <button
-                        key={tab}
-                        type="button"
-                        className={activeTab === tab ? 'is-active' : ''}
-                        aria-current={activeTab === tab ? 'page' : undefined}
-                        onClick={() => {
-                            setActiveTab(tab);
-                            setPage(0);
-                        }}
-                    >
-                        <span>{tabLabel(tab, language)}</span>
-                        <small>
-                            {couponTabCountDisplay(
-                                tab,
-                                pagination && tab === 'UNUSED'
-                                    ? (ownedPage.data?.totalItems ?? 0)
-                                    : pagination && tab === 'HISTORY'
-                                      ? (historyPage.data?.totalItems ?? 0)
-                                      : couponCenterTabCount(
-                                            tab,
-                                            customerAwareCampaigns,
-                                            myCoupons,
-                                            usageRecords,
-                                        ),
-                                campaignsLoading,
-                                campaignsError,
-                                myCouponsLoading,
-                                myCouponsError,
-                                usageRecordsLoading,
-                                usageRecordsError,
-                            )}
-                        </small>
-                    </button>
-                ))}
-            </nav>
-
-            {(activeTab === 'ACTIVITIES' || activeTab === 'UNCLAIMED') && campaignLoadState !== 'ready' ? (
-                <CouponQueryBoundary
-                    loading={campaignsLoading}
-                    error={campaignsError}
-                    hasData={false}
-                    language={language}
-                    onRetry={onRetryCampaigns}
-                    empty={<CouponTabEmpty tab={activeTab} language={language} onShop={shopNow} />}
-                >
-                    {null}
-                </CouponQueryBoundary>
-            ) : activeTab === 'UNCLAIMED' && ownershipLoadState !== 'ready' ? (
-                <CouponQueryBoundary
-                    loading={myCouponsLoading}
-                    error={myCouponsError}
-                    hasData={false}
-                    language={language}
-                    onRetry={onRetryMyCoupons}
-                    empty={<CouponTabEmpty tab={activeTab} language={language} onShop={shopNow} />}
-                >
-                    {null}
-                </CouponQueryBoundary>
-            ) : activeTab === 'ACTIVITIES' || activeTab === 'UNCLAIMED' ? (
-                visibleCampaignCards.length ? (
-                    <section
-                        className="coupon-center-panel"
-                        aria-label={
-                            activeTab === 'UNCLAIMED'
-                                ? isZh
-                                    ? '未领取优惠券'
-                                    : 'Unclaimed coupons'
-                                : isZh
-                                  ? '当前优惠券活动'
-                                  : 'Current coupon activities'
-                        }
-                    >
-                        {campaignsError ? (
-                            <div className="coupon-center-query-state is-inline">
-                                <InlineError
-                                    message={campaignsError}
-                                    action={isZh ? '重试' : 'Retry'}
-                                    onAction={onRetryCampaigns}
-                                />
-                            </div>
-                        ) : null}
-                        <div className="coupon-center-ticket-list">
-                            {visibleCampaignCards.map(card => {
-                                const campaign = customerAwareCampaigns.find(
-                                    item => item.id === card.campaignId,
-                                );
-                                if (!campaign) return null;
-                                const actionState = couponCampaignActionState(
-                                    campaign,
-                                    language,
-                                    ownershipLoadState,
-                                );
-                                const { canClaim } = actionState;
-                                const action = (
-                                    <button
-                                        type="button"
-                                        className={`${
-                                            activeTab === 'ACTIVITIES'
-                                                ? 'coupon-activity-action'
-                                                : 'coupon-claim-btn'
-                                        }${canClaim ? '' : ' is-claimed'}${
-                                            actionState.detail ? ' is-unavailable' : ''
-                                        }`}
-                                        disabled={!canClaim || loading || claimingId !== null}
-                                        onClick={() => void claim(campaign.id)}
-                                    >
-                                        <span className="coupon-btn-text-wrap">
-                                            <span>
-                                                {activeTab === 'UNCLAIMED' && canClaim && isZh
-                                                    ? '领取'
-                                                    : actionState.label}
-                                            </span>
-                                            {actionState.detail ? <small>{actionState.detail}</small> : null}
-                                            {campaign.claimed ? (
-                                                <Check size={13} aria-hidden="true" />
-                                            ) : canClaim ? (
-                                                <ChevronRight size={15} aria-hidden="true" />
-                                            ) : null}
-                                        </span>
-                                    </button>
-                                );
-                                return activeTab === 'ACTIVITIES' ? (
-                                    <ActivityCoupon
-                                        key={card.id}
-                                        card={card}
-                                        campaign={campaign}
-                                        language={language}
-                                        muted={!canClaim}
-                                        action={action}
-                                    />
-                                ) : (
-                                    <CouponTicket
-                                        key={card.id}
-                                        card={card}
-                                        muted={!canClaim}
-                                        action={action}
-                                        meta={campaignValidity(campaign, language)}
-                                    />
-                                );
-                            })}
-                        </div>
-                    </section>
-                ) : (
-                    <CouponTabEmpty tab={activeTab} language={language} onShop={shopNow} />
-                )
-            ) : activeTab === 'UNUSED' ? (
-                <CouponQueryBoundary
-                    loading={myCouponsLoading}
-                    error={myCouponsError}
-                    hasData={visibleCustomerCoupons.length > 0}
-                    language={language}
-                    onRetry={pagination ? () => void ownedPage.refetch() : onRetryMyCoupons}
-                    empty={<CouponTabEmpty tab={activeTab} language={language} onShop={shopNow} />}
-                >
-                    <section className="coupon-center-panel" aria-busy={loading}>
-                        <div className="coupon-center-ticket-list">
-                            {visibleCustomerCoupons.map((coupon, index) => {
-                                const card = couponCardFromCustomerCoupon(
-                                    coupon,
-                                    language,
-                                    currencyCode,
-                                    index,
-                                    displayCurrencyCode,
-                                );
-                                const locked = isLockedCoupon(coupon);
-                                return (
-                                    <CouponTicket
-                                        key={coupon.id}
-                                        card={card}
-                                        action={
-                                            locked ? (
-                                                <span className="coupon-ticket-status">
-                                                    {isZh ? '订单占用中' : 'Reserved'}
-                                                </span>
-                                            ) : (
-                                                <button
-                                                    type="button"
-                                                    className="coupon-claim-btn"
-                                                    onClick={shopNow}
-                                                >
-                                                    <span className="coupon-btn-text-wrap">
-                                                        <span>{isZh ? '去使用' : 'Shop now'}</span>
-                                                        <ChevronRight size={15} aria-hidden="true" />
-                                                    </span>
-                                                </button>
-                                            )
-                                        }
-                                        meta={customerCouponValidity(coupon, language)}
-                                    />
-                                );
-                            })}
-                        </div>
-                    </section>
-                </CouponQueryBoundary>
-            ) : (
-                <CouponQueryBoundary
-                    loading={usageRecordsLoading}
-                    error={usageRecordsError}
-                    hasData={usageRecords.length > 0}
-                    language={language}
-                    onRetry={pagination ? () => void historyPage.refetch() : onRetryUsageRecords}
-                    empty={<CouponTabEmpty tab={activeTab} language={language} onShop={shopNow} />}
-                >
-                    <section className="coupon-center-panel" aria-busy={loading}>
-                        <div className="coupon-center-ticket-list">
-                            {usageRecords.map((record, index) => (
-                                <CouponTicket
-                                    key={record.id}
-                                    card={couponCardFromUsageRecord(record, language, index)}
-                                    muted
-                                    action={
-                                        <span className="coupon-ticket-status is-used">
-                                            <Check size={13} aria-hidden="true" />
-                                            {record.status === 'REFUNDED'
-                                                ? isZh
-                                                    ? '已退款返券'
-                                                    : 'Refunded'
-                                                : isZh
-                                                  ? '已使用'
-                                                  : 'Used'}
-                                        </span>
-                                    }
-                                    meta={couponUsageRecord(record, language)}
-                                />
-                            ))}
-                        </div>
-                    </section>
-                </CouponQueryBoundary>
-            )}
-
-            {pagination &&
-            (activeTab === 'UNUSED' || activeTab === 'HISTORY') &&
-            (totalItems > pageSize || page > 0) ? (
-                <nav className="coupon-center-pagination" aria-label={isZh ? '优惠券分页' : 'Coupon pages'}>
-                    <button
-                        type="button"
-                        disabled={page === 0 || myCouponsLoading || usageRecordsLoading}
-                        onClick={() => setPage(value => value - 1)}
-                    >
-                        {isZh ? '上一页' : 'Previous'}
-                    </button>
-                    <span aria-live="polite">
-                        {page + 1} / {Math.max(1, Math.ceil(totalItems / pageSize))} ·{' '}
-                        {isZh ? `共 ${totalItems} 条` : `${totalItems} total`}
-                    </span>
-                    <button
-                        type="button"
-                        disabled={
-                            (page + 1) * pageSize >= totalItems || myCouponsLoading || usageRecordsLoading
-                        }
-                        onClick={() => setPage(value => value + 1)}
-                    >
-                        {isZh ? '下一页' : 'Next'}
-                    </button>
+        <Subpage
+            className="coupon-center-page"
+            title={isZh ? '优惠券中心' : 'Coupon center'}
+            language={language}
+            onBack={goBack}
+        >
+            <div className="coupon-center-workspace">
+                <nav className="coupon-center-tabs" aria-label={isZh ? '优惠券分类' : 'Coupon categories'}>
+                    {tabs.map(tab => (
+                        <button
+                            key={tab}
+                            type="button"
+                            className={activeTab === tab ? 'is-active' : ''}
+                            aria-current={activeTab === tab ? 'page' : undefined}
+                            onClick={() => {
+                                setActiveTab(tab);
+                                setPage(0);
+                            }}
+                        >
+                            <span>{tabLabel(tab, language)}</span>
+                            <small>
+                                {couponTabCountDisplay(
+                                    tab,
+                                    pagination && tab === 'UNUSED'
+                                        ? (ownedPage.data?.totalItems ?? 0)
+                                        : pagination && tab === 'HISTORY'
+                                          ? (historyPage.data?.totalItems ?? 0)
+                                          : couponCenterTabCount(
+                                                tab,
+                                                customerAwareCampaigns,
+                                                myCoupons,
+                                                usageRecords,
+                                            ),
+                                    campaignsLoading,
+                                    campaignsError,
+                                    myCouponsLoading,
+                                    myCouponsError,
+                                    usageRecordsLoading,
+                                    usageRecordsError,
+                                )}
+                            </small>
+                        </button>
+                    ))}
                 </nav>
-            ) : null}
-            {error ? (
-                <small className="form-error coupon-center-error" role="alert">
-                    {error}
-                </small>
-            ) : null}
+
+                {(activeTab === 'ACTIVITIES' || activeTab === 'UNCLAIMED') &&
+                campaignLoadState !== 'ready' ? (
+                    <CouponQueryBoundary
+                        loading={campaignsLoading}
+                        error={campaignsError}
+                        hasData={false}
+                        language={language}
+                        onRetry={onRetryCampaigns}
+                        empty={<CouponTabEmpty tab={activeTab} language={language} onShop={shopNow} />}
+                    >
+                        {null}
+                    </CouponQueryBoundary>
+                ) : activeTab === 'UNCLAIMED' && ownershipLoadState !== 'ready' ? (
+                    <CouponQueryBoundary
+                        loading={myCouponsLoading}
+                        error={myCouponsError}
+                        hasData={false}
+                        language={language}
+                        onRetry={onRetryMyCoupons}
+                        empty={<CouponTabEmpty tab={activeTab} language={language} onShop={shopNow} />}
+                    >
+                        {null}
+                    </CouponQueryBoundary>
+                ) : activeTab === 'ACTIVITIES' || activeTab === 'UNCLAIMED' ? (
+                    visibleCampaignCards.length ? (
+                        <section
+                            className="coupon-center-panel"
+                            aria-label={
+                                activeTab === 'UNCLAIMED'
+                                    ? isZh
+                                        ? '未领取优惠券'
+                                        : 'Unclaimed coupons'
+                                    : isZh
+                                      ? '当前优惠券活动'
+                                      : 'Current coupon activities'
+                            }
+                        >
+                            {campaignsError ? (
+                                <div className="coupon-center-query-state is-inline">
+                                    <InlineError
+                                        message={campaignsError}
+                                        action={isZh ? '重试' : 'Retry'}
+                                        onAction={onRetryCampaigns}
+                                    />
+                                </div>
+                            ) : null}
+                            <div className="coupon-center-ticket-list">
+                                {visibleCampaignCards.map(card => {
+                                    const campaign = customerAwareCampaigns.find(
+                                        item => item.id === card.campaignId,
+                                    );
+                                    if (!campaign) return null;
+                                    const actionState = couponCampaignActionState(
+                                        campaign,
+                                        language,
+                                        ownershipLoadState,
+                                    );
+                                    const { canClaim } = actionState;
+                                    const action = (
+                                        <button
+                                            type="button"
+                                            className={`${
+                                                activeTab === 'ACTIVITIES'
+                                                    ? 'coupon-activity-action'
+                                                    : 'coupon-claim-btn'
+                                            }${canClaim ? '' : ' is-claimed'}${
+                                                actionState.detail ? ' is-unavailable' : ''
+                                            }`}
+                                            disabled={!canClaim || loading || claimingId !== null}
+                                            onClick={() => void claim(campaign.id)}
+                                        >
+                                            <span className="coupon-btn-text-wrap">
+                                                <span>
+                                                    {activeTab === 'UNCLAIMED' && canClaim && isZh
+                                                        ? '领取'
+                                                        : actionState.label}
+                                                </span>
+                                                {actionState.detail ? (
+                                                    <small>{actionState.detail}</small>
+                                                ) : null}
+                                                {campaign.claimed ? (
+                                                    <Check size={13} aria-hidden="true" />
+                                                ) : canClaim ? (
+                                                    <ChevronRight size={15} aria-hidden="true" />
+                                                ) : null}
+                                            </span>
+                                        </button>
+                                    );
+                                    return activeTab === 'ACTIVITIES' ? (
+                                        <ActivityCoupon
+                                            key={card.id}
+                                            card={card}
+                                            campaign={campaign}
+                                            language={language}
+                                            muted={!canClaim}
+                                            action={action}
+                                        />
+                                    ) : (
+                                        <CouponTicket
+                                            key={card.id}
+                                            card={card}
+                                            muted={!canClaim}
+                                            action={action}
+                                            meta={campaignValidity(campaign, language)}
+                                        />
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    ) : (
+                        <CouponTabEmpty tab={activeTab} language={language} onShop={shopNow} />
+                    )
+                ) : activeTab === 'UNUSED' ? (
+                    <CouponQueryBoundary
+                        loading={myCouponsLoading}
+                        error={myCouponsError}
+                        hasData={visibleCustomerCoupons.length > 0}
+                        language={language}
+                        onRetry={pagination ? () => void ownedPage.refetch() : onRetryMyCoupons}
+                        empty={<CouponTabEmpty tab={activeTab} language={language} onShop={shopNow} />}
+                    >
+                        <section className="coupon-center-panel" aria-busy={loading}>
+                            <div className="coupon-center-ticket-list">
+                                {visibleCustomerCoupons.map((coupon, index) => {
+                                    const card = couponCardFromCustomerCoupon(
+                                        coupon,
+                                        language,
+                                        currencyCode,
+                                        index,
+                                        displayCurrencyCode,
+                                    );
+                                    const locked = isLockedCoupon(coupon);
+                                    return (
+                                        <CouponTicket
+                                            key={coupon.id}
+                                            card={card}
+                                            action={
+                                                locked ? (
+                                                    <span className="coupon-ticket-status">
+                                                        {isZh ? '订单占用中' : 'Reserved'}
+                                                    </span>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        className="coupon-claim-btn"
+                                                        onClick={shopNow}
+                                                    >
+                                                        <span className="coupon-btn-text-wrap">
+                                                            <span>{isZh ? '去使用' : 'Shop now'}</span>
+                                                            <ChevronRight size={15} aria-hidden="true" />
+                                                        </span>
+                                                    </button>
+                                                )
+                                            }
+                                            meta={customerCouponValidity(coupon, language)}
+                                        />
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    </CouponQueryBoundary>
+                ) : (
+                    <CouponQueryBoundary
+                        loading={usageRecordsLoading}
+                        error={usageRecordsError}
+                        hasData={usageRecords.length > 0}
+                        language={language}
+                        onRetry={pagination ? () => void historyPage.refetch() : onRetryUsageRecords}
+                        empty={<CouponTabEmpty tab={activeTab} language={language} onShop={shopNow} />}
+                    >
+                        <section className="coupon-center-panel" aria-busy={loading}>
+                            <div className="coupon-center-ticket-list">
+                                {usageRecords.map((record, index) => (
+                                    <CouponTicket
+                                        key={record.id}
+                                        card={couponCardFromUsageRecord(record, language, index)}
+                                        muted
+                                        action={
+                                            <span className="coupon-ticket-status is-used">
+                                                <Check size={13} aria-hidden="true" />
+                                                {record.status === 'REFUNDED'
+                                                    ? isZh
+                                                        ? '已退款返券'
+                                                        : 'Refunded'
+                                                    : isZh
+                                                      ? '已使用'
+                                                      : 'Used'}
+                                            </span>
+                                        }
+                                        meta={couponUsageRecord(record, language)}
+                                    />
+                                ))}
+                            </div>
+                        </section>
+                    </CouponQueryBoundary>
+                )}
+
+                {pagination &&
+                (activeTab === 'UNUSED' || activeTab === 'HISTORY') &&
+                (totalItems > pageSize || page > 0) ? (
+                    <nav
+                        className="coupon-center-pagination"
+                        aria-label={isZh ? '优惠券分页' : 'Coupon pages'}
+                    >
+                        <button
+                            type="button"
+                            disabled={page === 0 || myCouponsLoading || usageRecordsLoading}
+                            onClick={() => setPage(value => value - 1)}
+                        >
+                            {isZh ? '上一页' : 'Previous'}
+                        </button>
+                        <span aria-live="polite">
+                            {page + 1} / {Math.max(1, Math.ceil(totalItems / pageSize))} ·{' '}
+                            {isZh ? `共 ${totalItems} 条` : `${totalItems} total`}
+                        </span>
+                        <button
+                            type="button"
+                            disabled={
+                                (page + 1) * pageSize >= totalItems || myCouponsLoading || usageRecordsLoading
+                            }
+                            onClick={() => setPage(value => value + 1)}
+                        >
+                            {isZh ? '下一页' : 'Next'}
+                        </button>
+                    </nav>
+                ) : null}
+                {error ? (
+                    <small className="form-error coupon-center-error" role="alert">
+                        {error}
+                    </small>
+                ) : null}
+            </div>
+            <section className="coupon-center-instructions coupon-center-guide">
+                <h2>{isZh ? '使用说明' : 'Using your coupons'}</h2>
+                <p>
+                    {isZh
+                        ? '查看每张优惠券的有效期、适用范围和使用条件。进入购物车后查看可用优惠及折扣明细，最终金额以结算页为准。'
+                        : 'Check each coupon’s validity, scope and conditions. Review discounts in your cart and the final amount at checkout.'}
+                </p>
+            </section>
             <button
                 className="coupon-center-cart-link coupon-center-cart-link-standalone"
                 type="button"

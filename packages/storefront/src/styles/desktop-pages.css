@@ -116,7 +116,7 @@
     .desktop-store-layout .page.referral-page > .subpage-header {
         display: none;
     }
-    .desktop-store-layout .page.subpage:not(.referral-page) > .subpage-header {
+    .desktop-store-layout :where(.page.subpage:not(.referral-page)) > .subpage-header {
         display: flex;
         position: static;
         width: 100%;
@@ -598,6 +598,20 @@
         font-size: 24px;
         font-weight: var(--font-weight-semibold);
     }
+    .desktop-store-layout .cart-flow-steps {
+        display: flex;
+        justify-content: flex-end;
+        gap: 24px;
+        margin: 12px 0 20px;
+        padding: 0;
+        list-style: none;
+        color: var(--muted);
+        font-size: 13px;
+    }
+    .cart-flow-steps [aria-current] {
+        color: var(--accent-ink);
+        font-weight: 700;
+    }
     .desktop-store-layout .cart-commerce-layout {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 320px;
@@ -704,13 +718,13 @@
     .desktop-cart-columns,
     .desktop-cart-row {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 112px 124px 130px 100px;
+        grid-template-columns: minmax(0, 1fr) 100px 100px 100px;
         align-items: center;
         gap: 20px;
         padding: 14px 24px;
     }
     .desktop-cart-columns {
-        background: var(--soft);
+        background: transparent;
         color: var(--muted);
         font-size: 13px;
         font-weight: 500;
@@ -721,8 +735,8 @@
     }
     .desktop-cart-row {
         min-height: 104px;
-        background: var(--module-action-surface);
-        margin: 8px 12px;
+        background: transparent;
+        margin: 0 12px;
         border-top: 0;
         border-radius: var(--radius-sm);
         box-shadow: none;
@@ -747,8 +761,8 @@
     }
     .desktop-cart-product-link > :is(img, picture, .responsive-picture, .image-placeholder) {
         flex: none;
-        width: 88px;
-        height: 88px;
+        width: 72px;
+        height: 72px;
         border-radius: var(--radius-sm);
         overflow: hidden;
     }
@@ -776,10 +790,12 @@
         font-weight: 600;
     }
     .desktop-cart-actions {
+        grid-column: 1 / -1;
+        padding-left: 42px;
         position: relative;
         display: flex;
         align-items: center;
-        justify-content: center;
+        justify-content: flex-start;
         gap: 10px;
         flex-wrap: wrap;
     }
@@ -1388,14 +1404,28 @@
         min-height: 240px;
         padding: 36px 24px;
     }
+    .desktop-store-layout .coupon-center-workspace {
+        padding: 24px;
+        background: var(--surface);
+        border-radius: var(--skin-card-radius);
+        box-shadow: var(--skin-card-shadow);
+    }
+    .desktop-store-layout .coupon-center-guide h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+    }
+    .desktop-store-layout .coupon-center-guide p {
+        color: var(--muted);
+        line-height: 1.8;
+    }
     .desktop-store-layout .coupon-center-tabs {
         position: static;
         display: flex;
         justify-content: flex-start;
         gap: 8px;
         margin: 0 0 24px;
-        padding: 8px;
-        background: var(--surface);
+        padding: 0;
+        background: transparent;
         border: 0;
         border-radius: var(--skin-card-radius);
     }
@@ -2016,10 +2046,27 @@
     }
     .desktop-store-layout .support-center-content {
         display: grid;
-        grid-template-columns: 320px minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr);
         gap: 24px;
         padding: 0;
         align-items: start;
+    }
+    .desktop-store-layout .support-workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+        gap: 24px;
+        align-items: start;
+    }
+    .desktop-store-layout .support-contact-panel {
+        min-width: 0;
+        padding: 24px;
+        background: var(--surface);
+        border-radius: var(--skin-card-radius);
+        box-shadow: var(--skin-card-shadow);
+    }
+    .desktop-store-layout .support-contact-panel > h2 {
+        margin: 0 0 20px;
+        font-size: 18px;
     }
     .desktop-store-layout .support-desktop-hero {
         grid-column: 1 / -1;
@@ -2030,36 +2077,33 @@
         min-height: 164px;
         padding: 24px 28px;
         border-radius: var(--skin-hero-radius);
-        background: linear-gradient(
-            112deg,
-            color-mix(in srgb, var(--accent) 20%, var(--bg)),
-            color-mix(in srgb, var(--accent) 8%, var(--surface))
-        );
+        background: var(--account-hero-bg, linear-gradient(120deg, #203446, #142630));
+        color: #fffdf8;
         box-shadow: var(--skin-hero-shadow);
     }
     .desktop-store-layout .support-desktop-hero > div:first-child {
         min-width: 0;
     }
     .desktop-store-layout .support-desktop-hero span {
-        color: var(--accent-ink);
+        color: inherit;
         font-size: 12px;
         font-weight: 700;
     }
     .desktop-store-layout .support-desktop-hero h1 {
         margin: 8px 0 4px;
-        color: var(--text);
+        color: inherit;
         font-size: clamp(23px, 2vw, 30px);
     }
     .desktop-store-layout .support-desktop-hero p {
         margin: 0;
-        color: var(--muted);
+        color: inherit;
         font-size: 14px;
     }
     .desktop-store-layout .support-desktop-hero-media {
         display: grid;
         place-items: center;
-        flex: 0 0 min(32%, 280px);
-        height: 116px;
+        flex: 0 0 68px;
+        height: 68px;
         overflow: hidden;
         border-radius: var(--skin-media-radius);
         background: var(--control-surface);
@@ -2080,26 +2124,26 @@
     }
     .desktop-store-layout .support-hours-card {
         margin: 0;
-        min-height: 230px;
-        padding: 28px;
+        min-height: 0;
+        padding: 0 0 24px;
         border: 0;
-        border-radius: var(--skin-card-radius);
-        background: var(--surface, var(--paper));
-        box-shadow: var(--skin-card-shadow);
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
     }
     .desktop-store-layout .support-channel-list {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: minmax(0, 1fr);
         margin: 0;
-        gap: 20px;
+        gap: 12px;
     }
     .desktop-store-layout .support-channel-row {
-        min-height: 112px;
+        min-height: 84px;
         border: 0;
-        border-radius: var(--skin-card-radius);
-        padding: 24px;
-        background: var(--surface, var(--paper));
-        box-shadow: var(--skin-card-shadow);
+        border-radius: var(--skin-control-radius);
+        padding: 16px;
+        background: var(--soft);
+        box-shadow: none;
     }
     .desktop-store-layout .support-channel-empty {
         padding: 36px;
@@ -2187,8 +2231,8 @@
         .desktop-store-layout .page.auth-page-default {
             display: block;
         }
-        .desktop-store-layout .support-center-content {
-            grid-template-columns: 280px minmax(0, 1fr);
+        .desktop-store-layout .support-workspace {
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
         }
         .desktop-store-layout .support-channel-list {
             grid-template-columns: 1fr;
