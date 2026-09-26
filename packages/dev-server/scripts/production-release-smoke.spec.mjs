@@ -1,7 +1,44 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { once } from 'node:events';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import test from 'node:test';
+
+void test('runtime acceptance checks the ready candidate instead of an interrupted timer invocation', () => {
+    const bootstrap = readFileSync(
+        new URL('../../../deploy/deploy-production-from-s3.sh', import.meta.url),
+        'utf8',
+    );
+    const acceptance = bootstrap.match(
+        /if ! sudo -n systemctl (?:start|restart) vendure-production-healthcheck\.service; then[\s\S]*?\nfi/,
+    )?.[0];
+    assert.ok(acceptance);
+    const fixture = `
+set -Eeuo pipefail
+sudo() {
+    if [[ "$*" == "-n systemctl start vendure-production-healthcheck.service" ]]; then
+        return 1 # timer job observed the server while it was restarting
+    fi
+    if [[ "$*" == "-n systemctl restart vendure-production-healthcheck.service" ]]; then
+        return "$CANDIDATE_HEALTH_STATUS"
+    fi
+    return 0
+}
+fail() { exit 77; }
+${acceptance}
+`;
+    for (const [healthStatus, expectedStatus] of [
+        ['0', 0],
+        ['1', 77],
+    ]) {
+        const result = spawnSync('bash', ['-c', fixture], {
+            env: { ...process.env, CANDIDATE_HEALTH_STATUS: healthStatus },
+            encoding: 'utf8',
+        });
+        assert.equal(result.status, expectedStatus, result.stderr);
+    }
+});
 
 import {
     extractDashboardAssetUrls,

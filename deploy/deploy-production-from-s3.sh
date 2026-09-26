@@ -1054,7 +1054,9 @@ if ! sudo -n find /var/backups/vendure-files -maxdepth 1 -type f -name 'vendure-
     fi
 fi
 sudo -n systemctl enable --now vendure-production-healthcheck.timer
-if ! sudo -n systemctl start vendure-production-healthcheck.service; then
+# A timer invocation may have started during the runtime switch. Start a fresh
+# check after candidate readiness instead of joining that interrupted invocation.
+if ! sudo -n systemctl restart vendure-production-healthcheck.service; then
     sudo -n journalctl -u vendure-production-healthcheck.service -n 80 --no-pager >&2 || true
     fail 'the production health check service failed'
 fi
