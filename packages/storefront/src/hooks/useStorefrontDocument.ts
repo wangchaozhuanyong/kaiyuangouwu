@@ -8,6 +8,7 @@ import {
 import { type StorefrontVisualPresetId } from '../../../storefront-content-plugin/src/visual-presets';
 import { productDescriptionText } from '../rich-text';
 import { NEUTRAL_STOREFRONT_IMAGE, NEUTRAL_STOREFRONT_SOCIAL_IMAGE } from '../storefront-images';
+import { storefrontDocumentUrl } from '../storefront-preview-parameters';
 import { type RouteName, type RouteState } from '../storefront-router';
 import { productImage, setMetaContent, trimText } from '../storefront-utils';
 import { cacheLogoUrl } from '../StorefrontErrorBoundary';
@@ -122,7 +123,7 @@ export function useStorefrontMetadata({
                 ? trimText(productDescriptionText(selectedProduct.description), 150)
                 : storeSummary;
         const imagePath = storefrontShareImage(route.name, selectedProduct, logoUrl);
-        const image = new URL(imagePath, window.location.origin).href;
+        const image = new URL(imagePath, storefrontDocumentUrl()).href;
         const imageAlt =
             route.name === 'product' && selectedProduct
                 ? selectedProduct.name
@@ -130,7 +131,7 @@ export function useStorefrontMetadata({
                   ? `${storefrontName}精选商品`
                   : `Featured products from ${storefrontName}`;
         const isIndexable = false;
-        const canonicalUrl = new URL(window.location.href);
+        const canonicalUrl = new URL(storefrontDocumentUrl());
         canonicalUrl.hash = '';
         if (!isIndexable) canonicalUrl.search = '';
 

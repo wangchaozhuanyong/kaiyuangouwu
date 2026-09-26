@@ -18,10 +18,8 @@ import {
 } from '../../graphql/storefront-visual-preset.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
-import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { storefrontClientPreviewUrl } from './storefront-client-preview-url';
-import { storefrontVisualPreviewDocument } from './storefront-visual-preview';
+import { StorefrontDecorationPreview } from './StorefrontDecorationPreview';
 
 const STOREFRONT_PREVIEW_URL_QUERY = gql`
     query NextAdminStorefrontPreviewUrl {
@@ -58,7 +56,6 @@ export function StorefrontVisualPresetPanel() {
     const [feedbackChannel, setFeedbackChannel] = useState<string | null>(null);
     const queryData = query.data;
     const channel = queryData?.activeChannel;
-    const storeName = channel ? getChannelDisplayName(channel) : '当前店铺';
     const storefrontUrl = previewUrlQuery.data?.storeProfiles?.find(
         profile => profile.channel.id === channel?.id,
     )?.storefrontUrl;
@@ -72,17 +69,7 @@ export function StorefrontVisualPresetPanel() {
         (!getActiveChannelToken() || channel.token === getActiveChannelToken()),
     );
     const selected = consistent && draft?.channelId === source?.channelId ? draft : source;
-    const previewUrl = selected
-        ? storefrontClientPreviewUrl(storefrontUrl, selected.presetId, preview === 'mobile' ? 390 : 1440)
-        : null;
-    const embeddedPreviewUrl = selected
-        ? storefrontClientPreviewUrl(
-              storefrontUrl,
-              selected.presetId,
-              preview === 'mobile' ? 390 : 1440,
-              true,
-          )
-        : null;
+    const previewUrl = storefrontUrl;
     const dirty = Boolean(consistent && selected && source && selected.presetId !== source.presetId);
     const busy = query.loading || mutation.loading;
     const disabled =
@@ -241,12 +228,12 @@ export function StorefrontVisualPresetPanel() {
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 text-blue-700"
                     >
-                        打开真实页面预览 <ExternalLink className="h-4 w-4" />
+                        打开当前商城 <ExternalLink className="h-4 w-4" />
                     </a>
                 )}
             </div>
             <p className="mt-3 text-xs text-slate-500">
-                草稿皮肤仅在真实页面预览中生效；点击保存后，当前店铺客户端才切换到这套视觉规则。
+                草稿皮肤仅在客户端效果预览中生效；点击保存后，当前店铺客户端才切换到这套视觉规则。
             </p>
             {paletteAudit && (
                 <p
@@ -278,9 +265,7 @@ export function StorefrontVisualPresetPanel() {
                                     />
                                 </h3>
                                 <p className="text-xs text-slate-500">
-                                    {embeddedPreviewUrl
-                                        ? '当前店铺真实客户端页面 · 草稿不会发布 · 窄屏可横向滑动'
-                                        : '未配置可访问的店铺网址，仅显示配色示意；请勿据此验收真实页面'}
+                                    当前店铺客户端组件与样式 · 草稿不会发布
                                 </p>
                             </div>
                             <div className="flex items-center gap-3">
@@ -308,25 +293,10 @@ export function StorefrontVisualPresetPanel() {
                             </div>
                         </header>
                         <div className="min-h-0 min-w-0 overflow-auto bg-slate-100 p-3">
-                            <iframe
-                                title={embeddedPreviewUrl ? '真实客户端页面预览' : '皮肤配色示意'}
-                                sandbox={embeddedPreviewUrl ? 'allow-scripts allow-same-origin' : ''}
-                                className="mx-auto block h-[70dvh] max-w-none shrink-0 border-0"
-                                style={{
-                                    width: preview === 'mobile' ? 390 : 1440,
-                                    backgroundColor: palette?.page,
-                                }}
-                                src={embeddedPreviewUrl ?? undefined}
-                                srcDoc={
-                                    embeddedPreviewUrl
-                                        ? undefined
-                                        : storefrontVisualPreviewDocument(selected.presetId, storeName, {
-                                              backgroundColor: branding?.backgroundColor,
-                                              primaryColor: branding?.primaryColor,
-                                              accentColor: branding?.accentColor,
-                                              highlightColor: branding?.highlightColor,
-                                          })
-                                }
+                            <StorefrontDecorationPreview
+                                language="zh_Hans"
+                                fixedViewport={preview}
+                                presetId={selected.presetId}
                             />
                         </div>
                     </AccessibleDialogSurface>

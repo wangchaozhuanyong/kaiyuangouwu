@@ -21,6 +21,11 @@ vi.mock('../../hooks/use-admin-permissions', () => ({
     useAdminPermissions: () => ({ hasAnyPermission: () => true }),
 }));
 vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
+vi.mock('./StorefrontDecorationPreview', () => ({
+    StorefrontDecorationPreview: ({ presetId }: { presetId?: string }) => (
+        <div data-testid="shared-client-preview" data-preset={presetId} />
+    ),
+}));
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let host: HTMLDivElement;
@@ -98,11 +103,9 @@ describe('fixed desktop layout skin settings', () => {
             button => button.textContent === '预览效果',
         );
         act(() => previewButton!.click());
-        const iframe = host.querySelector('iframe');
-        expect(iframe?.src).toContain('storefrontPreviewPreset=classic');
-        expect(iframe?.src).toContain('storefrontPreviewEmbedded=1');
-        expect(iframe?.style.backgroundColor).toBe('rgb(241, 245, 249)');
-        expect(iframe?.srcdoc).toBe('');
+        expect(host.querySelector('[data-testid="shared-client-preview"]')?.getAttribute('data-preset')).toBe(
+            'classic',
+        );
         expect(mocks.save).not.toHaveBeenCalled();
     });
 

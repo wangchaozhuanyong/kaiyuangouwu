@@ -45,6 +45,7 @@ import { lowestPricedProductVariant } from '../product-pricing';
 import { PageSkeleton } from '../route-loading';
 import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-coupons';
 import { HomePageContext } from '../storefront-page-contexts';
+import { storefrontPreviewParameters } from '../storefront-preview-parameters';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import {
     aggregateFlashSaleProducts,
@@ -529,6 +530,15 @@ export function HomePage() {
     const [openNoticeId, setOpenNoticeId] = useState<string | null>(null);
     const [heroGestureActive, setHeroGestureActive] = useState(false);
     const [heroAutoplayStopped, setHeroAutoplayStopped] = useState(false);
+    useEffect(() => {
+        const focusId = storefrontPreviewParameters().get('storefrontPreviewBlockId');
+        if (!focusId) return;
+        const index = managedHeroes.findIndex(block => block.id === focusId);
+        if (index >= 0) {
+            setHeroIndex(index);
+            setHeroAutoplayStopped(true);
+        }
+    }, [managedHeroes]);
     const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
     const [pageVisible, setPageVisible] = useState(true);
     const heroGestureRef = useRef({

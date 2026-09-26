@@ -15,6 +15,7 @@ import {
 import { configureMoneyDisplay } from '../money-display';
 import { storefrontQueryKeys } from '../query-client';
 import { captureReferralAttribution } from '../referral-attribution';
+import { storefrontPreviewParameters } from '../storefront-preview-parameters';
 import { readStoredStrings, scopedStorageKey } from '../storefront-storage';
 import {
     DEFAULT_STOREFRONT_NAMES,
@@ -36,7 +37,7 @@ import { useStorefrontPublicData } from './useStorefrontPublicData';
 
 function previewLanguage(fallback: StorefrontLanguage): StorefrontLanguage {
     if (typeof window === 'undefined') return fallback;
-    const parameters = new URLSearchParams(window.location.search);
+    const parameters = storefrontPreviewParameters();
     if (parameters.get('storefrontPreviewEmbedded') !== '1') return fallback;
     return parameters.get('storefrontPreviewLanguage') === 'en' ? 'en' : 'zh';
 }

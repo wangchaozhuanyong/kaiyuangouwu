@@ -62,7 +62,11 @@ vi.mock('./StorefrontBlockEditor', () => ({
         </button>
     ),
 }));
-vi.mock('./storefront-block-preview', () => ({ HeroBlockPreview: () => null }));
+vi.mock('./StorefrontDecorationPreview', () => ({
+    StorefrontDecorationPreview: ({ language }: { language: string }) => (
+        <div data-testid="shared-client-preview" data-language={language} />
+    ),
+}));
 vi.mock('./StorefrontFloorList', () => ({
     StorefrontFloorList: ({
         rows,
@@ -278,61 +282,39 @@ describe('policy and support configuration uses verified writes as well', () => 
     );
 });
 
-it('filters the structure preview by the selected publication language', async () => {
+it('forwards the selected language to the shared client preview without changing saved content', async () => {
     current = data('a', true);
     current.storefrontContentBlocks[0].translations = [current.storefrontContentBlocks[0].translations[0]];
+    const saved = JSON.stringify(current.storefrontContentBlocks);
     await render();
-    const section = Array.from(host.querySelectorAll('section')).find(section =>
-        section.querySelector('h2')?.textContent?.includes('结构预览'),
-    )!;
-    expect(section.textContent).not.toContain('暂无可展示楼层');
+    const preview = host.querySelector('[data-testid="shared-client-preview"]')!;
+    expect(preview.getAttribute('data-language')).toBe('zh_Hans');
     const select = host.querySelector<HTMLSelectElement>('select[aria-label="预览语言"]')!;
     await act(async () => {
         select.value = 'en';
         select.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    expect(section.textContent).toContain('暂无可展示楼层');
+    expect(preview.getAttribute('data-language')).toBe('en');
+    expect(JSON.stringify(current.storefrontContentBlocks)).toBe(saved);
+    expect(mocks.update).not.toHaveBeenCalled();
 });
 
-it('limits the structure preview to the same two cards in saved order without hiding the floor for an incomplete extra card', async () => {
+it('keeps saved item order intact when the shared client preview changes language', async () => {
     current = data('a', true);
     current.storefrontContentBlocks[0].items = [
-        {
-            ...item,
-            id: 'second',
-            position: 2,
-            translations: [
-                { languageCode: 'zh_Hans', label: '第二张卡片', description: '' },
-                item.translations[1],
-            ],
-        },
-        {
-            ...item,
-            id: 'extra',
-            position: 3,
-            translations: [{ languageCode: 'zh_Hans', label: '备用卡片', description: '' }],
-        },
-        {
-            ...item,
-            id: 'first',
-            position: 1,
-            translations: [
-                { languageCode: 'zh_Hans', label: '第一张卡片', description: '' },
-                item.translations[1],
-            ],
-        },
+        { ...item, id: 'second', position: 2 },
+        { ...item, id: 'first', position: 1 },
     ];
+    const saved = JSON.stringify(current.storefrontContentBlocks[0].items);
     await render();
-    const section = Array.from(host.querySelectorAll('section')).find(section =>
-        section.querySelector('h2')?.textContent?.includes('结构预览'),
-    )!;
-    expect(section.textContent).toMatch(/第一张卡片[\s\S]*第二张卡片/);
-    expect(section.textContent).not.toContain('备用卡片');
     const select = host.querySelector<HTMLSelectElement>('select[aria-label="预览语言"]')!;
     await act(async () => {
         select.value = 'en';
         select.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    expect(section.textContent).not.toContain('暂无可展示楼层');
-    expect(section.querySelectorAll('article > div > div .grid > div')).toHaveLength(2);
+    expect(host.querySelector('[data-testid="shared-client-preview"]')?.getAttribute('data-language')).toBe(
+        'en',
+    );
+    expect(JSON.stringify(current.storefrontContentBlocks[0].items)).toBe(saved);
+    expect(mocks.update).not.toHaveBeenCalled();
 });
