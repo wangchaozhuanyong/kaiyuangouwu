@@ -5,7 +5,9 @@ describe('browser translation compatibility', () => {
     it('keeps the storefront document translatable by browser tools', () => {
         const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
-        expect(html).toMatch(/<html\s+lang="zh-CN"\s+translate="yes">/u);
+        const rootTag = html.match(/<html\b[^>]*>/u)?.[0];
+        expect(rootTag).toContain('lang="zh-CN"');
+        expect(rootTag).toContain('translate="yes"');
         expect(html).not.toMatch(/<meta[^>]+name=["']google["'][^>]+notranslate/iu);
         expect(html).not.toContain('class="notranslate"');
         expect(html).not.toContain('translate="no"');
