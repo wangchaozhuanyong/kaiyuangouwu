@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { storefrontQueryKeys } from './query-client';
 import {
@@ -9,6 +9,8 @@ import {
 } from './realtime-updates';
 
 const scope = { marketCode: 'store-a', languageCode: 'zh_Hans', customerId: 'customer-1' };
+
+afterEach(() => vi.useRealTimers());
 
 function event(overrides: Partial<StorefrontRealtimeEvent> = {}): StorefrontRealtimeEvent {
     return {
@@ -21,6 +23,102 @@ function event(overrides: Partial<StorefrontRealtimeEvent> = {}): StorefrontReal
 }
 
 describe('storefront realtime stream', () => {
+    it('closes a silent stream after missed heartbeats while real heartbeats extend its lifetime', async () => {
+        vi.useFakeTimers();
+        const encoder = new TextEncoder();
+        const cancel = vi.fn();
+        let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                streamController = controller;
+                controller.enqueue(
+                    encoder.encode('event: ready\ndata: {"version":1,"heartbeatIntervalMs":1000}\n\n'),
+                );
+            },
+            cancel,
+        });
+        if (!streamController) throw new Error('Stream controller was not initialized');
+        const observed = consumeStorefrontRealtimeStream(body, vi.fn()).catch(error => error);
+        await vi.advanceTimersByTimeAsync(2_000);
+        streamController.enqueue(encoder.encode(': heartbeat\n\n'));
+        await vi.advanceTimersByTimeAsync(2_999);
+        expect(cancel).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(1);
+        const cancelledOnDeadline = cancel.mock.calls.length;
+        if (!cancelledOnDeadline) streamController.close();
+        const outcome = await observed;
+
+        expect(cancelledOnDeadline).toBe(1);
+        expect(outcome).toBeInstanceOf(Error);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('rejects an invalid heartbeat interval instead of treating it as a ready connection', async () => {
+        vi.useFakeTimers();
+        const encoder = new TextEncoder();
+        const cancel = vi.fn();
+        const controller = new AbortController();
+        const onReady = vi.fn();
+        const body = new ReadableStream<Uint8Array>({
+            start(streamController) {
+                streamController.enqueue(
+                    encoder.encode('event: ready\ndata: {"version":1,"heartbeatIntervalMs":0}\n\n'),
+                );
+            },
+            cancel,
+        });
+        const observed = consumeStorefrontRealtimeStream(body, vi.fn(), {
+            signal: controller.signal,
+            onReady,
+        }).catch(error => error);
+
+        await vi.advanceTimersByTimeAsync(10_000);
+        const cancelledOnDeadline = cancel.mock.calls.length;
+        controller.abort();
+        const outcome = await observed;
+
+        expect(onReady).not.toHaveBeenCalled();
+        expect(cancelledOnDeadline).toBe(1);
+        expect(outcome).toBeInstanceOf(Error);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('keeps a healthy stream alive beyond the initial deadlines and cleans up on unmount', async () => {
+        vi.useFakeTimers();
+        const encoder = new TextEncoder();
+        const cancel = vi.fn();
+        const controller = new AbortController();
+        const onEvent = vi.fn();
+        let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
+        const body = new ReadableStream<Uint8Array>({
+            start(stream) {
+                streamController = stream;
+                stream.enqueue(encoder.encode('event: ready\ndata: {"version":1}\n\n'));
+            },
+            cancel,
+        });
+        if (!streamController) throw new Error('Stream controller was not initialized');
+        const pending = consumeStorefrontRealtimeStream(body, onEvent, { signal: controller.signal });
+        for (let index = 0; index < 4; index += 1) {
+            await vi.advanceTimersByTimeAsync(14_000);
+            streamController.enqueue(encoder.encode(': heartbeat\n\n'));
+        }
+        streamController.enqueue(
+            encoder.encode(
+                'event: invalidate\ndata: {"version":1,"id":"healthy-event","occurredAt":"2026-09-27T00:00:00Z","topics":["orders"]}\n\n',
+            ),
+        );
+        await vi.advanceTimersByTimeAsync(0);
+        expect(cancel).not.toHaveBeenCalled();
+        expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ id: 'healthy-event' }));
+
+        controller.abort();
+        await pending;
+        expect(cancel).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
     it('parses invalidate events and ignores heartbeats and ready frames', () => {
         expect(parseStorefrontRealtimeFrame(': heartbeat')).toBeNull();
         expect(parseStorefrontRealtimeFrame('event: ready\ndata: {"version":1}')).toBeNull();
