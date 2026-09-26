@@ -964,3 +964,171 @@ describe('StorefrontContentService optimistic concurrency', () => {
         ).rejects.toThrow(/CONCURRENT_MODIFICATION/);
     });
 });
+
+describe('card image removal persistence', () => {
+    it.each([null, ''])(
+        'clears an explicitly removed card image (%s) instead of restoring the old URL',
+        async imageUrl => {
+            const saved = {
+                id: 'item',
+                imageAssetId: null,
+                imageUrl: '/assets/old.png',
+                enabled: true,
+                position: 0,
+                targetType: 'NONE',
+                targetValue: null,
+                settings: null,
+                translations: [],
+            };
+            const repository = {
+                find: vi.fn(() => Promise.resolve([saved])),
+                save: vi.fn((item: unknown) => Promise.resolve(item)),
+                remove: vi.fn(),
+            };
+            const service = new StorefrontContentService(
+                { getRepository: () => repository } as never,
+                {} as never,
+                {} as never,
+                {} as never,
+            );
+            vi.spyOn(service as any, 'replaceItemTranslations').mockResolvedValue(undefined);
+            await (service as any).syncItems(
+                { channelId: 'store-a' },
+                { id: 'core', type: 'CORE_CATEGORIES' },
+                [
+                    {
+                        id: 'item',
+                        imageAssetId: null,
+                        imageUrl,
+                        enabled: true,
+                        position: 0,
+                        targetType: 'NONE',
+                        translations: [{ languageCode: LanguageCode.zh_Hans, label: '入口' }],
+                    },
+                ],
+            );
+            expect(repository.save).toHaveBeenCalledWith(
+                expect.objectContaining({ imageAssetId: null, imageUrl: null }),
+            );
+        },
+    );
+    it('retains the image when a partial update does not submit either image field', async () => {
+        const saved = {
+            id: 'item',
+            imageAssetId: null,
+            imageUrl: '/assets/old.png',
+            enabled: true,
+            position: 0,
+            translations: [],
+        };
+        const repository = {
+            find: vi.fn(() => Promise.resolve([saved])),
+            save: vi.fn((item: unknown) => Promise.resolve(item)),
+            remove: vi.fn(),
+        };
+        const service = new StorefrontContentService(
+            { getRepository: () => repository } as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+        vi.spyOn(service as any, 'replaceItemTranslations').mockResolvedValue(undefined);
+        await (service as any).syncItems({ channelId: 'store-a' }, { id: 'core', type: 'CORE_CATEGORIES' }, [
+            {
+                id: 'item',
+                enabled: true,
+                position: 0,
+                targetType: 'NONE',
+                translations: [{ languageCode: LanguageCode.zh_Hans, label: '入口' }],
+            },
+        ]);
+        expect(repository.save).toHaveBeenCalledWith(
+            expect.objectContaining({ imageUrl: '/assets/old.png' }),
+        );
+    });
+});
+
+it('publishes only the current store core with enabled cards and filters disabled card items', async () => {
+    const core = new StorefrontContentBlock({
+        id: 'core',
+        type: 'CORE_CATEGORIES',
+        enabled: true,
+        code: 'core',
+        translations: [{ languageCode: LanguageCode.zh_Hans, title: '入口' }],
+        items: [
+            {
+                id: '1',
+                enabled: true,
+                position: 0,
+                translations: [{ languageCode: LanguageCode.zh_Hans, label: '入口一' }],
+            },
+            { id: '2', enabled: false, position: 1, translations: [] },
+        ] as never,
+    });
+    const missing = new StorefrontContentBlock({ ...core, id: 'missing', items: [] });
+    const repository = {
+        find: vi.fn(({ where }: { where: { channelId: string } }) =>
+            Promise.resolve(where.channelId === 'damatong' ? [missing] : [core]),
+        ),
+    };
+    const service = new StorefrontContentService(
+        { getRepository: () => repository } as never,
+        { translate: (block: unknown) => structuredClone(block) } as never,
+        {} as never,
+        {} as never,
+    );
+    await expect(
+        service.findPublished({ channelId: 'damatong', languageCode: LanguageCode.zh_Hans } as never),
+    ).resolves.toEqual([]);
+    const published = await service.findPublished({
+        channelId: 'moyao',
+        languageCode: LanguageCode.zh_Hans,
+    });
+    expect(published.map(block => block.id)).toEqual(['core']);
+    expect(published[0].items.map(item => item.id)).toEqual(['1']);
+    expect(repository.find.mock.calls.map(([options]) => options.where.channelId)).toEqual([
+        'damatong',
+        'moyao',
+    ]);
+});
+
+it('rejects creating an enabled core with zero active cards before persisting any record', async () => {
+    const connection = { getRepository: vi.fn() };
+    const service = new StorefrontContentService(connection as never, {} as never, {} as never, {} as never);
+    for (const items of [
+        [],
+        [
+            {
+                enabled: false,
+                position: 0,
+                targetType: 'NONE' as const,
+                translations: [{ languageCode: LanguageCode.zh_Hans, label: '停用入口' }],
+            },
+        ],
+    ]) {
+        await expect(
+            service.create(
+                { channelId: 'damatong' } as never,
+                createInput({ type: 'CORE_CATEGORIES', enabled: true, items }),
+            ),
+        ).rejects.toThrow('已启用卡片');
+    }
+    expect(connection.getRepository).not.toHaveBeenCalled();
+});
+it('rejects enabling an empty existing core through the toggle API', async () => {
+    const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
+    const block = new StorefrontContentBlock({
+        ...createInput({ type: 'CORE_CATEGORIES', enabled: false }),
+        id: 'core',
+        updatedAt: new Date('2026-09-26T00:00:00Z'),
+        items: [],
+    });
+    vi.spyOn(service as any, 'lockOwnedBlockOrThrow').mockResolvedValue(block);
+    await expect(
+        service.update({ channelId: 'damatong' } as never, {
+            id: 'core',
+            enabled: true,
+            expectedUpdatedAt: new Date('2026-09-26T00:00:00.000Z'),
+        }),
+    ).rejects.toThrow('已启用卡片');
+});

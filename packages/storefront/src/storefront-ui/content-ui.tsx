@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { publishedContentItems } from '../../../storefront-content-plugin/src/content-publication';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { useDesktopLayout } from '../desktop-layout';
 import { selectManagedProducts } from '../home-merchandising';
@@ -562,7 +563,8 @@ export function HomeDualCategoryShowcase({
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const isZh = language === 'zh';
-    if (!block.items.length) return null;
+    const items = publishedContentItems(block);
+    if (!block.enabled || !items.length) return null;
     const template = dualCardTemplateSetting(block.settings);
 
     return (
@@ -571,7 +573,7 @@ export function HomeDualCategoryShowcase({
             data-card-template={template}
             aria-label={block.title || (isZh ? '核心品类精选' : 'Core Categories')}
         >
-            {block.items.slice(0, 2).map((item, index) => {
+            {items.map((item, index) => {
                 const disabled = item.targetType === 'NONE' || !item.targetValue;
                 const ShowcaseIcon = index === 0 ? Waypoints : Headphones;
                 const badgeLabel = localizedDualCardItemSetting(

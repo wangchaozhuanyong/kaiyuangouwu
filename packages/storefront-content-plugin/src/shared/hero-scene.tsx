@@ -5,6 +5,11 @@ import { normalizedHeroThemePreset } from '../content-visuals';
 
 import { heroThemeStyle, type HeroThemeData } from './hero-theme';
 
+// Storefront and editor use the same frame, regardless of the uploaded artwork dimensions.
+export const desktopHeroAspectRatio = 3;
+export const desktopHeroMinHeight = 320;
+export const mobileHeroMinHeight = 280;
+
 export interface HeroSceneData extends HeroThemeData {
     title: string;
     subtitle: string;

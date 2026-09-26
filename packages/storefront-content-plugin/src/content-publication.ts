@@ -27,7 +27,17 @@ interface PublicationBlock {
     imageAsset?: { preview?: string; source?: string; mimeType?: string } | null;
     settings?: unknown;
     translations?: Translation[];
-    items?: Array<{ enabled: boolean; translations?: Translation[] }>;
+    items?: Array<{ enabled: boolean; position?: number; translations?: Translation[] }>;
+}
+
+/** Match the client order and limit without changing the saved Admin draft. */
+export function publishedContentItems<T extends { enabled: boolean; position?: number }>(block: {
+    type: string;
+    items?: T[];
+}): T[] {
+    const enabled = (block.items ?? []).filter(item => item.enabled);
+    if (block.type !== 'CORE_CATEGORIES') return enabled;
+    return enabled.sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).slice(0, 2);
 }
 
 export type ContentPublicationStatus =
@@ -37,6 +47,7 @@ export type ContentPublicationStatus =
     | 'EXPIRED'
     | 'INCOMPLETE_TRANSLATION'
     | 'MISSING_IMAGE'
+    | 'MISSING_ITEMS'
     | 'SHARING';
 
 export const contentPublicationLabels: Record<ContentPublicationStatus, string> = {
@@ -46,6 +57,7 @@ export const contentPublicationLabels: Record<ContentPublicationStatus, string> 
     EXPIRED: '已过期',
     INCOMPLETE_TRANSLATION: '中英文内容未完成',
     MISSING_IMAGE: '缺少已发布图片',
+    MISSING_ITEMS: '缺少已启用卡片',
     SHARING: '分享设置专用',
 };
 
@@ -67,6 +79,7 @@ export function createContentPublicationChecker(isUsableEnglishTranslation: (val
         const isAuth = block.type === 'AUTH_LOGIN' || block.type === 'AUTH_REGISTER';
         const source = block.translations?.find(t => t.languageCode === 'zh_Hans');
         const target = block.translations?.find(t => t.languageCode === 'en');
+        const items = publishedContentItems(block);
         if (
             (isAuth ? !source : !source?.title?.trim()) ||
             (requireEnglish &&
@@ -77,20 +90,18 @@ export function createContentPublicationChecker(isUsableEnglishTranslation: (val
                 (['subtitle', 'body', 'ctaLabel'] as const).some(
                     field => !translationPair(source?.[field], target?.[field]),
                 )) ||
-            (block.items ?? [])
-                .filter(item => item.enabled)
-                .some(item => {
-                    const zh = item.translations?.find(t => t.languageCode === 'zh_Hans');
-                    const en = item.translations?.find(t => t.languageCode === 'en');
-                    return (
-                        (isAuth ? !zh : !zh?.label?.trim()) ||
-                        (requireEnglish &&
-                            (isAuth
-                                ? !en || !translationPair(zh?.label, en.label)
-                                : !isUsableEnglishTranslation(en?.label))) ||
-                        (requireEnglish && !translationPair(zh?.description, en?.description))
-                    );
-                })
+            items.some(item => {
+                const zh = item.translations?.find(t => t.languageCode === 'zh_Hans');
+                const en = item.translations?.find(t => t.languageCode === 'en');
+                return (
+                    (isAuth ? !zh : !zh?.label?.trim()) ||
+                    (requireEnglish &&
+                        (isAuth
+                            ? !en || !translationPair(zh?.label, en.label)
+                            : !isUsableEnglishTranslation(en?.label))) ||
+                    (requireEnglish && !translationPair(zh?.description, en?.description))
+                );
+            })
         )
             return 'INCOMPLETE_TRANSLATION';
         const image = block.imageAsset
@@ -99,6 +110,9 @@ export function createContentPublicationChecker(isUsableEnglishTranslation: (val
               ? block.imageUrl.trim()
               : null;
         if (block.type === 'HERO' && !image) return 'MISSING_IMAGE';
+        if (block.type === 'CORE_CATEGORIES' && !items.length) {
+            return 'MISSING_ITEMS';
+        }
         return 'PUBLISHED';
     };
 }

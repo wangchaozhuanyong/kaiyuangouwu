@@ -16,7 +16,6 @@ import {
     Sparkles,
     Tag,
     Truck,
-    Waypoints,
     WifiOff,
     Zap,
 } from 'lucide-react';
@@ -31,9 +30,9 @@ import {
 } from 'react';
 
 import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
-import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
+import { desktopHeroAspectRatio, HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
-import { LocalePreferencesSheet, LocalePreferencesTrigger } from '../components/common/locale-preferences';
+import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { ProductCard } from '../components/common/product-card';
 import { claimableCouponCampaigns } from '../coupon-center-state';
 import { useDesktopLayout } from '../desktop-layout';
@@ -49,16 +48,13 @@ import { HomePageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import {
     aggregateFlashSaleProducts,
-    BrandLogo,
-    dualCardTemplateSetting,
     FlashSaleSection,
-    localizedDualCardItemSetting,
+    HomeDualCategoryShowcase,
 } from '../storefront-ui/content-ui';
 import {
     EmptyState,
     InlineError,
     LegalFooter,
-    NoticeButton,
     SectionHeader,
     Sheet,
     Subpage,
@@ -496,7 +492,9 @@ export function HomePage() {
     const bestSellersBlock = contentBlocks.find(block => block.type === 'BEST_SELLERS');
     const recommendationsBlock = contentBlocks.find(block => block.type === 'RECOMMENDATIONS');
     const trustBlock = contentBlocks.find(block => block.type === 'TRUST_BAR');
-    const coreCategoriesBlock = contentBlocks.find(block => block.type === 'CORE_CATEGORIES');
+    const coreCategoriesBlock = contentBlocks.find(
+        block => block.type === 'CORE_CATEGORIES' && block.enabled && block.items.some(item => item.enabled),
+    );
     const legalBlock = contentBlocks.find(block => block.type === 'LEGAL');
     const bestSellersTitle = resolveManagedContentCopy(bestSellersBlock, 'title', '');
     const homepageModules = homepageModuleEntries(contentBlocks, configuredBlockTypes);
@@ -529,7 +527,6 @@ export function HomePage() {
     const [noticeHovered, setNoticeHovered] = useState(false);
     const [noticeFocused, setNoticeFocused] = useState(false);
     const [openNoticeId, setOpenNoticeId] = useState<string | null>(null);
-    const [preferencesOpen, setPreferencesOpen] = useState(false);
     const [heroGestureActive, setHeroGestureActive] = useState(false);
     const [heroAutoplayStopped, setHeroAutoplayStopped] = useState(false);
     const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -552,10 +549,6 @@ export function HomePage() {
     const heroImage = managedHero?.imageUrl ?? '';
     const heroImageWidth = managedHero?.imageAsset?.width;
     const heroImageHeight = managedHero?.imageAsset?.height;
-    const heroAspectRatio =
-        heroImageWidth && heroImageHeight && heroImageWidth > 0 && heroImageHeight > 0
-            ? `${heroImageWidth} / ${heroImageHeight}`
-            : '2 / 1';
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
     const defaultNoticeItem: HomeNoticeItem = {
         id: 'default-notice',
@@ -813,48 +806,41 @@ export function HomePage() {
         ? quickLinks.slice(activeQuickPage * 5, activeQuickPage * 5 + 5)
         : quickLinks;
     const trustIcons = [ShieldCheck, Zap, Lock, Headphones];
-    const trustItems = (trustBlock?.items ?? []).map(item => item.label);
+    // A missing merchant guarantee block must not remove the shared desktop service row.
+    // Keep mobile publication behavior and explicitly configured blocks unchanged.
+    const desktopServiceFallback =
+        desktop &&
+        !trustBlock &&
+        !configuredBlockTypes.includes('TRUST_BAR') &&
+        heroCount > 0 &&
+        quickLinks.length > 0;
+    const trustItems = desktopServiceFallback
+        ? isZh
+            ? ['商品信息', '订单可查', '帮助中心', '账户服务']
+            : ['Products', 'Orders', 'Help center', 'Account']
+        : (trustBlock?.items ?? []).map(item => item.label);
     const trustBarHasLongCopy = trustItems.some(label => Array.from(label.trim()).length > (isZh ? 4 : 10));
     const colorfulTrustBar = isColorfulHomepageStyle(trustBlock?.settings?.visualStyle);
     const colorfulQuickLinks = isColorfulHomepageStyle(quickBlock?.settings?.visualStyle);
 
     return (
         <main className="page home-page" data-page-pending={loading ? 'query' : undefined}>
-            <header className="topbar home-topbar">
-                <button
-                    className="brand"
-                    type="button"
-                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                    aria-label={
-                        isZh ? `返回 ${storefrontName} 首页顶部` : `Back to the top of ${storefrontName}`
-                    }
-                >
-                    <BrandLogo url={logoUrl} name={storefrontName} className="brand-mark" />
-                    <strong>{storefrontName}</strong>
-                </button>
-                <div className="topbar-actions">
-                    <LocalePreferencesTrigger
-                        language={language}
-                        currencyCode={displayCurrencyCode}
-                        expanded={preferencesOpen}
-                        onClick={() => setPreferencesOpen(true)}
-                    />
-                    <NoticeButton language={language} onClick={onNotifications} />
-                </div>
-            </header>
-
-            {preferencesOpen ? (
-                <LocalePreferencesSheet
-                    currencyCodes={currencySelectorEnabled ? availableCurrencyCodes : [displayCurrencyCode]}
-                    selectedCurrencyCode={displayCurrencyCode}
-                    currencyLoading={currencyLoading}
-                    language={language}
-                    marketLabel={market.label}
-                    onToggleLanguage={onToggleLanguage}
-                    onSelectCurrency={onCurrencyChange}
-                    onClose={() => setPreferencesOpen(false)}
-                />
-            ) : null}
+            <MobilePageHeader
+                title={storefrontName}
+                storefrontName={storefrontName}
+                logoUrl={logoUrl}
+                language={language}
+                marketLabel={market.label}
+                displayCurrencyCode={displayCurrencyCode}
+                availableCurrencyCodes={
+                    currencySelectorEnabled ? availableCurrencyCodes : [displayCurrencyCode]
+                }
+                currencyLoading={currencyLoading}
+                onToggleLanguage={onToggleLanguage}
+                onCurrencyChange={onCurrencyChange}
+                onNotifications={onNotifications}
+                onBrandClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            />
 
             {openNoticeItem ? (
                 <NoticeDetailSheet
@@ -926,7 +912,7 @@ export function HomePage() {
                                     className={`hero hero-image-overlay${heroCount > 1 ? ' is-swipeable' : ''}`}
                                     style={{
                                         order: homepageModuleOrder('HERO'),
-                                        aspectRatio: desktop ? heroAspectRatio : undefined,
+                                        aspectRatio: desktop ? String(desktopHeroAspectRatio) : undefined,
                                     }}
                                     role="region"
                                     aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
@@ -1057,10 +1043,15 @@ export function HomePage() {
                                 </section>
                             )}
 
-                            {hasHomepageModule('TRUST_BAR') && trustItems.length > 0 ? (
+                            {(hasHomepageModule('TRUST_BAR') || desktopServiceFallback) &&
+                            trustItems.length > 0 ? (
                                 <div
                                     className={`home-trust-bar${trustBarHasLongCopy ? ' has-long-copy' : ''}${colorfulTrustBar ? ' is-color-marketplace' : ''}`}
-                                    style={{ order: homepageModuleOrder('TRUST_BAR') }}
+                                    style={{
+                                        order: desktopServiceFallback
+                                            ? Math.max(...introOrders) + 1
+                                            : homepageModuleOrder('TRUST_BAR'),
+                                    }}
                                     aria-label={isZh ? '服务信息' : 'Service information'}
                                 >
                                     {trustItems.map((label, index) => {
@@ -1347,78 +1338,6 @@ function RecommendationPage({
                 />
             )}
         </Subpage>
-    );
-}
-
-function HomeDualCategoryShowcase({
-    language,
-    block,
-    onContentTarget,
-}: {
-    language: StorefrontLanguage;
-    block: StorefrontContentBlock;
-    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
-}) {
-    const isZh = language === 'zh';
-    if (!block.items.length) return null;
-    const template = dualCardTemplateSetting(block.settings);
-
-    return (
-        <section
-            className="home-dual-showcase"
-            data-card-template={template}
-            aria-label={block.title || (isZh ? '核心品类精选' : 'Core Categories')}
-        >
-            {block.items.slice(0, 2).map((item, index) => {
-                const disabled = item.targetType === 'NONE' || !item.targetValue;
-                const ShowcaseIcon = index === 0 ? Waypoints : Headphones;
-                const badgeLabel = localizedDualCardItemSetting(
-                    item.settings,
-                    'badgeLabel',
-                    language,
-                    block.subtitle || (isZh ? '核心品类' : 'Core category'),
-                );
-                const ctaLabel = localizedDualCardItemSetting(
-                    item.settings,
-                    'ctaLabel',
-                    language,
-                    block.ctaLabel || (isZh ? '查看分类' : 'View category'),
-                );
-                return (
-                    <button
-                        key={item.id}
-                        type="button"
-                        className={`showcase-card showcase-card--${index === 0 ? 'gateway' : 'support'}${item.imageUrl ? ' has-managed-image' : ''}`}
-                        disabled={disabled}
-                        onClick={() => onContentTarget(item.targetType, item.targetValue)}
-                    >
-                        {item.imageUrl ? (
-                            <>
-                                <span className="showcase-card-media" aria-hidden="true">
-                                    <SafeImage src={item.imageUrl} alt="" imageKind="card" loading="lazy" />
-                                </span>
-                                <span className="showcase-card-image-shade" aria-hidden="true" />
-                            </>
-                        ) : null}
-                        {template === 'tech-duo' ? (
-                            <span className="showcase-card-icon" aria-hidden="true">
-                                <ShowcaseIcon />
-                            </span>
-                        ) : null}
-                        <div className="showcase-content">
-                            {badgeLabel ? <span className="showcase-badge">{badgeLabel}</span> : null}
-                            <h3>{item.label}</h3>
-                            {item.description ? <p>{item.description}</p> : null}
-                            {!disabled && ctaLabel ? (
-                                <span className="showcase-link">
-                                    {ctaLabel} <ChevronRight aria-hidden="true" />
-                                </span>
-                            ) : null}
-                        </div>
-                    </button>
-                );
-            })}
-        </section>
     );
 }
 

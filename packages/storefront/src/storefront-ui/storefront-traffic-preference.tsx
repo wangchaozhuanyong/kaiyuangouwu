@@ -21,7 +21,6 @@ export function StorefrontTrafficPreference({
     const isZh = language === 'zh';
     const [preference, setPreference] = useState<StorefrontTrafficConsent>(storefrontTrafficConsent);
     const [busy, setBusy] = useState(false);
-    const [failed, setFailed] = useState(false);
     const pending = useRef(false);
     useEffect(() => {
         const refresh = () => setPreference(storefrontTrafficConsent());
@@ -32,17 +31,11 @@ export function StorefrontTrafficPreference({
             window.removeEventListener(TRAFFIC_PREFERENCE_EVENT, refresh);
         };
     }, []);
-    useEffect(() => {
-        if (!failed) return;
-        const timeout = window.setTimeout(() => setFailed(false), 5000);
-        return () => window.clearTimeout(timeout);
-    }, [failed]);
 
     const choose = async (granted: boolean) => {
         if (pending.current) return;
         pending.current = true;
         setBusy(true);
-        setFailed(false);
         if (!granted) {
             try {
                 setStorefrontTrafficConsent(false);
@@ -67,7 +60,6 @@ export function StorefrontTrafficPreference({
                 // Unknown consent also keeps analytics disabled when storage is unavailable.
             }
             setPreference('denied');
-            setFailed(granted);
         } finally {
             pending.current = false;
             setBusy(false);
@@ -83,9 +75,9 @@ export function StorefrontTrafficPreference({
                     </strong>
                     <p>
                         {isZh
-                            ? '拒绝不会影响购物、登录或售后。允许后仅记录本站的页面访问与去标识化统计，可随时撤回。'
+                            ? '拒绝不会影响购物、登录或售后。允许后仅记录本站的页面访问与去标识化统计。'
                             : 'Declining does not affect shopping, sign-in or support. Allowing records ' +
-                              'first-party page views and pseudonymous metrics, and can be withdrawn anytime.'}{' '}
+                              'first-party page views and pseudonymous metrics.'}{' '}
                         <a href="#/legal?id=privacy">{isZh ? '查看隐私政策' : 'View privacy policy'}</a>
                     </p>
                 </div>
@@ -106,27 +98,5 @@ export function StorefrontTrafficPreference({
         );
     }
 
-    return (
-        <>
-            <button
-                type="button"
-                className="traffic-preference-button"
-                disabled={busy}
-                aria-live="polite"
-                onClick={() => void choose(preference !== 'granted')}
-            >
-                {failed
-                    ? isZh
-                        ? '访问统计：未开启 · 重试'
-                        : 'Analytics not enabled · Retry'
-                    : preference === 'granted'
-                      ? isZh
-                          ? '访问统计：已允许 · 撤回'
-                          : 'Analytics allowed · Withdraw'
-                      : isZh
-                        ? '访问统计：已关闭 · 允许'
-                        : 'Analytics off · Allow'}
-            </button>
-        </>
-    );
+    return null;
 }

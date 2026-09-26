@@ -5,7 +5,12 @@ import { LocalePreferencesSheet } from './components/common/locale-preferences';
 import { DesktopLayoutContext } from './desktop-layout';
 import { buildHomeNoticeItems, HomePage, NoticeDetailSheet, type HomePageProps } from './pages/home-page';
 import { HomePageContext } from './storefront-page-contexts';
-import { aggregateFlashSaleProducts, FlashSalePage, FlashSaleSection } from './storefront-ui/content-ui';
+import {
+    aggregateFlashSaleProducts,
+    FlashSalePage,
+    FlashSaleSection,
+    HomeDualCategoryShowcase,
+} from './storefront-ui/content-ui';
 import { readStorefrontStylesheet } from './test-stylesheet';
 import {
     MarketConfig,
@@ -354,6 +359,15 @@ describe('HomePage hero carousel', () => {
         expect(markup).toContain('class="hero-rich-copy-surface"');
         expect(markup).toContain('aria-label="查看推荐内容：后台配置的首页轮播"');
         expect(markup).toContain(heroBlock.title);
+    });
+
+    it('uses the on-image hero scene for both phone and desktop viewports', () => {
+        for (const desktop of [false, true]) {
+            const markup = renderHome({ contentBlocks: [heroBlock] }, desktop);
+            expect(markup).toContain('class="hero hero-image-overlay');
+            expect(markup).toContain('class="hero-rich-copy-surface"');
+            expect(markup).toContain(heroBlock.title);
+        }
     });
 
     it('does not wash out CloudBridge artwork with a full-image overlay', () => {
@@ -846,7 +860,7 @@ describe('HomePage mobile header layout', () => {
         const markup = renderHome();
         const stylesheet = readStorefrontStylesheet();
 
-        expect(markup).toContain('class="topbar home-topbar"');
+        expect(markup).toContain('class="topbar home-topbar mobile-page-header"');
         expect(markup).not.toContain('class="search-trigger"');
         expect(stylesheet).toMatch(
             /\.home-topbar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) max-content;/,
@@ -915,6 +929,59 @@ describe('HomePage desktop intro layout', () => {
         imageUrl: null,
         items: [],
     };
+
+    it('keeps the desktop carousel frame stable for different stores and slide dimensions', () => {
+        const frames = [
+            { width: 1600, height: 800 },
+            { width: 2200, height: 715 },
+        ].map(dimensions => {
+            const markup = renderHome(
+                {
+                    contentBlocks: [
+                        {
+                            ...heroBlock,
+                            imageAsset: dimensions,
+                        },
+                    ],
+                },
+                true,
+            );
+            expect(markup).toContain(`width="${dimensions.width}" height="${dimensions.height}"`);
+            return markup.match(/<section class="hero[^>]+style="([^"]+)"/u)?.[1];
+        });
+        expect(frames[0]).toBeDefined();
+        expect(frames[0]).toBe(frames[1]);
+        expect(frames[0]).toContain('aspect-ratio:3');
+    });
+
+    it('keeps the desktop service row when a store has no published guarantee block', () => {
+        const contentBlocks = [
+            positionedHeroBlock,
+            {
+                ...quickLinksBlock,
+                items: [{ ...trustBarBlock.items[0], label: '联系客服', targetType: 'SUPPORT' as const }],
+            },
+        ];
+        const configuredBlockTypes = ['HERO', 'QUICK_LINKS'] as HomePageProps['configuredBlockTypes'];
+        const desktopMarkup = renderHome({ contentBlocks, configuredBlockTypes }, true);
+        expect(desktopMarkup).toContain('home-intro-grid is-grouped-intro');
+        expect(desktopMarkup).toContain('class="home-trust-bar"');
+        expect(desktopMarkup.match(/class="home-trust-item"/g)).toHaveLength(4);
+        expect(desktopMarkup).toContain('商品信息');
+        expect(desktopMarkup).not.toContain('正品保障');
+        expect(renderHome({ contentBlocks })).not.toContain('class="home-trust-bar"');
+        // Configured but unpublished means the merchant hid or scheduled this module.
+        expect(
+            renderHome({ contentBlocks, configuredBlockTypes: [...configuredBlockTypes, 'TRUST_BAR'] }, true),
+        ).not.toContain('class="home-trust-bar"');
+
+        const authoredMarkup = renderHome({ contentBlocks: [...contentBlocks, trustBarBlock] }, true);
+        expect(authoredMarkup).toContain('class="home-trust-label">物流</span>');
+        expect(authoredMarkup).not.toContain('商品信息');
+        expect(
+            renderHome({ contentBlocks: [...contentBlocks, { ...trustBarBlock, items: [] }] }, true),
+        ).not.toContain('class="home-trust-bar"');
+    });
 
     it('does not invent shortcuts when the managed module has no entries', () => {
         const desktopMarkup = renderHome({ contentBlocks: [quickLinksBlock] }, true);
@@ -1302,6 +1369,39 @@ describe('HomePage notices', () => {
 });
 
 describe('HomePage core category cards', () => {
+    it.each([false, true])('filters disabled cards on the actual homepage (desktop=%s)', desktop => {
+        const hidden = { ...coreCategoriesBlock.items[0], id: 'hidden', enabled: false, label: '隐藏入口' };
+        const extra = { ...coreCategoriesBlock.items[0], id: 'extra', position: 2, label: '第三个入口' };
+        const markup = renderHome(
+            {
+                contentBlocks: [
+                    { ...coreCategoriesBlock, items: [hidden, ...coreCategoriesBlock.items, extra] },
+                ],
+            },
+            desktop,
+        );
+        expect(markup).not.toContain('隐藏入口');
+        expect(markup).toContain('后台设置的办公卡片');
+        expect(markup).toContain('后台设置的数字卡片');
+        expect(markup).not.toContain('第三个入口');
+    });
+
+    it.each([false, true])(
+        'omits disabled or empty core modules on the actual homepage (desktop=%s)',
+        desktop => {
+            for (const block of [
+                { ...coreCategoriesBlock, enabled: false },
+                { ...coreCategoriesBlock, items: [] },
+                {
+                    ...coreCategoriesBlock,
+                    items: coreCategoriesBlock.items.map(item => ({ ...item, enabled: false })),
+                },
+            ]) {
+                expect(renderHome({ contentBlocks: [block] }, desktop)).not.toContain('home-dual-showcase');
+            }
+        },
+    );
+
     it('does not render hard-coded cards when no managed block exists', () => {
         const markup = renderHome();
 
@@ -1495,4 +1595,36 @@ describe('HomePage featured collection', () => {
             ),
         );
     });
+});
+
+it('honors core-card block and item enable states before choosing the two displayed cards', () => {
+    const item = {
+        id: 'disabled',
+        enabled: false,
+        position: 0,
+        imageUrl: null,
+        targetType: 'URL' as const,
+        targetValue: '/category',
+        settings: null,
+        label: 'Disabled card',
+        description: '',
+    };
+    const core: StorefrontContentBlock = {
+        ...heroBlock,
+        type: 'CORE_CATEGORIES',
+        items: [
+            item,
+            { ...item, id: 'one', enabled: true, label: 'Enabled one' },
+            { ...item, id: 'two', enabled: true, label: 'Enabled two' },
+        ],
+    };
+    const render = (block: StorefrontContentBlock) =>
+        renderToStaticMarkup(
+            <HomeDualCategoryShowcase language="zh" block={block} onContentTarget={vi.fn()} />,
+        );
+    expect(render(core)).not.toContain('Disabled card');
+    expect(render(core)).toContain('Enabled one');
+    expect(render(core)).toContain('Enabled two');
+    expect(render({ ...core, enabled: false })).toBe('');
+    expect(render({ ...core, items: [item] })).toBe('');
 });
