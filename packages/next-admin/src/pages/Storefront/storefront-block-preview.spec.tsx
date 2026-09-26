@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FeatureHelpProvider } from '../../components/FeatureHelp';
 import { STOREFRONT_CONTENT_QUERY } from '../../graphql/storefront.graphql';
 import { BlockPreview, HeroBlockPreview } from './storefront-block-preview';
-import { newContentBlock } from './storefront-content-utils';
+import { newContentBlock, newContentItem } from './storefront-content-utils';
 import { contentPublicationLabels, contentPublicationStatus } from './storefront-publication';
 
 vi.stubGlobal(
@@ -65,6 +65,39 @@ async function preview() {
 }
 
 describe('carousel draft preview', () => {
+    it('keeps the desktop draft frame stable across store artwork dimensions', async () => {
+        const container = document.createElement('div');
+        const root = createRoot(container);
+        cleanups.push(() => root.unmount());
+        const frames = [];
+        for (const dimensions of [
+            { width: 1600, height: 800 },
+            { width: 2200, height: 715 },
+        ]) {
+            const block = newContentBlock('HERO', 0, '首页横幅');
+            block.imageAsset = {
+                id: 'hero-art',
+                name: '横幅',
+                source: '/assets/hero.png',
+                preview: '/assets/hero.png',
+                ...dimensions,
+            };
+            await act(async () =>
+                root.render(
+                    <FeatureHelpProvider>
+                        <HeroBlockPreview block={block} language="zh_Hans" fixedViewport="desktop" compact />
+                    </FeatureHelpProvider>,
+                ),
+            );
+            const iframe = container.querySelector('iframe')!;
+            const doc = new DOMParser().parseFromString(iframe.srcdoc, 'text/html');
+            frames.push({ height: iframe.height, style: doc.querySelector('.hero')?.getAttribute('style') });
+            expect(doc.querySelector('img')?.getAttribute('width')).toBe(String(dimensions.width));
+            expect(doc.querySelector('img')?.getAttribute('height')).toBe(String(dimensions.height));
+        }
+        expect(frames[0]).toEqual(frames[1]);
+        expect(frames[0].style).toContain('aspect-ratio:3');
+    });
     it('uses the same on-image scene in the saved homepage structure preview', async () => {
         const container = document.createElement('div');
         const root = createRoot(container);
@@ -90,7 +123,8 @@ describe('carousel draft preview', () => {
             const doc = new DOMParser().parseFromString(iframe.srcdoc, 'text/html');
             expect(container.querySelector('[aria-label="首页横幅预览"]')).not.toBeNull();
             expect(container.querySelector('button')).toBeNull();
-            expect(doc.querySelector('.hero-image-overlay') !== null).toBe(viewport === 'desktop');
+            expect(doc.querySelector('.hero-image-overlay')).not.toBeNull();
+            expect(iframe.height).toBe(viewport === 'desktop' ? '344' : '304');
             expect(doc.querySelector('img')?.getAttribute('width')).toBe('1600');
             expect(doc.querySelector('img')?.getAttribute('height')).toBe('520');
             expect(iframe.width).toBe(viewport === 'desktop' ? '874' : '390');
@@ -138,8 +172,8 @@ describe('carousel draft preview', () => {
                     ?.getAttribute('style')
                     ?.match(/aspect-ratio:\s*([\d.]+)/)?.[1],
             ),
-        ).toBeCloseTo(1600 / 520);
-        expect(container.querySelector('iframe')?.height).toBe(String(Math.ceil(850 / (1600 / 520)) + 24));
+        ).toBe(3);
+        expect(container.querySelector('iframe')?.height).toBe('344');
     });
 
     it('updates copy colors and locale while keeping buttons inert', async () => {
@@ -256,6 +290,40 @@ it('previews the support header image and only FAQs that the Shop can publish', 
     expect(container.querySelector('[aria-label="FAQ preview"]')?.textContent).toContain(
         'When will it ship?',
     );
+});
+
+it('previews the same first two enabled core cards as the client and explains empty cards', async () => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    cleanups.push(() => root.unmount());
+    const block = newContentBlock('CORE_CATEGORIES', 0, '核心品类');
+    block.items = ['停用入口', '第一个入口', '第二个入口', '备用入口'].map((label, position) => ({
+        ...newContentItem(position),
+        enabled: position !== 0,
+        translations: [{ languageCode: 'zh_Hans', label, description: '' }],
+    }));
+    const render = () =>
+        act(async () =>
+            root.render(
+                <FeatureHelpProvider>
+                    <BlockPreview block={block} language="zh_Hans" />
+                </FeatureHelpProvider>,
+            ),
+        );
+    await render();
+    expect(container.textContent).toContain('第一个入口');
+    expect(container.textContent).toContain('第二个入口');
+    expect(container.textContent).not.toContain('停用入口');
+    expect(container.textContent).not.toContain('备用入口');
+    block.items.reverse();
+    await render();
+    expect(container.textContent).toMatch(/第一个入口[\s\S]*第二个入口/);
+    expect(container.textContent).not.toContain('备用入口');
+    block.items = block.items.map(item => ({ ...item, enabled: false }));
+    await render();
+    expect(container.textContent).toContain('当前没有已启用卡片，客户端不会展示该模块');
+    expect(container.textContent).not.toContain('第一个入口');
 });
 
 it('calls content publication published without promising product-dependent floor visibility', () => {

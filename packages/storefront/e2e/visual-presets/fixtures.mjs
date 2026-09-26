@@ -654,6 +654,24 @@ function reviewCenterFixture(signedIn) {
     };
 }
 
+function catalogScrollFixture() {
+    const children = Array.from({ length: 22 }, (_, index) => ({
+        ...collectionChild,
+        id: `qa-scroll-child-${index + 1}`,
+        name: `示例分类 ${index + 1}`,
+    }));
+    const items = Array.from({ length: 36 }, (_, index) => ({
+        ...product,
+        id: `qa-scroll-product-${index + 1}`,
+        name: `滚动验收示例商品 ${index + 1}`,
+        variants: [{ ...variant, id: `qa-scroll-variant-${index + 1}` }],
+    }));
+    return {
+        collections: { items: [{ ...collection, children }], totalItems: 1 },
+        storefrontCatalog: { items, totalItems: items.length },
+    };
+}
+
 export function fixtureData(presetId = 'modern-oriental', signedIn = true, content = 'normal') {
     const notificationOrders =
         content === 'notifications'
@@ -932,5 +950,6 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true, conte
         ...(content === 'dense' ? denseCommerceFixture(signedIn) : {}),
         ...(content === 'aftercare' ? aftercareFixture(signedIn) : {}),
         ...(content === 'reviews' ? reviewCenterFixture(signedIn) : {}),
+        ...(content === 'catalog-scroll' ? catalogScrollFixture() : {}),
     };
 }

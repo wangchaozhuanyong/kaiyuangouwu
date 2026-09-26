@@ -180,7 +180,9 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                 </Suspense>
                                 {previewEmbedded &&
                                     previewScenario &&
-                                    !['normal', 'dense', 'aftercare'].includes(previewScenario) &&
+                                    !['normal', 'dense', 'aftercare', 'catalog-scroll'].includes(
+                                        previewScenario,
+                                    ) &&
                                     !(
                                         displayedRoute.name === 'home' &&
                                         ['empty', 'loading'].includes(previewScenario)

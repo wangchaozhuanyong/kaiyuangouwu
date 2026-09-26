@@ -231,13 +231,29 @@ describe('storefront skin system', () => {
         expect(stylesheet('./styles/visual-presets.css')).not.toContain('.checkout-items');
     });
 
-    it('themes purchase quantity controls in their shared geometry owner with touch-sized actions', () => {
-        const source = stylesheet('./styles/checkout-items.css');
+    it('owns all quantity controls in one component and stylesheet with touch-sized actions', () => {
+        const source = stylesheet('./styles/quantity-control.css');
         expect(source).toMatch(
-            /\.purchase-quantity-control\s*\{[^}]*background:\s*var\(--control-surface\);/,
+            /\.quantity-control\s*\{[^}]*border:\s*1px solid var\(--line\);[^}]*background:\s*var\(--control-surface\);/,
         );
-        expect(source).toContain('grid-template-columns: 44px 24px 44px;');
-        expect(source).toMatch(/\.purchase-quantity-control button\s*\{[^}]*height:\s*44px;/);
+        expect(source).toMatch(/\.quantity-control > button\s*\{[^}]*height:\s*44px;/);
+        for (const file of [
+            './checkout-page.tsx',
+            './pages/product-detail-page.tsx',
+            './storefront-ui/cart-ui.tsx',
+        ]) {
+            expect(stylesheet(file)).toContain('<QuantityControl');
+        }
+        for (const file of [
+            './styles/checkout-items.css',
+            './styles/product-detail-surfaces.css',
+            './styles/cart-layout.css',
+            './styles/desktop-pages.css',
+        ]) {
+            expect(stylesheet(file)).not.toMatch(
+                /\.purchase-quantity-control|\.detail-quantity-controls|\.cart-line-actions > div|\.desktop-cart-quantity (?:> button|svg|> span)/,
+            );
+        }
         expect(stylesheet('./tailwind/checkout-page-styles.ts')).not.toContain('purchase-quantity-control');
     });
 

@@ -1,0 +1,67 @@
+.quantity-control {
+    display: inline-grid;
+    grid-template-columns: 44px minmax(32px, auto) 44px;
+    align-items: stretch;
+    gap: 0;
+    flex-shrink: 0;
+    width: max-content;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
+}
+
+.quantity-control > button {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    transition: background-color var(--experience-motion-fast) ease;
+}
+
+.quantity-control > button:hover:not(:disabled) {
+    background: var(--control-surface-hover);
+}
+
+.quantity-control > button:active:not(:disabled) {
+    background: var(--control-surface-pressed);
+}
+
+.quantity-control > button:focus-visible {
+    --experience-focus-offset: -3px;
+
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: -3px;
+}
+
+.quantity-control > button:disabled {
+    color: var(--muted);
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.quantity-control > button > svg {
+    width: 16px;
+    height: 16px;
+}
+
+.quantity-control > output {
+    display: grid;
+    place-items: center;
+    min-width: 32px;
+    padding-inline: 8px;
+    border-inline: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: var(--font-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}

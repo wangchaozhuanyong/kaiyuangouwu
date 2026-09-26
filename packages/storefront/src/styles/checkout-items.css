@@ -89,52 +89,6 @@
     font-size: 16px;
 }
 
-.purchase-quantity-control {
-    display: grid;
-    grid-template-columns: 44px 24px 44px;
-    align-items: center;
-    border-radius: var(--skin-control-radius);
-    background: var(--control-surface);
-    color: var(--text);
-}
-
-.purchase-quantity-control button {
-    display: grid;
-    place-items: center;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    border: 0;
-    border-radius: inherit;
-    background: transparent;
-    color: inherit;
-}
-
-.purchase-quantity-control button:hover:not(:disabled) {
-    background: var(--control-surface-hover);
-}
-
-.purchase-quantity-control button:active:not(:disabled) {
-    background: var(--control-surface-pressed);
-}
-
-.purchase-quantity-control button:disabled {
-    color: var(--muted);
-}
-
-.purchase-quantity-control button svg {
-    width: 16px;
-    height: 16px;
-}
-
-.checkout-items .purchase-quantity-control small {
-    margin: 0;
-    color: var(--text);
-    text-align: center;
-    font-size: 13px;
-    font-variant-numeric: tabular-nums;
-}
-
 @media (max-width: 370px) {
     .purchase-page .checkout-items article {
         grid-template-columns: 76px minmax(0, 1fr);

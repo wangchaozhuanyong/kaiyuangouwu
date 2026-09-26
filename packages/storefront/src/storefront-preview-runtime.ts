@@ -16,14 +16,34 @@ export function installStorefrontPreviewRuntime(): void {
     const preset = parameters.get('storefrontPreviewPreset') ?? 'classic';
     const signedIn = parameters.get('storefrontPreviewAuth') === 'authenticated';
     const scenario = parameters.get('storefrontPreviewScenario');
-    const content = scenario === 'dense' || scenario === 'aftercare' ? scenario : 'normal';
+    const content =
+        scenario === 'dense' || scenario === 'aftercare' || scenario === 'catalog-scroll'
+            ? scenario
+            : 'normal';
     const data = fixtureData(preset, signedIn, content);
     const nativeFetch = window.fetch.bind(window);
 
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = requestUrl(input);
         if (url.origin === window.location.origin && url.pathname.includes('/shop-api')) {
-            return new Response(JSON.stringify({ data }), {
+            let responseData = data;
+            if (content === 'catalog-scroll') {
+                const body = input instanceof Request ? await input.clone().text() : init?.body;
+                const request = typeof body === 'string' && body ? JSON.parse(body) : {};
+                const catalogInput = request.variables?.input;
+                if (catalogInput && request.query?.includes('storefrontCatalog')) {
+                    const skip = catalogInput.skip ?? 0;
+                    const take = catalogInput.take ?? 12;
+                    responseData = {
+                        ...data,
+                        storefrontCatalog: {
+                            ...data.storefrontCatalog,
+                            items: data.storefrontCatalog.items.slice(skip, skip + take),
+                        },
+                    };
+                }
+            }
+            return new Response(JSON.stringify({ data: responseData }), {
                 status: 200,
                 headers: { 'content-type': 'application/json' },
             });

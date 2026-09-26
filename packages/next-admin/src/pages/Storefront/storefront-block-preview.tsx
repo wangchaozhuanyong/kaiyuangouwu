@@ -2,12 +2,19 @@ import { gql } from '@apollo/client';
 import { useQuery } from '@apollo/client/react';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { publishedContentItems } from '../../../../storefront-content-plugin/src/content-publication';
 import {
     AuthVisual,
     authVisualStyle,
     type AuthVisualData,
 } from '../../../../storefront-content-plugin/src/shared/auth-visual';
-import { HeroScene, type HeroSceneData } from '../../../../storefront-content-plugin/src/shared/hero-scene';
+import {
+    desktopHeroAspectRatio,
+    desktopHeroMinHeight,
+    HeroScene,
+    mobileHeroMinHeight,
+    type HeroSceneData,
+} from '../../../../storefront-content-plugin/src/shared/hero-scene';
 import heroSceneCss from '../../../../storefront-content-plugin/src/shared/hero-scene.css?inline';
 import { heroThemeStyle } from '../../../../storefront-content-plugin/src/shared/hero-theme';
 import { useImageTone } from '../../../../storefront-content-plugin/src/shared/image-tone';
@@ -41,6 +48,7 @@ export function BlockPreview({
         return <AuthBlockPreview block={block} language={language} />;
     const translation = blockTranslation(block, language);
     const image = block.imageAsset?.preview ?? block.imageUrl;
+    const previewItems = publishedContentItems(block);
     if (block.type === 'SUPPORT') {
         const isZh = language === 'zh_Hans';
         const days = stringSetting(
@@ -211,23 +219,24 @@ export function BlockPreview({
                             {translation.ctaLabel}
                         </span>
                     )}
-                    {block.items.length > 0 && (
+                    {block.type === 'CORE_CATEGORIES' && !previewItems.length && (
+                        <p className="mt-4 text-xs opacity-75">当前没有已启用卡片，客户端不会展示该模块</p>
+                    )}
+                    {previewItems.length > 0 && (
                         <div className="mt-4 grid grid-cols-2 gap-2">
-                            {block.items
-                                .filter(item => item.enabled)
-                                .map((item, index) => (
-                                    <div
-                                        key={item.id ?? index}
-                                        className="rounded-lg bg-white/75 p-2 text-slate-900"
-                                    >
-                                        <div className="text-[11px] font-bold">
-                                            {itemTranslation(item, language).label || `子项 ${index + 1}`}
-                                        </div>
-                                        <div className="mt-1 line-clamp-2 text-[10px] text-slate-500">
-                                            {itemTranslation(item, language).description}
-                                        </div>
+                            {previewItems.map((item, index) => (
+                                <div
+                                    key={item.id ?? index}
+                                    className="rounded-lg bg-white/75 p-2 text-slate-900"
+                                >
+                                    <div className="text-[11px] font-bold">
+                                        {itemTranslation(item, language).label || `子项 ${index + 1}`}
                                     </div>
-                                ))}
+                                    <div className="mt-1 line-clamp-2 text-[10px] text-slate-500">
+                                        {itemTranslation(item, language).description}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>
@@ -282,10 +291,8 @@ export function HeroBlockPreview({
     const frameWidth = viewport === 'desktop' ? (compact ? 874 : 1024) : 390;
     const imageWidth = block.imageAsset?.width;
     const imageHeight = block.imageAsset?.height;
-    const imageRatio =
-        imageWidth && imageHeight && imageWidth > 0 && imageHeight > 0 ? imageWidth / imageHeight : 2;
-    const desktopHeroHeight = Math.ceil(850 / imageRatio);
-    const frameHeight = viewport === 'desktop' ? desktopHeroHeight + 24 : 235;
+    const desktopHeroHeight = Math.max(desktopHeroMinHeight, Math.ceil(850 / desktopHeroAspectRatio));
+    const frameHeight = (viewport === 'desktop' ? desktopHeroHeight : mobileHeroMinHeight) + 24;
     const frameScale = Math.min(1, previewWidth / frameWidth);
     const imageUrl = block.imageAsset?.preview ?? block.imageUrl ?? '';
     const content: HeroSceneData = {
@@ -329,13 +336,13 @@ export function HeroBlockPreview({
                 </head>
                 <body style={style}>
                     <section
-                        className={`hero${viewport === 'desktop' ? ' hero-editor-desktop hero-image-overlay' : ''}`}
+                        className={`hero hero-image-overlay${viewport === 'desktop' ? ' hero-editor-desktop' : ''}`}
                         style={{
                             ...heroThemeStyle(content),
                             margin: 0,
                             width: viewport === 'desktop' ? 850 : '100%',
-                            minHeight: viewport === 'desktop' ? desktopHeroHeight : 195,
-                            aspectRatio: viewport === 'desktop' ? String(imageRatio) : undefined,
+                            minHeight: viewport === 'desktop' ? desktopHeroHeight : mobileHeroMinHeight,
+                            aspectRatio: viewport === 'desktop' ? String(desktopHeroAspectRatio) : undefined,
                         }}
                     >
                         <HeroScene

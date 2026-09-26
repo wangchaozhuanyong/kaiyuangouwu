@@ -8,7 +8,6 @@ import {
     Minus,
     Package,
     Pin,
-    Plus,
     Share2,
     TicketPercent,
     Trash2,
@@ -16,6 +15,7 @@ import {
 import { PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react';
 
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
+import { QuantityControl } from '../components/common/quantity-control';
 import { useDesktopLayout } from '../desktop-layout';
 import {
     cartLineCanSelect,
@@ -188,30 +188,23 @@ function DesktopCartLine({
             </div>
             <span>{formatMoney(variant?.priceWithTax ?? 0, currency, locale)}</span>
             <div className="desktop-cart-quantity">
-                <button
-                    type="button"
-                    aria-label={isZh ? `减少 ${name} 数量` : `Decrease ${name} quantity`}
-                    disabled={loading}
-                    onClick={() =>
+                <QuantityControl
+                    value={line.quantity}
+                    label={isZh ? `${name} 购买数量` : `${name} quantity`}
+                    decreaseLabel={isZh ? `减少 ${name} 数量` : `Decrease ${name} quantity`}
+                    increaseLabel={isZh ? `增加 ${name} 数量` : `Increase ${name} quantity`}
+                    decreaseDisabled={loading}
+                    onDecrease={() =>
                         line.quantity === 1 ? onRemove(line.id) : onQuantity(line.id, line.quantity - 1)
                     }
-                >
-                    <Minus />
-                </button>
-                <span>{line.quantity}</span>
-                <button
-                    type="button"
-                    aria-label={isZh ? `增加 ${name} 数量` : `Increase ${name} quantity`}
-                    disabled={
+                    increaseDisabled={
                         loading ||
                         !line.available ||
                         !variant ||
                         !variantCanIncreaseQuantity(variant, line.quantity)
                     }
-                    onClick={() => onQuantity(line.id, line.quantity + 1)}
-                >
-                    <Plus />
-                </button>
+                    onIncrease={() => onQuantity(line.id, line.quantity + 1)}
+                />
                 {stockError && (
                     <small className="cart-stock-error" role="status">
                         {stockError}
@@ -585,44 +578,35 @@ export function SwipeableCartLine({
                                 : formatMoney(0, market.currencyCode, locale)}
                         </b>
                         <div className="cart-line-actions">
-                            <div>
-                                <button
-                                    type="button"
-                                    aria-label={
-                                        line.quantity === 1
-                                            ? isZh
-                                                ? `减少 ${productName} 数量并删除商品`
-                                                : `Decrease ${productName} quantity and remove item`
-                                            : isZh
-                                              ? `减少 ${productName} 数量`
-                                              : `Decrease ${productName} quantity`
-                                    }
-                                    onClick={() =>
-                                        line.quantity === 1
-                                            ? onRemove(line.id)
-                                            : onQuantity(line.id, line.quantity - 1)
-                                    }
-                                    disabled={loading}
-                                >
-                                    <Minus />
-                                </button>
-                                <span>{line.quantity}</span>
-                                <button
-                                    type="button"
-                                    aria-label={
-                                        isZh ? `增加 ${productName} 数量` : `Increase ${productName} quantity`
-                                    }
-                                    onClick={() => onQuantity(line.id, line.quantity + 1)}
-                                    disabled={
-                                        loading ||
-                                        !line.available ||
-                                        !variant ||
-                                        !variantCanIncreaseQuantity(variant, line.quantity)
-                                    }
-                                >
-                                    <Plus />
-                                </button>
-                            </div>
+                            <QuantityControl
+                                value={line.quantity}
+                                label={isZh ? `${productName} 购买数量` : `${productName} quantity`}
+                                decreaseLabel={
+                                    line.quantity === 1
+                                        ? isZh
+                                            ? `减少 ${productName} 数量并删除商品`
+                                            : `Decrease ${productName} quantity and remove item`
+                                        : isZh
+                                          ? `减少 ${productName} 数量`
+                                          : `Decrease ${productName} quantity`
+                                }
+                                onDecrease={() =>
+                                    line.quantity === 1
+                                        ? onRemove(line.id)
+                                        : onQuantity(line.id, line.quantity - 1)
+                                }
+                                decreaseDisabled={loading}
+                                increaseLabel={
+                                    isZh ? `增加 ${productName} 数量` : `Increase ${productName} quantity`
+                                }
+                                onIncrease={() => onQuantity(line.id, line.quantity + 1)}
+                                increaseDisabled={
+                                    loading ||
+                                    !line.available ||
+                                    !variant ||
+                                    !variantCanIncreaseQuantity(variant, line.quantity)
+                                }
+                            />
                         </div>
                     </div>
                 </div>

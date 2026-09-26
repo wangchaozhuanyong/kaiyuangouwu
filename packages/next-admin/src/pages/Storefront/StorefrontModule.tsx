@@ -18,9 +18,10 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { channelRequestContext } from '../../apollo';
+import { publishedContentItems } from '../../../../storefront-content-plugin/src/content-publication';
+import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -71,7 +72,13 @@ import {
     storefrontHomepageRows,
 } from './storefront-homepage-order';
 
+import { verifyContentChannel, verifyContentOrder, verifySavedBlock } from './storefront-save-verification';
+
 type Viewport = 'MOBILE' | 'DESKTOP';
+type ContentActionScope = {
+    context: ReturnType<typeof channelRequestContext>;
+    reread: () => Promise<StorefrontContentResult>;
+};
 
 export function StorefrontModule() {
     const location = useLocation();
@@ -116,20 +123,47 @@ export function StorefrontModule() {
     const mutationOptions = query.data
         ? { context: channelRequestContext(query.data.activeChannel.token) }
         : {};
-    const [createBlock, createState] = useMutation(CREATE_STOREFRONT_BLOCK_MUTATION, mutationOptions);
-    const [updateBlock, updateState] = useMutation(UPDATE_STOREFRONT_BLOCK_MUTATION, mutationOptions);
-    const [reorderBlocks, reorderState] = useMutation(REORDER_STOREFRONT_BLOCKS_MUTATION, mutationOptions);
+    const [createBlock, createState] = useMutation<{ createStorefrontContentBlock: StorefrontContentBlock }>(
+        CREATE_STOREFRONT_BLOCK_MUTATION,
+        mutationOptions,
+    );
+    const [updateBlock, updateState] = useMutation<{ updateStorefrontContentBlock: StorefrontContentBlock }>(
+        UPDATE_STOREFRONT_BLOCK_MUTATION,
+        mutationOptions,
+    );
+    const [reorderBlocks, reorderState] = useMutation<{
+        reorderStorefrontContentBlocks: Array<{ id: string; position: number }>;
+    }>(REORDER_STOREFRONT_BLOCKS_MUTATION, mutationOptions);
     const [deleteBlock, deleteState] = useMutation<{
         deleteStorefrontContentBlock: { result: string; message?: string | null };
     }>(DELETE_STOREFRONT_BLOCK_MUTATION, mutationOptions);
-    const [updateSettings, settingsState] = useMutation(UPDATE_STOREFRONT_SETTINGS_MUTATION, mutationOptions);
+    const [updateSettings, settingsState] = useMutation<{
+        updateStorefrontContentSettings: StorefrontContentResult['storefrontContentSettings'];
+    }>(UPDATE_STOREFRONT_SETTINGS_MUTATION, mutationOptions);
     const [updateAuthSettings, authSettingsState] = useMutation<{
         updateStorefrontAuthSettings: StorefrontAuthConfigurationRecord;
     }>(UPDATE_STOREFRONT_AUTH_SETTINGS_MUTATION, mutationOptions);
     const [updateGooglePlatformSettings, googlePlatformSettingsState] = useMutation<{
         updateStorefrontGooglePlatformSettings: StorefrontAuthConfigurationRecord;
     }>(UPDATE_STOREFRONT_GOOGLE_PLATFORM_SETTINGS_MUTATION, mutationOptions);
-    const allBlocks = query.data?.storefrontContentBlocks ?? [];
+    const channelId = query.data?.activeChannel.id;
+    const channelRef = useRef(channelId);
+    const actionLock = useRef(false);
+    const channelConsistent = Boolean(
+        query.data &&
+        (!getActiveChannelToken() || query.data.activeChannel.token === getActiveChannelToken()),
+    );
+    /* oxlint-disable react/set-state-in-effect -- A store switch invalidates the previous store's drafts and feedback. */
+    useLayoutEffect(() => {
+        channelRef.current = channelId;
+        setEditing(null);
+        setDeleting(null);
+        setCarouselOpen(false);
+        setNotice('');
+        setActionError('');
+    }, [channelId]);
+    /* oxlint-enable react/set-state-in-effect */
+    const allBlocks = channelConsistent ? (query.data?.storefrontContentBlocks ?? []) : [];
     const accountHeroBlock = allBlocks.find(block => block.type === 'ACCOUNT_HERO') ?? null;
     const homepageRows = storefrontHomepageRows(allBlocks);
     const homepageBlocks = homepageRows.flatMap(row => row.blocks);
@@ -150,10 +184,11 @@ export function StorefrontModule() {
         authSettingsState.loading ||
         googlePlatformSettingsState.loading ||
         query.loading ||
-        Boolean(query.error);
+        Boolean(query.error) ||
+        !channelConsistent;
 
     const openEditor = (block: StorefrontContentBlock) => {
-        if (!(block.id ? canUpdate : canCreate) || query.loading || query.error) return;
+        if (pending || !(block.id ? canUpdate : canCreate)) return;
         setActionError('');
         setNotice('');
         setEditing(block);
@@ -192,149 +227,170 @@ export function StorefrontModule() {
         await query.refetch();
     };
 
-    const saveEditor = async (block: StorefrontContentBlock) => {
-        if (savePending || !(block.id ? canUpdate : canCreate) || query.loading || query.error) return;
-        setActionPending(true);
-        setActionError('');
-        try {
-            if (block.id) {
-                if (!block.updatedAt) throw new Error('缺少内容版本，请刷新后重试');
-                await updateBlock({
-                    variables: {
-                        input: {
-                            id: block.id,
-                            expectedUpdatedAt: block.updatedAt,
-                            ...storefrontBlockInput(block, editing),
-                        },
-                    },
-                });
-            } else {
-                await createBlock({ variables: { input: storefrontBlockInput(block, editing) } });
-            }
-            setEditing(null);
-            showNotice('中文已保存，英文待同步；人工英文保持原设置');
-            try {
-                const refreshed = await query.refetch();
-                if (!block.id && block.type === 'HERO' && canUpdate && refreshed.data) {
-                    const blocks = refreshed.data.storefrontContentBlocks;
-                    await reorderBlocks({
-                        variables: { ids: homepageOrderIds(blocks, storefrontHomepageRows(blocks)) },
-                    });
-                    await query.refetch();
-                }
-            } catch (error) {
-                setActionError(`内容已保存，但顺序整理或重新读取失败，请刷新检查。${errorText(error)}`);
-            }
-        } catch (error) {
-            showError(error);
-        } finally {
-            setActionPending(false);
+    // Pin every write and its readback to the selected store; never report an unverified save.
+    const runContentAction = async (
+        action: (scope: ContentActionScope) => Promise<void>,
+        propagateError = false,
+    ) => {
+        const channel = query.data?.activeChannel;
+        if (pending || actionLock.current || !channel || !channelConsistent) {
+            if (propagateError) throw new Error('店铺配置正在读取或保存，请稍后重试');
+            return;
         }
-    };
-
-    const toggleBlock = async (block: StorefrontContentBlock) => {
-        if (!canUpdate || query.loading || query.error) return;
-        if (!block.id || !block.updatedAt) return;
-        try {
-            await updateBlock({
-                variables: {
-                    input: { id: block.id, expectedUpdatedAt: block.updatedAt, enabled: !block.enabled },
-                },
-            });
-            showNotice(`《${block.internalName}》已${block.enabled ? '停用' : '启用'}`);
-            await query.refetch();
-        } catch (error) {
-            showError(error);
-        }
-    };
-
-    const saveOrder = async (ids: string[] | null, message: string) => {
-        if (!ids || pending || !canUpdate) return;
+        const selectedToken = getActiveChannelToken();
+        const stillCurrent = () =>
+            channelRef.current === channel.id && getActiveChannelToken() === selectedToken;
+        actionLock.current = true;
         setActionPending(true);
         setNotice('');
         setActionError('');
         try {
-            await reorderBlocks({ variables: { ids } });
-            showNotice(message);
-            await query.refetch();
+            await action({
+                context: channelRequestContext(channel.token),
+                reread: async () => {
+                    if (!stillCurrent()) throw new Error('店铺已切换，请在当前店铺重新读取配置');
+                    const refreshed = await query.refetch();
+                    if (!stillCurrent()) throw new Error('店铺已切换，请在当前店铺重新读取配置');
+                    return verifyContentChannel(refreshed.data, channel.id);
+                },
+            });
         } catch (error) {
-            showError(error);
+            if (stillCurrent()) showError(error);
+            if (propagateError) throw error;
         } finally {
+            actionLock.current = false;
             setActionPending(false);
         }
     };
 
+    const publicationNotice = (block: StorefrontContentBlock) =>
+        `《${block.internalName}》已保存并重新读取核对。中文：${contentPublicationLabels[contentPublicationStatus(block, undefined, 'zh_Hans')]}；英文：${contentPublicationLabels[contentPublicationStatus(block, undefined, 'en')]}`;
+
+    const persistBlock = async (
+        block: StorefrontContentBlock,
+        original: StorefrontContentBlock | null,
+        scope: ContentActionScope,
+    ) => {
+        const input = storefrontBlockInput(block, original);
+        let saved: StorefrontContentBlock;
+        if (block.id) {
+            if (!block.updatedAt) throw new Error('缺少内容版本，请刷新后重试');
+            const result = await updateBlock({
+                context: scope.context,
+                variables: { input: { id: block.id, expectedUpdatedAt: block.updatedAt, ...input } },
+            });
+            saved = verifySavedBlock(result.data?.updateStorefrontContentBlock, { id: block.id, ...input });
+        } else {
+            const result = await createBlock({ context: scope.context, variables: { input } });
+            saved = verifySavedBlock(result.data?.createStorefrontContentBlock, input);
+        }
+        const refreshed = await scope.reread();
+        const readback = verifySavedBlock(
+            refreshed.storefrontContentBlocks.find(candidate => candidate.id === saved.id),
+            { id: saved.id, ...input },
+            saved,
+        );
+        return { readback, refreshed };
+    };
+
+    const persistOrder = async (ids: string[], scope: ContentActionScope) => {
+        const response = await reorderBlocks({ context: scope.context, variables: { ids } });
+        verifyContentOrder(response.data?.reorderStorefrontContentBlocks, ids);
+        const refreshed = await scope.reread();
+        verifyContentOrder(refreshed.storefrontContentBlocks, ids);
+    };
+
+    const saveEditor = async (block: StorefrontContentBlock) => {
+        if (!(block.id ? canUpdate : canCreate)) return;
+        await runContentAction(async scope => {
+            const { readback, refreshed } = await persistBlock(block, editing, scope);
+            if (!block.id && block.type === 'HERO' && canUpdate) {
+                const blocks = refreshed.storefrontContentBlocks;
+                await persistOrder(homepageOrderIds(blocks, storefrontHomepageRows(blocks)), scope);
+            }
+            setEditing(null);
+            showNotice(publicationNotice(readback));
+        });
+    };
+
+    const toggleBlock = async (block: StorefrontContentBlock) => {
+        if (!canUpdate || !block.id || !block.updatedAt) return;
+        await runContentAction(async scope => {
+            const input = { id: block.id!, enabled: !block.enabled };
+            const response = await updateBlock({
+                context: scope.context,
+                variables: { input: { ...input, expectedUpdatedAt: block.updatedAt } },
+            });
+            verifySavedBlock(response.data?.updateStorefrontContentBlock, input);
+            const refreshed = await scope.reread();
+            const saved = verifySavedBlock(
+                refreshed.storefrontContentBlocks.find(value => value.id === block.id),
+                input,
+            );
+            showNotice(publicationNotice(saved));
+        });
+    };
+
+    const saveOrder = async (ids: string[] | null, message: string) => {
+        if (!ids || !canUpdate) return;
+        await runContentAction(async scope => {
+            await persistOrder(ids, scope);
+            showNotice(`${message}，已重新读取核对`);
+        });
+    };
+
     const confirmDelete = async () => {
-        if (!deleting?.id || pending || !canDelete) return;
-        try {
-            const response = await deleteBlock({ variables: { id: deleting.id } });
+        if (!deleting?.id || !canDelete) return;
+        const block = deleting;
+        await runContentAction(async scope => {
+            const response = await deleteBlock({ context: scope.context, variables: { id: block.id } });
             const deletion = response.data?.deleteStorefrontContentBlock;
             if (!deletion || deletion.result !== 'DELETED') {
                 throw new Error(deletion?.message || '后端拒绝删除该楼层');
             }
-            showNotice(`已删除《${deleting.internalName}》`);
+            const refreshed = await scope.reread();
+            if (refreshed.storefrontContentBlocks.some(value => value.id === block.id)) {
+                throw new Error('删除后仍读取到该楼层，请刷新确认');
+            }
             setDeleting(null);
-            await query.refetch();
-        } catch (error) {
-            showError(error);
-        }
+            showNotice(`已删除《${block.internalName}》，已重新读取核对`);
+        });
     };
 
     const changeHeroInterval = async (seconds: number) => {
-        if (pending || !canUpdate) return;
+        if (!canUpdate) return;
         if (!Number.isInteger(seconds) || seconds < 3 || seconds > 30) {
             showError('轮播间隔请输入 3–30 的整数秒数');
             return;
         }
-        setActionPending(true);
-        try {
-            await updateSettings({ variables: { input: { heroAutoplayIntervalSeconds: seconds } } });
-            showNotice(`轮播间隔已设为 ${seconds} 秒`);
-            await query.refetch();
-        } catch (error) {
-            showError(error);
-        } finally {
-            setActionPending(false);
-        }
+        await runContentAction(async scope => {
+            const response = await updateSettings({
+                context: scope.context,
+                variables: { input: { heroAutoplayIntervalSeconds: seconds } },
+            });
+            if (response.data?.updateStorefrontContentSettings.heroAutoplayIntervalSeconds !== seconds) {
+                throw new Error('轮播间隔保存结果不一致');
+            }
+            const refreshed = await scope.reread();
+            if (refreshed.storefrontContentSettings.heroAutoplayIntervalSeconds !== seconds) {
+                throw new Error('轮播间隔重新读取结果不一致，请刷新确认');
+            }
+            showNotice(`轮播间隔已设为 ${seconds} 秒，已重新读取核对`);
+        });
     };
 
     const saveAccountHero = async (asset: StorefrontContentBlock['imageAsset']) => {
-        if (savePending || query.loading) throw new Error('配置正在处理，请稍后重试');
-        if (query.error) throw query.error;
         const block =
             accountHeroBlock ??
             newAccountHeroBlock(Math.max(-1, ...allBlocks.map(item => item.position)) + 1);
         if (!(block.id ? canUpdate : canCreate)) throw new Error('当前账号没有保存商城装修的权限');
-        const draft = {
-            ...block,
-            imageAsset: asset,
-            imageAssetId: asset?.id ?? null,
-            imageUrl: null,
-        };
-        setActionPending(true);
-        try {
-            if (draft.id) {
-                if (!draft.updatedAt) throw new Error('缺少内容版本，请刷新后重试');
-                await updateBlock({
-                    variables: {
-                        input: {
-                            id: draft.id,
-                            expectedUpdatedAt: draft.updatedAt,
-                            ...storefrontBlockInput(draft, block),
-                        },
-                    },
-                });
-            } else {
-                await createBlock({ variables: { input: storefrontBlockInput(draft) } });
-            }
-            try {
-                await query.refetch();
-            } catch {
-                throw new Error('头图已保存，但重新读取失败，请刷新确认');
-            }
-        } finally {
-            setActionPending(false);
-        }
+        await runContentAction(async scope => {
+            await persistBlock(
+                { ...block, imageAsset: asset, imageAssetId: asset?.id ?? null, imageUrl: null },
+                block,
+                scope,
+            );
+        }, true);
     };
 
     return (
@@ -587,7 +643,11 @@ export function StorefrontModule() {
                         </div>
                     </div>
                     <StorefrontPreview
-                        blocks={visibleBlocks}
+                        blocks={allBlocks.filter(
+                            block =>
+                                isHomepageBlock(block) &&
+                                contentPublicationStatus(block, undefined, previewLanguage) === 'PUBLISHED',
+                        )}
                         viewport={viewport}
                         language={previewLanguage}
                     />
@@ -623,6 +683,7 @@ export function StorefrontModule() {
                         query.loading ||
                         Boolean(query.error) ||
                         actionPending ||
+                        !channelConsistent ||
                         !(accountHeroBlock ? canUpdate : canCreate)
                     }
                     onSave={saveAccountHero}
@@ -1121,8 +1182,10 @@ function BlockRow({
                     tooltip={
                         block.enabled
                             ? scheduled
-                                ? '当前已启用（排期中），点击后停用'
-                                : '当前展示中，点击后停用'
+                                ? `当前已启用（${contentPublicationLabels[status]}），点击后停用`
+                                : contentPublicationStatus(block, undefined, 'zh_Hans') === 'PUBLISHED'
+                                  ? '当前已发布，点击后停用'
+                                  : `当前已启用（${contentPublicationLabels[contentPublicationStatus(block, undefined, 'zh_Hans')]}），点击后停用`
                             : '当前已停用，点击后启用'
                     }
                     disabled={pending || !canUpdate}
@@ -1215,6 +1278,7 @@ function PreviewBlock({
     }
     const copy = blockTranslation(block, language);
     const image = block.imageAsset?.preview ?? block.imageUrl;
+    const items = publishedContentItems(block);
     const productAutomation = ['COUPONS', 'FLASH_SALE', 'BEST_SELLERS', 'RECOMMENDATIONS'].includes(
         block.type,
     );
@@ -1250,18 +1314,18 @@ function PreviewBlock({
                             {copy.body}
                         </p>
                     )}
-                    {block.items.length > 0 && (
-                        <div className={`mt-3 grid gap-2 ${desktop ? 'grid-cols-4' : 'grid-cols-2'}`}>
-                            {block.items
-                                .filter(item => item.enabled)
-                                .map((item, index) => (
-                                    <div key={item.id ?? index} className="rounded-lg bg-slate-50 p-2">
-                                        <div className="truncate text-[10px] font-bold text-slate-700">
-                                            {item.translations.find(value => value.languageCode === language)
-                                                ?.label ?? ''}
-                                        </div>
+                    {items.length > 0 && (
+                        <div
+                            className={`mt-3 grid gap-2 ${desktop && block.type !== 'CORE_CATEGORIES' ? 'grid-cols-4' : 'grid-cols-2'}`}
+                        >
+                            {items.map((item, index) => (
+                                <div key={item.id ?? index} className="rounded-lg bg-slate-50 p-2">
+                                    <div className="truncate text-[10px] font-bold text-slate-700">
+                                        {item.translations.find(value => value.languageCode === language)
+                                            ?.label ?? ''}
                                     </div>
-                                ))}
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>

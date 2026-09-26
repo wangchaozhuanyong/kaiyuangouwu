@@ -12,6 +12,32 @@ afterEach(() => {
 });
 
 describe('storefront preview runtime', () => {
+    it('provides independent category columns and distinct catalog pages for local scroll acceptance', async () => {
+        const fallbackFetch = vi.fn();
+        window.fetch = fallbackFetch;
+        window.history.replaceState(
+            {},
+            '',
+            '/?storefrontPreviewEmbedded=1&storefrontPreviewScenario=catalog-scroll',
+        );
+        installStorefrontPreviewRuntime();
+        const fetchPage = async (skip: number) => {
+            const response = await window.fetch('/shop-api', {
+                body: JSON.stringify({
+                    query: 'storefrontCatalog',
+                    variables: { input: { skip, take: 12 } },
+                }),
+            });
+            return (await response.json()).data;
+        };
+        const first = await fetchPage(0);
+        const second = await fetchPage(12);
+        expect(first.collections.items[0].children).toHaveLength(22);
+        expect(first.storefrontCatalog.items).toHaveLength(12);
+        expect(first.storefrontCatalog.totalItems).toBe(36);
+        expect(second.storefrontCatalog.items[0].id).not.toBe(first.storefrontCatalog.items[0].id);
+        expect(fallbackFetch).not.toHaveBeenCalled();
+    });
     it('isolates digital deliveries, returns and review history in the aftercare sample', async () => {
         const fallbackFetch = vi.fn();
         window.fetch = fallbackFetch;

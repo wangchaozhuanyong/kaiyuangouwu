@@ -175,7 +175,7 @@ for (const [engine, browserType] of [
             const increment = page.getByRole('button', { name: '增加 商品一 数量', exact: true });
             const quantityStart = performance.now();
             await increment.click();
-            await expect(page.locator('.cart-line').first().locator('.cart-line-actions span')).toHaveText(
+            await expect(page.locator('.cart-line').first().locator('.quantity-control output')).toHaveText(
                 '2',
             );
             const quantityFeedbackMs = performance.now() - quantityStart;
@@ -202,7 +202,7 @@ for (const [engine, browserType] of [
             await expect(checkbox).toBeChecked({ timeout: 20000 });
             await expect(checkout).toBeEnabled({ timeout: 20000 });
             await page.getByRole('button', { name: '减少 商品一 数量', exact: true }).click();
-            await expect(page.locator('.cart-line').first().locator('.cart-line-actions span')).toHaveText(
+            await expect(page.locator('.cart-line').first().locator('.quantity-control output')).toHaveText(
                 '1',
             );
             const deletionStart = performance.now();

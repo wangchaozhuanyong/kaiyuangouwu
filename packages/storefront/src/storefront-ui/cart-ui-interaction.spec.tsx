@@ -165,82 +165,105 @@ describe('CouponSheet interactions', () => {
             expect(document.body.textContent).toContain('订单状态变化，请刷新');
         },
     );
-    it.each([false, true])('preserves stock recovery and selection rules in desktop=%s', async desktop => {
-        const onQuantity = vi.fn();
-        const onSelect = vi.fn();
-        const line: StorefrontCart['lines'][number] = {
-            id: 'line-stock',
-            quantity: 5,
-            selected: false,
-            available: true,
-            productVariant: {
-                id: 'variant-stock',
-                name: '库存商品',
-                sku: 'STOCK',
-                priceWithTax: 1000,
-                currencyCode: 'MYR',
-                stockLevel: 'IN_STOCK',
-                saleableStockLevel: 2,
-                featuredAsset: null,
-                product: { id: 'product-stock', name: '库存商品', featuredAsset: null },
-                customFields: { fulfillmentType: 'physical' },
-            },
-        };
-        const renderGroup = async (selected: boolean) => {
+    it.each([false, true])(
+        'preserves stock recovery, selection and quantity limits in desktop=%s',
+        async desktop => {
+            const onQuantity = vi.fn();
+            const onSelect = vi.fn();
+            const onRemove = vi.fn();
+            const line: StorefrontCart['lines'][number] = {
+                id: 'line-stock',
+                quantity: 5,
+                selected: false,
+                available: true,
+                productVariant: {
+                    id: 'variant-stock',
+                    name: '库存商品',
+                    sku: 'STOCK',
+                    priceWithTax: 1000,
+                    currencyCode: 'MYR',
+                    stockLevel: 'IN_STOCK',
+                    saleableStockLevel: 2,
+                    featuredAsset: null,
+                    product: { id: 'product-stock', name: '库存商品', featuredAsset: null },
+                    customFields: { fulfillmentType: 'physical' },
+                },
+            };
+            const renderGroup = async (selected: boolean, quantity = line.quantity, loading = false) => {
+                await act(async () => {
+                    root.render(
+                        <DesktopLayoutContext.Provider value={desktop}>
+                            <CartGroup
+                                title="商品"
+                                hint=""
+                                lines={[{ ...line, selected, quantity }]}
+                                market={{
+                                    code: 'my',
+                                    defaultLanguageCode: 'zh_Hans',
+                                    currencyCode: 'MYR',
+                                    countryCode: 'MY',
+                                    locale: 'zh-CN',
+                                    label: 'Malaysia',
+                                }}
+                                locale="zh-CN"
+                                language="zh"
+                                loading={loading}
+                                favoriteProductIds={[]}
+                                pinnedLineIds={[]}
+                                openActionLineId={null}
+                                onSelect={onSelect}
+                                onQuantity={onQuantity}
+                                onSelectAll={vi.fn()}
+                                onRemove={onRemove}
+                                onFavorite={vi.fn()}
+                                onPin={vi.fn()}
+                                onShare={vi.fn().mockResolvedValue(undefined)}
+                                onActionOpenChange={vi.fn()}
+                            />
+                        </DesktopLayoutContext.Provider>,
+                    );
+                    await Promise.resolve();
+                });
+            };
+            await renderGroup(false);
+            expect(container.querySelector<HTMLInputElement>('input[type="checkbox"]')?.disabled).toBe(true);
+            expect(container.textContent).toContain('库存不足，当前最多可购买 2 件');
+            const correction = [...container.querySelectorAll('button')].find(
+                button => button.textContent === '调整为 2 件',
+            );
+            expect(correction).toBeDefined();
             await act(async () => {
-                root.render(
-                    <DesktopLayoutContext.Provider value={desktop}>
-                        <CartGroup
-                            title="商品"
-                            hint=""
-                            lines={[{ ...line, selected }]}
-                            market={{
-                                code: 'my',
-                                defaultLanguageCode: 'zh_Hans',
-                                currencyCode: 'MYR',
-                                countryCode: 'MY',
-                                locale: 'zh-CN',
-                                label: 'Malaysia',
-                            }}
-                            locale="zh-CN"
-                            language="zh"
-                            loading={false}
-                            favoriteProductIds={[]}
-                            pinnedLineIds={[]}
-                            openActionLineId={null}
-                            onSelect={onSelect}
-                            onQuantity={onQuantity}
-                            onSelectAll={vi.fn()}
-                            onRemove={vi.fn()}
-                            onFavorite={vi.fn()}
-                            onPin={vi.fn()}
-                            onShare={vi.fn().mockResolvedValue(undefined)}
-                            onActionOpenChange={vi.fn()}
-                        />
-                    </DesktopLayoutContext.Provider>,
-                );
+                correction?.click();
                 await Promise.resolve();
             });
-        };
-        await renderGroup(false);
-        expect(container.querySelector<HTMLInputElement>('input[type="checkbox"]')?.disabled).toBe(true);
-        expect(container.textContent).toContain('库存不足，当前最多可购买 2 件');
-        const correction = [...container.querySelectorAll('button')].find(
-            button => button.textContent === '调整为 2 件',
-        );
-        expect(correction).toBeDefined();
-        await act(async () => {
-            correction?.click();
-            await Promise.resolve();
-        });
-        expect(onQuantity).toHaveBeenCalledWith('line-stock', 2);
-        await renderGroup(true);
-        const selectedCheckbox = container.querySelector<HTMLInputElement>('input[type="checkbox"]');
-        expect(selectedCheckbox?.disabled).toBe(false);
-        await act(async () => {
-            selectedCheckbox?.click();
-            await Promise.resolve();
-        });
-        expect(onSelect).toHaveBeenCalledWith('line-stock', false);
-    });
+            expect(onQuantity).toHaveBeenCalledWith('line-stock', 2);
+            await renderGroup(true);
+            const selectedCheckbox = container.querySelector<HTMLInputElement>('input[type="checkbox"]');
+            expect(selectedCheckbox?.disabled).toBe(false);
+            await act(async () => {
+                selectedCheckbox?.click();
+                await Promise.resolve();
+            });
+            expect(onSelect).toHaveBeenCalledWith('line-stock', false);
+            await renderGroup(true, 1);
+            const group = () => {
+                const element = container.querySelector('.quantity-control');
+                if (!element) throw new Error('Quantity control is missing');
+                return element;
+            };
+            expect(group().getAttribute('role')).toBe('group');
+            expect(group().querySelector('output')?.textContent).toBe('1');
+            const decrease = group().querySelector<HTMLButtonElement>('button');
+            if (!decrease) throw new Error('Decrease button is missing');
+            act(() => decrease.click());
+            expect(onRemove).toHaveBeenCalledWith('line-stock');
+            expect(onQuantity).not.toHaveBeenCalledWith('line-stock', 0);
+            await renderGroup(true, 2);
+            const increase = group().querySelector<HTMLButtonElement>('button:last-child');
+            if (!increase) throw new Error('Increase button is missing');
+            expect(increase.disabled).toBe(true);
+            await renderGroup(true, 1, true);
+            expect([...group().querySelectorAll('button')].every(button => button.disabled)).toBe(true);
+        },
+    );
 });
