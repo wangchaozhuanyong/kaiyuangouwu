@@ -861,7 +861,7 @@
         display: flex;
         flex-direction: column;
         min-width: 0;
-        gap: 0;
+        gap: 16px;
         padding: 24px;
         background: var(--surface, var(--paper));
         border-radius: var(--skin-card-radius);
@@ -925,9 +925,27 @@
     .desktop-store-layout .checkout-page .checkout-summary-section h2 {
         margin-bottom: 12px;
     }
+    .desktop-store-layout .checkout-page .checkout-summary-section .price-summary {
+        display: grid;
+        gap: 8px;
+    }
+    .desktop-store-layout .checkout-page .checkout-summary-section .price-summary > div {
+        gap: 12px;
+    }
+    .desktop-store-layout
+        .checkout-page
+        .checkout-summary-section
+        .price-summary
+        > div:not(.tax-detail):not(.shipping-estimate-detail):not(.summary-total) {
+        min-height: 44px;
+    }
+    .desktop-store-layout .checkout-page .checkout-summary-section .summary-total {
+        min-height: 52px;
+        margin-top: 8px;
+    }
     .desktop-store-layout .checkout-page .checkout-assurance {
         padding: 20px;
-        margin: 20px 0 0;
+        margin: 0;
         border: 0;
         border-top: 0;
         background: var(--soft);
