@@ -849,7 +849,6 @@ export function HomePage() {
                     selectedCurrencyCode={displayCurrencyCode}
                     currencyLoading={currencyLoading}
                     language={language}
-                    marketLabel={market.label}
                     onToggleLanguage={onToggleLanguage}
                     onSelectCurrency={onCurrencyChange}
                     onClose={() => setPreferencesOpen(false)}
@@ -1220,7 +1219,6 @@ export function HomePage() {
                             >
                                 <FlashSaleSection
                                     title={flashSaleBlock?.title || (isZh ? '限时秒杀' : 'Flash sale')}
-                                    subtitle={flashSaleBlock?.subtitle || undefined}
                                     items={flashSaleItems}
                                     locale={locale}
                                     language={language}

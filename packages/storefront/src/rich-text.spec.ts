@@ -53,4 +53,25 @@ describe('product description rich text', () => {
             'ChatGPT & AI 支付后交付',
         );
     });
+
+    it('keeps description text formatting while removing media and empty image paragraphs', () => {
+        expect(
+            sanitizeProductDescription(
+                '<h2>商品说明</h2><p>经典<strong>浓香</strong></p>' +
+                    '<figure><img src="/assets/preview/detail.png"><figcaption>包装说明</figcaption></figure>' +
+                    '<p><img src="/storefront/guide.svg"></p>' +
+                    '<ul><li>净含量：500ml</li></ul>' +
+                    '<video src="/assets/video.mp4">视频内容</video><iframe src="/player"></iframe>',
+                { textOnly: true },
+            ),
+        ).toBe(
+            '<h2>商品说明</h2><p>经典<strong>浓香</strong></p>' +
+                '<figure><figcaption>包装说明</figcaption></figure><ul><li>净含量：500ml</li></ul>',
+        );
+        expect(
+            sanitizeProductDescription('<figure><img src="/assets/preview/detail.png"></figure>', {
+                textOnly: true,
+            }),
+        ).toBe('');
+    });
 });

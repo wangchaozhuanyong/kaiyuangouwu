@@ -12,7 +12,6 @@ export interface MobilePageHeaderProps {
     storefrontName: string;
     logoUrl: string | null;
     language: StorefrontLanguage;
-    marketLabel: string;
     displayCurrencyCode: string;
     availableCurrencyCodes: string[];
     currencyLoading: boolean;
@@ -27,7 +26,6 @@ export function MobilePageHeader({
     storefrontName,
     logoUrl,
     language,
-    marketLabel,
     displayCurrencyCode,
     availableCurrencyCodes,
     currencyLoading,
@@ -76,7 +74,6 @@ export function MobilePageHeader({
                     }
                     selectedCurrencyCode={displayCurrencyCode}
                     currencyLoading={currencyLoading}
-                    marketLabel={marketLabel}
                     onToggleLanguage={onToggleLanguage}
                     onSelectCurrency={onCurrencyChange}
                     onClose={() => setPreferencesOpen(false)}

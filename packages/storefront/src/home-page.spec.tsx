@@ -604,6 +604,7 @@ describe('HomePage flash-sale product count', () => {
         expect(markup.match(/loading="lazy"/g) ?? []).toHaveLength(1);
         expect(markup).toContain('preset=storefront-thumbnail-160');
         expect(markup).toContain('sizes="(min-width: 420px) 126px, 30vw"');
+        expect(markup).toMatch(/<header class="section-header">[\s\S]*role="timer"[\s\S]*<\/header>/);
     });
 
     it('still honors an explicit merchant display limit', () => {
@@ -631,6 +632,7 @@ describe('HomePage flash-sale product count', () => {
         expect(markup.match(/class="flash-sale-card"/g) ?? []).toHaveLength(9);
         expect(markup).toContain('class="flash-sale-grid is-expanded"');
         expect(markup).toContain('共 9 件');
+        expect(markup).not.toContain('活动价格会在购物车和结算页自动生效');
         expect(stylesheet).toMatch(
             /\.flash-sale-grid\.is-expanded\s*\{[^}]*grid-auto-flow:\s*row;[^}]*overflow-x:\s*visible;/,
         );
@@ -877,7 +879,6 @@ describe('LocalePreferencesSheet', () => {
                 selectedCurrencyCode="USDT"
                 currencyLoading={false}
                 language="zh"
-                marketLabel="马来西亚"
                 onToggleLanguage={vi.fn()}
                 onSelectCurrency={vi.fn()}
                 onClose={vi.fn()}
@@ -886,7 +887,7 @@ describe('LocalePreferencesSheet', () => {
 
         expect(markup).toContain('class="sheet locale-preferences-sheet"');
         expect(markup).toContain('语言与货币');
-        expect(markup).toContain('马来西亚');
+        expect(markup).not.toContain('locale-preferences-market');
         expect(markup.match(/role="radiogroup"/g)).toHaveLength(2);
         expect(markup).toContain('role="radiogroup"');
         expect(markup).toContain('role="radio" aria-checked="true"');

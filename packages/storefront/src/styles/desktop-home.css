@@ -453,9 +453,6 @@
     .desktop-store-layout .home-page .flash-sale-section {
         position: relative;
     }
-    .desktop-store-layout .home-page .flash-sale-countdown {
-        margin: -8px 0 18px;
-    }
     .desktop-store-layout .home-page .flash-sale-grid {
         display: grid;
         grid-template-columns: none;

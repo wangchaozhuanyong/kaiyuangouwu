@@ -253,9 +253,7 @@
         grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
         gap: 24px;
     }
-    .desktop-store-layout .ai-studio-shell.ai-studio-workflow .ai-studio-composer,
-    .desktop-store-layout .ai-studio-shell.ai-studio-workflow .ai-studio-controls,
-    .desktop-store-layout .ai-studio-shell.ai-studio-workflow .ai-studio-history {
+    .desktop-store-layout .ai-studio-shell.ai-studio-workflow .ai-studio-composer {
         padding: 24px;
         border: 0;
         border-radius: var(--skin-card-radius);
@@ -263,27 +261,19 @@
         box-shadow: var(--skin-card-shadow);
     }
     .desktop-store-layout .ai-studio-shell.ai-studio-workflow .ai-studio-controls {
-        gap: 20px;
-    }
-    .desktop-store-layout .ai-studio-shell.ai-studio-workflow :is(.ai-studio-options, .ai-studio-checkout) {
-        padding-top: 0;
-        border-top: 0;
-    }
-    .desktop-store-layout .ai-studio-shell.ai-studio-workflow .ai-studio-checkout {
-        padding: 20px;
-        border-radius: var(--skin-control-radius);
-        background: var(--soft);
-    }
-    .desktop-store-layout
-        .ai-studio-shell.ai-studio-workflow
-        .ai-studio-setting-trigger
-        + .ai-studio-setting-trigger {
-        border-left-color: var(--skin-divider);
-    }
-    .desktop-store-layout .ai-studio-shell.ai-studio-workflow .ai-studio-fixed-generate {
-        padding-top: 18px;
+        padding: 0;
+        gap: 16px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
     }
     .desktop-store-layout .ai-studio-shell.ai-studio-workflow .ai-studio-history {
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
@@ -543,46 +533,11 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 0 40px;
     }
-    /* Commerce detail pages use a focused 790px editorial column. This keeps
-       long-form copy and merchant imagery easy to scan without stretching
-       them across the full desktop card. */
+    /* Match the full-width product information tabs above the text panel. */
     .desktop-store-layout .detail-description {
-        --detail-reading-width: 790px;
-
-        width: min(100%, 940px);
-        margin-inline: auto;
-        align-self: center;
-    }
-    .desktop-store-layout .detail-description > :is(h2, p, .detail-rich-text) {
-        width: min(100%, var(--detail-reading-width));
-        margin-inline: auto;
-    }
-    .desktop-store-layout .detail-rich-text img {
-        display: block;
-        width: auto;
-        max-width: 100%;
-        height: auto;
-        max-height: 900px;
-        margin: 24px auto;
-        object-fit: contain;
-    }
-    .desktop-store-layout .detail-description > .detail-description-media {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: min(100%, var(--detail-reading-width));
-        height: auto;
-        margin: 24px auto 0;
-        overflow: hidden;
-        background: transparent;
-    }
-    .desktop-store-layout .detail-description > .detail-description-media > img {
-        width: auto;
-        max-width: 100%;
-        height: auto;
-        max-height: 900px;
-        margin: 0;
-        object-fit: contain;
+        width: 100%;
+        margin-inline: 0;
+        align-self: stretch;
     }
     .desktop-store-layout .detail-description h2 {
         font-size: 20px;

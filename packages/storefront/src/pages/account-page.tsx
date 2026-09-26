@@ -7,6 +7,7 @@ import {
     CircleCheck,
     Headphones,
     Heart,
+    History,
     MapPin,
     Package,
     RotateCcw,
@@ -218,7 +219,6 @@ export function AccountPage() {
                     storefrontName={storefrontName}
                     logoUrl={logoUrl}
                     language={language}
-                    marketLabel={market.label}
                     displayCurrencyCode={displayCurrencyCode ?? market.currencyCode}
                     availableCurrencyCodes={availableCurrencyCodes ?? []}
                     currencyLoading={currencyLoading ?? false}
@@ -579,6 +579,14 @@ export function AccountPage() {
                         label={compactCopy.services.store}
                         onClick={() => navigateTo({ name: 'home' })}
                     />
+                    {!desktop && (
+                        <ServiceButton
+                            icon={<History />}
+                            tone="coupon"
+                            label={isZh ? '浏览足迹' : 'Browsing history'}
+                            onClick={() => navigateTo({ name: 'history' })}
+                        />
+                    )}
                 </div>
             </section>
 

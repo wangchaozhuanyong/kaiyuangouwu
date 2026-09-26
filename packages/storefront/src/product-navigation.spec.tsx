@@ -320,8 +320,7 @@ describe('product image navigation layers', () => {
             expect(mainImage).not.toContain('/assets/preview/previous-cover.png');
             expect(markup).toContain('/assets/preview/previous-cover.png');
         }
-        expect(page).toContain('responsive-picture safe-image-frame detail-description-media');
-        expect(page).toContain('sizes="(min-width: 1024px) 790px, 100vw"');
+        expect(page).not.toContain('detail-description-media');
         expect(gallery).toContain('查看第2张商品图');
         expect(gallery).not.toContain('查看第3张商品图');
         expect(displayProductImage(product)).toBe(cover.preview);
@@ -332,7 +331,7 @@ describe('product image navigation layers', () => {
         const coverOnly = { ...digitalProduct, featuredAsset: { id: 'cover', preview: '/cover.png' } };
         const markup = renderToStaticMarkup(<ProductGallery product={coverOnly} language="zh" />);
         expect(markup).toContain('/cover.png');
-        expect(markup).not.toContain('gallery-dots');
+        expect(markup).not.toContain('detail-gallery-thumbnails');
 
         const empty = renderToStaticMarkup(<ProductGallery product={digitalProduct} language="zh" />);
         expect(empty).toContain('image-placeholder');
@@ -593,39 +592,15 @@ describe('product image navigation layers', () => {
         expect(optionRule).toMatch(/border-radius:\s*var\(--skin-control-radius\);/);
     });
 
-    it('keeps desktop description media proportional inside a focused commerce reading column', () => {
+    it('aligns the text description panel with the product information navigation', () => {
         const stylesheet = readStorefrontStylesheet(['./styles/desktop-pages.css']);
         const descriptionRule = stylesheetRule(
             stylesheet,
             String.raw`\.desktop-store-layout\s+\.detail-description`,
         );
-        const mediaSelector =
-            String.raw`\.desktop-store-layout\s+\.detail-description\s*>\s*` +
-            String.raw`\.detail-description-media`;
-        const mediaRule = stylesheetRule(stylesheet, mediaSelector);
-        const imageRule = stylesheetRule(stylesheet, `${mediaSelector}\\s*>\\s*img`);
-        const richTextImageRule = stylesheetRule(
-            stylesheet,
-            String.raw`\.desktop-store-layout\s+\.detail-rich-text\s+img`,
-        );
-
-        expect(descriptionRule).toMatch(/--detail-reading-width:\s*790px;/);
-        expect(descriptionRule).toMatch(/width:\s*min\(100%,\s*940px\);/);
-        expect(descriptionRule).toMatch(/margin-inline:\s*auto;/);
-        expect(descriptionRule).toMatch(/align-self:\s*center;/);
-        expect(mediaRule).toMatch(/width:\s*min\(100%,\s*var\(--detail-reading-width\)\);/);
-        expect(mediaRule).toMatch(/height:\s*auto;/);
-        expect(mediaRule).toMatch(/margin:\s*24px auto 0;/);
-        expect(imageRule).toMatch(/width:\s*auto;/);
-        expect(imageRule).toMatch(/max-width:\s*100%;/);
-        expect(imageRule).toMatch(/height:\s*auto;/);
-        expect(imageRule).toMatch(/max-height:\s*900px;/);
-        expect(imageRule).toMatch(/object-fit:\s*contain;/);
-        expect(richTextImageRule).toMatch(/width:\s*auto;/);
-        expect(richTextImageRule).toMatch(/max-width:\s*100%;/);
-        expect(richTextImageRule).toMatch(/height:\s*auto;/);
-        expect(richTextImageRule).toMatch(/max-height:\s*900px;/);
-        expect(richTextImageRule).toMatch(/object-fit:\s*contain;/);
+        expect(descriptionRule).toMatch(/width:\s*100%;/);
+        expect(descriptionRule).toMatch(/margin-inline:\s*0;/);
+        expect(descriptionRule).toMatch(/align-self:\s*stretch;/);
     });
 
     it('ensures product-card provides a unified card frame with background, border-radius and shadow', () => {

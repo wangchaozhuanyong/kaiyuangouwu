@@ -419,9 +419,9 @@ export function StorefrontDesignPreview() {
                 {route === 'product' && productPreview.status !== 'ready' ? (
                     <p className="storefront-preview-feedback" role="status">
                         {productPreview.status === 'loading'
-                            ? '正在读取当前店铺的可预览商品…'
+                            ? '正在读取可预览商品…'
                             : productPreview.status === 'empty'
-                              ? '当前店铺暂无可预览商品，商品详情无法展示。'
+                              ? '暂无可预览商品，商品详情无法展示。'
                               : '商品读取失败，请检查店铺接口后重新选择此页面。'}
                     </p>
                 ) : (

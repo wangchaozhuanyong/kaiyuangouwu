@@ -38,7 +38,6 @@ export function BusinessServicesPage() {
         language,
         storefrontName,
         logoUrl,
-        marketLabel,
         displayCurrencyCode,
         availableCurrencyCodes,
         currencyLoading,
@@ -104,7 +103,6 @@ export function BusinessServicesPage() {
                     storefrontName={storefrontName}
                     logoUrl={logoUrl}
                     language={language}
-                    marketLabel={marketLabel}
                     displayCurrencyCode={displayCurrencyCode}
                     availableCurrencyCodes={availableCurrencyCodes}
                     currencyLoading={currencyLoading}

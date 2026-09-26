@@ -77,7 +77,7 @@ describe('balance payment completion', () => {
             const paymentMethodError = host.querySelector('.payment-method-section > .inline-error');
             expect(paymentMethodError?.children[0]?.tagName).toBe('svg');
             expect(paymentMethodError?.querySelector('span')?.textContent).toBe(
-                '当前店铺尚未接入支付方式，订单已保留',
+                '暂未接入支付方式，订单已保留',
             );
             expect(paymentMethodError?.querySelector('button')?.textContent).toBe('重试');
         } finally {

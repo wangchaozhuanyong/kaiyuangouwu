@@ -774,14 +774,43 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true, conte
             ? {
                   ...product,
                   description:
-                      '<p>商品长图与参数应保持完整可读。</p>' +
+                      '<p>商品文字与参数应保持完整可读。</p>' +
                       '<figure><img src="/storefront/default-hero.webp" width="1200" height="700" alt="详情图"></figure>' +
                       '<table><tbody><tr><td>规格</td><td>长内容需要在卡片内换行，不应撑宽页面</td></tr></tbody></table>',
                   featuredAsset: { id: 'portrait-asset', preview: portraitImage },
-                  assets: [{ id: 'portrait-asset', preview: portraitImage }],
+                  assets: [{ id: 'portrait-asset', preview: portraitImage }, asset],
               }
             : product;
     return {
+        ...(content === 'mail-query-surfaces'
+            ? {
+                  icloudQueryMails: {
+                      success: true,
+                      message: null,
+                      targetType: 'VIRTUAL',
+                      aliasEmail: 'qa@example.test',
+                      primaryEmail: null,
+                      codeExpiresAt: null,
+                      remainingDays: 25,
+                      totalEmails: 1,
+                      items: [
+                          {
+                              id: 'qa-mail',
+                              fromAddress: 'sender@example.test',
+                              fromName: '本地验收',
+                              subject: '本地验证码示例',
+                              receivedAt: '2026-09-26T08:00:00Z',
+                              extractedCode: '123456',
+                              bodyText: '本地验收邮件，验证码为 123456。',
+                              bodyHtml: '',
+                              targetEmail: 'qa@example.test',
+                              virtualEmailId: 'qa-mailbox',
+                          },
+                      ],
+                      virtualEmailsList: [],
+                  },
+              }
+            : {}),
         storefrontVisualPreset: { channelId: 'qa-channel', presetId, revision: 'qa-1' },
         activeChannel: {
             id: 'qa-channel',
@@ -808,7 +837,12 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true, conte
         },
         storefrontContentSettings: {
             heroAutoplayIntervalSeconds: 5,
-            configuredBlockTypes: ['HERO', 'AUTH_LOGIN', 'AUTH_REGISTER'],
+            configuredBlockTypes: [
+                'HERO',
+                'AUTH_LOGIN',
+                'AUTH_REGISTER',
+                ...(content === 'flash-sale-heading' ? ['FLASH_SALE'] : []),
+            ],
         },
         storefrontContent: [
             content === 'wide-hero'
@@ -816,6 +850,19 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true, conte
                 : block,
             quickLinksBlock,
             servicesBlock,
+            ...(content === 'flash-sale-heading'
+                ? [
+                      {
+                          ...block,
+                          id: 'qa-flash-sale',
+                          code: 'qa-flash-sale',
+                          type: 'FLASH_SALE',
+                          title: '限时秒杀',
+                          subtitle: '不应显示的秒杀副标题',
+                          position: 4,
+                      },
+                  ]
+                : []),
             ...(content === 'support' ? [supportBlock] : []),
             ...(content === 'category-banner'
                 ? [
@@ -855,7 +902,26 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true, conte
                   ]
                 : []),
         ],
-        activeStorefrontFlashSales: [],
+        activeStorefrontFlashSales:
+            content === 'flash-sale-heading'
+                ? [
+                      {
+                          id: 'qa-flash-sale',
+                          startsAt: null,
+                          endsAt: new Date(Date.now() + 363 * 86_400_000).toISOString(),
+                          items: Array.from({ length: 11 }, (_, index) => ({
+                              productId: `qa-flash-product-${index}`,
+                              productVariantId: `qa-flash-variant-${index}`,
+                              productName: `秒杀商品 ${index + 1}`,
+                              variantName: '',
+                              originalPrice: 2990,
+                              salePrice: 1990,
+                              currencyCode: 'MYR',
+                              imageUrl: image,
+                          })),
+                      },
+                  ]
+                : [],
         activeSystemAnnouncements: [],
         products: {
             items:
@@ -923,7 +989,18 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true, conte
             maxReferenceBytes: 10000000,
             maxReferencePixels: 16000000,
             maxQuantity: 4,
-            models: [model],
+            models: content.startsWith('image-studio-')
+                ? [
+                      model,
+                      {
+                          ...model,
+                          id: 'model-2',
+                          code: 'GPT_IMAGE',
+                          officialModelId: 'gpt-image-2',
+                          isDefault: false,
+                      },
+                  ]
+                : [model],
         },
         imageStudioWallet: { availableBalance: 1000, currencyCode: 'MYR' },
         imagePromptQuotaStatus: {
@@ -940,5 +1017,65 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true, conte
         ...(content === 'dense' ? denseCommerceFixture(signedIn) : {}),
         ...(content === 'aftercare' ? aftercareFixture(signedIn) : {}),
         ...(content === 'reviews' ? reviewCenterFixture(signedIn) : {}),
+        ...(content === 'image-studio-records' ? imageStudioRecordsFixture() : {}),
+    };
+}
+
+function imageStudioRecordsFixture() {
+    const job = {
+        id: 'studio-qa-success',
+        createdAt: '2026-09-26T08:00:00.000Z',
+        updatedAt: '2026-09-26T08:00:00.000Z',
+        state: 'SUCCEEDED',
+        modelCodeSnapshot: model.code,
+        modelNameSnapshot: model.displayNameZh,
+        officialModelIdSnapshot: model.officialModelId,
+        originalPrompt: '本地验收样本：浅色背景上的商品展示图',
+        finalPrompt: '本地验收样本：浅色背景上的商品展示图',
+        referenceMode: 'NONE',
+        aspectRatio: '1:1',
+        resolution: '1K',
+        quantity: 1,
+        unitPriceSnapshot: 30,
+        reservedAmount: 30,
+        expectedChargeAmount: 30,
+        freeQuantityReserved: 0,
+        freeQuantityCaptured: 0,
+        paidQuantityReserved: 1,
+        capturedAmount: 30,
+        releasedAmount: 0,
+        currencyCode: 'MYR',
+        termsVersion: 'qa',
+        inputSnapshotVersion: 1,
+        outputs: [
+            {
+                id: 'studio-qa-output',
+                outputIndex: 0,
+                state: 'SUCCEEDED',
+                attemptCount: 1,
+                billingMode: 'PAID',
+                chargeAmount: 30,
+                imageUrl: image,
+            },
+        ],
+    };
+    return {
+        imageStudioWallet: { availableBalance: 0, currencyCode: 'MYR' },
+        myImageGenerationJobs: {
+            items: [
+                job,
+                {
+                    ...job,
+                    id: 'studio-qa-failed',
+                    state: 'FAILED',
+                    originalPrompt: '本地验收样本：失败记录',
+                    capturedAmount: 0,
+                    releasedAmount: 30,
+                    errorMessage: '本地验收样本：生成失败，冻结金额已释放。',
+                    outputs: [],
+                },
+            ],
+            totalItems: 2,
+        },
     };
 }

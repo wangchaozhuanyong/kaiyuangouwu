@@ -268,7 +268,7 @@ describe('auth password visibility controls', () => {
 
         expect(markup).toContain('class="google-auth-button"');
         expect(markup).not.toContain('class="auth-account-form"');
-        expect(markup).not.toContain('当前店铺暂未开启注册方式');
+        expect(markup).not.toContain('暂未开启注册方式');
     });
 
     it('shows a clear message when all login methods are disabled', () => {
@@ -286,7 +286,7 @@ describe('auth password visibility controls', () => {
             }),
         );
 
-        expect(markup).toContain('当前店铺暂未开启登录方式');
+        expect(markup).toContain('暂未开启登录方式');
         expect(markup).not.toContain('class="auth-account-form"');
         expect(markup).not.toContain('class="google-auth-button"');
     });

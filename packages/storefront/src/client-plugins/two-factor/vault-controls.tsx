@@ -17,7 +17,7 @@ export function VaultControls({
     const [error, setError] = useState(false);
     const text = (zh: string, en: string) => (isZh ? zh : en);
     const inputClass =
-        'min-h-11 w-full rounded-[var(--skin-control-radius,10px)] border border-[var(--line)] bg-[var(--surface)] px-3 text-sm';
+        'min-h-11 w-full rounded-[var(--skin-control-radius,10px)] border border-transparent bg-[var(--soft)] px-3 text-sm';
     const buttonClass = [
         'min-h-11 rounded-[var(--skin-control-radius,10px)] border-0 bg-[var(--control-surface,var(--soft))] px-3 text-sm font-bold text-[var(--text)]',
         'transition-colors hover:bg-[var(--control-surface-hover,var(--accent-soft))] disabled:opacity-50',

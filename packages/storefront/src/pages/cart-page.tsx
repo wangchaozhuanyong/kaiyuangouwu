@@ -562,7 +562,7 @@ export function CartPage() {
                     {!locked && (
                         <ProductSection
                             title={isZh ? '顺手带一件' : 'Complete the order'}
-                            subtitle={isZh ? '从当前店铺继续挑选' : 'More from this store'}
+                            subtitle={isZh ? '继续挑选好物' : 'Discover more products'}
                             subtitlePlacement="end"
                             products={products
                                 .filter(

@@ -271,9 +271,11 @@ describe('storefront skin system', () => {
 
     it('allocates desktop two-factor space to the work area instead of a full-height privacy column', () => {
         const source = stylesheet('./client-plugins/two-factor/two-factor-page.tsx');
-        expect(source).toContain('lg:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)]');
-        expect(source).toMatch(/two-factor-privacy[^"\n]+lg:col-start-1 lg:row-start-2/);
-        expect(source).toMatch(/two-factor-accounts[^"\n]+lg:col-start-2 lg:row-span-2 lg:row-start-1/);
+        const layout = stylesheet('./client-plugins/two-factor/two-factor-page.css');
+        expect(source).toContain('two-factor-workspace');
+        expect(layout).toContain('grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);');
+        expect(layout).toMatch(/\.two-factor-privacy\s*\{[^}]*grid-column: 1 \/ -1;[^}]*grid-row: 2;/);
+        expect(layout).toMatch(/\.two-factor-accounts\s*\{[^}]*grid-column: 2;/);
         expect(source).toContain('grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))]');
         expect(stylesheet('./styles/desktop-pages.css')).not.toMatch(
             /\.desktop-two-factor-content\s*\{[^}]*grid-template-columns/,
