@@ -109,6 +109,11 @@ describe('desktop product purchase controls', () => {
         expect(host.querySelector('.detail-description')?.textContent).toContain('后台商品说明');
         expect(host.querySelector('.detail-description img')).toBeNull();
         expect(host.querySelector('.detail-gallery img')).not.toBeNull();
+        const summary = host.querySelector('.detail-summary');
+        expect(summary?.firstElementChild?.tagName).toBe('H1');
+        expect(summary?.firstElementChild?.textContent).toBe(product.name);
+        expect(summary?.textContent).not.toContain(product.description);
+        expect(host.querySelector('.detail-rich-text')?.textContent).toContain('后台商品说明');
         act(() => host.querySelector<HTMLButtonElement>('[aria-label="增加数量"]')?.click());
         act(() => host.querySelector<HTMLButtonElement>('[aria-label="增加数量"]')?.click());
         expect(host.querySelector('.detail-quantity output')?.textContent).toBe('3');

@@ -14,7 +14,6 @@ import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfi
 import gql from 'graphql-tag';
 import { mkdtempSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import 'reflect-metadata';
@@ -124,12 +123,13 @@ const copy = (title: string, english: string) => [
     { languageCode: LanguageCode.zh_Hans, title, subtitle: '', body: '', ctaLabel: '' },
     { languageCode: LanguageCode.en, title: english, subtitle: '', body: '', ctaLabel: '' },
 ];
+const testOutput =
+    process.env.STOREFRONT_TEST_OUTPUT ??
+    fileURLToPath(new URL('../../storefront/artifacts/content-sync-audit/integration/', import.meta.url));
 
 beforeAll(async () => {
-    registerInitializer(
-        'sqljs',
-        new SqljsInitializer(mkdtempSync(join(tmpdir(), 'vendure-unified-content-'))),
-    );
+    await mkdir(testOutput, { recursive: true });
+    registerInitializer('sqljs', new SqljsInitializer(mkdtempSync(join(testOutput, 'database-'))));
     await server.init({
         initialData: { ...initialData, collections: [], paymentMethods: [] },
         customerCount: 0,
@@ -313,6 +313,201 @@ afterAll(async () => {
 });
 
 describe('unified storefront Admin API to Shop API', () => {
+    it('shows configured dual cards in the actual homepage and follows Admin enable state and floor order', async () => {
+        const cores = [] as Array<{ id: string; updatedAt: string }>;
+        const originalOrders: string[][] = [];
+        for (const [index, store] of stores.slice(0, 2).entries()) {
+            adminClient.setChannelToken(store.token);
+            originalOrders.push(
+                (await adminClient.query(READ)).storefrontContentBlocks.map(
+                    (block: { id: string }) => block.id,
+                ),
+            );
+            cores.push(
+                (
+                    await adminClient.query(CREATE, {
+                        input: {
+                            code: 'configured-core',
+                            internalName: '后台双卡片验收',
+                            type: 'CORE_CATEGORIES',
+                            enabled: true,
+                            position: 0,
+                            translations: copy('配置双卡片', 'Configured dual cards'),
+                            items: [3, 0, 2, 1].map(position => ({
+                                enabled: position !== 0,
+                                position,
+                                targetType: 'PAGE',
+                                targetValue: 'category',
+                                translations: [
+                                    {
+                                        languageCode: LanguageCode.zh_Hans,
+                                        label: `店${index}卡片${position}`,
+                                        description: '',
+                                    },
+                                    {
+                                        languageCode: LanguageCode.en,
+                                        label: `Store ${index} card ${position}`,
+                                        description: '',
+                                    },
+                                ],
+                            })),
+                        },
+                    })
+                ).createStorefrontContentBlock,
+            );
+            shopClient.setChannelToken(store.token);
+            const admin = (await adminClient.query(READ)).storefrontContentBlocks.find(
+                (block: { id: string }) => block.id === cores[index].id,
+            );
+            expect(admin.items).toHaveLength(4);
+            const shop = (await shopClient.query(SHOP_READ)).storefrontContentBlocks.find(
+                (block: { id: string }) => block.id === cores[index].id,
+            );
+            expect(shop.items.map((item: { label: string }) => item.label)).toEqual([
+                `Store ${index} card 1`,
+                `Store ${index} card 2`,
+            ]);
+        }
+        const adminVite = await createServer({
+            root: fileURLToPath(new URL('../../next-admin', import.meta.url)),
+            server: { host: '127.0.0.1', port: 5301, strictPort: true },
+        });
+        const shopVite = await createServer({
+            root: fileURLToPath(new URL('../../storefront', import.meta.url)),
+            server: {
+                host: '127.0.0.1',
+                port: 5300,
+                strictPort: true,
+                proxy: { '/shop-api': 'http://127.0.0.1:5299' },
+            },
+        });
+        const browser = await chromium.launch({ headless: true });
+        const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+        await context.addInitScript(
+            ({ auth, channel }) => {
+                if (window !== window.top) return;
+                sessionStorage.setItem('local-test-admin-token', auth);
+                localStorage.setItem('vendure-active-channel-token', channel);
+            },
+            { auth: adminClient.getAuthToken(), channel: stores[0].token },
+        );
+        const errors: string[] = [];
+        try {
+            await adminVite.listen();
+            await shopVite.listen();
+            const admin = await context.newPage();
+            admin.on('pageerror', error => errors.push(error.message));
+            await admin.goto(
+                `http://127.0.0.1:5301/e2e/storefront-visual/index.html?panel=decoration&stores=${stores
+                    .slice(0, 2)
+                    .map(store => store.token)
+                    .join(',')}`,
+            );
+            const row = admin.getByRole('article', { name: '后台双卡片验收', exact: true });
+            await browserExpect(row).toContainText('已发布');
+            const structure = admin
+                .locator('section')
+                .filter({ has: admin.getByRole('heading', { name: /结构预览/ }) });
+            await browserExpect(structure).toContainText('店0卡片1');
+            await browserExpect(structure).toContainText('店0卡片2');
+            await browserExpect(structure).not.toContainText('店0卡片0');
+            await browserExpect(structure).not.toContainText('店0卡片3');
+            const shops = [] as Array<{
+                page: Awaited<ReturnType<typeof browser.newPage>>;
+                index: number;
+                width: number;
+            }>;
+            for (const [index, store] of stores.slice(0, 2).entries()) {
+                for (const width of [390, 1440]) {
+                    const page = await browser.newPage({ viewport: { width, height: 1000 } });
+                    page.on('pageerror', error => errors.push(error.message));
+                    const login = await page.request.post('http://127.0.0.1:5299/shop-api', {
+                        data: {
+                            query: 'mutation { login(username: "unified-catalog@example.test", password: "UnifiedFixturePass123!") { __typename } }',
+                        },
+                    });
+                    expect((await login.json()).data.login.__typename).toBe('CurrentUser');
+                    await page.goto(
+                        `http://127.0.0.1:5300/e2e/unification/index.html?channel=${store.token}&name=Store-${index}`,
+                    );
+                    await browserExpect(page.locator('.home-dual-showcase button')).toHaveCount(2);
+                    await browserExpect(page.locator('.home-dual-showcase h3')).toHaveText([
+                        `店${index}卡片1`,
+                        `店${index}卡片2`,
+                    ]);
+                    await browserExpect(page.locator('.home-dual-showcase button').first()).toBeEnabled();
+                    await page.screenshot({
+                        path: join(testOutput, `core-store-${index}-${width}.png`),
+                        fullPage: true,
+                        animations: 'disabled',
+                    });
+                    shops.push({ page, index, width });
+                }
+            }
+            const first = shops[0].page;
+            const order = () =>
+                first.locator('.home-dual-showcase').evaluate(element => {
+                    const parent = element.parentElement;
+                    if (!parent) throw new Error('Core cards have no floor container');
+                    return getComputedStyle(parent).order;
+                });
+            const before = await order();
+            await row.getByRole('button', { name: '下移', exact: true }).click();
+            await browserExpect(admin.getByRole('status')).toContainText('已重新读取核对');
+            await first.reload();
+            await browserExpect(first.locator('.home-dual-showcase')).toBeVisible();
+            expect(Number(await order())).toBeGreaterThan(Number(before));
+            await row.getByRole('button', { name: '停用楼层', exact: true }).click();
+            await browserExpect(row).toContainText('已停用');
+            for (const { page, index } of shops) {
+                await page.reload();
+                await browserExpect(page.locator('.home-page')).toBeVisible();
+                await browserExpect(page.locator('.home-dual-showcase button')).toHaveCount(
+                    index === 0 ? 0 : 2,
+                );
+            }
+            await row.getByRole('button', { name: '启用楼层', exact: true }).click();
+            await browserExpect(row).toContainText('已发布');
+            for (const { page, index, width } of shops) {
+                await page.reload();
+                await browserExpect(page.locator('.home-dual-showcase h3')).toHaveText([
+                    `店${index}卡片1`,
+                    `店${index}卡片2`,
+                ]);
+                expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+                    true,
+                );
+                await page.screenshot({
+                    path: join(testOutput, `core-restored-${index}-${width}.png`),
+                    fullPage: true,
+                    animations: 'disabled',
+                });
+            }
+            expect(errors).toEqual([]);
+        } finally {
+            await browser.close();
+            await shopVite.close();
+            await adminVite.close();
+            for (const [index, store] of stores.slice(0, 2).entries()) {
+                adminClient.setChannelToken(store.token);
+                const deleted = await adminClient.query(
+                    gql`
+                        mutation DeleteTestCore($id: ID!) {
+                            deleteStorefrontContentBlock(id: $id) {
+                                result
+                            }
+                        }
+                    `,
+                    { id: cores[index].id },
+                );
+                expect(deleted.deleteStorefrontContentBlock.result).toBe('DELETED');
+                const restored = await adminClient.query(REORDER, { ids: originalOrders[index] });
+                heroes[index] = restored.reorderStorefrontContentBlocks.find(
+                    (block: { id: string }) => block.id === heroes[index].id,
+                );
+            }
+        }
+    }, 180_000);
     it('preserves each store image, translation, empty fields and all eight links with the same content codes', async () => {
         for (const [index, store] of stores.slice(0, 2).entries()) {
             adminClient.setChannelToken(store.token);
@@ -407,7 +602,7 @@ describe('unified storefront Admin API to Shop API', () => {
             },
         });
         const browser = await chromium.launch({ headless: true });
-        const output = process.env.STOREFRONT_TEST_OUTPUT ?? join(tmpdir(), 'vendure-unified-browser');
+        const output = testOutput;
         await mkdir(output, { recursive: true });
         try {
             await vite.listen();
@@ -534,7 +729,7 @@ describe('unified storefront Admin API to Shop API', () => {
             },
         });
         const browser = await chromium.launch({ headless: true });
-        const output = process.env.STOREFRONT_TEST_OUTPUT ?? join(tmpdir(), 'vendure-unified-browser');
+        const output = testOutput;
         await mkdir(output, { recursive: true });
         try {
             await vite.listen();
@@ -768,7 +963,7 @@ describe('unified storefront Admin API to Shop API', () => {
             },
         });
         const browser = await chromium.launch({ headless: true });
-        const output = process.env.STOREFRONT_TEST_OUTPUT ?? join(tmpdir(), 'vendure-unified-browser');
+        const output = testOutput;
         await mkdir(output, { recursive: true });
         try {
             await vite.listen();
@@ -835,7 +1030,7 @@ describe('unified storefront Admin API to Shop API', () => {
             { auth: adminClient.getAuthToken(), channel: stores[0].token },
         );
         const uri = `http://127.0.0.1:5301/e2e/storefront-visual/index.html?stores=${stores.map(store => store.token).join(',')}`;
-        const output = process.env.STOREFRONT_TEST_OUTPUT ?? join(tmpdir(), 'vendure-unified-browser');
+        const output = testOutput;
         const READ_VISUAL = gql`
             query {
                 storefrontVisualPreset {
@@ -1108,7 +1303,7 @@ describe('unified storefront Admin API to Shop API', () => {
             server: { host: '127.0.0.1', port: 5301, strictPort: true },
         });
         const browser = await chromium.launch({ headless: true });
-        const output = process.env.STOREFRONT_TEST_OUTPUT ?? join(tmpdir(), 'vendure-unified-browser');
+        const output = testOutput;
         await mkdir(output, { recursive: true });
         try {
             await frontend.listen();
@@ -1402,7 +1597,7 @@ describe('unified storefront Admin API to Shop API', () => {
             { auth: adminClient.getAuthToken(), channel: stores[0].token },
         );
         const uri = `http://127.0.0.1:5301/e2e/storefront-visual/index.html?stores=${stores.map(store => store.token).join(',')}`;
-        const output = process.env.STOREFRONT_TEST_OUTPUT ?? join(tmpdir(), 'vendure-unified-browser');
+        const output = testOutput;
         await mkdir(output, { recursive: true });
         try {
             await Promise.all([frontend.listen(), backend.listen()]);
@@ -1494,7 +1689,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 .filter({ has: page.getByRole('button', { name: '从素材库选择' }) })
                 .last();
             await chooseImage(page, supportImage);
-            await page.getByRole('button', { name: '保存并生效', exact: true }).click();
+            await page.getByRole('button', { name: '保存并核对', exact: true }).click();
             await browserExpect(page.getByRole('status'))
                 .toContainText('已保存')
                 .catch(async () => {

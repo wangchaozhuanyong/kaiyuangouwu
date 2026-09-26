@@ -6,7 +6,6 @@ import {
     CircleCheck,
     Mail,
     MapPin,
-    Minus,
     Package,
     Plus,
     RotateCcw,
@@ -19,6 +18,7 @@ import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { provinceDisplayName } from './address-region-options';
 import { ShopApi, ShopApiError } from './api';
 import { checkoutAddress, isCompleteShippingAddress, shippingAddressInput } from './checkout-address';
+import { QuantityControl } from './components/common/quantity-control';
 import { compactUiCopy } from './i18n';
 import { isInputMethodKey } from './input-method';
 import { formatDisplayMoney } from './money-display';
@@ -1203,35 +1203,19 @@ function CheckoutItemsGroup({
                                 {formatMoney(line.linePriceWithTax, line.productVariant.currencyCode, locale)}
                             </b>
                             {directPurchase ? (
-                                <span
-                                    className={checkoutPageClassName('purchase-quantity-control')}
-                                    aria-label={isZh ? '购买数量' : 'Quantity'}
-                                >
-                                    <button
-                                        type="button"
-                                        disabled={line.quantity <= 1 || disabled}
-                                        onClick={() =>
-                                            onQuantity?.(line.productVariant.id, line.quantity - 1)
-                                        }
-                                        aria-label={isZh ? '减少数量' : 'Decrease quantity'}
-                                    >
-                                        <Minus aria-hidden="true" />
-                                    </button>
-                                    <small aria-live="polite">{line.quantity}</small>
-                                    <button
-                                        type="button"
-                                        disabled={
-                                            disabled ||
-                                            !variantCanIncreaseQuantity(line.productVariant, line.quantity)
-                                        }
-                                        onClick={() =>
-                                            onQuantity?.(line.productVariant.id, line.quantity + 1)
-                                        }
-                                        aria-label={isZh ? '增加数量' : 'Increase quantity'}
-                                    >
-                                        <Plus aria-hidden="true" />
-                                    </button>
-                                </span>
+                                <QuantityControl
+                                    value={line.quantity}
+                                    label={isZh ? '购买数量' : 'Quantity'}
+                                    decreaseDisabled={line.quantity <= 1 || disabled}
+                                    onDecrease={() => onQuantity?.(line.productVariant.id, line.quantity - 1)}
+                                    decreaseLabel={isZh ? '减少数量' : 'Decrease quantity'}
+                                    increaseDisabled={
+                                        disabled ||
+                                        !variantCanIncreaseQuantity(line.productVariant, line.quantity)
+                                    }
+                                    onIncrease={() => onQuantity?.(line.productVariant.id, line.quantity + 1)}
+                                    increaseLabel={isZh ? '增加数量' : 'Increase quantity'}
+                                />
                             ) : (
                                 <small>×{line.quantity}</small>
                             )}

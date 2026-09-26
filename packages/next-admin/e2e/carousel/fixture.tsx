@@ -1,8 +1,13 @@
 import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/client';
 import { ApolloProvider } from '@apollo/client/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
+import type { ShopApi } from '../../../storefront/src/api';
+import { useStorefrontPublicData } from '../../../storefront/src/hooks/useStorefrontPublicData';
+import { HomeDualCategoryShowcase } from '../../../storefront/src/storefront-ui/content-ui';
+import type { StorefrontContentBlock as ClientBlock } from '../../../storefront/src/types';
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
 import { AdminPermissionsProvider } from '../../src/components/admin-permissions-context';
 import '../../src/index.css';
@@ -10,6 +15,7 @@ import { BusinessServicesCopyModule } from '../../src/pages/Storefront/BusinessS
 import { StorefrontContentModule } from '../../src/pages/Storefront/StorefrontContentModule';
 import { StorefrontModule } from '../../src/pages/Storefront/StorefrontModule';
 import { newContentBlock } from '../../src/pages/Storefront/storefront-content-utils';
+import { contentPublicationStatus } from '../../src/pages/Storefront/storefront-publication';
 
 // Isolated browser fixture. No HTTP link, account, or store data is used.
 const params = new URLSearchParams(location.search);
@@ -156,6 +162,90 @@ if (params.has('sharing-records')) {
         settings: { purpose: 'referral-system-poster' },
         translations: blocks[0].translations.map(t => ({ ...t, title: '分享海报 · 清透蓝白' })),
     });
+}
+if (params.has('content-sync')) {
+    const core = newContentBlock('CORE_CATEGORIES', blocks.length, '同步验收双卡片');
+    blocks.push({
+        ...core,
+        __typename: 'StorefrontContentBlock',
+        id: 'sync-core',
+        code: 'sync-core',
+        createdAt: '2026-09-26T00:00:00Z',
+        updatedAt: '2026-09-26T00:00:00Z',
+        enabled: false,
+        imageAsset: null,
+        imageUrl: null,
+        items: ['中文入口一', '中文入口二'].map((label, position) => ({
+            __typename: 'StorefrontContentItem',
+            id: 'sync-card-' + position,
+            enabled: true,
+            position,
+            imageAsset: null,
+            imageUrl: null,
+            targetType: 'URL',
+            targetValue: '/category',
+            settings: null,
+            translations: [
+                { languageCode: 'zh_Hans', label, description: '本地测试入口' },
+                { languageCode: 'en', label: 'Card ' + position, description: 'Local test entry' },
+            ],
+        })),
+    } as (typeof blocks)[number]);
+}
+const guestClient = new QueryClient();
+const guestApi = {
+    products: async () => [],
+    collections: async () => [],
+    activeStoreCommerceMode: async () => 'RETAIL',
+    storefrontConfig: async () => ({}),
+    storefrontContent: async () => ({
+        blocks: blocks
+            .filter(block => contentPublicationStatus(block, undefined, 'zh_Hans') === 'PUBLISHED')
+            .map(block => ({
+                ...block,
+                ...block.translations.find(value => value.languageCode === 'zh_Hans'),
+                items: block.items
+                    .filter(item => item.enabled)
+                    .map(item => ({
+                        ...item,
+                        ...item.translations.find(value => value.languageCode === 'zh_Hans'),
+                    })),
+            })),
+        settings: settings(),
+        flashSales: [],
+        systemAnnouncements: [],
+    }),
+} as unknown as ShopApi;
+function GuestPreview() {
+    const result = useStorefrontPublicData({
+        api: guestApi,
+        market: {
+            code: 'sync-fixture',
+            currencyCode: 'MYR',
+            countryCode: 'MY',
+            defaultLanguageCode: 'zh_Hans',
+            locale: 'zh-CN',
+            label: 'Sync fixture',
+        },
+        language: 'zh',
+        vendureLanguageCode: 'zh_Hans',
+        storefrontContextResolved: true,
+        customerAuthenticated: false,
+    });
+    const block = result.contentBlocks.find(block => block.type === 'CORE_CATEGORIES');
+    return (
+        <section aria-label="未登录客户端同步预览" style={{ padding: 20 }}>
+            <h2>未登录客户端同步预览</h2>
+            <p>已发布双卡片：{block ? '已显示' : '未显示'}</p>
+            {block && (
+                <HomeDualCategoryShowcase
+                    language="zh"
+                    block={block as ClientBlock}
+                    onContentTarget={() => {}}
+                />
+            )}
+        </section>
+    );
 }
 let revision = 0;
 const operations: Array<{ name: string; variables: unknown }> = [];
@@ -395,6 +485,11 @@ createRoot(document.getElementById('root')!).render(
                             )}
                         </div>
                     </MemoryRouter>
+                    {params.has('content-sync') && (
+                        <QueryClientProvider client={guestClient}>
+                            <GuestPreview />
+                        </QueryClientProvider>
+                    )}
                 </AdminPermissionsProvider>
             </ApolloProvider>
         </FeatureHelpProvider>

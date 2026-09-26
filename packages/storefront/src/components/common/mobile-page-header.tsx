@@ -1,7 +1,7 @@
-import { Bell } from 'lucide-react';
 import { useState } from 'react';
 
 import { BrandLogo } from '../../storefront-ui/content-ui';
+import { NoticeButton } from '../../storefront-ui/page-shell';
 import { StorefrontLanguage } from '../../types';
 
 import { LocalePreferencesSheet, LocalePreferencesTrigger } from './locale-preferences';
@@ -18,6 +18,7 @@ export interface MobilePageHeaderProps {
     onToggleLanguage?: () => void;
     onCurrencyChange?: (currencyCode: string) => void | Promise<void>;
     onNotifications: () => void;
+    onBrandClick?: () => void;
 }
 
 export function MobilePageHeader({
@@ -32,18 +33,35 @@ export function MobilePageHeader({
     onToggleLanguage,
     onCurrencyChange,
     onNotifications,
+    onBrandClick,
 }: MobilePageHeaderProps) {
     const [preferencesOpen, setPreferencesOpen] = useState(false);
     const isZh = language === 'zh';
+    const brand = (
+        <>
+            <BrandLogo url={logoUrl} name={storefrontName} className="brand-mark" />
+            <strong>{title}</strong>
+        </>
+    );
 
     return (
         <>
-            <header className={`mobile-page-header${className ? ` ${className}` : ''}`}>
-                <span className="mobile-page-heading">
-                    <BrandLogo url={logoUrl} name={storefrontName} className="mobile-page-brand" />
-                    <strong>{title}</strong>
-                </span>
-                <span className="mobile-page-actions">
+            <header className={`topbar home-topbar mobile-page-header${className ? ` ${className}` : ''}`}>
+                {onBrandClick ? (
+                    <button
+                        className="brand"
+                        type="button"
+                        onClick={onBrandClick}
+                        aria-label={
+                            isZh ? `返回 ${storefrontName} 首页顶部` : `Back to the top of ${storefrontName}`
+                        }
+                    >
+                        {brand}
+                    </button>
+                ) : (
+                    <span className="brand">{brand}</span>
+                )}
+                <div className="topbar-actions">
                     {onToggleLanguage && onCurrencyChange ? (
                         <LocalePreferencesTrigger
                             language={language}
@@ -56,15 +74,8 @@ export function MobilePageHeader({
                             {isZh ? '简中' : 'EN'} | {displayCurrencyCode}
                         </span>
                     )}
-                    <button
-                        className="mobile-page-notifications"
-                        type="button"
-                        onClick={onNotifications}
-                        aria-label={isZh ? '消息通知' : 'Notifications'}
-                    >
-                        <Bell aria-hidden="true" />
-                    </button>
-                </span>
+                    <NoticeButton language={language} onClick={onNotifications} />
+                </div>
             </header>
             {preferencesOpen && onToggleLanguage && onCurrencyChange ? (
                 <LocalePreferencesSheet

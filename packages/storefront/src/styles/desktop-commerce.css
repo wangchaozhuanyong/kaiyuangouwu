@@ -1570,9 +1570,6 @@
     .desktop-store-layout .orders-page .order-tabs {
         background: var(--surface);
     }
-    .desktop-store-layout .orders-page .empty-state {
-        background: var(--paper, #fff);
-    }
     .desktop-order-tab-count {
         margin-left: 8px;
     }
@@ -1583,7 +1580,7 @@
         grid-template-columns: minmax(0, 1fr) 320px;
         align-content: start;
         padding: 0 0 48px;
-        column-gap: 24px;
+        gap: 24px;
     }
     .desktop-store-layout .orders-page > .order-search {
         grid-column: 2;
@@ -1642,15 +1639,32 @@
     .desktop-store-layout .sort-bar button::after {
         content: none;
     }
-    .desktop-store-layout .order-list {
+    .desktop-store-layout .orders-page > .order-list {
         display: flex;
-        padding: 18px 0 0;
+        padding: 0;
         gap: 12px;
     }
+    .desktop-store-layout .orders-page > .after-sales-list {
+        padding: 0;
+    }
     .desktop-store-layout .orders-page > .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
         min-height: 240px;
-        margin-top: 18px;
+        margin: 0;
         padding: 36px 24px;
+        border: 0;
+        border-radius: var(--skin-card-radius);
+        background: var(--surface);
+        box-shadow: var(--skin-card-shadow);
+    }
+    .desktop-store-layout .orders-page > .empty-state > h2 {
+        margin: 0;
+    }
+    .desktop-store-layout .orders-page > .empty-state > p {
+        margin: 8px 0 0;
     }
     .desktop-order-columns,
     .desktop-store-layout .order-card {
@@ -1804,7 +1818,6 @@
         .desktop-store-layout .orders-page > .order-search {
             grid-column: 1;
             grid-row: 2;
-            margin-top: 12px;
         }
         .desktop-header-main {
             grid-template-columns: 180px minmax(300px, 1fr) 140px;

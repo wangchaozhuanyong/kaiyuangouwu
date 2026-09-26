@@ -1,4 +1,4 @@
-import { isSharingContent } from '../../../../storefront-content-plugin/src/content-purpose';
+import { isNonHomepageContent } from '../../../../storefront-content-plugin/src/content-purpose';
 import type { StorefrontContentBlock } from '../../graphql/storefront.graphql';
 import { homepageModuleDescriptors } from './storefront-content-utils';
 
@@ -10,7 +10,7 @@ export interface StorefrontHomepageRow {
 const homepageTypes = new Set(homepageModuleDescriptors.map(item => item.type));
 
 export function isHomepageBlock(block: StorefrontContentBlock) {
-    return !isSharingContent(block) && (homepageTypes.has(block.type) || block.type === 'CUSTOM');
+    return !isNonHomepageContent(block) && (homepageTypes.has(block.type) || block.type === 'CUSTOM');
 }
 
 export function storefrontHomepageRows(blocks: StorefrontContentBlock[]): StorefrontHomepageRow[] {

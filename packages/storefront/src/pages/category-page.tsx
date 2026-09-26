@@ -21,7 +21,6 @@ import { CatalogFilterSheet } from '../components/common/catalog-filter-sheet';
 import { CategoryPaginationStatus } from '../components/common/category-pagination-status';
 import { ProductRow } from '../components/common/product-row';
 import { useCategoryPagination } from '../hooks/useCategoryPagination';
-import { useScrollDirectionVisibility } from '../hooks/useScrollDirectionVisibility';
 import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
 import { productAvailability } from '../product-availability';
@@ -110,10 +109,6 @@ export function CategoryPage() {
     const [draftMinimumPrice, setDraftMinimumPrice] = useState(minimumPriceInput);
     const [draftMaximumPrice, setDraftMaximumPrice] = useState(maximumPriceInput);
     const subcatScrollerRef = useRef<HTMLDivElement>(null);
-    const sortBarRef = useRef<HTMLElement>(null);
-    const sortBarHidden = useScrollDirectionVisibility(sortBarRef, {
-        disabled: filterOpen || allCategoriesOpen,
-    });
     const primaryCollections = collections;
     const primaryCategoryStripStyle = {
         '--primary-category-visible-slots': Math.min(primaryCollections.length + 1, 4),
@@ -526,8 +521,7 @@ export function CategoryPage() {
                     data-scroll-restoration-id="category-results"
                 >
                     <nav
-                        ref={sortBarRef}
-                        className={`sort-bar sort-bar-five${sortBarHidden ? ' is-scroll-hidden' : ''}`}
+                        className="sort-bar sort-bar-five"
                         aria-label={isZh ? '排序和筛选' : 'Sort and filter'}
                     >
                         <button

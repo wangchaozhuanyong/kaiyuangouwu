@@ -23,6 +23,7 @@ import {
     updateBusinessServicesLink,
 } from './business-services-link';
 import { storefrontBlockInput } from './storefront-content-utils';
+import { verifyContentChannel, verifySavedBlock } from './storefront-save-verification';
 
 const BLOCK_CODE = 'storefront-client-plugins';
 const COPY_VERSION = 1;
@@ -68,8 +69,12 @@ export function BusinessServicesCopyModule() {
     const [previewLanguage, setPreviewLanguage] = useState<Language>('zh_Hans');
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
-    const [create, createState] = useMutation(CREATE_STOREFRONT_BLOCK_MUTATION);
-    const [update, updateState] = useMutation(UPDATE_STOREFRONT_BLOCK_MUTATION);
+    const [create, createState] = useMutation<{ createStorefrontContentBlock: StorefrontContentBlock }>(
+        CREATE_STOREFRONT_BLOCK_MUTATION,
+    );
+    const [update, updateState] = useMutation<{ updateStorefrontContentBlock: StorefrontContentBlock }>(
+        UPDATE_STOREFRONT_BLOCK_MUTATION,
+    );
     const draft = resolveVersionedDraft(sourceSignature, signature, copyDraft(source), storedDraft);
     const linkValue = draft ? businessServicesLinkValue(draft) : '';
     const linkIsValid = businessServicesLinkIsValid(linkValue);
@@ -80,6 +85,8 @@ export function BusinessServicesCopyModule() {
         setDraft(copyDraft(source));
         setOriginalDraft(copyDraft(source));
         setSignature(sourceSignature);
+        setNotice('');
+        setError('');
     }, [signature, source, sourceSignature]);
     /* oxlint-enable react/set-state-in-effect */
 
@@ -92,7 +99,8 @@ export function BusinessServicesCopyModule() {
             return translation.title.trim() && translation.body.trim();
         }),
     );
-    const pending = createState.loading || updateState.loading;
+    const [verifying, setVerifying] = useState(false);
+    const pending = verifying || createState.loading || updateState.loading;
     useUnsavedChangesWarning(dirty || pending, '商业服务页修改尚未保存，离开后将放弃本次修改。');
 
     const change = (languageCode: Language, key: 'title' | 'body', value: string) =>
@@ -135,38 +143,40 @@ export function BusinessServicesCopyModule() {
         const stillCurrent = () => getActiveChannelToken() === activeToken;
         const context = channelRequestContext(channel.token);
         setError('');
+        setNotice('');
+        setVerifying(true);
         try {
+            const input = storefrontBlockInput({ ...draft, enabled: true }, originalDraft ?? undefined);
+            let saved: StorefrontContentBlock;
             if (draft.id) {
                 if (!draft.updatedAt) throw new Error('缺少内容版本，请刷新后重试');
-                await update({
+                const response = await update({
                     context,
-                    variables: {
-                        input: {
-                            id: draft.id,
-                            expectedUpdatedAt: draft.updatedAt,
-                            ...storefrontBlockInput({ ...draft, enabled: true }, originalDraft ?? undefined),
-                        },
-                    },
+                    variables: { input: { id: draft.id, expectedUpdatedAt: draft.updatedAt, ...input } },
+                });
+                saved = verifySavedBlock(response.data?.updateStorefrontContentBlock, {
+                    id: draft.id,
+                    ...input,
                 });
             } else {
-                await create({
-                    context,
-                    variables: {
-                        input: storefrontBlockInput({ ...draft, enabled: true }, originalDraft ?? undefined),
-                    },
-                });
+                const response = await create({ context, variables: { input } });
+                saved = verifySavedBlock(response.data?.createStorefrontContentBlock, input);
             }
             if (!stillCurrent()) return;
-            setNotice('已保存到当前店铺；修改的中文文案将按翻译设置同步。');
-            try {
-                await query.refetch();
-            } catch {
-                if (stillCurrent()) setError('保存已成功，但刷新失败，请稍后重新载入');
-            }
+            const refreshed = verifyContentChannel((await query.refetch()).data, channel.id);
+            if (!stillCurrent()) return;
+            verifySavedBlock(
+                refreshed.storefrontContentBlocks.find(block => block.id === saved.id),
+                { id: saved.id, ...input },
+                saved,
+            );
+            setNotice('已保存到当前店铺，并重新读取核对；中文文案将按翻译设置同步。');
         } catch (cause) {
             if (!stillCurrent()) return;
             setNotice('');
             setError(toUserFacingError(cause, '商业服务页文案保存失败'));
+        } finally {
+            setVerifying(false);
         }
     };
     const preview = draft ? getTranslation(draft, previewLanguage) : defaults[previewLanguage];

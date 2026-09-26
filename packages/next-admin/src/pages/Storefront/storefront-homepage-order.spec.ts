@@ -107,6 +107,12 @@ describe('homepage carousel management order', () => {
             storefrontHomepageRows([{ ...poster, settings: { purpose: 'referral-custom-poster' } }]),
         ).toEqual([]);
     });
+    it('excludes desktop category settings using the same purpose contract as the storefront', () => {
+        const banner = { ...block('banner', 'CUSTOM', 1), settings: { purpose: 'desktop-category-banner' } };
+        const records = [blocks[0], banner, block('core', 'CORE_CATEGORIES', 2)];
+        expect(storefrontHomepageRows(records).map(row => row.key)).toEqual(['notice', 'core']);
+        expect(moveHomepageRow(records, 'core', -1)).toEqual(['core', 'banner', 'notice']);
+    });
     it('groups every slide, including disabled and scheduled ones, without grouping custom floors', () => {
         const rows = storefrontHomepageRows(blocks);
         expect(rows.map(row => row.key)).toEqual(['notice', 'carousel', 'products', 'custom-a', 'custom-b']);

@@ -13,6 +13,7 @@ const requestedPreset = process.env.STOREFRONT_VISUAL_PRESET;
 const requestedRoute = process.env.STOREFRONT_VISUAL_ROUTE;
 const requestedWidth = Number(process.env.STOREFRONT_VISUAL_WIDTH || 0);
 const requestedContent = process.env.STOREFRONT_VISUAL_CONTENT || 'normal';
+const verifyProductNavigation = requestedContent.startsWith('product-navigation');
 const presets = requestedPreset ? [requestedPreset] : ['classic', 'modern-oriental', 'neo-minimalist'];
 const expectedPaletteSignature = {
     classic: { page: '#f1f5f9', surface: '#ffffff', text: '#0f172a', brand: '#3558aa' },
@@ -141,6 +142,29 @@ try {
                 if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.abort();
                 if (url.pathname.includes('shop-api')) {
                     const data = fixtureData(preset, signedIn, requestedContent);
+                    if (verifyProductNavigation) {
+                        data.myCustomerProductActivity = savedProductsActivity;
+                        data.storefrontContentSettings.configuredBlockTypes.push('RECOMMENDATIONS');
+                        data.storefrontContent.push({
+                            ...data.storefrontContent[0],
+                            id: 'qa-product-navigation',
+                            code: 'qa-product-navigation',
+                            type: 'RECOMMENDATIONS',
+                            position: 3,
+                            title: '推荐商品',
+                        });
+                        if (requestedContent === 'product-navigation-ai') {
+                            const product = {
+                                ...data.product,
+                                name: 'ChatGPT Plus',
+                                featuredAsset: null,
+                                assets: [],
+                            };
+                            data.product = product;
+                            data.products.items = [product];
+                            data.storefrontCatalog.items = [product];
+                        }
+                    }
                     if (requestedContent === 'saved-products') {
                         const request = route.request().postDataJSON();
                         const query = String(request.query ?? '');
@@ -686,7 +710,47 @@ try {
                         ).toBeCloseTo(16, 0);
                     }
                 }
+                const commonHeader = page
+                    .locator(
+                        width < 1024
+                            ? '.topbar, .mobile-page-header, .search-header, .mail-query-page .top-nav-inner'
+                            : '.proto-header-inner',
+                    )
+                    .filter({ visible: true })
+                    .first();
+                if (await commonHeader.count()) {
+                    expect(
+                        (await commonHeader.boundingBox()).height,
+                        `${preset}/${width}/${name} common header height`,
+                    ).toBe(width < 1024 ? 52 : 72);
+                }
                 if (name === 'home' && width < 1024) {
+                    const overlay = await page.locator('.hero').evaluate(hero => {
+                        const image = hero.querySelector('.hero-rich-backdrop');
+                        const copy = hero.querySelector('.hero-rich-content');
+                        const action = hero.querySelector('.hero-rich-cta-btn');
+                        return {
+                            image: image.getBoundingClientRect().toJSON(),
+                            title: hero.querySelector('.hero-rich-title').getBoundingClientRect().toJSON(),
+                            action: action.getBoundingClientRect().toJSON(),
+                            copyBackground: getComputedStyle(copy).backgroundColor,
+                            loaded: image.complete && image.naturalWidth > 0,
+                        };
+                    });
+                    expect(overlay.loaded, `${preset}/${width}/home image decoded`).toBe(true);
+                    expect(overlay.copyBackground, `${preset}/${width}/home no separate copy panel`).toBe(
+                        'rgba(0, 0, 0, 0)',
+                    );
+                    for (const element of [overlay.title, overlay.action]) {
+                        expect(element.left).toBeGreaterThanOrEqual(overlay.image.left);
+                        expect(element.top).toBeGreaterThanOrEqual(overlay.image.top);
+                        expect(element.right).toBeLessThanOrEqual(overlay.image.right + 1);
+                        expect(element.bottom).toBeLessThanOrEqual(overlay.image.bottom - 28);
+                    }
+                    expect(
+                        overlay.action.height,
+                        `${preset}/${width}/home touch target`,
+                    ).toBeGreaterThanOrEqual(44);
                     for (const selector of [
                         '.home-page .notice-strip',
                         '.home-page .hero',
@@ -719,6 +783,14 @@ try {
                     await expect(page.locator('.detail-quantity output')).toHaveText('3');
                     await expect(coupon).toContainText('3件券后合计');
                     await expect(coupon).toContainText('MYR 84.7');
+                }
+                if (name === 'product') {
+                    const summary = page.locator('.detail-summary');
+                    await expect(summary.locator(':scope > :first-child')).toHaveJSProperty('tagName', 'H1');
+                    await expect(summary.locator(':scope > p')).toHaveCount(0);
+                    const titleBounds = await summary.locator('h1').boundingBox();
+                    const priceBounds = await summary.locator('.detail-price-line').boundingBox();
+                    expect(titleBounds.y + titleBounds.height).toBeLessThanOrEqual(priceBounds.y);
                 }
                 if (width < 1024 && name === 'product') {
                     const productLayout = await page.evaluate(() => {
@@ -753,6 +825,16 @@ try {
                         `${preset}/${width}/product sections`,
                     ).toBeGreaterThanOrEqual(7);
                     for (const section of productLayout) {
+                        if (section.selector === '.detail-gallery-shell') {
+                            expect(section.left).toBe(0);
+                            expect(section.right).toBe(0);
+                            const gallery = page.locator('.detail-gallery');
+                            const bounds = await gallery.boundingBox();
+                            expect(bounds.width).toBe(width);
+                            expect(bounds.height).toBe(width);
+                            await expect(gallery).toHaveCSS('border-radius', '0px');
+                            continue;
+                        }
                         expect(
                             section.left,
                             `${preset}/${width}/${section.selector} left gutter`,
@@ -1484,6 +1566,7 @@ try {
                                 quickLeft: quickBounds.left,
                                 quickTop: quickBounds.top,
                                 copyBackground: getComputedStyle(copy).backgroundColor,
+                                imageFit: image ? getComputedStyle(image).objectFit : null,
                                 imageRatio:
                                     image instanceof HTMLImageElement && image.naturalHeight > 0
                                         ? image.naturalWidth / image.naturalHeight
@@ -1516,9 +1599,9 @@ try {
                     if (requestedContent === 'wide-hero') {
                         expect(pair.imageRatio, `${preset}/${width}/home image decoded`).not.toBeNull();
                         expect(
-                            Math.abs(pair.heroWidth / pair.heroHeight - pair.imageRatio) / pair.imageRatio,
-                            `${preset}/${width}/home preserves wide artwork`,
-                        ).toBeLessThan(0.08);
+                            pair.imageFit,
+                            `${preset}/${width}/home preserves the complete artwork inside the shared frame`,
+                        ).toBe('contain');
                     }
                 }
 
@@ -1537,6 +1620,53 @@ try {
                 if (name === 'services' && (width === 390 || width === 1440)) {
                     await page.locator('.business-services-page .category-client-plugin-two-factor').click();
                     await expect(page).toHaveURL(/\/two-factor(?:\?|$)/);
+                }
+                if (verifyProductNavigation) {
+                    if (name === 'category' && width >= 1024) {
+                        await page.goto(`${baseUrl}${route}`);
+                    }
+                    const consent = page.getByRole('button', { name: '仅必要功能' });
+                    if (await consent.isVisible()) await consent.click();
+                    if (name === 'category' && width < 1024) {
+                        const strip = page.locator('.primary-category-strip');
+                        await expect(strip).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+                        await expect(strip).toHaveCSS('box-shadow', 'none');
+                        await expect(page.locator('.primary-category-switcher')).toHaveCSS(
+                            'padding-top',
+                            '12px',
+                        );
+                        await expect(page.locator('.primary-category-switcher')).toHaveCSS(
+                            'padding-bottom',
+                            '12px',
+                        );
+                    }
+                    const entry = page.locator('.product-card, .product-row').first();
+                    await expect(entry, `${preset}/${width}/${name} has products`).toBeVisible();
+                    const title = await entry.locator('.product-card-name, .product-row-name').textContent();
+                    const media = entry.locator('.product-card-media, .product-row-image');
+                    await media.scrollIntoViewIfNeeded();
+                    const hit = await media.evaluate(element => {
+                        const rect = element.getBoundingClientRect();
+                        const x = rect.x + rect.width / 2;
+                        const y = rect.y + rect.height / 2;
+                        return {
+                            x,
+                            y,
+                            target: document.elementFromPoint(x, y)?.outerHTML.slice(0, 180),
+                            detailTarget: document
+                                .elementFromPoint(x, y)
+                                ?.matches('.product-card-detail-link, .product-row-detail-link'),
+                        };
+                    });
+                    expect(
+                        hit.detailTarget,
+                        `${preset}/${width}/${name} image reaches detail action: ${hit.target}`,
+                    ).toBe(true);
+                    await page.mouse.click(hit.x, hit.y);
+                    await expect(page).toHaveURL(/\/product\?id=product-1(?:&|$)/);
+                    await expect(
+                        page.getByRole('heading', { name: title, exact: true }).first(),
+                    ).toBeVisible();
                 }
             }
             expect(errors).toEqual([]);

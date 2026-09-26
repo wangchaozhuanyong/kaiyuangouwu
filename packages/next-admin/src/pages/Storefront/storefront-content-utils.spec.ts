@@ -265,3 +265,10 @@ it('prepares privacy and terms documents in a new legal content block', () => {
     ).toEqual(['隐私政策', '使用条款']);
     expect(storefrontBlockInput(block, block).items.map(item => item.targetType)).toEqual(['PAGE', 'PAGE']);
 });
+
+it('rejects enabled core categories with no enabled cards while allowing incomplete drafts', () => {
+    const block = newContentBlock('CORE_CATEGORIES', 0);
+    expect(storefrontBlockValidation(block)).toBeNull();
+    block.enabled = true;
+    expect(storefrontBlockValidation(block)).toContain('已启用卡片');
+});

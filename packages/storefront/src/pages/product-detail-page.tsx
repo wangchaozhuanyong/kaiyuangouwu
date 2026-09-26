@@ -4,8 +4,6 @@ import {
     ChevronRight,
     CircleCheck,
     Heart,
-    Minus,
-    Plus,
     RotateCcw,
     Share2,
     ShoppingCart,
@@ -14,6 +12,7 @@ import {
 import { Suspense, useEffect, useState } from 'react';
 
 import { ShopApi } from '../api';
+import { QuantityControl } from '../components/common/quantity-control';
 import { useDesktopLayout } from '../desktop-layout';
 import { LazySharePosterModal } from '../lazy-storefront-pages';
 import {
@@ -23,7 +22,7 @@ import {
 } from '../product-availability';
 import { lowestPricedProductVariant } from '../product-pricing';
 import { ProductReviewsSection } from '../review-pages';
-import { productDescriptionText, sanitizeProductDescription } from '../rich-text';
+import { sanitizeProductDescription } from '../rich-text';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { bestProductCouponPrice } from '../storefront-coupons';
 import { ProductDetailPageContext } from '../storefront-page-contexts';
@@ -167,7 +166,6 @@ export function ProductDetailPage() {
                 Number(a.collections.some(collection => collectionIds.has(collection.id))),
         )
         .slice(0, 4);
-    const descriptionText = productDescriptionText(product.description);
     const descriptionHtml = sanitizeProductDescription(product.description, { textOnly: true });
     const [posterOpen, setPosterOpen] = useState(false);
     const shareProduct = () => {
@@ -205,6 +203,7 @@ export function ProductDetailPage() {
         : undefined;
     const summary = (
         <section className="detail-summary">
+            <h1>{product.name}</h1>
             <div className="detail-price-line">
                 <div className="detail-price-stack">
                     <p className={`detail-price${activeFlashItem ? ' is-flash-sale' : ''}`}>
@@ -291,8 +290,6 @@ export function ProductDetailPage() {
                               : 'Shipping at checkout'}
                 </span>
             </div>
-            <h1>{product.name}</h1>
-            <p>{descriptionText || (isZh ? '暂无更多商品说明' : 'No additional description')}</p>
         </section>
     );
     const options = (
@@ -368,31 +365,22 @@ export function ProductDetailPage() {
     const quantityControl = (
         <section className="detail-quantity" aria-label={isZh ? '购买数量' : 'Purchase quantity'}>
             <strong>{isZh ? '购买数量' : 'Quantity'}</strong>
-            <div className="detail-quantity-controls">
-                <button
-                    type="button"
-                    aria-label={isZh ? '减少数量' : 'Decrease quantity'}
-                    disabled={unavailable || purchaseQuantity <= 1 || addingVariantId !== null}
-                    onClick={() => setQuantity(Math.max(1, purchaseQuantity - 1))}
-                >
-                    <Minus aria-hidden="true" />
-                </button>
-                <output aria-live="polite">{purchaseQuantity}</output>
-                <button
-                    type="button"
-                    aria-label={isZh ? '增加数量' : 'Increase quantity'}
-                    disabled={
-                        unavailable ||
-                        !variant ||
-                        !variantCanIncreaseQuantity(variant, purchaseQuantity) ||
-                        addingVariantId !== null
-                    }
-                    onClick={() => setQuantity(purchaseQuantity + 1)}
-                >
-                    <Plus aria-hidden="true" />
-                </button>
-            </div>
-            <span>{stockLabel}</span>
+            <QuantityControl
+                value={purchaseQuantity}
+                label={isZh ? '调整购买数量' : 'Adjust purchase quantity'}
+                decreaseLabel={isZh ? '减少数量' : 'Decrease quantity'}
+                increaseLabel={isZh ? '增加数量' : 'Increase quantity'}
+                decreaseDisabled={unavailable || purchaseQuantity <= 1 || addingVariantId !== null}
+                onDecrease={() => setQuantity(Math.max(1, purchaseQuantity - 1))}
+                increaseDisabled={
+                    unavailable ||
+                    !variant ||
+                    !variantCanIncreaseQuantity(variant, purchaseQuantity) ||
+                    addingVariantId !== null
+                }
+                onIncrease={() => setQuantity(purchaseQuantity + 1)}
+            />
+            <span className="detail-quantity-stock">{stockLabel}</span>
         </section>
     );
     const services = (

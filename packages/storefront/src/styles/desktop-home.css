@@ -46,7 +46,7 @@
         grid-row: 1;
         min-width: 0;
         width: 100%;
-        min-height: 0;
+        min-height: 320px;
         height: auto;
         align-self: stretch;
         border: 0;
@@ -298,46 +298,9 @@
     .desktop-store-layout .home-page .notice-strip {
         min-height: 40px;
         padding: 8px 18px;
-        border-radius: 9999px;
-        background: color-mix(in srgb, var(--accent) 4%, var(--paper, #fff));
-        box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.03);
-        display: flex;
-        align-items: center;
         gap: 12px;
-        color: var(--text, #1e293b);
         font-size: 13px;
-        font-weight: 500;
-        cursor: pointer;
         margin-bottom: 16px;
-        transition:
-            background-color 0.2s ease,
-            border-color 0.2s ease,
-            color 0.2s ease,
-            transform 0.2s ease;
-    }
-    .desktop-store-layout .home-page .notice-strip:hover {
-        border-color: var(--accent);
-        background: color-mix(in srgb, var(--accent) 8%, var(--paper, #fff));
-        transform: translateY(-1px);
-    }
-    .desktop-store-layout .home-page .notice-strip > svg:first-child {
-        color: var(--accent);
-        width: 15px;
-        height: 15px;
-        flex: none;
-    }
-    .desktop-store-layout .home-page .notice-strip > span {
-        flex: 1;
-        text-align: left;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .desktop-store-layout .home-page .notice-strip > svg:last-child {
-        color: var(--muted);
-        width: 14px;
-        height: 14px;
-        flex: none;
     }
     .desktop-store-layout .home-page .home-dual-showcase {
         gap: 20px;
@@ -980,8 +943,8 @@
         }
         .proto-header-inner {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            row-gap: 12px;
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            gap: 16px;
             padding: 12px 0;
         }
         .proto-header-left {
@@ -989,12 +952,25 @@
             grid-row: 1;
         }
         .proto-header-search {
-            grid-column: 1 / -1;
-            grid-row: 2;
-            max-width: none;
+            grid-column: 2;
+            grid-row: 1;
+            min-width: 44px;
+            width: 44px;
+        }
+        .proto-header-search .proto-search-open {
+            grid-template-columns: 1fr;
+            place-items: center;
+            padding: 0;
+        }
+        .proto-header-search .proto-search-open > span {
+            display: none;
+        }
+        .proto-header-search .proto-search-open > svg {
+            width: 18px;
+            height: 18px;
         }
         .proto-header-right {
-            grid-column: 2;
+            grid-column: 3;
             grid-row: 1;
         }
     }

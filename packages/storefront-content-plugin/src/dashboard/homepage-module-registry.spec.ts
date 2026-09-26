@@ -46,8 +46,9 @@ describe('homepage module registry', () => {
         const entries = homepageLayoutEntries([]);
 
         expect(entries.filter(entry => entry.fixed)).toHaveLength(fixedHomepageModuleTypes.length);
-        expect(entries.find(entry => entry.type === 'COUPONS')).toMatchObject({ enabled: true });
+        expect(entries.find(entry => entry.type === 'COUPONS')).toMatchObject({ enabled: false });
         expect(entries.find(entry => entry.type === 'STORY')).toMatchObject({ enabled: false });
+        expect(entries.every(entry => !entry.enabled)).toBe(true);
     });
 
     it('keeps multiple hero slides in one module and reports duplicate singleton records', () => {

@@ -64,6 +64,8 @@
 }
 
 .product-card-media {
+    /* Keep photo and generated-cover layers below the full-card detail action. */
+    isolation: isolate;
     width: 100%;
     aspect-ratio: var(--product-media-ratio);
     overflow: hidden;
@@ -106,16 +108,15 @@
 }
 
 .product-card-subtitle {
-    display: -webkit-box;
+    display: block;
     margin-top: 4px;
-    min-height: 3em;
+    min-height: 1.5em;
     overflow: hidden;
     color: var(--muted);
     font-size: 12px;
     line-height: 1.5;
-    overflow-wrap: anywhere;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .product-card-meta {

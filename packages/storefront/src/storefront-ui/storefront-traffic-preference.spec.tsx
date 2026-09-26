@@ -53,30 +53,20 @@ describe('StorefrontTrafficPreference', () => {
 
         expect(record).toHaveBeenCalledWith(expect.objectContaining({ granted: true, locale: 'zh' }));
         expect(container.querySelector('.traffic-consent-banner')).toBeNull();
-        expect(container.textContent).toContain('访问统计：已允许 · 撤回');
+        expect(container.childElementCount).toBe(0);
         expect(storefrontTrafficConsent()).toBe('granted');
     });
 
-    it('closes a failed grant safely and lets the visitor retry without a pinned error', async () => {
-        vi.useFakeTimers();
-        const record = vi.fn().mockRejectedValueOnce(new Error('temporary failure')).mockResolvedValueOnce({
-            id: 'consent-2',
-        });
+    it('closes a failed grant safely without leaving a persistent status module', async () => {
+        const record = vi.fn().mockRejectedValue(new Error('temporary failure'));
         render(record);
         await click('允许访问统计');
 
         expect(container.querySelector('.traffic-consent-banner')).toBeNull();
         expect(storefrontTrafficOptedOut()).toBe(true);
-        expect(container.textContent).toContain('访问统计：未开启 · 重试');
-        expect(container.querySelector('.traffic-preference-error')).toBeNull();
-
-        await act(async () => vi.advanceTimersByTimeAsync(5000));
-        expect(container.textContent).toContain('访问统计：已关闭 · 允许');
-
-        await click('已关闭 · 允许');
-        expect(record).toHaveBeenCalledTimes(2);
-        expect(container.textContent).toContain('访问统计：已允许 · 撤回');
-        expect(storefrontTrafficConsent()).toBe('granted');
+        expect(container.childElementCount).toBe(0);
+        expect(record).toHaveBeenCalledOnce();
+        expect(storefrontTrafficConsent()).toBe('denied');
     });
 
     it('applies necessary-only immediately even when evidence recording fails', async () => {
@@ -86,7 +76,7 @@ describe('StorefrontTrafficPreference', () => {
 
         expect(record).toHaveBeenCalledWith(expect.objectContaining({ granted: false }));
         expect(container.querySelector('.traffic-consent-banner')).toBeNull();
-        expect(container.textContent).toContain('访问统计：已关闭 · 允许');
+        expect(container.childElementCount).toBe(0);
         expect(container.querySelector('.traffic-preference-error')).toBeNull();
         expect(storefrontTrafficOptedOut()).toBe(true);
     });
@@ -109,6 +99,6 @@ describe('StorefrontTrafficPreference', () => {
             finish({ id: 'consent-3' });
             await Promise.resolve();
         });
-        expect(container.textContent).toContain('访问统计：已允许 · 撤回');
+        expect(container.childElementCount).toBe(0);
     });
 });

@@ -2,12 +2,19 @@ import { gql } from '@apollo/client';
 import { useQuery } from '@apollo/client/react';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { publishedContentItems } from '../../../../storefront-content-plugin/src/content-publication';
 import {
     AuthVisual,
     authVisualStyle,
     type AuthVisualData,
 } from '../../../../storefront-content-plugin/src/shared/auth-visual';
-import { HeroScene, type HeroSceneData } from '../../../../storefront-content-plugin/src/shared/hero-scene';
+import {
+    desktopHeroAspectRatio,
+    desktopHeroMinHeight,
+    HeroScene,
+    mobileHeroMinHeight,
+    type HeroSceneData,
+} from '../../../../storefront-content-plugin/src/shared/hero-scene';
 import heroSceneCss from '../../../../storefront-content-plugin/src/shared/hero-scene.css?inline';
 import { heroThemeStyle } from '../../../../storefront-content-plugin/src/shared/hero-theme';
 import { useImageTone } from '../../../../storefront-content-plugin/src/shared/image-tone';
@@ -22,12 +29,14 @@ import {
 } from '../../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import { supportFaqItems } from '../../../../storefront-content-plugin/src/support-faq';
 import { normalizeStorefrontVisualPreset } from '../../../../storefront-content-plugin/src/visual-presets';
+import heroMobileOverlayCss from '../../../../storefront/src/styles/hero-mobile-overlay.css?inline';
 import { getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { type StorefrontContentBlock, type StorefrontLanguageCode } from '../../graphql/storefront.graphql';
 import { blockTranslation, itemTranslation } from './storefront-content-utils';
 import { stringSetting } from './storefront-editor-model';
+import { useSandboxPreviewImage } from './storefront-preview-image';
 
 export function BlockPreview({
     block,
@@ -41,6 +50,7 @@ export function BlockPreview({
         return <AuthBlockPreview block={block} language={language} />;
     const translation = blockTranslation(block, language);
     const image = block.imageAsset?.preview ?? block.imageUrl;
+    const previewItems = publishedContentItems(block);
     if (block.type === 'SUPPORT') {
         const isZh = language === 'zh_Hans';
         const days = stringSetting(
@@ -211,23 +221,24 @@ export function BlockPreview({
                             {translation.ctaLabel}
                         </span>
                     )}
-                    {block.items.length > 0 && (
+                    {block.type === 'CORE_CATEGORIES' && !previewItems.length && (
+                        <p className="mt-4 text-xs opacity-75">当前没有已启用卡片，客户端不会展示该模块</p>
+                    )}
+                    {previewItems.length > 0 && (
                         <div className="mt-4 grid grid-cols-2 gap-2">
-                            {block.items
-                                .filter(item => item.enabled)
-                                .map((item, index) => (
-                                    <div
-                                        key={item.id ?? index}
-                                        className="rounded-lg bg-white/75 p-2 text-slate-900"
-                                    >
-                                        <div className="text-[11px] font-bold">
-                                            {itemTranslation(item, language).label || `子项 ${index + 1}`}
-                                        </div>
-                                        <div className="mt-1 line-clamp-2 text-[10px] text-slate-500">
-                                            {itemTranslation(item, language).description}
-                                        </div>
+                            {previewItems.map((item, index) => (
+                                <div
+                                    key={item.id ?? index}
+                                    className="rounded-lg bg-white/75 p-2 text-slate-900"
+                                >
+                                    <div className="text-[11px] font-bold">
+                                        {itemTranslation(item, language).label || `子项 ${index + 1}`}
                                     </div>
-                                ))}
+                                    <div className="mt-1 line-clamp-2 text-[10px] text-slate-500">
+                                        {itemTranslation(item, language).description}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>
@@ -282,10 +293,8 @@ export function HeroBlockPreview({
     const frameWidth = viewport === 'desktop' ? (compact ? 874 : 1024) : 390;
     const imageWidth = block.imageAsset?.width;
     const imageHeight = block.imageAsset?.height;
-    const imageRatio =
-        imageWidth && imageHeight && imageWidth > 0 && imageHeight > 0 ? imageWidth / imageHeight : 2;
-    const desktopHeroHeight = Math.ceil(850 / imageRatio);
-    const frameHeight = viewport === 'desktop' ? desktopHeroHeight + 24 : 235;
+    const desktopHeroHeight = Math.max(desktopHeroMinHeight, Math.ceil(850 / desktopHeroAspectRatio));
+    const frameHeight = (viewport === 'desktop' ? desktopHeroHeight : mobileHeroMinHeight) + 24;
     const frameScale = Math.min(1, previewWidth / frameWidth);
     const imageUrl = block.imageAsset?.preview ?? block.imageUrl ?? '';
     const content: HeroSceneData = {
@@ -318,6 +327,9 @@ export function HeroBlockPreview({
         ...storefrontSkinCssVariables(presetId),
     };
     const imageSources = responsiveImageSources(imageUrl, 'hero');
+    const previewImage = useSandboxPreviewImage(
+        imageSources?.fallbackSrc ?? normalizeStorefrontAssetUrl(imageUrl),
+    );
     const style = paletteVariables as CSSProperties;
     const document =
         '<!doctype html>' +
@@ -325,17 +337,17 @@ export function HeroBlockPreview({
             <html lang={language === 'zh_Hans' ? 'zh' : 'en'} data-storefront-preset={presetId}>
                 <head>
                     <meta charSet="utf-8" />
-                    <style>{`*{box-sizing:border-box;border:0 solid}body{margin:0;padding:12px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Roboto,sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;font-feature-settings:'cv02','cv03','cv04','cv11';--font-numeric:-apple-system,BlinkMacSystemFont,'SF Pro Display','PingFang SC','Segoe UI',Roboto,sans-serif}button{font:inherit;padding:0}h1,p{margin:0}img{display:block;max-width:100%;height:auto} ${heroSceneCss}`}</style>
+                    <style>{`*{box-sizing:border-box;border:0 solid}body{margin:0;padding:12px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Roboto,sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;font-feature-settings:'cv02','cv03','cv04','cv11';--font-numeric:-apple-system,BlinkMacSystemFont,'SF Pro Display','PingFang SC','Segoe UI',Roboto,sans-serif}button{font:inherit;padding:0}h1,p{margin:0}img{display:block;max-width:100%;height:auto} ${heroSceneCss} ${heroMobileOverlayCss}`}</style>
                 </head>
                 <body style={style}>
                     <section
-                        className={`hero${viewport === 'desktop' ? ' hero-editor-desktop hero-image-overlay' : ''}`}
+                        className={`hero hero-image-overlay${viewport === 'desktop' ? ' hero-editor-desktop' : ''}`}
                         style={{
                             ...heroThemeStyle(content),
                             margin: 0,
                             width: viewport === 'desktop' ? 850 : '100%',
-                            minHeight: viewport === 'desktop' ? desktopHeroHeight : 195,
-                            aspectRatio: viewport === 'desktop' ? String(imageRatio) : undefined,
+                            minHeight: viewport === 'desktop' ? desktopHeroHeight : mobileHeroMinHeight,
+                            aspectRatio: viewport === 'desktop' ? String(desktopHeroAspectRatio) : undefined,
                         }}
                     >
                         <HeroScene
@@ -344,10 +356,8 @@ export function HeroBlockPreview({
                             image={
                                 imageUrl ? (
                                     <img
-                                        src={
-                                            imageSources?.fallbackSrc ?? normalizeStorefrontAssetUrl(imageUrl)
-                                        }
-                                        srcSet={imageSources?.webpSrcSet}
+                                        src={previewImage.url || undefined}
+                                        srcSet={previewImage.inline ? undefined : imageSources?.webpSrcSet}
                                         sizes={imageSources?.sizes}
                                         width={imageWidth || undefined}
                                         height={imageHeight || undefined}
@@ -375,6 +385,18 @@ export function HeroBlockPreview({
                 height: frameHeight * frameScale,
             }}
         >
+            {previewImage.loading && (
+                <span className="absolute inset-x-0 top-0 z-10 text-center text-xs" role="status">
+                    {language === 'zh_Hans' ? '正在读取预览图片…' : 'Loading preview image…'}
+                </span>
+            )}
+            {previewImage.error && (
+                <span className="absolute inset-x-0 top-0 z-10 text-center text-xs" role="alert">
+                    {language === 'zh_Hans'
+                        ? '预览图片加载失败，请刷新预览。'
+                        : 'Preview image failed to load. Please refresh.'}
+                </span>
+            )}
             <iframe
                 title="首页轮播效果"
                 sandbox=""

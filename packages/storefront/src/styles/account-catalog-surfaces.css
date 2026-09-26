@@ -1,4 +1,4 @@
-/* The account foreground palette stays fixed; managed content can replace only the artwork. */
+/* Managed account artwork is decorative; account content determines the card height. */
 .page.account-page {
     background: var(--bg);
     color: var(--text);
@@ -22,29 +22,36 @@
 .account-hero-art img {
     width: 100%;
     height: 100%;
-    object-fit: contain;
+    object-fit: cover;
+    object-position: center top;
 }
 .account-hero.has-custom-background {
-    display: flex;
-    flex-direction: column;
-    padding: 0;
+    isolation: isolate;
     border-radius: var(--skin-hero-radius);
     background: var(--surface);
     color: var(--text);
 }
 .account-hero.has-custom-background > .account-hero-art {
-    position: relative;
-    height: auto;
-    flex: none;
+    z-index: 0;
 }
 .account-hero.has-custom-background > .account-hero-art::after {
-    display: none;
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    background: linear-gradient(
+        100deg,
+        color-mix(in srgb, var(--surface) 82%, transparent),
+        color-mix(in srgb, var(--surface) 55%, transparent)
+    );
+    content: '';
+    pointer-events: none;
 }
-.account-hero.has-custom-background .account-hero-art img {
-    height: auto;
+.account-hero.has-custom-background .safe-image-fallback {
+    background-size: cover;
+    background-position: center top;
 }
 .account-hero.has-custom-background .account-hero-content {
-    padding: 20px 18px 22px;
+    z-index: 1;
 }
 .account-hero.has-custom-background
     :is(.account-hero-name, .account-hero-profile, .account-hero-asset-value) {
@@ -52,14 +59,19 @@
     text-shadow: none;
 }
 .account-hero.has-custom-background :is(.account-hero-meta, .account-hero-asset-label) {
-    color: var(--muted);
+    color: color-mix(in srgb, var(--text) 85%, var(--surface));
     text-shadow: none;
 }
 .account-hero.has-custom-background .account-hero-assets {
-    border-color: var(--skin-divider);
+    border-color: color-mix(in srgb, var(--text) 15%, transparent);
 }
-.account-hero.has-custom-background .account-hero-asset:hover {
-    background: var(--soft);
+.account-hero.has-custom-background :is(.account-hero-asset, .account-hero-register):hover {
+    background: color-mix(in srgb, var(--surface) 45%, transparent);
+}
+.account-hero.has-custom-background .account-hero-register {
+    border-color: color-mix(in srgb, var(--text) 25%, transparent);
+    background: color-mix(in srgb, var(--surface) 25%, transparent);
+    color: var(--text);
 }
 .account-hero.has-custom-background .account-hero-avatar {
     border-color: var(--line);
@@ -156,7 +168,7 @@
 .account-hero-asset {
     display: flex;
     min-width: 0;
-    min-height: 38px;
+    min-height: 44px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -665,7 +677,7 @@
     }
     .account-page .account-hero {
         margin: 14px var(--page-section-inset) 0;
-        padding: 14px;
+        padding: 20px 18px;
         border-radius: var(--radius-md);
         box-shadow: var(--skin-card-shadow, var(--shadow-sm));
     }
@@ -725,27 +737,43 @@
     }
     .account-page .account-order-shortcuts {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: none;
+        grid-auto-flow: column;
+        grid-auto-columns: clamp(84px, calc((100% - 24px) / 3.5), 112px);
         gap: 8px;
         margin-top: 0;
+        padding: 8px 10px;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scroll-snap-type: x proximity;
+        scroll-padding-inline: 10px;
+        scrollbar-width: none;
+    }
+    .account-page .account-order-shortcuts::-webkit-scrollbar {
+        display: none;
     }
     .account-page .account-order-shortcuts > button {
         display: flex;
         min-width: 0;
-        min-height: 60px;
-        flex-direction: row;
+        min-height: 0;
+        aspect-ratio: 1;
+        flex-direction: column;
         align-items: center;
-        justify-content: flex-start;
-        gap: 7px;
+        justify-content: center;
+        gap: 10px;
         grid-column: auto;
-        padding: 7px;
+        padding: 8px;
         border: 0;
-        border-radius: 8px;
+        border-radius: var(--skin-control-radius);
         background: var(--soft);
         color: var(--text);
+        scroll-snap-align: start;
     }
     .account-page .account-order-shortcuts > button:hover {
-        background: var(--soft);
+        background: var(--control-surface-hover);
+    }
+    .account-page .account-order-shortcuts > button:active {
+        background: var(--control-surface-pressed);
     }
     .account-page .account-order-shortcuts > button > span {
         position: relative;
@@ -782,6 +810,44 @@
         font-size: 11px;
         font-weight: 500;
         white-space: nowrap;
+    }
+    .account-order-carousel-controls {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding-inline: 10px;
+    }
+    .account-order-carousel-controls > small {
+        margin-right: auto;
+        color: var(--muted);
+        font-size: 11px;
+    }
+    .account-order-carousel-controls > button {
+        display: grid;
+        width: 44px;
+        height: 44px;
+        flex: none;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        border-radius: var(--skin-control-radius);
+        background: var(--control-surface);
+        color: var(--text);
+        cursor: pointer;
+    }
+    .account-order-carousel-controls > button:hover:not(:disabled) {
+        background: var(--control-surface-hover);
+    }
+    .account-order-carousel-controls > button:active:not(:disabled) {
+        background: var(--control-surface-pressed);
+    }
+    .account-order-carousel-controls > button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+    .account-order-carousel-controls > button > svg {
+        width: 16px;
+        height: 16px;
     }
     .account-page .account-section {
         margin: 10px var(--page-section-inset, 20px) 0;

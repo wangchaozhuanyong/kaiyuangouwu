@@ -199,7 +199,7 @@ export function StorefrontBlockEditor({
                                             }
                                             className="h-4 w-4"
                                         />
-                                        前台启用
+                                        启用（保存后生效）
                                     </label>
                                 </div>
                                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -709,7 +709,9 @@ export function StorefrontBlockEditor({
                                             <p className="mt-1 text-[11px] text-slate-400">
                                                 {isSupport
                                                     ? '启用需要展示的联系方式；微信客服需上传二维码'
-                                                    : '用于轮播、入口、保障项、法律页或导航项'}
+                                                    : draft.type === 'CORE_CATEGORIES'
+                                                      ? '客户端按顺序展示前两张已启用卡片；停用的卡片不占展示名额'
+                                                      : '用于轮播、入口、保障项、法律页或导航项'}
                                             </p>
                                         </div>
                                         <button
@@ -774,7 +776,9 @@ export function StorefrontBlockEditor({
                                         ))}
                                         {!draft.items.length && (
                                             <p className="rounded-lg bg-slate-50 py-8 text-center text-xs text-slate-400">
-                                                当前没有子项，该楼层可以仅展示主文案
+                                                {draft.type === 'CORE_CATEGORIES'
+                                                    ? '当前没有卡片，客户端不会展示该模块；请添加并启用卡片后保存'
+                                                    : '当前没有子项，该楼层可以仅展示主文案'}
                                             </p>
                                         )}
                                     </div>
@@ -787,7 +791,7 @@ export function StorefrontBlockEditor({
                             <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-600">
                                 <div className="font-bold text-slate-900">生效方式</div>
                                 <p className="mt-2 leading-5">
-                                    保存后直接更新当前店铺的前台配置。展示时间都留空时永久展示；排期未到或已过期的内容不会展示。
+                                    预览包含尚未保存的修改。保存并核对成功后更新当前店铺配置；客户端按启用状态、语言内容、图片与展示时间决定是否显示。
                                 </p>
                             </div>
                         </aside>
@@ -814,7 +818,7 @@ export function StorefrontBlockEditor({
                             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-5 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                             <Check className="h-4 w-4" />
-                            {saving ? '正在保存…' : '保存并生效'}
+                            {saving ? '正在保存并核对…' : '保存并核对'}
                         </button>
                     </div>
                 </footer>
