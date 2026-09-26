@@ -137,6 +137,8 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/storefront/dist/index.html',
     'packages/storefront/dist/frontend-release.json',
     'packages/storefront/dist-two-factor/index.html',
+    'packages/storefront/dist-two-factor/build-config.json',
+    'packages/storefront/dist-two-factor/frontend-release.json',
     'packages/dev-server/scripts/catalog-cigarette-media.mjs',
     'packages/dev-server/scripts/sync-storefront-media.mjs',
     'packages/dev-server/scripts/sync-auth-visuals.mjs',
@@ -314,8 +316,12 @@ async function copyRuntimeBuildOutputs(stagingRoot) {
 
 export async function writeRuntimeFrontendReleaseManifests(stagingRoot, gitSha) {
     assert.match(gitSha, /^[a-f0-9]{40}$/u);
-    for (const component of ['storefront', 'next-admin']) {
-        const manifestPath = path.join(stagingRoot, 'packages', component, 'dist', 'frontend-release.json');
+    for (const [component, output] of [
+        ['storefront', 'packages/storefront/dist'],
+        ['next-admin', 'packages/next-admin/dist'],
+        ['two-factor', 'packages/storefront/dist-two-factor'],
+    ]) {
+        const manifestPath = path.join(stagingRoot, output, 'frontend-release.json');
         await writeFile(
             manifestPath,
             `${JSON.stringify({ sourceSha: gitSha, backendSha: gitSha, component, releaseLane: 'runtime' })}\n`,

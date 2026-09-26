@@ -56,11 +56,12 @@
 
 ## 独立 2FA 页面
 
-`packages/storefront` 构建会额外生成 `dist-two-factor`；生产运行包包含此目录和图片 worker 三个脚本。独立页面没有商城 API、分析脚本或外部请求；消息只传客户 ID、语言及页面就绪/返回状态，精确检查 parent origin 与 window source。
+`packages/storefront` 构建会额外生成 `dist-two-factor` 和其公开构建配置 `build-config.json`；生产运行包包含此目录和图片 worker 三个脚本。前台快速发布包也同时包含独立工具，使用 `/var/www/kaiyuangouwu-two-factor-current` 指针与主商城一起换版；独立虚拟主机不得继续绑定 runtime 目录。独立页面没有商城 API、分析脚本或外部请求；消息只传客户 ID、语言及页面就绪/返回状态，精确检查 parent origin 与 window source。
 
 1. 选择独立 HTTPS origin，建议独立可注册域名。一个 vault 实例只绑定同一商城后端的用户 ID 空间，不能合用到用户 ID 可能冲突的独立项目。
 2. 构建时设置 `VITE_TWO_FACTOR_ORIGIN=https://vault.example.net` 和 `VITE_TWO_FACTOR_PARENT_ORIGINS=https://shop.example.com`，多个父 origin 用逗号分隔，不带尾斜线或通配符。它们属于构建配置，修改服务器运行时环境不会改变既有 JS。
 3. 用 `vault-nginx.conf.example` 部署静态独立站点，替换证书和精确 `frame-ancestors`。在商城 Nginx 的 `/etc/nginx/customer-vault-frames/` 安装经核对的 map，匹配 `vault-parent-origins.map.example`。验证实际响应头和 iframe 加载，不能只确认文件已复制。
+   既有虚拟主机的 root 需改为 `/var/www/kaiyuangouwu-two-factor-current`；指针由发布脚本初始化，`frontend-release.json` 记录独立工具版本。发布前校验该 origin 的 root，发布后回读入口、清单与资源；未配置独立 origin 的部署只验证产物，不声称独立域名已启用或在线通过。
 4. 独立页面 CSP 拒绝网络请求及表单外发。iframe 必须保留 `allow-forms`，使正常 JS 表单提交事件可运行；CSP `form-action 'none'` 阻止真实外发。禁止扩大 parent allowlist 或启用同源商城脚本注入。
 
 未配置独立 origin 时，工具在当前商城 origin 使用临时/加密模式，**不具备跨域隔离**。配置错误时显示错误，不默默降级。浏览器禁用第三方存储、缺少 Web Locks/WebCrypto 时仍可临时使用，并保留旧数据。本地 Chromium、Firefox、WebKit 均通过加密备份下载/恢复及存储被禁用时的临时模式检查；生产域名和真实移动设备仍需验收。

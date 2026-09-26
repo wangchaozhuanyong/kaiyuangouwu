@@ -3,6 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
     chmodSync,
+    existsSync,
     mkdirSync,
     mkdtempSync,
     readFileSync,
@@ -19,8 +20,21 @@ import { fileURLToPath } from 'node:url';
 import { receiptFromInvocation, validateAcceptanceReceipt } from './acceptance-receipt.mjs';
 import { artifactSourceHash, runtimeArtifactRunTrusted } from './artifact-inputs.mjs';
 import { compiledExtractPython, validateBuildArtifact } from './build-artifact.mjs';
-import { frontendFingerprint, safeExtractPython, validateFrontendArtifact } from './frontend-artifact.mjs';
-import { activateFrontends, assertFrontendScope, verifyFrontend } from './frontend-release.mjs';
+import {
+    frontendFingerprint,
+    safeExtractPython,
+    stageFrontend,
+    validateFrontendArtifact,
+} from './frontend-artifact.mjs';
+import {
+    activateFrontends,
+    assertFrontendScope,
+    assertTwoFactorRouting,
+    frontendReleases,
+    validateTwoFactorCandidate,
+    verifyFrontend,
+    verifyTwoFactor,
+} from './frontend-release.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
 function fixture(t) {
@@ -85,7 +99,7 @@ test('the deployment transaction includes exactly the frontends changed since th
             () => true,
         ),
     );
-    assert.throws(() =>
+    assert.doesNotThrow(() =>
         assertFrontendScope(
             ['packages/storefront/two-factor-tool/main.ts'],
             ['storefront'],
@@ -93,6 +107,171 @@ test('the deployment transaction includes exactly the frontends changed since th
             () => true,
         ),
     );
+});
+
+function vaultFixture(root, origin = null) {
+    const tool = join(root, 'packages/storefront/dist-two-factor');
+    mkdirSync(join(tool, 'assets'), { recursive: true });
+    writeFileSync(join(tool, 'index.html'), '<script src="/assets/vault.js"></script>');
+    writeFileSync(join(tool, 'assets/vault.js'), 'export {};');
+    writeFileSync(
+        join(tool, 'build-config.json'),
+        JSON.stringify({ version: 1, origin, parents: ['https://shop.example.com'] }),
+    );
+    writeFileSync(
+        join(tool, 'frontend-release.json'),
+        JSON.stringify({ sourceSha: 'a'.repeat(40), backendSha: 'b'.repeat(40), component: 'two-factor' }),
+    );
+    return tool;
+}
+
+test('static artifact round trip carries the isolated tool and rejects missing output before staging', t => {
+    const { root } = fixture(t);
+    const main = join(root, 'packages/storefront/dist');
+    mkdirSync(join(main, 'assets'), { recursive: true });
+    writeFileSync(join(main, 'index.html'), '<script src="/assets/main.js"></script>');
+    writeFileSync(join(main, 'assets/main.js'), 'export {};');
+    const payload = join(root, 'payload/storefront');
+    assert.throws(() => stageFrontend('storefront', payload, root), /Missing isolated 2FA/u);
+    assert.equal(existsSync(payload), false);
+    vaultFixture(root);
+    stageFrontend('storefront', payload, root);
+    const archive = join(root, 'frontend.tar.gz');
+    const restored = join(root, 'restored');
+    execFileSync('tar', ['-czf', archive, '-C', join(root, 'payload'), '.']);
+    execFileSync('python3', ['-c', safeExtractPython, archive, restored]);
+    assert.equal(readFileSync(join(restored, 'storefront/assets/main.js'), 'utf8'), 'export {};');
+    assert.equal(
+        readFileSync(join(restored, 'storefront/.two-factor/assets/vault.js'), 'utf8'),
+        'export {};',
+    );
+    assert.deepEqual(validateTwoFactorCandidate(join(restored, 'storefront/.two-factor')), {
+        version: 1,
+        origin: null,
+        parents: ['https://shop.example.com'],
+    });
+    const old = {
+        component: 'storefront',
+        sourceHash: 'a'.repeat(64),
+        tree: 'b'.repeat(40),
+        fingerprint: 'c'.repeat(64),
+        version: 2,
+        archiveSha256: sha('bytes'),
+        sourceSha: 'd'.repeat(40),
+    };
+    assert.throws(
+        () =>
+            validateFrontendArtifact(
+                old,
+                { ...old, outputs: ['dist', 'dist-two-factor'] },
+                Buffer.from('bytes'),
+            ),
+        /omits isolated/u,
+    );
+});
+
+test('isolated vault routes must use the static pointer before any switch', () => {
+    const valid =
+        'server { listen 443 ssl; server_name vault.example.net; root /var/www/kaiyuangouwu-two-factor-current; location / { try_files $uri =404; } }';
+    assert.doesNotThrow(() => assertTwoFactorRouting(valid, 'https://vault.example.net'));
+    assert.doesNotThrow(() =>
+        assertTwoFactorRouting(
+            'server { listen 80; server_name vault.example.net; return 301 https://$host$request_uri; }\n' +
+                valid,
+            'https://vault.example.net',
+        ),
+    );
+    for (const source of [
+        valid.replace('kaiyuangouwu-two-factor-current', 'kaiyuangouwu-current'),
+        valid.replace('vault.example.net', 'other.example.net'),
+        valid.replace('try_files $uri =404;', 'proxy_pass http://upstream;'),
+    ])
+        assert.throws(() => assertTwoFactorRouting(source, 'https://vault.example.net'));
+    assert.doesNotThrow(() => assertTwoFactorRouting('', null));
+});
+
+test('isolated acceptance verifies its own origin, manifest and asset type without contacting unconfigured origins', async t => {
+    const { root } = fixture(t);
+    const tool = vaultFixture(root);
+    assert.equal(
+        (await verifyTwoFactor(tool, 'run', { fetcher: () => assert.fail('no isolated origin') })).public,
+        false,
+    );
+    writeFileSync(
+        join(tool, 'build-config.json'),
+        JSON.stringify({
+            version: 1,
+            origin: 'https://vault.example.net',
+            parents: ['https://shop.example.com'],
+        }),
+    );
+    const requests = [];
+    const fetcher = async url => {
+        requests.push(new URL(url).origin);
+        const name = new URL(url).pathname.slice(1) || 'index.html';
+        return new Response(readFileSync(join(tool, name)), {
+            headers: { 'content-type': name.endsWith('.js') ? 'application/javascript' : 'text/html' },
+        });
+    };
+    assert.equal((await verifyTwoFactor(tool, 'run', { fetcher })).public, true);
+    assert.ok(requests.length >= 3 && requests.every(origin => origin === 'https://vault.example.net'));
+    await assert.rejects(verifyTwoFactor(tool, 'run', { fetcher: async () => new Response('old version') }));
+    rmSync(join(tool, 'assets/vault.js'));
+    assert.throws(() => validateTwoFactorCandidate(tool), /ENOENT/u);
+});
+
+test('storefront and isolated pointer advance together and restore together on acceptance failure', async t => {
+    const { root, releases } = fixture(t);
+    const tool = vaultFixture(root);
+    const directory = join(root, 'payload');
+    mkdirSync(join(directory, 'storefront/.two-factor'), { recursive: true });
+    execFileSync('cp', ['-R', tool + '/.', join(directory, 'storefront/.two-factor')]);
+    writeFileSync(join(directory, 'storefront/index.html'), '<script src="/assets/main.js"></script>');
+    writeFileSync(
+        join(directory, 'storefront/frontend-release.json'),
+        JSON.stringify({ sourceSha: 'a'.repeat(40), backendSha: 'b'.repeat(40), component: 'storefront' }),
+    );
+    const toolPointer = join(root, 'two-factor-pointer');
+    const selected = frontendReleases(
+        ['storefront'],
+        directory,
+        { storefront: releases[0].pointer },
+        toolPointer,
+    );
+    writeFileSync(
+        join(directory, 'storefront/.two-factor/frontend-release.json'),
+        JSON.stringify({
+            sourceSha: 'c'.repeat(40),
+            backendSha: 'b'.repeat(40),
+            component: 'two-factor',
+        }),
+    );
+    assert.throws(
+        () => frontendReleases(['storefront'], directory, { storefront: releases[0].pointer }, toolPointer),
+        /revisions differ/u,
+    );
+    writeFileSync(
+        join(directory, 'storefront/.two-factor/frontend-release.json'),
+        JSON.stringify({
+            sourceSha: 'a'.repeat(40),
+            backendSha: 'b'.repeat(40),
+            component: 'two-factor',
+        }),
+    );
+    await assert.rejects(
+        activateFrontends(selected, async () => {
+            assert.equal(realpathSync(toolPointer), join(directory, 'storefront/.two-factor'));
+            throw new Error('tool acceptance failed');
+        }),
+        /tool acceptance failed/u,
+    );
+    assert.equal(realpathSync(releases[0].pointer), releases[0].old);
+    assert.equal(existsSync(toolPointer), false);
+    await activateFrontends(selected, async () => {
+        assert.equal(realpathSync(toolPointer), join(directory, 'storefront/.two-factor'));
+    });
+    assert.equal(realpathSync(releases[0].pointer), join(directory, 'storefront'));
+    assert.equal(realpathSync(toolPointer), join(directory, 'storefront/.two-factor'));
 });
 test('public admin acceptance checks entry, marker, and real asset response types', async t => {
     const { releases } = fixture(t);

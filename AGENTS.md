@@ -49,6 +49,15 @@ Headless e-commerce framework. Lerna monorepo with fixed versioning.
 - Finish only after the deployed component versions and affected functions are verified. Report local validation, GitHub checks, deployment, and browser/business acceptance separately.
 - These rules apply to this repository and its stores. Do not change other projects or global GitHub/organization policies. Local implementation authorization does not authorize pushing, merging, deploying, or deleting branches/worktrees.
 
+## Frequent visual releases: lessons from 2026-09-27
+
+- The user expects frequent visual fixes to use a short frontend release. Before dispatch, verify the classifier's actual lane against the cumulative changed files. The 2FA fast-lane repair carries both storefront and isolated outputs and allows frontend CSS/TSX changes; verify these updated scripts are installed on the server before claiming the new path has run in production. Configuration, dependencies, backend and database changes retain their actual release scope.
+- Reuse unchanged successful checks and checked artifacts. Run only affected page/component checks and the necessary frontend build; do not repeat package-wide, backend, database, restore, or browser matrices without a specific changed input or failure. Existing final acceptance is not a reason to start another verification cycle.
+- The user's instruction is to find the problem, repair it, and continue, not enter a rollback/re-release loop. For appearance regressions, prefer a forward fix. For a failed pre-switch gate, retain the running version while fixing the failed item. A rollback is not a repair and never justifies an unchanged retry; if an actual availability failure requires restoring service, diagnose and repair before continuing the authorized release.
+- Current automatic rollback remains enabled. Do not claim it has been removed by this documentation change or broadly disable availability protection as a substitute for repairing a false health failure. Make any requested deployment-policy change explicit and verify its actual execution path.
+- The 2FA fast lane must deliver every affected frontend artifact: the reusable storefront archive includes `dist-two-factor` under the private `.two-factor` companion directory. The isolated virtual host serves `/var/www/kaiyuangouwu-two-factor-current`, never a runtime-bound directory or a public storefront subroute. Validate the companion before switching and verify its own manifest/assets on the configured isolated origin. Without an isolated origin, report local artifact verification rather than invented public acceptance.
+- See `deploy/UI_RELEASE_LESSONS_20260927.md` for the failure evidence, completed fix, and remaining work. Record one release ledger and report code completion, local checks, merge, deployment, and live acceptance separately.
+
 ## Development Workflow
 
 1. Make changes to a package
