@@ -13,6 +13,7 @@ const manager = () => page.getByRole('dialog', { name: '首页轮播图', exact:
 const editor = () => page.getByRole('dialog', { name: '编辑店铺楼层区块', exact: true });
 const frame = () => editor().frameLocator('iframe[title="客户端装修效果"]');
 const openEditor = async () => {
+    await expect(page.getByRole('article', { name: '首页轮播', exact: true })).toBeVisible();
     await page.getByRole('button', { name: '首页轮播图', exact: true }).click();
     await manager()
         .getByRole('article', { name: '生活好物', exact: true })
@@ -85,7 +86,8 @@ try {
     compare(desktop.client, desktop.preview);
     await editor().getByRole('button', { name: '手机', exact: true }).click();
     await client.setViewportSize({ width: 390, height: 844 });
-    await expect(frame().locator('.hero img')).toHaveCSS('object-fit', 'contain');
+    await expect(client.locator('.hero img')).toHaveCSS('object-fit', 'cover');
+    await expect(frame().locator('.hero img')).toHaveCSS('object-fit', 'cover');
     const mobile = {
         client: await client.locator('body').evaluate(measure),
         preview: await frame().locator('body').evaluate(measure),
@@ -96,7 +98,7 @@ try {
     const expanded = page.getByRole('dialog', { name: '放大客户端装修预览' });
     await expect(expanded.locator('iframe')).toHaveAttribute('width', '390');
     await expanded.getByRole('button', { name: '关闭预览', exact: true }).click();
-    await editor().getByRole('button', { name: '保存并生效', exact: true }).click();
+    await editor().getByRole('button', { name: '保存并核对', exact: true }).click();
     await expect(editor()).toHaveCount(0);
     await page.reload();
     await openEditor();
