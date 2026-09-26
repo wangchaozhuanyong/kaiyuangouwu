@@ -1689,7 +1689,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 .filter({ has: page.getByRole('button', { name: '从素材库选择' }) })
                 .last();
             await chooseImage(page, supportImage);
-            await page.getByRole('button', { name: '保存并生效', exact: true }).click();
+            await page.getByRole('button', { name: '保存并核对', exact: true }).click();
             await browserExpect(page.getByRole('status'))
                 .toContainText('已保存')
                 .catch(async () => {

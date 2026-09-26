@@ -338,7 +338,8 @@ html[data-storefront-preset='modern-oriental'] {
 /* Storefront and editor share one on-image composition, without a separate copy card. */
 .hero.hero-image-overlay {
     display: block;
-    min-height: 0;
+    min-height: 320px;
+    aspect-ratio: 3;
     background: var(--skin-hero-background, #10212f);
 }
 
@@ -455,6 +456,7 @@ html[data-storefront-preset='modern-oriental'] {
         display: grid;
         align-items: center;
         min-height: 280px;
+        aspect-ratio: auto;
     }
 
     /* Marketing artwork fills the compact phone frame; product media is unaffected. */
