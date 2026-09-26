@@ -38,6 +38,7 @@ import {
     accountContentBlockTypes,
     createContentPublicationChecker,
     isAccountContentBlockType,
+    publishedContentItems,
 } from './content-publication';
 import {
     DESKTOP_CATEGORY_BANNER_DEFAULT,
@@ -189,6 +190,7 @@ export class StorefrontContentService {
         }
         this.validateAuthVisual(normalized, input.items ?? []);
         this.validateAccountHero(normalized, input.items ?? []);
+        this.assertEnabledCoreHasItems(normalized.type, normalized.enabled, input.items ?? []);
         await this.validateDesktopCategoryBanner(ctx, normalized, input.items ?? []);
         await this.assertUniqueCode(ctx, normalized.code);
         const image = await this.resolveImage(ctx, normalized.imageAssetId, normalized.imageUrl, '区块图片');
@@ -302,6 +304,7 @@ export class StorefrontContentService {
                     translations: [],
                 })),
         );
+        this.assertEnabledCoreHasItems(next.type, next.enabled, input.items ?? block.items);
         await this.validateDesktopCategoryBanner(ctx, next, input.items ?? block.items);
         await this.assertUniqueCode(ctx, next.code, block.id);
         const requestedImageUrl =
@@ -502,7 +505,9 @@ export class StorefrontContentService {
                 const requestedImageUrl =
                     input.imageAssetId === null && input.imageUrl === undefined
                         ? null
-                        : (this.optionalText(input.imageUrl) ?? item.imageUrl);
+                        : input.imageUrl === undefined
+                          ? item.imageUrl
+                          : this.optionalText(input.imageUrl);
                 const image = await this.resolveImage(ctx, imageAssetId, requestedImageUrl, '条目图片');
                 Object.assign(item, {
                     enabled: input.enabled ?? true,
@@ -761,7 +766,18 @@ export class StorefrontContentService {
                 return item;
             })
             .sort((a, b) => a.position - b.position || Number(a.id) - Number(b.id));
+        if (publishedOnly) translated.items = publishedContentItems(translated);
         return translated;
+    }
+
+    private assertEnabledCoreHasItems(
+        type: string,
+        enabled: boolean,
+        items: Array<{ enabled?: boolean | null }>,
+    ): void {
+        if (type === 'CORE_CATEGORIES' && enabled && !items.some(item => item.enabled !== false)) {
+            throw new UserInputError('启用核心品类前至少需要一张已启用卡片');
+        }
     }
 
     private assertEnabledHeroHasImage(

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { newContentBlock } from './storefront-content-utils';
-import { applyDecorationDraft, decorationDraft, isReadOnlyPreviewQuery } from './storefront-decoration-model';
+import {
+    applyDecorationDraft,
+    decorationDraft,
+    isReadOnlyPreviewQuery,
+    previewQueryCurrencyCode,
+} from './storefront-decoration-model';
 
 describe('decoration drafts follow the Shop publication contract', () => {
     it('uses public Asset URLs, dimensions, selected language and only enabled items', () => {
@@ -76,4 +81,12 @@ describe('preview network requests are read only', () => {
         ])
             expect(isReadOnlyPreviewQuery(query)).toBe(false);
     });
+});
+
+it('resolves store configuration before applying a preview currency preference', () => {
+    expect(
+        previewQueryCurrencyCode('query StorefrontConfig { activeChannel { code } }', 'CNY'),
+    ).toBeUndefined();
+    expect(previewQueryCurrencyCode('query Prices { products { items { id } } }', 'MYR')).toBe('MYR');
+    expect(previewQueryCurrencyCode('query Prices { products { items { id } } }', 'invalid')).toBeUndefined();
 });

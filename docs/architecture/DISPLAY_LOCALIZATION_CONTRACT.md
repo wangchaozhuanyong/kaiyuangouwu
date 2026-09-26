@@ -20,7 +20,7 @@
 | 状态、事件、部门、严重级别、运行阶段 | `packages/common/src/system-display-labels.ts` |
 | 后台当前语言 | `packages/next-admin/src/utils/admin-language.ts` |
 | 后台实体名称与说明 | `packages/next-admin/src/utils/localized-entity-display.ts` |
-| 插件双语显示元数据 | `packages/storefront-content-plugin/src/dashboard/client-plugin-display.ts` |
+| 插件双语显示元数据 | `packages/storefront-content-plugin/src/shared/client-plugin-display.ts` |
 | 后台扩展标题、导航、操作及组件说明 | `packages/next-admin/src/extensions/extension-api.ts` |
 | 服务端翻译引擎 | `packages/core/src/service/helpers/utils/translate-entity.ts` |
 

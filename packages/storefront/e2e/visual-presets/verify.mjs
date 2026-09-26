@@ -655,6 +655,20 @@ try {
                         ).toBeCloseTo(16, 0);
                     }
                 }
+                const commonHeader = page
+                    .locator(
+                        width < 1024
+                            ? '.topbar, .mobile-page-header, .search-header, .mail-query-page .top-nav-inner'
+                            : '.proto-header-inner',
+                    )
+                    .filter({ visible: true })
+                    .first();
+                if (await commonHeader.count()) {
+                    expect(
+                        (await commonHeader.boundingBox()).height,
+                        `${preset}/${width}/${name} common header height`,
+                    ).toBe(width < 1024 ? 52 : 72);
+                }
                 if (name === 'home' && width < 1024) {
                     const overlay = await page.locator('.hero').evaluate(hero => {
                         const image = hero.querySelector('.hero-rich-backdrop');
@@ -715,6 +729,14 @@ try {
                     await expect(coupon).toContainText('3件券后合计');
                     await expect(coupon).toContainText('MYR 84.7');
                 }
+                if (name === 'product') {
+                    const summary = page.locator('.detail-summary');
+                    await expect(summary.locator(':scope > :first-child')).toHaveJSProperty('tagName', 'H1');
+                    await expect(summary.locator(':scope > p')).toHaveCount(0);
+                    const titleBounds = await summary.locator('h1').boundingBox();
+                    const priceBounds = await summary.locator('.detail-price-line').boundingBox();
+                    expect(titleBounds.y + titleBounds.height).toBeLessThanOrEqual(priceBounds.y);
+                }
                 if (width < 1024 && name === 'product') {
                     const productLayout = await page.evaluate(() => {
                         const root = document.querySelector('.product-detail-page').getBoundingClientRect();
@@ -748,6 +770,16 @@ try {
                         `${preset}/${width}/product sections`,
                     ).toBeGreaterThanOrEqual(7);
                     for (const section of productLayout) {
+                        if (section.selector === '.detail-gallery-shell') {
+                            expect(section.left).toBe(0);
+                            expect(section.right).toBe(0);
+                            const gallery = page.locator('.detail-gallery');
+                            const bounds = await gallery.boundingBox();
+                            expect(bounds.width).toBe(width);
+                            expect(bounds.height).toBe(width);
+                            await expect(gallery).toHaveCSS('border-radius', '0px');
+                            continue;
+                        }
                         expect(
                             section.left,
                             `${preset}/${width}/${section.selector} left gutter`,
@@ -1312,6 +1344,7 @@ try {
                                 quickLeft: quickBounds.left,
                                 quickTop: quickBounds.top,
                                 copyBackground: getComputedStyle(copy).backgroundColor,
+                                imageFit: image ? getComputedStyle(image).objectFit : null,
                                 imageRatio:
                                     image instanceof HTMLImageElement && image.naturalHeight > 0
                                         ? image.naturalWidth / image.naturalHeight
@@ -1344,9 +1377,9 @@ try {
                     if (requestedContent === 'wide-hero') {
                         expect(pair.imageRatio, `${preset}/${width}/home image decoded`).not.toBeNull();
                         expect(
-                            Math.abs(pair.heroWidth / pair.heroHeight - pair.imageRatio) / pair.imageRatio,
-                            `${preset}/${width}/home preserves wide artwork`,
-                        ).toBeLessThan(0.08);
+                            pair.imageFit,
+                            `${preset}/${width}/home preserves the complete artwork inside the shared frame`,
+                        ).toBe('contain');
                     }
                 }
 

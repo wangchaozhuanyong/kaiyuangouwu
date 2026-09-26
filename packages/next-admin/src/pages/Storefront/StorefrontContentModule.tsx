@@ -16,9 +16,9 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { channelRequestContext } from '../../apollo';
+import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -57,6 +57,12 @@ import {
     toLocalDateTime,
 } from './storefront-content-utils';
 import { contentPublicationLabels, contentPublicationStatus } from './storefront-publication';
+import {
+    verifyAnnouncement,
+    verifyContentChannel,
+    verifyPromotion,
+    verifySavedBlock,
+} from './storefront-save-verification';
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
 
 type ContentTab = 'PAGES' | 'ANNOUNCEMENTS' | 'LANDING';
@@ -114,12 +120,41 @@ export function StorefrontContentModule() {
     const mutationOptions = content.data
         ? { context: channelRequestContext(content.data.activeChannel.token) }
         : {};
-    const [createBlock, createBlockState] = useMutation(CREATE_STOREFRONT_BLOCK_MUTATION, mutationOptions);
-    const [updateBlock, updateBlockState] = useMutation(UPDATE_STOREFRONT_BLOCK_MUTATION, mutationOptions);
+    const [createBlock, createBlockState] = useMutation<{
+        createStorefrontContentBlock: StorefrontContentBlock;
+    }>(CREATE_STOREFRONT_BLOCK_MUTATION, mutationOptions);
+    const [updateBlock, updateBlockState] = useMutation<{
+        updateStorefrontContentBlock: StorefrontContentBlock;
+    }>(UPDATE_STOREFRONT_BLOCK_MUTATION, mutationOptions);
     const [deleteAnnouncement, deleteAnnouncementState] = useMutation<{
         deleteSystemAnnouncement: { result: string; message?: string | null };
     }>(DELETE_SYSTEM_ANNOUNCEMENT_MUTATION);
-    const pageBlocks = (content.data?.storefrontContentBlocks ?? []).filter(block =>
+    const channelId = content.data?.activeChannel.id;
+    const channelRef = useRef(channelId);
+    const actionLock = useRef(false);
+    const [actionPending, setActionPending] = useState(false);
+    const consistent = Boolean(
+        content.data &&
+        (!getActiveChannelToken() || content.data.activeChannel.token === getActiveChannelToken()),
+    );
+    /* oxlint-disable react/set-state-in-effect -- A store switch invalidates the previous store's drafts and feedback. */
+    useLayoutEffect(() => {
+        channelRef.current = channelId;
+        setEditingBlock(null);
+        setEditingAnnouncement(null);
+        setDeletingAnnouncement(null);
+        setNotice('');
+        setActionError('');
+    }, [channelId]);
+    /* oxlint-enable react/set-state-in-effect */
+    const blockPending =
+        actionPending ||
+        createBlockState.loading ||
+        updateBlockState.loading ||
+        content.loading ||
+        Boolean(content.error) ||
+        !consistent;
+    const pageBlocks = (consistent ? (content.data?.storefrontContentBlocks ?? []) : []).filter(block =>
         contentModuleDescriptors.some(item => item.type === block.type),
     );
 
@@ -132,56 +167,84 @@ export function StorefrontContentModule() {
         setNotice('');
     };
 
-    const saveBlock = async (block: StorefrontContentBlock) => {
+    const runBlockAction = async (
+        operation: (scope: {
+            context: ReturnType<typeof channelRequestContext>;
+            reread: () => Promise<StorefrontContentResult>;
+        }) => Promise<void>,
+    ) => {
+        const channel = content.data?.activeChannel;
+        if (blockPending || actionLock.current || !channel) return;
+        const token = getActiveChannelToken();
+        const stillCurrent = () => getActiveChannelToken() === token && channelRef.current === channel.id;
+        actionLock.current = true;
+        setActionPending(true);
+        setNotice('');
         setActionError('');
-        if (
-            createBlockState.loading ||
-            updateBlockState.loading ||
-            content.loading ||
-            content.error ||
-            !(block.id ? canUpdate : canCreate)
-        )
-            return;
         try {
-            if (block.id) {
-                if (!block.updatedAt) throw new Error('缺少内容版本，请刷新后重试');
-                await updateBlock({
-                    variables: {
-                        input: {
-                            id: block.id,
-                            expectedUpdatedAt: block.updatedAt,
-                            ...storefrontBlockInput(block, editingBlock),
-                        },
-                    },
-                });
-            } else {
-                await createBlock({ variables: { input: storefrontBlockInput(block, editingBlock) } });
-            }
-            setEditingBlock(null);
-            showNotice('中文已保存，英文待同步；人工英文保持原设置');
-            try {
-                await content.refetch();
-            } catch (error) {
-                setActionError(`内容已保存，但重新读取失败，请刷新检查。${errorText(error)}`);
-            }
-        } catch (error) {
-            showError(error);
-        }
-    };
-
-    const toggleBlock = async (block: StorefrontContentBlock) => {
-        if (!block.id || !block.updatedAt || !canUpdate || content.loading || content.error) return;
-        try {
-            await updateBlock({
-                variables: {
-                    input: { id: block.id, expectedUpdatedAt: block.updatedAt, enabled: !block.enabled },
+            await operation({
+                context: channelRequestContext(channel.token),
+                reread: async () => {
+                    if (!stillCurrent()) throw new Error('店铺已切换，请重新读取');
+                    const response = await content.refetch();
+                    if (!stillCurrent()) throw new Error('店铺已切换，请重新读取');
+                    return verifyContentChannel(response.data, channel.id);
                 },
             });
-            showNotice(`《${block.internalName}》已${block.enabled ? '停用' : '启用'}`);
-            await content.refetch();
         } catch (error) {
-            showError(error);
+            if (stillCurrent()) showError(error);
+        } finally {
+            actionLock.current = false;
+            setActionPending(false);
         }
+    };
+    const publicationNotice = (block: StorefrontContentBlock) =>
+        `《${block.internalName}》已保存并重新读取核对。中文：${contentPublicationLabels[contentPublicationStatus(block, undefined, 'zh_Hans')]}；英文：${contentPublicationLabels[contentPublicationStatus(block, undefined, 'en')]}`;
+    const saveBlock = async (block: StorefrontContentBlock) => {
+        if (!(block.id ? canUpdate : canCreate)) return;
+        await runBlockAction(async scope => {
+            const input = storefrontBlockInput(block, editingBlock);
+            let saved: StorefrontContentBlock;
+            if (block.id) {
+                if (!block.updatedAt) throw new Error('缺少内容版本，请刷新后重试');
+                const response = await updateBlock({
+                    context: scope.context,
+                    variables: { input: { id: block.id, expectedUpdatedAt: block.updatedAt, ...input } },
+                });
+                saved = verifySavedBlock(response.data?.updateStorefrontContentBlock, {
+                    id: block.id,
+                    ...input,
+                });
+            } else {
+                const response = await createBlock({ context: scope.context, variables: { input } });
+                saved = verifySavedBlock(response.data?.createStorefrontContentBlock, input);
+            }
+            const refreshed = await scope.reread();
+            const readback = verifySavedBlock(
+                refreshed.storefrontContentBlocks.find(candidate => candidate.id === saved.id),
+                { id: saved.id, ...input },
+                saved,
+            );
+            setEditingBlock(null);
+            showNotice(publicationNotice(readback));
+        });
+    };
+    const toggleBlock = async (block: StorefrontContentBlock) => {
+        if (!block.id || !block.updatedAt || !canUpdate) return;
+        await runBlockAction(async scope => {
+            const input = { id: block.id!, enabled: !block.enabled };
+            const response = await updateBlock({
+                context: scope.context,
+                variables: { input: { ...input, expectedUpdatedAt: block.updatedAt } },
+            });
+            verifySavedBlock(response.data?.updateStorefrontContentBlock, input);
+            const refreshed = await scope.reread();
+            const saved = verifySavedBlock(
+                refreshed.storefrontContentBlocks.find(candidate => candidate.id === block.id),
+                input,
+            );
+            showNotice(publicationNotice(saved));
+        });
     };
 
     const confirmDeleteAnnouncement = async () => {
@@ -192,9 +255,12 @@ export function StorefrontContentModule() {
             if (!deletion || deletion.result !== 'DELETED') {
                 throw new Error(deletion?.message || '后端拒绝删除该公告');
             }
-            showNotice(`已删除公告《${deletingAnnouncement.titleZh}》`);
+            const refreshed = await announcements.refetch();
+            if (!refreshed.data) throw new Error('公告重新读取未返回结果');
+            if (refreshed.data.systemAnnouncements.some(item => item.id === deletingAnnouncement.id))
+                throw new Error('公告删除后仍可读取，请刷新确认');
+            showNotice(`已删除公告《${deletingAnnouncement.titleZh}》，已重新读取核对`);
             setDeletingAnnouncement(null);
-            await announcements.refetch();
         } catch (error) {
             showError(error);
         }
@@ -281,9 +347,12 @@ export function StorefrontContentModule() {
                         <PageBlockList
                             blocks={pageBlocks}
                             allCount={content.data?.storefrontContentBlocks.length ?? 0}
-                            pending={updateBlockState.loading}
-                            onEdit={setEditingBlock}
+                            pending={blockPending}
+                            onEdit={block => {
+                                if (!blockPending) setEditingBlock(block);
+                            }}
                             onCreate={descriptor =>
+                                !blockPending &&
                                 setEditingBlock(
                                     newContentBlock(
                                         descriptor.type,
@@ -326,11 +395,14 @@ export function StorefrontContentModule() {
                     ) : (
                         promotion.data && (
                             <PromotionPageEditor
-                                key={`${promotion.data.storefrontPromotionPage.id ?? 'default'}-${promotion.data.storefrontPromotionPage.publishedVersion}-${promotion.data.storefrontPromotionPage.draftSource.length}`}
+                                channel={content.data?.activeChannel}
+                                key={`${channelId}-${promotion.data.storefrontPromotionPage.id ?? 'default'}-${promotion.data.storefrontPromotionPage.publishedVersion}-${promotion.data.storefrontPromotionPage.draftSource.length}`}
                                 value={promotion.data.storefrontPromotionPage}
                                 onNotice={showNotice}
                                 onError={showError}
-                                onRefresh={() => promotion.refetch()}
+                                onRefresh={async () =>
+                                    (await promotion.refetch()).data?.storefrontPromotionPage
+                                }
                             />
                         )
                     ))}
@@ -341,23 +413,31 @@ export function StorefrontContentModule() {
                     key={editingBlock.id ?? editingBlock.code}
                     value={editingBlock}
                     error={actionError}
-                    saving={createBlockState.loading || updateBlockState.loading}
+                    saving={blockPending}
                     onClose={() => setEditingBlock(null)}
                     onSave={saveBlock}
                 />
             )}
             {activeAnnouncementEditor && canManageAnnouncements && (
                 <AnnouncementEditor
-                    key={activeAnnouncementEditor === 'NEW' ? 'new' : activeAnnouncementEditor.id}
+                    key={`${channelId}-${activeAnnouncementEditor === 'NEW' ? 'new' : activeAnnouncementEditor.id}`}
                     value={activeAnnouncementEditor === 'NEW' ? null : activeAnnouncementEditor}
                     activeChannel={content.data?.activeChannel ?? null}
                     onClose={closeAnnouncementEditor}
-                    onSaved={async message => {
+                    onSaved={async expected => {
+                        if (channelRef.current !== channelId) return;
+                        const refreshed = await announcements.refetch();
+                        if (channelRef.current !== channelId) return;
+                        verifyAnnouncement(
+                            refreshed.data?.systemAnnouncements.find(item => item.id === expected.id),
+                            expected,
+                        );
                         closeAnnouncementEditor();
-                        showNotice(message);
-                        await announcements.refetch();
+                        showNotice('中文公告已保存并重新读取核对，英文按翻译设置同步');
                     }}
-                    onError={showError}
+                    onError={error => {
+                        if (channelRef.current === channelId) showError(error);
+                    }}
                 />
             )}
             {deletingAnnouncement && (
@@ -609,7 +689,7 @@ function AnnouncementEditor({
     value: SystemAnnouncementRecord | null;
     activeChannel: SystemAnnouncementChannel | null;
     onClose: () => void;
-    onSaved: (message: string) => Promise<void>;
+    onSaved: (expected: Parameters<typeof verifyAnnouncement>[1]) => Promise<void>;
     onError: (error: unknown) => void;
 }) {
     const channels = useQuery<{ channels: { items: SystemAnnouncementChannel[] } }>(
@@ -651,15 +731,23 @@ function AnnouncementEditor({
         titleEn: value?.titleEn ?? '',
         contentEn: value?.contentEn ?? '',
     }));
-    const [create, createState] = useMutation(CREATE_SYSTEM_ANNOUNCEMENT_MUTATION);
-    const [update, updateState] = useMutation(UPDATE_SYSTEM_ANNOUNCEMENT_MUTATION);
+    const [create, createState] = useMutation<{ createSystemAnnouncement: { id: string } }>(
+        CREATE_SYSTEM_ANNOUNCEMENT_MUTATION,
+    );
+    const [update, updateState] = useMutation<{ updateSystemAnnouncement: { id: string; enabled: boolean } }>(
+        UPDATE_SYSTEM_ANNOUNCEMENT_MUTATION,
+    );
     const validation =
         (!allChannels && selectedChannelIds.length === 0 ? '请至少选择一个目标店铺' : null) ??
         announcementDraftError(draft);
     const submit = async () => {
-        if (createState.loading || updateState.loading || validation) return;
+        if (verifying || createState.loading || updateState.loading || validation) return;
         const input = {
-            targetMode: allChannels ? 'ALL' : selectedChannelIds.length === 1 ? 'SINGLE' : 'MULTIPLE',
+            targetMode: (allChannels
+                ? 'ALL'
+                : selectedChannelIds.length === 1
+                  ? 'SINGLE'
+                  : 'MULTIPLE') as SystemAnnouncementRecord['targetMode'],
             channelIds: allChannels ? [] : selectedChannelIds,
             enabled: draft.enabled,
             priority: Number.parseInt(draft.priority, 10) || 0,
@@ -673,22 +761,33 @@ function AnnouncementEditor({
             startsAt: fromLocalDateTime(draft.startsAt),
             endsAt: fromLocalDateTime(draft.endsAt),
         };
+        setVerifying(true);
         try {
-            if (value)
-                await update({
+            let savedId: string | undefined;
+            if (value) {
+                const response = await update({
                     variables: { input: { id: value.id, ...omitUnchangedEnglish(input, originalEnglish) } },
                 });
-            else await create({ variables: { input } });
-            try {
-                await onSaved('中文公告已保存，英文待同步');
-            } catch {
-                onError(new Error('公告已保存，刷新失败，请稍后刷新页面'));
+                if (
+                    response.data?.updateSystemAnnouncement.id !== value.id ||
+                    response.data.updateSystemAnnouncement.enabled !== input.enabled
+                )
+                    throw new Error('公告保存未返回对应结果');
+                savedId = response.data.updateSystemAnnouncement.id;
+            } else {
+                const response = await create({ variables: { input } });
+                savedId = response.data?.createSystemAnnouncement.id;
             }
+            if (!savedId) throw new Error('公告保存未返回对应结果');
+            await onSaved({ ...input, id: savedId });
         } catch (error) {
             onError(error);
+        } finally {
+            setVerifying(false);
         }
     };
-    const pending = createState.loading || updateState.loading;
+    const [verifying, setVerifying] = useState(false);
+    const pending = verifying || createState.loading || updateState.loading;
     return (
         <Modal
             title={value ? '编辑首页公告' : '新建首页公告'}
@@ -902,11 +1001,13 @@ function PromotionPageEditor({
     onNotice,
     onError,
     onRefresh,
+    channel,
 }: {
+    channel?: StorefrontContentResult['activeChannel'];
     value: StorefrontPromotionRecord;
     onNotice: (message: string) => void;
     onError: (error: unknown) => void;
-    onRefresh: () => Promise<unknown>;
+    onRefresh: () => Promise<StorefrontPromotionRecord | undefined>;
 }) {
     const { hasAnyPermission } = useAdminPermissions();
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
@@ -914,57 +1015,86 @@ function PromotionPageEditor({
     const [source, setSource] = useState(value.draftSource);
     const [previewHtml, setPreviewHtml] = useState('');
     const [confirmReset, setConfirmReset] = useState(false);
-    const [save, saveState] = useMutation(SAVE_STOREFRONT_PROMOTION_DRAFT_MUTATION);
+    const [save, saveState] = useMutation<{ saveStorefrontPromotionDraft: StorefrontPromotionRecord }>(
+        SAVE_STOREFRONT_PROMOTION_DRAFT_MUTATION,
+    );
     const [preview, previewState] = useMutation<{ previewStorefrontPromotionPage: string }>(
         PREVIEW_STOREFRONT_PROMOTION_PAGE_MUTATION,
     );
-    const [publish, publishState] = useMutation(PUBLISH_STOREFRONT_PROMOTION_PAGE_MUTATION);
-    const [reset, resetState] = useMutation(RESET_STOREFRONT_PROMOTION_PAGE_MUTATION);
+    const [publish, publishState] = useMutation<{
+        publishStorefrontPromotionPage: StorefrontPromotionRecord;
+    }>(PUBLISH_STOREFRONT_PROMOTION_PAGE_MUTATION);
+    const [reset, resetState] = useMutation<{ resetStorefrontPromotionPage: StorefrontPromotionRecord }>(
+        RESET_STOREFRONT_PROMOTION_PAGE_MUTATION,
+    );
     const dirty = contentType !== value.contentType || source !== value.draftSource;
-    const saveDraft = async () => {
-        if (!canUpdate) return;
-        if (!source.trim()) return onError(new Error('推广页内容不能为空'));
+    const [verifying, setVerifying] = useState(false);
+    const pending =
+        verifying || saveState.loading || previewState.loading || publishState.loading || resetState.loading;
+    const run = async (operation: (context: ReturnType<typeof channelRequestContext>) => Promise<void>) => {
+        if (!canUpdate || pending || !channel) return;
+        const token = getActiveChannelToken();
+        if (token && token !== channel.token) return;
+        const current = () => getActiveChannelToken() === token;
+        setVerifying(true);
         try {
-            await save({ variables: { input: { contentType, source } } });
-            onNotice('推广页草稿已保存');
-            await onRefresh();
+            await operation(channelRequestContext(channel.token));
         } catch (error) {
-            onError(error);
+            if (current()) onError(error);
+        } finally {
+            setVerifying(false);
         }
+    };
+    const reread = async (
+        expected: StorefrontPromotionRecord | undefined,
+        message: string,
+        token: string | null,
+    ) => {
+        if (getActiveChannelToken() !== token) return;
+        if (!expected) throw new Error('推广页保存未返回对应结果');
+        const refreshed = await onRefresh();
+        if (getActiveChannelToken() !== token) return;
+        verifyPromotion(refreshed, expected);
+        onNotice(`${message}，已重新读取核对`);
+    };
+    const saveDraft = async () => {
+        if (!source.trim()) return onError(new Error('推广页内容不能为空'));
+        await run(async context => {
+            const token = getActiveChannelToken();
+            const response = await save({ context, variables: { input: { contentType, source } } });
+            await reread(response.data?.saveStorefrontPromotionDraft, '推广页草稿已保存', token);
+        });
     };
     const showPreview = async () => {
-        if (!canUpdate) return;
         if (!source.trim()) return;
-        try {
-            const result = await preview({ variables: { input: { contentType, source } } });
-            setPreviewHtml(result.data?.previewStorefrontPromotionPage ?? '');
-        } catch (error) {
-            onError(error);
-        }
+        await run(async context => {
+            const token = getActiveChannelToken();
+            const result = await preview({ context, variables: { input: { contentType, source } } });
+            if (getActiveChannelToken() === token)
+                setPreviewHtml(result.data?.previewStorefrontPromotionPage ?? '');
+        });
     };
     const publishPage = async () => {
-        if (!canUpdate) return;
-        try {
-            if (dirty) await save({ variables: { input: { contentType, source } } });
-            await publish();
-            onNotice('推广落地页已发布');
-            await onRefresh();
-        } catch (error) {
-            onError(error);
-        }
+        await run(async context => {
+            const token = getActiveChannelToken();
+            if (dirty) {
+                const saved = await save({ context, variables: { input: { contentType, source } } });
+                if (!saved.data?.saveStorefrontPromotionDraft) throw new Error('推广页草稿保存未返回结果');
+            }
+            if (getActiveChannelToken() !== token) return;
+            const response = await publish({ context });
+            await reread(response.data?.publishStorefrontPromotionPage, '推广落地页已发布', token);
+        });
     };
     const resetPage = async () => {
-        if (!canUpdate) return;
-        try {
-            await reset();
-            setConfirmReset(false);
-            onNotice('推广页已恢复平台默认模板');
-            await onRefresh();
-        } catch (error) {
-            onError(error);
-        }
+        await run(async context => {
+            const token = getActiveChannelToken();
+            const response = await reset({ context });
+            await reread(response.data?.resetStorefrontPromotionPage, '推广页已恢复平台默认模板', token);
+            if (getActiveChannelToken() === token) setConfirmReset(false);
+        });
     };
-    const pending = saveState.loading || previewState.loading || publishState.loading || resetState.loading;
+
     return (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.8fr)]">
             <section className="rounded-xl border border-slate-200 bg-white">

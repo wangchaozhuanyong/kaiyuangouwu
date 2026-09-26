@@ -96,3 +96,10 @@ export function isReadOnlyPreviewQuery(query: unknown): query is string {
         return false;
     }
 }
+
+// Bootstrap discovers the selected store's settlement currency before monetary queries.
+export function previewQueryCurrencyCode(query: string, currency: unknown): string | undefined {
+    if (typeof currency !== 'string' || !/^[A-Z]{3,5}$/.test(currency)) return undefined;
+    const operation = parse(query).definitions.find(definition => definition.kind === 'OperationDefinition');
+    return operation?.name?.value === 'StorefrontConfig' ? undefined : currency;
+}

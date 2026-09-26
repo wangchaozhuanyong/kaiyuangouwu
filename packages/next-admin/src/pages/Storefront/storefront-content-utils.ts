@@ -465,6 +465,9 @@ export function storefrontBlockValidation(block: StorefrontContentBlock): string
     if (block.enabled && block.type === 'HERO' && !block.imageAsset && !block.imageUrl?.trim()) {
         return '启用首页主视觉前必须选择图片';
     }
+    if (block.enabled && block.type === 'CORE_CATEGORIES' && !block.items.some(item => item.enabled)) {
+        return '启用核心品类前至少需要一张已启用卡片';
+    }
     if (block.targetType !== 'NONE' && !block.targetValue?.trim()) return '请填写跳转目标';
     const startsAt = block.startsAt ? new Date(block.startsAt).getTime() : null;
     const endsAt = block.endsAt ? new Date(block.endsAt).getTime() : null;

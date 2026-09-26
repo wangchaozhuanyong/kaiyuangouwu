@@ -177,9 +177,7 @@ export function homepageLayoutEntries(blocks: ContentBlock[]): HomepageLayoutEnt
             blocks: matchingBlocks,
             block,
             fixed: true,
-            enabled: matchingBlocks.length
-                ? matchingBlocks.some(candidate => candidate.enabled)
-                : descriptor.defaultEnabled,
+            enabled: matchingBlocks.length ? matchingBlocks.some(candidate => candidate.enabled) : false,
             position: block?.position ?? descriptor.defaultPosition,
             duplicateCount: descriptor.allowsMultipleRecords ? 0 : Math.max(0, matchingBlocks.length - 1),
         } satisfies HomepageLayoutEntry;

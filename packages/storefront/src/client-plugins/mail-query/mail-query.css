@@ -50,6 +50,24 @@
     justify-content: space-between;
 }
 
+@media (max-width: 1023px) {
+    .mail-query-page .top-nav {
+        border-bottom: 0;
+        box-shadow: var(--skin-header-shadow);
+    }
+
+    .mail-query-page .top-nav-inner {
+        height: 52px;
+        padding: 4px var(--experience-page-gutter-mobile);
+        gap: 8px;
+    }
+
+    .mail-query-page .top-nav-inner .nav-back-link {
+        height: 44px;
+        padding-block: 0;
+    }
+}
+
 .mail-query-page .nav-back-link {
     display: inline-flex;
     align-items: center;

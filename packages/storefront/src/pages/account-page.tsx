@@ -21,6 +21,7 @@ import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import accountRefractionImage from '../assets/ui/account-refraction.webp';
+import { AccountOrderCarousel } from '../components/common/account-order-carousel';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { useDesktopLayout } from '../desktop-layout';
 import { compactUiCopy, languageCodeFor } from '../i18n';
@@ -386,7 +387,7 @@ export function AccountPage() {
                     action={isZh ? '全部订单' : 'View all'}
                     onAction={() => navigateTo({ name: 'orders', tab: 'all' })}
                 />
-                <nav className="account-order-shortcuts">
+                <AccountOrderCarousel isZh={isZh}>
                     <AccountShortcut
                         inlineCount={desktop}
                         icon={<WalletCards />}
@@ -435,7 +436,7 @@ export function AccountPage() {
                         count={desktop && !afterSalesQuery.data ? undefined : activeAfterSalesCount}
                         onClick={() => navigateTo({ name: 'orders', tab: 'service' })}
                     />
-                </nav>
+                </AccountOrderCarousel>
             </section>
 
             {desktop && latestOrder ? (

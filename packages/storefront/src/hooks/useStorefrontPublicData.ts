@@ -7,6 +7,7 @@ import {
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
     publicQueryMeta,
+    STOREFRONT_CONFIG_REFRESH_INTERVAL,
     storefrontQueryKeys,
 } from '../query-client';
 import { useProductsByIdsQuery } from '../route-queries';
@@ -47,7 +48,8 @@ export function useStorefrontPublicData({
             'public',
         ],
         queryFn: ({ signal }) => api.storefrontConfig(signal),
-        staleTime: PUBLIC_QUERY_STALE_TIME,
+        staleTime: 0,
+        refetchInterval: STOREFRONT_CONFIG_REFRESH_INTERVAL,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
 
@@ -58,7 +60,8 @@ export function useStorefrontPublicData({
         ],
         queryFn: ({ signal }) => api.storefrontContent(signal),
         enabled: storefrontContextResolved,
-        staleTime: PUBLIC_QUERY_STALE_TIME,
+        staleTime: 0,
+        refetchInterval: STOREFRONT_CONFIG_REFRESH_INTERVAL,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
     });

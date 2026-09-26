@@ -84,6 +84,5 @@ export const orderPageStyles: PageStyleMap = {
     'order-total-label': '[color:var(--text)] [font-size:12px] [font-weight:500]',
     'order-total-summary':
         '[&_b]:[font-family:var(--font-numeric)] [&_b]:[font-variant-numeric:tabular-nums] [&_b]:[letter-spacing:-0.02em] [display:flex] [align-items:baseline] [gap:4px] [font-size:12px] [color:var(--muted)] [min-width:0] [flex-wrap:wrap]',
-    'orders-page':
-        '[--page-surface:var(--paper)] lg:[&>.empty-state]:[width:100%] lg:[&>.empty-state]:[max-width:none] lg:[&>.empty-state]:[margin:24px_auto_0]',
+    'orders-page': '[--page-surface:var(--paper)]',
 };

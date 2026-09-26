@@ -10,7 +10,12 @@ import {
     type StorefrontContentResult,
     type StorefrontLanguageCode,
 } from '../../graphql/storefront.graphql';
-import { decorationDraft, isReadOnlyPreviewQuery, type DecorationDraft } from './storefront-decoration-model';
+import {
+    decorationDraft,
+    isReadOnlyPreviewQuery,
+    previewQueryCurrencyCode,
+    type DecorationDraft,
+} from './storefront-decoration-model';
 import { contentPublicationLabels, contentPublicationStatus } from './storefront-publication';
 
 function ClientFrame({
@@ -136,8 +141,8 @@ function ClientFrame({
                 try {
                     const endpoint = new URL(apiHref);
                     endpoint.searchParams.set('languageCode', languageCode === 'en' ? 'en' : 'zh_Hans');
-                    if (typeof currencyCode === 'string' && /^[A-Z]{3,5}$/.test(currencyCode))
-                        endpoint.searchParams.set('currencyCode', currencyCode);
+                    const queryCurrency = previewQueryCurrencyCode(document, currencyCode);
+                    if (queryCurrency) endpoint.searchParams.set('currencyCode', queryCurrency);
                     const response = await fetch(endpoint, {
                         method: 'POST',
                         credentials: 'omit',

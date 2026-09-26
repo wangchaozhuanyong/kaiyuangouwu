@@ -27,6 +27,7 @@ import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warnin
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { AssetPicker } from './storefront-asset-picker';
+import { verifyContentChannel, verifySavedBlock } from './storefront-save-verification';
 
 const COLLECTIONS = gql`
     query NextAdminBannerCollections($skip: Int!) {
@@ -93,7 +94,7 @@ export function DesktopCategoryBannerPanel() {
                     blocks={query.data.storefrontContentBlocks}
                     disabled={query.loading || Boolean(query.error)}
                     reload={async () => {
-                        await query.refetch();
+                        return verifyContentChannel((await query.refetch()).data, channel.id);
                     }}
                 />
             ) : (
@@ -123,7 +124,7 @@ function BannerEditor({
     channel: StorefrontContentResult['activeChannel'];
     blocks: StorefrontContentBlock[];
     disabled: boolean;
-    reload: () => Promise<void>;
+    reload: () => Promise<StorefrontContentResult>;
 }) {
     const client = useApolloClient();
     const { hasAnyPermission } = useAdminPermissions();
@@ -137,8 +138,14 @@ function BannerEditor({
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
-    const [create] = useMutation(CREATE_STOREFRONT_BLOCK_MUTATION, { fetchPolicy: 'no-cache' });
-    const [update] = useMutation(UPDATE_STOREFRONT_BLOCK_MUTATION, { fetchPolicy: 'no-cache' });
+    const [create] = useMutation<{ createStorefrontContentBlock: StorefrontContentBlock }>(
+        CREATE_STOREFRONT_BLOCK_MUTATION,
+        { fetchPolicy: 'no-cache' },
+    );
+    const [update] = useMutation<{ updateStorefrontContentBlock: StorefrontContentBlock }>(
+        UPDATE_STOREFRONT_BLOCK_MUTATION,
+        { fetchPolicy: 'no-cache' },
+    );
     const [remove] = useMutation<{ deleteStorefrontContentBlock: { result: string; message?: string } }>(
         DELETE_STOREFRONT_BLOCK_MUTATION,
     );
@@ -219,6 +226,9 @@ function BannerEditor({
         setError('');
         setNotice('');
         let persisted = false;
+        let expected: Parameters<typeof verifySavedBlock>[1] | undefined;
+        let savedId: string | undefined;
+        let savedSource: StorefrontContentBlock | undefined;
         try {
             const context = channelRequestContext(channel.token);
             if (draft.mode === 'inherit') {
@@ -237,17 +247,35 @@ function BannerEditor({
                 });
                 if (source) {
                     if (!source.updatedAt) throw new Error('缺少内容版本，请刷新后重试');
-                    await update({
+                    const response = await update({
                         context,
                         variables: {
                             input: { ...input, id: source.id, expectedUpdatedAt: source.updatedAt },
                         },
                     });
-                } else await create({ context, variables: { input } });
+                    expected = { ...input, id: source.id };
+                    savedSource = verifySavedBlock(response.data?.updateStorefrontContentBlock, expected);
+                    savedId = savedSource.id;
+                } else {
+                    const response = await create({ context, variables: { input } });
+                    expected = input;
+                    savedSource = verifySavedBlock(response.data?.createStorefrontContentBlock, expected);
+                    savedId = savedSource.id;
+                }
             }
             persisted = true;
             if (!stillCurrent()) return;
-            await reload();
+            const refreshed = await reload();
+            if (!stillCurrent()) return;
+            if (expected) {
+                verifySavedBlock(
+                    refreshed.storefrontContentBlocks.find(block => block.id === savedId),
+                    { ...expected, id: savedId },
+                    savedSource,
+                );
+            } else if (source && refreshed.storefrontContentBlocks.some(block => block.id === source.id)) {
+                throw new Error('恢复继承后仍读取到原分类横幅，请重新读取确认');
+            }
             if (stillCurrent()) {
                 setEdited(null);
                 setNotice('分类横幅已保存到当前店铺。');
@@ -256,7 +284,7 @@ function BannerEditor({
             if (stillCurrent())
                 setError(
                     persisted
-                        ? '已保存，刷新失败。请重新读取配置后继续编辑。'
+                        ? `保存已提交，但重新读取核对未通过。${toUserFacingError(reason, '请重新读取配置后继续编辑。')}`
                         : toUserFacingError(reason, '分类横幅保存失败，请重试'),
                 );
         } finally {

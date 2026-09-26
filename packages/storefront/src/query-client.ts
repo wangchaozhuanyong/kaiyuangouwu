@@ -3,6 +3,8 @@ import { DehydratedState, QueryClient, QueryKey, dehydrate, hydrate } from '@tan
 import { ShopApiTimeoutError } from './api';
 
 export const PUBLIC_QUERY_STALE_TIME = 60_000;
+// Guests have no authenticated event stream. Refresh visible configuration periodically.
+export const STOREFRONT_CONFIG_REFRESH_INTERVAL = 30_000;
 export const ROUTE_QUERY_STALE_TIME = 60_000;
 export const PUBLIC_QUERY_GC_TIME = 30 * 60_000;
 export const PUBLIC_QUERY_CACHE_MAX_AGE = 5 * 60_000;

@@ -80,7 +80,8 @@ describe('browser compatibility policy', () => {
             /\.detail-options > div button\s*\{[^}]*min-height:\s*(\d+)px;/u,
         );
         expect(Number(detailOptionMinHeight?.[1])).toBeGreaterThanOrEqual(44);
-        expect(stylesheet).toMatch(/\.cart-line-actions > div button\s*\{[^}]*height:\s*44px;/u);
+        const quantityStyles = readStorefrontStylesheet(['./styles/quantity-control.css']);
+        expect(quantityStyles).toMatch(/\.quantity-control > button\s*\{[^}]*height:\s*44px;/u);
     });
 
     it('asks 360 dual-engine browsers to use their WebKit speed mode', () => {

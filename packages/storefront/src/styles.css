@@ -756,6 +756,7 @@ img {
 .home-topbar {
     grid-template-columns: minmax(0, 1fr) max-content;
     column-gap: 10px;
+    padding-inline: var(--experience-page-gutter-mobile);
 }
 
 .home-topbar > .brand {
