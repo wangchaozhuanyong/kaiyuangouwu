@@ -656,6 +656,32 @@ try {
                     }
                 }
                 if (name === 'home' && width < 1024) {
+                    const overlay = await page.locator('.hero').evaluate(hero => {
+                        const image = hero.querySelector('.hero-rich-backdrop');
+                        const copy = hero.querySelector('.hero-rich-content');
+                        const action = hero.querySelector('.hero-rich-cta-btn');
+                        return {
+                            image: image.getBoundingClientRect().toJSON(),
+                            title: hero.querySelector('.hero-rich-title').getBoundingClientRect().toJSON(),
+                            action: action.getBoundingClientRect().toJSON(),
+                            copyBackground: getComputedStyle(copy).backgroundColor,
+                            loaded: image.complete && image.naturalWidth > 0,
+                        };
+                    });
+                    expect(overlay.loaded, `${preset}/${width}/home image decoded`).toBe(true);
+                    expect(overlay.copyBackground, `${preset}/${width}/home no separate copy panel`).toBe(
+                        'rgba(0, 0, 0, 0)',
+                    );
+                    for (const element of [overlay.title, overlay.action]) {
+                        expect(element.left).toBeGreaterThanOrEqual(overlay.image.left);
+                        expect(element.top).toBeGreaterThanOrEqual(overlay.image.top);
+                        expect(element.right).toBeLessThanOrEqual(overlay.image.right + 1);
+                        expect(element.bottom).toBeLessThanOrEqual(overlay.image.bottom - 28);
+                    }
+                    expect(
+                        overlay.action.height,
+                        `${preset}/${width}/home touch target`,
+                    ).toBeGreaterThanOrEqual(44);
                     for (const selector of [
                         '.home-page .notice-strip',
                         '.home-page .hero',

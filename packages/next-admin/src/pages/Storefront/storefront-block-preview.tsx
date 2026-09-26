@@ -22,6 +22,7 @@ import {
 } from '../../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import { supportFaqItems } from '../../../../storefront-content-plugin/src/support-faq';
 import { normalizeStorefrontVisualPreset } from '../../../../storefront-content-plugin/src/visual-presets';
+import heroMobileOverlayCss from '../../../../storefront/src/styles/hero-mobile-overlay.css?inline';
 import { getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -285,7 +286,7 @@ export function HeroBlockPreview({
     const imageRatio =
         imageWidth && imageHeight && imageWidth > 0 && imageHeight > 0 ? imageWidth / imageHeight : 2;
     const desktopHeroHeight = Math.ceil(850 / imageRatio);
-    const frameHeight = viewport === 'desktop' ? desktopHeroHeight + 24 : 235;
+    const frameHeight = viewport === 'desktop' ? desktopHeroHeight + 24 : 284;
     const frameScale = Math.min(1, previewWidth / frameWidth);
     const imageUrl = block.imageAsset?.preview ?? block.imageUrl ?? '';
     const content: HeroSceneData = {
@@ -325,16 +326,16 @@ export function HeroBlockPreview({
             <html lang={language === 'zh_Hans' ? 'zh' : 'en'} data-storefront-preset={presetId}>
                 <head>
                     <meta charSet="utf-8" />
-                    <style>{`*{box-sizing:border-box;border:0 solid}body{margin:0;padding:12px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Roboto,sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;font-feature-settings:'cv02','cv03','cv04','cv11';--font-numeric:-apple-system,BlinkMacSystemFont,'SF Pro Display','PingFang SC','Segoe UI',Roboto,sans-serif}button{font:inherit;padding:0}h1,p{margin:0}img{display:block;max-width:100%;height:auto} ${heroSceneCss}`}</style>
+                    <style>{`*{box-sizing:border-box;border:0 solid}body{margin:0;padding:12px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Roboto,sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;font-feature-settings:'cv02','cv03','cv04','cv11';--font-numeric:-apple-system,BlinkMacSystemFont,'SF Pro Display','PingFang SC','Segoe UI',Roboto,sans-serif}button{font:inherit;padding:0}h1,p{margin:0}img{display:block;max-width:100%;height:auto} ${heroSceneCss} ${heroMobileOverlayCss}`}</style>
                 </head>
                 <body style={style}>
                     <section
-                        className={`hero${viewport === 'desktop' ? ' hero-editor-desktop hero-image-overlay' : ''}`}
+                        className={`hero hero-image-overlay${viewport === 'desktop' ? ' hero-editor-desktop' : ''}`}
                         style={{
                             ...heroThemeStyle(content),
                             margin: 0,
                             width: viewport === 'desktop' ? 850 : '100%',
-                            minHeight: viewport === 'desktop' ? desktopHeroHeight : 195,
+                            minHeight: viewport === 'desktop' ? desktopHeroHeight : undefined,
                             aspectRatio: viewport === 'desktop' ? String(imageRatio) : undefined,
                         }}
                     >

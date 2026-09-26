@@ -245,6 +245,14 @@ function renderHome(overrides: Partial<HomePageProps> = {}, desktop = false) {
 }
 
 describe('HomePage hero carousel', () => {
+    it.each([false, true])('keeps managed copy on its image with desktop=%s', desktop => {
+        const markup = renderHome({ contentBlocks: [heroBlock] }, desktop);
+        expect(markup).toContain('class="hero hero-image-overlay"');
+        expect(markup).toContain('后台配置的首页轮播');
+        expect(markup).toContain('只显示后台配置的内容');
+        expect(markup).toMatch(/class="[^"]*\bhero-rich-backdrop\b[^"]*"/);
+    });
+
     it('pairs the current store icon with a separate store name in the main header', () => {
         const markup = renderHome({
             logoUrl: '/assets/preview/icon.png',

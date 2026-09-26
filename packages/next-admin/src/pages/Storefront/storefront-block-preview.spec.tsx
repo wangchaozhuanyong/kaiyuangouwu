@@ -90,14 +90,17 @@ describe('carousel draft preview', () => {
             const doc = new DOMParser().parseFromString(iframe.srcdoc, 'text/html');
             expect(container.querySelector('[aria-label="首页横幅预览"]')).not.toBeNull();
             expect(container.querySelector('button')).toBeNull();
-            expect(doc.querySelector('.hero-image-overlay') !== null).toBe(viewport === 'desktop');
+            expect(doc.querySelector('.hero-image-overlay')).not.toBeNull();
+            expect(iframe.height).toBe(
+                viewport === 'desktop' ? String(Math.ceil(850 / (1600 / 520)) + 24) : '284',
+            );
             expect(doc.querySelector('img')?.getAttribute('width')).toBe('1600');
             expect(doc.querySelector('img')?.getAttribute('height')).toBe('520');
             expect(iframe.width).toBe(viewport === 'desktop' ? '874' : '390');
         }
     });
 
-    it('keeps the complete image unobscured while draft copy changes', async () => {
+    it('keeps the saved image and on-image draft copy together while copy changes', async () => {
         const { block, container, render } = await preview();
         block.imageAsset = {
             id: 'uploaded-hero',
