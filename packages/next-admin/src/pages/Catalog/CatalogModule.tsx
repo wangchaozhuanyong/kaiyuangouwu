@@ -782,7 +782,14 @@ export function CatalogModule() {
                                             if (variant.customFields?.digitalStockPolicy === 'unlimited') {
                                                 return total;
                                             }
-                                            return total + (variant.stockOnHand ?? 0);
+                                            return (
+                                                total +
+                                                Math.max(
+                                                    0,
+                                                    (variant.stockOnHand ?? 0) -
+                                                        (variant.stockAllocated ?? 0),
+                                                )
+                                            );
                                         }, 0);
 
                                         return (

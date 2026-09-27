@@ -80,11 +80,12 @@ describe('catalog profit access and expense writes', () => {
             Permission.ReadOrder,
             manageCatalogOperationsPermission.Read,
         ]);
+        const join = vi.fn().mockReturnValue(query);
         Object.assign(query, {
             clone: vi.fn().mockReturnValue(query),
             select: vi.fn().mockReturnValue(query),
             getRawOne: vi.fn().mockResolvedValue({ totalItems: 3 }),
-            leftJoinAndSelect: vi.fn().mockReturnValue(query),
+            leftJoinAndSelect: join,
             distinct: vi.fn().mockReturnValue(query),
             orderBy: vi.fn().mockReturnValue(query),
             addOrderBy: vi.fn().mockReturnValue(query),
@@ -118,6 +119,12 @@ describe('catalog profit access and expense writes', () => {
         });
         expect(result.items.map(item => item.code)).toEqual(['ORDER-1', 'ORDER-2', 'ORDER-3']);
         expect(result.summary.settledRevenueMicrounits).toBe(30_000);
+        expect(join.mock.calls.map(([relation]) => relation)).toEqual([
+            'order.lines',
+            'order.shippingLines',
+            'order.payments',
+            'payment.refunds',
+        ]);
         expect(methods.find).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: expect.objectContaining({ channels: { id: 9 } }),

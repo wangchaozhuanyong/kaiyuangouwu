@@ -88,6 +88,17 @@ describe('normalizeOperationFailure', () => {
         expect(formatOperationFailure(failure)).not.toContain('FK_channel_seller');
     });
 
+    it('reports an invalid ORM relation as a server error rather than a missing record', () => {
+        const failure = normalizeOperationFailure(
+            new Error('Relation with property path adjustments in entity was not found.'),
+        );
+        expect(failure).toMatchObject({
+            code: 'SERVER_ERROR',
+            reason: '管理服务处理请求时发生内部异常',
+        });
+        expect(formatOperationFailure(failure)).not.toContain('adjustments');
+    });
+
     it('turns a legacy English zone blocker into a Chinese reason with the exact channel', () => {
         const failure = normalizeOperationFailure(
             new Error(

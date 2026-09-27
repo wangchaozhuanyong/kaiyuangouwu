@@ -16,7 +16,13 @@ afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
 });
 
-async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 'meiyijia' } = {}) {
+async function renderCatalog({
+    empty = false,
+    initialEntry = '/',
+    channelCode = 'meiyijia',
+    digital = false,
+    stockAllocated = 0,
+} = {}) {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const rootCollection = {
         __typename: 'Collection',
@@ -51,7 +57,7 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
                                             slug: 'white-liqun-2',
                                             description: '',
                                             customFields: {
-                                                fulfillmentType: 'physical',
+                                                fulfillmentType: digital ? 'digital' : 'physical',
                                                 refundPolicy: null,
                                                 manualDeliverySlaMinutes: null,
                                             },
@@ -64,14 +70,15 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
                                                     sku: 'WHITE-LIQUN-2',
                                                     price: 19000,
                                                     currencyCode: 'MYR',
-                                                    stockLevel: 'IN_STOCK',
+                                                    stockLevel:
+                                                        stockAllocated >= 105 ? 'OUT_OF_STOCK' : 'IN_STOCK',
                                                     stockOnHand: 105,
-                                                    stockAllocated: 0,
+                                                    stockAllocated,
                                                     enabled: true,
                                                     trackInventory: 'TRUE',
                                                     autoCardAvailableStock: null,
                                                     customFields: {
-                                                        fulfillmentType: 'physical',
+                                                        fulfillmentType: digital ? 'digital' : 'physical',
                                                         digitalDeliveryMode: null,
                                                         digitalStockPolicy: null,
                                                     },
@@ -112,7 +119,12 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
                         });
                     } else if (operation.operationName === 'NextAdminStoreCommerceMode') {
                         observer.next({
-                            data: { myStoreCommerceMode: { mode: 'PHYSICAL_ONLY', conflicts: [] } },
+                            data: {
+                                myStoreCommerceMode: {
+                                    mode: digital ? 'DIGITAL_ONLY' : 'PHYSICAL_ONLY',
+                                    conflicts: [],
+                                },
+                            },
                         });
                     } else if (operation.operationName === 'GetCatalogChannels') {
                         observer.next({
@@ -239,6 +251,26 @@ async function renderCatalog({ empty = false, initialEntry = '/', channelCode = 
 }
 
 describe('CatalogModule category columns', () => {
+    it('shows unallocated virtual stock while physical stock remains on-hand stock', async () => {
+        const digital = await renderCatalog({ digital: true, stockAllocated: 105 });
+        const digitalHeaders = Array.from(digital.querySelectorAll('thead th')).map(cell =>
+            cell.textContent?.trim(),
+        );
+        const digitalCells = Array.from(digital.querySelectorAll('tbody tr:first-child td')).map(cell =>
+            cell.textContent?.trim(),
+        );
+        expect(digitalCells[digitalHeaders.indexOf('虚拟可售库存')]).toBe('0');
+
+        const physical = await renderCatalog({ stockAllocated: 105 });
+        const physicalHeaders = Array.from(physical.querySelectorAll('thead th')).map(cell =>
+            cell.textContent?.trim(),
+        );
+        const physicalCells = Array.from(physical.querySelectorAll('tbody tr:first-child td')).map(cell =>
+            cell.textContent?.trim(),
+        );
+        expect(physicalCells[physicalHeaders.indexOf('在手总库存')]).toBe('105');
+    });
+
     it('keeps the filter toolbar pinned above the scrolling product table', async () => {
         const container = await renderCatalog();
         const toolbar = container.querySelector<HTMLElement>('[data-testid="catalog-filter-toolbar"]');
