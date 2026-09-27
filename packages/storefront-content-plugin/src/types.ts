@@ -74,6 +74,8 @@ export interface UpdateStorefrontContentBlockInput extends Partial<
 > {
     id: ID;
     expectedUpdatedAt: Date;
+    /** Explicitly reviewed replacement/removal of an existing image, never implied by a skin edit. */
+    allowImageReplacement?: boolean;
     translations?: StorefrontContentBlockTranslationInput[] | null;
     items?: StorefrontContentItemInput[] | null;
 }

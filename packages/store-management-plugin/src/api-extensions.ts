@@ -470,6 +470,7 @@ export const adminApiExtensions = gql`
     input UpdateStorefrontPromotionDraftInput {
         contentType: StorefrontPromotionContentType!
         source: String!
+        allowImageReplacement: Boolean
     }
 
     type StoreCouponCampaign {
@@ -1040,7 +1041,7 @@ export const adminApiExtensions = gql`
         resolveStoreUsdtPaymentIntent(input: ResolveStoreUsdtPaymentIntentInput!): StoreUsdtPaymentIntent!
         completeInitialPasswordChange(password: String!): MerchantInitialPasswordStatus!
         saveStorefrontPromotionDraft(input: UpdateStorefrontPromotionDraftInput!): StorefrontPromotionPage!
-        publishStorefrontPromotionPage: StorefrontPromotionPage!
+        publishStorefrontPromotionPage(allowImageReplacement: Boolean): StorefrontPromotionPage!
         resetStorefrontPromotionPage: StorefrontPromotionPage!
         previewStorefrontPromotionPage(input: UpdateStorefrontPromotionDraftInput!): String!
         createStoreCouponCampaign(input: CreateStoreCouponCampaignInput!): StoreCouponCampaign!

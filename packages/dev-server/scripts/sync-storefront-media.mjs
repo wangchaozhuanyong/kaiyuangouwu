@@ -784,12 +784,22 @@ async function bindProductAsset(fetchImpl, apiOrigin, authToken, channel, varian
     return async () => updateProductAssetState(fetchImpl, apiOrigin, authToken, channel, variant, before);
 }
 
-async function bindContentAsset(fetchImpl, apiOrigin, authToken, channel, block, content, assetId) {
+async function bindContentAsset(
+    fetchImpl,
+    apiOrigin,
+    authToken,
+    channel,
+    block,
+    content,
+    assetId,
+    allowImageReplacement,
+) {
     const input = {
         id: block.id,
         expectedUpdatedAt: block.updatedAt,
         imageAssetId: assetId,
         imageUrl: null,
+        ...(allowImageReplacement ? { allowImageReplacement: true } : {}),
     };
     if (content.backgroundColor) input.backgroundColor = content.backgroundColor;
     if (content.textColor) input.textColor = content.textColor;
@@ -815,6 +825,7 @@ async function bindContentAsset(fetchImpl, apiOrigin, authToken, channel, block,
                     expectedUpdatedAt: result.data.updateStorefrontContentBlock.updatedAt,
                     imageAssetId: block.imageAsset?.id ?? null,
                     imageUrl: block.imageUrl ?? null,
+                    allowImageReplacement: true,
                     backgroundColor: block.backgroundColor ?? null,
                     textColor: block.textColor ?? null,
                     settings: block.settings ?? null,
@@ -969,6 +980,7 @@ export async function syncStorefrontMedia({
     apply = false,
     verify = false,
     allowRemote = false,
+    allowImageReplacement = false,
     production = process.env.NODE_ENV === 'production',
     fetchImpl = fetch,
     manifest = storefrontMediaManifest,
@@ -999,6 +1011,38 @@ export async function syncStorefrontMedia({
     for (const channel of selectedChannels) {
         channelStates.push(
             await loadChannelState(fetchImpl, normalizedApiOrigin, session.authToken, channel, prepared),
+        );
+    }
+
+    const existingImageTargets = prepared.flatMap(media =>
+        channelStates.flatMap(state => {
+            const targets = (media.productSkus ?? []).flatMap(sku => {
+                const variant = state.variants.get(sku);
+                return [
+                    { owner: `product:${sku}`, assetId: variant?.product.featuredAsset?.id },
+                    { owner: `variant:${sku}`, assetId: variant?.featuredAsset?.id },
+                ].filter(target => target.assetId != null);
+            });
+            if (media.content) {
+                const block = findContentBlock(state.blocks, media.content);
+                if (block.imageAsset?.id != null || block.imageUrl) {
+                    targets.push({
+                        owner: `content:${block.code}`,
+                        assetId: block.imageAsset?.id ?? block.imageUrl,
+                    });
+                }
+            }
+            return targets.map(target => ({
+                channelCode: state.channel.code,
+                mediaKey: media.key,
+                ...target,
+            }));
+        }),
+    );
+    if (apply && existingImageTargets.length && !allowImageReplacement) {
+        throw new Error(
+            `IMAGE_REPLACEMENT_REQUIRES_REVIEW: 已设置图片的 ${existingImageTargets.length} 个对象可能被覆盖；` +
+                '先核对 dry-run 的 existingImageTargets，再单独使用 --allow-image-replacement。',
         );
     }
 
@@ -1128,6 +1172,7 @@ export async function syncStorefrontMedia({
                                 block,
                                 media.content,
                                 asset.id,
+                                allowImageReplacement,
                             ),
                         );
                     }
@@ -1203,6 +1248,7 @@ export async function syncStorefrontMedia({
         apiOrigin: normalizedApiOrigin,
         shopOrigin: normalizedShopOrigin,
         channelCodes: selectedChannels.map(channel => channel.code),
+        existingImageTargets,
         results,
     };
 }
@@ -1210,6 +1256,7 @@ export async function syncStorefrontMedia({
 export function parseCliArguments(args) {
     const options = {
         allowRemote: false,
+        allowImageReplacement: false,
         apply: false,
         verify: false,
         validate: false,
@@ -1219,6 +1266,7 @@ export function parseCliArguments(args) {
         if (argument === '--apply') options.apply = true;
         else if (argument === '--verify') options.verify = true;
         else if (argument === '--allow-remote') options.allowRemote = true;
+        else if (argument === '--allow-image-replacement') options.allowImageReplacement = true;
         else if (argument === '--validate') options.validate = true;
         else if (argument === '--dry-run') {
             options.apply = false;
@@ -1263,6 +1311,7 @@ if (isMain) {
             apply: options.apply,
             verify: options.verify,
             allowRemote: options.allowRemote,
+            allowImageReplacement: options.allowImageReplacement,
         });
         process.stdout.write(
             `${JSON.stringify(
@@ -1272,6 +1321,7 @@ if (isMain) {
                     apiOrigin: result.apiOrigin,
                     shopOrigin: result.shopOrigin,
                     channelCodes: result.channelCodes,
+                    existingImageTargets: result.existingImageTargets,
                     media: result.results.map(item => ({
                         key: item.key,
                         sourceAssetName: item.sourceAssetName,

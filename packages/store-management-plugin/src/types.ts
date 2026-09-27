@@ -58,6 +58,7 @@ export interface StorefrontPromotionPageView {
 export interface UpdateStorefrontPromotionDraftInput {
     contentType: StorefrontPromotionContentType;
     source: string;
+    allowImageReplacement?: boolean;
 }
 
 export interface StorefrontPromotionPluginOptions {

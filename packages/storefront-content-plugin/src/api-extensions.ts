@@ -204,6 +204,7 @@ export const adminApiExtensions = gql`
     input UpdateStorefrontContentBlockInput {
         id: ID!
         expectedUpdatedAt: DateTime!
+        allowImageReplacement: Boolean
         code: String
         internalName: String
         type: StorefrontContentBlockType

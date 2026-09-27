@@ -17,6 +17,8 @@ Headless e-commerce framework. Lerna monorepo with fixed versioning.
 
 ## Product and Interface Design Principles
 
+- Uploaded storefront images belong to merchant content. Changing skins, spacing, colors, layouts, or copy never authorizes replacing or clearing them. Preserve existing asset bindings in editors, batch operations, and sync scripts. Image replacement requires a separately reviewed list of changes and explicit image confirmation; do not automatically set `allowImageReplacement` for appearance work. This applies to all stores, content items, auth visuals, and promotion-page source.
+
 - Treat each page, modal, or task-focused state as having one visually strongest primary action. Necessary parallel admin operations may remain available, but they must use secondary or tertiary emphasis unless one action is the clear next step.
 - Build container hierarchy primarily with spacing, typography, and semantic surface colors. Reserve borders for controls, selection, keyboard focus, tables, and true reading separation; do not use repeated card outlines as the default layout tool.
 - Product media must use the shared stable aspect-ratio contract. Catalog and product subjects use `contain`; skins may change the surrounding surface and radius, but must not crop the product itself. Only explicit marketing artwork may opt into crop behavior.

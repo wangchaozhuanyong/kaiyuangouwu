@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import { Asset, ConfigService, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { StoreDomain } from '@vendure/store-domain-plugin';
-import { StorefrontContentBlock } from '@vendure/storefront-content-plugin';
+import { sourceImageReplacements, StorefrontContentBlock } from '@vendure/storefront-content-plugin';
 import type { Request } from 'express';
 
 import { ReferralPosterTemplate } from '../entities/referral-poster-template.entity';
@@ -51,6 +51,7 @@ export class StorefrontPromotionService {
         const source = this.htmlService.validateSource(input.contentType, input.source);
         const repository = this.connection.getRepository(ctx, StorefrontPromotionPage);
         let page = await this.findPage(ctx);
+        this.assertImageReplacementReviewed(page?.draftSource ?? '', source, input.allowImageReplacement);
         if (!page) {
             page = new StorefrontPromotionPage({
                 channel: ctx.channel,
@@ -72,17 +73,30 @@ export class StorefrontPromotionService {
         return this.toView(ctx, await repository.save(page));
     }
 
-    async publish(ctx: RequestContext): Promise<StorefrontPromotionPageView> {
+    async publish(ctx: RequestContext, allowImageReplacement = false): Promise<StorefrontPromotionPageView> {
         const page = await this.getPageOrThrow(ctx);
         if (!page.draftSource) {
             throw new UserInputError('请先保存推广页草稿');
         }
+        this.assertImageReplacementReviewed(
+            page.publishedSource ?? '',
+            page.draftSource,
+            allowImageReplacement,
+        );
         page.publishedContentType = page.contentType;
         page.publishedSource = this.htmlService.validateSource(page.contentType, page.draftSource);
         page.isCustomized = true;
         page.publishedVersion += 1;
         page.publishedAt = new Date();
         return this.toView(ctx, await this.connection.getRepository(ctx, StorefrontPromotionPage).save(page));
+    }
+
+    private assertImageReplacementReviewed(previous: string, next: string, reviewed = false): void {
+        if (!reviewed && sourceImageReplacements(previous, next).length > 0) {
+            throw new UserInputError(
+                'IMAGE_REPLACEMENT_REQUIRES_REVIEW: 推广页会替换或清除原有图片，请核对图片变化后单独确认。',
+            );
+        }
     }
 
     async resetToDefault(ctx: RequestContext): Promise<StorefrontPromotionPageView> {

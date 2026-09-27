@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { ExternalLink, RefreshCw, RotateCcw, Save, Sparkles } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
+import { imageReplacements } from '../../../../storefront-content-plugin/src/image-replacement-policy';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
@@ -69,6 +70,7 @@ export function BusinessServicesCopyModule() {
     const [previewLanguage, setPreviewLanguage] = useState<Language>('zh_Hans');
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
+    const [reviewedImageKey, setReviewedImageKey] = useState<string | null>(null);
     const [create, createState] = useMutation<{ createStorefrontContentBlock: StorefrontContentBlock }>(
         CREATE_STOREFRONT_BLOCK_MUTATION,
     );
@@ -76,6 +78,12 @@ export function BusinessServicesCopyModule() {
         UPDATE_STOREFRONT_BLOCK_MUTATION,
     );
     const draft = resolveVersionedDraft(sourceSignature, signature, copyDraft(source), storedDraft);
+    const imageChanges = source && draft ? imageReplacements(source, draft) : [];
+    const imageReviewKey = `${sourceSignature}:${JSON.stringify(imageChanges)}`;
+    const imagesConfirmed = imageChanges.length === 0 || reviewedImageKey === imageReviewKey;
+    /* oxlint-disable react/set-state-in-effect -- A new source version or image selection requires fresh review. */
+    useLayoutEffect(() => setReviewedImageKey(null), [imageReviewKey]);
+    /* oxlint-enable react/set-state-in-effect */
     const linkValue = draft ? businessServicesLinkValue(draft) : '';
     const linkIsValid = businessServicesLinkIsValid(linkValue);
 
@@ -138,7 +146,7 @@ export function BusinessServicesCopyModule() {
         );
 
     const save = async () => {
-        if (!draft || !valid || !canEdit || pending || !channel) return;
+        if (!draft || !valid || !canEdit || pending || !channel || !imagesConfirmed) return;
         const activeToken = getActiveChannelToken();
         const stillCurrent = () => getActiveChannelToken() === activeToken;
         const context = channelRequestContext(channel.token);
@@ -146,7 +154,11 @@ export function BusinessServicesCopyModule() {
         setNotice('');
         setVerifying(true);
         try {
-            const input = storefrontBlockInput({ ...draft, enabled: true }, originalDraft ?? undefined);
+            const input = storefrontBlockInput(
+                { ...draft, enabled: true },
+                originalDraft ?? undefined,
+                imageChanges.length > 0 && imagesConfirmed,
+            );
             let saved: StorefrontContentBlock;
             if (draft.id) {
                 if (!draft.updatedAt) throw new Error('缺少内容版本，请刷新后重试');
@@ -211,7 +223,7 @@ export function BusinessServicesCopyModule() {
                             <button
                                 type="button"
                                 onClick={() => void save()}
-                                disabled={!dirty || !valid || pending}
+                                disabled={!dirty || !valid || pending || !imagesConfirmed}
                                 className={primaryButton}
                             >
                                 <Save className="h-4 w-4" />
@@ -325,6 +337,20 @@ export function BusinessServicesCopyModule() {
                                 <p className="text-xs leading-5 text-slate-500">
                                     图片显示在电脑端卡片右侧，手机端沿用原布局。建议选用主体清晰的横图。
                                 </p>
+                                {imageChanges.length > 0 && (
+                                    <label className="flex items-start gap-2 text-xs leading-5 text-amber-900">
+                                        <input
+                                            type="checkbox"
+                                            checked={imagesConfirmed}
+                                            onChange={event =>
+                                                setReviewedImageKey(
+                                                    event.target.checked ? imageReviewKey : null,
+                                                )
+                                            }
+                                        />
+                                        我确认将当前已设置的商业服务页配图替换或清除
+                                    </label>
+                                )}
                             </fieldset>
                             <div className="space-y-2 rounded-lg border border-slate-200 p-4">
                                 <Field label="跳转链接地址（可选）">

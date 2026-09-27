@@ -49,7 +49,13 @@ export function verifySavedBlock(
         targetValue: saved.items[index].targetValue,
     }));
     for (const [field, expected] of Object.entries(input)) {
-        if (field === 'id' || field === 'translations' || field === 'items') continue;
+        if (
+            field === 'id' ||
+            field === 'translations' ||
+            field === 'items' ||
+            field === 'allowImageReplacement'
+        )
+            continue;
         if (field === 'imageUrl' && input.imageAssetId) continue;
         // The server imports external images into the managed asset library.
         if (
