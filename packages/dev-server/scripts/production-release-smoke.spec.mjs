@@ -199,6 +199,7 @@ test('verifies public browsing and optional promotion navigation without requiri
         'dashboard health',
         'public Shop API',
         'expected Channel',
+        'dashboard preview Shop API',
         'direct storefront',
         'storefront release marker',
         'optional promotion page',
@@ -244,6 +245,30 @@ test('rejects a dashboard origin without its same-origin health route', async ()
         }),
         /Dashboard health endpoint: expected HTTP 200, received 404/u,
     );
+});
+
+test('rejects a broken console preview route even when storefront browsing and both health routes work', async () => {
+    for (const status of [404, 200]) {
+        const fetchImpl = async url => {
+            const requestUrl = new URL(url);
+            if (requestUrl.pathname === '/health') {
+                return new Response('{"status":"ok"}', { status: 200 });
+            }
+            if (requestUrl.origin === 'https://store.example.com' && requestUrl.pathname === '/shop-api') {
+                return new Response('{"data":{"__typename":"Query"}}', { status: 200 });
+            }
+            return new Response('<html>Missing preview route</html>', { status });
+        };
+        await assert.rejects(
+            verifyProductionRelease({
+                storefrontUrl: 'https://store.example.com',
+                dashboardUrl: 'https://console.example.com/dashboard/',
+                fetchImpl,
+                timeoutMs: 1_000,
+            }),
+            /Dashboard preview Shop API: (?:expected HTTP 200, received 404|response was not valid JSON)/u,
+        );
+    }
 });
 
 test('rejects a Shop API that still requires a promotion cookie', async t => {
