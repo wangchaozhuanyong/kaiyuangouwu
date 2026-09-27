@@ -15,7 +15,11 @@ import {
     UserInputError,
 } from '@vendure/core';
 import { totalCoveredByPayments } from '@vendure/core/dist/service/helpers/utils/order-utils';
-import { StorefrontCartService } from '@vendure/storefront-cart-plugin';
+import {
+    controlledTestPaymentScopeMatchesOrder,
+    StorefrontCartService,
+    testPaymentArguments,
+} from '@vendure/storefront-cart-plugin';
 import { randomUUID } from 'node:crypto';
 
 declare module '@vendure/core/dist/service/helpers/payment-state-machine/payment-state' {
@@ -33,22 +37,6 @@ declare module '@vendure/core/dist/service/helpers/order-state-machine/order-sta
 export const CONTROLLED_TEST_PAYMENT_HANDLER = 'controlled-test-payment-handler';
 export const CONTROLLED_TEST_PAYMENT_CHECKER = 'controlled-test-payment-checker';
 export const CONTROLLED_TEST_PAYMENT_PREFIX = 'controlled-test-payment-';
-
-export function testPaymentArguments(method: PaymentMethod) {
-    return Object.fromEntries(
-        method.handler.args.map(arg => {
-            // Next Admin serializes text arguments as JSON strings; the standard API also accepts raw text.
-            let value = String(arg.value);
-            try {
-                const parsed: unknown = JSON.parse(value);
-                if (typeof parsed === 'string') value = parsed;
-            } catch {
-                /* Raw configurable-operation text. */
-            }
-            return [arg.name, value];
-        }),
-    );
-}
 
 /** Simulate the server-calculated payment while using the normal paid-order workflow. */
 export function createControlledTestPayment(enabled: boolean) {
@@ -99,14 +87,14 @@ export function createControlledTestPayment(enabled: boolean) {
             currentMethod.checker?.code !== CONTROLLED_TEST_PAYMENT_CHECKER
         )
             return;
-        // Shop API applies the normal session/order ownership rules. No test-customer whitelist is required.
         // A joined locking read avoids stale payment totals under MySQL REPEATABLE READ.
         const order = await connection.findOneInChannel(ctx, Order, orderId, ctx.channelId, {
-            relations: ['payments', 'payments.refunds'],
+            relations: ['payments', 'payments.refunds', 'lines', 'lines.productVariant'],
             relationLoadStrategy: 'join',
             lock,
         });
         if (!order?.active || order.state !== 'ArrangingPayment') return;
+        if (!controlledTestPaymentScopeMatchesOrder(args, order)) return;
         const amount = order.totalWithTax - totalCoveredByPayments(order);
         if (!Number.isSafeInteger(amount) || amount < 0) return;
         return order;
@@ -117,7 +105,7 @@ export function createControlledTestPayment(enabled: boolean) {
         description: [
             {
                 languageCode: LanguageCode.zh_Hans,
-                value: '开启后所有客户均可按正常结账流程使用测试支付',
+                value: '仅对指定测试商品和订单备注开放；订单建立后可再锁定订单号',
             },
         ],
         args: {},
@@ -138,6 +126,23 @@ export function createControlledTestPayment(enabled: boolean) {
                 type: 'string',
                 required: true,
                 label: [{ languageCode: LanguageCode.zh_Hans, value: '本店 Channel ID' }],
+            },
+            orderCode: {
+                type: 'string',
+                required: false,
+                label: [
+                    { languageCode: LanguageCode.zh_Hans, value: '仅允许模拟支付的订单号（建立订单后填写）' },
+                ],
+            },
+            qaSku: {
+                type: 'string',
+                required: false,
+                label: [{ languageCode: LanguageCode.zh_Hans, value: '本次测试商品 SKU' }],
+            },
+            qaMarker: {
+                type: 'string',
+                required: false,
+                label: [{ languageCode: LanguageCode.zh_Hans, value: '本次订单备注（完整一致）' }],
             },
         },
         init,

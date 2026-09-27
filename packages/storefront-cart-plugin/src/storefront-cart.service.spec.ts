@@ -4,7 +4,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StorefrontCartLine } from './entities/storefront-cart-line.entity';
 import { StorefrontCart } from './entities/storefront-cart.entity';
-import { isRegisteredProductionPaymentMethod, StorefrontCartService } from './storefront-cart.service';
+import {
+    controlledTestPaymentScopeMatchesOrder,
+    isRegisteredProductionPaymentMethod,
+    StorefrontCartService,
+    testPaymentArguments,
+} from './storefront-cart.service';
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -218,6 +223,34 @@ describe('production payment readiness', () => {
                 new Set(['referral-balance-payment']),
             ),
         ).toBe(false);
+    });
+
+    it('admits a controlled QA checkout only when its item and note match', () => {
+        const paymentMethod = {
+            handler: {
+                args: [
+                    { name: 'channelId', value: '"2"' },
+                    { name: 'qaSku', value: '"QA-CHECKOUT"' },
+                    { name: 'qaMarker', value: 'QA marker' },
+                ],
+            },
+        } as any;
+        const args = testPaymentArguments(paymentMethod);
+        const order = {
+            code: 'ORDER-1',
+            customFields: { customerNote: 'QA marker' },
+            lines: [{ quantity: 1, productVariant: { sku: 'QA-CHECKOUT' } }],
+        } as any;
+        expect(args.channelId).toBe('2');
+        expect(controlledTestPaymentScopeMatchesOrder(args, order)).toBe(true);
+        expect(controlledTestPaymentScopeMatchesOrder({}, order)).toBe(false);
+        order.customFields.customerNote = 'another order';
+        expect(controlledTestPaymentScopeMatchesOrder(args, order)).toBe(false);
+        order.customFields.customerNote = 'QA marker';
+        order.lines[0].productVariant.sku = 'OTHER';
+        expect(controlledTestPaymentScopeMatchesOrder(args, order)).toBe(false);
+        order.lines[0].productVariant.sku = 'QA-CHECKOUT';
+        expect(controlledTestPaymentScopeMatchesOrder({ ...args, orderCode: 'ORDER-2' }, order)).toBe(false);
     });
 });
 
