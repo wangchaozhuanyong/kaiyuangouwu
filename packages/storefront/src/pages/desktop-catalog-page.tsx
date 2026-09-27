@@ -1,7 +1,6 @@
 import { Search, SlidersHorizontal, WifiOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { resolveDesktopCategoryBanner } from '../../../storefront-content-plugin/src/desktop-category-banner';
 import { ShopApi } from '../api';
 import { matchesCatalogFilters } from '../api/helpers';
 import { catalogInputFromRoute, catalogRouteWithChanges } from '../catalog-route-query';
@@ -13,7 +12,6 @@ import { ProductCard } from '../components/common/product-card';
 import { useCategoryPagination } from '../hooks/useCategoryPagination';
 import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
-import { SafeImage } from '../safe-image';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { RouteState } from '../storefront-router';
 import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
@@ -65,12 +63,6 @@ export function DesktopCatalogPage() {
           : '';
     const activeCollection = collections.find(collection => collection.id === route.collectionId);
     const activeChild = activeCollection?.children?.find(collection => collection.id === route.childId);
-    const banner = resolveDesktopCategoryBanner(
-        contentBlocks,
-        activeChild?.id ?? activeCollection?.id,
-        activeChild ? activeCollection?.id : null,
-    );
-    const bannerImage = banner?.settings.mode === 'image' ? banner.block.imageUrl : null;
     const [filterOpen, setFilterOpen] = useState(false);
     const appliedFilters: CatalogFilterValues = {
         fulfillment: route.fulfillment ?? 'all',
@@ -134,51 +126,15 @@ export function DesktopCatalogPage() {
                 </section>
             </aside>
             <div className="desktop-catalog-workspace">
-                <header
-                    className={`desktop-catalog-hero${bannerImage ? ` has-image is-${banner?.settings.layout ?? 'side'}` : ''}`}
-                    data-focal={banner?.settings.focal ?? 'center'}
-                >
-                    {bannerImage && banner?.settings.layout === 'background' ? (
-                        <SafeImage
-                            frameClassName="desktop-catalog-hero-background"
-                            src={bannerImage}
-                            alt=""
-                            imageKind="hero"
-                            showFallbackIcon={false}
-                        />
-                    ) : null}
-                    <div className="desktop-catalog-hero-copy">
-                        <span>{isZh ? '商品与服务' : 'Products and services'}</span>
-                        <h1>
+                <div className="desktop-catalog-toolbar">
+                    <div className="section-heading-inline desktop-catalog-heading">
+                        <h1 className="desktop-catalog-label">
                             {input.term
                                 ? title
                                 : activeChild?.name ||
                                   activeCollection?.name ||
                                   (isZh ? '全部商品' : 'All products')}
                         </h1>
-                        {activeChild?.description || activeCollection?.description ? (
-                            <p>{activeChild?.description || activeCollection?.description}</p>
-                        ) : null}
-                    </div>
-                    {bannerImage && banner?.settings.layout === 'side' ? (
-                        <SafeImage
-                            frameClassName="desktop-catalog-hero-side-image"
-                            src={bannerImage}
-                            alt=""
-                            imageKind="hero"
-                            showFallbackIcon={false}
-                        />
-                    ) : null}
-                </header>
-                <div className="desktop-catalog-toolbar">
-                    <div className="section-heading-inline desktop-catalog-heading">
-                        <strong className="desktop-catalog-label">
-                            {input.term
-                                ? title
-                                : activeChild?.name ||
-                                  activeCollection?.name ||
-                                  (isZh ? '全部商品' : 'All products')}
-                        </strong>
                         <span className="desktop-result-count" role="status">
                             {query.isPending
                                 ? isZh
@@ -201,7 +157,7 @@ export function DesktopCatalogPage() {
                         <nav className="desktop-sort" aria-label={isZh ? '商品排序' : 'Sort products'}>
                             {(
                                 [
-                                    ['recommended', isZh ? '综合' : 'Recommended'],
+                                    ['recommended', isZh ? '全部' : 'All'],
                                     ['sales', isZh ? '销量' : 'Best sellers'],
                                     ['newest', isZh ? '最新' : 'Newest'],
                                     ['price-asc', isZh ? '价格从低到高' : 'Price: low to high'],
@@ -211,8 +167,22 @@ export function DesktopCatalogPage() {
                                 <button
                                     key={value}
                                     type="button"
-                                    aria-pressed={input.sort === value}
-                                    onClick={() => update({ sort: value })}
+                                    aria-pressed={
+                                        input.sort === value && (value !== 'recommended' || !filtered)
+                                    }
+                                    onClick={() =>
+                                        update(
+                                            value === 'recommended'
+                                                ? {
+                                                      sort: value,
+                                                      fulfillment: 'all',
+                                                      inStockOnly: false,
+                                                      minPrice: undefined,
+                                                      maxPrice: undefined,
+                                                  }
+                                                : { sort: value },
+                                        )
+                                    }
                                 >
                                     {label}
                                 </button>

@@ -9,9 +9,11 @@ import { CategoryPage, categoryFilterActionLabel } from './pages/category-page';
 import { storefrontQueryKeys } from './query-client';
 import { CategoryPageContext } from './storefront-page-contexts';
 
+const navigate = vi.hoisted(() => vi.fn());
+
 vi.mock('@tanstack/react-router', async original => ({
     ...(await original<any>()),
-    useNavigate: () => () => undefined,
+    useNavigate: () => navigate,
 }));
 vi.mock('./components/common/product-row', () => ({ ProductRow: () => null }));
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -75,7 +77,25 @@ it.each([
             collectionId: undefined,
             sort: 'recommended',
         });
-        expect(container.querySelectorAll('.primary-category-label')[1]?.textContent).toBe(name);
+        expect(container.querySelectorAll('.primary-category-label')[0]?.textContent).toBe(name);
+        expect(container.querySelectorAll('.primary-categories button')).toHaveLength(1);
+        const trigger = container.querySelector<HTMLButtonElement>('.primary-categories-all');
+        if (!trigger) throw new Error('Missing category dropdown trigger');
+        act(() => trigger.click());
+        expect(trigger.getAttribute('aria-expanded')).toBe('true');
+        expect(container.querySelector('.all-primary-category-grid')?.textContent).toContain(name);
+        // The expanded grid replaces the compact navigation visually and for keyboard users.
+        const strip = container.querySelector('.primary-category-strip');
+        expect(strip?.getAttribute('aria-hidden')).toBe('true');
+        expect(strip?.hasAttribute('inert')).toBe(true);
+        expect(container.querySelectorAll('.all-primary-category-grid button')).toHaveLength(1);
+        act(() => {
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        });
+        expect(trigger.getAttribute('aria-expanded')).toBe('false');
+        expect(container.querySelector('.all-primary-category-grid')).toBeNull();
+        expect(strip?.hasAttribute('aria-hidden')).toBe(false);
+        expect(strip?.hasAttribute('inert')).toBe(false);
     } finally {
         act(() => root.unmount());
         client.clear();
@@ -117,11 +137,11 @@ it('uses the server catalog total in the filter confirmation action', async () =
                                 language: 'en',
                                 activeCollectionId: 'collection-1',
                                 activeChildId: 'collection-1',
-                                sortMode: 'recommended',
-                                fulfillmentFilter: 'all',
-                                inStockOnly: false,
-                                minimumPrice: '',
-                                maximumPrice: '',
+                                sortMode: 'sales',
+                                fulfillmentFilter: 'physical',
+                                inStockOnly: true,
+                                minimumPrice: '10',
+                                maximumPrice: '100',
                                 onCollectionChange: noop,
                                 onChildChange: noop,
                                 onSortChange: noop,
@@ -137,6 +157,22 @@ it('uses the server catalog total in the filter confirmation action', async () =
             );
             await new Promise(resolve => setTimeout(resolve, 20));
         });
+        const allButton = container.querySelector<HTMLButtonElement>('.sort-bar button');
+        if (!allButton) throw new Error('Missing All control');
+        expect(allButton.textContent).toBe('All');
+        act(() => allButton.click());
+        expect(navigate).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                to: '/category',
+                search: expect.objectContaining({ collectionId: 'collection-1', childId: 'collection-1' }),
+            }),
+        );
+        const search = navigate.mock.calls.at(-1)?.[0].search;
+        expect(search.sort).toBe('recommended');
+        expect(search.fulfillment).toBe('all');
+        expect(search.inStockOnly).toBe(false);
+        expect(search.minPrice).toBeUndefined();
+        expect(search.maxPrice).toBeUndefined();
         const filterButton = Array.from(container.querySelectorAll('button')).find(
             button => button.textContent?.trim() === 'Filter',
         );

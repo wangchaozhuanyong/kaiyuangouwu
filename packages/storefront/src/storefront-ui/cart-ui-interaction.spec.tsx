@@ -165,6 +165,78 @@ describe('CouponSheet interactions', () => {
             expect(document.body.textContent).toContain('订单状态变化，请刷新');
         },
     );
+    it('shows a plain product description without inventing details for old or empty cart data', () => {
+        for (const description of [
+            '<p>轻巧杯身，<strong>便于携带</strong>，适合日常使用</p>',
+            '',
+            undefined,
+        ]) {
+            act(() => {
+                root.render(
+                    <DesktopLayoutContext.Provider value={true}>
+                        <CartGroup
+                            title="商品"
+                            hint=""
+                            lines={[
+                                {
+                                    id: 'line-description',
+                                    quantity: 2,
+                                    selected: true,
+                                    available: true,
+                                    productVariant: {
+                                        id: 'variant-description',
+                                        name: '随行杯',
+                                        sku: 'CUP',
+                                        priceWithTax: 4500,
+                                        currencyCode: 'MYR',
+                                        saleableStockLevel: 10,
+                                        featuredAsset: null,
+                                        product: {
+                                            id: 'product-description',
+                                            name: '随行杯',
+                                            description,
+                                            featuredAsset: null,
+                                        },
+                                        customFields: { fulfillmentType: 'physical' },
+                                    },
+                                },
+                            ]}
+                            market={{
+                                code: 'my',
+                                defaultLanguageCode: 'zh_Hans',
+                                currencyCode: 'MYR',
+                                countryCode: 'MY',
+                                locale: 'zh-CN',
+                                label: 'Malaysia',
+                            }}
+                            locale="zh-CN"
+                            language="zh"
+                            loading={false}
+                            favoriteProductIds={[]}
+                            pinnedLineIds={[]}
+                            openActionLineId={null}
+                            onSelect={vi.fn()}
+                            onSelectAll={vi.fn()}
+                            onQuantity={vi.fn()}
+                            onRemove={vi.fn()}
+                            onFavorite={vi.fn()}
+                            onPin={vi.fn()}
+                            onShare={vi.fn().mockResolvedValue(undefined)}
+                            onActionOpenChange={vi.fn()}
+                        />
+                    </DesktopLayoutContext.Provider>,
+                );
+            });
+            const summary = container.querySelector('.desktop-cart-product-description');
+            if (description) {
+                expect(summary?.textContent).toBe('轻巧杯身， 便于携带 ，适合日常使用');
+                expect(summary?.children).toHaveLength(0);
+            } else {
+                expect(summary).toBeNull();
+            }
+        }
+    });
+
     it.each([false, true])(
         'preserves stock recovery, selection and quantity limits in desktop=%s',
         async desktop => {

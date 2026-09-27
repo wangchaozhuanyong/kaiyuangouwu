@@ -11,14 +11,12 @@ export interface LegacyRouteCapability {
     status: 'MIGRATED';
 }
 
+// Approved by the user on 2026-09-27: remove the desktop category banner and its editor.
+// Historical content remains excluded from homepage modules; no stored data is deleted.
+export const DEPRECATED_LEGACY_ROUTES = ['/desktop-category-banners'] as const;
+
 export const LEGACY_ROUTE_CAPABILITIES: LegacyRouteCapability[] = [
     { id: 'after-sales', legacyPath: '/after-sales', target: '/sales/after-sales', status: 'MIGRATED' },
-    {
-        id: 'desktop-category-banners',
-        legacyPath: '/desktop-category-banners',
-        target: '/storefront/decoration?panel=desktop-category-banners',
-        status: 'MIGRATED',
-    },
     {
         id: 'auth-visuals',
         legacyPath: '/auth-visuals',

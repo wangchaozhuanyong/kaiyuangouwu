@@ -2,6 +2,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { storefrontVisualPresets } from '../../storefront-content-plugin/src/visual-presets';
+
 function stylesheet(relativePath: string): string {
     return readFileSync(path.join(__dirname, relativePath), 'utf8');
 }
@@ -43,6 +45,24 @@ describe('storefront skin system', () => {
                         if (
                             selector.trim() === '.detail-quantity-controls output' &&
                             border[1] === 'inline'
+                        ) {
+                            continue;
+                        }
+                        // User-requested reading separators between unframed product rows.
+                        if (
+                            file === path.join(__dirname, 'styles/product-row.css') &&
+                            selector.trim() === '.product-row + .product-row' &&
+                            border[1] === 'top' &&
+                            border[2].trim() === '1px solid var(--skin-divider)'
+                        ) {
+                            continue;
+                        }
+                        // Approved compact cart rows need one shallow reading separator.
+                        if (
+                            file === path.join(__dirname, 'styles/desktop-pages.css') &&
+                            selector.trim() === '.desktop-cart-row + .desktop-cart-row' &&
+                            border[1] === 'top' &&
+                            border[2].trim() === '1px solid var(--line-subtle)'
                         ) {
                             continue;
                         }
@@ -136,11 +156,14 @@ describe('storefront skin system', () => {
         const source = stylesheet('./styles/visual-presets.css').replace(/\/\*[\s\S]*?\*\//g, '');
         expect(source).not.toMatch(/@|!important|--color-/);
         const rules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
-        expect(rules).toHaveLength(3);
-        for (const [, selector, body] of rules) {
-            expect(selector.trim()).toMatch(
-                /^html\[data-storefront-preset(?:='(?:modern-oriental|neo-minimalist)')?\]$/,
-            );
+        const expectedSelectors = [
+            'html[data-storefront-preset]',
+            ...storefrontVisualPresets
+                .filter(preset => preset.id !== 'classic')
+                .map(preset => `html[data-storefront-preset='${preset.id}']`),
+        ];
+        expect(rules.map(([, selector]) => selector.trim()).sort()).toEqual(expectedSelectors.sort());
+        for (const [, , body] of rules) {
             for (const declaration of body
                 .split(';')
                 .map(value => value.trim())
@@ -206,7 +229,7 @@ describe('storefront skin system', () => {
         );
     });
 
-    it('keeps cart surfaces in their component owner and desktop merchandise rows borderless', () => {
+    it('keeps cart surfaces in their owner with shallow separators only between merchandise rows', () => {
         const layout = stylesheet('./styles/desktop-layout.css');
         const skin = stylesheet('./styles/visual-presets.css').split('@media (max-width: 1023px)')[0];
         expect(layout).not.toMatch(/\.cart-group\s*[,\{]/);
@@ -222,8 +245,8 @@ describe('storefront skin system', () => {
         expect(desktopRow).toContain('border-top: 0;');
         expect(desktopRow).toContain('border-radius: 0;');
         expect(desktopRow).toContain('box-shadow: none;');
-        expect(stylesheet('./styles/desktop-pages.css')).not.toMatch(
-            /\.desktop-cart-row\s*\+\s*\.desktop-cart-row\s*\{[^}]*border(?:-top)?:/,
+        expect(stylesheet('./styles/desktop-pages.css')).toMatch(
+            /\.desktop-cart-row\s*\+\s*\.desktop-cart-row\s*\{[^}]*border-top:\s*1px solid var\(--line-subtle\);/,
         );
         const accountAssets = stylesheet('./styles/account-identity.css').match(
             /\.account-identity-assets\s*\{([^}]*)\}/,
@@ -321,10 +344,13 @@ describe('storefront skin system', () => {
         expect(card).toContain('aspect-ratio: var(--product-media-ratio)');
         expect(card).toContain('object-fit: contain');
         expect(card).toMatch(/\.product-card-media\s*\{[^}]*border-radius:\s*0;/);
-        expect(card).toContain('padding: var(--product-card-inset)');
+        expect(card).toMatch(/\.product-card\s*\{[^}]*overflow:\s*hidden;[^}]*padding:\s*0;/);
+        expect(card).toMatch(
+            /\.product-card-content\s*\{[^}]*padding:\s*0 var\(--product-card-inset\) var\(--product-card-inset\);/,
+        );
     });
 
-    it('gives product rows one owner and preserves square art without decorative rules', () => {
+    it('gives transparent product rows one owner and preserves square art with reading separators', () => {
         for (const file of [
             'home-showcase',
             'ai-product-covers',
@@ -337,8 +363,9 @@ describe('storefront skin system', () => {
         const row = stylesheet('./styles/product-row.css');
         expect(row).toContain('aspect-ratio: var(--product-media-ratio)');
         expect(row).toContain('object-fit: contain');
+        expect(row).toMatch(/\.product-row\s*\{[^}]*background:\s*transparent;/);
         expect(row).toMatch(
-            /\.product-row\s*\{[^}]*padding:\s*12px;[^}]*overflow:\s*visible;[^}]*border:\s*0;[^}]*box-shadow:\s*none;/,
+            /\.product-row\s*\{[^}]*padding:\s*0;[^}]*overflow:\s*hidden;[^}]*border:\s*0;[^}]*box-shadow:\s*none;/,
         );
         expect(row).not.toMatch(/border-bottom|#[0-9a-f]{3,8}\b|!important/);
         expect(row).toMatch(/\.product-row-name\s*\{[^}]*overflow-wrap:\s*anywhere;/);

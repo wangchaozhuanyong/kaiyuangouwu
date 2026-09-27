@@ -16,8 +16,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -39,7 +38,6 @@ import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { DesktopCategoryBannerPanel } from './DesktopCategoryBannerPanel';
 import {
     StorefrontAuthSettingsPanel,
     type StorefrontGooglePlatformSettingsInput,
@@ -77,8 +75,6 @@ type ContentActionScope = {
 };
 
 export function StorefrontModule() {
-    const location = useLocation();
-    const categoryBannerRef = useRef<HTMLDivElement>(null);
     const { hasAnyPermission } = useAdminPermissions();
     const canCreate = hasAnyPermission(['CreateStorefrontContent']);
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
@@ -86,26 +82,7 @@ export function StorefrontModule() {
     const canEditPlatformGoogle = hasAnyPermission(['SuperAdmin']);
     const [previewLanguage, setPreviewLanguage] = useState<StorefrontLanguageCode>('zh_Hans');
     const [carouselOpen, setCarouselOpen] = useState(false);
-    const [settingsOpen, setSettingsOpen] = useState(
-        new URLSearchParams(location.search).get('panel') === 'desktop-category-banners',
-    );
-    useEffect(() => {
-        if (new URLSearchParams(location.search).get('panel') === 'desktop-category-banners') {
-            setSettingsOpen(true);
-        }
-    }, [location.search]);
-    useEffect(() => {
-        if (
-            !settingsOpen ||
-            new URLSearchParams(location.search).get('panel') !== 'desktop-category-banners'
-        ) {
-            return;
-        }
-        const frame = requestAnimationFrame(() => {
-            categoryBannerRef.current?.scrollIntoView({ block: 'start' });
-        });
-        return () => cancelAnimationFrame(frame);
-    }, [location.search, settingsOpen]);
+    const [settingsOpen, setSettingsOpen] = useState(false);
     const [actionPending, setActionPending] = useState(false);
     const [editing, setEditing] = useState<StorefrontContentBlock | null>(null);
     const [deleting, setDeleting] = useState<StorefrontContentBlock | null>(null);
@@ -621,9 +598,6 @@ export function StorefrontModule() {
                     />
                 ) : null}
                 <StorefrontVisualPresetPanel />
-                <div ref={categoryBannerRef}>
-                    <DesktopCategoryBannerPanel />
-                </div>
             </StorefrontSettingsDrawer>
 
             {carouselOpen && (

@@ -8,7 +8,7 @@ import {
     SlidersHorizontal,
     WifiOff,
 } from 'lucide-react';
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 // eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
 import type { RouteState, SortMode } from '../storefront-router';
 
@@ -109,10 +109,20 @@ export function CategoryPage() {
     const [draftMinimumPrice, setDraftMinimumPrice] = useState(minimumPriceInput);
     const [draftMaximumPrice, setDraftMaximumPrice] = useState(maximumPriceInput);
     const subcatScrollerRef = useRef<HTMLDivElement>(null);
+    const primaryCategoriesRef = useRef<HTMLElement>(null);
     const primaryCollections = collections;
-    const primaryCategoryStripStyle = {
-        '--primary-category-visible-slots': Math.min(primaryCollections.length + 1, 4),
-    } as CSSProperties;
+    useEffect(() => {
+        const scroller = primaryCategoriesRef.current;
+        const item = scroller?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]');
+        if (!scroller || !item || scroller.scrollWidth <= scroller.clientWidth) return;
+        const frame = requestAnimationFrame(() => {
+            scroller.scrollTo({
+                left: centeredHorizontalScrollLeft(scroller, item),
+                behavior: 'auto',
+            });
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [activeCollectionId, primaryCollections.length]);
     const primary =
         activeCollectionId === 'all'
             ? undefined
@@ -195,16 +205,30 @@ export function CategoryPage() {
               : '';
 
     const allCategoriesRef = useRef<HTMLDivElement | null>(null);
+    const allCategoriesTriggerRef = useRef<HTMLButtonElement | null>(null);
+    const allCategoriesGridRef = useRef<HTMLElement | null>(null);
+    const closeAllCategories = useCallback(() => {
+        setAllCategoriesOpen(false);
+        // Restore focus after the compact row is visible and interactive again.
+        requestAnimationFrame(() => allCategoriesTriggerRef.current?.focus({ preventScroll: true }));
+    }, []);
 
     useEffect(() => {
         if (!allCategoriesOpen) return;
+        const grid = allCategoriesGridRef.current;
+        const selected =
+            grid?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]') ??
+            grid?.querySelector<HTMLButtonElement>('button');
+        selected?.focus({ preventScroll: true });
         const handleClickOutside = (event: MouseEvent | TouchEvent) => {
             if (allCategoriesRef.current && !allCategoriesRef.current.contains(event.target as Node)) {
                 setAllCategoriesOpen(false);
             }
         };
         const closeOnEscape = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') setAllCategoriesOpen(false);
+            if (event.key === 'Escape') {
+                closeAllCategories();
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         document.addEventListener('touchstart', handleClickOutside, { passive: true });
@@ -214,7 +238,7 @@ export function CategoryPage() {
             document.removeEventListener('touchstart', handleClickOutside);
             document.removeEventListener('keydown', closeOnEscape);
         };
-    }, [allCategoriesOpen]);
+    }, [allCategoriesOpen, closeAllCategories]);
 
     const draftMatchesAppliedFilters =
         draftType === fulfillmentFilter &&
@@ -245,9 +269,6 @@ export function CategoryPage() {
                         <span className="search-trigger-placeholder">
                             {isZh ? '搜索商品、品牌或分类' : 'Search products, brands, or categories'}
                         </span>
-                        <span className="search-trigger-action" aria-hidden="true">
-                            {isZh ? '搜索' : 'Search'}
-                        </span>
                     </button>
                 </header>
 
@@ -264,134 +285,78 @@ export function CategoryPage() {
                     className={`primary-category-switcher ${allCategoriesOpen ? 'is-expanded' : ''}`}
                     aria-label={isZh ? '商品分类切换' : 'Category switcher'}
                 >
-                    {!allCategoriesOpen ? (
-                        <div className="primary-category-strip" style={primaryCategoryStripStyle}>
-                            <nav
-                                className="primary-categories"
-                                aria-label={isZh ? '一级分类' : 'Main categories'}
-                            >
-                                <button
-                                    type="button"
-                                    title={isZh ? '全部商品' : 'All products'}
-                                    aria-label={isZh ? '全部商品' : 'All products'}
-                                    className={activeCollectionId === 'all' ? 'is-active' : undefined}
-                                    aria-pressed={activeCollectionId === 'all'}
-                                    onClick={event => {
-                                        onCollectionChange('all', 'all');
-                                        const item = event.currentTarget;
-                                        const scroller = item.parentElement;
-                                        if (!scroller) return;
-                                        requestAnimationFrame(() => {
-                                            scroller.scrollTo({
-                                                left: centeredHorizontalScrollLeft(scroller, item),
-                                                behavior: 'smooth',
-                                            });
-                                        });
-                                    }}
-                                >
-                                    <span className="primary-category-image">
-                                        <span className="primary-category-placeholder">
-                                            <LayoutGrid aria-hidden="true" />
+                    <div
+                        className="primary-category-strip"
+                        aria-hidden={allCategoriesOpen || undefined}
+                        inert={allCategoriesOpen}
+                    >
+                        <nav
+                            ref={primaryCategoriesRef}
+                            className="primary-categories"
+                            aria-label={isZh ? '一级分类' : 'Main categories'}
+                        >
+                            {primaryCollections.map((collection, index) => {
+                                const image = primaryCollectionImage(collection);
+                                return (
+                                    <button
+                                        type="button"
+                                        key={collection.id}
+                                        title={collection.name}
+                                        aria-label={collection.name}
+                                        className={
+                                            collection.id === activeCollectionId ? 'is-active' : undefined
+                                        }
+                                        aria-pressed={collection.id === activeCollectionId}
+                                        onClick={() => {
+                                            onCollectionChange(
+                                                collection.id,
+                                                collection.children?.[0]?.id ?? collection.id,
+                                            );
+                                        }}
+                                    >
+                                        <span className="primary-category-image">
+                                            {image ? (
+                                                <SafeImage
+                                                    src={image}
+                                                    alt=""
+                                                    imageKind="thumbnail"
+                                                    loading={index < 6 ? 'eager' : 'lazy'}
+                                                    fetchPriority={index < 2 ? 'high' : 'auto'}
+                                                    showFallbackIcon={false}
+                                                />
+                                            ) : (
+                                                <span className="primary-category-placeholder">
+                                                    <LayoutGrid aria-hidden="true" />
+                                                </span>
+                                            )}
                                         </span>
-                                    </span>
-                                    <span className="primary-category-label">{isZh ? '全部' : 'All'}</span>
-                                </button>
-                                {primaryCollections.map((collection, index) => {
-                                    const image = primaryCollectionImage(collection);
-                                    return (
-                                        <button
-                                            type="button"
-                                            key={collection.id}
-                                            title={collection.name}
-                                            aria-label={collection.name}
-                                            className={
-                                                collection.id === activeCollectionId ? 'is-active' : undefined
-                                            }
-                                            aria-pressed={collection.id === activeCollectionId}
-                                            onClick={event => {
-                                                onCollectionChange(
-                                                    collection.id,
-                                                    collection.children?.[0]?.id ?? collection.id,
-                                                );
-                                                const item = event.currentTarget;
-                                                const scroller = item.parentElement;
-                                                if (!scroller) return;
-                                                requestAnimationFrame(() => {
-                                                    scroller.scrollTo({
-                                                        left: centeredHorizontalScrollLeft(scroller, item),
-                                                        behavior: 'smooth',
-                                                    });
-                                                });
-                                            }}
-                                        >
-                                            <span className="primary-category-image">
-                                                {image ? (
-                                                    <SafeImage
-                                                        src={image}
-                                                        alt=""
-                                                        imageKind="thumbnail"
-                                                        loading={index < 6 ? 'eager' : 'lazy'}
-                                                        fetchPriority={index < 2 ? 'high' : 'auto'}
-                                                        showFallbackIcon={false}
-                                                    />
-                                                ) : (
-                                                    <span className="primary-category-placeholder">
-                                                        <LayoutGrid aria-hidden="true" />
-                                                    </span>
-                                                )}
-                                            </span>
-                                            <span className="primary-category-label">{collection.name}</span>
-                                        </button>
-                                    );
-                                })}
-                            </nav>
-                            <button
-                                type="button"
-                                className="primary-categories-all"
-                                aria-expanded="false"
-                                aria-label={isZh ? '全部分类' : 'All categories'}
-                                onClick={() => setAllCategoriesOpen(true)}
-                            >
-                                <span className="primary-categories-all-icon" aria-hidden="true">
-                                    <svg viewBox="0 0 40 40" fill="none">
-                                        <rect
-                                            x="9"
-                                            y="9"
-                                            width="6"
-                                            height="6"
-                                            rx="1.75"
-                                            fill="currentColor"
-                                        />
-                                        <path d="M19 12H31" />
-                                        <rect
-                                            x="9"
-                                            y="17"
-                                            width="6"
-                                            height="6"
-                                            rx="1.75"
-                                            fill="currentColor"
-                                        />
-                                        <path d="M19 20H31" />
-                                        <rect
-                                            x="9"
-                                            y="25"
-                                            width="6"
-                                            height="6"
-                                            rx="1.75"
-                                            fill="currentColor"
-                                        />
-                                        <path d="M19 28H27" />
-                                    </svg>
-                                </span>
-                                <span className="primary-categories-all-label">
-                                    {isZh ? '全部分类' : 'All'}
-                                </span>
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="all-primary-categories">
+                                        <span className="primary-category-label">{collection.name}</span>
+                                    </button>
+                                );
+                            })}
+                        </nav>
+                        <button
+                            type="button"
+                            className="primary-categories-all"
+                            ref={allCategoriesTriggerRef}
+                            aria-expanded={allCategoriesOpen}
+                            aria-controls="all-primary-categories"
+                            aria-label={isZh ? '全部分类' : 'All categories'}
+                            onClick={() => setAllCategoriesOpen(open => !open)}
+                        >
+                            <span className="primary-categories-all-label">{isZh ? '全部' : 'All'}</span>
+                            {allCategoriesOpen ? (
+                                <ChevronUp aria-hidden="true" />
+                            ) : (
+                                <ChevronDown aria-hidden="true" />
+                            )}
+                        </button>
+                    </div>
+                    {allCategoriesOpen && (
+                        <div className="all-primary-categories" id="all-primary-categories">
                             <h2>{isZh ? '全部分类' : 'All categories'}</h2>
                             <nav
+                                ref={allCategoriesGridRef}
                                 className="all-primary-category-grid"
                                 aria-label={isZh ? '全部分类' : 'All categories'}
                             >
@@ -411,7 +376,7 @@ export function CategoryPage() {
                                                     collection.id,
                                                     collection.children?.[0]?.id ?? collection.id,
                                                 );
-                                                setAllCategoriesOpen(false);
+                                                closeAllCategories();
                                             }}
                                         >
                                             <span className="all-primary-category-image">
@@ -437,7 +402,7 @@ export function CategoryPage() {
                             <button
                                 type="button"
                                 className="all-primary-categories-collapse"
-                                onClick={() => setAllCategoriesOpen(false)}
+                                onClick={closeAllCategories}
                             >
                                 <span>{isZh ? '点击收起' : 'Collapse'}</span>
                                 <ChevronUp aria-hidden="true" />
@@ -462,15 +427,6 @@ export function CategoryPage() {
                         className={`category-subcat-sidebar${subcategoriesExpanded ? ' is-expanded' : ''}`}
                         aria-label={isZh ? '二级分类' : 'Subcategories'}
                     >
-                        <button
-                            type="button"
-                            className={`subcat-side-item subcat-side-all ${activeChildId === 'all' || !activeChildId ? 'is-active' : ''}`}
-                            aria-pressed={activeChildId === 'all' || !activeChildId}
-                            onClick={() => onChildChange('all')}
-                        >
-                            <span className="subcat-side-name">{isZh ? '全部' : 'All'}</span>
-                            <span className="subcat-side-count">{totalItems}</span>
-                        </button>
                         {children.map((child, index) => (
                             <button
                                 type="button"
@@ -522,14 +478,25 @@ export function CategoryPage() {
                     >
                         <button
                             type="button"
-                            className={sortMode === 'recommended' ? 'is-active' : undefined}
-                            onClick={() => onSortChange('recommended')}
+                            className={sortMode === 'recommended' && !hasFilters ? 'is-active' : undefined}
+                            aria-pressed={sortMode === 'recommended' && !hasFilters}
+                            onClick={() =>
+                                navigateTo({
+                                    name: 'category',
+                                    collectionId: activeCollectionId,
+                                    childId: activeChildId,
+                                    sort: 'recommended',
+                                    fulfillment: 'all',
+                                    inStockOnly: false,
+                                })
+                            }
                         >
-                            {isZh ? '综合' : 'Default'}
+                            {isZh ? '全部' : 'All'}
                         </button>
                         <button
                             type="button"
                             className={sortMode === 'sales' ? 'is-active' : undefined}
+                            aria-pressed={sortMode === 'sales'}
                             onClick={() => onSortChange('sales')}
                         >
                             {isZh ? '销量' : 'Sales'}
@@ -537,6 +504,7 @@ export function CategoryPage() {
                         <button
                             type="button"
                             className={sortMode === 'newest' ? 'is-active' : undefined}
+                            aria-pressed={sortMode === 'newest'}
                             onClick={() => onSortChange('newest')}
                         >
                             {isZh ? '最新' : 'Newest'}
@@ -544,6 +512,7 @@ export function CategoryPage() {
                         <button
                             type="button"
                             className={sortMode.startsWith('price') ? 'is-active' : undefined}
+                            aria-pressed={sortMode.startsWith('price')}
                             onClick={() =>
                                 onSortChange(sortMode === 'price-asc' ? 'price-desc' : 'price-asc')
                             }
