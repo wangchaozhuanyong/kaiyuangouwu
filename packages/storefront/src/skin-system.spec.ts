@@ -415,7 +415,9 @@ describe('storefront skin system', () => {
             /\.product-row\s*\{[^}]*padding:\s*0;[^}]*overflow:\s*hidden;[^}]*border:\s*0;[^}]*box-shadow:\s*none;/,
         );
         expect(row).not.toMatch(/border-bottom|#[0-9a-f]{3,8}\b|!important/);
-        expect(row).toMatch(/\.product-row-name\s*\{[^}]*overflow-wrap:\s*anywhere;/);
+        expect(row).toMatch(
+            /\.product-row-name\s*\{[^}]*white-space:\s*nowrap;[^}]*text-overflow:\s*ellipsis;/,
+        );
     });
 
     it('scopes controls to storefront surfaces and themes consent through shared tokens', () => {

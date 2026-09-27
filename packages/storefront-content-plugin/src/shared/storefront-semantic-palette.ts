@@ -358,6 +358,44 @@ const TOOL_ICON_TONES: Record<
     },
 };
 
+// Stable service identities; every skin derives surfaces and readable ink from its actual palette.
+const SERVICE_CARD_HUES: Record<StorefrontToolTone, string> = {
+    security: '#3978db',
+    mail: '#20a77d',
+    studio: '#915ee5',
+    coupon: '#d69b31',
+    support: '#db7869',
+};
+
+function serviceCardInk(color: string, backgrounds: string[], target: string): string {
+    for (let step = 0; step <= 100; step += 1) {
+        const candidate = mixColors(color, target, step / 100);
+        if (backgrounds.every(background => storefrontContrastRatio(candidate, background) >= 4.5)) {
+            return candidate;
+        }
+    }
+    return target;
+}
+
+export function storefrontServiceCardCssVariables(
+    palette: StorefrontSemanticPalette,
+): Record<string, string> {
+    const dark = storefrontRelativeLuminance(palette.surface) < 0.3;
+    const target = dark ? '#ffffff' : '#000000';
+    const variables: Record<string, string> = {};
+    for (const [tone, hue] of Object.entries(SERVICE_CARD_HUES)) {
+        const surface = mixColors(palette.surface, hue, dark ? 0.25 : 0.14);
+        const action = mixColors(palette.surface, hue, dark ? 0.43 : 0.31);
+        const hover = mixColors(palette.surface, hue, dark ? 0.51 : 0.39);
+        variables[`--skin-service-${tone}-surface`] = surface;
+        variables[`--skin-service-${tone}-action`] = action;
+        variables[`--skin-service-${tone}-action-hover`] = hover;
+        variables[`--skin-service-${tone}-ink`] = serviceCardInk(hue, [surface, action, hover], target);
+        variables[`--skin-service-${tone}-description`] = serviceCardInk(palette.muted, [surface], target);
+    }
+    return variables;
+}
+
 export function resolveStorefrontSkinTreatment(presetId: StorefrontVisualPresetId): StorefrontSkinTreatment {
     return { ...SKIN_TREATMENTS[presetId] };
 }
@@ -368,6 +406,7 @@ export function storefrontSkinCssVariables(
 ): Record<string, string> {
     const treatment = resolveStorefrontSkinTreatment(presetId);
     const variables: Record<string, string> = {
+        ...storefrontServiceCardCssVariables(palette),
         '--skin-divider': treatment.divider,
         '--skin-display-font': treatment.displayFont,
         '--skin-card-radius': treatment.cardRadius,

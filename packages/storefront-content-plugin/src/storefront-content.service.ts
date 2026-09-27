@@ -52,6 +52,7 @@ import { StorefrontContentBlock } from './entities/storefront-content-block.enti
 import { StorefrontContentItemTranslation } from './entities/storefront-content-item-translation.entity';
 import { StorefrontContentItem } from './entities/storefront-content-item.entity';
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
+import { imageReplacements } from './image-replacement-policy';
 import { StorefrontContentChangedEvent } from './storefront-content-changed.event';
 import { StorefrontExternalImageService } from './storefront-external-image.service';
 import {
@@ -220,6 +221,11 @@ export class StorefrontContentService {
     ): Promise<StorefrontContentBlock> {
         const block = await this.lockOwnedBlockOrThrow(ctx, input.id);
         this.assertExpectedUpdatedAt(block.updatedAt, input.expectedUpdatedAt);
+        if (!input.allowImageReplacement && imageReplacements(block, input).length > 0) {
+            throw new UserInputError(
+                'IMAGE_REPLACEMENT_REQUIRES_REVIEW: 本次操作会替换或清除已设置的图片，请核对图片变化后单独确认。调整皮肤、配色或文案不会授权换图。',
+            );
+        }
         const next = this.validateBlockInput({
             code: input.code ?? block.code,
             internalName: input.internalName ?? block.internalName,

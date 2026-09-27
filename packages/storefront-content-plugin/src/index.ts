@@ -16,6 +16,7 @@ export {
 export type { StorefrontContentBlockType, StorefrontContentTargetType } from './constants';
 export { StorefrontContentBlock } from './entities/storefront-content-block.entity';
 export { StorefrontContentItem } from './entities/storefront-content-item.entity';
+export { sourceImageReplacements } from './image-replacement-policy';
 export {
     normalizeStorefrontAssetUrl,
     responsiveImageSources,

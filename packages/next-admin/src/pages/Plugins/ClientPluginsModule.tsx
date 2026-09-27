@@ -16,12 +16,13 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
     storefrontClientPluginCatalog as catalog,
     type StorefrontClientPluginPlacement as Placement,
     type StorefrontClientPluginDefinition as PluginDefinition,
 } from '../../../../storefront-content-plugin/src/client-plugin-manifest';
+import { imageReplacements } from '../../../../storefront-content-plugin/src/image-replacement-policy';
 import { getClientPluginDisplay } from '../../../../storefront-content-plugin/src/shared/client-plugin-display';
 import { channelRequestContext } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -70,6 +71,7 @@ export function ClientPluginsModule() {
     const { hasAnyPermission } = useAdminPermissions();
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
+    const [reviewedImageKey, setReviewedImageKey] = useState<string | null>(null);
     const [collectionSearch, setCollectionSearch] = useState('');
     const content = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, {
         fetchPolicy: 'cache-and-network',
@@ -92,6 +94,12 @@ export function ClientPluginsModule() {
         createDraft(sourceBlock),
         storedDraft,
     );
+    const imageChanges = sourceBlock && draft ? imageReplacements(sourceBlock, draft) : [];
+    const imageReviewKey = `${sourceSignature}:${JSON.stringify(imageChanges)}`;
+    const imagesConfirmed = imageChanges.length === 0 || reviewedImageKey === imageReviewKey;
+    /* oxlint-disable react/set-state-in-effect -- A new configuration version or item removal requires fresh review. */
+    useLayoutEffect(() => setReviewedImageKey(null), [imageReviewKey]);
+    /* oxlint-enable react/set-state-in-effect */
     const selectedCollectionIds = useMemo(
         () => [...new Set((draft?.items ?? []).flatMap(item => pluginCategoryIds(item)))].sort(),
         [draft],
@@ -145,7 +153,16 @@ export function ClientPluginsModule() {
     const pending = createState.loading || updateState.loading;
 
     const save = async () => {
-        if (!draft || validation || !canSave || content.loading || content.error || !content.data) return;
+        if (
+            !draft ||
+            validation ||
+            !canSave ||
+            content.loading ||
+            content.error ||
+            !content.data ||
+            !imagesConfirmed
+        )
+            return;
         try {
             if (draft.id) {
                 if (!draft.updatedAt) throw new Error('缺少配置版本，请刷新后重试');
@@ -155,7 +172,11 @@ export function ClientPluginsModule() {
                         input: {
                             id: draft.id,
                             expectedUpdatedAt: draft.updatedAt,
-                            ...storefrontBlockInput(draft),
+                            ...storefrontBlockInput(
+                                draft,
+                                sourceBlock,
+                                imageChanges.length > 0 && imagesConfirmed,
+                            ),
                         },
                     },
                 });
@@ -209,7 +230,8 @@ export function ClientPluginsModule() {
                                 Boolean(content.error) ||
                                 !dirty ||
                                 Boolean(validation) ||
-                                Boolean(collections.error)
+                                Boolean(collections.error) ||
+                                !imagesConfirmed
                             }
                             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                         >
@@ -229,6 +251,19 @@ export function ClientPluginsModule() {
                     <Message kind="error" onClose={() => setActionError('')}>
                         {actionError}
                     </Message>
+                )}
+                {imageChanges.length > 0 && (
+                    <label className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900">
+                        <input
+                            type="checkbox"
+                            checked={imagesConfirmed}
+                            disabled={pending}
+                            onChange={event =>
+                                setReviewedImageKey(event.target.checked ? imageReviewKey : null)
+                            }
+                        />
+                        我确认移除所选插件时会清除其中已设置的 {imageChanges.length} 处图片
+                    </label>
                 )}
                 {collections.error && (
                     <Message kind="error" onClose={() => void collections.refetch()}>

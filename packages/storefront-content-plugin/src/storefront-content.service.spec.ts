@@ -14,6 +14,64 @@ import { STOREFRONT_VISUAL_PRESET_CODE } from './visual-presets';
 
 const contentPublicationStatus = createContentPublicationChecker(isUsableEnglishTranslation);
 
+describe('StorefrontContentService image replacement guard', () => {
+    for (const channelId of ['damatong', 'moyao']) {
+        it(`rejects unreviewed changes before persistence in ${channelId}`, async () => {
+            const repository = { save: vi.fn() };
+            const service = new StorefrontContentService(
+                { getRepository: () => repository } as never,
+                {} as never,
+                {} as never,
+                {} as never,
+            );
+            const block = new StorefrontContentBlock({
+                id: 'block',
+                updatedAt: new Date('2026-09-26T00:00:00Z'),
+                imageAssetId: 'merchant',
+                items: [{ id: 'item', imageAssetId: 'card' }] as never,
+            });
+            vi.spyOn(service as any, 'lockOwnedBlockOrThrow').mockResolvedValue(block);
+            for (const patch of [{ imageAssetId: 'template' }, { imageAssetId: null }, { items: [] }]) {
+                await expect(
+                    service.update({ channelId } as never, {
+                        id: 'block',
+                        expectedUpdatedAt: block.updatedAt,
+                        ...patch,
+                    }),
+                ).rejects.toThrow('IMAGE_REPLACEMENT_REQUIRES_REVIEW');
+            }
+            expect(repository.save).not.toHaveBeenCalled();
+        });
+    }
+    it('lets unchanged images and an explicitly reviewed replacement reach validation', async () => {
+        const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
+        const block = new StorefrontContentBlock({
+            id: 'block',
+            updatedAt: new Date('2026-09-26T00:00:00Z'),
+            imageAssetId: 'merchant',
+            translations: [],
+            items: [],
+        });
+        vi.spyOn(service as any, 'lockOwnedBlockOrThrow').mockResolvedValue(block);
+        const validation = vi.spyOn(service as any, 'validateBlockInput').mockImplementation(() => {
+            throw new Error('validation reached');
+        });
+        for (const patch of [
+            { backgroundColor: '#ffffff' },
+            { imageAssetId: 'reviewed', allowImageReplacement: true },
+        ]) {
+            await expect(
+                service.update({ channelId: 'store' } as never, {
+                    id: 'block',
+                    expectedUpdatedAt: block.updatedAt,
+                    ...patch,
+                }),
+            ).rejects.toThrow('validation reached');
+        }
+        expect(validation).toHaveBeenCalledTimes(2);
+    });
+});
+
 function createInput(
     overrides: Partial<CreateStorefrontContentBlockInput> = {},
 ): CreateStorefrontContentBlockInput {
@@ -1083,7 +1141,7 @@ it('publishes only the current store core with enabled cards and filters disable
     const published = await service.findPublished({
         channelId: 'moyao',
         languageCode: LanguageCode.zh_Hans,
-    });
+    } as never);
     expect(published.map(block => block.id)).toEqual(['core']);
     expect(published[0].items.map(item => item.id)).toEqual(['1']);
     expect(repository.find.mock.calls.map(([options]) => options.where.channelId)).toEqual([

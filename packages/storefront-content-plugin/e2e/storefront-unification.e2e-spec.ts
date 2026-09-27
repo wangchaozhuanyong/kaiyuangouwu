@@ -1,4 +1,10 @@
-import { expect as browserExpect, chromium, type BrowserContext, type Route } from '@playwright/test';
+import {
+    expect as browserExpect,
+    chromium,
+    type Browser,
+    type BrowserContext,
+    type Route,
+} from '@playwright/test';
 import { AssetType, LanguageCode } from '@vendure/common/lib/generated-types';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
@@ -238,6 +244,13 @@ async function prepareClientPreview(context: BrowserContext) {
     };
     await context.route('http://127.0.0.1:5301/shop-api**', contentPreview);
     await context.route(/^https:\/\/store-\d+\.unification\.test\/shop-api/, contentPreview);
+}
+
+async function closePreviewBrowser(browser: Browser) {
+    for (const context of browser.contexts()) {
+        await context.unrouteAll({ behavior: 'wait' });
+    }
+    await browser.close();
 }
 
 beforeAll(async () => {
@@ -606,7 +619,7 @@ describe('unified storefront Admin API to Shop API', () => {
             }
             expect(errors).toEqual([]);
         } finally {
-            await browser.close();
+            await closePreviewBrowser(browser);
             await shopVite.close();
             await adminVite.close();
             for (const [index, store] of stores.slice(0, 2).entries()) {
@@ -1255,7 +1268,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 });
             }
         } finally {
-            await browser.close();
+            await closePreviewBrowser(browser);
             await vite.close();
         }
     }, 90000);
@@ -1602,7 +1615,7 @@ describe('unified storefront Admin API to Shop API', () => {
                     settings: original.settings,
                 },
             });
-            await browser.close();
+            await closePreviewBrowser(browser);
             await frontend.close();
             await backend.close();
         }
@@ -1905,7 +1918,7 @@ describe('unified storefront Admin API to Shop API', () => {
             ).toBe(false);
             await shop.close();
         } finally {
-            await browser.close();
+            await closePreviewBrowser(browser);
             await Promise.all([frontend.close(), backend.close()]);
             adminClient.setChannelToken(stores[0].token);
             shopClient.setChannelToken(stores[0].token);

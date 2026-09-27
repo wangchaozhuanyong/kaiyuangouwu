@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { sourceImageReplacements } from '../../../../storefront-content-plugin/src/image-replacement-policy';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -200,10 +201,10 @@ export function StorefrontContentModule() {
     };
     const publicationNotice = (block: StorefrontContentBlock) =>
         `《${block.internalName}》已保存并重新读取核对。中文：${contentPublicationLabels[contentPublicationStatus(block, undefined, 'zh_Hans')]}；英文：${contentPublicationLabels[contentPublicationStatus(block, undefined, 'en')]}`;
-    const saveBlock = async (block: StorefrontContentBlock) => {
+    const saveBlock = async (block: StorefrontContentBlock, allowImageReplacement = false) => {
         if (!(block.id ? canUpdate : canCreate)) return;
         await runBlockAction(async scope => {
-            const input = storefrontBlockInput(block, editingBlock);
+            const input = storefrontBlockInput(block, editingBlock, allowImageReplacement);
             let saved: StorefrontContentBlock;
             if (block.id) {
                 if (!block.updatedAt) throw new Error('缺少内容版本，请刷新后重试');
@@ -1013,6 +1014,28 @@ function PromotionPageEditor({
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
     const [contentType, setContentType] = useState(value.contentType);
     const [source, setSource] = useState(value.draftSource);
+    const [reviewedImages, setReviewedImages] = useState<string | null>(null);
+    const draftImageChanges = sourceImageReplacements(value.draftSource, source);
+    const publishedImageChanges = sourceImageReplacements(value.publishedSource ?? '', source);
+    const imageChanges = [...draftImageChanges, ...publishedImageChanges].filter(
+        (change, index, all) =>
+            all.findIndex(other => other.before === change.before && other.slot === change.slot) === index,
+    );
+    const imageReviewKey = JSON.stringify({
+        draft: value.draftSource,
+        published: value.publishedSource,
+        next: source,
+        contentType,
+    });
+    const imagesConfirmed = imageChanges.length === 0 || reviewedImages === imageReviewKey;
+    const imageInput = {
+        contentType,
+        source,
+        ...(imageChanges.length > 0 && imagesConfirmed ? { allowImageReplacement: true } : {}),
+    };
+    /* oxlint-disable react/set-state-in-effect -- Any media or source edit invalidates the prior confirmation. */
+    useLayoutEffect(() => setReviewedImages(null), [imageReviewKey]);
+    /* oxlint-enable react/set-state-in-effect */
     const [previewHtml, setPreviewHtml] = useState('');
     const [confirmReset, setConfirmReset] = useState(false);
     const [save, saveState] = useMutation<{ saveStorefrontPromotionDraft: StorefrontPromotionRecord }>(
@@ -1058,10 +1081,11 @@ function PromotionPageEditor({
         onNotice(`${message}，已重新读取核对`);
     };
     const saveDraft = async () => {
+        if (!imagesConfirmed) return;
         if (!source.trim()) return onError(new Error('推广页内容不能为空'));
         await run(async context => {
             const token = getActiveChannelToken();
-            const response = await save({ context, variables: { input: { contentType, source } } });
+            const response = await save({ context, variables: { input: imageInput } });
             await reread(response.data?.saveStorefrontPromotionDraft, '推广页草稿已保存', token);
         });
     };
@@ -1075,14 +1099,18 @@ function PromotionPageEditor({
         });
     };
     const publishPage = async () => {
+        if (!imagesConfirmed) return;
         await run(async context => {
             const token = getActiveChannelToken();
             if (dirty) {
-                const saved = await save({ context, variables: { input: { contentType, source } } });
+                const saved = await save({ context, variables: { input: imageInput } });
                 if (!saved.data?.saveStorefrontPromotionDraft) throw new Error('推广页草稿保存未返回结果');
             }
             if (getActiveChannelToken() !== token) return;
-            const response = await publish({ context });
+            const response = await publish({
+                context,
+                variables: { allowImageReplacement: imageChanges.length > 0 && imagesConfirmed },
+            });
             await reread(response.data?.publishStorefrontPromotionPage, '推广落地页已发布', token);
         });
     };
@@ -1146,6 +1174,30 @@ function PromotionPageEditor({
                         className="w-full resize-y rounded-xl border border-slate-300 bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-100 outline-none focus:border-blue-500"
                     />
                     <div className="mt-4 flex flex-wrap justify-between gap-3">
+                        {imageChanges.length > 0 && (
+                            <div className="w-full space-y-2 text-xs text-slate-700">
+                                <p>本次会替换或清除原有图片，请逐项核对：</p>
+                                <ul className="max-h-24 space-y-1 overflow-auto">
+                                    {imageChanges.map(change => (
+                                        <li key={`${change.slot}:${change.before}`}>
+                                            {change.before.split('/').pop()} →{' '}
+                                            {change.after?.split('/').pop() ?? '清除图片'}
+                                        </li>
+                                    ))}
+                                </ul>
+                                <label className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={imagesConfirmed}
+                                        disabled={pending}
+                                        onChange={event =>
+                                            setReviewedImages(event.target.checked ? imageReviewKey : null)
+                                        }
+                                    />
+                                    我确认替换或清除以上图片
+                                </label>
+                            </div>
+                        )}
                         <button
                             type="button"
                             onClick={() => setConfirmReset(true)}
@@ -1168,7 +1220,9 @@ function PromotionPageEditor({
                             <button
                                 type="button"
                                 onClick={() => void saveDraft()}
-                                disabled={!canUpdate || pending || !dirty || !source.trim()}
+                                disabled={
+                                    !canUpdate || pending || !dirty || !source.trim() || !imagesConfirmed
+                                }
                                 className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 disabled:opacity-50"
                             >
                                 <Save className="h-3.5 w-3.5" />
@@ -1177,7 +1231,7 @@ function PromotionPageEditor({
                             <button
                                 type="button"
                                 onClick={() => void publishPage()}
-                                disabled={!canUpdate || pending || !source.trim()}
+                                disabled={!canUpdate || pending || !source.trim() || !imagesConfirmed}
                                 className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                             >
                                 <Send className="h-3.5 w-3.5" />

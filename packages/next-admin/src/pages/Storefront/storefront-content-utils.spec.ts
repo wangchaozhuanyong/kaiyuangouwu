@@ -23,6 +23,24 @@ function validSupportBlock() {
 }
 
 describe('storefront support content editor', () => {
+    it('omits unchanged image bindings during ordinary saves, including reordered items', () => {
+        const original = { ...validSupportBlock(), id: 'saved', imageAssetId: 'hero' };
+        original.items.forEach((item, index) =>
+            Object.assign(item, { id: String(index), imageAssetId: `photo-${index}` }),
+        );
+        const draft = cloneContentBlock(original);
+        draft.items.reverse();
+        const input = storefrontBlockInput(draft, original);
+        expect(input).not.toHaveProperty('imageAssetId');
+        expect(input).not.toHaveProperty('imageUrl');
+        expect(input).not.toHaveProperty('allowImageReplacement');
+        for (const item of input.items) expect(item).not.toHaveProperty('imageAssetId');
+        draft.imageAssetId = 'replacement';
+        expect(storefrontBlockInput(draft, original, true)).toMatchObject({
+            imageAssetId: 'replacement',
+            allowImageReplacement: true,
+        });
+    });
     it('uses selected asset IDs without submitting generated preview URLs as external sources', () => {
         const block = validSupportBlock();
         block.imageAssetId = 'selected-banner';

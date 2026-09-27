@@ -1,0 +1,344 @@
+/* Shared service entry appearance; skin adapters supply only palette variables. */
+.category-client-plugin-two-factor {
+    --service-card-surface: var(--skin-service-security-surface);
+    --service-card-ink: var(--skin-service-security-ink);
+    --service-card-description: var(--skin-service-security-description);
+    --service-card-action: var(--skin-service-security-action);
+    --service-card-action-hover: var(--skin-service-security-action-hover);
+}
+
+.category-client-plugin-mail-query {
+    --service-card-surface: var(--skin-service-mail-surface);
+    --service-card-ink: var(--skin-service-mail-ink);
+    --service-card-description: var(--skin-service-mail-description);
+    --service-card-action: var(--skin-service-mail-action);
+    --service-card-action-hover: var(--skin-service-mail-action-hover);
+}
+
+.category-client-plugin-image-studio {
+    --service-card-surface: var(--skin-service-studio-surface);
+    --service-card-ink: var(--skin-service-studio-ink);
+    --service-card-description: var(--skin-service-studio-description);
+    --service-card-action: var(--skin-service-studio-action);
+    --service-card-action-hover: var(--skin-service-studio-action-hover);
+}
+
+.category-client-plugin-coupon {
+    --service-card-surface: var(--skin-service-coupon-surface);
+    --service-card-ink: var(--skin-service-coupon-ink);
+    --service-card-description: var(--skin-service-coupon-description);
+    --service-card-action: var(--skin-service-coupon-action);
+    --service-card-action-hover: var(--skin-service-coupon-action-hover);
+}
+
+.category-client-plugin-support {
+    --service-card-surface: var(--skin-service-support-surface);
+    --service-card-ink: var(--skin-service-support-ink);
+    --service-card-description: var(--skin-service-support-description);
+    --service-card-action: var(--skin-service-support-action);
+    --service-card-action-hover: var(--skin-service-support-action-hover);
+}
+
+.category-client-plugin-slot {
+    --client-plugin-slot-block-space: 8px;
+    --client-plugin-slot-inline-space: 10px;
+
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: 8px;
+    padding-block: var(--client-plugin-slot-block-space);
+    padding-inline: var(--page-section-inset, var(--client-plugin-slot-inline-space));
+}
+
+.category-client-plugin {
+    width: 100%;
+    min-height: 58px;
+    border: 0;
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    background: var(--service-card-surface, var(--paper));
+    color: var(--service-card-ink, var(--text));
+    text-align: left;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm, 0 2px 8px rgba(15, 23, 42, 0.04));
+    transition:
+        transform 140ms ease,
+        box-shadow 140ms ease;
+}
+
+.category-client-plugin:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md, 0 5px 14px rgba(15, 23, 42, 0.08));
+}
+
+.category-client-plugin:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.category-client-plugin-icon {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    color: var(--service-card-ink, var(--accent-ink));
+}
+
+.category-client-plugin-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.category-client-plugin-copy strong {
+    font-size: 13px;
+    line-height: 1.3;
+}
+
+.category-client-plugin-copy > span {
+    overflow: hidden;
+    color: var(--service-card-description, var(--muted));
+    font-size: 11px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.category-client-plugin-action {
+    border-radius: 999px;
+    padding: 6px 9px;
+    background: var(--service-card-action, var(--accent-soft));
+    color: var(--service-card-ink, var(--accent-ink));
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.category-client-plugin:hover .category-client-plugin-action {
+    background: var(--service-card-action-hover, var(--interaction-hover));
+}
+
+/* Expanded service cards share the same colors and behavior as compact category entries. */
+.is-business-services-main.category-client-plugin-slot {
+    display: grid;
+    gap: 12px;
+    padding: 0;
+    margin: 0 0 18px;
+}
+
+.category-client-plugin-group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: inherit;
+    min-width: 0;
+}
+
+.category-client-plugin-group.is-assistance {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.category-client-plugin-group > :only-child {
+    grid-column: 1 / -1;
+}
+
+.is-business-services-main .category-client-plugin {
+    grid-template-columns: 30px minmax(0, 1fr);
+    grid-template-rows: 1fr auto;
+    align-content: start;
+    align-items: start;
+    min-width: 0;
+    min-height: 0;
+    gap: 0 12px;
+    padding: 18px;
+    border-radius: var(--skin-card-radius, 16px);
+    box-shadow: var(--skin-card-shadow, var(--shadow-sm));
+}
+
+.is-business-services-main .category-client-plugin:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--skin-card-hover-shadow, var(--shadow-md));
+}
+
+.is-business-services-main .category-client-plugin:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 4px;
+}
+
+.is-business-services-main .category-client-plugin-icon {
+    grid-column: 1;
+    grid-row: 1;
+    width: 30px;
+    height: 30px;
+}
+
+.is-business-services-main .category-client-plugin-copy {
+    grid-column: 2;
+    grid-row: 1;
+    gap: 4px;
+}
+
+.is-business-services-main .category-client-plugin-copy strong {
+    font-size: 17px;
+    font-weight: 650;
+    line-height: 28px;
+    letter-spacing: -0.02em;
+    overflow-wrap: anywhere;
+}
+
+.is-business-services-main .category-client-plugin-copy > span {
+    min-height: 42px;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+    line-height: 21px;
+}
+
+.is-business-services-main .category-client-plugin-action {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    align-self: end;
+    gap: 10px;
+    min-width: 0;
+    min-height: 44px;
+    margin-top: 16px;
+    padding: 10px 14px;
+    border-radius: var(--skin-control-radius, 10px);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 22px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.is-business-services-main .category-client-plugin-action::after {
+    content: '→';
+    flex: none;
+    font-size: 18px;
+    font-weight: 400;
+    line-height: 1;
+}
+
+.is-business-services-main :is(.category-client-plugin-coupon, .category-client-plugin-support) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto;
+    gap: 10px;
+    padding: 18px 16px;
+}
+
+.is-assistance .category-client-plugin-copy {
+    grid-column: 1;
+    grid-row: 2;
+    gap: 5px;
+}
+
+.is-assistance .category-client-plugin-copy strong {
+    font-size: 15px;
+    line-height: 24px;
+}
+
+.is-assistance .category-client-plugin-copy > span {
+    min-height: 40px;
+    font-size: 12px;
+    line-height: 20px;
+}
+
+.is-assistance .category-client-plugin-action {
+    grid-column: 1;
+    grid-row: 3;
+    margin-top: 2px;
+    padding: 10px 12px;
+}
+
+@media (min-width: 1024px) {
+    .is-business-services-main.category-client-plugin-slot {
+        gap: 18px;
+        margin-bottom: 24px;
+    }
+
+    .category-client-plugin-group.is-tools {
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    }
+
+    .is-business-services-main .category-client-plugin {
+        grid-template-columns: 32px minmax(0, 1fr);
+        gap: 0 14px;
+        padding: 24px;
+    }
+
+    .is-business-services-main .category-client-plugin-icon {
+        width: 32px;
+        height: 32px;
+    }
+
+    .is-business-services-main .category-client-plugin-copy {
+        gap: 10px;
+    }
+
+    .is-business-services-main .category-client-plugin-copy strong {
+        font-size: 18px;
+        line-height: 32px;
+    }
+
+    .is-business-services-main .category-client-plugin-copy > span {
+        min-height: 44px;
+        font-size: 13px;
+        line-height: 22px;
+    }
+
+    .is-business-services-main .category-client-plugin-action {
+        margin-top: 20px;
+        padding: 11px 16px;
+    }
+
+    .is-business-services-main :is(.category-client-plugin-coupon, .category-client-plugin-support) {
+        grid-template-columns: 32px minmax(0, 1fr) 132px;
+        grid-template-rows: auto;
+        align-items: center;
+        gap: 16px;
+        padding: 22px 24px;
+    }
+
+    .is-assistance .category-client-plugin-copy {
+        grid-column: 2;
+        grid-row: 1;
+        gap: 3px;
+    }
+
+    .is-assistance .category-client-plugin-copy strong {
+        font-size: 16px;
+        line-height: 28px;
+    }
+
+    .is-assistance .category-client-plugin-copy > span {
+        min-height: 0;
+        font-size: 12px;
+        line-height: 20px;
+    }
+
+    .is-assistance .category-client-plugin-action {
+        grid-column: 3;
+        grid-row: 1;
+        margin: 0;
+        align-self: center;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .category-client-plugin {
+        transition: none;
+    }
+    .category-client-plugin:hover {
+        transform: none;
+    }
+}

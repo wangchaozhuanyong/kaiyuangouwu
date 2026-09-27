@@ -241,8 +241,9 @@ export function StorefrontModule() {
         block: StorefrontContentBlock,
         original: StorefrontContentBlock | null,
         scope: ContentActionScope,
+        allowImageReplacement = false,
     ) => {
-        const input = storefrontBlockInput(block, original);
+        const input = storefrontBlockInput(block, original, allowImageReplacement);
         let saved: StorefrontContentBlock;
         if (block.id) {
             if (!block.updatedAt) throw new Error('缺少内容版本，请刷新后重试');
@@ -271,10 +272,10 @@ export function StorefrontModule() {
         verifyContentOrder(refreshed.storefrontContentBlocks, ids);
     };
 
-    const saveEditor = async (block: StorefrontContentBlock) => {
+    const saveEditor = async (block: StorefrontContentBlock, allowImageReplacement = false) => {
         if (!(block.id ? canUpdate : canCreate)) return;
         await runContentAction(async scope => {
-            const { readback, refreshed } = await persistBlock(block, editing, scope);
+            const { readback, refreshed } = await persistBlock(block, editing, scope, allowImageReplacement);
             if (!block.id && block.type === 'HERO' && canUpdate) {
                 const blocks = refreshed.storefrontContentBlocks;
                 await persistOrder(homepageOrderIds(blocks, storefrontHomepageRows(blocks)), scope);

@@ -154,7 +154,7 @@ describe('account referral visibility', () => {
         expect(markup).toContain('locale-preferences-trigger');
         expect(markup).toContain('我的订单中心');
         expect(markup).toContain('返利余额');
-        expect(markup).toContain('¥8.8');
+        expect(markup).toContain('CNY</span> <span>8.80');
         expect(markup).toContain('账户快捷入口');
         expect(markup).toContain('我的收藏');
         expect(markup).toContain('优惠券');
@@ -205,4 +205,53 @@ describe('account referral visibility', () => {
         });
         expect(markup).not.toContain('data-page-pending="query"');
     });
+
+    it.each([false, true])('shows zero only after a successful empty wallet lookup, desktop=%s', desktop => {
+        const queryKey = storefrontQueryKeys.customerReferral(
+            storefrontQueryKeys.market(market),
+            languageCodeFor('zh'),
+            customer.id,
+        );
+        for (const wallets of [[], [{ ...overview.wallets[0], currencyCode: 'MYR' }]]) {
+            const markup = renderAccount(true, {
+                desktop,
+                prepareClient: client => client.setQueryData(queryKey, { ...overview, wallets }),
+            });
+            expect(markup).toContain('CNY</span> <span>0.00');
+            expect(markup).not.toContain('data-page-pending="query"');
+        }
+    });
+
+    it.each([false, true])(
+        'keeps loading and failed wallet reads distinct from zero, desktop=%s',
+        desktop => {
+            const queryKey = storefrontQueryKeys.customerReferral(
+                storefrontQueryKeys.market(market),
+                languageCodeFor('zh'),
+                customer.id,
+            );
+            const loading = renderAccount(true, {
+                desktop,
+                prepareClient: client => client.removeQueries({ queryKey }),
+            });
+            expect(loading).toContain('加载中…');
+            expect(loading).not.toContain('CNY</span> <span>0.00');
+            const failed = renderAccount(true, {
+                desktop,
+                prepareClient: client =>
+                    client
+                        .getQueryCache()
+                        .find({ queryKey })
+                        ?.setState({
+                            status: 'error',
+                            error: new Error('Read failed'),
+                            fetchStatus: 'idle',
+                        }),
+            });
+            expect(failed).toContain('暂不可用');
+            expect(failed).toContain('重试');
+            expect(failed).not.toContain('CNY</span> <span>0.00');
+            expect(failed).not.toContain('CNY</span> <span>8.80');
+        },
+    );
 });

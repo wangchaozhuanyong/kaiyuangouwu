@@ -29,8 +29,11 @@ export class StorefrontPromotionAdminResolver {
     @Transaction()
     @Mutation()
     @Allow(storefrontContentPermission.Update)
-    publishStorefrontPromotionPage(@Ctx() ctx: RequestContext) {
-        return this.promotionService.publish(ctx);
+    publishStorefrontPromotionPage(
+        @Ctx() ctx: RequestContext,
+        @Args('allowImageReplacement', { nullable: true }) allowImageReplacement?: boolean,
+    ) {
+        return this.promotionService.publish(ctx, allowImageReplacement);
     }
 
     @Transaction()

@@ -239,18 +239,31 @@ export function ClientPluginSlot({
 }>) {
     const plugins = resolveClientPlugins(block, placement, categoryContext);
     if (!plugins.length) return null;
-    // Desktop services group tools before assistance; preserve managed ordering within each group.
-    const orderedPlugins = toolsFirst
-        ? [
-              ...plugins.filter(plugin => plugin.code !== 'category-support-entry'),
-              ...plugins.filter(plugin => plugin.code === 'category-support-entry'),
-          ]
-        : plugins;
+    const renderPlugins = (entries: ResolvedClientPlugin[]) =>
+        entries.map(({ code, item, Component }) => (
+            <Component key={item.id || code} language={language} onNavigate={onNavigate} />
+        ));
+    // Keep managed order within each group, including when a merchant hides an entry.
+    const isAssistance = (plugin: ResolvedClientPlugin) =>
+        plugin.code === 'category-coupon-entry' || plugin.code === 'category-support-entry';
+    const tools = plugins.filter(plugin => !isAssistance(plugin));
+    const assistance = plugins.filter(isAssistance);
     return (
         <div className={`category-client-plugin-slot is-${placement.toLowerCase().replaceAll('_', '-')}`}>
-            {orderedPlugins.map(({ code, item, Component }) => (
-                <Component key={item.id || code} language={language} onNavigate={onNavigate} />
-            ))}
+            {toolsFirst ? (
+                <>
+                    {tools.length > 0 && (
+                        <div className="category-client-plugin-group is-tools">{renderPlugins(tools)}</div>
+                    )}
+                    {assistance.length > 0 && (
+                        <div className="category-client-plugin-group is-assistance">
+                            {renderPlugins(assistance)}
+                        </div>
+                    )}
+                </>
+            ) : (
+                renderPlugins(plugins)
+            )}
         </div>
     );
 }

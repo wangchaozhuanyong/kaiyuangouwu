@@ -324,12 +324,6 @@
         }
     }
 
-    .flash-sale-name {
-        display: block;
-        overflow: visible;
-        -webkit-line-clamp: unset;
-    }
-
     .flash-sale-grid {
         grid-auto-columns: 176px;
         gap: 16px;

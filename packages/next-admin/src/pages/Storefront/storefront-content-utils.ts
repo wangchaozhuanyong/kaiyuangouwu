@@ -1,5 +1,6 @@
 import { STOREFRONT_ACCOUNT_HERO_CODE } from '../../../../storefront-content-plugin/src/account-hero-config';
 import { homepageModuleCatalog } from '../../../../storefront-content-plugin/src/homepage-manifest';
+import { imageBindingKey } from '../../../../storefront-content-plugin/src/image-replacement-policy';
 import { supportFaqValidation } from '../../../../storefront-content-plugin/src/support-faq';
 import type {
     StorefrontBlockTranslation,
@@ -330,9 +331,21 @@ export function itemTranslation(item: StorefrontContentItem, languageCode: Store
     );
 }
 
+function changedImageInput(
+    value: StorefrontContentBlock | StorefrontContentItem,
+    previous?: StorefrontContentBlock | StorefrontContentItem,
+): { imageAssetId?: string | null; imageUrl?: string | null } {
+    if (previous && imageBindingKey(value) === imageBindingKey(previous)) return {};
+    return {
+        imageAssetId: value.imageAsset?.id ?? value.imageAssetId ?? null,
+        imageUrl: value.imageAsset?.id || value.imageAssetId ? null : value.imageUrl?.trim() || null,
+    };
+}
+
 export function storefrontBlockInput(
     block: StorefrontContentBlock,
     original?: StorefrontContentBlock | null,
+    allowImageReplacement = false,
 ) {
     const savedOriginal = original?.id ? original : undefined;
     const unsavedOriginal = original && !original.id ? original : undefined;
@@ -348,8 +361,8 @@ export function storefrontBlockInput(
         position: block.position,
         startsAt: block.startsAt,
         endsAt: block.endsAt,
-        imageAssetId: block.imageAsset?.id ?? block.imageAssetId ?? null,
-        imageUrl: block.imageAsset?.id || block.imageAssetId ? null : block.imageUrl?.trim() || null,
+        ...changedImageInput(block, savedOriginal),
+        ...(savedOriginal && allowImageReplacement ? { allowImageReplacement: true } : {}),
         backgroundColor: block.backgroundColor?.trim() || null,
         textColor: block.textColor?.trim() || null,
         targetType: block.targetType,
@@ -401,8 +414,10 @@ export function storefrontBlockInput(
                 ...(item.id ? { id: item.id } : {}),
                 enabled: item.enabled,
                 position,
-                imageAssetId: item.imageAsset?.id ?? item.imageAssetId ?? null,
-                imageUrl: item.imageAsset?.id || item.imageAssetId ? null : item.imageUrl?.trim() || null,
+                ...changedImageInput(
+                    item,
+                    savedOriginal?.items.find(previous => item.id && previous.id === item.id),
+                ),
                 targetType,
                 targetValue:
                     targetType === 'NONE' ? null : (generatedTarget ?? (item.targetValue?.trim() || null)),

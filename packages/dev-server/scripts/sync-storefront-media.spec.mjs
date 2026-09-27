@@ -241,6 +241,7 @@ test('CLI parsing deduplicates Channels and keeps writes opt-in', () => {
         {
             apply: true,
             allowRemote: true,
+            allowImageReplacement: false,
             verify: false,
             validate: false,
             apiOrigin: 'https://api.example.com/',
@@ -253,10 +254,12 @@ test('CLI parsing deduplicates Channels and keeps writes opt-in', () => {
     assert.deepEqual(parseCliArguments(['--verify']), {
         apply: false,
         allowRemote: false,
+        allowImageReplacement: false,
         verify: true,
         validate: false,
     });
     assert.throws(() => parseMediaKeys(''), /at least one media key/);
+    assert.equal(parseCliArguments(['--allow-image-replacement']).allowImageReplacement, true);
 });
 
 test('media key selection fails before authentication when a key is unknown', async () => {
@@ -643,6 +646,7 @@ test('apply preserves galleries and verifies the same Asset through Admin and Sh
         username: 'admin',
         password: 'secret',
         apply: true,
+        allowImageReplacement: true,
         fetchImpl,
         manifest: [storefrontMediaManifest[0]],
         waitImpl: async delayMs => waits.push(delayMs),
@@ -711,11 +715,25 @@ test('content apply sends the optimistic version and verifies Admin-Shop parity'
     const media = storefrontMediaManifest.find(item => item.key === 'home-gpt-category-ad');
     assert.ok(media);
 
+    await assert.rejects(
+        syncStorefrontMedia({
+            apiOrigin: 'http://127.0.0.1:3000',
+            username: 'admin',
+            password: 'secret',
+            apply: true,
+            fetchImpl,
+            manifest: [media],
+        }),
+        /IMAGE_REPLACEMENT_REQUIRES_REVIEW/,
+    );
+    assert.equal(updateInput, undefined);
+
     const result = await syncStorefrontMedia({
         apiOrigin: 'http://127.0.0.1:3000',
         username: 'admin',
         password: 'secret',
         apply: true,
+        allowImageReplacement: true,
         fetchImpl,
         manifest: [media],
     });
@@ -785,6 +803,7 @@ test('failed Shop verification restores the previous content Asset binding', asy
             username: 'admin',
             password: 'secret',
             apply: true,
+            allowImageReplacement: true,
             fetchImpl,
             manifest: [media],
             verificationAttempts: 1,
@@ -878,6 +897,7 @@ test('a later media failure restores bindings from the entire reviewed batch', a
             username: 'admin',
             password: 'secret',
             apply: true,
+            allowImageReplacement: true,
             fetchImpl,
             manifest,
             verificationAttempts: 1,

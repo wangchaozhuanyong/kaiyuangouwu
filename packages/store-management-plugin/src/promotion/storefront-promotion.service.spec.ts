@@ -2,6 +2,55 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { StorefrontPromotionService } from './storefront-promotion.service';
 
+describe('promotion image replacement review', () => {
+    function guardedFixture() {
+        const page = {
+            contentType: 'HTML',
+            draftSource: '<img src="/merchant.png">',
+            publishedSource: '<img src="/merchant.png">',
+            publishedVersion: 1,
+        };
+        const save = vi.fn(value => value);
+        const service = new StorefrontPromotionService(
+            { getRepository: () => ({ save }) } as never,
+            {} as never,
+            { validateSource: (_type: string, source: string) => source } as never,
+        );
+        vi.spyOn(service as any, 'findPage').mockResolvedValue(page);
+        vi.spyOn(service as any, 'toView').mockImplementation((_ctx: unknown, value: unknown) => value);
+        return { page, service, save };
+    }
+    it('blocks unreviewed source replacement in both draft saving and publishing', async () => {
+        const { page, service, save } = guardedFixture();
+        await expect(
+            service.saveDraft({ channelId: 'store' } as never, {
+                contentType: 'HTML',
+                source: '<img src="/preset.png">',
+            }),
+        ).rejects.toThrow('IMAGE_REPLACEMENT_REQUIRES_REVIEW');
+        page.draftSource = '<img src="/preset.png">';
+        await expect(service.publish({ channelId: 'store' } as never)).rejects.toThrow(
+            'IMAGE_REPLACEMENT_REQUIRES_REVIEW',
+        );
+        expect(page.publishedSource).toBe('<img src="/merchant.png">');
+        expect(save).not.toHaveBeenCalled();
+    });
+    it('allows copy changes and separately reviewed replacements', async () => {
+        const { service, save } = guardedFixture();
+        await service.saveDraft({} as never, {
+            contentType: 'HTML',
+            source: '<h1>new copy</h1><img src="/merchant.png">',
+        });
+        await service.saveDraft({} as never, {
+            contentType: 'HTML',
+            source: '<img src="/reviewed.png">',
+            allowImageReplacement: true,
+        });
+        await service.publish({} as never, true);
+        expect(save).toHaveBeenCalledTimes(3);
+    });
+});
+
 function fixture(logo: string | null, share: string | null = null) {
     const findOne = vi.fn((entity: string, options: { where: { channelId: string } }) => {
         expect(options.where.channelId).toBe('store-b');

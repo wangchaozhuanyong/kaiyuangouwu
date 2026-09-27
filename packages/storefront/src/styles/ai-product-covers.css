@@ -519,7 +519,7 @@
     border: 1px solid var(--line);
     border-radius: 9999px;
     background: var(--soft);
-    color: var(--muted);
+    color: var(--text);
     font-size: 14px;
     font-weight: 600;
     transition:

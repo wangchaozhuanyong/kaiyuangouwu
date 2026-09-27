@@ -2,6 +2,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { Check, ChevronRight, Minus, ShoppingBag, TicketPercent } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
+import { useDesktopLayout } from '../desktop-layout';
 import { cartLineCanSelect, cartSelectionState } from '../product-availability';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { appliedCouponLabel } from '../storefront-coupons';
@@ -87,6 +88,7 @@ export function CartPage() {
         onRemoveCoupon,
     } = CartPageContext.useValue();
     const isZh = language === 'zh';
+    const desktop = useDesktopLayout();
     const lines = cart?.lines ?? [];
     const selectionState = cartSelectionState(lines);
     const selectableQuantity = lines
@@ -188,43 +190,60 @@ export function CartPage() {
         }
     };
 
+    const selectAllControl = !!lines.length && (
+        <button
+            className={`select-all ${selectionState.toLowerCase()}`}
+            type="button"
+            onClick={onToggleAll}
+            disabled={
+                editingBlocked ||
+                (loading && !selectionPending) ||
+                locked ||
+                (!selectableQuantity && !cart?.selectedQuantity)
+            }
+        >
+            <span>
+                {selectionState === 'ALL' ? <Check /> : selectionState === 'PARTIAL' ? <Minus /> : null}
+            </span>
+            <b>
+                {selectionState === 'ALL'
+                    ? isZh
+                        ? `已全选 ${cart?.selectedQuantity}件`
+                        : `All ${cart?.selectedQuantity}`
+                    : selectionState === 'PARTIAL'
+                      ? isZh
+                          ? `已选 ${cart?.selectedQuantity}/${selectableQuantity}件`
+                          : `${cart?.selectedQuantity}/${selectableQuantity} selected`
+                      : isZh
+                        ? `全选 ${selectableQuantity}件`
+                        : `Select all ${selectableQuantity}`}
+            </b>
+        </button>
+    );
+
     return (
         <main className={`page cart-page${!lines.length ? ' is-empty' : ''}`}>
             <header className="topbar cart-topbar">
-                <h1 className="topbar-title">{isZh ? '我的购物车' : 'My Cart'}</h1>
-                {!!lines.length && (
-                    <button
-                        className={`select-all ${selectionState.toLowerCase()}`}
-                        type="button"
-                        onClick={onToggleAll}
-                        disabled={
-                            editingBlocked ||
-                            (loading && !selectionPending) ||
-                            locked ||
-                            (!selectableQuantity && !cart?.selectedQuantity)
-                        }
-                    >
-                        <span>
-                            {selectionState === 'ALL' ? (
-                                <Check />
-                            ) : selectionState === 'PARTIAL' ? (
-                                <Minus />
-                            ) : null}
-                        </span>
-                        <b>
-                            {selectionState === 'ALL'
-                                ? isZh
-                                    ? `已全选 ${cart?.selectedQuantity}件`
-                                    : `All ${cart?.selectedQuantity}`
-                                : selectionState === 'PARTIAL'
-                                  ? isZh
-                                      ? `已选 ${cart?.selectedQuantity}/${selectableQuantity}件`
-                                      : `${cart?.selectedQuantity}/${selectableQuantity} selected`
-                                  : isZh
-                                    ? `全选 ${selectableQuantity}件`
-                                    : `Select all ${selectableQuantity}`}
-                        </b>
-                    </button>
+                {desktop ? (
+                    <>
+                        <div className="desktop-cart-heading">
+                            <h1 className="topbar-title">{isZh ? '购物车' : 'My Cart'}</h1>
+                            {selectAllControl}
+                        </div>
+                        <button
+                            className="desktop-cart-continue"
+                            type="button"
+                            onClick={() => navigateTo({ name: 'category' })}
+                        >
+                            {isZh ? '继续选购' : 'Continue shopping'}
+                            <ChevronRight aria-hidden="true" />
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <h1 className="topbar-title">{isZh ? '我的购物车' : 'My Cart'}</h1>
+                        {selectAllControl}
+                    </>
                 )}
             </header>
 
@@ -407,7 +426,7 @@ export function CartPage() {
                         </div>
                         <aside className={`cart-summary-panel${coupons.length ? ' has-coupons' : ''}`}>
                             <div className="cart-summary-header">
-                                <h2>{isZh ? '订单结算' : 'Order Summary'}</h2>
+                                <h2>{isZh ? '订单摘要' : 'Order Summary'}</h2>
                             </div>
                             <div className="cart-summary-breakdown">
                                 <div className="summary-row">

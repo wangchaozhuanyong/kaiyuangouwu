@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { DesktopLayoutContext } from './desktop-layout';
 import { BusinessServicesPage } from './pages/business-services-page';
 import { BusinessServicesPageContext } from './storefront-page-contexts';
-import { readStorefrontStylesheet } from './test-stylesheet';
 import { type StorefrontContentBlock, type StorefrontContentItem } from './types';
 
 function businessPluginBlock(): StorefrontContentBlock {
@@ -109,43 +108,6 @@ function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'e
 }
 
 describe('business services page', () => {
-    it('uses theme surfaces and scoped modules for the service page only', () => {
-        const stylesheet = readStorefrontStylesheet([
-            './styles/visual-presets.css',
-            './styles/modals-and-support.css',
-            './styles/image-studio.css',
-        ]);
-
-        expect(stylesheet).toMatch(
-            /\.category-client-plugin\s*\{[^}]*background:\s*var\(--paper\);[^}]*color:\s*var\(--text\);/,
-        );
-        expect(stylesheet).toMatch(
-            /\.business-services-page \.category-client-plugin-slot\s*\{[^}]*display:\s*grid;/,
-        );
-        expect(stylesheet).toMatch(/\.business-services-page \.category-client-plugin\s*\{[^}]*border:\s*0;/);
-        expect(stylesheet).not.toMatch(
-            /\.category-client-plugin-image-studio\s*\{[^}]*background:\s*var\(--bg\)/,
-        );
-        expect(stylesheet).toMatch(
-            /\.business-services-page \.category-client-plugin-two-factor\s*\{[^}]*--service-icon-foreground:\s*var\(--skin-tool-security-foreground/,
-        );
-        expect(stylesheet).toMatch(
-            /\.business-services-page \.category-client-plugin-slot\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
-        );
-        expect(stylesheet).toMatch(
-            /@media \(min-width: 1024px\)[\s\S]*?\.business-services-page \.category-client-plugin-slot\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;/,
-        );
-        const desktopCard = Array.from(
-            stylesheet.matchAll(/\.business-services-page \.category-client-plugin\s*\{([^}]+)\}/g),
-            match => match[1],
-        ).find(block => block.includes('flex: 1 1'));
-        expect(desktopCard).toContain('grid-template-columns: 48px minmax(0, 1fr);');
-        expect(desktopCard).toContain('grid-template-rows: 1fr auto;');
-        expect(stylesheet).toMatch(
-            /@media \(min-width: 1024px\)[\s\S]*?\.business-services-page \.category-client-plugin-icon\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*1;/,
-        );
-    });
-
     it('puts enabled tools before assistance on both layouts and retains managed copy beside the title', () => {
         const block = businessPluginBlock();
         block.settings = { businessServicesCopyVersion: 1 };

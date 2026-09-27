@@ -1,7 +1,7 @@
 /* One card composition for home, catalog, recommendations and favorites.
    Grid owners choose columns; the card owns media, rhythm and interaction. */
 .product-card {
-    --product-card-inset: 12px;
+    --product-card-inset: 8px;
     position: relative;
     isolation: isolate;
     display: flex;
@@ -107,20 +107,21 @@
 
 .product-card-name {
     display: block;
-    min-height: 2.8em;
+    min-width: 0;
     margin-top: 10px;
     color: var(--text);
     font-size: 13px;
     font-weight: var(--font-weight-semibold);
     line-height: 1.4;
-    overflow-wrap: anywhere;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
     text-align: left;
 }
 
 .product-card-subtitle {
     display: block;
     margin-top: 4px;
-    min-height: 1.5em;
     overflow: hidden;
     color: var(--muted);
     font-size: 12px;
@@ -219,7 +220,7 @@
 
 @media (min-width: 1024px) {
     .product-card {
-        --product-card-inset: 16px;
+        --product-card-inset: 8px;
     }
 
     .product-card-name {

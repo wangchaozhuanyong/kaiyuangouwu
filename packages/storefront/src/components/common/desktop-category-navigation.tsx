@@ -141,15 +141,6 @@ export function DesktopSubcategoryNavigation() {
         <aside className="desktop-subcategory-sidebar" aria-label={isZh ? '子分类' : 'Subcategories'}>
             <strong>{activeCollection.name}</strong>
             <nav aria-label={isZh ? `选择${activeCollection.name}分类` : `Choose ${activeCollection.name}`}>
-                <button
-                    type="button"
-                    title={isZh ? `全部${activeCollection.name}` : `All ${activeCollection.name}`}
-                    aria-pressed={!activeChild}
-                    onClick={() => update({ childId: 'all' })}
-                >
-                    <span>{isZh ? `全部${activeCollection.name}` : `All ${activeCollection.name}`}</span>
-                    {!activeChild ? <Check aria-hidden="true" /> : null}
-                </button>
                 {activeCollection.children.map(child => (
                     <button
                         key={child.id}

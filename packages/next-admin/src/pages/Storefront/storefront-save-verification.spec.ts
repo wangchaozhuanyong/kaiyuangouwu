@@ -17,6 +17,9 @@ const block = { ...newContentBlock('SUPPORT', 0), id: 'saved-block' };
 const input = storefrontBlockInput(block);
 
 describe('content save and readback verification', () => {
+    it('verifies reviewed image changes without expecting the transient confirmation in readback', () => {
+        expect(verifySavedBlock(block, { ...input, allowImageReplacement: true })).toBe(block);
+    });
     it('rejects empty responses, missing rows and a different record', () => {
         expect(() => verifySavedBlock(undefined, input)).toThrow('未返回');
         expect(() => verifySavedBlock({ ...block, id: 'other' }, { ...input, id: block.id })).toThrow(

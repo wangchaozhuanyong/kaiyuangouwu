@@ -366,8 +366,8 @@ export const PREVIEW_STOREFRONT_PROMOTION_PAGE_MUTATION = gql`
 
 export const PUBLISH_STOREFRONT_PROMOTION_PAGE_MUTATION = gql`
     ${PROMOTION_PAGE_FIELDS}
-    mutation NextAdminPublishStorefrontPromotionPage {
-        publishStorefrontPromotionPage {
+    mutation NextAdminPublishStorefrontPromotionPage($allowImageReplacement: Boolean) {
+        publishStorefrontPromotionPage(allowImageReplacement: $allowImageReplacement) {
             ...NextAdminPromotionPageFields
         }
     }

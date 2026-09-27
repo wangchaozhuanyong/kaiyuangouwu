@@ -1274,7 +1274,7 @@
     }
     .desktop-subcategory-sidebar nav {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: minmax(0, 1fr);
         gap: 6px;
         border: 0;
         max-height: calc(100dvh - var(--desktop-header-height) - 110px);
@@ -1305,16 +1305,10 @@
         white-space: normal;
         cursor: pointer;
     }
-    .desktop-subcategory-sidebar nav > button:first-child {
-        grid-column: 1 / -1;
-    }
     .desktop-subcategory-sidebar nav > button > span {
-        display: -webkit-box;
+        display: block;
         min-width: 0;
-        overflow: hidden;
         overflow-wrap: anywhere;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
     }
     .desktop-subcategory-sidebar nav > button > svg {
         width: 14px;

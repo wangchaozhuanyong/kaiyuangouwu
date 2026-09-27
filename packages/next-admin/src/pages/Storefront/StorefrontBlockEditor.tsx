@@ -1,12 +1,13 @@
 import { useQuery } from '@apollo/client/react';
 import { Check, Plus, Search, X } from 'lucide-react';
-import { useDeferredValue, useState } from 'react';
+import { useDeferredValue, useLayoutEffect, useState } from 'react';
 import {
     heroThemePresets,
     homepageVisualStyles,
     normalizedHeroThemePreset,
     normalizedHomepageVisualStyle,
 } from '../../../../storefront-content-plugin/src/content-visuals';
+import { imageReplacements } from '../../../../storefront-content-plugin/src/image-replacement-policy';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -56,11 +57,12 @@ export function StorefrontBlockEditor({
     saving: boolean;
     error?: string;
     onClose: () => void;
-    onSave: (value: StorefrontContentBlock) => Promise<void>;
+    onSave: (value: StorefrontContentBlock, allowImageReplacement?: boolean) => Promise<void>;
 }) {
     const { hasAnyPermission } = useAdminPermissions();
     const canReadProducts = hasAnyPermission(['ReadCatalog', 'ReadProduct']);
     const [draft, setDraft] = useState(() => cloneContentBlock(value));
+    const [reviewedImages, setReviewedImages] = useState<string | null>(null);
     const [language, setLanguage] = useState<StorefrontLanguageCode>('zh_Hans');
     const [showProducts, setShowProducts] = useState(false);
     const [productSearch, setProductSearch] = useState('');
@@ -81,6 +83,23 @@ export function StorefrontBlockEditor({
     });
     const translation = blockTranslation(draft, language);
     const validation = storefrontBlockValidation(draft);
+    const imageChanges = value.id ? imageReplacements(value, draft) : [];
+    const imageReviewKey = JSON.stringify(imageChanges);
+    const imagesConfirmed = imageChanges.length === 0 || reviewedImages === imageReviewKey;
+    /* oxlint-disable react/set-state-in-effect -- Any image edit invalidates the prior confirmation. */
+    useLayoutEffect(() => setReviewedImages(null), [imageReviewKey]);
+    /* oxlint-enable react/set-state-in-effect */
+    const imageName = (
+        binding: StorefrontContentBlock | StorefrontContentBlock['items'][number] | undefined,
+    ) => binding?.imageAsset?.name || binding?.imageUrl?.split('/').pop() || '清除图片';
+    const imageChangeDescriptions = imageChanges.map(change => {
+        if (change.slot === 'main') return `主图：${imageName(value)} → ${imageName(draft)}`;
+        const itemId = change.slot.slice('item:'.length);
+        const previous = value.items.find(item => String(item.id) === itemId);
+        const next = draft.items.find(item => String(item.id) === itemId);
+        const label = previous?.translations.find(item => item.languageCode === 'zh_Hans')?.label || '子项';
+        return `${label}：${imageName(previous)} → ${next ? imageName(next) : '移除子项图片'}`;
+    });
     const isSupport = draft.type === 'SUPPORT';
     const productSettingKey = ['CATEGORY_AD', 'FEATURED_COLLECTION'].includes(draft.type)
         ? 'selectedProductIds'
@@ -799,9 +818,32 @@ export function StorefrontBlockEditor({
                 </div>
 
                 <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-slate-200 bg-white px-5 py-3 sm:px-7">
-                    <p className={`text-xs ${validation ? 'text-rose-600' : 'text-emerald-700'}`}>
-                        {validation ?? '内容校验通过'}
-                    </p>
+                    <div className="min-w-0 flex-1 space-y-2">
+                        <p className={`text-xs ${validation ? 'text-rose-600' : 'text-emerald-700'}`}>
+                            {validation ?? '内容校验通过'}
+                        </p>
+                        {imageChanges.length > 0 && (
+                            <div className="space-y-2 text-xs text-slate-700">
+                                <p>本次将替换或清除 {imageChanges.length} 处已设置的图片：</p>
+                                <ul className="max-h-24 space-y-1 overflow-auto">
+                                    {imageChangeDescriptions.map((description, index) => (
+                                        <li key={imageChanges[index].slot}>{description}</li>
+                                    ))}
+                                </ul>
+                                <label className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={imagesConfirmed}
+                                        disabled={saving}
+                                        onChange={event =>
+                                            setReviewedImages(event.target.checked ? imageReviewKey : null)
+                                        }
+                                    />
+                                    我确认替换或清除以上图片
+                                </label>
+                            </div>
+                        )}
+                    </div>
                     <div className="flex gap-2">
                         <button
                             type="button"
@@ -813,8 +855,8 @@ export function StorefrontBlockEditor({
                         </button>
                         <button
                             type="button"
-                            onClick={() => void onSave(draft)}
-                            disabled={saving || Boolean(validation)}
+                            onClick={() => void onSave(draft, imageChanges.length > 0 && imagesConfirmed)}
+                            disabled={saving || Boolean(validation) || !imagesConfirmed}
                             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-5 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                             <Check className="h-4 w-4" />
