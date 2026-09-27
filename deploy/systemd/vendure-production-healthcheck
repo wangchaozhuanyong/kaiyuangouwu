@@ -127,8 +127,12 @@ check_restore_evidence "${vendure_restore_drill_evidence}" "${database_rto_secon
 check_restore_evidence "${vendure_file_restore_drill_evidence}" "${file_rto_seconds}" \
     "${VENDURE_REQUIRE_OFFSITE_FILE_BACKUP:-false}" 'file-restore-drill'
 
-disk_usage_percent="$(df --output=pcent / | tail -1 | tr -dc '0-9')"
-if [[ -z "${disk_usage_percent}" ]] || ((disk_usage_percent >= maximum_disk_usage_percent)); then
+disk_usage_kib="$(df -Pk / | awk 'NR == 2 { print $2, $3 }')" || disk_usage_kib=""
+read -r disk_total_kib disk_used_kib <<< "${disk_usage_kib}"
+if [[ ! "${maximum_disk_usage_percent}" =~ ^([1-9][0-9]?|100)$ ||
+    ! "${disk_total_kib}" =~ ^[1-9][0-9]*$ ||
+    ! "${disk_used_kib}" =~ ^[0-9]+$ ]] ||
+    ((disk_used_kib > disk_total_kib || disk_used_kib * 100 >= disk_total_kib * maximum_disk_usage_percent)); then
     failures+=("root-disk-high")
 fi
 
