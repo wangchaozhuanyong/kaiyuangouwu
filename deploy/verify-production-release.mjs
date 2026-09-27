@@ -404,6 +404,22 @@ export async function verifyProductionRelease({
         checks.push('expected Channel');
     }
 
+    const previewResponse = await fetchWithTimeout(
+        fetchImpl,
+        new URL('/shop-api', dashboard),
+        {
+            ...shopApiRequest(),
+            body: JSON.stringify({ query: 'query DecorationPreviewHealth { __typename }' }),
+        },
+        timeoutMs,
+    );
+    expectStatus(previewResponse, 200, 'Dashboard preview Shop API');
+    const previewBody = await readJson(previewResponse, 'Dashboard preview Shop API');
+    if (previewBody?.data?.__typename !== 'Query') {
+        throw new Error('Dashboard preview Shop API: GraphQL probe did not return Query');
+    }
+    checks.push('dashboard preview Shop API');
+
     const storefrontResponse = await fetchWithTimeout(
         fetchImpl,
         storefront,
