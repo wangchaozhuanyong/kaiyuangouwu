@@ -270,9 +270,16 @@ export class ManualDigitalDeliveryService {
 
     async recordEmailResult(ctx: RequestContext, id: ID, success: boolean, error?: Error): Promise<void> {
         const delivery = await this.ownedDelivery(ctx, id);
-        const wasManualReview = delivery.state === 'MANUAL_REVIEW';
+        const hadManualReview =
+            delivery.state === 'MANUAL_REVIEW' ||
+            delivery.events?.some(event => event.type === 'MANUAL_REVIEW') === true;
         // Old queued attempts must not reopen a cancelled or already completed task.
         if (delivery.state === 'CANCELLED' || delivery.state === 'SENT') {
+            return;
+        }
+        // A queued attempt rejected after the task reached manual review must not replace
+        // the original send error with a secondary "current state cannot send" error.
+        if (delivery.state === 'MANUAL_REVIEW' && !success) {
             return;
         }
         delivery.attemptCount += 1;
@@ -298,7 +305,7 @@ export class ManualDigitalDeliveryService {
         delivery.lastError = null;
         await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
         await this.addEvent(ctx, delivery, 'EMAIL_SENT', '人工交付邮件已发送');
-        if (wasManualReview) await this.resolveDeliveryFailure(ctx, delivery);
+        if (hadManualReview) await this.resolveDeliveryFailure(ctx, delivery);
         await this.resolveOverdue(ctx, delivery);
         await this.completeFulfillment(ctx, delivery);
     }

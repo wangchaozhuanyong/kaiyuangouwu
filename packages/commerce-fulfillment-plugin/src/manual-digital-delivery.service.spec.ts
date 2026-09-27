@@ -264,6 +264,44 @@ describe('ManualDigitalDeliveryService invariants', () => {
         });
         expect(notification?.notification.payload).not.toHaveProperty('recipientEmail');
     });
+
+    it('keeps the first failure for manual review and resolves its incident after a successful retry', async () => {
+        const test = createHarness('EMAIL_FAILED');
+        test.delivery.state = 'DRAFT';
+        await test.service.publish(test.ctx, { id: test.delivery.id, packages: test.packages });
+        test.delivery.state = 'EMAIL_FAILED';
+        test.delivery.attemptCount = 4;
+        await test.service.recordEmailResult(
+            test.ctx,
+            test.delivery.id,
+            false,
+            new Error('SMTP rejected recipient'),
+        );
+        expect(test.delivery.state).toBe('MANUAL_REVIEW');
+        const attempts = test.delivery.attemptCount;
+        test.eventBus.publish.mockClear();
+
+        await test.service.recordEmailResult(
+            test.ctx,
+            test.delivery.id,
+            false,
+            new Error('人工交付任务已关闭或当前状态不能发送邮件'),
+        );
+        expect(test.delivery.lastError).toBe('SMTP rejected recipient');
+        expect(test.delivery.attemptCount).toBe(attempts);
+        expect(test.eventBus.publish).not.toHaveBeenCalled();
+
+        await test.service.retry(test.ctx, test.delivery.id);
+        await test.service.recordEmailResult(test.ctx, test.delivery.id, true);
+        expect(test.delivery.state).toBe('SENT');
+        expect(
+            test.eventBus.publish.mock.calls.some(
+                call =>
+                    call[0] instanceof AdminNotificationRequestedEvent &&
+                    call[0].notification.mode === 'INCIDENT_RESOLVED',
+            ),
+        ).toBe(true);
+    });
 });
 
 it.each(['channel-2', null])(
