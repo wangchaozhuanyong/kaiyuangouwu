@@ -320,7 +320,7 @@ function MembersTable({
             description:
                 kind === 'PLATFORM'
                     ? '此操作会撤销您和目标账号的全部登录会话。您将降为平台管理员；平台仍只能有一名所有者。'
-                    : `目标账号将成为${getChannelDisplayName(member.access.channel?.code ?? '')}的唯一主管理员，原主管理员将降为普通管理员；双方会话立即失效。`,
+                    : `目标账号将成为${getChannelDisplayName(member.access.channel ?? '')}的唯一主管理员，原主管理员将降为普通管理员；双方会话立即失效。`,
             confirmLabel: '确认移交',
             tone: 'danger',
             requireCurrentPassword: true,
@@ -447,7 +447,7 @@ function MembersTable({
                                         <span className="shrink-0 rounded bg-blue-50 px-1.5 py-1 text-[9px] font-bold text-blue-700">
                                             {member.access.scope === 'PLATFORM'
                                                 ? '跨店'
-                                                : getChannelDisplayName(member.access.channel?.code ?? '')}
+                                                : getChannelDisplayName(member.access.channel ?? '')}
                                         </span>
                                     </div>
                                 </td>

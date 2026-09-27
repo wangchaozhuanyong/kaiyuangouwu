@@ -110,6 +110,8 @@ describe('RolesModule ownership transfer', () => {
             status: 'ACTIVE',
             channel: store,
         });
+        expect(container.textContent).toContain('模钥科技');
+        expect(container.textContent).not.toContain('店铺名称不可用');
         expect(container.querySelector('[aria-label="移交平台所有权给platform用户"]')).toBeNull();
         expect(container.querySelector('[aria-label="移交店铺主管理员给other用户"]')).toBeNull();
         const button = container.querySelector<HTMLButtonElement>(
@@ -118,7 +120,11 @@ describe('RolesModule ownership transfer', () => {
         expect(button).not.toBeNull();
         await act(async () => button?.click());
         expect(confirmation).toHaveBeenCalledWith(
-            expect.objectContaining({ requireCurrentPassword: true, tone: 'danger' }),
+            expect.objectContaining({
+                requireCurrentPassword: true,
+                tone: 'danger',
+                description: expect.stringContaining('模钥科技'),
+            }),
         );
         expect(transferStore).toHaveBeenCalledWith({
             variables: {

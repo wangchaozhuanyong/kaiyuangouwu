@@ -238,6 +238,7 @@ const fieldLabels = {
         SYSTEM: '系统',
         CUSTOMER: '客户',
         ADMIN: '管理员',
+        COOKIE_PREFERENCE: 'Cookie 偏好设置',
     },
     type: {
         IMAGE: '图片',

@@ -169,6 +169,7 @@ describe('DataManagementModule', () => {
         expect(container.textContent).toContain('同意与撤回证据');
         expect(container.textContent).toContain('访问统计');
         expect(container.textContent).toContain('已撤回');
+        expect(container.textContent).toContain('Cookie 偏好设置');
         expect(container.querySelectorAll('button').length).toBeGreaterThan(0);
     });
 
