@@ -2340,7 +2340,7 @@ html[lang='en'] .quick-grid b {
         .category-promotion-layout.is-visual-only
         .category-promotion-visual {
         min-height: 0;
-        aspect-ratio: 21 / 9;
+        aspect-ratio: auto;
     }
 
     .category-promotion-products {
