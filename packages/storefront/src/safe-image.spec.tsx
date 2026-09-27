@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { IMAGE_WAIT_EXPIRED_EVENT } from './image-readiness';
 import { isImageAlreadyDecoded } from './safe-image';
 import { SafeImage } from './storefront-ui/product-display';
 
@@ -22,6 +23,114 @@ function requiredImage(host: ParentNode): HTMLImageElement {
 }
 
 describe('SafeImage', () => {
+    it('gives a late-promoted lazy image its own network deadline', async () => {
+        vi.useFakeTimers();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() => root.render(<SafeImage src="/below-fold.png" alt="Product" loading="lazy" />));
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(60_000);
+            });
+            expect(requiredImage(host).getAttribute('src')).toBe('/below-fold.png');
+            expect(host.querySelector('[data-safe-image=timeout]')).toBeNull();
+            act(() => {
+                const image = requiredImage(host);
+                image.loading = 'eager';
+                image.dispatchEvent(new Event(IMAGE_WAIT_EXPIRED_EVENT));
+            });
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(14_999);
+            });
+            expect(requiredImage(host).getAttribute('src')).toBe('/below-fold.png');
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(1);
+            });
+            expect(host.querySelector('img')).toBeNull();
+        } finally {
+            act(() => root.unmount());
+            vi.useRealTimers();
+        }
+    });
+
+    it('does not expire a lazy image which has not been promoted into page loading', async () => {
+        vi.useFakeTimers();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() => root.render(<SafeImage src="/below-fold.png" alt="Product" loading="lazy" />));
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(60_000);
+            });
+            expect(requiredImage(host).getAttribute('src')).toBe('/below-fold.png');
+            expect(host.querySelector('[data-safe-image=timeout]')).toBeNull();
+        } finally {
+            act(() => root.unmount());
+            vi.useRealTimers();
+        }
+    });
+    it('clears the previous deadline when the image source changes', async () => {
+        vi.useFakeTimers();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() =>
+                root.render(<SafeImage src="/previous.png" alt="Product" srcSet="/previous-large.png 2x" />),
+            );
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(10_000);
+            });
+            act(() =>
+                root.render(<SafeImage src="/current.png" alt="Product" srcSet="/current-large.png 2x" />),
+            );
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(5_100);
+            });
+            expect(requiredImage(host).getAttribute('src')).toBe('/current.png');
+            const image = requiredImage(host);
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(10_000);
+            });
+            expect(host.querySelector('img')).toBeNull();
+            expect(image.hasAttribute('srcset')).toBe(false);
+        } finally {
+            act(() => root.unmount());
+            vi.useRealTimers();
+        }
+    });
+    it('releases the stalled responsive image preload while keeping other preloads', async () => {
+        vi.useFakeTimers();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const matching = document.createElement('link');
+        const unrelated = document.createElement('link');
+        matching.rel = unrelated.rel = 'preload';
+        matching.setAttribute('as', 'image');
+        unrelated.setAttribute('as', 'image');
+        matching.href = '/default-preload.png';
+        matching.setAttribute('imagesrcset', '/selected-preload.png 2x');
+        unrelated.href = '/next-route.png';
+        document.head.append(matching, unrelated);
+        try {
+            act(() =>
+                root.render(
+                    <SafeImage src="/small-preload.png" srcSet="/selected-preload.png 2x" alt="Product" />,
+                ),
+            );
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(15_000);
+            });
+            expect(matching.isConnected).toBe(false);
+            expect(unrelated.isConnected).toBe(true);
+            expect(host.querySelector('img')).toBeNull();
+        } finally {
+            act(() => root.unmount());
+            matching.remove();
+            unrelated.remove();
+            vi.useRealTimers();
+        }
+    });
+
     it('shows a product-image message only after all image sources fail and clears it for a replacement', () => {
         const host = document.createElement('div');
         const root = createRoot(host);

@@ -26,6 +26,7 @@ import {
     PointerEvent as ReactPointerEvent,
     useCallback,
     useEffect,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -1583,6 +1584,9 @@ function CategoryPromotionSection({
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const isZh = language === 'zh';
+    const desktop = useDesktopLayout();
+    const productRailRef = useRef<HTMLDivElement>(null);
+    const [scrollbarHeight, setScrollbarHeight] = useState(0);
     const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
     const displayCount = Math.min(4, Math.max(1, contentNumberSetting(block.settings?.displayCount, 4)));
     const categoryProducts = selectCategoryPromotionProducts({
@@ -1598,6 +1602,20 @@ function CategoryPromotionSection({
     const sectionClassName = `content-section managed-content-section managed-content-category_ad category-promotion-section${
         colorfulMarketplace ? ' is-color-marketplace' : ''
     }`;
+
+    useLayoutEffect(() => {
+        const rail = productRailRef.current;
+        if (!desktop || !rail) {
+            setScrollbarHeight(0);
+            return;
+        }
+        // Align the artwork with the cards, excluding any native scrollbar below them.
+        const measure = () => setScrollbarHeight(Math.max(0, rail.offsetHeight - rail.clientHeight));
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(rail);
+        return () => observer.disconnect();
+    }, [desktop, categoryProducts.length]);
 
     return (
         <section
@@ -1615,6 +1633,7 @@ function CategoryPromotionSection({
             <div className={`category-promotion-layout${hasSupportingContent ? '' : ' is-visual-only'}`}>
                 <button
                     className="category-promotion-visual"
+                    style={desktop ? { marginBottom: scrollbarHeight } : undefined}
                     type="button"
                     disabled={!blockHasTarget}
                     onClick={() => onContentTarget(block.targetType, block.targetValue)}
@@ -1636,6 +1655,7 @@ function CategoryPromotionSection({
 
                 {categoryProducts.length ? (
                     <div
+                        ref={productRailRef}
                         className={`product-grid category-promotion-products category-promotion-products-${productGridCount} desktop-product-rail is-four-column`}
                     >
                         {categoryProducts.map(product => (

@@ -292,7 +292,7 @@ export function FlashSaleSection({
                 title={title}
                 action={onMore ? (isZh ? '更多' : 'More') : undefined}
                 onAction={onMore}
-                endContent={
+                titleSuffix={
                     countdown ? (
                         <div
                             className="flash-sale-countdown"

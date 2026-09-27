@@ -2071,7 +2071,7 @@ html[lang='en'] .quick-grid b {
 
 .flash-sale-countdown {
     min-height: 28px;
-    margin: 0 0 0 auto;
+    margin: 0;
     padding: 4px 6px;
     border-radius: 8px;
     background: var(--surface);
@@ -2089,10 +2089,21 @@ html[lang='en'] .quick-grid b {
     min-width: 0;
 }
 
+.flash-sale-section .section-header {
+    align-items: flex-start;
+}
+
+.flash-sale-section .section-header-title-row {
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.flash-sale-section .section-header-action-btn {
+    flex-shrink: 0;
+}
+
 .flash-sale-section .section-header h2 {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
 }
 
 @media (max-width: 460px) {
@@ -2235,7 +2246,8 @@ html[lang='en'] .quick-grid b {
 }
 
 .flash-sale-price {
-    margin: 4px 2px 0;
+    margin: auto 2px 0;
+    padding-top: 4px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;

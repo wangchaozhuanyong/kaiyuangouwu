@@ -644,6 +644,7 @@ describe('HomePage flash-sale product count', () => {
         expect(markup).toContain('preset=storefront-thumbnail-160');
         expect(markup).toContain('sizes="(min-width: 1024px) 220px, (min-width: 420px) 126px, 30vw"');
         expect(markup).toMatch(/<header class="section-header">[\s\S]*role="timer"[\s\S]*<\/header>/);
+        expect(markup).toContain('<h2>限时秒杀</h2><div class="flash-sale-countdown"');
     });
 
     it('still honors an explicit merchant display limit', () => {

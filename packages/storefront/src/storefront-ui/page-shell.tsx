@@ -262,6 +262,7 @@ export function SectionIcon({ kind }: { kind: SectionKind }) {
 
 export function SectionHeader({
     title,
+    titleSuffix,
     subtitle,
     centerLabel,
     action,
@@ -272,6 +273,7 @@ export function SectionHeader({
     endContent,
 }: {
     title?: string;
+    titleSuffix?: ReactNode;
     subtitle?: string;
     centerLabel?: string;
     action?: string;
@@ -298,6 +300,7 @@ export function SectionHeader({
                             )
                         )}
                         {title && <h2>{title}</h2>}
+                        {titleSuffix}
                     </div>
                     {subtitle && !subtitleAtEnd ? <p>{subtitle}</p> : null}
                 </div>

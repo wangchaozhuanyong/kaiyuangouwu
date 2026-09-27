@@ -22,6 +22,24 @@ export function decodeImageElement(image: HTMLImageElement): Promise<void> {
 }
 
 export const IMAGE_WAIT_EXPIRED_EVENT = 'storefront-image-wait-expired';
+export const IMAGE_REQUEST_TIMEOUT_MS = 15_000;
+
+/** Cancel the image and any shared preload which still holds the document load open. */
+export function cancelPendingImage(image: HTMLImageElement): void {
+    const candidates = new Set([image.src, image.currentSrc].filter(Boolean));
+    for (const hint of document.querySelectorAll<HTMLLinkElement>('link[rel="preload"][as="image"]')) {
+        if (
+            candidates.has(hint.href) ||
+            (image.srcset && hint.getAttribute('imagesrcset') === image.srcset)
+        ) {
+            hint.removeAttribute('imagesrcset');
+            hint.removeAttribute('href');
+            hint.remove();
+        }
+    }
+    image.removeAttribute('srcset');
+    image.removeAttribute('src');
+}
 
 /** Hidden slides and offscreen media must never hold up the current viewport. */
 export function isFirstViewportElement(element: Element, root: Element): boolean {
