@@ -47,6 +47,7 @@ export function LocalePreferencesSheet({
     currencyCodes,
     selectedCurrencyCode,
     currencyLoading,
+    storefrontLabel,
     onToggleLanguage,
     onSelectCurrency,
     onClose,
@@ -55,6 +56,7 @@ export function LocalePreferencesSheet({
     currencyCodes: string[];
     selectedCurrencyCode: string;
     currencyLoading: boolean;
+    storefrontLabel: string;
     onToggleLanguage: () => void;
     onSelectCurrency: (currencyCode: string) => void | Promise<void>;
     onClose: () => void;
@@ -88,6 +90,10 @@ export function LocalePreferencesSheet({
             initialFocus="dialog"
         >
             <div className="locale-preferences-content" aria-busy={saving || currencyLoading}>
+                <p className="locale-preferences-store">
+                    <small>{isZh ? '当前店铺' : 'Current storefront'}</small>
+                    <strong>{storefrontLabel}</strong>
+                </p>
                 <fieldset className="locale-preferences-fieldset">
                     <legend>
                         <Languages aria-hidden="true" />

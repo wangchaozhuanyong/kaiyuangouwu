@@ -79,6 +79,7 @@ export function MobilePageHeader({
             </header>
             {preferencesOpen && onToggleLanguage && onCurrencyChange ? (
                 <LocalePreferencesSheet
+                    storefrontLabel={storefrontName}
                     language={language}
                     currencyCodes={
                         availableCurrencyCodes.length ? availableCurrencyCodes : [displayCurrencyCode]

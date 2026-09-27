@@ -80,7 +80,7 @@ export type ApplyCollectionFiltersJobData = {
 export class CollectionService implements OnModuleInit {
     // The collection tree has one structural root. Store isolation is enforced on each
     // non-root Collection's Channel assignment, not by creating a root per Channel.
-    private rootCollection: Translated<Collection> | undefined;
+    private rootCollection: Collection | undefined;
     private applyFiltersQueue: JobQueue<ApplyCollectionFiltersJobData>;
     private applyAllFiltersOnProductUpdates = true;
 
@@ -424,9 +424,10 @@ export class CollectionService implements OnModuleInit {
         maxDepth: number = Number.MAX_SAFE_INTEGER,
     ): Promise<Array<Translated<Collection>>> {
         const getChildren = async (id: ID, _descendants: Collection[] = [], depth = 1) => {
-            const children = await this.connection
-                .getRepository(ctx, Collection)
-                .find({ where: { parent: { id } }, order: { position: 'ASC' } });
+            const children = await this.connection.getRepository(ctx, Collection).find({
+                where: { parent: { id }, channels: { id: ctx.channelId } },
+                order: { position: 'ASC' },
+            });
             for (const child of children) {
                 _descendants.push(child);
                 if (depth < maxDepth) {
@@ -928,21 +929,22 @@ export class CollectionService implements OnModuleInit {
         const cachedRoot = this.rootCollection;
 
         if (cachedRoot) {
-            return cachedRoot;
+            return this.translator.translate(cachedRoot, ctx);
         }
 
         const existingRoot = await this.connection
             .getRepository(ctx, Collection)
             .createQueryBuilder('collection')
-            .leftJoin('collection.channels', 'channel')
             .leftJoinAndSelect('collection.translations', 'translation')
             .where('collection.isRoot = :isRoot', { isRoot: true })
-            .andWhere('channel.id = :channelId', { channelId: ctx.channelId })
+            // Legacy databases can retain multiple roots. Use one stable structural root without
+            // creating additional roots for stores or rewriting their existing category parents.
+            .orderBy('collection.id', 'ASC')
             .getOne();
 
         if (existingRoot) {
-            this.rootCollection = this.translator.translate(existingRoot, ctx);
-            return this.rootCollection;
+            this.rootCollection = existingRoot;
+            return this.translator.translate(existingRoot, ctx);
         }
 
         // We purposefully do not use the ctx in saving the new root Collection
@@ -966,8 +968,8 @@ export class CollectionService implements OnModuleInit {
                 filters: [],
             }),
         );
-        this.rootCollection = this.translator.translate(newRoot, ctx);
-        return this.rootCollection;
+        this.rootCollection = newRoot;
+        return this.translator.translate(newRoot, ctx);
     }
 
     /**

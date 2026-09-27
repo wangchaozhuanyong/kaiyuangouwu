@@ -947,6 +947,7 @@ describe('LocalePreferencesSheet', () => {
     it('stages language and currency in one accessible preference dialog', () => {
         const markup = renderToStaticMarkup(
             <LocalePreferencesSheet
+                storefrontLabel="测试店铺"
                 currencyCodes={['MYR', 'USDT']}
                 selectedCurrencyCode="USDT"
                 currencyLoading={false}
@@ -959,6 +960,8 @@ describe('LocalePreferencesSheet', () => {
 
         expect(markup).toContain('class="sheet locale-preferences-sheet"');
         expect(markup).toContain('语言与货币');
+        expect(markup).toContain('当前店铺');
+        expect(markup).toContain('测试店铺');
         expect(markup).not.toContain('locale-preferences-market');
         expect(markup.match(/role="radiogroup"/g)).toHaveLength(2);
         expect(markup).toContain('role="radiogroup"');

@@ -114,6 +114,8 @@ describe('desktop header search', () => {
         const dialog = document.body.querySelector<HTMLElement>('.locale-preferences-sheet');
         expect(dialog?.getAttribute('role')).toBe('dialog');
         expect(dialog?.textContent).toContain('语言与货币');
+        expect(dialog?.querySelector('.locale-preferences-store')?.textContent).toContain('大马通');
+        expect(dialog?.querySelector('.locale-preferences-store')?.textContent).not.toContain('马来西亚');
         expect(dialog?.textContent).toContain('保存设置');
 
         const buttons = Array.from(dialog?.querySelectorAll<HTMLButtonElement>('button') ?? []);

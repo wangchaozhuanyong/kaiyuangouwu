@@ -853,7 +853,8 @@ describe('Collection resolver', () => {
                 fail('did not return the collection');
                 return;
             }
-            expect(result.collection.children?.map(c => c.position)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+            // Position 5 belongs only to the second Channel; scoped children retain tree order.
+            expect(result.collection.children?.map(c => c.position)).toEqual([0, 1, 2, 3, 4, 6]);
         });
 
         async function getChildrenOf(parentId: string): Promise<Array<{ name: string; id: string }>> {
@@ -2340,6 +2341,28 @@ describe('Collection resolver', () => {
                 id: targetCollectionId,
             });
             expect(collection?.name).toBe('Channel-A Collection');
+        });
+
+        it('keeps shared-root children scoped when reading through a category parent', async () => {
+            // Historical root-cache review: one structural root must not expose other stores' children.
+            adminClient.setChannelToken(CHANNEL_A_TOKEN);
+            const document = graphql(`
+                query StoreRootChildren($id: ID!) {
+                    collection(id: $id) {
+                        id
+                        parent {
+                            id
+                            children {
+                                id
+                                name
+                            }
+                        }
+                    }
+                }
+            `);
+            const { collection } = await adminClient.query(document, { id: targetCollectionId });
+            expect(collection?.parent?.children.map(child => child.id)).toEqual([targetCollectionId]);
+            expect(collection?.parent?.children.map(child => child.name)).toEqual(['Channel-A Collection']);
         });
     });
 
