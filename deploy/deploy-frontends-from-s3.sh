@@ -63,6 +63,21 @@ import json,pathlib,sys
 pathlib.Path(sys.argv[1]).write_text(json.dumps({'sourceSha':sys.argv[2],'backendSha':sys.argv[3],'artifactSha256':sys.argv[4],'component':sys.argv[5]})+'\n')
 PYMANIFEST
 done
+if [[ ",$components," == *,storefront,* ]]; then
+    tool="$staging/payload/storefront/.two-factor"
+    test -s "$tool/index.html"
+    test -d "$tool/assets"
+    cp "$staging/payload/storefront/frontend-release.json" "$tool/frontend-release.json"
+    python3 - "$tool/frontend-release.json" <<'PYVAULT'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); value=json.loads(p.read_text())
+value['component']='two-factor'
+p.write_text(json.dumps(value)+'\n')
+PYVAULT
+    # Detect missing companion files or an active vault using a runtime-bound
+    # root before changing either public frontend pointer.
+    sudo -n nginx -T 2>/dev/null | node deploy/frontend-release.mjs vault-routing "$staging/payload/storefront"
+fi
 if [[ -e "$candidate" ]]; then
     diff --recursive --brief "$candidate" "$staging/payload" || fail 'Existing immutable candidate differs from the verified payload'
 else

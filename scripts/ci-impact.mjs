@@ -91,9 +91,7 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
             file =>
                 STATIC_APPS.some(app => file.startsWith(`packages/${app}/`)) &&
                 !/(^|\/)(package\.json|[^/]*config\.[^/]+|\.env[^/]*)$/u.test(file) &&
-                !/packages\/storefront\/(two-factor-tool\/|src\/client-plugins\/two-factor\/|src\/assets\/(storefront|brand)\/)/u.test(
-                    file,
-                ),
+                !/packages\/storefront\/src\/assets\/(storefront|brand)\//u.test(file),
         );
     const frontends = sorted([...selected].filter(name => STATIC_APPS.includes(name)));
     const packages = sorted([...selected].filter(name => !STATIC_APPS.includes(name)));

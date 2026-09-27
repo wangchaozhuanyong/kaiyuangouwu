@@ -91,6 +91,8 @@ verification_result:
 - PM2 进程：`vendure-api`、`vendure-worker`
 - PM2 生产环境固定设置 `VENDURE_DISABLE_TELEMETRY=true`，防止 Vendure 的文件系统兜底在不可变运行目录内写入 `.vendure/.installation-id`
 - 新流程 Storefront 指针：`/var/www/kaiyuangouwu-storefront-current`
+- 独立 2FA 指针：`/var/www/kaiyuangouwu-two-factor-current`。商城前台快速包同时包含主 `dist` 和私有 `.two-factor` 伴随目录（来自 `dist-two-factor`），不能复用只包含主商城的旧包。发布同时切换商城与 2FA 指针；整包发布也初始化/更新该指针及独立版本清单。独立虚拟主机必须从该指针服务，配置的独立 origin 在切换前校验 Nginx root，切换后校验该 origin 的 HTML、版本清单及真实 JS/CSS 响应。未配置独立 origin 时只校验伴随产物，不启用新域名或扩大商城 CSP。
+- 2FA 的样式、组件、独立入口属于前台路径；配置、依赖、后端及数据库变更仍按累计差异判断。此流程修复首次安装涉及服务器发布脚本：先把审核后的脚本纳入一次正常维护发布；安装后普通 2FA 美工无需重建后端或恢复演练。已有独立虚拟主机仍指向 runtime 目录时，先更新为上述独立指针，再验证；不得跳过切换前检查继续发布。
 - 新流程 Dashboard 指针：`/var/www/kaiyuangouwu-next-admin-current`（Nginx 同时从该指针提供 HTML 与 assets，Admin API 保持原路径）
 - 首次运行时发布把两个指针指向运行产物中的对应 `dist`，之后前端发布可切换到 `/var/www/kaiyuangouwu-frontend-releases` 的不可变目录。运行时版本与前端版本分别记录。前端目录不参与现有运行时保留脚本的自动清理。
 - Nginx 配置基线：`deploy/nginx/damatong.conf`（保留兼容文件名，已覆盖双店域名）

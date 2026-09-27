@@ -14,14 +14,13 @@ import {
     Store,
     TicketPercent,
     Truck,
-    UserRound,
     WalletCards,
 } from 'lucide-react';
 // eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
 import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
-import accountRefractionImage from '../assets/ui/account-refraction.webp';
+import { AccountIdentity } from '../components/common/account-identity';
 import { AccountOrderCarousel } from '../components/common/account-order-carousel';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { useDesktopLayout } from '../desktop-layout';
@@ -32,7 +31,6 @@ import {
     readCachedReferralProgram,
     writeCachedReferralProgram,
 } from '../referral-client-feature';
-import { SafeImage } from '../safe-image';
 import { AccountPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { orderStateLabel } from '../storefront-ui/order-ui';
@@ -60,7 +58,6 @@ export interface AccountPageProps {
     language: StorefrontLanguage;
     storefrontName: string;
     logoUrl: string | null;
-    accountHeroImageUrl: string | null;
     favoriteProductCount: number;
     couponCount: number;
     displayCurrencyCode?: string;
@@ -88,7 +85,6 @@ export function AccountPage() {
         language,
         storefrontName,
         logoUrl,
-        accountHeroImageUrl,
         favoriteProductCount,
         couponCount,
         displayCurrencyCode,
@@ -181,9 +177,6 @@ export function AccountPage() {
             orders.flatMap(order => order.lines).map(line => [line.productVariant.id, line.productVariant]),
         ).values(),
     ).slice(0, 2);
-    const customerName = customer
-        ? `${customer.lastName}${customer.firstName}`.trim() || customer.emailAddress
-        : '';
 
     if (desktop)
         return (
@@ -203,7 +196,8 @@ export function AccountPage() {
                 onRetryCounts={() => void countsQuery.refetch()}
                 afterSalesCount={afterSalesQuery.data ? activeAfterSalesCount : undefined}
                 referralEnabled={referralEnabled}
-                referralBalance={referralWallet?.availableBalance}
+                referralPending={referralProgramQuery.isPending}
+                referralBalance={referralOverviewQuery.isError ? undefined : referralWallet?.availableBalance}
                 navigate={navigateTo}
             />
         );
@@ -228,158 +222,19 @@ export function AccountPage() {
                     onNotifications={() => navigateTo({ name: 'notifications' })}
                 />
             )}
-            <section
-                className={`account-hero lg:col-span-full ${accountHeroImageUrl ? 'has-custom-background' : ''}`}
-                aria-labelledby={customer ? undefined : 'guest-account-title'}
-            >
-                {accountHeroImageUrl && (
-                    <SafeImage
-                        src={accountHeroImageUrl}
-                        fallbackSrc={accountRefractionImage}
-                        placeholderSrc={accountRefractionImage}
-                        frameClassName="account-hero-art"
-                        imageKind="hero"
-                        sizes="100vw"
-                        alt=""
-                    />
-                )}
-                {customer ? (
-                    <div className="account-hero-content">
-                        <div className="account-hero-identity">
-                            <div className="account-hero-avatar-wrap">
-                                <button
-                                    className="account-hero-avatar-button"
-                                    type="button"
-                                    onClick={() => navigateTo({ name: 'account-security' })}
-                                    aria-label={isZh ? '个人信息与安全' : 'Profile and security'}
-                                >
-                                    <span className="account-hero-avatar">
-                                        {customer.avatar?.preview ? (
-                                            <SafeImage
-                                                className="size-full rounded-full object-cover"
-                                                src={customer.avatar.preview}
-                                                alt=""
-                                            />
-                                        ) : desktop ? (
-                                            <UserRound aria-hidden="true" />
-                                        ) : (
-                                            customerName.slice(0, 1).toUpperCase()
-                                        )}
-                                    </span>
-                                </button>
-                            </div>
-
-                            <div className="account-hero-details">
-                                <h1 className="account-hero-name">
-                                    <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-                                        {customerName}
-                                    </span>
-                                </h1>
-                                <button
-                                    className="account-hero-profile"
-                                    type="button"
-                                    onClick={() => navigateTo({ name: 'account-security' })}
-                                >
-                                    {isZh ? '查看个人资料' : 'View profile'}
-                                    <ChevronRight aria-hidden="true" />
-                                </button>
-                            </div>
-                        </div>
-
-                        <div
-                            className="account-hero-assets"
-                            role="group"
-                            aria-label={isZh ? '账户快捷入口' : 'Account shortcuts'}
-                        >
-                            {referralEnabled ? (
-                                <button
-                                    type="button"
-                                    className="account-hero-asset"
-                                    onClick={() => navigateTo({ name: 'referral' })}
-                                >
-                                    <strong className="account-hero-asset-value">
-                                        {referralOverviewQuery.isLoading ||
-                                        referralOverviewQuery.isError ||
-                                        !referralWallet
-                                            ? '—'
-                                            : formatMoney(
-                                                  referralWallet.availableBalance,
-                                                  market.currencyCode,
-                                                  locale,
-                                              )}
-                                    </strong>
-                                    <span className="account-hero-asset-label">
-                                        {isZh ? '返利余额' : 'Referral balance'}
-                                    </span>
-                                </button>
-                            ) : (
-                                <button
-                                    type="button"
-                                    className="account-hero-asset"
-                                    onClick={() => navigateTo({ name: 'favorites' })}
-                                >
-                                    <strong className="account-hero-asset-value">
-                                        {favoriteProductCount}
-                                    </strong>
-                                    <span className="account-hero-asset-label">
-                                        {isZh ? '我的收藏' : 'Favorites'}
-                                    </span>
-                                </button>
-                            )}
-                            <button
-                                type="button"
-                                className="account-hero-asset"
-                                onClick={() => navigateTo({ name: 'coupons' })}
-                            >
-                                <strong className="account-hero-asset-value">{couponCount}</strong>
-                                <span className="account-hero-asset-label">
-                                    {isZh ? '有效优惠券' : 'Coupons'}
-                                </span>
-                            </button>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="account-hero-content account-hero-guest">
-                        <div className="account-hero-identity">
-                            <div className="account-hero-avatar-wrap">
-                                <span className="account-hero-avatar">
-                                    <UserRound aria-hidden="true" />
-                                </span>
-                            </div>
-                            <div className="account-hero-details">
-                                <h1 id="guest-account-title" className="account-hero-name">
-                                    <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-                                        {isZh ? `欢迎来到 ${storefrontName}` : `Welcome to ${storefrontName}`}
-                                    </span>
-                                </h1>
-                                <div className="account-hero-meta">
-                                    <span>
-                                        {isZh
-                                            ? '登录后享受会员特权与专属优惠'
-                                            : 'Sign in for member benefits and offers'}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="account-hero-guest-actions">
-                            <button
-                                type="button"
-                                className="account-hero-signin"
-                                onClick={() => navigateTo({ name: 'login' })}
-                            >
-                                {isZh ? '立即登录' : 'Sign in'}
-                            </button>
-                            <button
-                                type="button"
-                                className="account-hero-register"
-                                onClick={() => navigateTo({ name: 'register' })}
-                            >
-                                {isZh ? '免费注册' : 'Register'}
-                            </button>
-                        </div>
-                    </div>
-                )}
-            </section>
+            <AccountIdentity
+                customer={customer}
+                storefrontName={storefrontName}
+                language={language}
+                favoriteCount={favoriteProductCount}
+                couponCount={couponCount}
+                referralEnabled={referralEnabled}
+                referralPending={referralProgramQuery.isPending}
+                referralBalance={referralOverviewQuery.isError ? undefined : referralWallet?.availableBalance}
+                currencyCode={market.currencyCode}
+                locale={locale}
+                navigate={navigateTo}
+            />
 
             <section className={`account-orders ${accountSectionClass}`}>
                 <SectionHeader

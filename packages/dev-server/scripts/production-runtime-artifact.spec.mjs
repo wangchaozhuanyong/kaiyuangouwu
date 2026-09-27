@@ -56,13 +56,14 @@ void test('runtime artifact serves the standalone next-admin application', () =>
     assert.ok(!REQUIRED_RUNTIME_FILES.includes('packages/dev-server/dist/dashboard/index.html'));
 });
 
-void test('full runtime writes public frontend revision manifests for both applications', async () => {
+void test('full runtime writes public revisions for both applications and isolated 2FA', async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-frontend-revisions-'));
     const gitSha = 'a'.repeat(40);
     try {
         for (const component of ['storefront', 'next-admin']) {
             await mkdir(path.join(fixtureRoot, 'packages', component, 'dist'), { recursive: true });
         }
+        await mkdir(path.join(fixtureRoot, 'packages/storefront/dist-two-factor'), { recursive: true });
         await writeRuntimeFrontendReleaseManifests(fixtureRoot, gitSha);
         for (const component of ['storefront', 'next-admin']) {
             const manifest = JSON.parse(
@@ -78,6 +79,18 @@ void test('full runtime writes public frontend revision manifests for both appli
                 releaseLane: 'runtime',
             });
         }
+        const toolManifest = JSON.parse(
+            await readFile(
+                path.join(fixtureRoot, 'packages/storefront/dist-two-factor/frontend-release.json'),
+                'utf8',
+            ),
+        );
+        assert.deepEqual(toolManifest, {
+            sourceSha: gitSha,
+            backendSha: gitSha,
+            component: 'two-factor',
+            releaseLane: 'runtime',
+        });
     } finally {
         await rm(fixtureRoot, { recursive: true, force: true });
     }

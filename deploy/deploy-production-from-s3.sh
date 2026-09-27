@@ -9,6 +9,7 @@ readonly repository="/var/www/kaiyuangouwu"
 readonly releases_dir="/var/www/kaiyuangouwu-releases"
 readonly current_pointer="/var/www/kaiyuangouwu-current"
 readonly storefront_pointer="/var/www/kaiyuangouwu-storefront-current"
+readonly two_factor_pointer="/var/www/kaiyuangouwu-two-factor-current"
 readonly admin_pointer="/var/www/kaiyuangouwu-next-admin-current"
 readonly current_marker="${releases_dir}/current-sha"
 readonly deploy_lock="/run/lock/vendure-production-deploy.lock"
@@ -395,6 +396,10 @@ readonly previous_admin="$(
     if [[ -L "${admin_pointer}" ]]; then readlink -f "${admin_pointer}";
     else printf '%s' "${previous_runtime}/packages/next-admin/dist"; fi
 )"
+readonly previous_two_factor="$(
+    if [[ -L "${two_factor_pointer}" ]]; then readlink -f "${two_factor_pointer}";
+    else printf '%s' "${previous_runtime}/packages/storefront/dist-two-factor"; fi
+)"
 readonly staging_dir="$(mktemp -d "${releases_dir}/.incoming-${artifact_name}.XXXXXX")"
 readonly archive_path="${staging_dir}/${archive_name}"
 readonly checksum_path="${staging_dir}/${checksum_name}"
@@ -408,6 +413,7 @@ worker_paused_early=0
 nginx_changed=0
 pointer_changed=0
 storefront_pointer_changed=0
+two_factor_pointer_changed=0
 admin_pointer_changed=0
 
 refresh_image_processor() {
@@ -461,6 +467,10 @@ rollback() {
             sudo -n node "${repository}/deploy/storefront-release.mjs" switch \
                 "${previous_storefront:-${previous_runtime}/packages/storefront/dist}" "${storefront_pointer}" ||
                 printf 'STOREFRONT_ROLLBACK_FAILED\n' >&2
+        fi
+        if [[ "${two_factor_pointer_changed}" == "1" ]]; then
+            sudo -n node "${repository}/deploy/storefront-release.mjs" switch \
+                "${previous_two_factor}" "${two_factor_pointer}" || printf 'TWO_FACTOR_ROLLBACK_FAILED\n' >&2
         fi
         if ! node "${repository}/deploy/usdt-migration-guard.cjs" check-runtime "${previous_runtime}"; then
             pm2 stop vendure-worker vendure-api 9>&- || true
@@ -556,6 +566,8 @@ fi
 
 [[ "$(stat --format='%a' "${candidate}")" == "755" ]] || fail 'runtime directory mode is not 755'
 node "${candidate}/verify-runtime.mjs" --expected-sha "${target_sha}"
+sudo -n nginx -T 2>/dev/null | node "${repository}/deploy/frontend-release.mjs" \
+    vault-routing-tool "${candidate}/packages/storefront/dist-two-factor"
 
 retain_release_file() {
     local source_path="${1}"
@@ -957,6 +969,9 @@ sudo -n node "${repository}/deploy/storefront-release.mjs" switch \
     "${candidate}/packages/storefront/dist" "${storefront_pointer}"
 storefront_pointer_changed=1
 sudo -n node "${repository}/deploy/storefront-release.mjs" switch \
+    "${candidate}/packages/storefront/dist-two-factor" "${two_factor_pointer}"
+two_factor_pointer_changed=1
+sudo -n node "${repository}/deploy/storefront-release.mjs" switch \
     "${candidate}/packages/next-admin/dist" "${admin_pointer}"
 admin_pointer_changed=1
 sudo -n cp -p "${nginx_target}" "${nginx_backup}"
@@ -964,6 +979,8 @@ sudo -n install -o root -g root -m 0644 "${repository}/deploy/nginx/damatong.con
 nginx_changed=1
 sudo -n nginx -t
 sudo -n systemctl reload nginx
+node "${repository}/deploy/frontend-release.mjs" verify-two-factor \
+    "${candidate}/packages/storefront/dist-two-factor" "${deployment_id}"
 
 sudo -n ln -s "${candidate}" "/var/www/.kaiyuangouwu-current.new.$$"
 sudo -n mv -Tf "/var/www/.kaiyuangouwu-current.new.$$" "${current_pointer}"

@@ -11,6 +11,7 @@ import {
 
 import '../commerce-styles';
 import '../styles/account-catalog-surfaces.css';
+import '../styles/account-identity.css';
 import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
 
 const AccountPage = lazyRouteComponent(() => import('../pages/account-page'), 'AccountPage');
@@ -43,8 +44,6 @@ export function AccountRoutePage() {
                     language: runtime.language,
                     storefrontName: runtime.storefrontName,
                     logoUrl: runtime.logoUrl,
-                    accountHeroImageUrl:
-                        runtime.contentBlocks.find(block => block.type === 'ACCOUNT_HERO')?.imageUrl ?? null,
                     favoriteProductCount: runtime.favoriteProductIds.length,
                     couponCount: runtime.myCoupons.filter((coupon: { status: string }) =>
                         ['AVAILABLE', 'RETURNED', 'LOCKED'].includes(coupon.status),

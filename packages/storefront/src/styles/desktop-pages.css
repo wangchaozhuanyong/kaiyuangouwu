@@ -598,7 +598,7 @@
     .desktop-cart-columns,
     .desktop-cart-row {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 100px 100px 100px;
+        grid-template-columns: minmax(0, 1fr) 100px 136px 112px;
         align-items: center;
         gap: 20px;
         padding: 14px 24px;
@@ -614,13 +614,19 @@
         text-align: center;
     }
     .desktop-cart-row {
-        min-height: 104px;
+        min-height: 148px;
+        padding: 20px 0;
+        row-gap: 12px;
         background: transparent;
-        margin: 0 12px;
+        margin: 0 24px;
         border-top: 0;
-        border-radius: var(--radius-sm);
+        border-radius: 0;
         box-shadow: none;
         font-size: 14px;
+    }
+    .desktop-cart-columns > :last-child,
+    .desktop-cart-row > .desktop-cart-amount {
+        text-align: right;
     }
     .desktop-cart-product {
         display: flex;
@@ -653,7 +659,7 @@
     }
     .desktop-cart-product-link strong {
         overflow-wrap: anywhere;
-        font-weight: 500;
+        font-weight: var(--font-weight-semibold);
     }
     .desktop-cart-quantity {
         display: flex;
@@ -671,27 +677,35 @@
     }
     .desktop-cart-actions {
         grid-column: 1 / -1;
-        padding-left: 42px;
+        padding: 0;
         position: relative;
         display: flex;
         align-items: center;
-        justify-content: flex-start;
-        gap: 10px;
+        justify-content: flex-end;
+        gap: 4px 12px;
         flex-wrap: wrap;
     }
     .desktop-cart-actions button,
     .desktop-cart-actions summary {
         border: 0;
         background: none;
-        padding: 2px 4px;
+        min-height: 44px;
+        padding: 8px 6px;
+        border-radius: var(--skin-control-radius);
         color: var(--muted);
         font-size: 13px;
         cursor: pointer;
         transition: color 0.15s ease;
     }
-    .desktop-cart-actions button:hover,
+    .desktop-cart-actions button:hover:not(:disabled),
     .desktop-cart-actions summary:hover {
         color: var(--accent);
+        background: var(--control-surface-hover);
+    }
+    .desktop-cart-actions button:focus-visible,
+    .desktop-cart-actions summary:focus-visible {
+        outline: var(--experience-focus-width) solid var(--focus);
+        outline-offset: -2px;
     }
     .desktop-cart-actions details {
         position: relative;
@@ -800,7 +814,7 @@
         display: flex;
         flex-direction: column;
         min-width: 0;
-        gap: 0;
+        gap: 16px;
         padding: 24px;
         background: var(--surface, var(--paper));
         border-radius: var(--skin-card-radius);
@@ -864,9 +878,27 @@
     .desktop-store-layout .checkout-page .checkout-summary-section h2 {
         margin-bottom: 12px;
     }
+    .desktop-store-layout .checkout-page .checkout-summary-section .price-summary {
+        display: grid;
+        gap: 8px;
+    }
+    .desktop-store-layout .checkout-page .checkout-summary-section .price-summary > div {
+        gap: 12px;
+    }
+    .desktop-store-layout
+        .checkout-page
+        .checkout-summary-section
+        .price-summary
+        > div:not(.tax-detail):not(.shipping-estimate-detail):not(.summary-total) {
+        min-height: 44px;
+    }
+    .desktop-store-layout .checkout-page .checkout-summary-section .summary-total {
+        min-height: 52px;
+        margin-top: 8px;
+    }
     .desktop-store-layout .checkout-page .checkout-assurance {
         padding: 20px;
-        margin: 20px 0 0;
+        margin: 0;
         border: 0;
         border-top: 0;
         background: var(--soft);
@@ -2071,9 +2103,13 @@
         }
         .desktop-cart-columns,
         .desktop-cart-row {
-            grid-template-columns: minmax(0, 1fr) 90px 100px 100px 80px;
+            grid-template-columns: minmax(0, 1fr) 90px 136px 112px;
             gap: 12px;
             padding-inline: 20px;
+        }
+        .desktop-cart-row {
+            margin-inline: 20px;
+            padding-inline: 0;
         }
         .desktop-cart-product {
             gap: 12px;

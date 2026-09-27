@@ -218,8 +218,11 @@ describe('storefront skin system', () => {
                 .find(rule => rule.includes('background: transparent;')) ?? '';
         expect(desktopRow).toContain('background: transparent;');
         expect(desktopRow).toContain('border-top: 0;');
-        expect(desktopRow).toContain('border-radius: var(--radius-sm);');
+        expect(desktopRow).toContain('border-radius: 0;');
         expect(desktopRow).toContain('box-shadow: none;');
+        expect(stylesheet('./styles/desktop-pages.css')).not.toMatch(
+            /\.desktop-cart-row\s*\+\s*\.desktop-cart-row\s*\{[^}]*border(?:-top)?:/,
+        );
     });
 
     it('owns populated logistics surfaces in one semantic component stylesheet', () => {
@@ -548,9 +551,8 @@ describe('storefront skin system', () => {
         const addresses = stylesheet('./addresses-page.tsx');
         expect(addresses).toContain("actionVisibility={selection ? 'all' : 'mobile'}");
         const account = stylesheet('./pages/desktop-account-page.tsx');
-        expect(account).toMatch(
-            /className="desktop-member-summary"[\s\S]*className="desktop-account-continue"[\s\S]*<\/section>/,
-        );
+        expect(account).toContain('<AccountIdentity');
+        expect(account).toContain('className="desktop-account-orders"');
         expect(account).not.toContain('className="desktop-account-heading"');
     });
 });

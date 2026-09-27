@@ -70,7 +70,7 @@ jobs:
                           fi
                           bun run --cwd "packages/$app" build
                       fi
-                      cp -R "packages/$app/dist" "$RUNNER_TEMP/frontend-payload/$app"
+                      node deploy/frontend-artifact.mjs stage "$app" "$RUNNER_TEMP/frontend-payload/$app"
                   done
             - name: Package the fixed frontend release
               id: archive

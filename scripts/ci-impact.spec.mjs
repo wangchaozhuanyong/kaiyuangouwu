@@ -32,6 +32,31 @@ test('admin UI stays in its own scope, while mixed app changes include both apps
         ['next-admin', 'storefront'],
     );
 });
+test('2FA styles and components select only the static frontend lane', () => {
+    for (const file of [
+        'packages/storefront/src/client-plugins/two-factor/two-factor-page.css',
+        'packages/storefront/src/client-plugins/two-factor/two-factor-page.tsx',
+        'packages/storefront/two-factor-tool/main.tsx',
+        'packages/storefront/two-factor-tool/styles.css',
+    ]) {
+        const plan = classifyChanges([file], inventory);
+        assert.equal(plan.lane, 'frontend', file);
+        assert.deepEqual(plan.frontends, ['storefront']);
+        assert.deepEqual(plan.packages, []);
+        assert.deepEqual(plan.databases, []);
+        assert.equal(plan.full, false);
+    }
+    for (const file of [
+        'packages/storefront/vite.two-factor.config.ts',
+        'packages/core/src/api/auth.ts',
+        'packages/dev-server/migrations/change.ts',
+    ])
+        assert.equal(
+            classifyChanges(['packages/storefront/two-factor-tool/styles.css', file], inventory).lane,
+            'runtime',
+            file,
+        );
+});
 test('plugin changes include their dependents but not unrelated plugin integrations', () => {
     const plan = classifyChanges(['packages/catalog-management-plugin/src/service.ts'], inventory);
     assert.deepEqual(plan.packages, ['catalog-management-plugin', 'other-plugin']);
