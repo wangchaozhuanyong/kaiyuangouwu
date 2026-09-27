@@ -14,6 +14,11 @@ export interface ManualDeliveryRecord {
     lastError?: string | null;
     sentAt?: string | null;
     order: { id: string; code: string };
+    events?: Array<{
+        id: string;
+        createdAt: string;
+        note: string;
+    }>;
     packages: Array<{
         fields: Array<{ key: string; label: string; value: string; secret: boolean }>;
         note: string;
@@ -53,6 +58,11 @@ const DETAIL_FIELDS = gql`
             }
             note
             attachmentAssetIds
+        }
+        events {
+            id
+            createdAt
+            note
         }
     }
     ${LIST_FIELDS}

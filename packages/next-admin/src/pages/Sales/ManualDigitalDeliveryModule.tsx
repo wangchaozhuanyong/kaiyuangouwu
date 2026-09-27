@@ -370,6 +370,21 @@ function DeliveryForm({
                     {serviceMessageDisplay(delivery.lastError)}
                 </p>
             )}
+            {delivery.events?.length ? (
+                <section aria-label="交付处理记录" className="rounded-lg border border-slate-200 p-3 text-xs">
+                    <h3 className="font-semibold text-slate-800">
+                        交付处理记录 · 发送尝试 {delivery.attemptCount} 次
+                    </h3>
+                    <ol className="mt-2 space-y-2">
+                        {delivery.events.map(event => (
+                            <li key={event.id} className="border-t border-slate-100 pt-2 text-slate-600">
+                                {serviceMessageDisplay(event.note)} ·{' '}
+                                {new Date(event.createdAt).toLocaleString()}
+                            </li>
+                        ))}
+                    </ol>
+                </section>
+            ) : null}
             {error && (
                 <p role="alert" className="rounded-lg bg-rose-50 p-3 text-rose-700">
                     {error}
