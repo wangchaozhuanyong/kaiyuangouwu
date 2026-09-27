@@ -265,7 +265,7 @@ describe('CartPage guest cart', () => {
         ]);
         expect(stylesheet).toMatch(/\.cart-page > \.product-section\s*\{[^}]*margin-top:\s*24px;/u);
         expect(stylesheet).toMatch(
-            /\.desktop-store-layout \.cart-commerce-layout\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 320px;/u,
+            /\.desktop-store-layout \.cart-commerce-layout\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 280px;/u,
         );
         expect(stylesheet).toMatch(
             /\.desktop-store-layout \.cart-summary-panel > \.coupon-row\s*\{[^}]*width:\s*100%;/u,

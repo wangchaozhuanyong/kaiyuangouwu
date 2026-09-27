@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -88,6 +88,106 @@ describe('CouponSheet interactions', () => {
 
         expect(onApply).toHaveBeenCalledWith(coupon.id);
         expect(onClose).toHaveBeenCalledOnce();
+    });
+
+    it('keeps pin and share in an accessible desktop more menu', () => {
+        const onPin = vi.fn();
+        const onShare = vi.fn().mockResolvedValue(undefined);
+        const line: StorefrontCart['lines'][number] = {
+            id: 'line-more',
+            quantity: 1,
+            selected: true,
+            available: true,
+            productVariant: {
+                id: 'variant-more',
+                name: '随行杯',
+                sku: 'CUP',
+                priceWithTax: 4500,
+                currencyCode: 'MYR',
+                saleableStockLevel: 10,
+                featuredAsset: null,
+                product: { id: 'product-more', name: '随行杯', featuredAsset: null },
+                customFields: { fulfillmentType: 'physical' },
+            },
+        };
+        function Preview({ loading = false }: { loading?: boolean }) {
+            const [open, setOpen] = useState<string | null>(null);
+            return (
+                <DesktopLayoutContext.Provider value={true}>
+                    <CartGroup
+                        title="商品"
+                        hint=""
+                        lines={[line]}
+                        market={{
+                            code: 'my',
+                            defaultLanguageCode: 'zh_Hans',
+                            currencyCode: 'MYR',
+                            countryCode: 'MY',
+                            locale: 'zh-CN',
+                            label: 'Malaysia',
+                        }}
+                        locale="zh-CN"
+                        language="zh"
+                        loading={loading}
+                        favoriteProductIds={[]}
+                        pinnedLineIds={[]}
+                        openActionLineId={open}
+                        onActionOpenChange={setOpen}
+                        onSelect={vi.fn()}
+                        onSelectAll={vi.fn()}
+                        onQuantity={vi.fn()}
+                        onRemove={vi.fn()}
+                        onFavorite={vi.fn()}
+                        onPin={onPin}
+                        onShare={onShare}
+                    />
+                </DesktopLayoutContext.Provider>
+            );
+        }
+        const requireElement = <T extends Element>(selector: string, parent: ParentNode = container): T => {
+            const element = parent.querySelector<T>(selector);
+            if (!element) throw new Error(`Missing ${selector}`);
+            return element;
+        };
+        act(() => root.render(<Preview />));
+        const trigger = requireElement<HTMLButtonElement>('.desktop-cart-more > button');
+        const panel = () => container.querySelector<HTMLDivElement>('.desktop-cart-more-panel');
+        const click = (button: HTMLButtonElement) => act(() => button.click());
+        expect(panel()).toBeNull();
+        expect(trigger.getAttribute('aria-expanded')).toBe('false');
+        click(trigger);
+        expect(trigger.getAttribute('aria-expanded')).toBe('true');
+        expect(document.getElementById(trigger.getAttribute('aria-controls') ?? '')).toBe(panel());
+        act(() =>
+            requireElement<HTMLButtonElement>('button', requireElement('.desktop-cart-more-panel')).focus(),
+        );
+        act(() => {
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        });
+        expect(panel()).toBeNull();
+        expect(document.activeElement).toBe(trigger);
+        click(trigger);
+        act(() => {
+            document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+        });
+        expect(panel()).toBeNull();
+        click(trigger);
+        click(requireElement<HTMLButtonElement>('button', requireElement('.desktop-cart-more-panel')));
+        expect(onPin).toHaveBeenCalledWith('line-more', '随行杯');
+        expect(panel()).toBeNull();
+        click(trigger);
+        click(
+            requireElement<HTMLButtonElement>(
+                'button:last-child',
+                requireElement('.desktop-cart-more-panel'),
+            ),
+        );
+        expect(onShare).toHaveBeenCalledWith('product-more', '随行杯');
+        expect(panel()).toBeNull();
+        click(trigger);
+        act(() => root.render(<Preview loading />));
+        expect(panel()).toBeNull();
+        expect(trigger.disabled).toBe(true);
     });
 
     it.each([false, true])(

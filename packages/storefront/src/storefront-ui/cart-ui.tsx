@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import {
     Check,
+    ChevronDown,
     ChevronLeft,
     ChevronRight,
     Heart,
@@ -11,7 +12,7 @@ import {
     TicketPercent,
     Trash2,
 } from 'lucide-react';
-import { PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react';
+import { PointerEvent as ReactPointerEvent, useEffect, useId, useRef, useState } from 'react';
 
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { QuantityControl } from '../components/common/quantity-control';
@@ -80,33 +81,38 @@ export function CartGroup({
     const CartLine = desktop ? DesktopCartLine : SwipeableCartLine;
     const allSelected = cartSelectionState(lines) === 'ALL';
     const partiallySelected = !allSelected && lines.some(line => line.selected);
+    const groupSelection = (
+        <button
+            type="button"
+            className={`group-select ${partiallySelected ? 'is-partial' : ''}`}
+            onClick={() =>
+                onSelectAll(
+                    lines.map(line => line.id),
+                    !allSelected,
+                )
+            }
+            disabled={
+                selectionDisabled || (!lines.some(cartLineCanSelect) && !lines.some(line => line.selected))
+            }
+        >
+            <span>{allSelected ? <Check /> : partiallySelected ? <Minus /> : null}</span>
+            <strong>{title}</strong>
+        </button>
+    );
     return (
         <section className="cart-group">
-            <header>
-                <button
-                    type="button"
-                    className={`group-select ${partiallySelected ? 'is-partial' : ''}`}
-                    onClick={() =>
-                        onSelectAll(
-                            lines.map(line => line.id),
-                            !allSelected,
-                        )
-                    }
-                    disabled={
-                        selectionDisabled ||
-                        (!lines.some(cartLineCanSelect) && !lines.some(line => line.selected))
-                    }
-                >
-                    <span>{allSelected ? <Check /> : partiallySelected ? <Minus /> : null}</span>
-                    <strong>{title}</strong>
-                </button>
-                <span>{hint}</span>
-            </header>
+            {!desktop && (
+                <header>
+                    {groupSelection}
+                    <span>{hint}</span>
+                </header>
+            )}
             {desktop && (
-                <div className="desktop-cart-columns" aria-hidden="true">
+                <div className="desktop-cart-columns">
+                    {groupSelection}
                     {(language === 'zh'
-                        ? ['商品信息', '单价', '数量', '商品金额']
-                        : ['Product', 'Unit price', 'Quantity', 'Amount']
+                        ? ['单价', '数量', '小计']
+                        : ['Unit price', 'Quantity', 'Subtotal']
                     ).map(label => (
                         <span key={label}>{label}</span>
                     ))}
@@ -136,6 +142,16 @@ export function CartGroup({
                     onActionOpenChange={onActionOpenChange}
                 />
             ))}
+            {desktop && (
+                <footer className="desktop-cart-group-footer">
+                    <span>
+                        {language === 'zh'
+                            ? `已选择 ${lines.reduce((sum, line) => sum + (line.selected ? line.quantity : 0), 0)} 件商品`
+                            : `${lines.reduce((sum, line) => sum + (line.selected ? line.quantity : 0), 0)} item(s) selected`}
+                    </span>
+                    <span>{hint}</span>
+                </footer>
+            )}
         </section>
     );
 }
@@ -149,12 +165,14 @@ function DesktopCartLine({
     selectionDisabled = loading,
     favorite,
     pinned,
+    open,
     onSelect,
     onQuantity,
     onRemove,
     onFavorite,
     onPin,
     onShare,
+    onActionOpenChange,
 }: Parameters<typeof SwipeableCartLine>[0]) {
     const isZh = language === 'zh';
     const variant = line.productVariant;
@@ -168,6 +186,32 @@ function DesktopCartLine({
     const currency = variant?.currencyCode ?? market.currencyCode;
     const stockError = quantityStockMessage(variant, line.quantity, language);
     const stock = productAvailability(variant).stock;
+    const moreRef = useRef<HTMLDivElement>(null);
+    const moreButtonRef = useRef<HTMLButtonElement>(null);
+    const moreId = useId();
+    const moreOpen = open && !loading;
+    useEffect(() => {
+        if (!moreOpen) return;
+        const closeOutside = (event: Event) => {
+            if (event.target instanceof Node && !moreRef.current?.contains(event.target)) {
+                onActionOpenChange(null);
+            }
+        };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            onActionOpenChange(null);
+            moreButtonRef.current?.focus();
+        };
+        document.addEventListener('pointerdown', closeOutside);
+        document.addEventListener('focusin', closeOutside);
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.removeEventListener('pointerdown', closeOutside);
+            document.removeEventListener('focusin', closeOutside);
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [moreOpen, onActionOpenChange]);
     return (
         <article className="desktop-cart-row">
             <div className="desktop-cart-product">
@@ -203,7 +247,9 @@ function DesktopCartLine({
                     <strong>{name}</strong>
                 )}
             </div>
-            <span>{formatMoney(variant?.priceWithTax ?? 0, currency, locale)}</span>
+            <span className="desktop-cart-unit-price">
+                {formatMoney(variant?.priceWithTax ?? 0, currency, locale)}
+            </span>
             <div className="desktop-cart-quantity">
                 <QuantityControl
                     value={line.quantity}
@@ -222,20 +268,6 @@ function DesktopCartLine({
                     }
                     onIncrease={() => onQuantity(line.id, line.quantity + 1)}
                 />
-                {stockError && (
-                    <small className="cart-stock-error" role="status">
-                        {stockError}
-                        {stock != null && stock > 0 && (
-                            <button
-                                type="button"
-                                disabled={loading}
-                                onClick={() => onQuantity(line.id, stock)}
-                            >
-                                {isZh ? `调整为 ${stock} 件` : `Set quantity to ${stock}`}
-                            </button>
-                        )}
-                    </small>
-                )}
             </div>
             <strong className="desktop-cart-amount">
                 {formatMoney((variant?.priceWithTax ?? 0) * line.quantity, currency, locale)}
@@ -248,30 +280,70 @@ function DesktopCartLine({
                     onClick={() => productId && onFavorite(productId, name)}
                 >
                     <Heart aria-hidden="true" />
-                    {isZh ? (favorite ? '取消收藏' : '移入收藏') : favorite ? 'Unsave' : 'Save'}
+                    {isZh ? (favorite ? '取消收藏' : '收藏') : favorite ? 'Unsave' : 'Save'}
                 </button>
                 <button type="button" disabled={loading} onClick={() => onRemove(line.id)}>
                     <Trash2 aria-hidden="true" />
                     {isZh ? '删除' : 'Remove'}
                 </button>
-                <button
-                    type="button"
-                    disabled={loading}
-                    aria-pressed={pinned}
-                    onClick={() => onPin(line.id, name)}
-                >
-                    <Pin aria-hidden="true" />
-                    {isZh ? (pinned ? '取消置顶' : '置顶') : pinned ? 'Unpin' : 'Pin'}
-                </button>
-                <button
-                    type="button"
-                    disabled={loading || !productId}
-                    onClick={() => productId && void onShare(productId, name)}
-                >
-                    <Share2 aria-hidden="true" />
-                    {isZh ? '分享' : 'Share'}
-                </button>
+                <div className="desktop-cart-more" ref={moreRef}>
+                    <button
+                        type="button"
+                        ref={moreButtonRef}
+                        disabled={loading}
+                        aria-label={isZh ? `${name} 更多操作` : `More actions for ${name}`}
+                        aria-expanded={moreOpen}
+                        aria-controls={moreOpen ? moreId : undefined}
+                        onClick={() => onActionOpenChange(moreOpen ? null : line.id)}
+                    >
+                        {isZh ? '更多' : 'More'}
+                        <ChevronDown aria-hidden="true" />
+                    </button>
+                    {moreOpen && (
+                        <div
+                            id={moreId}
+                            className="desktop-cart-more-panel"
+                            role="group"
+                            aria-label={isZh ? `${name} 更多操作` : `More actions for ${name}`}
+                        >
+                            <button
+                                type="button"
+                                aria-pressed={pinned}
+                                onClick={() => {
+                                    onPin(line.id, name);
+                                    onActionOpenChange(null);
+                                    moreButtonRef.current?.focus();
+                                }}
+                            >
+                                <Pin aria-hidden="true" />
+                                {isZh ? (pinned ? '取消置顶' : '置顶商品') : pinned ? 'Unpin' : 'Pin item'}
+                            </button>
+                            <button
+                                type="button"
+                                disabled={!productId}
+                                onClick={() => {
+                                    if (productId) void onShare(productId, name);
+                                    onActionOpenChange(null);
+                                    moreButtonRef.current?.focus();
+                                }}
+                            >
+                                <Share2 aria-hidden="true" />
+                                {isZh ? '分享商品' : 'Share item'}
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
+            {stockError && (
+                <small className="cart-stock-error" role="status">
+                    {stockError}
+                    {stock != null && stock > 0 && (
+                        <button type="button" disabled={loading} onClick={() => onQuantity(line.id, stock)}>
+                            {isZh ? `调整为 ${stock} 件` : `Set quantity to ${stock}`}
+                        </button>
+                    )}
+                </small>
+            )}
         </article>
     );
 }
