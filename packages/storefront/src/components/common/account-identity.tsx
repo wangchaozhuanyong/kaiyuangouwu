@@ -2,7 +2,6 @@ import { ChevronRight, Heart, Share2, TicketPercent, UsersRound } from 'lucide-r
 
 import { SafeImage } from '../../safe-image';
 import { type RouteState } from '../../storefront-router';
-import { formatMoney } from '../../storefront-ui/product-display';
 import { type ActiveCustomer, type StorefrontLanguage } from '../../types';
 
 export function maskedAccountEmail(email: string): string {
@@ -20,6 +19,8 @@ export function AccountIdentity({
     referralEnabled,
     referralPending,
     referralBalance,
+    referralBalanceStatus = referralBalance == null ? 'loading' : 'ready',
+    onRetryReferral,
     currencyCode,
     locale,
     navigate,
@@ -32,6 +33,8 @@ export function AccountIdentity({
     referralEnabled: boolean;
     referralPending: boolean;
     referralBalance: number | undefined;
+    referralBalanceStatus?: 'loading' | 'error' | 'ready';
+    onRetryReferral?: () => void;
     currencyCode: string;
     locale: string;
     navigate: (route: RouteState) => void;
@@ -162,14 +165,41 @@ export function AccountIdentity({
                         </div>
                     </div>
                     <div className="account-identity-promotion-actions">
-                        <p>
-                            {isZh ? '返利余额' : 'Referral balance'}
-                            <strong>
-                                {referralBalance == null
-                                    ? '—'
-                                    : formatMoney(referralBalance, currencyCode, locale)}
-                            </strong>
-                        </p>
+                        <div className="account-identity-promotion-balance" aria-live="polite">
+                            <p>{isZh ? '返利余额' : 'Referral balance'}</p>
+                            {referralBalanceStatus === 'ready' && referralBalance != null ? (
+                                <strong>
+                                    <span className="account-identity-promotion-currency">
+                                        {currencyCode}
+                                    </span>{' '}
+                                    <span>
+                                        {new Intl.NumberFormat(locale, {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2,
+                                        }).format(referralBalance / 100)}
+                                    </span>
+                                </strong>
+                            ) : (
+                                <span className="account-identity-promotion-status">
+                                    {referralBalanceStatus === 'error'
+                                        ? isZh
+                                            ? '暂不可用'
+                                            : 'Unavailable'
+                                        : isZh
+                                          ? '加载中…'
+                                          : 'Loading…'}
+                                    {referralBalanceStatus === 'error' && onRetryReferral && (
+                                        <button
+                                            type="button"
+                                            className="account-identity-promotion-retry"
+                                            onClick={onRetryReferral}
+                                        >
+                                            {isZh ? '重试' : 'Retry'}
+                                        </button>
+                                    )}
+                                </span>
+                            )}
+                        </div>
                         <button type="button" onClick={() => navigate({ name: 'referral' })}>
                             {isZh ? '邀请好友' : 'Invite friends'}
                             <ChevronRight aria-hidden="true" />

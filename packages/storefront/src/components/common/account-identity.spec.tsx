@@ -37,7 +37,7 @@ async function withIdentity(
                     couponCount={2}
                     referralEnabled={true}
                     referralPending={false}
-                    referralBalance={undefined}
+                    referralBalance={0}
                     currencyCode="MYR"
                     locale="zh-CN"
                     navigate={navigate}
@@ -77,8 +77,40 @@ describe('account identity navigation and data', () => {
             expect(navigate).toHaveBeenLastCalledWith({ name: 'referral' });
             expect(host.textContent).toContain('pr***@example.com');
             expect(host.textContent).not.toContain(customer.emailAddress);
-            expect(host.querySelector('.account-identity-promotion-actions strong')?.textContent).toBe('—');
+            expect(host.querySelector('.account-identity-promotion-actions strong')?.textContent).toBe(
+                'MYR 0.00',
+            );
         });
+    });
+    it('shows the actual wallet currency and fractional balance', async () => {
+        await withIdentity({ referralBalance: 12345 }, host => {
+            expect(host.querySelector('.account-identity-promotion-actions strong')?.textContent).toBe(
+                'MYR 123.45',
+            );
+        });
+    });
+    it('does not present an unloaded balance as zero', async () => {
+        await withIdentity({ referralBalance: undefined, referralBalanceStatus: 'loading' }, host => {
+            expect(host.querySelector('.account-identity-promotion-balance')?.textContent).toContain(
+                '加载中',
+            );
+            expect(host.querySelector('.account-identity-promotion-balance strong')).toBeNull();
+        });
+    });
+    it('hides stale money after a failed read and retries without opening referrals', async () => {
+        const onRetryReferral = vi.fn();
+        await withIdentity(
+            { referralBalance: 12345, referralBalanceStatus: 'error', onRetryReferral },
+            (host, navigate) => {
+                expect(host.querySelector('.account-identity-promotion-balance')?.textContent).toContain(
+                    '暂不可用',
+                );
+                expect(host.querySelector('.account-identity-promotion-balance strong')).toBeNull();
+                act(() => button(host, '.account-identity-promotion-retry').click());
+                expect(onRetryReferral).toHaveBeenCalledOnce();
+                expect(navigate).not.toHaveBeenCalled();
+            },
+        );
     });
     it('disables unavailable referral without inventing a balance', async () => {
         await withIdentity({ referralEnabled: false }, (host, navigate) => {

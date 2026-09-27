@@ -17,7 +17,7 @@ const verifyProductNavigation = requestedContent.startsWith('product-navigation'
 const presets = requestedPreset ? [requestedPreset] : ['classic', 'modern-oriental', 'neo-minimalist'];
 const expectedPaletteSignature = {
     classic: { page: '#f1f5f9', surface: '#ffffff', text: '#0f172a', brand: '#3558aa' },
-    'modern-oriental': { page: '#f1ece2', surface: '#fffaf1', text: '#1c302d', brand: '#9f3b30' },
+    'modern-oriental': { page: '#f3f4f0', surface: '#ffffff', text: '#203432', brand: '#9f3b30' },
     'neo-minimalist': { page: '#070b14', surface: '#0e1421', text: '#f4f7fb', brand: '#8b5cf6' },
 };
 const routes = [
@@ -619,8 +619,38 @@ try {
                         firstCardBox?.height,
                         `${preset}/${width}/services touch target`,
                     ).toBeGreaterThanOrEqual(44);
+                    const serviceColors = [];
+                    for (const card of await cards.all()) {
+                        const appearance = await card.evaluate(element => {
+                            const style = node => getComputedStyle(node);
+                            const title = element.querySelector('.category-client-plugin-copy strong');
+                            const description = element.querySelector('.category-client-plugin-copy > span');
+                            const icon = element.querySelector('.category-client-plugin-icon');
+                            const action = element.querySelector('.category-client-plugin-action');
+                            return {
+                                surface: style(element).backgroundColor,
+                                ink: style(title).color,
+                                description: style(description).color,
+                                icon: style(icon).color,
+                                iconBackground: style(icon).backgroundColor,
+                                actionInk: style(action).color,
+                                actionBackground: style(action).backgroundColor,
+                                actionHeight: action.getBoundingClientRect().height,
+                            };
+                        });
+                        expect(appearance.actionHeight).toBeGreaterThanOrEqual(44);
+                        expect(appearance.iconBackground).toBe('rgba(0, 0, 0, 0)');
+                        for (const ink of [appearance.ink, appearance.description, appearance.icon]) {
+                            expect(textContrast(ink, appearance.surface)).toBeGreaterThanOrEqual(4.5);
+                        }
+                        expect(
+                            textContrast(appearance.actionInk, appearance.actionBackground),
+                        ).toBeGreaterThanOrEqual(4.5);
+                        serviceColors.push(appearance.surface);
+                    }
+                    expect(new Set(serviceColors).size).toBe(5);
                     if (width >= 1024) {
-                        expect(moduleLayout.display, `${preset}/${width}/services layout`).toBe('flex');
+                        expect(moduleLayout.display, `${preset}/${width}/services layout`).toBe('grid');
                         expect(moduleLayout.cards[0].top).toBeCloseTo(moduleLayout.cards[1].top, 0);
                         expect(moduleLayout.cards[1].top).toBeCloseTo(moduleLayout.cards[2].top, 0);
                         expect(moduleLayout.cards[0].left).toBeLessThan(moduleLayout.cards[1].left);
@@ -629,6 +659,9 @@ try {
                         expect(moduleLayout.cards[3].top).toBeCloseTo(moduleLayout.cards[4].top, 0);
                     } else {
                         expect(moduleLayout.display, `${preset}/${width}/services layout`).toBe('grid');
+                        expect(moduleLayout.cards[0].top).toBeLessThan(moduleLayout.cards[1].top);
+                        expect(moduleLayout.cards[1].top).toBeLessThan(moduleLayout.cards[2].top);
+                        expect(moduleLayout.cards[3].top).toBeCloseTo(moduleLayout.cards[4].top, 0);
                         const firstCard = cards.first();
                         const icon = firstCard.locator('.category-client-plugin-icon');
                         const title = firstCard.locator('.category-client-plugin-copy');
@@ -707,7 +740,7 @@ try {
                         expect(
                             mobileCategory.alignment[edge],
                             `${preset}/${width}/category ${edge}`,
-                        ).toBeCloseTo(16, 0);
+                        ).toBeCloseTo(edge.startsWith('sort') ? 16 : 8, 0);
                     }
                 }
                 const commonHeader = page
@@ -722,7 +755,7 @@ try {
                     expect(
                         (await commonHeader.boundingBox()).height,
                         `${preset}/${width}/${name} common header height`,
-                    ).toBe(width < 1024 ? 52 : 72);
+                    ).toBe(width < 1024 ? (name === 'category' ? 60 : 52) : 72);
                 }
                 if (name === 'home' && width < 1024) {
                     const overlay = await page.locator('.hero').evaluate(hero => {
@@ -1733,13 +1766,15 @@ try {
                 // overlay, force the action or retry it: those hide missed image clicks.
                 const productLinks = page.locator('.product-card-detail-link, .product-row-detail-link');
                 if (await productLinks.count()) {
+                    const consent = page.getByRole('button', { name: '仅必要功能' });
+                    if (await consent.isVisible()) await consent.click();
                     const sourceUrl = page.url();
                     const firstLink = productLinks.first();
                     const href = await firstLink.getAttribute('href');
                     expect(href).toMatch(/^\/product\?id=/u);
                     const destination = new URL(href, sourceUrl).href;
                     const targets = [
-                        'img, .image-placeholder, .ai-product-cover',
+                        'img:visible, .image-placeholder:visible, .ai-product-cover:visible',
                         '.product-card-name, .product-row-name',
                         '.product-card-price, .product-row-price',
                     ];

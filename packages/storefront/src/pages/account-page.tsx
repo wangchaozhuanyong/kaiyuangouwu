@@ -142,6 +142,14 @@ export function AccountPage() {
     const referralWallet = referralOverviewQuery.data?.wallets.find(
         wallet => wallet.currencyCode === market.currencyCode,
     );
+    const referralBalanceStatus = referralOverviewQuery.isPending
+        ? 'loading'
+        : referralOverviewQuery.isError
+          ? 'error'
+          : 'ready';
+    const referralBalance = referralOverviewQuery.isSuccess
+        ? (referralWallet?.availableBalance ?? 0)
+        : undefined;
     const counts = countsQuery.data ?? { pending: 0, shipping: 0, receiving: 0, completed: 0 };
     const afterSalesQuery = useQuery({
         queryKey: storefrontQueryKeys.afterSalesRequests(
@@ -197,7 +205,9 @@ export function AccountPage() {
                 afterSalesCount={afterSalesQuery.data ? activeAfterSalesCount : undefined}
                 referralEnabled={referralEnabled}
                 referralPending={referralProgramQuery.isPending}
-                referralBalance={referralOverviewQuery.isError ? undefined : referralWallet?.availableBalance}
+                referralBalance={referralBalance}
+                referralBalanceStatus={referralBalanceStatus}
+                onRetryReferral={() => void referralOverviewQuery.refetch()}
                 navigate={navigateTo}
             />
         );
@@ -230,7 +240,9 @@ export function AccountPage() {
                 couponCount={couponCount}
                 referralEnabled={referralEnabled}
                 referralPending={referralProgramQuery.isPending}
-                referralBalance={referralOverviewQuery.isError ? undefined : referralWallet?.availableBalance}
+                referralBalance={referralBalance}
+                referralBalanceStatus={referralBalanceStatus}
+                onRetryReferral={() => void referralOverviewQuery.refetch()}
                 currencyCode={market.currencyCode}
                 locale={locale}
                 navigate={navigateTo}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import {
     resolveStorefrontSemanticPalette,
@@ -63,6 +63,9 @@ function previewRouteUrl(
 }
 
 export function StorefrontDesignPreview() {
+    useLayoutEffect(() => {
+        document.documentElement.removeAttribute('data-storefront-theme-pending');
+    }, []);
     const previewFrame = useRef<HTMLIFrameElement>(null);
     const requestedRoute = useRef<RouteName | null>(null);
     const [previewSession] = useState(

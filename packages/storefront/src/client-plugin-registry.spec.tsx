@@ -52,6 +52,38 @@ function pluginBlock(items: StorefrontContentItem[]): StorefrontContentBlock {
 }
 
 describe('category client plugin registry', () => {
+    it('groups tools and assistance without losing managed order or rendering empty groups', () => {
+        const block = pluginBlock([
+            pluginItem('category-support-entry', 'BUSINESS_SERVICES_MAIN', 0),
+            pluginItem('icloud-mail-query-entry', 'BUSINESS_SERVICES_MAIN', 1),
+            pluginItem('category-coupon-entry', 'BUSINESS_SERVICES_MAIN', 2),
+            pluginItem('two-factor-code-tool', 'BUSINESS_SERVICES_MAIN', 3),
+        ]);
+        const render = () =>
+            renderToStaticMarkup(
+                <ClientPluginSlot
+                    block={block}
+                    placement="BUSINESS_SERVICES_MAIN"
+                    toolsFirst
+                    language="zh"
+                    onNavigate={() => undefined}
+                />,
+            );
+        const markup = render();
+        expect(markup.indexOf('邮件验证码查询')).toBeLessThan(markup.indexOf('2FA 动态码'));
+        expect(markup.indexOf('2FA 动态码')).toBeLessThan(markup.indexOf('选购遇到问题？'));
+        expect(markup.indexOf('选购遇到问题？')).toBeLessThan(markup.indexOf('先领券，再选购'));
+        expect(markup.match(/<button /g)).toHaveLength(4);
+        expect(markup).toContain('category-client-plugin-group is-assistance');
+        block.items[1].enabled = false;
+        block.items[3].enabled = false;
+        expect(render()).not.toContain('category-client-plugin-group is-tools');
+        expect(render()).not.toContain('2FA 动态码');
+        block.items[0].enabled = false;
+        block.items[2].enabled = false;
+        expect(render()).toBe('');
+    });
+
     it('resolves registered plugins by placement and configured order', () => {
         const block = pluginBlock([
             pluginItem('category-support-entry', 'BEFORE_PRODUCT_LIST', 2),

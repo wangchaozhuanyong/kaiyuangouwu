@@ -107,6 +107,37 @@ describe('storefront semantic palette', () => {
         }
     });
 
+    it('keeps five service colors distinct and readable on every current skin surface', () => {
+        for (const presetId of ['classic', 'modern-oriental', 'neo-minimalist'] as const) {
+            for (const surfacePreset of ['classic', 'modern-oriental', 'neo-minimalist'] as const) {
+                for (const brandColor of ['#ffffff', '#000000', '#777777', '#ffff00']) {
+                    const palette = resolveStorefrontSemanticPalette(surfacePreset, {
+                        primaryColor: brandColor,
+                    });
+                    const variables = storefrontSkinCssVariables(presetId, palette);
+                    const surfaces = new Set<string>();
+                    for (const tone of ['security', 'mail', 'studio', 'coupon', 'support']) {
+                        const prefix = `--skin-service-${tone}`;
+                        const surface = variables[`${prefix}-surface`];
+                        surfaces.add(surface);
+                        for (const state of ['surface', 'action', 'action-hover']) {
+                            expect(
+                                storefrontContrastRatio(
+                                    variables[`${prefix}-ink`],
+                                    variables[`${prefix}-${state}`],
+                                ),
+                            ).toBeGreaterThanOrEqual(4.5);
+                        }
+                        expect(
+                            storefrontContrastRatio(variables[`${prefix}-description`], surface),
+                        ).toBeGreaterThanOrEqual(4.5);
+                    }
+                    expect(surfaces.size).toBe(5);
+                }
+            }
+        }
+    });
+
     it('keeps all five service icon tones readable in every skin', () => {
         for (const presetId of ['classic', 'modern-oriental', 'neo-minimalist'] as const) {
             const variables = storefrontSkinCssVariables(presetId);
