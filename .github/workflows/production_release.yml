@@ -177,6 +177,8 @@ jobs:
                   GH_TOKEN: ${{ github.token }}
                   BASE_SHA: ${{ needs.preflight.outputs.deployed_sha }}
                   TARGET_SHA: ${{ inputs.target_sha || github.sha }}
+                  STOREFRONT_SHA: ${{ needs.preflight.outputs.storefront_sha }}
+                  ADMIN_SHA: ${{ needs.preflight.outputs.admin_sha }}
               run: node scripts/release-evidence.mjs find "$BASE_SHA" "$TARGET_SHA"
 
     checks:
@@ -367,7 +369,20 @@ jobs:
     recovery:
         name: explain release failure and bounded recovery
         needs:
-            [lock, preflight, route, checks, ready, frontend, build, offhost_file_restore, deploy, postflight, acceptance, complete]
+            [
+                lock,
+                preflight,
+                route,
+                checks,
+                ready,
+                frontend,
+                build,
+                offhost_file_restore,
+                deploy,
+                postflight,
+                acceptance,
+                complete,
+            ]
         if: always() && contains(needs.*.result, 'failure')
         runs-on: ubuntu-24.04
         permissions:

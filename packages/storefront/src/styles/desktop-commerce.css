@@ -597,6 +597,9 @@
         font-weight: 600;
         line-height: 24px;
     }
+    .desktop-account-page .section-header .section-header-title-row {
+        gap: 10px;
+    }
     .desktop-account-page :is(header, .desktop-account-heading) button {
         display: flex;
         gap: 6px;
