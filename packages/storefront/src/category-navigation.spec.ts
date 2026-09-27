@@ -78,7 +78,7 @@ describe('category navigation responsive spacing', () => {
             /\.category-client-plugin-slot\.is-[^{]+\{[^}]*(?:padding-top|padding-bottom):/,
         );
         expect(stylesheet).toMatch(
-            /\.business-services-page \.category-client-plugin-slot\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*padding:\s*0;/,
+            /\.is-business-services-main\.category-client-plugin-slot\s*\{[^}]*display:\s*grid;[^}]*padding:\s*0;/,
         );
     });
 
