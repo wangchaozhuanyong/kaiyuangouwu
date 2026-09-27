@@ -51,6 +51,7 @@ export function GovernanceRiskPanel() {
     const [error, setError] = useState('');
     const busy = submitState.loading || approvalState.loading || riskState.loading;
     const data = query.data;
+    const auditIntegrity = data?.governanceAuditIntegrity;
 
     const run = async (work: () => Promise<unknown>, success: string) => {
         setError('');
@@ -84,13 +85,21 @@ export function GovernanceRiskPanel() {
     return (
         <div className="space-y-4">
             <section className="grid gap-3 md:grid-cols-4">
-                <Metric label="待审批配置" value={data?.governanceApprovals.length ?? 0} />
-                <Metric label="风险案件" value={data?.fraudRiskCases.totalItems ?? 0} />
-                <Metric label="审计记录" value={data?.governanceAuditEntries.totalItems ?? 0} />
+                <Metric label="待审批配置" value={data?.governanceApprovals.length ?? '—'} />
+                <Metric label="风险案件" value={data?.fraudRiskCases.totalItems ?? '—'} />
+                <Metric label="审计记录" value={data?.governanceAuditEntries.totalItems ?? '—'} />
                 <Metric
                     label="审计链"
-                    value={data?.governanceAuditIntegrity.valid ? '完整' : '异常'}
-                    danger={data != null && !data.governanceAuditIntegrity.valid}
+                    value={
+                        auditIntegrity
+                            ? auditIntegrity.valid
+                                ? '完整'
+                                : '异常'
+                            : query.error
+                              ? '读取失败'
+                              : '核验中'
+                    }
+                    danger={auditIntegrity?.valid === false}
                 />
             </section>
 
@@ -359,10 +368,14 @@ export function GovernanceRiskPanel() {
             <section className="grid gap-4 xl:grid-cols-2">
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        {data?.governanceAuditIntegrity.valid ? (
+                        {auditIntegrity?.valid ? (
                             <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                        ) : (
+                        ) : auditIntegrity?.valid === false ? (
                             <ShieldX className="h-4 w-4 text-rose-600" />
+                        ) : (
+                            <RefreshCw
+                                className={`h-4 w-4 text-slate-400 ${query.loading ? 'animate-spin' : ''}`}
+                            />
                         )}
                         不可变审计链
                         <FeatureHelpButton topic="settings.governance-risk" title="不可变审计链" />
@@ -382,7 +395,9 @@ export function GovernanceRiskPanel() {
                                 </code>
                             </div>
                         ))}
-                        {!data?.governanceAuditEntries.items.length && <Empty text="尚无治理审计记录" />}
+                        {data && !data.governanceAuditEntries.items.length && (
+                            <Empty text="尚无治理审计记录" />
+                        )}
                     </div>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -402,7 +417,9 @@ export function GovernanceRiskPanel() {
                                 </code>
                             </div>
                         ))}
-                        {!data?.governanceReports.length && <Empty text="定时任务运行后会生成每日治理报告" />}
+                        {data && !data.governanceReports.length && (
+                            <Empty text="定时任务运行后会生成每日治理报告" />
+                        )}
                     </div>
                 </div>
             </section>
