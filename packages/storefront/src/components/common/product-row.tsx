@@ -88,6 +88,7 @@ export function ProductRow({
     language,
     onOpen,
     layout = 'row',
+    showDescription = true,
 }: {
     product: Product;
     market: MarketConfig;
@@ -95,6 +96,7 @@ export function ProductRow({
     language: StorefrontLanguage;
     onOpen: () => void;
     layout?: 'row' | 'catalog';
+    showDescription?: boolean;
 }) {
     const isZh = language === 'zh';
     const variant = lowestPricedProductVariant(product);
@@ -114,7 +116,9 @@ export function ProductRow({
             <div className="product-row-content">
                 <div className="product-row-top">
                     <strong className="product-row-name">{product.name}</strong>
-                    {subtitle ? <span className="product-row-desc">{subtitle}</span> : null}
+                    {subtitle && showDescription ? (
+                        <span className="product-row-desc">{subtitle}</span>
+                    ) : null}
                     <div className="product-row-meta">
                         <span className="product-row-badge product-row-smart-line">{smartInfo.primary}</span>
                         {smartInfo.secondary ? (

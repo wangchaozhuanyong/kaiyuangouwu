@@ -6,6 +6,9 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 export const STATIC_APPS = ['storefront', 'next-admin'];
+// This stylesheet is imported by storefront home-showcase.css; it has no server consumer.
+export const staticStyleOwner = file =>
+    file === 'packages/storefront-content-plugin/src/shared/hero-scene.css' ? 'storefront' : undefined;
 export const DATABASES = ['mysql', 'sqljs', 'postgres', 'mariadb'];
 const sorted = values => [...new Set(values)].sort();
 export const isDocumentation = file =>
@@ -16,6 +19,7 @@ export const isDocumentation = file =>
 // control checks, but must not turn a later CSS release into a runtime release.
 export const isAutomationOnly = file =>
     file.startsWith('.github/') ||
+    file === 'deploy/artifact-inputs.mjs' ||
     /^scripts\/(ci-|release-|lint-check\.mjs$)/u.test(file) ||
     /^(deploy\/|packages\/dev-server\/scripts\/).*\.spec\.mjs$/u.test(file);
 
@@ -45,9 +49,11 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
     const deployable = executable.filter(file => !isAutomationOnly(file));
     const changedPackages = sorted(
         executable.flatMap(file =>
-            file.startsWith('packages/dev-server/scripts/')
-                ? []
-                : (/^packages\/([^/]+)\//u.exec(file)?.[1] ?? []),
+            staticStyleOwner(file)
+                ? [staticStyleOwner(file)]
+                : file.startsWith('packages/dev-server/scripts/')
+                  ? []
+                  : (/^packages\/([^/]+)\//u.exec(file)?.[1] ?? []),
         ),
     );
     const dependencies =
@@ -89,7 +95,7 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
         deployable.length > 0 &&
         deployable.every(
             file =>
-                STATIC_APPS.some(app => file.startsWith(`packages/${app}/`)) &&
+                (staticStyleOwner(file) || STATIC_APPS.some(app => file.startsWith(`packages/${app}/`))) &&
                 !/(^|\/)(package\.json|[^/]*config\.[^/]+|\.env[^/]*)$/u.test(file) &&
                 !/packages\/storefront\/src\/assets\/(storefront|brand)\//u.test(file),
         );
@@ -116,10 +122,12 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
         executable.some(file => /^(deploy\/|scripts\/|packages\/dev-server\/scripts\/)/u.test(file));
     const publishing =
         full ||
-        executable.some(file =>
-            /storefront-publishing|sync-.*\.(mjs|ts)$|storefront-content-plugin\/|store-management-plugin\//u.test(
-                file,
-            ),
+        executable.some(
+            file =>
+                !staticStyleOwner(file) &&
+                /storefront-publishing|sync-.*\.(mjs|ts)$|storefront-content-plugin\/|store-management-plugin\//u.test(
+                    file,
+                ),
         );
     const codegen =
         shared ||

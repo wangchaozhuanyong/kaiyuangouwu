@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
-import { DATABASES, isDocumentation } from './ci-impact.mjs';
+import { DATABASES, isDocumentation, staticStyleOwner } from './ci-impact.mjs';
 
 const unique = values => [...new Set(values)].sort();
 const digest = value => createHash('sha256').update(value).digest('hex');
@@ -180,6 +180,7 @@ export function checkFingerprint(ref, check, inventory, reader, fullFrontend = f
             )
                 return false;
             if (sharedInput(path)) return true;
+            if (check.kind === 'frontend' && check.packages.includes(staticStyleOwner(path))) return true;
             if (check.kind === 'architecture')
                 return path.startsWith('packages/') || path.startsWith('scripts/architecture-debt');
             if (check.kind === 'migration')

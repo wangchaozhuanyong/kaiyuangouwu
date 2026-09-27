@@ -24,10 +24,12 @@ export function ProductSection({
     selection,
     kind,
     desktopRail = false,
+    appearance,
 }: {
     desktopRail?: boolean;
     title?: string;
     kind?: SectionKind;
+    appearance?: 'card' | 'plain';
     subtitle?: string;
     centerLabel?: string;
     action?: string;
@@ -52,6 +54,7 @@ export function ProductSection({
         >
             {title || subtitle || centerLabel || action ? (
                 <SectionHeader
+                    icon={appearance === 'plain' ? false : undefined}
                     kind={kind}
                     title={title}
                     subtitle={subtitle}
@@ -70,6 +73,7 @@ export function ProductSection({
                             market={market}
                             locale={locale}
                             language={language}
+                            appearance={appearance}
                             priority={index === 0}
                             imageSizes="(min-width: 1024px) 200px, calc(50vw - 24px)"
                             favorite={favoriteProductIds?.includes(product.id)}

@@ -540,6 +540,10 @@ test('compilation follows source inputs across release-script commits, and front
         assert.equal(hashFor(changes), hashFor({}));
         assert.equal(hashFor(changes, 'storefront'), hashFor({}, 'storefront'));
     }
+    assert.notEqual(
+        hashFor({ 'packages/storefront-content-plugin/src/shared/hero-scene.css': 'cover' }, 'storefront'),
+        hashFor({}, 'storefront'),
+    );
     assert.equal(
         hashFor({ 'packages/next-admin/src/App.tsx': 'admin2' }, 'storefront'),
         hashFor({}, 'storefront'),

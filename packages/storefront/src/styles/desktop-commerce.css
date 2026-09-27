@@ -590,8 +590,12 @@
         line-height: 30px;
     }
     .desktop-account-page header h2 {
+        display: flex;
+        align-items: center;
+        gap: 10px;
         font-size: 18px;
         font-weight: 600;
+        line-height: 24px;
     }
     .desktop-account-page :is(header, .desktop-account-heading) button {
         display: flex;
@@ -1058,6 +1062,9 @@
     .desktop-account-recommendations.product-section {
         margin: 0;
         padding: 0;
+    }
+    .desktop-account-recommendations .product-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
     }
     .desktop-account-page .section-header h2 {
         font-size: 18px;

@@ -10,9 +10,16 @@ import { storefrontQueryKeys } from '../query-client';
 import { SearchPageContext } from '../storefront-page-contexts';
 import { Product } from '../types';
 
-import { SearchPage } from './search-page';
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+import { SearchPage, type SearchPageProps } from './search-page';
+(
+    globalThis as typeof globalThis & {
+        IS_REACT_ACT_ENVIRONMENT: boolean;
+    }
+).IS_REACT_ACT_ENVIRONMENT = true;
+function required<T>(value: T | null | undefined): T {
+    if (value == null) throw new Error('Expected test element');
+    return value;
+}
 const navigate = vi.hoisted(() => vi.fn());
 const back = vi.hoisted(() => vi.fn());
 const canGoBack = vi.hoisted(() => vi.fn(() => false));
@@ -22,7 +29,6 @@ vi.mock('@tanstack/react-router', () => ({
     useNavigate: () => navigate,
     useRouter: () => ({ history: { back, canGoBack } }),
 }));
-
 describe('search result and product-detail cache separation', () => {
     const market = enabledMarkets[0];
     const product: Product = {
@@ -44,9 +50,8 @@ describe('search result and product-detail cache separation', () => {
     let client: QueryClient;
     let root: ReturnType<typeof createRoot>;
     let container: HTMLDivElement;
-
     function render() {
-        act(() =>
+        void act(() =>
             root.render(
                 <QueryClientProvider client={client}>
                     <SearchPageContext.Provider
@@ -66,7 +71,273 @@ describe('search result and product-detail cache separation', () => {
             ),
         );
     }
-
+    function renderDiscovery(overrides: Partial<SearchPageProps> = {}) {
+        void act(() =>
+            root.render(
+                <QueryClientProvider client={client}>
+                    <SearchPageContext.Provider
+                        value={{
+                            api: {
+                                catalog: vi.fn().mockResolvedValue({ items: [], totalItems: 0 }),
+                            } as unknown as ShopApi,
+                            products: [product],
+                            market,
+                            locale: 'en-MY',
+                            language: 'en',
+                            storefrontCode: market.code,
+                            initialQuery: '',
+                            ...overrides,
+                        }}
+                    >
+                        <SearchPage />
+                    </SearchPageContext.Provider>
+                </QueryClientProvider>,
+            ),
+        );
+    }
+    function typeTerm(value: string) {
+        const input = required(container.querySelector<HTMLInputElement>('.search-header input'));
+        void act(() => {
+            setNativeInputValue(input, value);
+            input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+        });
+        return input;
+    }
+    async function debounce() {
+        await act(async () => {
+            await new Promise(resolve => setTimeout(resolve, 280));
+        });
+        await act(async () => {
+            await new Promise(resolve => setTimeout(resolve, 0));
+        });
+    }
+    it('debounces suggestions, keeps result caches separate, and supports keyboard selection', async () => {
+        const suggested = { ...product, name: 'Coffee beans' };
+        const catalog = vi.fn().mockResolvedValue({ items: [suggested], totalItems: 1 });
+        renderDiscovery({ api: { catalog } as unknown as ShopApi });
+        const input = typeTerm('cof');
+        expect(catalog).not.toHaveBeenCalled();
+        await debounce();
+        expect(catalog).toHaveBeenCalledWith(
+            expect.objectContaining({ term: 'cof', take: 5 }),
+            expect.anything(),
+        );
+        expect(client.getQueryData(searchKey)).toEqual({
+            pages: [{ items: [product], totalItems: 1 }],
+            pageParams: [0],
+        });
+        expect(client.getQueryData(productKey)).toBeUndefined();
+        expect(container.querySelector('[role="listbox"]')?.textContent).toContain('Coffee beans');
+        void act(() =>
+            input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })),
+        );
+        void act(() =>
+            input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })),
+        );
+        expect(
+            document.getElementById(required(input.getAttribute('aria-activedescendant')))?.textContent,
+        ).toContain('Coffee beans');
+        await act(async () => {
+            await Promise.resolve();
+            input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        });
+        expect(navigate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                to: '/search',
+                search: expect.objectContaining({ term: 'Coffee beans' }),
+            }),
+        );
+    });
+    it('cancels obsolete suggestion requests and never presents a stale response', async () => {
+        let resolveOld: (value: { items: Product[]; totalItems: number }) => void = () => {
+            throw new Error('Old request resolver not ready');
+        };
+        let oldSignal: AbortSignal | undefined;
+        const catalog = vi.fn((input, signal) => {
+            if (input.term === 'old') {
+                oldSignal = signal;
+                return new Promise(resolve => {
+                    resolveOld = resolve;
+                });
+            }
+            return Promise.resolve({ items: [{ ...product, name: 'New match' }], totalItems: 1 });
+        });
+        renderDiscovery({ api: { catalog } as unknown as ShopApi });
+        typeTerm('old');
+        await debounce();
+        typeTerm('new');
+        await debounce();
+        expect(oldSignal?.aborted).toBe(true);
+        await act(async () => {
+            await Promise.resolve();
+            resolveOld({ items: [{ ...product, name: 'Stale match' }], totalItems: 1 });
+        });
+        expect(container.querySelector('[role="listbox"]')?.textContent).toContain('New match');
+        expect(container.querySelector('[role="listbox"]')?.textContent).not.toContain('Stale match');
+    });
+    it('waits for composition to finish before requesting suggestions', async () => {
+        const catalog = vi.fn().mockResolvedValue({ items: [], totalItems: 0 });
+        renderDiscovery({ api: { catalog } as unknown as ShopApi });
+        const input = required(container.querySelector('input'));
+        void act(() => input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })));
+        typeTerm('中文');
+        await debounce();
+        expect(catalog).not.toHaveBeenCalled();
+        void act(() => input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
+        await debounce();
+        expect(catalog).toHaveBeenCalledWith(
+            expect.objectContaining({ term: '中文', take: 5 }),
+            expect.anything(),
+        );
+        expect(navigate).not.toHaveBeenCalled();
+    });
+    it('restores URL filters, applies real catalog fields, and preserves them when sorting', async () => {
+        const catalog = vi.fn().mockResolvedValue({ items: [], totalItems: 0 });
+        renderDiscovery({
+            api: { catalog } as unknown as ShopApi,
+            initialQuery: 'cup',
+            initialFilters: {
+                collectionId: 'kitchen',
+                inStockOnly: true,
+                minPrice: '10',
+                maxPrice: '50',
+                fulfillment: 'physical',
+                sort: 'price-desc',
+            },
+        });
+        await act(async () => {
+            await Promise.resolve();
+        });
+        expect(catalog).toHaveBeenCalledWith(
+            expect.objectContaining({
+                term: 'cup',
+                collectionId: 'kitchen',
+                inStockOnly: true,
+                minPriceWithTax: 1000,
+                maxPriceWithTax: 5000,
+                fulfillmentType: 'physical',
+                sort: 'price-desc',
+            }),
+            expect.anything(),
+        );
+        const nameSort = required(
+            [...container.querySelectorAll<HTMLButtonElement>('.search-sort button')].find(
+                button => button.textContent === 'Name',
+            ),
+        );
+        await act(async () => {
+            await Promise.resolve();
+            nameSort.click();
+        });
+        expect(navigate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                search: expect.objectContaining({
+                    term: 'cup',
+                    collectionId: 'kitchen',
+                    inStockOnly: true,
+                    minPrice: '10',
+                    maxPrice: '50',
+                    sort: 'name',
+                }),
+            }),
+        );
+        await act(async () => {
+            await Promise.resolve();
+            required(container.querySelector<HTMLButtonElement>('.search-filter-summary button')).click();
+        });
+        expect(catalog).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                term: 'cup',
+                collectionId: undefined,
+                inStockOnly: undefined,
+                minPriceWithTax: undefined,
+                maxPriceWithTax: undefined,
+                sort: 'name',
+            }),
+            expect.anything(),
+        );
+    });
+    it('applies the selected category and resets it with the other filter draft fields', async () => {
+        const catalog = vi.fn().mockResolvedValue({ items: [], totalItems: 0 });
+        renderDiscovery({
+            api: { catalog } as unknown as ShopApi,
+            initialQuery: 'cup',
+            collections: [
+                {
+                    id: 'kitchen',
+                    name: 'Kitchen',
+                    slug: 'kitchen',
+                    description: '',
+                    parentId: 'root',
+                    position: 0,
+                    featuredAsset: null,
+                },
+            ],
+        });
+        void act(() =>
+            required(container.querySelector<HTMLButtonElement>('.search-filter-trigger')).click(),
+        );
+        const select = required(
+            document.querySelector<HTMLSelectElement>('.filter-collection-select select'),
+        );
+        void act(() => {
+            select.value = 'kitchen';
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        await act(async () => {
+            await Promise.resolve();
+            required(document.querySelector<HTMLButtonElement>('.filter-confirm-button')).click();
+        });
+        expect(navigate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                search: expect.objectContaining({ term: 'cup', collectionId: 'kitchen' }),
+            }),
+        );
+        expect(catalog).toHaveBeenLastCalledWith(
+            expect.objectContaining({ term: 'cup', collectionId: 'kitchen' }),
+            expect.anything(),
+        );
+        void act(() =>
+            required(container.querySelector<HTMLButtonElement>('.search-filter-trigger')).click(),
+        );
+        void act(() => required(document.querySelector<HTMLButtonElement>('.reset-filter-button')).click());
+        expect(
+            required(document.querySelector<HTMLSelectElement>('.filter-collection-select select')).value,
+        ).toBe('all');
+    });
+    it('undoes history clearing without touching another account', () => {
+        const guestKey = 'storefront-search-history:' + market.code + ':guest';
+        const otherKey = 'storefront-search-history:' + market.code + ':customer:other';
+        localStorage.setItem(guestKey, JSON.stringify(['coffee', 'tea']));
+        localStorage.setItem(otherKey, JSON.stringify(['private']));
+        renderDiscovery();
+        void act(() =>
+            required(
+                container.querySelector<HTMLButtonElement>('.search-recent button[aria-label="Clear"]'),
+            ).click(),
+        );
+        expect(localStorage.getItem(guestKey)).toBeNull();
+        const undo = required(
+            [...container.querySelectorAll<HTMLButtonElement>('.search-history-actions button')].find(
+                button => button.textContent === 'Undo clear',
+            ),
+        );
+        void act(() => undo.click());
+        expect(JSON.parse(required(localStorage.getItem(guestKey)))).toEqual(['coffee', 'tea']);
+        expect(JSON.parse(required(localStorage.getItem(otherKey)))).toEqual(['private']);
+    });
+    it('does not label an unavailable search as zero results', async () => {
+        renderDiscovery({
+            initialQuery: 'unavailable',
+            api: { catalog: vi.fn().mockRejectedValue(new Error('Request failed')) } as unknown as ShopApi,
+        });
+        await act(async () => {
+            await new Promise(resolve => setTimeout(resolve, 20));
+        });
+        expect(container.querySelector('.search-results-heading')?.textContent).toContain('Unavailable');
+        expect(container.querySelector('.search-results-heading')?.textContent).not.toContain('0 items');
+        expect(container.querySelector('.search-empty')).toBeNull();
+    });
     beforeEach(() => {
         navigate.mockClear();
         back.mockClear();
@@ -82,24 +353,21 @@ describe('search result and product-detail cache separation', () => {
         root = createRoot(container);
     });
     afterEach(() => {
-        act(() => root.unmount());
+        void act(() => root.unmount());
         client.clear();
         container.remove();
         localStorage.clear();
     });
-
     it('preserves a newer detail response while the previous search page remains visible', () => {
         render();
         expect(client.getQueryData(productKey)).toBeUndefined();
         const detail = { ...product, description: 'Full detail loaded by the destination route' };
         client.setQueryData(productKey, detail);
-
         // A pending route or other parent update must not publish the old search payload again.
         render();
         render();
         expect(client.getQueryData(productKey)).toEqual(detail);
     });
-
     it('keeps newly received result pages out of the complete detail cache', async () => {
         render();
         const nextProduct = { ...product, id: 'tea', name: 'Tea' };
@@ -118,25 +386,22 @@ describe('search result and product-detail cache separation', () => {
         ).toBeUndefined();
         expect(container.textContent).toContain('Tea');
     });
-
     it('closes a directly opened desktop search page to the home page', () => {
         viewport.desktop = true;
         render();
         const close = container.querySelector<HTMLButtonElement>('.search-close');
         expect(close?.textContent).toContain('Close search');
-        act(() => close?.click());
+        void act(() => close?.click());
         expect(navigate).toHaveBeenCalledWith({ to: '/', search: {} });
     });
-
     it('returns to the previous page when closing an entered desktop search', () => {
         viewport.desktop = true;
         canGoBack.mockReturnValue(true);
         render();
-        act(() => container.querySelector<HTMLButtonElement>('.search-close')?.click());
+        void act(() => container.querySelector<HTMLButtonElement>('.search-close')?.click());
         expect(back).toHaveBeenCalledOnce();
         expect(navigate).not.toHaveBeenCalled();
     });
-
     it('closes desktop search with Escape while preserving an open dialog', async () => {
         viewport.desktop = true;
         render();
@@ -155,20 +420,18 @@ describe('search result and product-detail cache separation', () => {
         });
         expect(navigate).toHaveBeenCalledWith({ to: '/', search: {} });
     });
-
     it('returns to discovery when the search term is cleared', () => {
         viewport.desktop = true;
         render();
         const input = container.querySelector<HTMLInputElement>('.search-header input');
         if (!input) throw new Error('Search input was not mounted');
-        act(() => {
+        void act(() => {
             setNativeInputValue(input, '');
             input.dispatchEvent(new InputEvent('input', { bubbles: true }));
         });
         expect(navigate).toHaveBeenCalledWith({ to: '/search', search: {}, replace: true });
         expect(container.querySelector('.search-discovery')).not.toBeNull();
     });
-
     it('shows and clears recent searches for only the current store and account', () => {
         const baseKey = `storefront-search-history:${market.code}`;
         localStorage.setItem(baseKey, JSON.stringify(['old shared search']));
@@ -176,7 +439,7 @@ describe('search result and product-detail cache separation', () => {
         localStorage.setItem(`${baseKey}:customer:bob`, JSON.stringify(['bob search']));
         localStorage.setItem(`${baseKey}:guest`, JSON.stringify(['guest search']));
         const renderIdentity = (customerId?: string) => {
-            act(() => {
+            void act(() => {
                 root.render(
                     <QueryClientProvider client={client}>
                         <SearchPageContext.Provider
@@ -197,27 +460,23 @@ describe('search result and product-detail cache separation', () => {
                 );
             });
         };
-
         renderIdentity('alice');
         expect(container.textContent).toContain('alice search');
         expect(container.textContent).not.toContain('bob search');
         expect(container.textContent).not.toContain('old shared search');
-
         renderIdentity('bob');
         expect(container.textContent).toContain('bob search');
         expect(container.textContent).not.toContain('alice search');
-        act(() => {
+        void act(() => {
             container.querySelector<HTMLButtonElement>('.search-recent button[aria-label="Clear"]')?.click();
         });
         expect(localStorage.getItem(`${baseKey}:customer:bob`)).toBeNull();
         expect(localStorage.getItem(`${baseKey}:customer:alice`)).not.toBeNull();
         expect(localStorage.getItem(baseKey)).not.toBeNull();
-
         renderIdentity();
         expect(container.textContent).toContain('guest search');
         expect(container.textContent).not.toContain('alice search');
     });
-
     it('keeps searching and clearing in-memory history when browser storage rejects writes', () => {
         const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
             throw new DOMException('Storage blocked', 'SecurityError');
@@ -226,7 +485,7 @@ describe('search result and product-detail cache separation', () => {
             throw new DOMException('Storage blocked', 'SecurityError');
         });
         try {
-            act(() => {
+            void act(() => {
                 root.render(
                     <QueryClientProvider client={client}>
                         <SearchPageContext.Provider
@@ -250,21 +509,21 @@ describe('search result and product-detail cache separation', () => {
             });
             const input = container.querySelector<HTMLInputElement>('.search-header input');
             if (!input) throw new Error('Search input was not mounted');
-            act(() => {
+            void act(() => {
                 setNativeInputValue(input, 'coffee');
                 input.dispatchEvent(new InputEvent('input', { bubbles: true }));
             });
-            act(() => {
+            void act(() => {
                 container.querySelector<HTMLButtonElement>('.search-submit')?.click();
             });
             expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ to: '/search' }));
             expect(setItem).toHaveBeenCalled();
-            act(() => {
+            void act(() => {
                 setNativeInputValue(input, '');
                 input.dispatchEvent(new InputEvent('input', { bubbles: true }));
             });
             expect(container.querySelector('.search-recent')?.textContent).toContain('coffee');
-            act(() => {
+            void act(() => {
                 container
                     .querySelector<HTMLButtonElement>('.search-recent button[aria-label="Clear"]')
                     ?.click();
@@ -276,12 +535,11 @@ describe('search result and product-detail cache separation', () => {
             removeItem.mockRestore();
         }
     });
-
     it('does not submit unfinished Chinese text when Enter confirms an IME candidate', async () => {
         const catalog = vi.fn().mockResolvedValue({ items: [], totalItems: 0 });
         const storeHistory = vi.spyOn(Storage.prototype, 'setItem');
         try {
-            act(() => {
+            void act(() => {
                 root.render(
                     <QueryClientProvider client={client}>
                         <SearchPageContext.Provider
@@ -302,12 +560,12 @@ describe('search result and product-detail cache separation', () => {
             });
             const input = container.querySelector('input');
             if (!input) throw new Error('Search input was not mounted');
-            act(() => {
+            void act(() => {
                 setNativeInputValue(input, '中华');
                 input.dispatchEvent(new InputEvent('input', { bubbles: true }));
             });
             for (const options of [{ isComposing: true }, { isComposing: false, keyCode: 229 }]) {
-                act(() => {
+                void act(() => {
                     input.dispatchEvent(
                         new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, ...options }),
                     );
@@ -333,7 +591,6 @@ describe('search result and product-detail cache separation', () => {
         }
     });
 });
-
 function setNativeInputValue(input: HTMLInputElement, value: string) {
     const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
     if (!descriptor?.set) throw new Error('Native input setter is unavailable');

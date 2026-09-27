@@ -17,7 +17,7 @@ import { ClientPluginsModule } from '../../src/pages/Plugins/ClientPluginsModule
 import { BusinessServicesCopyModule } from '../../src/pages/Storefront/BusinessServicesCopyModule';
 import { StorefrontContentModule } from '../../src/pages/Storefront/StorefrontContentModule';
 import { StorefrontModule } from '../../src/pages/Storefront/StorefrontModule';
-import { newContentBlock } from '../../src/pages/Storefront/storefront-content-utils';
+import { newContentBlock, newContentItem } from '../../src/pages/Storefront/storefront-content-utils';
 import { decorationDraft } from '../../src/pages/Storefront/storefront-decoration-model';
 import { contentPublicationStatus } from '../../src/pages/Storefront/storefront-publication';
 
@@ -62,6 +62,36 @@ let blocks = params.has('empty')
           imageAsset: type === 'HERO' ? asset : null,
           imageUrl: type === 'HERO' ? asset.preview : null,
       }));
+if (params.has('original')) {
+    for (const block of blocks) {
+        if (block.type === 'HERO') block.settings = { ...block.settings, themePreset: 'bright' };
+    }
+}
+if (params.has('gallery')) {
+    const gallery = newContentBlock('QUICK_LINKS', 3, '精选分类');
+    gallery.id = 'gallery';
+    gallery.code = 'gallery';
+    gallery.enabled = true;
+    gallery.items = Array.from({ length: 5 }, (_, index) => {
+        const item = newContentItem(index);
+        item.id = `gallery-${index}`;
+        item.imageUrl = '/assets/fixture-carousel.svg';
+        item.targetType = 'PAGE';
+        item.targetValue = 'category';
+        item.translations[0].label = ['签证留学', '第二家园', '正品烟草', '精品白酒', '正厂槟榔'][index];
+        return item;
+    });
+    blocks.push({
+        ...gallery,
+        __typename: 'StorefrontContentBlock',
+        id: 'gallery',
+        code: 'gallery',
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-09-01T00:00:00Z',
+        imageAsset: null,
+        imageUrl: null,
+    });
+}
 if (params.has('plugins')) {
     const pluginBlock = newContentBlock('CLIENT_PLUGINS', 10_001, '客户端插件配置');
     blocks.push({
@@ -387,6 +417,12 @@ const client = new ApolloClient({
                                     effectiveGoogleClientId: null,
                                     googleConfigurationSource: 'DISABLED',
                                 },
+                            };
+                        } else if (name === 'NextAdminStorefrontPreviewDomains') {
+                            data = {
+                                storeDomains: [
+                                    { domain: 'fixture.invalid', isPrimary: true, status: 'ACTIVE', channel },
+                                ],
                             };
                         } else if (name === 'NextAdminStorefrontPreviewUrl') {
                             data = { activeChannel: channel, storeProfiles: [] };
