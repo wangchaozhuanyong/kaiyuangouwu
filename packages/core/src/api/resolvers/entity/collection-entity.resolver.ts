@@ -122,9 +122,14 @@ export class CollectionEntityResolver {
     ): Promise<Collection[]> {
         let children: Collection[] = [];
         if (collection.children) {
-            children = collection.children.sort((a, b) => a.position - b.position);
+            // Eager relations can contain children of the shared structural root from other stores.
+            children = await this.collectionService.findByIds(
+                ctx,
+                collection.children.map(child => child.id),
+            );
+            children.sort((a, b) => a.position - b.position);
         } else {
-            children = (await this.collectionService.getChildren(ctx, collection.id)) as any;
+            children = await this.collectionService.getChildren(ctx, collection.id);
         }
         return children.filter(c => (apiType === 'shop' ? !c.isPrivate : true));
     }

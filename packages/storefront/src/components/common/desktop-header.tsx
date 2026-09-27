@@ -160,6 +160,7 @@ export function DesktopHeader({
             </div>
             {preferencesOpen ? (
                 <LocalePreferencesSheet
+                    storefrontLabel={context.storefrontName}
                     language={context.language}
                     currencyCodes={
                         context.currencySelectorEnabled

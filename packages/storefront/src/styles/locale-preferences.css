@@ -67,6 +67,17 @@
     border: 0;
 }
 
+.locale-preferences-store {
+    margin: 0;
+    display: grid;
+    gap: 4px;
+    color: var(--text);
+}
+
+.locale-preferences-store > small {
+    color: var(--muted);
+}
+
 .locale-preferences-fieldset > legend {
     width: 100%;
     margin-bottom: 8px;
