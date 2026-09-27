@@ -210,6 +210,7 @@ function classifyFailure(code: string, message: string): OperationFailureCode {
     if (resourceInUsePattern.test(message)) return 'RESOURCE_IN_USE';
     if (stalePattern.test(message)) return 'STALE_DATA';
     if (conflictPattern.test(message)) return 'CONFLICT';
+    if (/relation with property path .+ was not found/i.test(message)) return 'SERVER_ERROR';
     if (notFoundPattern.test(message)) return 'NOT_FOUND';
     if (validationPattern.test(message)) return 'VALIDATION_FAILED';
     if (serverPattern.test(message)) return 'SERVER_ERROR';

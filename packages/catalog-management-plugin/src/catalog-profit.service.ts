@@ -433,11 +433,7 @@ export class CatalogProfitService {
 
         const orders = await baseQuery
             .leftJoinAndSelect('order.lines', 'line')
-            .leftJoinAndSelect('line.adjustments', 'lineAdjustment')
-            .leftJoinAndSelect('line.taxLines', 'lineTaxLine')
             .leftJoinAndSelect('order.shippingLines', 'shippingLine')
-            .leftJoinAndSelect('shippingLine.adjustments', 'shippingAdjustment')
-            .leftJoinAndSelect('shippingLine.taxLines', 'shippingTaxLine')
             .leftJoinAndSelect('order.payments', 'payment')
             .leftJoinAndSelect('payment.refunds', 'refund')
             .distinct(true)
