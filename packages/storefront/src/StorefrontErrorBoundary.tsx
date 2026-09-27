@@ -36,6 +36,7 @@ export class StorefrontErrorBoundary extends Component<
     }
 
     componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+        document.documentElement.removeAttribute('data-storefront-theme-pending');
         // Rendering failures must remain visible in production diagnostics.
         // eslint-disable-next-line no-console
         console.error('Storefront render failed', error, errorInfo);

@@ -124,7 +124,7 @@ export function ProductEditorSidebar() {
                                     className="h-full w-full object-contain"
                                 />
                                 <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-linear-to-t from-slate-950/80 to-transparent px-3 pb-2.5 pt-8 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                                    <span className="truncate text-[10px]">Asset #{featuredAssetId}</span>
+                                    <span className="truncate text-[10px]">素材编号 #{featuredAssetId}</span>
                                     <button
                                         type="button"
                                         disabled={saving}

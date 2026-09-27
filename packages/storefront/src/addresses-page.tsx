@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { ArrowLeft, CircleCheck, Mail, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { CircleCheck, Mail, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 import './styles/address-surfaces.css';
 import './styles/checkout-payment-surfaces.css';
@@ -22,6 +22,7 @@ import { PageSkeleton } from './route-loading';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
+import { SubHeader, Subpage } from './storefront-ui/page-shell';
 import {
     ActiveCustomer,
     CustomerAddress,
@@ -349,9 +350,9 @@ export function AddressesPage({
                 title={pageTitle}
                 language={language}
                 onBack={onBack}
+                actionVisibility={selection ? 'all' : 'mobile'}
                 action={
                     <button
-                        className={selection ? undefined : 'account-mobile-header-action'}
                         type="button"
                         onClick={() => (effectiveTab === 'email' ? setEmailOpen(true) : startEdit(null))}
                         aria-label={
@@ -766,45 +767,6 @@ export function AddressesPage({
     );
 }
 
-function SubHeader({
-    title,
-    language,
-    onBack,
-    action,
-}: {
-    title: string;
-    language: StorefrontLanguage;
-    onBack: () => void;
-    action?: ReactNode;
-}) {
-    return (
-        <header className="topbar subpage-header">
-            <button type="button" onClick={onBack} aria-label={language === 'zh' ? '返回' : 'Back'}>
-                <ArrowLeft aria-hidden="true" />
-            </button>
-            <strong>{title}</strong>
-            <span>{action}</span>
-        </header>
-    );
-}
-function Subpage({
-    title,
-    language,
-    onBack,
-    children,
-}: {
-    title: string;
-    language: StorefrontLanguage;
-    onBack: () => void;
-    children: ReactNode;
-}) {
-    return (
-        <main className="page subpage">
-            <SubHeader title={title} language={language} onBack={onBack} />
-            {children}
-        </main>
-    );
-}
 function EmptyState({
     icon,
     title,

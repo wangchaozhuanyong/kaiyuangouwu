@@ -970,13 +970,24 @@
 }
 
 .support-tag-btn:hover {
-    background: var(--control-surface-hover);
+    background: var(--interaction-hover);
+    color: var(--interaction-ink);
+}
+
+.support-tag-btn:active {
+    background: var(--interaction-pressed);
+    color: var(--interaction-ink);
 }
 
 .support-tag-btn.is-active {
-    background: var(--accent-soft);
-    color: var(--accent-ink);
+    background: var(--selection);
+    color: var(--selection-foreground);
     font-weight: 600;
+}
+
+.support-tag-btn.is-active:hover:not(:disabled) {
+    background: var(--selection-hover);
+    color: var(--selection-foreground);
 }
 
 .support-evaluation-textarea {

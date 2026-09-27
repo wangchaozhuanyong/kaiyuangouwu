@@ -461,7 +461,7 @@ describe('product image navigation layers', () => {
         expect(markup).not.toContain('含税');
     });
 
-    it('keeps list-row links above the missing-image placeholder without add buttons', () => {
+    it('keeps list-row content inside the navigation link without add buttons', () => {
         const markup = renderToStaticMarkup(
             <ProductRow
                 product={digitalProduct}
@@ -474,10 +474,15 @@ describe('product image navigation layers', () => {
         const stylesheet = readStorefrontStylesheet();
 
         expect(markup).toContain('product-row-detail-link');
-        expect(markup).toContain('暂无商品图');
+        expect(markup).toContain('product-image-placeholder');
         expect(markup).toContain('库存 10');
         expect(markup).not.toContain('加入购物车');
-        expect(stylesheet).toMatch(/\.product-row-detail-link\s*\{[^}]*z-index:\s*10;/);
+        expect(markup).toMatch(
+            /<a[^>]*product-row-detail-link[^>]*href="\/product\?id=[^"]+"[^>]*>[\s\S]*product-image-placeholder[\s\S]*<\/a>/,
+        );
+        expect(stylesheet).not.toMatch(
+            /\.product-row-detail-link\s*\{[^}]*(?:position:\s*absolute|z-index:)/,
+        );
         expect(stylesheet).not.toMatch(/\.row-add\s*\{/);
     });
 

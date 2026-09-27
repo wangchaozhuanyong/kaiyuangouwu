@@ -511,6 +511,38 @@ describe('HomePage localized trust bar layout', () => {
         );
     });
 
+    it('renders saved descriptions and imagery while excluding disabled and empty items', () => {
+        const markup = renderHome(
+            {
+                contentBlocks: [
+                    {
+                        ...trustBarBlock,
+                        items: [
+                            { ...trustBarBlock.items[0], enabled: false, label: '不应显示的停用条目' },
+                            { ...trustBarBlock.items[1], label: '   ', description: '   ' },
+                            {
+                                ...trustBarBlock.items[2],
+                                label: '后台配置的保障标题',
+                                description: '后台配置的保障说明',
+                                imageUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>',
+                            },
+                        ],
+                    },
+                ],
+            },
+            true,
+        );
+        expect(markup.match(/class="home-trust-item"/g)).toHaveLength(1);
+        expect(markup).toContain('后台配置的保障标题');
+        expect(markup).toContain('class="home-trust-description">后台配置的保障说明');
+        expect(markup).toContain('data:image/svg+xml');
+        expect(markup).not.toContain('不应显示的停用条目');
+        for (const claim of ['假一赔十', '全马免运费', '次日达', '持牌资质'])
+            expect(markup).not.toContain(claim);
+        const emptyMarkup = renderHome({ contentBlocks: [{ ...trustBarBlock, items: [] }] }, true);
+        expect(emptyMarkup).not.toContain('home-trust-bar');
+    });
+
     it('applies the balanced marketplace treatment only when managed content opts in', () => {
         const markup = renderHome({
             contentBlocks: [
@@ -644,7 +676,7 @@ describe('HomePage flash-sale product count', () => {
         expect(markup).toContain('preset=storefront-thumbnail-160');
         expect(markup).toContain('sizes="(min-width: 1024px) 220px, (min-width: 420px) 126px, 30vw"');
         expect(markup).toMatch(/<header class="section-header">[\s\S]*role="timer"[\s\S]*<\/header>/);
-        expect(markup).toContain('<h2>限时秒杀</h2><div class="flash-sale-countdown"');
+        expect(markup).toMatch(/<h2>限时秒杀<\/h2><(?:div|span) class="flash-sale-countdown"/);
     });
 
     it('still honors an explicit merchant display limit', () => {

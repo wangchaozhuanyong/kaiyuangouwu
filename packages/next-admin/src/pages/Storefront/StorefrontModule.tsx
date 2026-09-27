@@ -54,7 +54,9 @@ import {
     errorText,
     homepageModuleDescriptors,
     newContentBlock,
+    storefrontBlockDisplayName,
     storefrontBlockInput,
+    storefrontBlockTypeLabel,
 } from './storefront-content-utils';
 import { contentPublicationLabels, contentPublicationStatus } from './storefront-publication';
 
@@ -1025,7 +1027,7 @@ function BlockRow({
     const scheduled = status !== 'PUBLISHED' && block.enabled;
     return (
         <article
-            aria-label={block.internalName || block.code}
+            aria-label={storefrontBlockDisplayName(block)}
             className="flex flex-wrap items-center gap-3 p-4 hover:bg-slate-50"
         >
             {dragHandle}
@@ -1043,13 +1045,13 @@ function BlockRow({
             <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                     <h3
-                        title={block.internalName || block.code}
+                        title={storefrontBlockDisplayName(block)}
                         className="truncate text-xs font-bold text-slate-900"
                     >
-                        {block.internalName || block.code}
+                        {storefrontBlockDisplayName(block)}
                     </h3>
                     <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] text-slate-500">
-                        {block.type}
+                        {storefrontBlockTypeLabel(block.type)}
                     </span>
                     <span
                         className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${block.enabled ? (scheduled ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700') : 'bg-slate-100 text-slate-400'}`}

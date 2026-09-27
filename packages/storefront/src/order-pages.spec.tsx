@@ -139,10 +139,12 @@ function renderLogistics(cachedOrders?: Order[]) {
 }
 
 describe('OrdersPage route query', () => {
-    it('renders a desktop order with real order totals and all primary actions without the mobile search toggle', () => {
+    it('renders a desktop order summary with the real total and payment entry', () => {
         const pending = { ...order, state: 'ArrangingPayment', totalQuantity: 6, totalWithTax: 10800 };
         const markup = renderOrders([pending], 'zh', true);
-        expect(markup).toContain('desktop-order-columns');
+        expect(markup).toContain('order-summary-card');
+        expect(markup).not.toContain('desktop-order-columns');
+        expect(markup).not.toContain('desktop-order-values');
         expect(markup).toContain('订单 T0001');
         expect(markup).toContain('共 6 件');
         expect(markup).toContain('108');
@@ -151,6 +153,17 @@ describe('OrdersPage route query', () => {
         expect(markup).toContain('没有更多订单');
         expect(markup).not.toContain('DEMO-0001');
         expect(markup).not.toContain('aria-label="搜索订单"');
+    });
+
+    it('keeps full product guidance and repeat-purchase actions in details instead of the desktop summary', () => {
+        const markup = renderOrders([order], 'zh', true);
+        expect(markup).toContain('查看详情');
+        expect(markup).toContain('待发货');
+        expect(markup).toContain('订单测试商品');
+        expect(markup).not.toContain('order-product-spec');
+        expect(markup).not.toContain('order-total-summary');
+        expect(markup).not.toContain('再来一单');
+        expect(renderOrders([order])).toContain('再来一单');
     });
 
     it('includes completed orders in the same lifecycle filters on mobile', () => {

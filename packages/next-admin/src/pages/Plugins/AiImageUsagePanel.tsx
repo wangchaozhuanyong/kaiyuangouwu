@@ -1,5 +1,7 @@
 import { useQuery } from '@apollo/client/react';
 import { useState } from 'react';
+import { getSystemLabel } from '../../../../common/src/display-localization';
+import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
@@ -150,7 +152,7 @@ export function AiImageUsagePanel() {
                                             {record.modelCode || '未记录'}
                                         </div>
                                         <div className="mt-1 text-xs">
-                                            {outcomeLabels[record.state] ?? record.state}
+                                            {getSystemLabel(record.state, outcomeLabels, 'zh', 'status')}
                                         </div>
                                     </td>
                                     <td className="p-3">
@@ -350,7 +352,7 @@ function ImageUsageDetail({ record, onClose }: { record: ImageAiUsageRecord; onC
                                 >
                                     <summary className="cursor-pointer">
                                         第 {attempt.attemptNumber} 次 · {attempt.modelId} ·{' '}
-                                        {outcomeLabels[attempt.outcome] ?? attempt.outcome}
+                                        {getSystemLabel(attempt.outcome, outcomeLabels, 'zh', 'status')}
                                         {' · '}
                                         {attempt.actualCostMicrounits == null || !attempt.costCurrency
                                             ? '费用待核对'
@@ -364,7 +366,8 @@ function ImageUsageDetail({ record, onClose }: { record: ImageAiUsageRecord; onC
                                         </dd>
                                         <dt>阶段 / 耗时</dt>
                                         <dd>
-                                            {attempt.stage} / {attempt.latencyMs} ms
+                                            {systemFieldDisplayLabel('stage', attempt.stage)} /{' '}
+                                            {attempt.latencyMs} ms
                                             {attempt.httpStatus ? ` / HTTP ${attempt.httpStatus}` : ''}
                                         </dd>
                                         <dt>本地调用编号</dt>
@@ -372,7 +375,10 @@ function ImageUsageDetail({ record, onClose }: { record: ImageAiUsageRecord; onC
                                         <dt>响应头编号</dt>
                                         <dd>
                                             {attempt.headerRequestId ?? '未返回'}{' '}
-                                            {attempt.headerRequestIdSource ?? ''}
+                                            {systemFieldDisplayLabel(
+                                                'headerRequestIdSource',
+                                                attempt.headerRequestIdSource,
+                                            ) ?? ''}
                                         </dd>
                                         <dt>模型响应编号</dt>
                                         <dd>{attempt.modelResponseId ?? '未保存'}</dd>
@@ -380,20 +386,13 @@ function ImageUsageDetail({ record, onClose }: { record: ImageAiUsageRecord; onC
                                         <dd>{attempt.providerRequestId ?? '未保存'}</dd>
                                         <dt>账单关联</dt>
                                         <dd>
-                                            {attempt.matchingStatus === 'UNRECONCILED'
-                                                ? '尚未核实供应商账单'
-                                                : attempt.matchingStatus === 'CROSS_MATCH_REVIEWED'
-                                                  ? '交叉匹配已审'
-                                                  : attempt.matchingStatus}
+                                            {systemFieldDisplayLabel(
+                                                'matchingStatus',
+                                                attempt.matchingStatus,
+                                            )}
                                         </dd>
                                         <dt>费用来源</dt>
-                                        <dd>
-                                            {attempt.costSource === 'UNVERIFIED'
-                                                ? '未核实'
-                                                : attempt.costSource === 'SUPPLIER_BILLING'
-                                                  ? '供应商账单审定'
-                                                  : attempt.costSource}
-                                        </dd>
+                                        <dd>{systemFieldDisplayLabel('costSource', attempt.costSource)}</dd>
                                         {attempt.reportedCostEvidence && (
                                             <>
                                                 <dt>响应申报金额</dt>

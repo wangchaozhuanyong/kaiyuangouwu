@@ -62,7 +62,7 @@ describe('ListQueryBuilder', () => {
                     'cake',
                     'dog',
                     'egg',
-                    'baum', // if default en lang does not exist, use next available lang
+                    'English name not set', // Missing English copy does not borrow German.
                 ]),
             );
         });
@@ -1076,7 +1076,7 @@ describe('ListQueryBuilder', () => {
             });
             expect(testEntities.items.map((x: any) => x.name)).toEqual([
                 'apple',
-                'baum', // falling back to de here
+                'English name not set', // SQL sorting stays stable; displayed copy uses English only.
                 'bike',
                 'cake',
                 'dog',
@@ -1115,7 +1115,12 @@ describe('ListQueryBuilder', () => {
                     take: 4,
                 },
             });
-            expect(testEntities.items.map((x: any) => x.name)).toEqual(['apple', 'baum', 'bike', 'cake']);
+            expect(testEntities.items.map((x: any) => x.name)).toEqual([
+                'apple',
+                'English name not set',
+                'bike',
+                'cake',
+            ]);
         });
 
         it('sort by translated field de with take', async () => {
@@ -1234,7 +1239,7 @@ describe('ListQueryBuilder', () => {
                 },
             });
             expect(testEntities.items.map((x: any) => x.name)).toEqual([
-                'baum',
+                'English name not set',
                 'bike',
                 'cake',
                 'dog',

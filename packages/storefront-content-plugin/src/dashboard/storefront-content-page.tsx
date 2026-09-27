@@ -1339,7 +1339,7 @@ function HomepageModuleRow({
         ? isZh
             ? entry.descriptor?.labelZh
             : entry.descriptor?.labelEn
-        : block?.internalName || translation?.title || block?.code;
+        : block?.internalName || translation?.title || (isZh ? '自定义内容' : 'Custom content');
     const description = entry.fixed
         ? isZh
             ? entry.descriptor?.descriptionZh
@@ -1503,7 +1503,7 @@ function CarouselSlideRow({
                         )}
                     </div>
                     <p className="mt-1 truncate text-sm text-muted-foreground">
-                        {translation.title || slide.internalName || slide.code}
+                        {translation.title || slide.internalName || (isZh ? '未填写标题' : 'Title not set')}
                     </p>
                     <p className="mt-1 truncate text-xs text-muted-foreground">
                         {translation.subtitle || (isZh ? '暂无副标题' : 'No subtitle')}

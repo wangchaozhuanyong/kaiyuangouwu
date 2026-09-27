@@ -62,7 +62,9 @@ const storeManagementData: StoreManagementResult = {
                 code: 'card',
                 enabled: true,
                 updatedAt: '2026-09-01T00:00:00.000Z',
-                translations: [],
+                translations: [
+                    { id: 'zh-payment', languageCode: 'zh_Hans', name: '银行卡', description: '' },
+                ],
                 checker: null,
                 handler: { code: 'card-handler', args: [] },
             },
@@ -78,7 +80,9 @@ const storeManagementData: StoreManagementResult = {
                 code: 'malaysia-shipping',
                 fulfillmentHandlerCode: 'manual-fulfillment',
                 updatedAt: '2026-09-01T00:00:00.000Z',
-                translations: [],
+                translations: [
+                    { id: 'zh-shipping', languageCode: 'zh_Hans', name: '全马配送', description: '' },
+                ],
                 checker: { code: 'default-checker', args: [] },
                 calculator: { code: 'default-calculator', args: [] },
             },

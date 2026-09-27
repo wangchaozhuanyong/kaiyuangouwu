@@ -2985,10 +2985,10 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 
 .subcat-side-item.is-active {
     z-index: 1;
-    background: var(--category-results-surface);
-    color: var(--accent-ink);
+    background: var(--selection);
+    color: var(--selection-foreground);
     font-weight: 700;
-    box-shadow: 1px 0 0 var(--category-results-surface);
+    box-shadow: none;
 }
 
 .subcat-side-item:focus-visible {
@@ -3703,7 +3703,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         display: grid;
         gap: 10px;
         padding-left: 24px;
-        border-left: 1px solid #ffffff26;
+        border-left: 0;
     }
     .business-services-hero-shortcuts button {
         display: flex;
@@ -3992,11 +3992,6 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 }
 
 @media (min-width: 1024px) {
-    .category-navigation-shell > .topbar.category-topbar {
-        height: 128px;
-        padding-top: 72px;
-    }
-
     .category-page .primary-category-strip {
         margin-block: 4px 8px;
         border-radius: var(--skin-card-radius, var(--radius-md));

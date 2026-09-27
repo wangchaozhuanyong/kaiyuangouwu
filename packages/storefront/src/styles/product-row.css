@@ -17,13 +17,9 @@
 }
 
 .product-row-detail-link {
-    position: absolute;
-    z-index: 10;
-    inset: 0;
-    padding: 0;
-    border: 0;
-    border-radius: inherit;
-    background: transparent;
+    color: inherit;
+    text-align: left;
+    text-decoration: none;
     cursor: pointer;
 }
 

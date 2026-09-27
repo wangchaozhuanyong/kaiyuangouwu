@@ -196,7 +196,8 @@ describe('desktop catalog card', () => {
                 onOpen={() => undefined}
             />,
         );
-        expect(html).toContain('class="product-row"');
+        expect(html).toContain('class="product-row product-row-detail-link"');
+        expect(html).toContain('href="/product?id=product-1"');
         expect(html).not.toContain('product-catalog-action');
     });
 });

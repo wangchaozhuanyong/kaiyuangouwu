@@ -1,6 +1,8 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { Check, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, WalletCards, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { serviceMessageDisplay } from '../../../../common/src/display-localization';
+import { systemStatusDisplayLabel } from '../../../../common/src/system-display-labels';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { usePageSize } from '../../hooks/use-page-size';
 
@@ -303,10 +305,7 @@ export function UsdtPaymentManagementModule() {
                                     >
                                         <div>
                                             <strong>{channelName(item.channelId, item.channelCode)}</strong>
-                                            <span
-                                                className="ml-2 rounded bg-slate-100 px-2 py-0.5"
-                                                title={`系统标识：${item.paymentMethodCode}`}
-                                            >
+                                            <span className="ml-2 rounded bg-slate-100 px-2 py-0.5">
                                                 {storePaymentMethodLabel(item.paymentMethodCode)}
                                             </span>
                                         </div>
@@ -414,17 +413,11 @@ export function UsdtPaymentManagementModule() {
                                                 <td className="whitespace-nowrap px-3 py-3 text-slate-500">
                                                     {payment.orderCode}
                                                 </td>
-                                                <td
-                                                    className="px-3 py-3"
-                                                    title={`系统标识：${payment.paymentMethodCode}`}
-                                                >
+                                                <td className="px-3 py-3">
                                                     {storePaymentMethodLabel(payment.paymentMethodCode)}
                                                 </td>
                                                 <td className="px-3 py-3">
-                                                    <span
-                                                        className="rounded bg-slate-100 px-2 py-1 font-medium text-slate-700"
-                                                        title={`系统状态：${payment.paymentState}`}
-                                                    >
+                                                    <span className="rounded bg-slate-100 px-2 py-1 font-medium text-slate-700">
                                                         {getPaymentStateLabel(payment.paymentState)}
                                                     </span>
                                                 </td>
@@ -562,10 +555,7 @@ export function UsdtPaymentManagementModule() {
                                                     {channelName(intent.channelId, intent.channelCode)} · 订单{' '}
                                                     {intent.orderCode}
                                                 </strong>
-                                                <small
-                                                    className="ml-2 text-slate-500"
-                                                    title={`系统状态：${intent.status}`}
-                                                >
+                                                <small className="ml-2 text-slate-500">
                                                     {storeUsdtPaymentIntentStatusLabel(intent.status)}
                                                 </small>
                                                 <span className="mt-1 block font-mono text-[10px] text-slate-500">
@@ -576,7 +566,7 @@ export function UsdtPaymentManagementModule() {
                                         </div>
                                         {intent.failureReason && (
                                             <p className="mt-2 rounded bg-amber-50 px-2 py-1.5 text-amber-800">
-                                                {intent.failureReason}
+                                                {serviceMessageDisplay(intent.failureReason, 'zh')}
                                                 {intent.manualReviewCode && (
                                                     <span className="ml-1 font-mono text-[10px]">
                                                         ({intent.manualReviewCode})
@@ -614,7 +604,7 @@ export function UsdtPaymentManagementModule() {
                                                     {item.action === 'RETRY_SETTLEMENT'
                                                         ? '重试入账'
                                                         : '外部链上退款'}{' '}
-                                                    · {item.outcome}
+                                                    · {systemStatusDisplayLabel(item.outcome)}
                                                 </strong>
                                                 <span>{formatDateTime(item.createdAt)}</span>
                                             </div>
@@ -775,7 +765,7 @@ function ReconciliationEditor({
                         </h2>
                         <p className="mt-1 text-xs text-slate-500">
                             订单 {intent.orderCode} · {intent.expectedUsdtAmount.toFixed(6)} USDT ·{' '}
-                            {intent.failureReason}
+                            {serviceMessageDisplay(intent.failureReason, 'zh')}
                         </p>
                     </div>
                     <button type="button" onClick={onClose} aria-label="关闭">

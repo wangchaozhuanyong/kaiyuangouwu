@@ -55,6 +55,7 @@ module.exports = {
             files: [
                 './packages/store-management-plugin/src/admin/**/*',
                 './packages/store-management-plugin/src/dashboard/**/*',
+                './packages/store-domain-plugin/src/dashboard/**/*',
                 './packages/storefront-content-plugin/src/dashboard/**/*',
             ],
             extends: ['plugin:@typescript-eslint/disable-type-checked'],

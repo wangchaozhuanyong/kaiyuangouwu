@@ -523,7 +523,7 @@ export function StorefrontBlockEditor({
                                                         className={inputClass}
                                                     />
                                                 </Field>
-                                                <Field label="English service days">
+                                                <Field label="英文服务日期">
                                                     <input
                                                         value={stringSetting(
                                                             draft.settings?.serviceDaysEn,

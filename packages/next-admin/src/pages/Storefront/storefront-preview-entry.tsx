@@ -9,15 +9,7 @@ import { storefrontQueryClient } from '../../../../storefront/src/query-client';
 import { setStorefrontPreviewParameters } from '../../../../storefront/src/storefront-preview-parameters';
 import { StorefrontErrorBoundary } from '../../../../storefront/src/StorefrontErrorBoundary';
 import type { StorefrontContentResponse } from '../../../../storefront/src/types';
-import '../../../../storefront/src/styles.css';
-import '../../../../storefront/src/styles/subpage-content.css';
-import '../../../../storefront/src/styles/desktop-layout.css';
-import '../../../../storefront/src/styles/visual-presets.css';
-import '../../../../storefront/src/styles/desktop-commerce.css';
-import '../../../../storefront/src/styles/desktop-home.css';
-import '../../../../storefront/src/styles/desktop-pages.css';
-import '../../../../storefront/src/styles/control-surfaces.css';
-import '../../../../storefront/src/styles/locale-preferences.css';
+import '../../../../storefront/src/storefront-styles';
 import {
     applyDecorationDraft,
     isReadOnlyPreviewQuery,

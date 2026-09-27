@@ -269,7 +269,13 @@
 }
 
 .detail-options > div button:hover {
-    background: var(--control-surface-hover);
+    background: var(--interaction-hover);
+    color: var(--interaction-ink);
+}
+
+.detail-options > div button:active {
+    background: var(--interaction-pressed);
+    color: var(--interaction-ink);
 }
 
 .detail-options > div button:focus-visible {
@@ -278,9 +284,14 @@
 }
 
 .detail-options > div button.is-active {
-    background: var(--accent-soft);
-    color: var(--accent-ink);
-    box-shadow: inset 0 0 0 1px var(--accent);
+    background: var(--selection);
+    color: var(--selection-foreground);
+    box-shadow: none;
+}
+
+.detail-options > div button.is-active:hover:not(:disabled) {
+    background: var(--selection-hover);
+    color: var(--selection-foreground);
 }
 
 .detail-variant-name {
@@ -428,13 +439,23 @@
 }
 
 .detail-content-tabs button:hover {
-    background: var(--control-surface-hover);
-    color: var(--text);
+    background: var(--interaction-hover);
+    color: var(--interaction-ink);
+}
+
+.detail-content-tabs button:active {
+    background: var(--interaction-pressed);
+    color: var(--interaction-ink);
 }
 
 .detail-content-tabs button.is-active {
-    background: var(--accent-soft);
-    color: var(--accent-ink);
+    background: var(--selection);
+    color: var(--selection-foreground);
+}
+
+.detail-content-tabs button.is-active:hover:not(:disabled) {
+    background: var(--selection-hover);
+    color: var(--selection-foreground);
 }
 
 .detail-content-tabs button:focus-visible {

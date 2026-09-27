@@ -1,11 +1,38 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ComponentType, LazyExoticComponent } from 'react';
+import { getLocalizedInterfaceCopy } from '../../../common/src/display-localization';
+import { getAdminDisplayLanguage } from '../utils/admin-language';
+
+export interface NextAdminInterfaceTranslations {
+    zh_Hans?: string;
+    en?: string;
+}
+
+function interfaceCopy(
+    value: string | undefined,
+    translations?: NextAdminInterfaceTranslations,
+    optional = false,
+) {
+    const language = getAdminDisplayLanguage();
+    const localized = translations?.[language] ?? value;
+    if (
+        optional &&
+        (!localized ||
+            (language === 'zh_Hans' ? !/\p{Script=Han}/u.test(localized) : /\p{Script=Han}/u.test(localized)))
+    )
+        return undefined;
+    return getLocalizedInterfaceCopy(
+        language === 'zh_Hans' ? { zh: localized } : { en: localized },
+        language,
+    );
+}
 
 export type NextAdminExtensionComponent<Props = Record<string, never>> =
     LazyExoticComponent<ComponentType<Props>> | ComponentType<Props>;
 
 export interface NextAdminExtensionNavItem {
     label: string;
+    labelTranslations?: NextAdminInterfaceTranslations;
     sectionId: string;
     icon?: LucideIcon;
     order?: number;
@@ -21,6 +48,7 @@ export interface NextAdminExtensionRoute {
      */
     legacyPaths?: NextAdminLegacyPath[];
     title: string;
+    titleTranslations?: NextAdminInterfaceTranslations;
     component: NextAdminExtensionComponent;
     permissions?: string[];
     navItem?: NextAdminExtensionNavItem;
@@ -58,6 +86,7 @@ export interface NextAdminActionDefinition {
     id: string;
     pageId: string;
     label: string;
+    labelTranslations?: NextAdminInterfaceTranslations;
     component: NextAdminExtensionComponent<{ context: NextAdminPageBlockContext }>;
     order?: number;
     permissions?: string[];
@@ -66,8 +95,10 @@ export interface NextAdminActionDefinition {
 export interface NextAdminDashboardWidgetDefinition {
     id: string;
     title: string;
+    titleTranslations?: NextAdminInterfaceTranslations;
     component: NextAdminExtensionComponent;
     description?: string;
+    descriptionTranslations?: NextAdminInterfaceTranslations;
     order?: number;
     permissions?: string[];
 }
@@ -136,7 +167,28 @@ export function defineNextAdminExtension(extension: NextAdminExtension) {
 }
 
 export function getNextAdminExtensions() {
-    return Array.from(extensions.values());
+    return Array.from(extensions.values()).map(extension => ({
+        ...extension,
+        routes: extension.routes?.map(route => ({
+            ...route,
+            title: interfaceCopy(route.title, route.titleTranslations)!,
+            navItem: route.navItem
+                ? {
+                      ...route.navItem,
+                      label: interfaceCopy(route.navItem.label, route.navItem.labelTranslations)!,
+                  }
+                : undefined,
+        })),
+        actions: extension.actions?.map(action => ({
+            ...action,
+            label: interfaceCopy(action.label, action.labelTranslations)!,
+        })),
+        dashboardWidgets: extension.dashboardWidgets?.map(widget => ({
+            ...widget,
+            title: interfaceCopy(widget.title, widget.titleTranslations)!,
+            description: interfaceCopy(widget.description, widget.descriptionTranslations, true),
+        })),
+    }));
 }
 
 export function getNextAdminExtensionRoutes() {

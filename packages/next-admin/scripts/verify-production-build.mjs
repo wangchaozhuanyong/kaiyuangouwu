@@ -1,7 +1,10 @@
+import { assertDisplayLocalization } from '../../../scripts/audit-display-localization.mjs';
 /* eslint-disable no-console */
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+assertDisplayLocalization();
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const distRoot = path.join(packageRoot, 'dist');
@@ -34,6 +37,30 @@ if (!entryScriptMatch) {
 }
 if (inlineScripts.length > 0) {
     throw new Error('next-admin production build must not contain inline scripts blocked by production CSP');
+}
+
+const previewHtml = await readFile(path.join(distRoot, 'storefront-preview.html'), 'utf8');
+const previewEntry = previewHtml.match(
+    /<script\b[^>]*\bsrc=["']\/dashboard\/assets\/([^"']+\.js)["']/iu,
+)?.[1];
+const previewCss = [
+    ...previewHtml.matchAll(/<link\b[^>]*href=["']\/dashboard\/assets\/([^"']+\.css)["']/giu),
+].map(match => match[1]);
+if (!previewEntry || previewEntry === entryScriptMatch[1] || previewCss.length === 0) {
+    throw new Error('next-admin must emit a separate storefront preview entry and client stylesheet');
+}
+for (const fileName of [previewEntry, ...previewCss]) {
+    await stat(path.join(assetsRoot, fileName));
+}
+if (
+    [...previewHtml.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/giu)].some(
+        match => !/\bsrc\s*=/iu.test(match[1]) && match[2].trim().length > 0,
+    )
+) {
+    throw new Error('storefront preview must not contain inline scripts blocked by production CSP');
+}
+if (previewCss.some(fileName => indexHtml.includes(fileName))) {
+    throw new Error('storefront preview CSS must stay isolated from the Admin stylesheet');
 }
 
 let hasBuildPreloadRecovery = false;

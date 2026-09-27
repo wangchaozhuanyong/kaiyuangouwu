@@ -2,6 +2,7 @@ import { useQuery } from '@apollo/client/react';
 import { gql } from 'graphql-tag';
 import { RefreshCw, Star } from 'lucide-react';
 import { useState } from 'react';
+import { getSystemLabel } from '../../../../common/src/display-localization';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 
 interface FeedbackRecord {
@@ -118,7 +119,7 @@ export function CustomerServiceFeedbackModule() {
                                         key={tag}
                                         className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700"
                                     >
-                                        {tagLabels[tag] ?? tag}
+                                        {getSystemLabel(tag, tagLabels, 'zh', 'tag')}
                                     </span>
                                 ))}
                             </div>

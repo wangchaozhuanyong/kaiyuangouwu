@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { getSystemLabel } from '../../../../common/src/display-localization';
 import { ADMIN_API_URL } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -714,11 +715,19 @@ export function AfterSalesModule() {
                                                     <td className="h-[52px] max-w-52 px-3 py-0">
                                                         <span
                                                             className="block truncate text-slate-500"
-                                                            title={
-                                                                reasonLabels[request.reason] ?? request.reason
-                                                            }
+                                                            title={getSystemLabel(
+                                                                request.reason,
+                                                                reasonLabels,
+                                                                'zh',
+                                                                'reason',
+                                                            )}
                                                         >
-                                                            {reasonLabels[request.reason] ?? request.reason}
+                                                            {getSystemLabel(
+                                                                request.reason,
+                                                                reasonLabels,
+                                                                'zh',
+                                                                'reason',
+                                                            )}
                                                         </span>
                                                     </td>
                                                     <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold tabular-nums text-slate-950">
@@ -875,7 +884,7 @@ export function AfterSalesModule() {
                                 <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-6 text-amber-900">
                                     <div className="font-semibold">
                                         {typeLabels[selectedRequest.type]} ·{' '}
-                                        {reasonLabels[selectedRequest.reason] ?? selectedRequest.reason}
+                                        {getSystemLabel(selectedRequest.reason, reasonLabels, 'zh', 'reason')}
                                     </div>
                                     <p className="mt-1 whitespace-pre-wrap">{selectedRequest.description}</p>
                                 </div>

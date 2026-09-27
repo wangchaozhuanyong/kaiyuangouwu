@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { AsyncRouteStatePage, Subpage } from './storefront-ui/page-shell';
+import { AsyncRouteStatePage, SubHeader, Subpage } from './storefront-ui/page-shell';
 import { readStorefrontStylesheet } from './test-stylesheet';
 
 describe('Subpage surface', () => {
@@ -26,17 +26,49 @@ describe('Subpage surface', () => {
     });
 
     it('lets the desktop account rail replace duplicate subpage titles without hiding real actions', () => {
-        const stylesheet = readStorefrontStylesheet(['./styles/desktop-pages.css']);
+        const stylesheet = readStorefrontStylesheet();
 
         expect(stylesheet).toMatch(
-            /\.desktop-account-layout \.page\.subpage > \.subpage-header:not\(:has\(> span > \*\)\)\s*\{[^}]*display:\s*none;/u,
+            /\.desktop-account-layout \.page\.subpage > \.subpage-header:not\(\[data-desktop-actions\]\)\s*\{[^}]*display:\s*none;/u,
         );
         expect(stylesheet).toMatch(
             /\.desktop-account-layout \.subpage-header > :is\(button:first-child, strong\)\s*\{[^}]*display:\s*none;/u,
         );
         expect(stylesheet).toMatch(
-            /\.desktop-account-layout \.subpage-header > span\s*\{[^}]*margin-left:\s*auto;/u,
+            /\.desktop-account-layout \.subpage-header-actions\s*\{[^}]*margin-left:\s*auto;/u,
         );
+    });
+});
+
+describe('SubHeader action visibility', () => {
+    it('marks real desktop actions so the account rail can retain them', () => {
+        const markup = renderToStaticMarkup(
+            <SubHeader
+                title="选择收货地址"
+                language="zh"
+                onBack={vi.fn()}
+                action={<button>新增地址</button>}
+            />,
+        );
+        expect(markup).toContain('data-desktop-actions="true"');
+        expect(markup).toContain('新增地址');
+    });
+    it('does not reserve a desktop row for an absent action or a mobile toolbar', () => {
+        for (const action of [undefined, <button key="add">新增地址</button>]) {
+            const markup = renderToStaticMarkup(
+                <SubHeader
+                    title="收货地址"
+                    language="zh"
+                    onBack={vi.fn()}
+                    action={action}
+                    actionVisibility="mobile"
+                />,
+            );
+            expect(markup).not.toContain('data-desktop-actions');
+            expect(markup).toContain('data-action-visibility="mobile"');
+            expect(markup).toContain('收货地址');
+            expect(markup).toContain('aria-label="返回"');
+        }
     });
 });
 
@@ -64,7 +96,7 @@ describe('AsyncRouteStatePage layout', () => {
         );
 
         expect(accountMarkup).toContain('route-state-page');
-        expect(accountMarkup).toContain('lg:pt-[72px]');
+        expect(accountMarkup).not.toContain('lg:pt-[72px]');
         expect(accountMarkup).toContain('page-skeleton--account');
         expect(accountMarkup).not.toContain('subpage-header');
         expect(cartMarkup).toContain('page-skeleton--checkout');

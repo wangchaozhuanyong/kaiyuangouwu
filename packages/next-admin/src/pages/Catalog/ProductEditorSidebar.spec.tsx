@@ -49,7 +49,7 @@ describe('ProductEditorSidebar', () => {
         expect(html).toContain('切换右侧步骤时保持不变');
         expect(html).toContain('value="测试商品"');
         expect(html).toContain('value="test-product"');
-        expect(html).toContain('Asset #asset-1');
+        expect(html).toContain('素材编号 #asset-1');
         expect(html).toContain('AI 生成主图');
         expect(html).toContain('待保存');
         expect(html).toContain('虚拟商品');

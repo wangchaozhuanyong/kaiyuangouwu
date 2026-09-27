@@ -180,7 +180,7 @@
     padding: 16px;
     background: var(--surface, #ffffff);
     border-radius: var(--radius-md, 12px);
-    border: 1px solid var(--border-subtle, #e2e8f0);
+    border: 0;
 }
 
 .skeleton-studio-title {

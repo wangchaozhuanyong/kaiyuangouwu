@@ -686,7 +686,7 @@ export function CatalogModule() {
                                             className="sticky left-24 z-20 w-60 bg-slate-50 px-3 py-3"
                                         />
                                         <SortableTableHeader
-                                            label="SPU Slug"
+                                            label="商品访问标识"
                                             sortField="slug"
                                             activeSortField={sortField}
                                             sortDirection={sortDirection}

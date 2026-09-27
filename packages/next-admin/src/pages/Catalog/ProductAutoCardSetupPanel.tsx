@@ -674,7 +674,7 @@ function AutoCardSetupEditor({
                                 className={inputClass}
                             />
                         </Field>
-                        <Field label="English delivery instructions">
+                        <Field label="英文交付说明">
                             <textarea
                                 rows={4}
                                 value={instructionsEn}

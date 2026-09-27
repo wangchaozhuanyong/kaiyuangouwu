@@ -20,12 +20,12 @@ vi.mock('../../apollo', () => ({
 vi.mock('../../hooks/use-admin-permissions', () => ({
     useAdminPermissions: () => ({ hasAnyPermission: () => true }),
 }));
-vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
 vi.mock('./StorefrontDecorationPreview', () => ({
-    StorefrontDecorationPreview: ({ presetId }: { presetId?: string }) => (
-        <div data-testid="shared-client-preview" data-preset={presetId} />
+    StorefrontDecorationPreview: (props: { presetId: string; fixedViewport: string }) => (
+        <div data-real-client-preview data-preset={props.presetId} data-viewport={props.fixedViewport} />
     ),
 }));
+vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let host: HTMLDivElement;
@@ -103,9 +103,9 @@ describe('fixed desktop layout skin settings', () => {
             button => button.textContent === '预览效果',
         );
         act(() => previewButton!.click());
-        expect(host.querySelector('[data-testid="shared-client-preview"]')?.getAttribute('data-preset')).toBe(
-            'classic',
-        );
+        const preview = host.querySelector('[data-real-client-preview]');
+        expect(preview?.getAttribute('data-preset')).toBe('classic');
+        expect(preview?.getAttribute('data-viewport')).toBe('mobile');
         expect(mocks.save).not.toHaveBeenCalled();
     });
 

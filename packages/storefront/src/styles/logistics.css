@@ -340,13 +340,7 @@
 }
 
 .logistics-card-timeline li:not(:last-child)::before {
-    content: '';
-    position: absolute;
-    top: 14px;
-    bottom: 0;
-    left: 4px;
-    width: 1px;
-    background: var(--skin-divider);
+    content: none;
 }
 
 .logistics-card-timeline li > span {
@@ -474,9 +468,14 @@
 }
 
 .logistics-tab-btn.is-active {
-    background: var(--accent);
-    color: var(--accent-foreground);
+    background: var(--selection);
+    color: var(--selection-foreground);
     font-weight: 600;
+}
+
+.logistics-tab-btn.is-active:hover:not(:disabled) {
+    background: var(--selection-hover);
+    color: var(--selection-foreground);
 }
 
 .logistics-info-card {
@@ -582,14 +581,7 @@
 }
 
 .logistics-timeline::before {
-    content: '';
-    position: absolute;
-    top: 14px;
-    bottom: 24px;
-    left: 9px;
-    width: 2px;
-    background: var(--line-subtle);
-    z-index: 1;
+    content: none;
 }
 
 .timeline-step {

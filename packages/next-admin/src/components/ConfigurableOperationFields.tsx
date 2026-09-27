@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { TechnicalDetails } from './TechnicalDetails';
 
 import {
     configurableArgumentDescription,
@@ -159,14 +160,11 @@ export function ConfigurableOperationTechnicalDetails({
     definition: ConfigurableOperationDefinitionLike;
 }) {
     return (
-        <details className="mt-1 text-[10px] font-normal text-slate-400">
-            <summary className="w-fit cursor-pointer select-none hover:text-slate-600">查看技术信息</summary>
-            <div className="mt-1 space-y-1 rounded-md bg-slate-100 px-2 py-1.5 font-mono">
-                <div>规则标识：{definition.code}</div>
-                {definition.args.length > 0 && (
-                    <div>参数标识：{definition.args.map(argument => argument.name).join('、')}</div>
-                )}
-            </div>
-        </details>
+        <TechnicalDetails
+            entries={[
+                { label: '规则标识', value: definition.code },
+                { label: '参数标识', value: definition.args.map(argument => argument.name).join('、') },
+            ]}
+        />
     );
 }

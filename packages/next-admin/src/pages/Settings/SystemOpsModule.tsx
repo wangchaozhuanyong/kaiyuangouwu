@@ -26,7 +26,10 @@ import {
     X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { getSystemLabel } from '../../../../common/src/display-localization';
+import { TechnicalDetails } from '../../components/TechnicalDetails';
 import type { CustomFieldDefinition, CustomFieldValueMap } from '../../custom-fields/custom-field-types';
+import { getLocalizedEntityTranslation } from '../../utils/localized-entity-display';
 
 import { getServerHealthUrl, sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
@@ -779,7 +782,7 @@ function SchedulesPanel({
                                 调度说明
                             </th>
                             <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
-                                Cron
+                                定时表达式
                             </th>
                             <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
                                 状态
@@ -1242,7 +1245,7 @@ function ApiKeysPanel({
                             </div>
                             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-400">
                                 <span>
-                                    Lookup ID：
+                                    查询编号：
                                     <code className="font-mono text-slate-600">{key.lookupId}</code>
                                 </span>
                                 <span>创建者：{key.owner?.identifier ?? '—'}</span>
@@ -1385,8 +1388,8 @@ function EditApiKeyDialog({
     onError: (message: string) => void;
 }) {
     const requestConfirmation = useConfirmDialog();
-    const sourceTranslation = item.translations[0];
-    const [name, setName] = useState(item.name);
+    const sourceTranslation = getLocalizedEntityTranslation(item.translations, 'zh_Hans');
+    const [name, setName] = useState(sourceTranslation?.name ?? '');
     const [roleIds, setRoleIds] = useState(item.user.roles.map(role => role.id));
     const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>(() =>
         customFieldValuesFromEntity(customFieldDefinitions, item.customFields, item.translations),
@@ -1482,9 +1485,9 @@ function EditApiKeyDialog({
                             />
                             <span>
                                 <strong className="text-slate-800">{getRoleLabel(role)}</strong>
-                                <code className="ml-2 font-mono text-[9px] text-slate-400">
-                                    {getRoleCodeLabel(role.code)}
-                                </code>
+                                <TechnicalDetails
+                                    entries={[{ label: '角色标识', value: getRoleCodeLabel(role.code) }]}
+                                />
                             </span>
                         </label>
                     ))}
@@ -1571,9 +1574,9 @@ function CreateApiKeyDialog({
                             />
                             <span>
                                 <strong className="text-slate-800">{getRoleLabel(role)}</strong>
-                                <code className="ml-2 font-mono text-[9px] text-slate-400">
-                                    {getRoleCodeLabel(role.code)}
-                                </code>
+                                <TechnicalDetails
+                                    entries={[{ label: '角色标识', value: getRoleCodeLabel(role.code) }]}
+                                />
                             </span>
                         </label>
                     ))}
@@ -1702,7 +1705,7 @@ function scopeLabel(scope: string) {
         USER_AND_CHANNEL: '用户与渠道',
         CUSTOM: '自定义',
     };
-    return labels[scope] ?? scope;
+    return getSystemLabel(scope, labels, 'zh', 'scope');
 }
 function formatDuration(duration: number) {
     if (!duration) return '—';

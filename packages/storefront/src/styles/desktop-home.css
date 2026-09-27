@@ -849,8 +849,8 @@
     }
     @media (hover: hover) and (pointer: fine) {
         .proto-header-right > .proto-header-action:hover {
-            background: var(--control-surface-hover);
-            color: var(--text);
+            background: var(--interaction-hover);
+            color: var(--interaction-ink);
             box-shadow: var(--control-elevation-hover);
         }
     }

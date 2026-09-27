@@ -47,6 +47,7 @@ function GalleryImages({
                         alt={`${productName} ${activeImage + 1}`}
                         fallbackLabel={productImageUnavailableLabel(language)}
                         imageKind="detail"
+                        language={language}
                         loading="eager"
                         fetchPriority="high"
                         onLoad={prefetchAdjacentGalleryImages}

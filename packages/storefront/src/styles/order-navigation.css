@@ -26,12 +26,21 @@
         background-color var(--experience-motion-fast) var(--experience-ease-standard);
 }
 .order-tabs button:hover {
-    color: var(--text);
+    color: var(--interaction-ink);
+    background: var(--interaction-hover);
+}
+.order-tabs button:active {
+    background: var(--interaction-pressed);
+    color: var(--interaction-ink);
 }
 .order-tabs button.is-active {
-    background: var(--accent-soft);
-    color: var(--accent-ink);
+    background: var(--selection);
+    color: var(--selection-foreground);
     font-weight: var(--font-weight-bold);
+}
+.order-tabs button.is-active:hover:not(:disabled) {
+    background: var(--selection-hover);
+    color: var(--selection-foreground);
 }
 @media (min-width: 1024px) {
     .order-tabs {
@@ -75,8 +84,12 @@
 }
 @media (max-width: 1023px) {
     .orders-page .order-tabs button.is-active {
-        background: var(--accent-soft);
-        color: var(--accent-ink);
+        background: var(--selection);
+        color: var(--selection-foreground);
+    }
+    .orders-page .order-tabs button.is-active:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .orders-page .order-tabs {
         height: 54px;

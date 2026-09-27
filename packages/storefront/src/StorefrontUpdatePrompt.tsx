@@ -43,12 +43,23 @@ export function StorefrontUpdatePrompt({ language }: { language: StorefrontLangu
         let disposed = false;
         let checking = false;
         let updateFound = false;
+        let activeCheck: AbortController | undefined;
 
         const checkForUpdate = async () => {
-            if (disposed || checking || updateFound || !navigator.onLine) return;
+            if (
+                disposed ||
+                checking ||
+                updateFound ||
+                !navigator.onLine ||
+                document.readyState !== 'complete'
+            )
+                return;
             checking = true;
+            activeCheck = new AbortController();
             try {
-                const latestFingerprint = await fetchStorefrontAssetFingerprint();
+                const latestFingerprint = await fetchStorefrontAssetFingerprint({
+                    signal: activeCheck.signal,
+                });
                 if (!disposed && latestFingerprint && latestFingerprint !== currentFingerprint) {
                     updateFound = true;
                     setUpdateAvailable(true);
@@ -57,6 +68,7 @@ export function StorefrontUpdatePrompt({ language }: { language: StorefrontLangu
                 // A failed background check must not interrupt the storefront.
             } finally {
                 checking = false;
+                activeCheck = undefined;
             }
         };
         const checkVisiblePage = () => {
@@ -65,14 +77,17 @@ export function StorefrontUpdatePrompt({ language }: { language: StorefrontLangu
         const interval = window.setInterval(checkVisiblePage, STOREFRONT_VERSION_CHECK_INTERVAL_MS);
 
         window.addEventListener('focus', checkVisiblePage);
+        window.addEventListener('load', checkVisiblePage);
         window.addEventListener('online', checkVisiblePage);
         document.addEventListener('visibilitychange', checkVisiblePage);
         void checkForUpdate();
 
         return () => {
             disposed = true;
+            activeCheck?.abort();
             window.clearInterval(interval);
             window.removeEventListener('focus', checkVisiblePage);
+            window.removeEventListener('load', checkVisiblePage);
             window.removeEventListener('online', checkVisiblePage);
             document.removeEventListener('visibilitychange', checkVisiblePage);
         };

@@ -38,6 +38,8 @@ import {
 import { Clock3, Eye, Paperclip, RefreshCw, RotateCcw, Save, Send, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { systemFieldDisplayLabel } from '../../../common/src/system-display-labels';
+
 import {
     ManualDeliveryRecord,
     manualDigitalDeliveriesQuery,
@@ -493,7 +495,8 @@ function ManualDigitalDeliveryPage() {
                                 >
                                     <span>{event.note}</span>
                                     <span className="text-muted-foreground">
-                                        {new Date(event.createdAt).toLocaleString()} · {event.actorType}
+                                        {new Date(event.createdAt).toLocaleString()} ·{' '}
+                                        {systemFieldDisplayLabel('actorType', event.actorType)}
                                     </span>
                                 </div>
                             ))}

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, type ReactNode } from 'react';
+import { act, useState, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StorefrontContentBlock, StorefrontContentResult } from '../../graphql/storefront.graphql';
@@ -63,9 +63,16 @@ vi.mock('./StorefrontBlockEditor', () => ({
     ),
 }));
 vi.mock('./StorefrontDecorationPreview', () => ({
-    StorefrontDecorationPreview: ({ language }: { language: string }) => (
-        <div data-testid="shared-client-preview" data-language={language} />
-    ),
+    StorefrontDecorationPreview: ({ language }: { language: string }) => {
+        const [instance] = useState(() => crypto.randomUUID());
+        return (
+            <section
+                data-testid="shared-client-preview"
+                data-client-preview={instance}
+                data-language={language}
+            />
+        );
+    },
 }));
 vi.mock('./StorefrontFloorList', () => ({
     StorefrontFloorList: ({
@@ -317,4 +324,23 @@ it('keeps saved item order intact when the shared client preview changes languag
     );
     expect(JSON.stringify(current.storefrontContentBlocks[0].items)).toBe(saved);
     expect(mocks.update).not.toHaveBeenCalled();
+});
+
+it('refreshes the saved client preview after a verified content revision', async () => {
+    current = data('a', true);
+    await render();
+    const instance = host.querySelector('[data-client-preview]')?.getAttribute('data-client-preview');
+    expect(instance).toBeTruthy();
+    current = {
+        ...current,
+        storefrontContentBlocks: current.storefrontContentBlocks.map(block => ({
+            ...block,
+            updatedAt: '2026-09-26T10:00:00Z',
+            position: block.position + 1,
+        })),
+    };
+    await render();
+    expect(host.querySelector('[data-client-preview]')?.getAttribute('data-client-preview')).not.toBe(
+        instance,
+    );
 });

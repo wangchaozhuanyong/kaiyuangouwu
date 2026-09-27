@@ -141,7 +141,7 @@ describe('Asset with translatable custom fields', () => {
         }
     });
 
-    it('falls back to default language when translation is not available', async () => {
+    it('leaves Chinese display fields empty when their translation is unavailable', async () => {
         const { asset } = await adminClient.query(
             getAssetWithCustomFieldsDocument,
             { id: assetId },
@@ -150,9 +150,9 @@ describe('Asset with translatable custom fields', () => {
 
         expect(asset).not.toBeNull();
         if (asset) {
-            // Should fall back to English (the default language)
-            expect(asset.customFields.alt).toBe('English alt text');
-            expect(asset.customFields.title).toBe('English title');
+            // Missing Chinese copy must never borrow the default English translation.
+            expect(asset.customFields.alt).toBe('');
+            expect(asset.customFields.title).toBe('');
         }
     });
 });

@@ -1,5 +1,7 @@
 import type { ImageAiUsageRecordDetailQueryResult } from './image-generation.graphql';
 
+import { systemFieldDisplayLabel } from '../../../common/src/system-display-labels';
+
 type Detail = ImageAiUsageRecordDetailQueryResult['imageAiUsageRecord'];
 
 export function ProviderAttemptDetails({ detail }: { detail: Detail }) {
@@ -42,7 +44,7 @@ export function ProviderAttemptDetails({ detail }: { detail: Detail }) {
                         <dd>{attempt.credentialNameSnapshot}</dd>
                         <dt>阶段 / 耗时</dt>
                         <dd>
-                            {attempt.stage} / {attempt.latencyMs} ms
+                            {systemFieldDisplayLabel('stage', attempt.stage)} / {attempt.latencyMs} ms
                             {attempt.httpStatus ? ` / 响应状态 ${attempt.httpStatus}` : ''}
                         </dd>
                         <dt>本地调用编号</dt>
@@ -50,14 +52,16 @@ export function ProviderAttemptDetails({ detail }: { detail: Detail }) {
                         <dt>响应头编号</dt>
                         <dd>
                             {attempt.headerRequestId ?? '未返回'}{' '}
-                            {attempt.headerRequestIdSource ? `(${attempt.headerRequestIdSource})` : ''}
+                            {attempt.headerRequestIdSource
+                                ? `(${systemFieldDisplayLabel('headerRequestIdSource', attempt.headerRequestIdSource)})`
+                                : ''}
                         </dd>
                         <dt>模型响应编号</dt>
                         <dd>{attempt.modelResponseId ?? '未保存'}</dd>
                         <dt>账单关联</dt>
                         <dd>尚未核实供应商账单；响应编号不等于已对账。</dd>
                         <dt>费用来源</dt>
-                        <dd>{attempt.costSource === 'UNVERIFIED' ? '未核实' : attempt.costSource}</dd>
+                        <dd>{systemFieldDisplayLabel('costSource', attempt.costSource)}</dd>
                         {attempt.reportedCostEvidence ? (
                             <>
                                 <dt>响应申报金额（待核实）</dt>

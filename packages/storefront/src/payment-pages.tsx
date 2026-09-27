@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
-    ArrowLeft,
     Check,
     CircleAlert,
     CircleCheck,
@@ -15,6 +14,8 @@ import {
 } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 
+import { orderStateDisplayLabel } from '../../common/src/display-localization';
+
 import { ShopApi } from './api';
 import { languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
@@ -27,7 +28,7 @@ import { preloadStorefrontRouteComponent } from './route-component-preload';
 import { PageSkeleton } from './route-loading';
 import { storefrontErrorCode, storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
-import { InlineError } from './storefront-ui/page-shell';
+import { InlineError, SubHeader, Subpage } from './storefront-ui/page-shell';
 import './styles/checkout-payment-surfaces.css';
 import './styles/order-aftercare.css';
 import { TaxSummaryRows } from './tax-summary';
@@ -1063,43 +1064,6 @@ function shippingEstimate(order: Order, language: StorefrontLanguage): string {
         .join(' · ');
 }
 
-function SubHeader({
-    title,
-    language,
-    onBack,
-}: {
-    title: string;
-    language: StorefrontLanguage;
-    onBack: () => void;
-}) {
-    return (
-        <header className="topbar subpage-header">
-            <button type="button" onClick={onBack} aria-label={language === 'zh' ? '返回' : 'Back'}>
-                <ArrowLeft aria-hidden="true" />
-            </button>
-            <strong>{title}</strong>
-            <span />
-        </header>
-    );
-}
-function Subpage({
-    title,
-    language,
-    onBack,
-    children,
-}: {
-    title: string;
-    language: StorefrontLanguage;
-    onBack: () => void;
-    children: ReactNode;
-}) {
-    return (
-        <main className="page subpage">
-            <SubHeader title={title} language={language} onBack={onBack} />
-            {children}
-        </main>
-    );
-}
 function EmptyState({
     icon,
     title,
@@ -1153,27 +1117,4 @@ function usdtQuoteDescription(
         ? `1 USDT = ${rate}，有效至 ${expiry}`
         : `1 USDT = ${rate}, valid until ${expiry}`;
 }
-function orderStateLabel(state: string, language: StorefrontLanguage): string {
-    if (state === 'TestPaymentSettled') return language === 'zh' ? '测试已付款' : 'Test payment complete';
-    const zh: Record<string, string> = {
-        AddingItems: '待付款',
-        ArrangingPayment: '待付款',
-        PaymentAuthorized: '待发货',
-        PaymentSettled: '待发货',
-        Shipped: '待收货',
-        PartiallyShipped: '部分发货',
-        Delivered: '交易完成',
-        Cancelled: '已取消',
-    };
-    const en: Record<string, string> = {
-        AddingItems: 'Payment pending',
-        ArrangingPayment: 'Payment pending',
-        PaymentAuthorized: 'Preparing shipment',
-        PaymentSettled: 'Preparing shipment',
-        Shipped: 'In transit',
-        PartiallyShipped: 'Partially shipped',
-        Delivered: 'Completed',
-        Cancelled: 'Cancelled',
-    };
-    return (language === 'zh' ? zh : en)[state] ?? state;
-}
+const orderStateLabel = orderStateDisplayLabel;

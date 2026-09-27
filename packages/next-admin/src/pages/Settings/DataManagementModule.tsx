@@ -14,6 +14,8 @@ import {
     X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { getSystemLabel, serviceMessageDisplay } from '../../../../common/src/display-localization';
+import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -412,7 +414,8 @@ export function DataManagementModule() {
                                                 >
                                                     {record.legalHold
                                                         ? `法律保留：${record.legalHoldReason ?? '未说明'}`
-                                                        : (record.lastError ?? '—')}
+                                                        : (serviceMessageDisplay(record.lastError, 'zh') ??
+                                                          '—')}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3">
@@ -523,7 +526,7 @@ export function DataManagementModule() {
                                         </td>
                                         <td className="px-4 py-3 text-slate-600">{request.attemptCount}</td>
                                         <td className="max-w-96 px-4 py-3 text-rose-600">
-                                            {request.lastError ?? '—'}
+                                            {serviceMessageDisplay(request.lastError, 'zh') ?? '—'}
                                         </td>
                                         <td className="px-4 py-3 text-right">
                                             {request.requestType === 'ACCOUNT_CLOSURE' &&
@@ -606,7 +609,8 @@ export function DataManagementModule() {
                                             {record.policyDigest.slice(0, 16)}…
                                         </td>
                                         <td className="px-4 py-3 text-slate-600">
-                                            {record.source} · {record.locale}
+                                            {systemFieldDisplayLabel('source', record.source)} ·{' '}
+                                            {systemFieldDisplayLabel('defaultLanguageCode', record.locale)}
                                         </td>
                                         <td className="whitespace-nowrap px-4 py-3 font-mono text-[10px] text-slate-500">
                                             {formatDateTime(record.recordedAt)}
@@ -774,17 +778,20 @@ function filterLabel(value: Filter) {
 }
 
 function resourceLabel(value: string) {
-    return value === 'CUSTOMER_AVATAR' ? '用户头像' : value;
+    return getSystemLabel(value, { CUSTOMER_AVATAR: '用户头像' }, 'zh', 'resource');
 }
 
 function reasonLabel(value: string) {
-    return (
+    return getSystemLabel(
+        value,
         {
             REPLACED: '用户更换',
             REMOVED: '用户移除',
             RESTORE_REPLACEMENT: '恢复历史头像时替换',
             ACCOUNT_CLOSURE: '账户注销',
-        }[value] ?? value
+        },
+        'zh',
+        'status',
     );
 }
 

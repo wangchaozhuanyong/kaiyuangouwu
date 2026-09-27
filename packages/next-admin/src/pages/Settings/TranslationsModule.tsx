@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { getSystemLabel } from '../../../../common/src/display-localization';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SearchInput } from '../../components/SearchInput';
 import {
@@ -736,10 +737,10 @@ function originLabel(origin: string) {
         BACKFILL: '历史补齐',
         SOURCE: '源内容',
     };
-    return labels[origin] ?? origin;
+    return getSystemLabel(origin, labels, 'zh', 'source');
 }
 function entityLabel(type: string) {
-    return entityOptions.find(item => item[0] === type)?.[1] ?? type;
+    return getSystemLabel(type, Object.fromEntries(entityOptions), 'zh', 'type');
 }
 function Metric({
     label,

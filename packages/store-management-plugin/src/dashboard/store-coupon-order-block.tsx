@@ -1,6 +1,8 @@
 import { Badge, Skeleton, api, useQuery } from '@vendure/dashboard';
 import { gql } from 'graphql-tag';
 
+import { getSystemLabel } from '../../../common/src/display-localization';
+
 const orderCouponAllocationsQuery = gql`
     query StoreOrderCouponAllocations($id: ID!) {
         order(id: $id) {
@@ -96,15 +98,16 @@ export function StoreCouponOrderBlock({ context }: { context: { entity?: { id?: 
 }
 
 function couponAllocationStatus(status: string) {
-    return (
-        (
-            {
-                LOCKED: '已锁定',
-                USED: '已核销',
-                RELEASED: '已释放',
-                REFUNDED: '已退款',
-            } as Record<string, string>
-        )[status] ?? status
+    return getSystemLabel(
+        status,
+        {
+            LOCKED: '已锁定',
+            USED: '已核销',
+            RELEASED: '已释放',
+            REFUNDED: '已退款',
+        } as Record<string, string>,
+        'zh',
+        'status',
     );
 }
 

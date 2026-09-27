@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 
 import { ShopApi } from '../api';
 import { CartController } from '../cart/cart-controller';
@@ -234,7 +234,14 @@ export function useStorefrontBootstrap() {
         vendureLanguageCode,
     ]);
 
-    useStorefrontBrandColors(configQuery.data, visualConfig.presetId);
+    useStorefrontBrandColors(configQuery.data, visualConfig.presetId, {
+        ready: Boolean((configQuery.data && visualConfig.ready) || configQuery.isError),
+        cache: visualConfig.cache,
+    });
+    useLayoutEffect(() => {
+        // React Query pauses requests offline; keep the existing offline/retry UI visible.
+        if (configQuery.isPaused) document.documentElement.removeAttribute('data-storefront-theme-pending');
+    }, [configQuery.isPaused]);
 
     const refetchStorefront = useCallback(async () => {
         await Promise.all([productsQuery.refetch(), collectionsQuery.refetch(), configQuery.refetch()]);

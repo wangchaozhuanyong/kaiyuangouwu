@@ -854,11 +854,15 @@ export function HomePage() {
                   icon: UserRound,
               },
           ]
-        : (trustBlock?.items ?? []).map((item, index) => ({
-              label: item.label,
-              description: item.description,
-              icon: trustIcons[index % trustIcons.length],
-          }));
+        : (trustBlock?.items ?? [])
+              .filter(item => item.enabled && (item.label.trim() || item.description.trim()))
+              .sort((first, second) => first.position - second.position)
+              .map((item, index) => ({
+                  imageUrl: item.imageUrl,
+                  label: item.label,
+                  description: item.description,
+                  icon: trustIcons[index % trustIcons.length],
+              }));
     const trustBarHasLongCopy = trustItems.some(
         ({ label }) => Array.from(label.trim()).length > (isZh ? 4 : 10),
     );
@@ -1100,10 +1104,22 @@ export function HomePage() {
                                     }}
                                     aria-label={isZh ? '服务信息' : 'Service information'}
                                 >
-                                    {trustItems.map(({ label, description, icon: TrustIcon }, index) => {
+                                    {trustItems.map((item, index) => {
+                                        const { label, description, icon: TrustIcon } = item;
+                                        const imageUrl = 'imageUrl' in item ? item.imageUrl : null;
                                         return (
                                             <div className="home-trust-item" key={`${label}-${index}`}>
-                                                <TrustIcon className="trust-icon" aria-hidden="true" />
+                                                {imageUrl ? (
+                                                    <SafeImage
+                                                        src={imageUrl}
+                                                        alt=""
+                                                        imageKind="icon"
+                                                        className="trust-icon"
+                                                        sizes={desktop ? '28px' : '24px'}
+                                                    />
+                                                ) : (
+                                                    <TrustIcon className="trust-icon" aria-hidden="true" />
+                                                )}
                                                 {desktop ? (
                                                     <span className="home-trust-copy">
                                                         <span className="home-trust-label">{label}</span>

@@ -102,7 +102,7 @@ export function LoginModule() {
                             <img className="h-10 w-10 rounded-xl" src={adminBrandIcon} alt="" />
                             <div>
                                 <p className="text-lg font-bold tracking-tight">MOYAO AI｜模钥管理后台</p>
-                                <p className="text-xs text-slate-400">Merchant Administration</p>
+                                <p className="text-xs text-slate-400">商家管理后台</p>
                             </div>
                         </div>
 
@@ -324,7 +324,7 @@ export function LoginModule() {
                         </form>
 
                         <p className="mt-8 border-t border-slate-100 pt-6 text-center text-xs text-slate-400">
-                            Powered by Vendure
+                            技术支持：Vendure
                         </p>
                     </div>
                 </section>

@@ -13,6 +13,7 @@ const market: MarketConfig = {
 };
 
 afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
 });
@@ -92,6 +93,106 @@ describe('storefront realtime retry policy', () => {
 });
 
 describe('ShopApi storefront realtime lifecycle', () => {
+    it('retries a connection that never returns response headers', async () => {
+        vi.useFakeTimers();
+        const controller = new AbortController();
+        const fetchMock = vi
+            .fn()
+            .mockImplementationOnce(
+                (_url, init: RequestInit) =>
+                    new Promise((_resolve, reject) => {
+                        init.signal?.addEventListener('abort', () =>
+                            reject(new DOMException('Aborted', 'AbortError')),
+                        );
+                    }),
+            )
+            .mockImplementationOnce(() => {
+                controller.abort();
+                return Promise.reject(new DOMException('Aborted', 'AbortError'));
+            });
+        const delays: number[] = [];
+        stubRealtimeBrowser(delays, true);
+        vi.stubGlobal('fetch', fetchMock);
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        const pending = new ShopApi(market).watchRealtime(vi.fn(), controller.signal);
+
+        await vi.advanceTimersByTimeAsync(10_000);
+        const attemptCount = fetchMock.mock.calls.length;
+        controller.abort();
+        await pending;
+
+        expect(attemptCount).toBe(2);
+        expect(delays).toEqual([1_000]);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('cancels and retries an open response that never sends its ready frame', async () => {
+        vi.useFakeTimers();
+        const controller = new AbortController();
+        const cancel = vi.fn();
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(new Response(new ReadableStream<Uint8Array>({ cancel })))
+            .mockImplementationOnce(() => {
+                controller.abort();
+                return Promise.reject(new DOMException('Aborted', 'AbortError'));
+            });
+        const delays: number[] = [];
+        stubRealtimeBrowser(delays, true);
+        vi.stubGlobal('fetch', fetchMock);
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        const pending = new ShopApi(market).watchRealtime(vi.fn(), controller.signal);
+        await waitForMicrotasks();
+
+        await vi.advanceTimersByTimeAsync(10_000);
+        const attemptCount = fetchMock.mock.calls.length;
+        const cancelReason = cancel.mock.calls[0]?.[0];
+        controller.abort();
+        await pending;
+
+        expect(attemptCount).toBe(2);
+        expect(cancelReason).toBeInstanceOf(Error);
+        expect(delays).toEqual([1_000]);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('reconnects after a ready connection stops sending heartbeats', async () => {
+        vi.useFakeTimers();
+        const controller = new AbortController();
+        const cancel = vi.fn();
+        const responseBody = new ReadableStream<Uint8Array>({
+            start(streamController) {
+                streamController.enqueue(
+                    new TextEncoder().encode(
+                        'event: ready\ndata: {"version":1,"heartbeatIntervalMs":1000}\n\n',
+                    ),
+                );
+            },
+            cancel,
+        });
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(new Response(responseBody))
+            .mockImplementationOnce(() => {
+                controller.abort();
+                return Promise.reject(new DOMException('Aborted', 'AbortError'));
+            });
+        const delays: number[] = [];
+        stubRealtimeBrowser(delays, true);
+        vi.stubGlobal('fetch', fetchMock);
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        const pending = new ShopApi(market).watchRealtime(vi.fn(), controller.signal);
+        await waitForMicrotasks();
+
+        await vi.advanceTimersByTimeAsync(3_000);
+        await pending;
+
+        expect(cancel).toHaveBeenCalledWith(expect.any(Error));
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(delays).toEqual([1_000]);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
     it('cancels a non-OK response body and applies the 429 Retry-After delay', async () => {
         const controller = new AbortController();
         const bodyCancel = vi.fn();

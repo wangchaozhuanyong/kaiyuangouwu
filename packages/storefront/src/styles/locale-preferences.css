@@ -24,9 +24,7 @@
 }
 
 .locale-preferences-trigger > i {
-    width: 1px;
-    height: 13px;
-    background: color-mix(in srgb, currentColor 18%, transparent);
+    display: none;
 }
 
 .locale-preferences-trigger-icon,
@@ -111,14 +109,27 @@
 
 .locale-preferences-language > button:hover,
 .locale-preferences-currencies > button:hover {
-    background: color-mix(in srgb, var(--accent-soft) 40%, var(--surface));
+    background: var(--interaction-hover);
+    color: var(--interaction-ink);
+}
+
+.locale-preferences-language > button:active,
+.locale-preferences-currencies > button:active {
+    background: var(--interaction-pressed);
+    color: var(--interaction-ink);
 }
 
 .locale-preferences-language > button.is-selected,
 .locale-preferences-currencies > button.is-selected {
-    background: var(--surface);
-    color: var(--accent-ink);
-    box-shadow: var(--control-elevation, var(--shadow-sm));
+    background: var(--selection);
+    color: var(--selection-foreground);
+    box-shadow: none;
+}
+
+.locale-preferences-language > button.is-selected:hover:not(:disabled),
+.locale-preferences-currencies > button.is-selected:hover:not(:disabled) {
+    background: var(--selection-hover);
+    color: var(--selection-foreground);
 }
 
 .locale-preferences-language svg,
@@ -220,4 +231,8 @@
     .locale-preferences-save {
         transition: none;
     }
+}
+
+.locale-preferences-currencies > button.is-selected small {
+    color: inherit;
 }

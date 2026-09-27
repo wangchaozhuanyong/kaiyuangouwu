@@ -32,6 +32,12 @@ import {
 import { Check, LoaderCircle, RefreshCw, ShieldCheck, WalletCards, X } from 'lucide-react';
 import { useState } from 'react';
 
+import { getSystemLabel, serviceMessageDisplay } from '../../../common/src/display-localization';
+import {
+    paymentMethodDisplayLabel,
+    systemStatusDisplayLabel,
+} from '../../../common/src/system-display-labels';
+
 import {
     StorePaymentDetailListRecord,
     StorePaymentDetailRecord,
@@ -397,7 +403,9 @@ function UsdtPaymentManagementPage() {
                                         <strong>
                                             订单 {action.orderId} · {reconciliationActionLabel(action.action)}
                                         </strong>
-                                        <Badge variant="outline">{action.outcome}</Badge>
+                                        <Badge variant="outline">
+                                            {systemStatusDisplayLabel(action.outcome)}
+                                        </Badge>
                                     </div>
                                     <p className="mt-2 text-muted-foreground">{action.reason}</p>
                                     {action.transactionId ? (
@@ -439,7 +447,9 @@ function PlatformPaymentStats({ stats }: { stats: StorePaymentStatsRecord[] }) {
                 >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <strong>{summary.channelCode}</strong>
-                        <Badge variant="outline">{summary.paymentMethodCode}</Badge>
+                        <Badge variant="outline">
+                            {paymentMethodDisplayLabel(summary.paymentMethodCode)}
+                        </Badge>
                     </div>
                     <strong className="mt-3 block text-2xl tabular-nums">
                         {formatMoney(summary.currencyCode, summary.netAmount)}
@@ -478,9 +488,11 @@ function PlatformPaymentDetails({
                                 {detail.channelCode} · 订单 {detail.orderCode}
                             </strong>
                             <Badge variant={detail.paymentState === 'Settled' ? 'default' : 'outline'}>
-                                {paymentStateLabel(detail.paymentState)}
+                                {systemStatusDisplayLabel(detail.paymentState)}
                             </Badge>
-                            <Badge variant="outline">{detail.paymentMethodCode}</Badge>
+                            <Badge variant="outline">
+                                {paymentMethodDisplayLabel(detail.paymentMethodCode)}
+                            </Badge>
                         </div>
                         <p className="break-all text-muted-foreground">
                             交易号：{detail.transactionId ?? '暂无'} · 支付 ID：{detail.id}
@@ -571,7 +583,7 @@ function ReconciliationDialog({
                     <DialogTitle>处理 USDT 对账异常</DialogTitle>
                     <DialogDescription>
                         订单 {intent.orderCode} · ₮{intent.expectedUsdtAmount.toFixed(6)} ·{' '}
-                        {intent.failureReason}
+                        {serviceMessageDisplay(intent.failureReason, 'zh')}
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
@@ -681,7 +693,9 @@ function PaymentDetail({
                     收款：{intent.receivingAddressMasked} · 付款方：{intent.senderAddressMasked ?? '未知'}
                 </p>
                 {intent.failureReason ? (
-                    <p className="font-medium text-destructive">{intent.failureReason}</p>
+                    <p className="font-medium text-destructive">
+                        {serviceMessageDisplay(intent.failureReason, 'zh')}
+                    </p>
                 ) : null}
                 {intent.manualReviewCode ? (
                     <p className="text-xs text-muted-foreground">异常代码：{intent.manualReviewCode}</p>
@@ -709,38 +723,31 @@ function PaymentDetail({
 }
 
 function walletStatusLabel(status: string): string {
-    return (
+    return getSystemLabel(
+        status,
         {
             UNCONFIGURED: '未配置',
             PENDING: '待审核',
             ACTIVE: '已启用',
             REJECTED: '已驳回',
-        }[status] ?? status
+        },
+        'zh',
+        'status',
     );
 }
 
 function paymentStatusLabel(status: string): string {
-    return (
+    return getSystemLabel(
+        status,
         {
             PENDING: '等待到账',
             SETTLED: '已确认到账',
             MANUAL_REVIEW: '人工复核',
             EXPIRED: '已过期',
             RESOLVED: '已人工闭环',
-        }[status] ?? status
-    );
-}
-
-function paymentStateLabel(state: string): string {
-    return (
-        {
-            Created: '已创建',
-            Authorized: '已授权',
-            Settled: '已结算',
-            Declined: '已拒绝',
-            Error: '错误',
-            Cancelled: '已取消',
-        }[state] ?? state
+        },
+        'zh',
+        'status',
     );
 }
 

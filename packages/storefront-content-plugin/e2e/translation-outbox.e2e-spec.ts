@@ -75,6 +75,10 @@ const create = gql`
             }
             items {
                 id
+                translations {
+                    languageCode
+                    label
+                }
             }
         }
     }
@@ -276,15 +280,22 @@ describe('real Admin API saves and Shop API publication with the translation out
                 })
             ).createStorefrontContentBlock;
             expect(saved.items).toHaveLength(5);
+            const labels = input('test').items.map(item => item.translations[0].label);
+            expect(
+                saved.items.map(
+                    (item: any) =>
+                        item.translations.find((translation: any) => translation.languageCode === 'zh_Hans')
+                            ?.label,
+                ),
+            ).toEqual(labels);
             expect(translate).not.toHaveBeenCalled();
             shopClient.setRequestHeader('language-code', 'zh_Hans');
             const chinese = (
                 await shopClient.query(read, {}, { languageCode: 'zh_Hans' })
             ).storefrontContent.find((block: any) => block.id === saved.id);
             expect(chinese.title).toBe('精选五分类');
-            expect(chinese.items.map((item: any) => item.label)).toEqual(
-                input('test').items.map(item => item.translations[0].label),
-            );
+            // The Admin draft retains all five entries; CORE_CATEGORIES publishes the first two cards.
+            expect(chinese.items.map((item: any) => item.label)).toEqual(labels.slice(0, 2));
             shopClient.setRequestHeader('language-code', 'en');
             expect(
                 (await shopClient.query(read, {}, { languageCode: 'en' })).storefrontContent.some(
