@@ -7,6 +7,23 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
+const STOREFRONT_MEDIA_SCRIPT = 'packages/dev-server/scripts/sync-storefront-media.mjs';
+const MEDIA_MANIFEST_START = 'const scriptDirectory = ';
+const MEDIA_MANIFEST_END = 'const LOGIN_MUTATION = ';
+
+function storefrontMediaManifestSource(source) {
+    const start = source.indexOf(MEDIA_MANIFEST_START);
+    const end = source.indexOf(MEDIA_MANIFEST_END);
+    if (
+        start < 0 ||
+        end <= start ||
+        source.indexOf(MEDIA_MANIFEST_START, start + 1) !== -1 ||
+        source.indexOf(MEDIA_MANIFEST_END, end + 1) !== -1
+    ) {
+        throw new Error('Cannot isolate the storefront media manifest for release review');
+    }
+    return source.slice(start, end);
+}
 
 function uniqueSorted(values) {
     return [...new Set(values)].sort();
@@ -16,7 +33,7 @@ function hasPath(changedFiles, predicate) {
     return changedFiles.some(predicate);
 }
 
-function validateManagedReleaseScope(files, releaseScope) {
+function validateManagedReleaseScope(files, releaseScope, { storefrontMediaManifestChanged = true } = {}) {
     const authVisualChange = files.includes('packages/dev-server/scripts/sync-auth-visuals.mjs');
     const brandChange = hasPath(
         files,
@@ -48,7 +65,7 @@ function validateManagedReleaseScope(files, releaseScope) {
     const managedStorefrontChanges = files.filter(
         file =>
             file === 'packages/dev-server/scripts/catalog-cigarette-media.mjs' ||
-            file === 'packages/dev-server/scripts/sync-storefront-media.mjs' ||
+            (file === STOREFRONT_MEDIA_SCRIPT && storefrontMediaManifestChanged) ||
             file === 'packages/dev-server/scripts/repair-inventory-inheritance.mjs' ||
             (file.startsWith('packages/storefront/src/assets/storefront/') &&
                 !file.startsWith('packages/storefront/src/assets/storefront/damatong/')),
@@ -84,12 +101,12 @@ function validateManagedReleaseScope(files, releaseScope) {
     }
 }
 
-export function classifyProductionReleaseImpact(changedFiles, releaseScope = {}) {
+export function classifyProductionReleaseImpact(changedFiles, releaseScope = {}, inspection = {}) {
     const files = uniqueSorted(changedFiles.filter(Boolean));
     if (!files.length) {
         throw new Error('A production release must contain at least one change from the deployed revision');
     }
-    validateManagedReleaseScope(files, releaseScope);
+    validateManagedReleaseScope(files, releaseScope, inspection);
 
     const managedContentWrite = Boolean(
         releaseScope.mediaKeys ||
@@ -184,7 +201,18 @@ export function inspectProductionReleaseImpact({ baseSha, targetSha, releaseScop
     })
         .split('\n')
         .filter(Boolean);
-    return classifyProductionReleaseImpact(changedFiles, releaseScope);
+    const inspection = {};
+    if (changedFiles.includes(STOREFRONT_MEDIA_SCRIPT)) {
+        const readManifest = sha =>
+            storefrontMediaManifestSource(
+                git('git', ['show', `${sha}:${STOREFRONT_MEDIA_SCRIPT}`], {
+                    encoding: 'utf8',
+                    maxBuffer: 4 * 1024 * 1024,
+                }),
+            );
+        inspection.storefrontMediaManifestChanged = readManifest(baseSha) !== readManifest(targetSha);
+    }
+    return classifyProductionReleaseImpact(changedFiles, releaseScope, inspection);
 }
 
 function booleanInput(value, name) {
