@@ -195,6 +195,11 @@
 }
 
 @container (max-width: 160px) {
+    .product-card-content > footer {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: 6px;
+    }
     .product-card-price .price-lockup {
         font-size: 14px;
     }

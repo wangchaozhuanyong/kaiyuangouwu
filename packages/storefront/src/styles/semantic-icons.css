@@ -1,21 +1,159 @@
-/* Shared semantic icon palette. Each skin supplies its five contrast-checked tones. */
+/* Sole owner of decorative icon frames and glyph sizing across routes and skins.
+   Page styles may position an icon slot, but may not paint a frame around it. */
+:is(
+    .section-header-icon-pill,
+    .colorful-icon-badge,
+    .colorful-icon-img-wrap,
+    .desktop-order-status-icon,
+    .coupon-hub-icon-pill,
+    .trust-icon-box,
+    .category-client-plugin-icon,
+    .showcase-card-icon,
+    .primary-categories-all-icon,
+    .security-item-icon,
+    .security-privacy-dialog-icon,
+    .notification-icon,
+    .auth-hero-benefit-icon,
+    .auth-assurance-icon,
+    .cart-guest-icon,
+    .coupon-empty-icon,
+    .order-confirmation-icon,
+    .ai-studio-reference-add-icon,
+    .ai-confirmation-dialog-icon,
+    .logistics-status-icon,
+    .support-channel-icon,
+    .search-trigger-icon,
+    .account-order-shortcuts > button > span,
+    .account-service-grid > button > span
+) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    min-height: 24px;
+    flex-shrink: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+:is(
+        .section-header-icon-pill,
+        .colorful-icon-badge,
+        .desktop-order-status-icon,
+        .coupon-hub-icon-pill,
+        .trust-icon-box,
+        .category-client-plugin-icon,
+        .showcase-card-icon,
+        .primary-categories-all-icon,
+        .security-item-icon,
+        .security-privacy-dialog-icon,
+        .notification-icon,
+        .auth-hero-benefit-icon,
+        .auth-assurance-icon,
+        .cart-guest-icon,
+        .coupon-empty-icon,
+        .order-confirmation-icon,
+        .ai-studio-reference-add-icon,
+        .ai-confirmation-dialog-icon,
+        .logistics-status-icon,
+        .support-channel-icon,
+        .search-trigger-icon,
+        .account-order-shortcuts > button > span,
+        .account-service-grid > button > span
+    )
+    > svg {
+    display: block;
+    width: 24px;
+    height: 24px;
+    flex: none;
+}
+
+:is(.colorful-icon-badge, .category-client-plugin-icon, .account-service-grid > button > span) > svg {
+    width: 28px;
+    height: 28px;
+}
+
+:is(.coupon-empty-icon, .order-confirmation-icon, .ai-confirmation-dialog-icon) > svg {
+    width: 32px;
+    height: 32px;
+}
+
+.account-logistics-empty > svg,
+.desktop-account-support > svg:first-child,
+.payment-method-list label > svg:first-of-type,
+.ai-studio-settlement-refund > svg {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.desktop-account-support > svg:first-child {
+    color: var(--accent-ink);
+}
+
+.notification-icon.is-pending {
+    color: var(--warning);
+}
+.notification-icon.is-progress,
+.security-privacy-dialog-icon {
+    color: var(--focus);
+}
+.notification-icon.is-complete {
+    color: var(--success);
+}
+.security-item-icon.icon-avatar-history {
+    color: var(--accent-ink);
+}
+.ai-confirmation-dialog-icon,
+.icon-account-closure {
+    color: var(--danger);
+}
+.icon-data-export {
+    color: var(--focus);
+}
+
+.trust-item.item-genuine .trust-icon-box,
+.order-confirmation-icon,
+.support-channel-row:is([data-channel='wechat'], [data-channel='whatsapp']) .support-channel-icon {
+    color: var(--success);
+}
+.trust-item.item-delivery .trust-icon-box,
+.support-channel-row:is([data-channel='telegram'], [data-channel='qq'], [data-channel='qq_group'])
+    .support-channel-icon {
+    color: var(--skin-tool-security-foreground, var(--focus));
+}
+.trust-item.item-shipping .trust-icon-box {
+    color: var(--warning);
+}
+.trust-item.item-support .trust-icon-box,
+.support-channel-icon {
+    color: var(--skin-tool-support-foreground, var(--accent-ink));
+}
+.coupon-empty-icon {
+    color: var(--danger);
+}
+
+/* The shared palette derives these line colors against transparent icon surfaces.
+   The adaptation algorithm is the same for all skins and merchant colors. */
 [data-icon-tone='security'] {
     --semantic-icon-foreground: var(--skin-tool-security-foreground, var(--accent-ink));
-    --semantic-icon-background: var(--skin-tool-security-background, var(--accent-soft));
 }
 [data-icon-tone='mail'] {
     --semantic-icon-foreground: var(--skin-tool-mail-foreground, var(--success));
-    --semantic-icon-background: var(--skin-tool-mail-background, var(--accent-soft));
 }
 [data-icon-tone='studio'] {
     --semantic-icon-foreground: var(--skin-tool-studio-foreground, var(--accent-ink));
-    --semantic-icon-background: var(--skin-tool-studio-background, var(--accent-soft));
 }
 [data-icon-tone='coupon'] {
     --semantic-icon-foreground: var(--skin-tool-coupon-foreground, var(--warning));
-    --semantic-icon-background: var(--skin-tool-coupon-background, var(--accent-soft));
 }
 [data-icon-tone='support'] {
     --semantic-icon-foreground: var(--skin-tool-support-foreground, var(--accent-ink));
-    --semantic-icon-background: var(--skin-tool-support-background, var(--accent-soft));
 }

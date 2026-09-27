@@ -254,12 +254,6 @@
     grid-template-columns: 30px minmax(0, 1fr);
 }
 
-.ai-studio-settlement-refund > svg {
-    width: 30px;
-    height: 30px;
-    padding: 7px;
-}
-
 .ai-studio-settlement-refund strong {
     font-size: 12px;
 }
@@ -1162,16 +1156,8 @@
     width: 46px;
     height: 46px;
     margin: 0 auto 12px;
-    border-radius: 14px;
     display: grid;
     place-items: center;
-    background: #fff0ee;
-    color: #c24949;
-}
-
-.ai-confirmation-dialog-icon svg {
-    width: 21px;
-    height: 21px;
 }
 
 .ai-confirmation-dialog h2 {

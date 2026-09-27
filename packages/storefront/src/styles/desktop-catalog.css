@@ -701,7 +701,6 @@
     .has-desktop-catalog .account-services .account-service-grid > button > span {
         flex: none;
         color: var(--text);
-        background: transparent;
     }
     .has-desktop-catalog .account-services .account-service-grid > button > b {
         font-size: 14px;
@@ -971,8 +970,6 @@
     }
     .has-desktop-catalog .account-orders .account-order-shortcuts > button > span svg {
         color: var(--text);
-        width: 24px;
-        height: 24px;
     }
     .has-desktop-catalog .account-order-shortcuts > button:not(:first-child) {
         border-left: 0;

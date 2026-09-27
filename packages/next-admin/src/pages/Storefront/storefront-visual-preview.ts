@@ -22,9 +22,10 @@ export function storefrontVisualPreviewDocument(
     storeName: string,
     brand: StorefrontBrandPaletteInput = {},
 ): string {
+    const palette = resolveStorefrontSemanticPalette(presetId, brand);
     const variables = {
-        ...semanticPaletteCssVariables(resolveStorefrontSemanticPalette(presetId, brand)),
-        ...storefrontSkinCssVariables(presetId),
+        ...semanticPaletteCssVariables(palette),
+        ...storefrontSkinCssVariables(presetId, palette),
     };
     const semanticStyles = Object.entries(variables)
         .map(([property, value]) => `${property}:${value}`)

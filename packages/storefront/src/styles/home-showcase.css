@@ -237,35 +237,27 @@
 .colorful-icon-badge {
     width: 48px;
     height: 48px;
-    border-radius: var(--skin-control-radius);
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--accent-soft);
     color: var(--accent-ink);
     transition: transform 180ms ease;
 }
 .colorful-icon-badge[data-icon-tone] {
     color: var(--semantic-icon-foreground);
-    background: var(--semantic-icon-background);
 }
 
 .colorful-icon-badge svg {
-    width: 22px;
-    height: 22px;
     stroke-width: 1.7;
 }
 
 .colorful-icon-img-wrap {
     width: 48px;
     height: 48px;
-    border-radius: 12px;
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--soft);
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--brand-background) 12%, transparent);
 }
 
 .quick-grid.is-color-marketplace button > span {
@@ -277,15 +269,11 @@
 .quick-grid.is-color-marketplace .colorful-icon-img-wrap {
     width: 52px;
     height: 52px;
-    border-radius: 11px;
-    background: var(--quick-icon-surface);
-    box-shadow: 0 7px 18px -15px var(--quick-accent);
 }
 
 .colorful-icon-img-wrap img {
     width: 100%;
     height: 100%;
-    border-radius: inherit;
     object-fit: contain;
 }
 
@@ -409,8 +397,6 @@ html[lang='en'] .quick-grid b {
 .coupon-hub-icon-pill {
     width: 20px;
     height: 20px;
-    border-radius: 5px;
-    background: var(--accent-soft);
     color: var(--accent-ink);
     display: flex;
     align-items: center;
@@ -949,21 +935,13 @@ html[lang='en'] .quick-grid b {
     right: 18px;
     width: 58px;
     height: 58px;
-    border-radius: 50%;
     display: grid;
     place-items: center;
     color: var(--showcase-accent-text);
-    background: color-mix(in srgb, var(--surface) 90%, transparent);
-    box-shadow:
-        0 12px 24px -18px rgb(var(--showcase-accent-rgb) / 0.72),
-        inset 0 1px 0 rgb(255 255 255 / 0.08);
     transform: translateY(-58%);
-    backdrop-filter: blur(8px);
 }
 
 .home-dual-showcase[data-card-template='tech-duo'] .showcase-card-icon svg {
-    width: 25px;
-    height: 25px;
     stroke-width: 1.8;
 }
 
@@ -1118,11 +1096,6 @@ html[lang='en'] .quick-grid b {
         transform: none;
     }
 
-    .home-dual-showcase[data-card-template='tech-duo'] .showcase-card-icon svg {
-        width: 18px;
-        height: 18px;
-    }
-
     .home-dual-showcase[data-card-template='tech-duo'] .showcase-badge {
         max-width: calc(100% - 44px);
     }
@@ -1190,40 +1163,10 @@ html[lang='en'] .quick-grid b {
 .trust-icon-box {
     width: 32px;
     height: 32px;
-    border-radius: 8px;
     display: grid;
     place-items: center;
     flex-shrink: 0;
     transition: transform 160ms ease;
-}
-
-.trust-item.item-genuine .trust-icon-box {
-    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-    color: #059669;
-    box-shadow: 0 2px 5px rgba(16, 185, 129, 0.15);
-}
-
-.trust-item.item-delivery .trust-icon-box {
-    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-    color: #2563eb;
-    box-shadow: 0 2px 5px rgba(37, 99, 235, 0.15);
-}
-
-.trust-item.item-shipping .trust-icon-box {
-    background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
-    color: #ea580c;
-    box-shadow: 0 2px 5px rgba(234, 88, 12, 0.15);
-}
-
-.trust-item.item-support .trust-icon-box {
-    background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
-    color: #635bff;
-    box-shadow: 0 2px 5px rgba(124, 58, 237, 0.15);
-}
-
-.trust-icon-box svg {
-    width: 16px;
-    height: 16px;
 }
 
 .trust-text {
@@ -2000,40 +1943,28 @@ html[lang='en'] .quick-grid b {
 .section-header-icon-pill {
     width: 22px;
     height: 22px;
-    border-radius: 6px;
-    background: var(--accent-soft);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    color: var(--oriental-gold, var(--accent-ink));
+    color: var(--accent-ink);
 }
 
 .section-header-icon-pill[data-section-kind] {
     color: var(--accent-ink);
-    background: var(--accent-soft);
 }
 .section-header-icon-pill[data-section-kind='best-sellers'] {
     color: var(--warning);
-    background: color-mix(in srgb, var(--warning) 12%, var(--surface));
 }
 .section-header-icon-pill[data-section-kind='services'],
 .section-header-icon-pill[data-section-kind='support'] {
     color: var(--success);
-    background: color-mix(in srgb, var(--success) 12%, var(--surface));
 }
 .section-header-icon-pill[data-section-kind='categories'] {
     color: var(--focus);
-    background: color-mix(in srgb, var(--focus) 12%, var(--surface));
 }
 .section-header-icon-pill[data-icon-tone] {
     color: var(--semantic-icon-foreground);
-    background: var(--semantic-icon-background);
-}
-
-.section-header-icon-pill svg {
-    width: 13px;
-    height: 13px;
 }
 
 .section-header h2,
@@ -3095,14 +3026,6 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         border: 0;
     }
 
-    .home-page .quick-grid .colorful-icon-img-wrap {
-        border: 0;
-    }
-
-    .home-page .quick-grid .colorful-icon-badge {
-        border: 0;
-    }
-
     .category-page .primary-category-switcher {
         height: auto;
         min-height: 0;
@@ -3335,16 +3258,9 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 .category-client-plugin-icon {
     width: 38px;
     height: 38px;
-    border-radius: 10px;
     display: grid;
     place-items: center;
-    background: var(--accent-soft);
     color: var(--accent-ink, var(--accent));
-}
-
-.category-client-plugin-icon svg {
-    width: 19px;
-    height: 19px;
 }
 
 .category-client-plugin-copy {
@@ -3498,14 +3414,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     flex: none;
     grid-column: 1;
     grid-row: 1 / span 2;
-    border-radius: var(--skin-control-radius, 10px);
-    background: var(--service-icon-background, var(--accent-soft));
     color: var(--service-icon-foreground, var(--accent-ink));
-}
-
-.business-services-page .category-client-plugin-icon svg {
-    width: 22px;
-    height: 22px;
 }
 
 .business-services-page .category-client-plugin-two-factor {
@@ -3914,9 +3823,6 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 .category-topbar .search-trigger-icon {
     width: 18px;
     height: 18px;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
 }
 
 .category-topbar .search-trigger-icon svg {
@@ -3993,7 +3899,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 }
 
 .home-trust-bar .trust-icon {
-    color: var(--oriental-gold, var(--accent-ink));
+    color: var(--accent-ink);
 }
 
 .notice-strip-copy {

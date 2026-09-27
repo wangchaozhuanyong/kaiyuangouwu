@@ -120,4 +120,44 @@ describe('storefront semantic palette', () => {
             }
         }
     });
+
+    it.each(['classic', 'modern-oriental', 'neo-minimalist'] as const)(
+        'adapts transparent %s icons to the resolved surfaces rather than the preset name',
+        presetId => {
+            // Cross the two sets of identity hues with light and dark surfaces. This
+            // exercises actual adjustment instead of only checking default colors.
+            for (const surfacePreset of ['classic', 'modern-oriental', 'neo-minimalist'] as const) {
+                for (const brandColor of ['#ffffff', '#000000', '#777777', '#ffff00']) {
+                    const palette = resolveStorefrontSemanticPalette(surfacePreset, {
+                        primaryColor: brandColor,
+                        accentColor: brandColor,
+                        highlightColor: brandColor,
+                    });
+                    const variables = storefrontSkinCssVariables(presetId, palette);
+                    const surfaces = [
+                        palette.page,
+                        palette.surface,
+                        palette.elevated,
+                        palette.subtle,
+                        palette.accentSoft,
+                        palette.interactionHover,
+                        palette.interactionPressed,
+                    ];
+                    for (const tone of ['security', 'mail', 'studio', 'coupon', 'support']) {
+                        const color = variables[`--skin-tool-${tone}-foreground`];
+                        for (const background of surfaces) {
+                            expect(storefrontContrastRatio(color, background)).toBeGreaterThanOrEqual(3);
+                        }
+                    }
+                    const defaultSecurity =
+                        storefrontSkinCssVariables(presetId)['--skin-tool-security-foreground'];
+                    if (
+                        surfaces.some(background => storefrontContrastRatio(defaultSecurity, background) < 3)
+                    ) {
+                        expect(variables['--skin-tool-security-foreground']).not.toBe(defaultSecurity);
+                    }
+                }
+            }
+        },
+    );
 });

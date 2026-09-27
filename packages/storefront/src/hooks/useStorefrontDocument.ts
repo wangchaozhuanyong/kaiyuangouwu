@@ -29,7 +29,10 @@ export function useStorefrontBrandColors(
             accentColor: config?.brandAccentColor,
             highlightColor: config?.brandHighlightColor,
         });
-        const colors = { ...semanticPaletteCssVariables(palette), ...storefrontSkinCssVariables(presetId) };
+        const colors = {
+            ...semanticPaletteCssVariables(palette),
+            ...storefrontSkinCssVariables(presetId, palette),
+        };
         const themeColorMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
         const colorSchemeMeta = document.querySelector<HTMLMetaElement>('meta[name="color-scheme"]');
         const previousColorScheme = root.style.getPropertyValue('color-scheme');
