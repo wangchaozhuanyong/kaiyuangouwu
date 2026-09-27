@@ -187,7 +187,6 @@
 }
 .account-identity-promotion-actions {
     display: flex;
-    flex-wrap: wrap;
     align-items: flex-end;
     justify-content: space-between;
     gap: 12px;
@@ -199,6 +198,7 @@
 }
 .account-identity-promotion-balance {
     min-width: 0;
+    flex: 1;
 }
 .account-identity-promotion-actions strong {
     display: flex;
@@ -297,5 +297,11 @@
     }
     .desktop-account-page .account-identity:not(:has(.account-identity-promotion)) {
         grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 359px), (min-width: 1024px) and (max-width: 1199px) {
+    .account-identity-promotion-actions strong {
+        font-size: 28px;
     }
 }
