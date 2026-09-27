@@ -345,6 +345,81 @@ function shopApiRequest(cookie) {
     };
 }
 
+// Mirror the credential-free browser request to the selected store, not console /shop-api.
+export async function verifyDashboardPreviewShopApi({
+    storefrontUrl,
+    dashboardUrl,
+    expectedChannelCode,
+    fetchImpl = globalThis.fetch,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+}) {
+    const storefront = normalizeStorefrontUrl(storefrontUrl);
+    const dashboard = normalizeDashboardUrl(dashboardUrl);
+    const endpoint = new URL('/shop-api', storefront);
+    const crossOrigin = storefront.origin !== dashboard.origin;
+    const allowsOrigin = corsResponse =>
+        ['*', dashboard.origin].includes(corsResponse.headers.get('access-control-allow-origin'));
+    if (crossOrigin) {
+        const preflight = await fetchWithTimeout(
+            fetchImpl,
+            endpoint,
+            {
+                method: 'OPTIONS',
+                redirect: 'manual',
+                headers: {
+                    origin: dashboard.origin,
+                    'access-control-request-method': 'POST',
+                    'access-control-request-headers': 'content-type,vendure-token',
+                },
+            },
+            timeoutMs,
+        );
+        if (![200, 204].includes(preflight.status) || !allowsOrigin(preflight))
+            throw new Error('Dashboard preview Shop API: CORS preflight did not allow the Admin origin');
+        const methods = (preflight.headers.get('access-control-allow-methods') ?? '')
+            .toUpperCase()
+            .split(',')
+            .map(value => value.trim());
+        const headers = (preflight.headers.get('access-control-allow-headers') ?? '')
+            .toLowerCase()
+            .split(',')
+            .map(value => value.trim());
+        if (
+            !methods.includes('POST') ||
+            !['content-type', 'vendure-token'].every(
+                header => headers.includes(header) || headers.includes('*'),
+            )
+        )
+            throw new Error('Dashboard preview Shop API: CORS preflight did not allow the preview request');
+        await preflight.body?.cancel();
+    }
+    const response = await fetchWithTimeout(
+        fetchImpl,
+        endpoint,
+        {
+            ...shopApiRequest(),
+            credentials: 'omit',
+            headers: { 'content-type': 'application/json', origin: dashboard.origin },
+            body: JSON.stringify({
+                query: 'query DecorationPreviewHealth { __typename activeChannel { code } storefrontContent { id } }',
+            }),
+        },
+        timeoutMs,
+    );
+    expectStatus(response, 200, 'Dashboard preview Shop API');
+    if (crossOrigin && !allowsOrigin(response))
+        throw new Error('Dashboard preview Shop API: response did not allow the Admin origin');
+    const payload = await readJson(response, 'Dashboard preview Shop API');
+    if (
+        payload.errors ||
+        payload?.data?.__typename !== 'Query' ||
+        !Array.isArray(payload?.data?.storefrontContent)
+    )
+        throw new Error('Dashboard preview Shop API: public content query failed');
+    if (!expectedChannelCode || payload.data.activeChannel?.code !== expectedChannelCode)
+        throw new Error('Dashboard preview Shop API: selected store Channel mismatch');
+}
+
 export async function verifyProductionRelease({
     storefrontUrl,
     dashboardUrl,
@@ -404,20 +479,13 @@ export async function verifyProductionRelease({
         checks.push('expected Channel');
     }
 
-    const previewResponse = await fetchWithTimeout(
+    await verifyDashboardPreviewShopApi({
+        storefrontUrl: storefront,
+        dashboardUrl: dashboard,
+        expectedChannelCode: expectedChannelCode ?? publicShopBody?.data?.activeChannel?.code,
         fetchImpl,
-        new URL('/shop-api', dashboard),
-        {
-            ...shopApiRequest(),
-            body: JSON.stringify({ query: 'query DecorationPreviewHealth { __typename }' }),
-        },
         timeoutMs,
-    );
-    expectStatus(previewResponse, 200, 'Dashboard preview Shop API');
-    const previewBody = await readJson(previewResponse, 'Dashboard preview Shop API');
-    if (previewBody?.data?.__typename !== 'Query') {
-        throw new Error('Dashboard preview Shop API: GraphQL probe did not return Query');
-    }
+    });
     checks.push('dashboard preview Shop API');
 
     const storefrontResponse = await fetchWithTimeout(

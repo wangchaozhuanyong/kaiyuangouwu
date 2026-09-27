@@ -1493,3 +1493,20 @@ void test('backup reuse requires the current manifest format and keeps old archi
     assert.equal(versionResult.status, 0, versionResult.stderr);
     assert.equal(versionResult.stdout.trim(), '3');
 });
+
+void test('Admin decoration preview CORS is limited to public Shop API and preserves store domain routing', async () => {
+    const nginx = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
+    assert.match(nginx, /map "\$uri\|\$http_origin" \$shop_api_cors_origin/u);
+    assert.match(nginx, /"\/shop-api\|https:\/\/console\.moyaoai\.com" "https:\/\/console\.moyaoai\.com"/u);
+    assert.match(nginx, /~\^\/shop-api\[\|\] \$upstream_http_access_control_allow_origin/u);
+    assert.match(nginx, /location = \/shop-api \{\s*proxy_hide_header Access-Control-Allow-Origin/u);
+    const consoleServer = nginx.slice(
+        nginx.indexOf('server_name console.moyaoai.com;', nginx.indexOf('listen 443')),
+    );
+    assert.match(
+        consoleServer,
+        /connect-src 'self' https:\/\/cloudflareinsights\.com https:\/\/\*\/shop-api;/u,
+    );
+    assert.doesNotMatch(consoleServer, /location = \/shop-api/u);
+    assert.doesNotMatch(nginx, /proxy_set_header (?:Host|X-Forwarded-Host) \$http_vendure_token/u);
+});

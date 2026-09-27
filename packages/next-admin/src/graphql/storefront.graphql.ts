@@ -104,6 +104,30 @@ export const STOREFRONT_CONTENT_QUERY = gql`
     }
 `;
 
+// Preview needs public routing metadata only, never domain verification secrets.
+export const STOREFRONT_PREVIEW_DOMAINS_QUERY = gql`
+    query NextAdminStorefrontPreviewDomains($channelId: ID!) {
+        storeDomains(channelId: $channelId) {
+            domain
+            isPrimary
+            status
+            channel {
+                id
+                code
+            }
+        }
+    }
+`;
+
+export interface StorefrontPreviewDomainsResult {
+    storeDomains: Array<{
+        domain: string;
+        isPrimary: boolean;
+        status: 'PENDING' | 'ACTIVE';
+        channel: { id: string; code: string };
+    }>;
+}
+
 export const CREATE_STOREFRONT_BLOCK_MUTATION = gql`
     ${STOREFRONT_BLOCK_FIELDS}
     mutation NextAdminCreateStorefrontBlock($input: CreateStorefrontContentBlockInput!) {
