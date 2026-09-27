@@ -149,7 +149,7 @@ describe('category navigation responsive spacing', () => {
             /@media \(max-width:\s*1023px\)[\s\S]*?\.category-navigation-shell\s*\{[^}]*--page-section-inset:\s*8px;/,
         );
         expect(stylesheet).toMatch(
-            /\.category-navigation-shell > \.topbar\.category-topbar\s*\{[^}]*height:\s*52px;[^}]*padding:\s*4px var\(--page-section-inset, 16px\);/,
+            /\.category-navigation-shell > \.topbar\.category-topbar\s*\{[^}]*height:\s*60px;[^}]*padding:\s*12px var\(--page-section-inset, 16px\);/,
         );
         expect(stylesheet).toMatch(
             /\.category-page \.primary-category-strip\s*\{[^}]*margin:\s*0 var\(--page-section-inset, 16px\);/,
@@ -162,11 +162,11 @@ describe('category navigation responsive spacing', () => {
         );
     });
 
-    it('centers the mobile sorting row without an extra top gap', () => {
+    it('centers the sorting row within its own balanced section', () => {
         expect(presetStylesheet).toMatch(
-            /\.category-page \.category-results \.sort-bar\s*\{[^}]*height:\s*52px;[^}]*margin:\s*0 var\(--page-section-inset, 16px\);[^}]*align-items:\s*center;/,
+            /\.category-page \.category-results \.sort-bar\s*\{[^}]*height:\s*44px;[^}]*margin:\s*0 var\(--page-section-inset, 16px\);[^}]*align-items:\s*center;/,
         );
-        expect(stylesheet).toMatch(/\.category-page \.category-product-list\s*\{[^}]*padding-top:\s*12px;/);
+        expect(stylesheet).toMatch(/\.category-page \.category-product-list\s*\{[^}]*padding-top:\s*0;/);
     });
 
     it('distinguishes the active mobile subcategory without decorative dividers', () => {

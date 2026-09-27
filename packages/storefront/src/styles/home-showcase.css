@@ -2194,13 +2194,13 @@ html[lang='en'] .quick-grid b {
 }
 
 .flash-sale-name {
-    min-height: 2.7em;
     margin: 6px 2px 0;
     display: block;
-    overflow: visible;
+    overflow: hidden;
     font-size: 12px;
     line-height: 1.35;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .flash-sale-card > small {
@@ -2992,7 +2992,17 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 
     /* Keep native scrolling without narrowing the shared content alignment. */
     .category-page .category-results {
+        padding-top: 0;
         scrollbar-width: none;
+    }
+
+    .category-page .category-subcat-sidebar {
+        padding-top: 0;
+    }
+
+    .category-page .subcat-side-item {
+        min-height: 44px;
+        padding-block: 6px;
     }
 
     .category-page .category-results::-webkit-scrollbar {
@@ -3029,7 +3039,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     .category-page .primary-category-switcher {
         height: auto;
         min-height: 0;
-        padding-block: 12px;
+        padding-block: 0 12px;
         border: 0;
         background: transparent;
         box-shadow: none;
@@ -3037,8 +3047,8 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 
     .category-page .primary-category-image,
     .category-page .all-primary-category-image {
-        width: 72px;
-        height: 72px;
+        width: 60px;
+        height: 60px;
         border: 2px solid transparent;
         border-radius: var(--skin-control-radius);
         flex-shrink: 0;
@@ -3104,8 +3114,10 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         background: transparent;
     }
 
+    /* Each section owns balanced space around its complete content block. */
     .category-page .category-results .sort-bar {
-        height: 52px;
+        height: 44px;
+        top: 0;
         width: auto;
         margin: 0 var(--page-section-inset, 16px);
         padding: 0;
@@ -3117,8 +3129,19 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         box-shadow: none;
     }
 
+    .category-page .category-results .sort-bar::before {
+        content: '';
+        position: absolute;
+        inset: 0 calc(-1 * var(--page-section-inset, 16px));
+        z-index: -1;
+        background: inherit;
+        pointer-events: none;
+    }
+
     .category-page .sort-bar button {
         height: 44px;
+        padding-block: 12px;
+        line-height: 20px;
         border-radius: 0;
     }
 
@@ -3134,7 +3157,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     }
 
     .category-page .category-product-list {
-        padding-top: 12px;
+        padding-top: 0;
     }
     .category-page .primary-category-strip {
         margin-inline: var(--page-section-inset, 16px);
@@ -3175,8 +3198,8 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         align-items: stretch;
     }
     html[lang='en'] .category-page .primary-category-image {
-        width: 72px;
-        height: 72px;
+        width: 60px;
+        height: 60px;
     }
     html[lang='en'] .category-page .primary-category-label,
     html[lang='en'] .category-page .primary-categories-all-label {
@@ -3796,9 +3819,9 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 }
 
 .category-navigation-shell > .topbar.category-topbar {
-    height: 52px;
-    min-height: 52px;
-    padding: 4px var(--page-section-inset, 16px);
+    height: 60px;
+    min-height: 60px;
+    padding: 12px var(--page-section-inset, 16px);
     gap: 0;
     border-bottom: 0;
     background: var(--surface);
@@ -3876,7 +3899,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     background: var(--surface);
     box-shadow: none;
     display: grid;
-    grid-template-rows: 72px 22px;
+    grid-template-rows: 60px 22px;
     align-content: start;
     align-items: center;
     justify-items: center;

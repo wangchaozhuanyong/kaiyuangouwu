@@ -75,7 +75,9 @@
     font-size: 15px;
     font-weight: var(--font-weight-semibold);
     line-height: 1.45;
-    overflow-wrap: anywhere;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
     text-align: left;
 }
 
@@ -152,9 +154,6 @@
         padding: 12px 0 0;
     }
 
-    .product-row-name {
-        min-height: 2.9em;
-    }
 }
 
 /* Narrow rows need the full card width for the currency and complete amount. */
