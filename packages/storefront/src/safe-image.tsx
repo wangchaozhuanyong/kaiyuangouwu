@@ -1,7 +1,13 @@
 import { ImageOff } from 'lucide-react';
 import { ImgHTMLAttributes, useContext, useLayoutEffect, useRef, useState } from 'react';
 
-import { decodeImageElement, IMAGE_WAIT_EXPIRED_EVENT, imageCandidateIdentity } from './image-readiness';
+import {
+    cancelPendingImage,
+    decodeImageElement,
+    IMAGE_REQUEST_TIMEOUT_MS,
+    IMAGE_WAIT_EXPIRED_EVENT,
+    imageCandidateIdentity,
+} from './image-readiness';
 import { imageSources, StorefrontImageKind, storefrontPlaceholderUrl } from './responsive-image';
 import { StorefrontContext } from './StorefrontContext';
 import { StorefrontLanguage } from './types';
@@ -207,11 +213,35 @@ function SafeImageSource({
     useLayoutEffect(() => {
         active.current = true;
         const image = imageRef.current;
+        const startedAt = performance.now();
+        let requestTimer: number | undefined;
+        const clearRequestTimer = () => window.clearTimeout(requestTimer);
+        const boundRequest = () => {
+            if (!image || image.complete || requestTimer !== undefined) return;
+            requestTimer = window.setTimeout(
+                () => {
+                    if (!active.current || imageRef.current !== image || image.complete) return;
+                    exceededBudget.current = true;
+                    setFallbackHeight(image.getBoundingClientRect().height || undefined);
+                    setTimedOut(true);
+                    // A placeholder alone leaves the eager request holding window.load open.
+                    cancelPendingImage(image);
+                    setFailed(true);
+                },
+                Math.max(0, IMAGE_REQUEST_TIMEOUT_MS - (performance.now() - startedAt)),
+            );
+        };
         const expire = () => {
             exceededBudget.current = true;
             setTimedOut(true);
+            boundRequest();
         };
         image?.addEventListener(IMAGE_WAIT_EXPIRED_EVENT, expire);
+        image?.addEventListener('load', clearRequestTimer);
+        image?.addEventListener('error', clearRequestTimer);
+        // Offscreen lazy images do not block window.load and may not have started yet.
+        // The readiness observer notifies us if it promotes one into an eager request.
+        if (image?.getAttribute('loading') !== 'lazy') boundRequest();
         if (image?.complete && image.naturalWidth > 0) {
             const candidate = imageCandidateIdentity(image);
             if (
@@ -226,11 +256,22 @@ function SafeImageSource({
         }
         return () => {
             active.current = false;
+            clearRequestTimer();
             image?.removeEventListener(IMAGE_WAIT_EXPIRED_EVENT, expire);
+            image?.removeEventListener('load', clearRequestTimer);
+            image?.removeEventListener('error', clearRequestTimer);
         };
     }, [sourceKey]);
 
-    const state = failed ? 'error' : loaded ? 'ready' : timedOut ? 'timeout' : 'loading';
+    const state = failed
+        ? timedOut
+            ? 'timeout'
+            : 'error'
+        : loaded
+          ? 'ready'
+          : timedOut
+            ? 'timeout'
+            : 'loading';
     const frame = [
         'responsive-picture safe-image-frame',
         loaded && 'is-loaded',
