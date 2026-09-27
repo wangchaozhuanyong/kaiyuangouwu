@@ -7,6 +7,10 @@ export const SHARING_SETTINGS_QUERY = gql`
             id
             code
             defaultCurrencyCode
+            customFields {
+                storefrontNameZh
+                storefrontNameEn
+            }
         }
         referralProgram {
             ...AdminReferralProgramFields

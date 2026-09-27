@@ -57,6 +57,10 @@ describe('shared display language contract', () => {
     it('localizes operational metadata while preserving already localized service stages', () => {
         expect(departmentDisplayLabel('DATA_FINANCE')).toBe('数据财务与经营分析部');
         expect(eventTypeDisplayLabel('commerce.payment.settled')).toBe('支付成功');
+        expect(eventTypeDisplayLabel('WALLET_USAGE_RESERVED')).toBe('余额抵扣预留');
+        expect(eventTypeDisplayLabel('WALLET_USAGE_CAPTURED')).toBe('余额抵扣完成');
+        expect(eventTypeDisplayLabel('WALLET_USAGE_RELEASED')).toBe('余额抵扣释放');
+        expect(eventTypeDisplayLabel('WALLET_USAGE_REFUNDED')).toBe('余额抵扣退回');
         expect(systemFieldDisplayLabel('stage', '选择 Key')).toBe('选择密钥');
         expect(systemFieldDisplayLabel('stage', '结果保存')).toBe('结果保存');
         expect(systemFieldDisplayLabel('stage', 'FUTURE_STAGE')).toBe('未识别类型');

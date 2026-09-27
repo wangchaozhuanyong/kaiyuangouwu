@@ -76,6 +76,11 @@ const OrderOperationsBlock = lazy(() =>
         default: module.OrderOperationsBlock,
     })),
 );
+const ManualDigitalDeliveryModule = lazy(() =>
+    import('../pages/Sales/ManualDigitalDeliveryModule').then(module => ({
+        default: module.ManualDigitalDeliveryModule,
+    })),
+);
 
 const AiImageSettingsModule = lazy(() =>
     routeModuleLoaders.aiImageSettings().then(module => ({
@@ -515,10 +520,15 @@ defineNextAdminExtension({
             id: 'operations-manual-digital-delivery',
             path: '/operations/manual-digital-delivery',
             legacyPaths: ['/manual-digital-delivery'],
-            title: '手动数字发货',
-            component: redirectTo('/catalog/card-pool?tab=deliveries'),
-            permissions: ['ReadOrder', 'ReadCatalog'],
-            commandPalette: false,
+            title: '人工数字交付',
+            component: ManualDigitalDeliveryModule,
+            permissions: ['ReadOrder'],
+            navItem: {
+                label: '人工数字交付',
+                sectionId: 'sales',
+                icon: Mail,
+                order: 20,
+            },
         },
     ],
 });

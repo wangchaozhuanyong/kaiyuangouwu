@@ -89,7 +89,11 @@ interface SalesFulfillment {
 }
 
 interface SalesOrderItem {
-    salesChannel: { id: string; code: string } | null;
+    salesChannel: {
+        id: string;
+        code: string;
+        customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
+    } | null;
     id: string;
     createdAt: string;
     orderPlacedAt?: string | null;
