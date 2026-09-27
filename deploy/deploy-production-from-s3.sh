@@ -303,11 +303,28 @@ fi
 mapfile -t managed_storefront_changes < <(
     git diff --name-only "${deployed_sha}" "${target_sha}" -- \
         packages/dev-server/scripts/catalog-cigarette-media.mjs \
-        packages/dev-server/scripts/sync-storefront-media.mjs \
         packages/dev-server/scripts/repair-inventory-inheritance.mjs \
         packages/storefront/src/assets/storefront/ | \
         grep -v '^packages/storefront/src/assets/storefront/damatong/' || true
 )
+if ! git diff --quiet "${deployed_sha}" "${target_sha}" -- \
+    packages/dev-server/scripts/sync-storefront-media.mjs; then
+    storefront_media_manifest_snapshot() {
+        git show "${1}:packages/dev-server/scripts/sync-storefront-media.mjs" | awk '
+            /^const scriptDirectory = / { inside = 1; starts++ }
+            /^const LOGIN_MUTATION = / { if (inside) { inside = 0; ends++ }; exit }
+            inside { print }
+            END { if (starts != 1 || ends != 1) exit 1 }
+        '
+    }
+    base_media_manifest="$(storefront_media_manifest_snapshot "${deployed_sha}")" ||
+        fail 'could not inspect the deployed storefront media manifest'
+    target_media_manifest="$(storefront_media_manifest_snapshot "${target_sha}")" ||
+        fail 'could not inspect the target storefront media manifest'
+    if [[ "${base_media_manifest}" != "${target_media_manifest}" ]]; then
+        managed_storefront_changes+=(packages/dev-server/scripts/sync-storefront-media.mjs)
+    fi
+fi
 if [[ "${#managed_storefront_changes[@]}" -gt 0 ]]; then
     [[ -n "${reviewed_storefront_media_keys}" ]] ||
         fail 'managed storefront data changed; provide reviewed media keys in the production release plan'

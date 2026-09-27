@@ -61,6 +61,65 @@ test('managed storefront omissions fail before the expensive production build', 
     );
 });
 
+test('a code-only media publisher change does not authorize a content write', () => {
+    const mediaScript = 'packages/dev-server/scripts/sync-storefront-media.mjs';
+    const manifest = 'const scriptDirectory = "/assets";\nconst storefrontMediaManifest = [];\n';
+    const source = code => `${manifest}const LOGIN_MUTATION = \`login\`;\n${code}`;
+    const impact = inspectProductionReleaseImpact({
+        baseSha: 'a'.repeat(40),
+        targetSha: 'b'.repeat(40),
+        releaseScope: {},
+        git(_command, args) {
+            if (args[0] === 'diff') return `${mediaScript}\n`;
+            if (args[0] === 'show') return source(args[1].startsWith('a') ? 'old code' : 'new code');
+            return '';
+        },
+    });
+
+    assert.equal(impact.dataRisk, 'runtime-only');
+    assert.ok(impact.affectedChecks.includes('api'));
+    assert.ok(!impact.affectedChecks.includes('managed-content'));
+});
+
+test('a media manifest change still requires reviewed media keys', () => {
+    const mediaScript = 'packages/dev-server/scripts/sync-storefront-media.mjs';
+    assert.throws(
+        () =>
+            inspectProductionReleaseImpact({
+                baseSha: 'a'.repeat(40),
+                targetSha: 'b'.repeat(40),
+                releaseScope: {},
+                git(_command, args) {
+                    if (args[0] === 'diff') return `${mediaScript}\n`;
+                    if (args[0] === 'show') {
+                        const key = args[1].startsWith('a') ? 'old' : 'new';
+                        return `const scriptDirectory = "/assets";\nconst manifest = ["${key}"];\nconst LOGIN_MUTATION = \`login\`;\n`;
+                    }
+                    return '';
+                },
+            }),
+        /reviewed media keys are required/u,
+    );
+});
+
+test('a media publisher with unrecognized manifest boundaries is rejected', () => {
+    const mediaScript = 'packages/dev-server/scripts/sync-storefront-media.mjs';
+    assert.throws(
+        () =>
+            inspectProductionReleaseImpact({
+                baseSha: 'a'.repeat(40),
+                targetSha: 'b'.repeat(40),
+                releaseScope: {},
+                git(_command, args) {
+                    if (args[0] === 'diff') return `${mediaScript}\n`;
+                    if (args[0] === 'show') return 'export const storefrontMediaManifest = [];\n';
+                    return '';
+                },
+            }),
+        /Cannot isolate the storefront media manifest/u,
+    );
+});
+
 test('managed scope cannot be attached to an unrelated runtime release', () => {
     assert.throws(
         () =>
