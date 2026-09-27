@@ -954,6 +954,12 @@ function AfterSalesList({
                             <dt>{isZh ? '申请金额' : 'Requested'}</dt>
                             <dd>{formatMoney(request.requestedAmount, request.currencyCode, locale)}</dd>
                         </div>
+                        {request.approvedAmount != null && (
+                            <div>
+                                <dt>{isZh ? '通过金额' : 'Approved'}</dt>
+                                <dd>{formatMoney(request.approvedAmount, request.currencyCode, locale)}</dd>
+                            </div>
+                        )}
                         <div>
                             <dt>{isZh ? '更新时间' : 'Updated'}</dt>
                             <dd>{formatOrderDate(request.updatedAt, locale)}</dd>

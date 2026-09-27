@@ -360,7 +360,9 @@ export function AfterSalesModule() {
                     ? '售后申请已审核通过'
                     : nextState === 'REJECTED'
                       ? '售后申请已驳回'
-                      : '售后工单已关联真实退款并完成',
+                      : (selectedRequest.approvedAmount ?? 0) > 0
+                        ? '售后工单已关联真实退款并完成'
+                        : '售后工单已完成，无需资金退款',
             );
         } catch (mutationError) {
             setActionError(toUserFacingError(mutationError, '售后状态更新失败，请稍后重试'));
