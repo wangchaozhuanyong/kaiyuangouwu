@@ -62,7 +62,8 @@
         grid-template-columns: minmax(0, 1fr);
         align-self: start;
         padding: 0;
-        border-radius: var(--skin-hero-radius);
+        /* Clip the gallery's four outer corners; all tile joins stay square. */
+        border-radius: var(--skin-media-radius);
         overflow: hidden;
         background: var(--bg);
         border: 0;

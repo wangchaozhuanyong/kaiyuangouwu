@@ -1354,7 +1354,7 @@
         align-items: center;
         gap: 12px 20px;
         min-height: 68px;
-        margin: 18px 0 20px;
+        margin: 0 0 20px;
         padding: 10px 12px;
         border-radius: var(--skin-card-radius);
         background: var(--surface);
