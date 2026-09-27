@@ -1,5 +1,5 @@
 import { QueryKey, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { markCouponCampaignClaimed } from '../coupon-center-state';
 import { claimAndVerifyCoupon } from '../coupon-claim-verification';
@@ -9,6 +9,12 @@ import { storefrontErrorMessage } from '../storefront-errors';
 import { RouteName, RouteState } from '../storefront-router';
 import { ActiveCustomer, StoreCustomerCoupon, StorefrontCart, StorefrontCouponCampaign } from '../types';
 
+import {
+    automaticCouponInputKey,
+    AutomaticCouponSelection,
+    readAutomaticCouponSelection,
+    rememberAutomaticCouponSelection,
+} from './coupon-auto-selection-state';
 import { StorefrontQueryContext } from './storefront-query-context';
 import { useStorefrontNavigation } from './useStorefrontNavigation';
 
@@ -71,11 +77,11 @@ export function useStorefrontCoupons({
     const couponAutoSelectionScope =
         cart?.checkoutOrder && customer ? `${customer.id}:${cart.id}:${cart.checkoutOrder.id}` : '';
     const couponAutoSelectionAttemptKey = couponAutoSelectionScope
-        ? `${couponAutoSelectionScope}:${cart?.revision ?? 0}:${myCoupons
-              .map(coupon => `${coupon.id}:${coupon.status}:${coupon.lockedOrderId ?? ''}`)
-              .sort()
-              .join('|')}`
+        ? `${couponAutoSelectionScope}:${automaticCouponInputKey(cart, myCoupons)}`
         : '';
+    const automaticSelectionRef = useRef<AutomaticCouponSelection | null>(null);
+    const automaticSelection = readAutomaticCouponSelection(market.code) ?? automaticSelectionRef.current;
+    const [, recheckAutomaticSelection] = useState(0);
     const couponAutoSelectionAttemptRef = useRef('');
     const couponAutoSelectionPendingRef = useRef('');
     const couponAutoSelectionSuppressedRef = useRef('');
@@ -255,8 +261,16 @@ export function useStorefrontCoupons({
             suppressedCouponScope(market.code) === couponAutoSelectionScope ||
             couponAutoSelectionPendingRef.current === couponAutoSelectionScope ||
             couponAutoSelectionAttemptRef.current === couponAutoSelectionAttemptKey ||
-            myCoupons.some(coupon => coupon.lockedOrderId === order.id) ||
-            !myCoupons.some(coupon => coupon.usable)
+            (automaticSelection?.scope === couponAutoSelectionScope &&
+                automaticSelection.attemptKey === couponAutoSelectionAttemptKey) ||
+            myCoupons.some(
+                coupon =>
+                    coupon.lockedOrderId === order.id &&
+                    (automaticSelection?.scope !== couponAutoSelectionScope ||
+                        automaticSelection.couponId !== coupon.id),
+            ) ||
+            (!myCoupons.some(coupon => coupon.usable) &&
+                !(automaticSelection?.scope === couponAutoSelectionScope && automaticSelection.couponId))
         ) {
             return;
         }
@@ -266,25 +280,41 @@ export function useStorefrontCoupons({
         setCartLoading(true);
         let active = true;
         let selected = false;
+        const previousAutomaticId =
+            automaticSelection?.scope === couponAutoSelectionScope ? automaticSelection.couponId : null;
         void api
             .applyBestCustomerCoupon()
             .then(async coupon => {
-                if (!coupon) return;
-                selected = true;
-                queryClient.setQueryData<StoreCustomerCoupon[]>(customerCouponQueryKey, current =>
-                    current?.map(existing => (existing.id === coupon.id ? coupon : existing)),
-                );
-                if (couponAutoSelectionScopeRef.current === couponAutoSelectionScope) {
-                    await refreshCart();
+                selected = Boolean(coupon || previousAutomaticId);
+                if (coupon) {
+                    queryClient.setQueryData<StoreCustomerCoupon[]>(customerCouponQueryKey, current =>
+                        current?.map(existing => (existing.id === coupon.id ? coupon : existing)),
+                    );
                 }
-                if (active) {
+                const selection = {
+                    scope: couponAutoSelectionScope,
+                    couponId: coupon?.id ?? null,
+                    attemptKey: '',
+                };
+                const isCurrentScope = couponAutoSelectionScopeRef.current === couponAutoSelectionScope;
+                const isManual = couponAutoSelectionSuppressedRef.current === couponAutoSelectionScope;
+                if (isCurrentScope && !isManual) {
+                    automaticSelectionRef.current = selection;
+                    rememberAutomaticCouponSelection(market.code, selection);
+                    if (selected) await refreshCart();
+                    selection.attemptKey = couponAutoSelectionAttemptKey;
+                    rememberAutomaticCouponSelection(market.code, selection);
+                }
+                if (active && !isManual && coupon && coupon.id !== previousAutomaticId) {
                     notify(
                         isZh
                             ? `已自动选择最优惠券：${coupon.campaignName}`
                             : `Best coupon applied: ${coupon.campaignName}`,
                     );
                 }
-                await Promise.all([queryClient.invalidateQueries({ queryKey: customerCouponQueryKey })]);
+                if (selected) {
+                    await queryClient.invalidateQueries({ queryKey: customerCouponQueryKey });
+                }
             })
             .catch(() => {
                 if (selected && couponAutoSelectionScopeRef.current === couponAutoSelectionScope) {
@@ -301,6 +331,7 @@ export function useStorefrontCoupons({
                 }
                 if (couponAutoSelectionScopeRef.current === couponAutoSelectionScope) {
                     setCartLoading(false);
+                    recheckAutomaticSelection(version => version + 1);
                 }
             });
         return () => {
@@ -308,6 +339,9 @@ export function useStorefrontCoupons({
         };
     }, [
         api,
+        automaticSelection?.scope,
+        automaticSelection?.couponId,
+        automaticSelection?.attemptKey,
         cart,
         cartState.pending,
         couponAutoSelectionAttemptKey,

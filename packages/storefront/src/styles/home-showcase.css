@@ -3040,6 +3040,15 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         --page-section-inset: 8px;
     }
 
+    /* Keep native scrolling without narrowing the shared content alignment. */
+    .category-page .category-results {
+        scrollbar-width: none;
+    }
+
+    .category-page .category-results::-webkit-scrollbar {
+        display: none;
+    }
+
     .category-navigation-shell {
         border-bottom: 0;
         background: var(--surface);

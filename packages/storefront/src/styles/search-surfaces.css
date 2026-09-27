@@ -355,9 +355,9 @@
         padding: 4px;
         gap: 4px;
         border: 0;
-        border-radius: var(--radius-md);
+        border-radius: var(--skin-control-radius);
         background: var(--surface);
-        box-shadow: var(--shadow-sm);
+        box-shadow: none;
     }
     .search-page .search-sort button {
         height: 44px;
@@ -368,7 +368,7 @@
     }
     .search-page .product-list {
         display: grid;
-        gap: 8px;
+        gap: 12px;
     }
     .search-page .search-discovery > .product-section {
         border: 0;

@@ -344,7 +344,32 @@ describe('StoreCouponLifecycleService', () => {
         expect(applyCouponCode).not.toHaveBeenCalled();
     });
 
-    it('applies the coupon with the largest calculated saving for the active order', async () => {
+    it.each([
+        {
+            name: 'applies the best coupon to an order without a coupon',
+            savings: [3_000, 4_500],
+            expected: 'coupon-2',
+            locked: false,
+        },
+        {
+            name: 'replaces an automatic locked coupon with the new best choice',
+            savings: [3_000, 4_500],
+            expected: 'coupon-2',
+            locked: true,
+        },
+        {
+            name: 'keeps the locked coupon when it still saves the most',
+            savings: [4_500, 3_000],
+            expected: 'coupon-1',
+            locked: true,
+        },
+        {
+            name: 'removes the locked coupon if neither candidate is eligible',
+            savings: [0, 0],
+            expected: null,
+            locked: true,
+        },
+    ])('$name', async ({ savings, expected, locked }) => {
         const now = Date.now();
         const promotions = [
             { id: 'promotion-1', couponCode: 'FIXED_30', enabled: true, deletedAt: null },
@@ -363,8 +388,9 @@ describe('StoreCouponLifecycleService', () => {
             validUntil: new Date(now + 60_000),
             claimedAt: new Date(now - index * 1_000),
         })) as any[];
+        if (locked) Object.assign(coupons[0], { status: 'LOCKED', lockedOrderId: 'order-1' });
         const couponRepository = {
-            findOne: vi.fn(async () => null),
+            findOne: vi.fn(async () => (locked ? coupons[0] : null)),
             find: vi.fn().mockResolvedValueOnce(coupons).mockResolvedValue([]),
         };
         for (const promotion of promotions) Object.assign(promotion, { conditions: [] });
@@ -396,14 +422,37 @@ describe('StoreCouponLifecycleService', () => {
             estimateCouponSavings: (...args: unknown[]) => Promise<number>;
         };
         vi.spyOn(savingsService, 'estimateCouponSavings').mockImplementation(async (...args: unknown[]) =>
-            (args[2] as { id: string }).id === 'promotion-1' ? 3_000 : 4_500,
+            (args[2] as { id: string }).id === 'promotion-1' ? savings[0] : savings[1],
         );
         const apply = vi
             .spyOn(service, 'apply')
             .mockResolvedValue({ id: 'coupon-2', campaignName: '分类八折券' } as any);
 
-        await expect(service.applyBest(ctx)).resolves.toMatchObject({ id: 'coupon-2' });
-        expect(apply).toHaveBeenCalledWith(ctx, 'coupon-2');
+        const viewService = service as unknown as {
+            toCustomerCouponView: (...args: unknown[]) => Promise<{ id: string }>;
+        };
+        vi.spyOn(viewService, 'toCustomerCouponView').mockResolvedValue({ id: 'coupon-1' });
+        const remove = vi
+            .spyOn(service, 'remove')
+            .mockResolvedValue({ id: 'coupon-1' } as Awaited<ReturnType<typeof service.remove>>);
+        const result = await service.applyBest(ctx);
+        expect(result?.id ?? null).toBe(expected);
+        if (expected === 'coupon-2') expect(apply).toHaveBeenCalledWith(ctx, 'coupon-2');
+        else expect(apply).not.toHaveBeenCalled();
+        if (expected === null) expect(remove).toHaveBeenCalledWith(ctx, 'coupon-1');
+        else expect(remove).not.toHaveBeenCalled();
+        expect(couponRepository.find).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.arrayContaining([
+                    expect.objectContaining({
+                        status: 'LOCKED',
+                        lockedOrderId: 'order-1',
+                        channelId: 'channel-1',
+                        customerId: 'customer-1',
+                    }),
+                ]),
+            }),
+        );
     });
 
     it('keeps a refunded allocation in the customer usage history', async () => {
