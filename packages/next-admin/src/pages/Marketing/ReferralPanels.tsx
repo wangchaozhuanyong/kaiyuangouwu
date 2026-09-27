@@ -553,7 +553,12 @@ export function LedgerPanel({
                                         className="block max-w-64 truncate text-slate-500"
                                         title={item.note || undefined}
                                     >
-                                        {item.note || '—'}
+                                        {item.note &&
+                                        /^WALLET_USAGE_(?:RESERVED|CAPTURED|RELEASED|REFUNDED)$/u.test(
+                                            item.note,
+                                        )
+                                            ? eventTypeDisplayLabel(item.note)
+                                            : item.note || '—'}
                                     </span>
                                 </Td>
                             </tr>

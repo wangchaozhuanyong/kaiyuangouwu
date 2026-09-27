@@ -15,6 +15,10 @@ const ORDER_LIST_FIELDS = gql`
         salesChannel {
             id
             code
+            customFields {
+                storefrontNameZh
+                storefrontNameEn
+            }
         }
         customer {
             id

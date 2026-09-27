@@ -676,7 +676,11 @@ export function AppShell() {
                     icon: Megaphone,
                 },
                 ...getNextAdminExtensionNavItems()
-                    .filter(route => route.commandPalette !== false)
+                    .filter(
+                        route =>
+                            route.commandPalette !== false &&
+                            commerceModeAllowsPath(commerceMode, route.path),
+                    )
                     .map(route => ({
                         title: route.title,
                         path: route.path,
@@ -706,7 +710,7 @@ export function AppShell() {
                       ]
                     : []),
             ].filter(item => canAccessPath(item.path)),
-        [canAccessPath, isSuperAdmin, showsDigitalCatalog, showsPhysicalCatalog],
+        [canAccessPath, commerceMode, isSuperAdmin, showsDigitalCatalog, showsPhysicalCatalog],
     );
 
     const filteredCmdItems = useMemo(() => {
@@ -894,16 +898,18 @@ export function AppShell() {
                             >
                                 素材媒体库
                             </NavLink>
-                            {getNextAdminExtensionNavItems('catalog').map(route => (
-                                <NavLink
-                                    key={route.id}
-                                    allowed={canAccessPath(route.path)}
-                                    to={route.path}
-                                    className={navItemClass}
-                                >
-                                    {route.navItem?.label ?? route.title}
-                                </NavLink>
-                            ))}
+                            {getNextAdminExtensionNavItems('catalog')
+                                .filter(route => commerceModeAllowsPath(commerceMode, route.path))
+                                .map(route => (
+                                    <NavLink
+                                        key={route.id}
+                                        allowed={canAccessPath(route.path)}
+                                        to={route.path}
+                                        className={navItemClass}
+                                    >
+                                        {route.navItem?.label ?? route.title}
+                                    </NavLink>
+                                ))}
                         </div>
                     </div>
 
@@ -966,6 +972,16 @@ export function AppShell() {
                             >
                                 客服服务评价
                             </NavLink>
+                            {getNextAdminExtensionNavItems('sales').map(route => (
+                                <NavLink
+                                    key={route.id}
+                                    allowed={canAccessPath(route.path)}
+                                    to={route.path}
+                                    className={navItemClass}
+                                >
+                                    {route.navItem?.label ?? route.title}
+                                </NavLink>
+                            ))}
                         </div>
                     </div>
 

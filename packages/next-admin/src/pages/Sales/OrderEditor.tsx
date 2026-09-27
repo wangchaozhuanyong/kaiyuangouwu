@@ -179,7 +179,11 @@ interface SalesOrderDetail {
     } | null;
     shippingAddress?: AddressItem | null;
     billingAddress?: AddressItem | null;
-    salesChannel: { id: string; code: string } | null;
+    salesChannel: {
+        id: string;
+        code: string;
+        customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
+    } | null;
     channels: Array<{ id: string; code: string; token: string }>;
     shippingLines: Array<{
         id: string;
@@ -242,6 +246,8 @@ const historyLabel = (entry: HistoryItem) => {
         return `退款状态：${getRefundStateLabel(String(entry.data.from ?? ''))} → ${getRefundStateLabel(String(entry.data.to ?? ''))}`;
     if (entry.type === 'ORDER_CANCELLATION') return `订单取消：${String(entry.data.reason ?? '未填写原因')}`;
     if (entry.type === 'ORDER_FULFILLMENT') return '创建履约记录';
+    if (entry.type === 'ORDER_COUPON_APPLIED') return '已使用优惠券';
+    if (entry.type === 'ORDER_COUPON_REMOVED') return '已移除优惠券';
     return entry.type;
 };
 
@@ -1324,7 +1330,7 @@ export function OrderEditor() {
                                 </div>
                                 <div className="mt-3 space-y-2 text-xs">
                                     <div className="flex justify-between text-slate-300">
-                                        <span>商品小计</span>
+                                        <span>商品折后小计</span>
                                         <span className="font-mono">
                                             {formatMoney(order.subTotalWithTax, order.currencyCode)}
                                         </span>
@@ -1340,11 +1346,11 @@ export function OrderEditor() {
                                             key={`${discount.description}-${index}`}
                                             className="flex justify-between text-emerald-400"
                                         >
-                                            <span className="truncate pr-2">
-                                                {discount.description || '优惠折扣'}
+                                            <span className="truncate pr-2" title="已计入折后小计">
+                                                {discount.description || '优惠折扣'}（已计入）
                                             </span>
                                             <span className="font-mono">
-                                                -{formatMoney(discount.amountWithTax, order.currencyCode)}
+                                                {formatMoney(discount.amountWithTax, order.currencyCode)}
                                             </span>
                                         </div>
                                     ))}

@@ -1031,7 +1031,12 @@ export interface ReferralProgramRecord {
 }
 
 export interface ReferralProgramResult {
-    activeChannel: { id: string; code: string; defaultCurrencyCode: string };
+    activeChannel: {
+        id: string;
+        code: string;
+        defaultCurrencyCode: string;
+        customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
+    };
     referralProgram: ReferralProgramRecord;
     referralTodayMetrics: {
         businessDate: string;

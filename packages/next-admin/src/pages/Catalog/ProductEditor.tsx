@@ -25,6 +25,11 @@ export function ProductEditor() {
         saving,
         isDirty,
     } = editor;
+    const legacyTypeMismatch =
+        !isCreateMode &&
+        !!productData?.product?.customFields?.fulfillmentType &&
+        !!editor.fixedFulfillmentType &&
+        productData.product.customFields.fulfillmentType !== editor.fixedFulfillmentType;
 
     return (
         <ProductEditorProvider value={editor}>
@@ -55,7 +60,7 @@ export function ProductEditor() {
                         <button
                             type="button"
                             onClick={handleSave}
-                            disabled={saving}
+                            disabled={saving || legacyTypeMismatch}
                             className="px-5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer transition-colors"
                         >
                             {saving ? (
@@ -93,6 +98,14 @@ export function ProductEditor() {
                         )}
 
                         {/* 错误提示 */}
+                        {legacyTypeMismatch && (
+                            <div
+                                role="alert"
+                                className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900"
+                            >
+                                此历史商品的存储类型与当前店铺模式不符，暂不能在本店保存。请先核对原归属渠道及商品类型，再完成数据迁移。
+                            </div>
+                        )}
                         {errorMessage && (
                             <div
                                 role="alert"
