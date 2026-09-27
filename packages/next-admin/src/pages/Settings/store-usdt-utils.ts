@@ -1,3 +1,4 @@
+import { isControlledTestPaymentMethod } from '../../../../common/src/controlled-test-payment';
 import { paymentMethodDisplayLabel } from '../../../../common/src/system-display-labels';
 import type { ConfigurableOperationDefinitionRecord } from '../../graphql/management.graphql';
 import type {
@@ -27,6 +28,16 @@ export function isSystemManagedUsdtPaymentMethod(method: { code: string; handler
 }
 
 export const storePaymentMethodLabel = paymentMethodDisplayLabel;
+
+/** Legacy test method names are not proof of either a real receipt or a scoped simulation. */
+export function storePaymentSettlementLabel(methodCode?: string | null): string {
+    if (isControlledTestPaymentMethod(methodCode)) return '模拟结算';
+    const methodLabel = paymentMethodDisplayLabel(methodCode);
+    if (methodLabel === '内部测试支付' || methodLabel === '本地测试支付') {
+        return '测试方式结算（到账待核）';
+    }
+    return '实收';
+}
 
 export function storeUsdtPaymentIntentStatusLabel(status?: string | null): string {
     const normalizedStatus = status?.trim();

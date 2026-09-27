@@ -1,7 +1,6 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { CircleDollarSign, RefreshCw, Save, ShieldCheck, WalletCards } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { isControlledTestPaymentMethod } from '../../../../common/src/controlled-test-payment';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 
 import { sensitiveActionContext } from '../../apollo';
@@ -23,6 +22,7 @@ import { resolveVersionedDraft } from '../../utils/versioned-draft';
 import { formatDateTime, formatMoney } from '../Sales/sales-utils';
 import {
     storePaymentMethodLabel,
+    storePaymentSettlementLabel,
     storeUsdtPaymentIntentStatusLabel,
     storeUsdtWalletStatusLabel,
 } from './store-usdt-utils';
@@ -415,7 +415,7 @@ export function StoreUsdtPanel() {
                                 {formatMoney(item.netAmount, item.currencyCode)}
                             </b>
                             <small className="text-slate-500">
-                                {isControlledTestPaymentMethod(item.paymentMethodCode) ? '模拟结算' : '实收'}{' '}
+                                {storePaymentSettlementLabel(item.paymentMethodCode)}{' '}
                                 {formatMoney(item.grossAmount, item.currencyCode)} · 退款{' '}
                                 {formatMoney(item.refundedAmount, item.currencyCode)}
                             </small>

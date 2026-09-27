@@ -1,7 +1,6 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { Check, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, WalletCards, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { isControlledTestPaymentMethod } from '../../../../common/src/controlled-test-payment';
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { systemStatusDisplayLabel } from '../../../../common/src/system-display-labels';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
@@ -27,6 +26,7 @@ import { formatDateTime, formatMoney, getPaymentStateLabel } from '../Sales/sale
 import { SettingsContentSkeleton } from './settings-ui';
 import {
     storePaymentMethodLabel,
+    storePaymentSettlementLabel,
     storeUsdtPaymentIntentStatusLabel,
     storeUsdtWalletStatusLabel,
 } from './store-usdt-utils';
@@ -314,9 +314,7 @@ export function UsdtPaymentManagementModule() {
                                             {formatMoney(item.netAmount, item.currencyCode)}
                                         </b>
                                         <small className="text-slate-500">
-                                            {isControlledTestPaymentMethod(item.paymentMethodCode)
-                                                ? '模拟结算'
-                                                : '实收'}{' '}
+                                            {storePaymentSettlementLabel(item.paymentMethodCode)}{' '}
                                             {formatMoney(item.grossAmount, item.currencyCode)} · 退款{' '}
                                             {formatMoney(item.refundedAmount, item.currencyCode)}
                                         </small>

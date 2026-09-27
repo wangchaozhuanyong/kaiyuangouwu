@@ -11,6 +11,7 @@ import {
     isSystemManagedUsdtPaymentMethod,
     selectablePaymentHandlers,
     storePaymentMethodLabel,
+    storePaymentSettlementLabel,
     storeUsdtConfigurationChanged,
     storeUsdtPaymentIntentStatusLabel,
     storeUsdtWalletStatusLabel,
@@ -125,6 +126,15 @@ describe('store USDT setup helpers', () => {
         expect(storeUsdtPaymentIntentStatusLabel('EXPIRED')).toBe('已过期');
         expect(storeUsdtPaymentIntentStatusLabel('RESOLVED')).toBe('已人工闭环');
         expect(storeUsdtPaymentIntentStatusLabel('NEW_BACKEND_STATUS')).toBe('未知状态');
+    });
+
+    it('does not call an unverified legacy test-method settlement real cash', () => {
+        expect(storePaymentSettlementLabel('controlled-test-payment-5')).toBe('模拟结算');
+        expect(storePaymentSettlementLabel('production-coupon-atomicity-test')).toBe(
+            '测试方式结算（到账待核）',
+        );
+        expect(storePaymentSettlementLabel('standard-payment')).toBe('测试方式结算（到账待核）');
+        expect(storePaymentSettlementLabel('bank-transfer')).toBe('实收');
     });
 });
 
