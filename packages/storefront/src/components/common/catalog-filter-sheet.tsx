@@ -1,7 +1,8 @@
 import { Sheet } from '../../storefront-ui/page-shell';
-import { type FulfillmentType, type StorefrontLanguage } from '../../types';
+import { type CollectionSummary, type FulfillmentType, type StorefrontLanguage } from '../../types';
 
 export interface CatalogFilterValues {
+    collectionId?: string;
     fulfillment: 'all' | FulfillmentType;
     inStockOnly: boolean;
     minPrice: string;
@@ -22,6 +23,8 @@ export function CatalogFilterSheet({
     onChange,
     onApply,
     onClose,
+    collections,
+    className,
 }: {
     language: StorefrontLanguage;
     currencyCode: string;
@@ -30,6 +33,8 @@ export function CatalogFilterSheet({
     onChange: (value: CatalogFilterValues) => void;
     onApply: (value: CatalogFilterValues) => void;
     onClose: () => void;
+    collections?: CollectionSummary[];
+    className?: string;
 }) {
     const isZh = language === 'zh';
     const draftType = value.fulfillment;
@@ -50,8 +55,24 @@ export function CatalogFilterSheet({
             draftMaximumPrice !== '' &&
             Number(draftMinimumPrice) > Number(draftMaximumPrice));
     return (
-        <Sheet title={isZh ? '筛选' : 'Filter'} language={language} onClose={onClose}>
+        <Sheet title={isZh ? '筛选' : 'Filter'} language={language} onClose={onClose} className={className}>
             <div className="filter-sheet-content">
+                {!!collections?.length && (
+                    <label className="filter-collection-select">
+                        <span>{isZh ? '商品分类' : 'Category'}</span>
+                        <select
+                            value={value.collectionId ?? 'all'}
+                            onChange={event => onChange({ ...value, collectionId: event.target.value })}
+                        >
+                            <option value="all">{isZh ? '全部分类' : 'All categories'}</option>
+                            {collections.map(collection => (
+                                <option key={collection.id} value={collection.id}>
+                                    {collection.name}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                )}
                 <label className="filter-card filter-stock-card">
                     <span className="filter-stock-title">{isZh ? '仅看有货' : 'In stock only'}</span>
                     <input
@@ -164,7 +185,13 @@ export function CatalogFilterSheet({
                         type="button"
                         className="reset-filter-button"
                         onClick={() => {
-                            onChange({ fulfillment: 'all', inStockOnly: false, minPrice: '', maxPrice: '' });
+                            onChange({
+                                ...(value.collectionId === undefined ? {} : { collectionId: 'all' }),
+                                fulfillment: 'all',
+                                inStockOnly: false,
+                                minPrice: '',
+                                maxPrice: '',
+                            });
                         }}
                     >
                         {isZh ? '重置' : 'Reset'}

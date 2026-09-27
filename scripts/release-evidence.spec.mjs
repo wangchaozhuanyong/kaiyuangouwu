@@ -625,3 +625,16 @@ test('a later deployment failure preserves v2 successful CI-stage evidence, neve
         assert.equal(result.missing.length === 0, conclusion === 'success');
     }
 });
+
+test('shared hero style changes invalidate storefront check input fingerprints', () => {
+    const css = 'packages/storefront-content-plugin/src/shared/hero-scene.css';
+    const { reader } = inputFixture({ [css]: 'marketing-cover' });
+    const check = checkRequirements(
+        classifyChanges(['packages/storefront/src/a.ts'], inputInventory),
+        inputInventory,
+    )[0];
+    assert.notEqual(
+        checkFingerprint(sourceSha, check, inputInventory, reader),
+        checkFingerprint(targetSha, check, inputInventory, reader),
+    );
+});

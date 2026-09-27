@@ -311,11 +311,10 @@ export function DesktopAccountPage({
             </div>
             {products.length > 0 && (
                 <ProductSection
-                    desktopRail
                     className="desktop-account-recommendations"
                     kind="recommendations"
                     title={isZh ? '为你推荐' : 'Recommended for you'}
-                    products={products.slice(0, 4)}
+                    products={products.slice(0, 6)}
                     market={market}
                     locale={locale}
                     language={language}

@@ -161,3 +161,37 @@ test('CI-only changes are checked without deploying, and cannot accumulate into 
     ])
         assert.equal(classifyChanges([...files, file], inventory).lane, 'runtime', file);
 });
+
+test('shared hero CSS belongs to storefront while shared executable changes retain runtime scope', () => {
+    const css = 'packages/storefront-content-plugin/src/shared/hero-scene.css';
+    const plan = classifyChanges([css], inventory);
+    assert.equal(plan.lane, 'frontend');
+    assert.deepEqual(plan.frontends, ['storefront']);
+    assert.deepEqual(plan.packages, []);
+    assert.deepEqual(plan.databases, []);
+    assert.equal(plan.publishing, false);
+    for (const runtime of [
+        'packages/core/src/service.ts',
+        'packages/storefront-content-plugin/src/shared/hero-scene.tsx',
+    ])
+        assert.equal(
+            classifyChanges(
+                [css, runtime],
+                [
+                    ...inventory,
+                    { directory: 'storefront-content-plugin', name: '@vendure/storefront-content-plugin' },
+                ],
+            ).lane,
+            'runtime',
+        );
+});
+
+test('artifact input hashing is a release control rather than serving process code', () => {
+    const plan = classifyChanges(
+        ['deploy/artifact-inputs.mjs', 'packages/storefront/src/index.css'],
+        inventory,
+    );
+    assert.equal(plan.lane, 'frontend');
+    assert.equal(plan.controls, true);
+    assert.deepEqual(plan.packages, []);
+});

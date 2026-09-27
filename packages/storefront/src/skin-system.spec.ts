@@ -56,6 +56,8 @@ describe('storefront skin system', () => {
                         /(?:^|;)\s*background(?:-color)?:/.test(body) &&
                         !/display:\s*none|content:\s*none/.test(body) &&
                         !new Set([
+                            // The active search sort underline identifies the selected control.
+                            '.search-sort > button.is-active::after',
                             '.price-range-inputs > i',
                             '.page-readiness-progress',
                             '.route-transition-track',
@@ -511,6 +513,24 @@ describe('storefront skin system', () => {
         expect(source).toContain('overflow-wrap: anywhere');
         expect(source).toContain('min-height: 44px');
         expect(source).not.toMatch(/#[0-9a-f]{3,8}\b|background:\s*white|backdrop-filter|transition:\s*all/i);
+    });
+
+    it('fills the carousel frame for every theme without reintroducing original-image letterboxing', () => {
+        const source = stylesheet('../../storefront-content-plugin/src/shared/hero-scene.css');
+        const imageRules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
+            ([, selector]) =>
+                selector.includes('.hero.hero-image-overlay') && selector.includes('.hero-rich-backdrop'),
+        );
+        expect(imageRules.length).toBeGreaterThan(0);
+        for (const [, , declarations] of imageRules) {
+            if (declarations.includes('object-fit:')) expect(declarations).toContain('object-fit: cover;');
+        }
+        expect(source).toMatch(
+            /\.hero\.hero-image-overlay \.hero-rich-image-link,\s*\.hero\.hero-image-overlay \.safe-image-frame\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0;/,
+        );
+        expect(source).toMatch(
+            /\.hero\.hero-image-overlay \.hero-rich-content\s*\{[^}]*background:\s*transparent;/,
+        );
     });
 
     it('lets mobile hero content grow around an accessible primary action without backdrop blur', () => {

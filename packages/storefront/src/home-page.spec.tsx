@@ -1176,20 +1176,23 @@ describe('HomePage desktop intro layout', () => {
         expect(desktopMarkup).not.toContain('第六个快捷入口');
         expect(
             (desktopMarkup.match(/<img\b[^>]*>/g) ?? []).filter(image =>
-                image.includes('preset=storefront-icon-64'),
+                image.includes('preset=storefront-card-square-960'),
             ),
         ).toHaveLength(5);
         expect(desktopMarkup).not.toContain('src="/assets/preview/shortcut-0.png"');
         expect(desktopMarkup).not.toContain('shortcut-5.png');
         expect(desktopMarkup).toContain('aria-label="上一组快捷入口"');
         expect(desktopMarkup).toContain('aria-label="下一组快捷入口"');
-        expect(desktopMarkup).toContain('data-section-kind="services"');
+        expect(desktopMarkup).not.toContain('data-section-kind="services"');
+        expect(desktopMarkup.match(/class="desktop-quick-row"/g)).toHaveLength(2);
+        expect(desktopMarkup.match(/class="desktop-quick-tile"/g)).toHaveLength(5);
         expect(desktopMarkup).toContain('desktop-quick-pagination');
         expect(desktopMarkup).toContain('1 / 2');
-        expect(desktopMarkup.indexOf('data-section-kind="services"')).toBeLessThan(
-            desktopMarkup.indexOf('desktop-quick-pagination'),
-        );
+        expect(desktopMarkup).toContain('grid-template-columns:repeat(2, minmax(0, 1fr))');
+        expect(desktopMarkup).toContain('grid-template-columns:repeat(3, minmax(0, 1fr))');
         const mobileMarkup = renderHome(overrides);
+        expect(mobileMarkup).not.toContain('desktop-quick-tile');
+        expect(mobileMarkup).toContain('preset=storefront-icon-64');
         expect(mobileMarkup).toContain('<b>主分类快捷入口</b>');
         expect(mobileMarkup).toContain('<b>子分类快捷入口</b>');
         expect(mobileMarkup).toContain('<b>自定义服务入口</b>');

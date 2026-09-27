@@ -18,6 +18,7 @@ export function ProductCard({
     onFavorite,
     priority = false,
     imageSizes,
+    appearance = 'card',
 }: {
     product: Product;
     market: MarketConfig;
@@ -28,6 +29,7 @@ export function ProductCard({
     onFavorite?: () => void;
     priority?: boolean;
     imageSizes?: string;
+    appearance?: 'card' | 'plain';
 }) {
     const isZh = language === 'zh';
     const variant = lowestPricedProductVariant(product);
@@ -37,7 +39,7 @@ export function ProductCard({
     const smartInfo = buildProductRowSmartInfo(product, language);
 
     return (
-        <article className="product-card">
+        <article className={`product-card${appearance === 'plain' ? ' is-plain' : ''}`}>
             <ProductDetailLink
                 className="product-card-detail-link"
                 product={product}
@@ -57,7 +59,9 @@ export function ProductCard({
 
                 <div className="product-card-content">
                     <strong className="product-card-name">{product.name}</strong>
-                    {subtitle ? <span className="product-card-subtitle">{subtitle}</span> : null}
+                    {subtitle && appearance !== 'plain' ? (
+                        <span className="product-card-subtitle">{subtitle}</span>
+                    ) : null}
                     <div className="product-card-meta">
                         <span className="product-card-delivery">{smartInfo.primary}</span>
                         {smartInfo.secondary ? <span>{smartInfo.secondary}</span> : null}

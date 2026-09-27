@@ -1,6 +1,7 @@
 import { lazyRouteComponent } from '@tanstack/react-router';
 import { ShoppingBag } from 'lucide-react';
 
+import { catalogRouteState } from '../catalog-route-query';
 import { useDesktopLayout } from '../desktop-layout';
 import { offlineLoadError } from '../loading-state';
 import { PageSkeleton } from '../route-loading';
@@ -242,6 +243,7 @@ export function SearchRoutePage() {
                 storefrontCode: runtime.storefrontCode,
                 customerId: runtime.customer?.id,
                 initialQuery: runtime.route.term ?? '',
+                initialFilters: catalogRouteState(runtime.route),
             }}
         >
             <SearchPage key={JSON.stringify([runtime.storefrontCode, runtime.customer?.id ?? null])} />

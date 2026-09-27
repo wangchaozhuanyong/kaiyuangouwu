@@ -808,12 +808,14 @@ export function HomePage() {
         id: string;
         label: string;
         icon: ReactNode;
+        imageUrl?: string | null;
         disabled?: boolean;
         onClick: () => void;
     }> = (quickBlock?.items ?? []).map((item, index) => ({
         id: item.id,
         label: item.label,
-        icon: renderColorfulQuickIcon(item.label, index, item.imageUrl),
+        icon: renderColorfulQuickIcon(item.label, index, desktop ? undefined : item.imageUrl),
+        imageUrl: item.imageUrl?.trim(),
         disabled: item.targetType === 'NONE' || !item.targetValue,
         onClick: () => onContentTarget(item.targetType, item.targetValue),
     }));
@@ -822,6 +824,10 @@ export function HomePage() {
     const visibleQuickLinks = desktop
         ? quickLinks.slice(activeQuickPage * 5, activeQuickPage * 5 + 5)
         : quickLinks;
+    const desktopQuickRows =
+        visibleQuickLinks.length > 3
+            ? [visibleQuickLinks.slice(0, 2), visibleQuickLinks.slice(2)]
+            : [visibleQuickLinks];
     const trustIcons = [ShieldCheck, Zap, Lock, Headphones];
     // A missing merchant guarantee block must not remove the shared desktop service row.
     // Keep mobile publication behavior and explicitly configured blocks unchanged.
@@ -868,6 +874,49 @@ export function HomePage() {
     );
     const colorfulTrustBar = isColorfulHomepageStyle(trustBlock?.settings?.visualStyle);
     const colorfulQuickLinks = isColorfulHomepageStyle(quickBlock?.settings?.visualStyle);
+    const trustBar =
+        (hasHomepageModule('TRUST_BAR') || desktopServiceFallback) && trustItems.length > 0 ? (
+            <div
+                className={`home-trust-bar${trustBarHasLongCopy ? ' has-long-copy' : ''}${colorfulTrustBar ? ' is-color-marketplace' : ''}`}
+                style={{
+                    order: desktopServiceFallback
+                        ? Math.max(...introOrders) + 1
+                        : homepageModuleOrder('TRUST_BAR'),
+                }}
+                aria-label={isZh ? '服务信息' : 'Service information'}
+            >
+                {trustItems.map((item, index) => {
+                    const { label, description, icon: TrustIcon } = item;
+                    const imageUrl = 'imageUrl' in item ? item.imageUrl : null;
+                    return (
+                        <div className="home-trust-item" key={`${label}-${index}`}>
+                            {imageUrl ? (
+                                <SafeImage
+                                    src={imageUrl}
+                                    alt=""
+                                    imageKind="icon"
+                                    className="trust-icon"
+                                    sizes={desktop ? '28px' : '24px'}
+                                />
+                            ) : (
+                                <TrustIcon className="trust-icon" aria-hidden="true" />
+                            )}
+                            {desktop ? (
+                                <span className="home-trust-copy">
+                                    <span className="home-trust-label">{label}</span>
+                                    {description.trim() && (
+                                        <small className="home-trust-description">{description}</small>
+                                    )}
+                                </span>
+                            ) : (
+                                <span className="home-trust-label">{label}</span>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        ) : null;
+    const overlayTrustBar = desktop && hasHomepageModule('HERO') && heroCount > 0 && Boolean(trustBar);
 
     return (
         <main className="page home-page" data-page-pending={loading ? 'query' : undefined}>
@@ -959,7 +1008,7 @@ export function HomePage() {
                         >
                             {hasHomepageModule('HERO') && heroCount > 0 && (
                                 <section
-                                    className={`hero hero-image-overlay${heroCount > 1 ? ' is-swipeable' : ''}`}
+                                    className={`hero hero-image-overlay${heroCount > 1 ? ' is-swipeable' : ''}${overlayTrustBar ? ' has-service-overlay' : ''}`}
                                     style={{
                                         order: homepageModuleOrder('HERO'),
                                         aspectRatio: desktop ? String(desktopHeroAspectRatio) : undefined,
@@ -1022,6 +1071,9 @@ export function HomePage() {
                                                 />
                                             }
                                         />
+                                    )}
+                                    {overlayTrustBar && (
+                                        <div className="hero-service-overlay">{trustBar}</div>
                                     )}
                                     {desktop && heroCount > 1 && (
                                         <div
@@ -1093,75 +1145,75 @@ export function HomePage() {
                                 </section>
                             )}
 
-                            {(hasHomepageModule('TRUST_BAR') || desktopServiceFallback) &&
-                            trustItems.length > 0 ? (
-                                <div
-                                    className={`home-trust-bar${trustBarHasLongCopy ? ' has-long-copy' : ''}${colorfulTrustBar ? ' is-color-marketplace' : ''}`}
-                                    style={{
-                                        order: desktopServiceFallback
-                                            ? Math.max(...introOrders) + 1
-                                            : homepageModuleOrder('TRUST_BAR'),
-                                    }}
-                                    aria-label={isZh ? '服务信息' : 'Service information'}
-                                >
-                                    {trustItems.map((item, index) => {
-                                        const { label, description, icon: TrustIcon } = item;
-                                        const imageUrl = 'imageUrl' in item ? item.imageUrl : null;
-                                        return (
-                                            <div className="home-trust-item" key={`${label}-${index}`}>
-                                                {imageUrl ? (
-                                                    <SafeImage
-                                                        src={imageUrl}
-                                                        alt=""
-                                                        imageKind="icon"
-                                                        className="trust-icon"
-                                                        sizes={desktop ? '28px' : '24px'}
-                                                    />
-                                                ) : (
-                                                    <TrustIcon className="trust-icon" aria-hidden="true" />
-                                                )}
-                                                {desktop ? (
-                                                    <span className="home-trust-copy">
-                                                        <span className="home-trust-label">{label}</span>
-                                                        {description.trim() && (
-                                                            <small className="home-trust-description">
-                                                                {description}
-                                                            </small>
-                                                        )}
-                                                    </span>
-                                                ) : (
-                                                    <span className="home-trust-label">{label}</span>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ) : null}
+                            {!overlayTrustBar && trustBar}
 
                             {hasHomepageModule('QUICK_LINKS') && quickLinks.length > 0 ? (
                                 <nav
-                                    className={`quick-grid quick-grid-${quickLinks.length}${colorfulQuickLinks ? ' is-color-marketplace' : ''}`}
+                                    className={[
+                                        'quick-grid',
+                                        `quick-grid-${quickLinks.length}`,
+                                        colorfulQuickLinks ? 'is-color-marketplace' : '',
+                                        desktop ? 'is-desktop-gallery' : '',
+                                    ]
+                                        .filter(Boolean)
+                                        .join(' ')}
                                     style={{ order: homepageModuleOrder('QUICK_LINKS') }}
-                                    aria-label={isZh ? '快捷入口' : 'Quick links'}
+                                    aria-label={
+                                        desktop && quickBlock?.title
+                                            ? quickBlock.title
+                                            : isZh
+                                              ? '快捷入口'
+                                              : 'Quick links'
+                                    }
                                 >
-                                    {desktop && (
-                                        <SectionHeader
-                                            kind="services"
-                                            title={quickBlock?.title || (isZh ? '常用服务' : 'Quick links')}
-                                        />
-                                    )}
-                                    {visibleQuickLinks.map(item => (
-                                        <button
-                                            type="button"
-                                            key={item.id}
-                                            onClick={item.onClick}
-                                            disabled={item.disabled}
-                                        >
-                                            <span>{item.icon}</span>
-                                            <b>{item.label}</b>
-                                            {desktop && <ChevronRight aria-hidden="true" />}
-                                        </button>
-                                    ))}
+                                    {desktop
+                                        ? desktopQuickRows.map((row, rowIndex) => (
+                                              <div
+                                                  className="desktop-quick-row"
+                                                  key={rowIndex}
+                                                  style={{
+                                                      gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))`,
+                                                  }}
+                                              >
+                                                  {row.map(item => (
+                                                      <button
+                                                          type="button"
+                                                          className="desktop-quick-tile"
+                                                          key={item.id}
+                                                          onClick={item.onClick}
+                                                          disabled={item.disabled}
+                                                      >
+                                                          <span
+                                                              className="desktop-quick-media"
+                                                              aria-hidden="true"
+                                                          >
+                                                              {item.imageUrl ? (
+                                                                  <SafeImage
+                                                                      src={item.imageUrl}
+                                                                      alt=""
+                                                                      imageKind="card"
+                                                                      sizes="(min-width: 1400px) 210px, 20vw"
+                                                                  />
+                                                              ) : (
+                                                                  item.icon
+                                                              )}
+                                                          </span>
+                                                          <b>{item.label}</b>
+                                                      </button>
+                                                  ))}
+                                              </div>
+                                          ))
+                                        : visibleQuickLinks.map(item => (
+                                              <button
+                                                  type="button"
+                                                  key={item.id}
+                                                  onClick={item.onClick}
+                                                  disabled={item.disabled}
+                                              >
+                                                  <span>{item.icon}</span>
+                                                  <b>{item.label}</b>
+                                              </button>
+                                          ))}
                                     {desktop && quickPageCount > 1 && (
                                         <div className="desktop-quick-pagination">
                                             <button
