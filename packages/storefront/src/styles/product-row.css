@@ -1,0 +1,180 @@
+/* ProductRow owns its image, copy and hit area in every consumer and skin.
+   Page layouts only arrange rows and choose the surrounding surface. */
+.product-row {
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    grid-template-columns: clamp(64px, 30%, 104px) minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    min-width: 0;
+    padding: 12px;
+    overflow: visible;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--product-card-surface, var(--surface));
+    box-shadow: none;
+}
+
+.product-row-detail-link {
+    color: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.product-row-detail-link:focus-visible {
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
+}
+
+.product-row-image {
+    position: relative;
+    width: 100%;
+    height: auto;
+    aspect-ratio: var(--product-media-ratio);
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    background: var(--product-media-bg);
+}
+
+.product-row-image :is(.responsive-picture, img, .image-placeholder) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    object-fit: contain;
+    object-position: center;
+}
+
+.product-row-image .image-placeholder {
+    display: grid;
+}
+
+.product-row-content {
+    min-width: 0;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.product-row-top {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.product-row-name {
+    display: block;
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: var(--font-weight-semibold);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+
+.product-row-desc {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.product-row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.product-row-bottom {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    min-width: 0;
+    margin-top: auto;
+    padding-top: 10px;
+}
+
+.product-row-price {
+    margin: 0;
+    color: var(--accent-ink);
+    font-family: var(--font-numeric);
+    font-variant-numeric: tabular-nums;
+}
+
+.product-row-price .price-lockup {
+    font-size: 20px;
+    font-weight: var(--font-weight-bold);
+    line-height: 1.2;
+}
+
+.product-row-stock {
+    max-width: 100%;
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.product-row-stock.is-sold-out {
+    color: var(--availability-unavailable);
+}
+
+@media (min-width: 1024px) {
+    .product-row {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+    }
+
+    .product-row-content {
+        width: 100%;
+        flex: 1;
+    }
+
+    .product-row-name {
+        min-height: 2.9em;
+    }
+}
+
+/* Narrow rows need the full card width for the currency and complete amount. */
+@media (max-width: 1023px) {
+    .product-row {
+        container-type: inline-size;
+    }
+
+    @container (max-width: 320px) {
+        .product-row-content {
+            display: contents;
+        }
+
+        .product-row-top {
+            grid-column: 2;
+        }
+
+        .product-row-bottom {
+            grid-column: 1 / -1;
+            margin-top: 0;
+            padding-top: 0;
+        }
+    }
+}

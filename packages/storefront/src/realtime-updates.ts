@@ -30,6 +30,9 @@ interface StorefrontRealtimeScope {
 }
 
 const MAX_PENDING_EVENT_BYTES = 256 * 1024;
+const REALTIME_READY_TIMEOUT_MS = 10_000;
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000;
+const MAX_HEARTBEAT_INTERVAL_MS = 300_000;
 
 export interface StorefrontRealtimeStreamOptions {
     signal?: AbortSignal;
@@ -47,6 +50,9 @@ export async function consumeStorefrontRealtimeStream(
     let completedNaturally = false;
     let failure: unknown;
     let ready = false;
+    let heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
+    let timeoutFailure: Error | undefined;
     let cancellation: Promise<void> | undefined;
     const cancelReader = (reason?: unknown) => {
         if (cancellation) return cancellation;
@@ -60,6 +66,15 @@ export async function consumeStorefrontRealtimeStream(
     const abort = () => {
         void cancelReader(options.signal?.reason);
     };
+    const scheduleWatchdog = (timeoutMs: number) => {
+        if (watchdog !== undefined) clearTimeout(watchdog);
+        watchdog = setTimeout(() => {
+            timeoutFailure = new Error(
+                ready ? 'Storefront realtime heartbeat timed out' : 'Storefront realtime ready timed out',
+            );
+            void cancelReader(timeoutFailure);
+        }, timeoutMs);
+    };
 
     if (options.signal?.aborted) {
         await cancelReader(options.signal.reason);
@@ -68,8 +83,10 @@ export async function consumeStorefrontRealtimeStream(
     }
     options.signal?.addEventListener('abort', abort, { once: true });
     try {
+        scheduleWatchdog(REALTIME_READY_TIMEOUT_MS);
         while (true) {
             const { done, value } = await reader.read();
+            if (timeoutFailure) throw timeoutFailure;
             pending += decoder.decode(value, { stream: !done });
             if (pending.length > MAX_PENDING_EVENT_BYTES) {
                 throw new Error('Storefront realtime event exceeded the maximum size');
@@ -77,11 +94,17 @@ export async function consumeStorefrontRealtimeStream(
             const frames = pending.split(/\r?\n\r?\n/u);
             pending = done ? '' : (frames.pop() ?? '');
             for (const frame of frames) {
-                if (!ready && isStorefrontRealtimeReadyFrame(frame)) {
+                const readyInterval = ready ? null : storefrontRealtimeReadyHeartbeatInterval(frame);
+                if (readyInterval !== null) {
                     ready = true;
+                    heartbeatIntervalMs = readyInterval;
+                    scheduleWatchdog(Math.max(1_000, heartbeatIntervalMs * 3));
                     options.onReady?.();
                 }
                 const parsed = parseStorefrontRealtimeFrame(frame);
+                if (ready && (parsed || frame.split(/\r?\n/u).some(line => line.startsWith(':')))) {
+                    scheduleWatchdog(Math.max(1_000, heartbeatIntervalMs * 3));
+                }
                 if (parsed) onEvent(parsed);
             }
             if (done) {
@@ -93,6 +116,7 @@ export async function consumeStorefrontRealtimeStream(
         failure = error;
         throw error;
     } finally {
+        if (watchdog !== undefined) clearTimeout(watchdog);
         options.signal?.removeEventListener('abort', abort);
         if (!completedNaturally) await cancelReader(failure ?? options.signal?.reason);
         reader.releaseLock();
@@ -119,14 +143,21 @@ export function parseStorefrontRealtimeFrame(frame: string): StorefrontRealtimeE
     }
 }
 
-function isStorefrontRealtimeReadyFrame(frame: string): boolean {
+function storefrontRealtimeReadyHeartbeatInterval(frame: string): number | null {
     const { eventName, data } = parseStorefrontRealtimeFrameFields(frame);
-    if (eventName !== 'ready' || data.length === 0) return false;
+    if (eventName !== 'ready' || data.length === 0) return null;
     try {
-        const candidate = JSON.parse(data.join('\n')) as { version?: unknown };
-        return candidate.version === 1;
+        const candidate = JSON.parse(data.join('\n')) as { version?: unknown; heartbeatIntervalMs?: unknown };
+        if (candidate.version !== 1) return null;
+        if (candidate.heartbeatIntervalMs === undefined) return DEFAULT_HEARTBEAT_INTERVAL_MS;
+        return typeof candidate.heartbeatIntervalMs === 'number' &&
+            Number.isInteger(candidate.heartbeatIntervalMs) &&
+            candidate.heartbeatIntervalMs >= 1 &&
+            candidate.heartbeatIntervalMs <= MAX_HEARTBEAT_INTERVAL_MS
+            ? candidate.heartbeatIntervalMs
+            : null;
     } catch {
-        return false;
+        return null;
     }
 }
 

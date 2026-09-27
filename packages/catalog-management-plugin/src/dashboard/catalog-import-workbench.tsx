@@ -51,6 +51,8 @@ import {
 } from 'lucide-react';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 
+import { serviceMessageDisplay } from '../../../common/src/display-localization';
+
 import { createCatalogImportBatches } from './catalog-import-batches';
 import { catalogImportTemplateCsv } from './catalog-import-template';
 import {
@@ -491,7 +493,9 @@ function CatalogImportWorkbench({
                                 {job.errorMessage && (
                                     <Alert variant="destructive">
                                         <XCircle className="size-4" />
-                                        <AlertDescription>{job.errorMessage}</AlertDescription>
+                                        <AlertDescription>
+                                            {serviceMessageDisplay(job.errorMessage, 'zh')}
+                                        </AlertDescription>
                                     </Alert>
                                 )}
                                 {unresolved > 0 && (

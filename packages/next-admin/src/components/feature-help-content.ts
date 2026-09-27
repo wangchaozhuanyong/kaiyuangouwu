@@ -322,8 +322,8 @@ export const featureHelpContent = {
         impact: '预览本身不保存、不发布；保存后仍应在真实商城核对效果。',
     },
     'storefront.structure-preview': {
-        purpose: '按已保存内容和发布规则预览首页楼层结构，检查顺序、语言和显隐。',
-        requirements: ['已加载当前店铺的楼层数据', '精确样式仍需到真实前台验收'],
+        purpose: '使用客户端完整页面与样式预览当前店铺，检查顺序、语言、图片和显隐。',
+        requirements: ['已加载当前店铺的楼层数据', '电脑和手机按真实宽度渲染，右侧等比缩放'],
         example: '例如：预览中确认轮播图、入口宫格和商品楼层的先后顺序。',
         impact: '预览本身不保存、不发布。',
     },

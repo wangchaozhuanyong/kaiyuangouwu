@@ -9,6 +9,7 @@ import { enabledMarkets } from '../i18n';
 import {
     ActiveCustomer,
     Order,
+    ProductVariant,
     StoreCustomerCoupon,
     StorefrontCart,
     StorefrontCouponCampaign,
@@ -78,6 +79,19 @@ describe('storefront coupon coordination', () => {
                 id: 'cart-a',
                 revision: 1,
                 state: 'OPEN',
+                lines: [
+                    {
+                        id: 'cart-line-a',
+                        quantity: 1,
+                        selected: true,
+                        available: true,
+                        productVariant: {
+                            id: 'variant-a',
+                            priceWithTax: 10_000,
+                            currencyCode: 'MYR',
+                        } as ProductVariant,
+                    },
+                ],
                 checkoutOrder: { id: 'order-a', lines: [{}] } as Order,
             } as StorefrontCart,
             cartState: { pending: false },
@@ -262,5 +276,157 @@ describe('storefront coupon coordination', () => {
         expect(client.getQueryData(originalKey)).toEqual([locked]);
         expect(client.getQueryData(options.customerCouponQueryKey)).toBeUndefined();
         expect(options.notify).not.toHaveBeenCalled();
+    });
+    function changeQuantity(quantity: number) {
+        if (!options.cart) throw new Error('Missing cart fixture');
+        options.cart = {
+            ...options.cart,
+            revision: options.cart.revision + 1,
+            lines: options.cart.lines.map(line => ({ ...line, quantity })),
+        };
+    }
+
+    it('reselects a known automatic coupon when merchandise changes, without a revision feedback loop', async () => {
+        const locked = {
+            ...coupon,
+            status: 'LOCKED',
+            usable: false,
+            lockedOrderId: 'order-a',
+        } as StoreCustomerCoupon;
+        api.applyBestCustomerCoupon.mockResolvedValue(locked);
+        options.route = { name: 'cart' };
+        await render();
+        options.myCoupons = [locked];
+        if (!options.cart) throw new Error('Missing cart fixture');
+        options.cart = { ...options.cart, revision: 2 };
+        await render();
+        await remount();
+        expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(1);
+        changeQuantity(2);
+        await render();
+        expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(2);
+        expect(options.notify).toHaveBeenCalledTimes(1);
+        changeQuantity(3);
+        const better = { ...locked, id: 'coupon-b', campaignName: '更优惠活动券' };
+        api.applyBestCustomerCoupon.mockResolvedValueOnce(better);
+        options.myCoupons = [locked, { ...better, status: 'AVAILABLE', usable: true, lockedOrderId: null }];
+        await render();
+        expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(3);
+        expect(options.notify).toHaveBeenLastCalledWith('已自动选择最优惠券：更优惠活动券');
+    });
+
+    it('refreshes totals when no coupon remains eligible after an automatic choice', async () => {
+        const locked = {
+            ...coupon,
+            status: 'LOCKED',
+            usable: false,
+            lockedOrderId: 'order-a',
+        } as StoreCustomerCoupon;
+        api.applyBestCustomerCoupon.mockResolvedValueOnce(locked).mockResolvedValueOnce(null);
+        options.route = { name: 'cart' };
+        await render();
+        options.myCoupons = [locked];
+        changeQuantity(2);
+        await render();
+        expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(2);
+        expect(options.refreshCart).toHaveBeenCalledTimes(2);
+        options.myCoupons = [coupon];
+        await render();
+        expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(2);
+    });
+
+    it('preserves a manual selection after merchandise changes and remount', async () => {
+        await render();
+        expect(await value.applyCoupon(coupon.id)).toBeNull();
+        options.route = { name: 'cart' };
+        changeQuantity(2);
+        await remount();
+        expect(api.applyBestCustomerCoupon).not.toHaveBeenCalled();
+    });
+
+    it('does not replace an existing locked coupon with unknown selection provenance', async () => {
+        options.myCoupons = [{ ...coupon, status: 'LOCKED', lockedOrderId: 'order-a' }];
+        options.route = { name: 'cart' };
+        await render();
+        changeQuantity(2);
+        await render();
+        expect(api.applyBestCustomerCoupon).not.toHaveBeenCalled();
+    });
+
+    it.each(['price', 'selection', 'coupon-terms'] as const)(
+        'rechecks %s changes while ignoring discount totals',
+        async kind => {
+            const locked = {
+                ...coupon,
+                status: 'LOCKED',
+                usable: false,
+                lockedOrderId: 'order-a',
+            } as StoreCustomerCoupon;
+            api.applyBestCustomerCoupon.mockResolvedValue(locked);
+            options.route = { name: 'checkout' };
+            await render();
+            options.myCoupons = [locked];
+            if (!options.cart?.checkoutOrder) throw new Error('Missing cart fixture');
+            options.cart = {
+                ...options.cart,
+                revision: 3,
+                checkoutOrder: { ...options.cart.checkoutOrder, totalWithTax: 9000, subTotalWithTax: 9000 },
+            };
+            await render();
+            expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(1);
+            if (kind === 'coupon-terms') options.myCoupons = [{ ...locked, minimumSpend: 15000 }];
+            else
+                options.cart = {
+                    ...options.cart,
+                    lines: options.cart.lines.map(line => ({
+                        ...line,
+                        selected: kind === 'selection' ? false : line.selected,
+                        productVariant: line.productVariant && {
+                            ...line.productVariant,
+                            priceWithTax: 20000,
+                        },
+                    })),
+                };
+            await render();
+            expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(2);
+        },
+    );
+
+    it('rechecks a merchandise change that arrived during the preceding BEST request', async () => {
+        let resolve!: (selected: StoreCustomerCoupon | null) => void;
+        const locked = { ...coupon, status: 'LOCKED', lockedOrderId: 'order-a' } as StoreCustomerCoupon;
+        api.applyBestCustomerCoupon
+            .mockReturnValueOnce(new Promise(done => (resolve = done)))
+            .mockResolvedValue(locked);
+        options.route = { name: 'cart' };
+        await render();
+        changeQuantity(2);
+        await render();
+        expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(1);
+        await act(async () => {
+            resolve(locked);
+            await Promise.resolve();
+        });
+        expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(2);
+    });
+
+    it('retries the failed total refresh after remount using automatic selection provenance', async () => {
+        const locked = {
+            ...coupon,
+            status: 'LOCKED',
+            usable: false,
+            lockedOrderId: 'order-a',
+        } as StoreCustomerCoupon;
+        api.applyBestCustomerCoupon.mockResolvedValue(locked);
+        options.refreshCart = vi
+            .fn()
+            .mockRejectedValueOnce(new Error('Temporary failure'))
+            .mockResolvedValue(options.cart);
+        options.route = { name: 'cart' };
+        await render();
+        options.myCoupons = [locked];
+        await remount();
+        expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(2);
+        expect(options.refreshCart).toHaveBeenCalledTimes(2);
     });
 });

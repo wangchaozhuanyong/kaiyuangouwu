@@ -16,7 +16,7 @@ describe('locale preferences presentation', () => {
             /\.proto-header-right > \.proto-header-action\s*\{[^}]*background-color:\s*var\(--control-surface\);[^}]*box-shadow:\s*var\(--control-elevation\);/,
         );
         expect(stylesheet).toMatch(
-            /\.proto-header-right > \.proto-header-action:hover\s*\{[^}]*background:\s*var\(--control-surface-hover\);/,
+            /\.proto-header-right > \.proto-header-action:hover\s*\{[^}]*background:\s*var\(--interaction-hover\);/,
         );
         expect(stylesheet).toMatch(
             /\.locale-preferences-language\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/,

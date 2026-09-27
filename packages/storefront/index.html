@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN" translate="yes">
+<html lang="zh-CN" translate="yes" data-storefront-theme-pending>
     <head>
         <meta charset="UTF-8" />
         <meta http-equiv="X-UA-Compatible" content="IE=edge" />
@@ -17,13 +17,10 @@
             html,
             body {
                 margin: 0;
-                background-color: #f1f5f9;
+                background-color: var(--bg, #f1f5f9);
             }
-            @media (min-width: 1024px) {
-                html,
-                body {
-                    background-color: #f5f5f5;
-                }
+            html[data-storefront-theme-pending] #root {
+                visibility: hidden;
             }
         </style>
         <meta property="og:type" content="website" />

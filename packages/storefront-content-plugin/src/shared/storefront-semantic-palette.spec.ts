@@ -12,6 +12,27 @@ import {
 
 describe('storefront semantic palette', () => {
     it.each(['classic', 'modern-oriental', 'neo-minimalist'] as const)(
+        'separates navigation from primary actions with readable %s interaction states',
+        presetId => {
+            const palette = resolveStorefrontSemanticPalette(presetId);
+            expect(palette.selection).not.toBe(palette.accent);
+            expect(palette.interactionHover).not.toBe(palette.selection);
+            expect(storefrontContrastRatio(palette.onSelection, palette.selection)).toBeGreaterThanOrEqual(
+                4.5,
+            );
+            expect(
+                storefrontContrastRatio(palette.onSelection, palette.selectionHover),
+            ).toBeGreaterThanOrEqual(4.5);
+            expect(
+                storefrontContrastRatio(palette.interactionInk, palette.interactionHover),
+            ).toBeGreaterThanOrEqual(4.5);
+            expect(
+                storefrontContrastRatio(palette.interactionInk, palette.interactionPressed),
+            ).toBeGreaterThanOrEqual(4.5);
+            expect(semanticPaletteCssVariables(palette)['--selection-foreground']).toBe(palette.onSelection);
+        },
+    );
+    it.each(['classic', 'modern-oriental', 'neo-minimalist'] as const)(
         'keeps the %s standard palette inside the contrast contract',
         presetId => {
             expect(auditStorefrontSemanticPalette(resolveStorefrontSemanticPalette(presetId)).passes).toBe(

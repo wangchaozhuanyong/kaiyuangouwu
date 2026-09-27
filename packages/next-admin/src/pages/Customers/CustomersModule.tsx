@@ -1,3 +1,4 @@
+import { getSystemLabel } from '../../../../common/src/display-localization';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
 import { useMutation, useQuery } from '@apollo/client/react';
@@ -1915,8 +1916,15 @@ function CustomerOperationsPanel({
                                     key={item.id}
                                     className="border-t border-slate-100 pt-2 text-[10px] text-slate-600"
                                 >
-                                    <strong>{item.title}</strong> · {item.outcomeCode ?? '已完成'} ·{' '}
-                                    {formatDateTime(item.completedAt)}
+                                    <strong>{item.title}</strong> ·{' '}
+                                    {getSystemLabel(item.outcomeCode, {
+                                        RESOLVED: '问题已解决',
+                                        CONTACTED: '已联系，后续观察',
+                                        NO_RESPONSE: '未联系上',
+                                        DO_NOT_CONTACT: '客户要求停止联系',
+                                        NOT_NEEDED: '无需继续跟进',
+                                    })}{' '}
+                                    · {formatDateTime(item.completedAt)}
                                     {item.outcomeNote && (
                                         <p className="mt-1 whitespace-pre-wrap">{item.outcomeNote}</p>
                                     )}
@@ -1931,7 +1939,8 @@ function CustomerOperationsPanel({
 }
 
 function customerSegmentLabel(value: string): string {
-    return (
+    return getSystemLabel(
+        value,
         {
             NEW: '新注册',
             LEAD: '潜客',
@@ -1940,12 +1949,14 @@ function customerSegmentLabel(value: string): string {
             VIP: '高价值客户',
             AT_RISK: '流失风险',
             DORMANT: '沉睡客户',
-        }[value] ?? value
+        },
+        'zh',
+        'status',
     );
 }
 
 function customerRiskLabel(value: string): string {
-    return { NONE: '暂无', LOW: '低', MEDIUM: '中', HIGH: '高' }[value] ?? value;
+    return getSystemLabel(value, { NONE: '暂无', LOW: '低', MEDIUM: '中', HIGH: '高' }, 'zh', 'status');
 }
 
 function localDateTimeValue(timestamp: number): string {

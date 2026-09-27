@@ -24,6 +24,9 @@ import {
 import { ClipboardCopy, ExternalLink, Globe2, Plus, RefreshCw, Star, Trash2 } from 'lucide-react';
 import { KeyboardEvent, useState } from 'react';
 
+import { serviceMessageDisplay } from '../../../common/src/display-localization';
+import { systemStatusDisplayLabel } from '../../../common/src/system-display-labels';
+
 import {
     StoreDomainItem,
     StoreDomainsResult,
@@ -350,12 +353,15 @@ function DomainRow({
                     </div>
                     {domain.provisioningMode === 'CLOUDFLARE_SAAS' && (
                         <p className="mt-1 text-xs text-muted-foreground">
-                            {text.hostnameStatus}：{domain.providerHostnameStatus ?? '-'} · {text.sslStatus}：
-                            {domain.providerSslStatus ?? '-'}
+                            {text.hostnameStatus}：
+                            {systemStatusDisplayLabel(domain.providerHostnameStatus) ?? '-'} ·{' '}
+                            {text.sslStatus}：{systemStatusDisplayLabel(domain.providerSslStatus) ?? '-'}
                         </p>
                     )}
                     {domain.lastVerificationError && (
-                        <p className="mt-1 text-xs text-destructive">{domain.lastVerificationError}</p>
+                        <p className="mt-1 text-xs text-destructive">
+                            {serviceMessageDisplay(domain.lastVerificationError, 'zh')}
+                        </p>
                     )}
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-1">

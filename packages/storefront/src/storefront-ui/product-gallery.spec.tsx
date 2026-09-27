@@ -112,9 +112,18 @@ describe('ProductGallery interactions', () => {
         render({ ...product, featuredAsset: null, assets: [] });
         expect(container.querySelector('img')).toBeNull();
         expect(container.querySelector('.image-placeholder')).not.toBeNull();
+        expect(container.querySelector('.image-placeholder')?.textContent).toBe('暂无商品图');
         expect(container.querySelector('.gallery-count')).toBeNull();
+
+        act(() =>
+            root.render(
+                <ProductGallery product={{ ...product, featuredAsset: null, assets: [] }} language="en" />,
+            ),
+        );
+        expect(container.querySelector('.image-placeholder')?.textContent).toBe('No image');
 
         render({ ...product, assets: [] });
         expectImage(cover.preview, 1);
+        expect(container.textContent).not.toContain('暂无商品图');
     });
 });

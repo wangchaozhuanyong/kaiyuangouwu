@@ -20,6 +20,12 @@ export interface StorefrontSemanticPalette {
     accentSoft: string;
     accentInk: string;
     onAccent: string;
+    selection: string;
+    selectionHover: string;
+    onSelection: string;
+    interactionHover: string;
+    interactionPressed: string;
+    interactionInk: string;
     border: string;
     borderStrong: string;
     focus: string;
@@ -54,6 +60,12 @@ export interface StorefrontPaletteAudit {
             | 'page-muted'
             | 'button'
             | 'button-hover'
+            | 'selection'
+            | 'selection-hover'
+            | 'selection-surface'
+            | 'selection-page'
+            | 'interaction-hover'
+            | 'interaction-pressed'
             | 'emphasis'
             | 'page-emphasis'
             | 'border'
@@ -200,6 +212,12 @@ function resolveClassicPalette(brand: StorefrontBrandPaletteInput): StorefrontSe
         accentSoft,
         accentInk,
         onAccent: accentForeground,
+        selection: '#24455d',
+        selectionHover: '#183447',
+        onSelection: '#ffffff',
+        interactionHover: '#dee9f0',
+        interactionPressed: '#c6d8e4',
+        interactionInk: '#24455d',
         border: makeAccessibleAgainstAll(mixColors(surfaceText, surface, 0.58), [page, surface], 3, 'dark'),
         borderStrong: makeAccessibleAgainstAll(
             mixColors(surfaceText, surface, 0.42),
@@ -216,21 +234,27 @@ function resolveClassicPalette(brand: StorefrontBrandPaletteInput): StorefrontSe
 
 const FIXED_PALETTES: Record<Exclude<StorefrontVisualPresetId, 'classic'>, StorefrontSemanticPalette> = {
     'modern-oriental': {
-        page: '#f1ece2',
-        surface: '#fffaf1',
-        elevated: '#fffdf8',
-        subtle: '#e8dfd0',
-        text: '#1c302d',
-        muted: '#5b645d',
+        page: '#f3f4f0',
+        surface: '#ffffff',
+        elevated: '#ffffff',
+        subtle: '#edf1ee',
+        text: '#203432',
+        muted: '#63716d',
         brand: '#9f3b30',
-        accent: '#913128',
-        accentHover: '#74251f',
-        accentSoft: '#f1ddd3',
-        accentInk: '#873027',
-        onAccent: '#fffdf8',
+        accent: '#b34431',
+        accentHover: '#923526',
+        accentSoft: '#f8e7df',
+        accentInk: '#a33b2b',
+        onAccent: '#ffffff',
+        selection: '#20564f',
+        selectionHover: '#16443e',
+        onSelection: '#ffffff',
+        interactionHover: '#dcece5',
+        interactionPressed: '#c7ddd3',
+        interactionInk: '#20564f',
         border: '#807563',
         borderStrong: '#5f574a',
-        focus: '#873027',
+        focus: '#2472a5',
         success: '#285d46',
         warning: '#855213',
         danger: '#942c27',
@@ -248,6 +272,12 @@ const FIXED_PALETTES: Record<Exclude<StorefrontVisualPresetId, 'classic'>, Store
         accentSoft: '#251b3b',
         accentInk: '#c4b5fd',
         onAccent: '#ffffff',
+        selection: '#b9e3d7',
+        selectionHover: '#d2efe6',
+        onSelection: '#173e36',
+        interactionHover: '#223c3c',
+        interactionPressed: '#2c4d48',
+        interactionInk: '#b9e3d7',
         border: '#65748a',
         borderStrong: '#8897aa',
         focus: '#a78bfa',
@@ -267,7 +297,7 @@ const SKIN_TREATMENTS: Record<StorefrontVisualPresetId, StorefrontSkinTreatment>
         controlRadius: '10px',
         mediaRadius: '12px',
         cardShadow: '0 2px 10px rgba(15, 23, 42, 0.04)',
-        cardHoverShadow: '0 6px 18px rgba(15, 23, 42, 0.08)',
+        cardHoverShadow: '0 9px 22px rgba(15, 35, 52, 0.15)',
         heroShadow: '0 6px 24px rgba(15, 23, 42, 0.06)',
         headerShadow: '0 2px 10px rgba(15, 23, 42, 0.04)',
     },
@@ -279,7 +309,7 @@ const SKIN_TREATMENTS: Record<StorefrontVisualPresetId, StorefrontSkinTreatment>
         controlRadius: '8px',
         mediaRadius: '10px',
         cardShadow: '0 2px 12px rgba(67, 48, 27, 0.045)',
-        cardHoverShadow: '0 6px 20px rgba(67, 48, 27, 0.085)',
+        cardHoverShadow: '0 9px 22px rgba(23, 58, 53, 0.15)',
         heroShadow: '0 8px 28px rgba(55, 39, 22, 0.07)',
         headerShadow: '0 2px 12px rgba(55, 39, 22, 0.045)',
     },
@@ -384,6 +414,13 @@ export function semanticPaletteCssVariables(palette: StorefrontSemanticPalette):
         '--accent-soft': palette.accentSoft,
         '--accent-foreground': palette.onAccent,
         '--accent-ink': palette.accentInk,
+        '--selection': palette.selection,
+        '--selection-hover': palette.selectionHover,
+        '--selection-foreground': palette.onSelection,
+        '--selection-soft': mixColors(palette.surface, palette.interactionHover, 0.5),
+        '--interaction-hover': palette.interactionHover,
+        '--interaction-pressed': palette.interactionPressed,
+        '--interaction-ink': palette.interactionInk,
         '--line': palette.border,
         '--line-strong': palette.borderStrong,
         '--focus': palette.focus,
@@ -403,6 +440,12 @@ export function auditStorefrontSemanticPalette(palette: StorefrontSemanticPalett
         ['page-muted', palette.muted, palette.page, 4.5],
         ['button', palette.onAccent, palette.accent, 4.5],
         ['button-hover', palette.onAccent, palette.accentHover, 4.5],
+        ['selection', palette.onSelection, palette.selection, 4.5],
+        ['selection-hover', palette.onSelection, palette.selectionHover, 4.5],
+        ['selection-surface', palette.selection, palette.surface, 3],
+        ['selection-page', palette.selection, palette.page, 3],
+        ['interaction-hover', palette.interactionInk, palette.interactionHover, 4.5],
+        ['interaction-pressed', palette.interactionInk, palette.interactionPressed, 4.5],
         ['emphasis', palette.accentInk, palette.accentSoft, 4.5],
         ['page-emphasis', palette.accentInk, palette.page, 4.5],
         ['border', palette.border, palette.surface, 3],

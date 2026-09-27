@@ -104,7 +104,7 @@ export function AsyncRouteStatePage({
         );
 
     if (rootSkeletonVariant) {
-        return <main className="page route-state-page lg:pt-[72px]">{content}</main>;
+        return <main className="page route-state-page">{content}</main>;
     }
 
     return (
@@ -169,21 +169,27 @@ export function SubHeader({
     language,
     onBack,
     action,
+    actionVisibility = 'all',
     className,
 }: {
     title: string;
     language: StorefrontLanguage;
     onBack: () => void;
     action?: ReactNode;
+    actionVisibility?: 'all' | 'mobile';
     className?: string;
 }) {
     return (
-        <header className={`topbar subpage-header${className ? ` ${className}` : ''}`}>
+        <header
+            className={`topbar subpage-header${className ? ` ${className}` : ''}`}
+            data-action-visibility={actionVisibility}
+            data-desktop-actions={Boolean(action) && actionVisibility === 'all' ? true : undefined}
+        >
             <button type="button" onClick={onBack} aria-label={language === 'zh' ? '返回' : 'Back'}>
                 <ArrowLeft aria-hidden="true" />
             </button>
             <strong>{title}</strong>
-            <span>{action}</span>
+            <span className="subpage-header-actions">{action}</span>
         </header>
     );
 }
@@ -262,6 +268,7 @@ export function SectionIcon({ kind }: { kind: SectionKind }) {
 
 export function SectionHeader({
     title,
+    titleSuffix,
     subtitle,
     centerLabel,
     action,
@@ -272,6 +279,7 @@ export function SectionHeader({
     endContent,
 }: {
     title?: string;
+    titleSuffix?: ReactNode;
     subtitle?: string;
     centerLabel?: string;
     action?: string;
@@ -298,6 +306,7 @@ export function SectionHeader({
                             )
                         )}
                         {title && <h2>{title}</h2>}
+                        {titleSuffix}
                     </div>
                     {subtitle && !subtitleAtEnd ? <p>{subtitle}</p> : null}
                 </div>
@@ -496,10 +505,21 @@ export function InlineError({
     );
 }
 
-export function ListSkeleton({ label = 'Loading' }: { label?: string }) {
+export function ListSkeleton({
+    label = 'Loading',
+    layout = 'rows',
+}: {
+    label?: string;
+    layout?: 'rows' | 'products';
+}) {
     return (
-        <div data-page-pending="data" className="list-skeleton" role="status" aria-label={label}>
-            {[0, 1, 2, 3].map(item => (
+        <div
+            data-page-pending="data"
+            className={`list-skeleton${layout === 'products' ? ' is-product-grid' : ''}`}
+            role="status"
+            aria-label={label}
+        >
+            {Array.from({ length: layout === 'products' ? 6 : 4 }, (_, item) => (
                 <span key={item}>
                     <i />
                     <b />

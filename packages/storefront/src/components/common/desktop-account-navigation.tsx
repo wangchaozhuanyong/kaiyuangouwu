@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router';
 import type { LucideIcon } from 'lucide-react';
 import {
     Bell,
+    Check,
     ChevronRight,
     Headphones,
     Heart,
@@ -99,19 +100,6 @@ const desktopAccountGroups: ReadonlyArray<{
     },
 ];
 
-const accountIconTone: Record<AccountPath, 'security' | 'mail' | 'studio' | 'coupon' | 'support'> = {
-    '/account': 'security',
-    '/orders': 'security',
-    '/coupons': 'coupon',
-    '/notifications': 'studio',
-    '/favorites': 'support',
-    '/history': 'studio',
-    '/reviews': 'coupon',
-    '/referral': 'mail',
-    '/addresses': 'security',
-    '/account-security': 'mail',
-};
-
 export const desktopAccountSections = desktopAccountGroups.flatMap(group => group.items);
 
 export function isDesktopAccountRoute(name: RouteState['name']) {
@@ -165,8 +153,14 @@ export function DesktopAccountNavigation() {
                                     : route.tab !== 'service'));
                         const label = (
                             <>
-                                <section.icon aria-hidden="true" />
+                                <section.icon
+                                    className="desktop-account-navigation-icon"
+                                    aria-hidden="true"
+                                />
                                 <span>{section.label[isZh ? 0 : 1]}</span>
+                                <span className="desktop-account-navigation-state" aria-hidden="true">
+                                    {selected ? <Check /> : <ChevronRight />}
+                                </span>
                             </>
                         );
                         return section.tab === 'service' ? (
@@ -174,7 +168,6 @@ export function DesktopAccountNavigation() {
                                 key="after-sales"
                                 to="/orders"
                                 search={{ tab: 'service' }}
-                                data-icon-tone="support"
                                 aria-current={selected ? 'page' : undefined}
                             >
                                 {label}
@@ -184,7 +177,6 @@ export function DesktopAccountNavigation() {
                                 key="orders"
                                 to="/orders"
                                 search={{ tab: undefined }}
-                                data-icon-tone={accountIconTone[section.path]}
                                 activeOptions={{ explicitUndefined: true }}
                                 aria-current={selected ? 'page' : undefined}
                             >
@@ -194,7 +186,6 @@ export function DesktopAccountNavigation() {
                             <Link
                                 key={section.path}
                                 to={section.path}
-                                data-icon-tone={accountIconTone[section.path]}
                                 aria-current={selected ? 'page' : undefined}
                             >
                                 {label}

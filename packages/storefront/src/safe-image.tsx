@@ -1,17 +1,69 @@
-import { Package } from 'lucide-react';
-import { ImgHTMLAttributes, useLayoutEffect, useRef, useState } from 'react';
+import { ImageOff, Package } from 'lucide-react';
+import { ImgHTMLAttributes, useContext, useLayoutEffect, useRef, useState } from 'react';
 
-import { decodeImageElement, IMAGE_WAIT_EXPIRED_EVENT, imageCandidateIdentity } from './image-readiness';
+import {
+    cancelPendingImage,
+    decodeImageElement,
+    IMAGE_REQUEST_TIMEOUT_MS,
+    IMAGE_WAIT_EXPIRED_EVENT,
+    imageCandidateIdentity,
+} from './image-readiness';
 import { imageSources, StorefrontImageKind, storefrontPlaceholderUrl } from './responsive-image';
+import { StorefrontContext } from './StorefrontContext';
+import { StorefrontLanguage } from './types';
+
+export function ImagePlaceholder({
+    state = 'missing',
+    alt = '',
+    compact = false,
+    language,
+}: {
+    state?: 'missing' | 'loading' | 'error' | 'timeout';
+    alt?: string;
+    compact?: boolean;
+    language?: StorefrontLanguage;
+}) {
+    const runtime = useContext(StorefrontContext);
+    const isZh = (language ?? runtime?.language ?? 'zh') === 'zh';
+    const loading = state === 'loading';
+    const label =
+        state === 'missing'
+            ? isZh
+                ? '暂无商品图片'
+                : 'No product image'
+            : isZh
+              ? '图片暂时无法显示'
+              : 'Image temporarily unavailable';
+    return (
+        <span
+            className="image-placeholder image-status"
+            data-image-state={state}
+            role={loading ? undefined : 'img'}
+            aria-label={loading ? undefined : [alt, label].filter(Boolean).join(' · ')}
+            aria-hidden={loading ? true : undefined}
+        >
+            {loading ? (
+                <span className="image-status-loading" />
+            ) : (
+                <span className="image-status-content" aria-hidden="true">
+                    <ImageOff />
+                    {!compact && <span className="image-status-label">{label}</span>}
+                </span>
+            )}
+        </span>
+    );
+}
 
 export type SafeImageProps = {
     src: string;
     fallbackSrc?: string;
     placeholderSrc?: string;
     showFallbackIcon?: boolean;
+    fallbackLabel?: string;
     frameClassName?: string;
     alt: string;
     imageKind?: StorefrontImageKind;
+    language?: StorefrontLanguage;
     onImageReady?: (image: HTMLImageElement) => void;
 } & Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt' | 'onError'>;
 
@@ -67,9 +119,11 @@ function SafeImageSource({
     fallbackSrc,
     placeholderSrc,
     showFallbackIcon = true,
+    fallbackLabel,
     frameClassName,
     alt,
     imageKind,
+    language,
     onLoad,
     onImageReady,
     className,
@@ -161,11 +215,31 @@ function SafeImageSource({
     useLayoutEffect(() => {
         active.current = true;
         const image = imageRef.current;
+        let requestTimer: number | undefined;
+        const clearRequestTimer = () => window.clearTimeout(requestTimer);
+        const boundRequest = () => {
+            if (!image || image.complete || requestTimer !== undefined) return;
+            requestTimer = window.setTimeout(() => {
+                if (!active.current || imageRef.current !== image || image.complete) return;
+                exceededBudget.current = true;
+                setFallbackHeight(image.getBoundingClientRect().height || undefined);
+                setTimedOut(true);
+                // A placeholder alone leaves the eager request holding window.load open.
+                cancelPendingImage(image);
+                setFailed(true);
+            }, IMAGE_REQUEST_TIMEOUT_MS);
+        };
         const expire = () => {
             exceededBudget.current = true;
             setTimedOut(true);
+            boundRequest();
         };
         image?.addEventListener(IMAGE_WAIT_EXPIRED_EVENT, expire);
+        image?.addEventListener('load', clearRequestTimer);
+        image?.addEventListener('error', clearRequestTimer);
+        // Offscreen lazy images do not block window.load and may not have started yet.
+        // The readiness observer notifies us if it promotes one into an eager request.
+        if (image?.getAttribute('loading') !== 'lazy') boundRequest();
         if (image?.complete && image.naturalWidth > 0) {
             const candidate = imageCandidateIdentity(image);
             if (
@@ -180,11 +254,22 @@ function SafeImageSource({
         }
         return () => {
             active.current = false;
+            clearRequestTimer();
             image?.removeEventListener(IMAGE_WAIT_EXPIRED_EVENT, expire);
+            image?.removeEventListener('load', clearRequestTimer);
+            image?.removeEventListener('error', clearRequestTimer);
         };
     }, [sourceKey]);
 
-    const state = failed ? 'error' : loaded ? 'ready' : timedOut ? 'timeout' : 'loading';
+    const state = failed
+        ? timedOut
+            ? 'timeout'
+            : 'error'
+        : loaded
+          ? 'ready'
+          : timedOut
+            ? 'timeout'
+            : 'loading';
     const frame = [
         'responsive-picture safe-image-frame',
         loaded && 'is-loaded',
@@ -202,10 +287,25 @@ function SafeImageSource({
         >
             <span
                 className="safe-image-fallback"
-                aria-hidden="true"
+                aria-hidden={failed || timedOut ? undefined : true}
                 style={placeholder ? { backgroundImage: `url(${JSON.stringify(placeholder)})` } : undefined}
             >
-                {!placeholder && showFallbackIcon && <Package />}
+                {!placeholder && failed && fallbackLabel ? (
+                    <span className="product-image-placeholder-copy">
+                        {showFallbackIcon && <Package />}
+                        <span className="product-image-placeholder-label">{fallbackLabel}</span>
+                    </span>
+                ) : (
+                    !placeholder &&
+                    showFallbackIcon && (
+                        <ImagePlaceholder
+                            state={failed ? 'error' : timedOut ? 'timeout' : 'loading'}
+                            alt={alt}
+                            compact={imageKind === 'thumbnail' || imageKind === 'icon'}
+                            language={language}
+                        />
+                    )
+                )}
             </span>
             {!failed ? (
                 <img
@@ -225,8 +325,8 @@ function SafeImageSource({
             ) : (
                 <span
                     className="safe-image-unavailable"
-                    role={alt ? 'img' : undefined}
-                    aria-label={alt || undefined}
+                    role={alt && (fallbackLabel || !showFallbackIcon || placeholder) ? 'img' : undefined}
+                    aria-label={alt ? [alt, fallbackLabel].filter(Boolean).join(' · ') : undefined}
                 />
             )}
         </span>

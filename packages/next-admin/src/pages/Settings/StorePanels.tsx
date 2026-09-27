@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { ExternalLink, Globe2, Pencil, Plus, Store, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { client, sensitiveActionContext } from '../../apollo';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -530,7 +531,7 @@ export function DomainsPanel({
                                     )}
                                     {item.lastVerificationError && (
                                         <p className="mt-2 text-[10px] text-rose-600">
-                                            {item.lastVerificationError}
+                                            {serviceMessageDisplay(item.lastVerificationError, 'zh')}
                                         </p>
                                     )}
                                 </div>

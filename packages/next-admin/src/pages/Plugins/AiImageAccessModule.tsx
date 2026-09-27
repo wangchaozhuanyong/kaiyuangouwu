@@ -12,6 +12,7 @@ import {
     X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -235,7 +236,7 @@ function ProviderDrawer({
         Boolean(apiKey.trim()) ||
         enabled !== value.credentialEnabled;
     const health = testResult ? (testResult.ok ? 'HEALTHY' : 'UNHEALTHY') : value.providerHealthStatus;
-    const healthMessage = testResult?.message ?? value.providerHealthMessage;
+    const healthMessage = serviceMessageDisplay(testResult?.message ?? value.providerHealthMessage);
     const pending = saveState.loading || testState.loading;
 
     const saveProvider = async () => {
@@ -359,7 +360,7 @@ function ProviderDrawer({
                             Base URL 和模型 ID 必须与当前服务商网关实际支持的配置一致。
                         </p>
                         <div className="mt-4 space-y-4">
-                            <Field label="API Base URL *">
+                            <Field label="接口基础地址 *">
                                 <input
                                     value={baseUrl}
                                     onChange={event => setBaseUrl(event.target.value)}

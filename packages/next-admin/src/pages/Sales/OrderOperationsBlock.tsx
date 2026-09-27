@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@apollo/client/react';
 import { CreditCard, Plus, RefreshCw, ShieldCheck, Store, Ticket, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { getSystemLabel, serviceMessageDisplay } from '../../../../common/src/display-localization';
 
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
@@ -359,7 +360,9 @@ function PaymentCard({
                         </dl>
                     </details>
                     {payment.errorMessage && (
-                        <span className="mt-1 block text-xs text-rose-600">{payment.errorMessage}</span>
+                        <span className="mt-1 block text-xs text-rose-600">
+                            {serviceMessageDisplay(payment.errorMessage, 'zh')}
+                        </span>
                     )}
                 </div>
                 <b className="shrink-0 whitespace-nowrap text-sm tabular-nums">
@@ -559,13 +562,14 @@ function actionLabel(action: ProtectedAction) {
     )[action.kind];
 }
 function couponStatus(value: string) {
-    return (
-        (
-            { LOCKED: '已锁定', USED: '已核销', RELEASED: '已释放', REFUNDED: '已退款' } as Record<
-                string,
-                string
-            >
-        )[value] ?? value
+    return getSystemLabel(
+        value,
+        { LOCKED: '已锁定', USED: '已核销', RELEASED: '已释放', REFUNDED: '已退款' } as Record<
+            string,
+            string
+        >,
+        'zh',
+        'status',
     );
 }
 function required(value: string, label: string) {

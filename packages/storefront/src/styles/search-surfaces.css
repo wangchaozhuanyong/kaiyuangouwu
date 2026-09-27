@@ -94,7 +94,8 @@
     margin-left: -14px;
     padding-right: 14px;
     padding-left: 14px;
-    border-top: 8px solid var(--bg);
+    border-top: 0;
+    padding-top: 8px;
 }
 
 .search-discovery section {
@@ -296,9 +297,14 @@
 }
 
 .search-sort button.is-active {
-    background: var(--accent-soft);
-    color: var(--accent-ink);
+    background: var(--selection);
+    color: var(--selection-foreground);
     font-weight: 600;
+}
+
+.search-sort button.is-active:hover:not(:disabled) {
+    background: var(--selection-hover);
+    color: var(--selection-foreground);
 }
 
 .search-load-error {
@@ -330,7 +336,8 @@
     margin-left: -12px;
     padding-right: 12px;
     padding-left: 12px;
-    border-top: 8px solid var(--bg);
+    border-top: 0;
+    padding-top: 8px;
 }
 
 @media (max-width: 1023px) {
@@ -355,27 +362,25 @@
         padding: 4px;
         gap: 4px;
         border: 0;
-        border-radius: var(--radius-md);
+        border-radius: var(--skin-control-radius);
         background: var(--surface);
-        box-shadow: var(--shadow-sm);
+        box-shadow: none;
     }
     .search-page .search-sort button {
         height: 44px;
         border-radius: var(--radius-sm);
     }
     .search-page .search-sort button.is-active {
-        background: var(--accent-soft);
+        background: var(--selection);
+        color: var(--selection-foreground);
+    }
+    .search-page .search-sort button.is-active:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .search-page .product-list {
         display: grid;
-        gap: 8px;
-    }
-    .search-page .product-list .product-row {
-        padding: 10px;
-        border: 0;
-        border-radius: var(--radius-md);
-        background: var(--surface);
-        box-shadow: var(--shadow-sm);
+        gap: 12px;
     }
     .search-page .search-discovery > .product-section {
         border: 0;
@@ -485,10 +490,7 @@
         width: 100%;
         padding: 0;
     }
-    .search-page .search-results .product-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 20px;
-    }
+
     .search-page .search-results {
         display: grid;
         grid-template-columns: 250px minmax(0, 1fr);
@@ -561,7 +563,12 @@
         cursor: pointer;
     }
     .search-page .search-sort button.is-active {
-        background: var(--accent-soft);
+        background: var(--selection);
+        color: var(--selection-foreground);
+    }
+    .search-page .search-sort button.is-active:hover:not(:disabled) {
+        background: var(--selection-hover);
+        color: var(--selection-foreground);
     }
     .search-page .search-results > :not(header, .search-sort, .search-results-sidebar) {
         grid-column: 2;
@@ -667,10 +674,5 @@
         border-radius: var(--skin-control-radius);
         background: var(--module-action-surface);
         box-shadow: none;
-    }
-
-    .search-page .search-discovery .product-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
     }
 }

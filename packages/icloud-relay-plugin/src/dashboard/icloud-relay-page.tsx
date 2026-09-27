@@ -15,6 +15,7 @@ import {
 import { Copy, Mail, Pencil, Plug, Plus, RefreshCw, RotateCcw, Trash2, UploadCloud, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 
+import { serviceMessageDisplay } from '../../../common/src/display-localization';
 import { validateIcloudInput } from '../client/admin-validation';
 
 import {
@@ -495,7 +496,10 @@ export function IcloudRelayPage() {
                                                 <TableCell>
                                                     <StatusBadge
                                                         status={account.status}
-                                                        lastSyncError={account.lastSyncError}
+                                                        lastSyncError={serviceMessageDisplay(
+                                                            account.lastSyncError,
+                                                            'zh',
+                                                        )}
                                                     />
                                                 </TableCell>
                                                 <TableCell>
@@ -534,9 +538,15 @@ export function IcloudRelayPage() {
                                                     {account.lastSyncError && (
                                                         <div
                                                             className="text-red-500 text-[11px] truncate max-w-[120px]"
-                                                            title={account.lastSyncError}
+                                                            title={serviceMessageDisplay(
+                                                                account.lastSyncError,
+                                                                'zh',
+                                                            )}
                                                         >
-                                                            {account.lastSyncError}
+                                                            {serviceMessageDisplay(
+                                                                account.lastSyncError,
+                                                                'zh',
+                                                            )}
                                                         </div>
                                                     )}
                                                 </TableCell>

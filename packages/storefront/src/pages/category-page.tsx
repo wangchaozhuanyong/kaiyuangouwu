@@ -15,7 +15,7 @@ import type { RouteState, SortMode } from '../storefront-router';
 import { ShopApi } from '../api';
 import { minimumProductPrice } from '../catalog-page-utils';
 import { catalogInputFromRoute } from '../catalog-route-query';
-import { centeredHorizontalScrollLeft, compactCategoryLabel } from '../category-navigation';
+import { centeredHorizontalScrollLeft } from '../category-navigation';
 import { CategoryClientPluginSlot } from '../client-plugins/client-plugin-registry';
 import { CatalogFilterSheet } from '../components/common/catalog-filter-sheet';
 import { CategoryPaginationStatus } from '../components/common/category-pagination-status';
@@ -340,11 +340,7 @@ export function CategoryPage() {
                                                     </span>
                                                 )}
                                             </span>
-                                            <span className="primary-category-label">
-                                                {isZh
-                                                    ? compactCategoryLabel(collection.name)
-                                                    : collection.name}
-                                            </span>
+                                            <span className="primary-category-label">{collection.name}</span>
                                         </button>
                                     );
                                 })}

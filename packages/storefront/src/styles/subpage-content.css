@@ -28,7 +28,7 @@
 .product-detail-page > .subpage-header {
     padding-inline: var(--page-section-inset, 16px);
     margin-bottom: -52px;
-    border-bottom: 1px solid transparent;
+    border-bottom: 0;
     border-bottom-color: transparent;
     background: transparent;
     color: white;
@@ -248,14 +248,19 @@
 }
 
 .legal-document-navigation button:hover {
-    background: var(--control-surface-hover);
-    color: var(--text);
+    background: var(--interaction-hover);
+    color: var(--interaction-ink);
+}
+
+.legal-document-navigation button:active {
+    background: var(--interaction-pressed);
+    color: var(--interaction-ink);
 }
 
 .legal-document-navigation button.is-active,
 .legal-document-navigation button.is-active:hover {
-    background: var(--accent-soft);
-    color: var(--accent-ink);
+    background: var(--selection);
+    color: var(--selection-foreground);
 }
 
 .legal-document-navigation button:focus-visible {
@@ -382,5 +387,87 @@
 @media (max-width: 560px) {
     .legal-identity-card {
         grid-template-columns: 1fr;
+    }
+}
+
+/* The shared page header owns its desktop size and account action policy.
+   Navigation is already in normal flow; no second header offset is reserved. */
+@media (min-width: 1024px) {
+    .desktop-store-layout .page.subpage > .subpage-header {
+        display: flex;
+        position: static;
+        width: 100%;
+        height: auto;
+        min-height: var(--experience-control-min);
+        margin: 0 0 16px;
+        padding: 0;
+        gap: 14px;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+        color: var(--text);
+    }
+    .desktop-store-layout .subpage-header > strong {
+        display: block;
+        flex: 1;
+        text-align: left;
+        font-size: 24px;
+        font-weight: 500;
+        opacity: 1;
+    }
+    .desktop-store-layout .subpage-header > button {
+        position: static;
+        display: flex;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        width: auto;
+        min-width: var(--experience-control-min);
+        min-height: var(--experience-control-min);
+        height: auto;
+        padding: 6px;
+        background: transparent;
+        border: 0;
+        color: var(--muted);
+    }
+    .desktop-store-layout .subpage-header button svg {
+        width: 20px;
+        height: 20px;
+    }
+    .desktop-store-layout .subpage-header-actions {
+        display: flex;
+        min-height: 0;
+        gap: 8px;
+        flex: none;
+    }
+    .desktop-store-layout .subpage-header-actions > button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: auto;
+        min-height: var(--experience-control-min);
+        padding: 0 14px;
+        white-space: nowrap;
+        color: var(--accent);
+        border: 0;
+        background: var(--control-surface);
+        border-radius: var(--skin-control-radius);
+    }
+    .desktop-store-layout .subpage-header[data-action-visibility='mobile'] > .subpage-header-actions,
+    .desktop-store-layout .subpage-header-actions:empty {
+        display: none;
+    }
+    .desktop-account-layout .page.subpage > .subpage-header {
+        justify-content: flex-end;
+    }
+    .desktop-account-layout .page.subpage > .subpage-header:not([data-desktop-actions]) {
+        display: none;
+    }
+    .desktop-account-layout .subpage-header > :is(button:first-child, strong) {
+        display: none;
+    }
+    .desktop-account-layout .subpage-header-actions {
+        margin-left: auto;
     }
 }

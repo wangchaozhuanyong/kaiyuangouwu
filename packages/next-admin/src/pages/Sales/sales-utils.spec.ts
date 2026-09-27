@@ -14,12 +14,10 @@ describe('payment method labels', () => {
         expect(getPaymentMethodLabel('controlled-test-payment-31', '银行卡')).toBe('测试支付（模拟付款）');
     });
 
-    it('uses configured names for other methods and preserves unknown identifiers', () => {
+    it('uses configured names and safe labels for unknown methods', () => {
         expect(getPaymentMethodLabel('bank-transfer', '银行转账')).toBe('银行转账');
-        expect(getPaymentMethodLabel('controlled-test-payment-provider')).toBe(
-            'controlled-test-payment-provider',
-        );
-        expect(getPaymentMethodLabel('legacy-payment')).toBe('legacy-payment');
+        expect(getPaymentMethodLabel('controlled-test-payment-provider')).toBe('内部测试支付');
+        expect(getPaymentMethodLabel('legacy-payment')).toBe('其他支付方式');
         expect(getPaymentMethodLabel('')).toBe('未标注支付方式');
     });
 });

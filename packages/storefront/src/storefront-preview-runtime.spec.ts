@@ -149,6 +149,7 @@ describe('storefront preview runtime', () => {
         installStorefrontPreviewRuntime();
 
         const { data } = await (await window.fetch('/shop-api', { method: 'POST' })).json();
+        expect(data.storefrontProductReviews).toEqual({ items: [], totalItems: 0, averageRating: 0 });
         expect(data.myStorefrontReviews).toEqual([]);
         expect(data.myStorefrontReviewCandidates).toHaveLength(1);
         expect(data.myStorefrontReviewCandidates[0].orderLineId).toBe('qa-review-line');

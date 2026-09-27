@@ -1,6 +1,7 @@
 import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
 import { AlertCircle, CheckCircle2, Copy, Languages, LoaderCircle, Trash2 } from 'lucide-react';
 import { useState, type Dispatch, type SetStateAction } from 'react';
+import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
@@ -736,7 +737,7 @@ export function ProvisionStoreDialog({
                 onClose={onClose}
             >
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                    <div className="text-xs text-emerald-700">Channel</div>
+                    <div className="text-xs text-emerald-700">店铺</div>
                     <div className="mt-1 font-mono font-bold text-emerald-900">{result.channelCode}</div>
                 </div>
                 <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -832,8 +833,9 @@ export function ProvisionStoreDialog({
                         <option value="">请选择要复制配置的现有店铺</option>
                         {templates.map(template => (
                             <option key={template.id} value={template.id}>
-                                {getChannelDisplayName(template)} · {template.defaultLanguageCode} /{' '}
-                                {template.defaultCurrencyCode}
+                                {getChannelDisplayName(template)} ·{' '}
+                                {systemFieldDisplayLabel('defaultLanguageCode', template.defaultLanguageCode)}{' '}
+                                / {template.defaultCurrencyCode}
                             </option>
                         ))}
                     </select>

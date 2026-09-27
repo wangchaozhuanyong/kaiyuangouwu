@@ -1,5 +1,6 @@
 import { GripVertical } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { storefrontBlockDisplayName } from './storefront-content-utils';
 import type { StorefrontHomepageRow } from './storefront-homepage-order';
 
 type Placement = 'before' | 'after';
@@ -43,8 +44,7 @@ export function StorefrontFloorList({
                 拖动手柄到目标楼层上方或下方，松开后自动保存。也可聚焦手柄使用上下方向键排序。
             </p>
             {rows.map((row, index) => {
-                const name =
-                    row.key === 'carousel' ? '首页轮播' : row.blocks[0].internalName || row.blocks[0].code;
+                const name = row.key === 'carousel' ? '首页轮播' : storefrontBlockDisplayName(row.blocks[0]);
                 return (
                     <div
                         key={row.key}

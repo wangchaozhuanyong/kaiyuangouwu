@@ -11,6 +11,7 @@ import {
     User,
 } from 'lucide-react';
 import { useState } from 'react';
+import { getSystemLabel } from '../../../../common/src/display-localization';
 import { sensitiveActionContext } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -376,7 +377,16 @@ function ProfileContent({
                                                 className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs"
                                             >
                                                 <span className="font-bold text-slate-700">
-                                                    {method.strategy === 'native' ? '密码' : method.strategy}
+                                                    {getSystemLabel(
+                                                        method.strategy,
+                                                        {
+                                                            native: '密码',
+                                                            google: '谷歌账户',
+                                                            facebook: '脸书账户',
+                                                        },
+                                                        'zh',
+                                                        'type',
+                                                    )}
                                                 </span>
                                                 <span className="text-[11px] text-slate-400">
                                                     {formatDateTime(method.createdAt)}
@@ -402,7 +412,7 @@ function ProfileContent({
                                         profile.user.roles.map(role => (
                                             <span
                                                 key={role.id}
-                                                title={role.code}
+                                                title={getRoleLabel(role)}
                                                 className="rounded-md bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700"
                                             >
                                                 {getRoleLabel(role)}

@@ -3,12 +3,10 @@ import {
     Check,
     ChevronRight,
     CircleCheck,
-    Clock3,
     Download,
     Flame,
     Headphones,
     LayoutGrid,
-    Package,
     RotateCcw,
     Sparkles,
     Store,
@@ -45,6 +43,8 @@ import {
     contentStringArraySetting,
     formatMoney,
     productImage,
+    ProductImagePlaceholder,
+    productImageUnavailableLabel,
     SafeImage,
     trimText,
 } from './product-display';
@@ -289,24 +289,23 @@ export function FlashSaleSection({
             <SectionHeader
                 kind="flash-sale"
                 title={title}
-                action={onMore ? (isZh ? '更多' : 'More') : undefined}
-                onAction={onMore}
-                endContent={
+                titleSuffix={
                     countdown ? (
-                        <div
+                        <span
                             className="flash-sale-countdown"
                             role="timer"
-                            aria-label={isZh ? '距结束' : 'Ends in'}
+                            aria-label={`${isZh ? '距结束' : 'Ends in'} ${countdown}`}
                         >
-                            <Clock3 aria-hidden="true" />
                             <span className="flash-sale-countdown-label">{isZh ? '距结束' : 'Ends in'}</span>
                             <strong>{countdown}</strong>
-                        </div>
-                    ) : null
+                        </span>
+                    ) : undefined
                 }
+                action={onMore ? (isZh ? '更多' : 'More') : undefined}
+                onAction={onMore}
             />
             <div
-                className={`flash-sale-grid${layout === 'grid' ? ' is-expanded' : ''}`}
+                className={`flash-sale-grid${layout === 'grid' ? ' is-expanded' : ' desktop-product-rail'}`}
                 aria-label={
                     isZh ? `秒杀商品，共 ${items.length} 件` : `Flash-sale products, ${items.length} items`
                 }
@@ -324,6 +323,7 @@ export function FlashSaleSection({
                             aria-label={`${isZh ? '查看秒杀商品' : 'View flash-sale product'} ${item.productName}`}
                         >
                             <FlashSaleImage
+                                language={language}
                                 imageUrl={item.imageUrl}
                                 productName={item.productName}
                                 index={index}
@@ -358,12 +358,14 @@ export function FlashSaleSection({
 }
 
 function FlashSaleImage({
+    language,
     imageUrl,
     productName,
     index,
     layout,
     badge,
 }: {
+    language: StorefrontLanguage;
     imageUrl: string | null;
     productName: string;
     index: number;
@@ -401,19 +403,18 @@ function FlashSaleImage({
                 <SafeImage
                     src={imageUrl}
                     alt={productName}
+                    fallbackLabel={productImageUnavailableLabel(language)}
                     imageKind={layout === 'carousel' ? 'thumbnail' : 'card'}
                     sizes={
                         layout === 'carousel'
-                            ? '(min-width: 420px) 126px, 30vw'
+                            ? '(min-width: 1024px) 220px, (min-width: 420px) 126px, 30vw'
                             : '(min-width: 1024px) 220px, (min-width: 420px) 160px, 42vw'
                     }
                     loading={preload ? 'eager' : 'lazy'}
                     fetchPriority={index < 2 ? 'high' : 'auto'}
                 />
             ) : (
-                <span className="image-placeholder" aria-hidden="true">
-                    <Package />
-                </span>
+                <ProductImagePlaceholder language={language} />
             )}
             <em>{badge}</em>
         </span>

@@ -1,4 +1,4 @@
-import { LayoutGrid } from 'lucide-react';
+import { Check, LayoutGrid } from 'lucide-react';
 
 import allCategoriesIcon from '../../assets/icons/catalog-directory-color.webp';
 import allProductsIcon from '../../assets/icons/catalog-products-color.webp';
@@ -90,7 +90,7 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
                                                 src={image}
                                                 alt=""
                                                 imageKind="icon"
-                                                sizes="32px"
+                                                sizes="28px"
                                                 loading="eager"
                                             />
                                         ) : (
@@ -141,17 +141,25 @@ export function DesktopSubcategoryNavigation() {
         <aside className="desktop-subcategory-sidebar" aria-label={isZh ? '子分类' : 'Subcategories'}>
             <strong>{activeCollection.name}</strong>
             <nav aria-label={isZh ? `选择${activeCollection.name}分类` : `Choose ${activeCollection.name}`}>
-                <button type="button" aria-pressed={!activeChild} onClick={() => update({ childId: 'all' })}>
-                    {isZh ? `全部${activeCollection.name}` : `All ${activeCollection.name}`}
+                <button
+                    type="button"
+                    title={isZh ? `全部${activeCollection.name}` : `All ${activeCollection.name}`}
+                    aria-pressed={!activeChild}
+                    onClick={() => update({ childId: 'all' })}
+                >
+                    <span>{isZh ? `全部${activeCollection.name}` : `All ${activeCollection.name}`}</span>
+                    {!activeChild ? <Check aria-hidden="true" /> : null}
                 </button>
                 {activeCollection.children.map(child => (
                     <button
                         key={child.id}
                         type="button"
+                        title={child.name}
                         aria-pressed={activeChild?.id === child.id}
                         onClick={() => update({ childId: child.id })}
                     >
-                        {child.name}
+                        <span>{child.name}</span>
+                        {activeChild?.id === child.id ? <Check aria-hidden="true" /> : null}
                     </button>
                 ))}
             </nav>

@@ -397,7 +397,6 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             relations: { promotion: true, campaignConfig: true },
             order: { id: 'ASC' },
         });
-        if (selected) return this.toCustomerCouponView(ctx, selected);
         const now = new Date();
         const allPromotions = await this.promotionService.getActivePromotionsInChannel(ctx);
         const exhaustedPromotionIds = await this.promotionService.getExhaustedPromotionIds(
@@ -427,7 +426,6 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             const where = {
                 channelId: ctx.channelId,
                 customerId: customer.id,
-                status: In(usableCustomerCouponStatuses),
                 validFrom: LessThanOrEqual(now),
                 promotion: { enabled: true, deletedAt: IsNull() },
                 campaignConfig: { channelId: ctx.channelId },
@@ -435,8 +433,10 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             };
             const candidates = await this.connection.getRepository(ctx, CustomerCoupon).find({
                 where: [
-                    { ...where, validUntil: IsNull() },
-                    { ...where, validUntil: MoreThan(now) },
+                    { ...where, status: In(usableCustomerCouponStatuses), validUntil: IsNull() },
+                    { ...where, status: In(usableCustomerCouponStatuses), validUntil: MoreThan(now) },
+                    { ...where, status: 'LOCKED', lockedOrderId: order.id, validUntil: IsNull() },
+                    { ...where, status: 'LOCKED', lockedOrderId: order.id, validUntil: MoreThan(now) },
                 ],
                 relations: { promotion: true, campaignConfig: true },
                 order: { id: 'ASC' },
@@ -468,7 +468,14 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             }
         }
 
-        return best ? this.apply(ctx, best.coupon.id) : null;
+        if (best) {
+            if (selected && idsAreEqual(selected.id, best.coupon.id)) {
+                return this.toCustomerCouponView(ctx, selected);
+            }
+            return this.apply(ctx, best.coupon.id);
+        }
+        if (selected) await this.remove(ctx, selected.id);
+        return null;
     }
 
     async remove(ctx: RequestContext, customerCouponId: ID): Promise<StoreCustomerCouponView> {

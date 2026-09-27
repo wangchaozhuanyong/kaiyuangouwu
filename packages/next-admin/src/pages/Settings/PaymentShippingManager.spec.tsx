@@ -44,6 +44,7 @@ const data = {
                 id: 'shipping-1',
                 code: 'test-shipping',
                 name: '测试配送',
+                translations: [{ languageCode: 'zh_Hans', name: '测试配送', description: '用于测试运费' }],
                 description: '用于测试运费',
                 calculator: { code: 'test-calculator' },
                 fulfillmentHandlerCode: 'test-fulfillment-handler',

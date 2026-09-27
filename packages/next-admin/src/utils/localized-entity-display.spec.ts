@@ -33,8 +33,14 @@ describe('localized entity display', () => {
         expect(getLocalizedEntityDescription(chineseOnly, 'en')).toBe('');
     });
 
-    it('uses the API-resolved field when a lightweight query omits translations', () => {
-        expect(getLocalizedEntityName({ name: '上门自提' }, 'zh_Hans')).toBe('上门自提');
+    it('requires explicit response-language metadata for lightweight queries', () => {
+        expect(getLocalizedEntityName({ name: 'English fallback' }, 'zh_Hans')).toBe('未填写中文名称');
+        expect(getLocalizedEntityName({ name: 'English fallback', translations: [] }, 'zh_Hans')).toBe(
+            '未填写中文名称',
+        );
+        expect(getLocalizedEntityName({ name: '上门自提', languageCode: 'zh_Hans' }, 'zh_Hans')).toBe(
+            '上门自提',
+        );
     });
 
     it('returns the exact translation for locale-aware editors', () => {

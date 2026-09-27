@@ -21,7 +21,10 @@ export class CartCouponCommandAdapter implements OnModuleInit {
     onModuleInit(): void {
         this.commands.register('coupon', async (ctx, input, cart) => {
             const command = input as CouponCommand;
-            if (command.action === 'BEST') return this.coupons.applyBest(ctx);
+            if (command.action === 'BEST') {
+                // BEST can release an ineligible coupon and return null. Refresh the cart projection either way.
+                return (await this.coupons.applyBest(ctx)) ?? {};
+            }
             if (command.action === 'APPLY' && command.couponId)
                 return this.coupons.apply(ctx, command.couponId);
             if (command.action === 'REMOVE' && command.couponId)

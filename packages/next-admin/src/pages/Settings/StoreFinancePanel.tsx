@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { CircleDollarSign, RefreshCw, Save, ShieldCheck, WalletCards } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 
 import { sensitiveActionContext } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -263,7 +264,8 @@ export function CurrencyAndRatesPanel() {
                     <strong className="block text-slate-900">CNY/MYR</strong>1 CNY ={' '}
                     {configuration.cnyToMyrRate.toFixed(4)} MYR
                     <br />
-                    {configuration.rateSource ?? '尚未采集'} · {date(configuration.rateUpdatedAt)}
+                    {systemFieldDisplayLabel('rateSource', configuration.rateSource) ?? '尚未采集'} ·{' '}
+                    {date(configuration.rateUpdatedAt)}
                 </p>
                 <p>
                     <strong className="block text-slate-900">USDT</strong>CNY{' '}
@@ -403,9 +405,7 @@ export function StoreUsdtPanel() {
                             key={`${item.paymentMethodCode}:${item.currencyCode}`}
                             className="rounded-lg border border-slate-200 p-3 text-xs"
                         >
-                            <strong title={`系统标识：${item.paymentMethodCode}`}>
-                                {storePaymentMethodLabel(item.paymentMethodCode)}
-                            </strong>
+                            <strong>{storePaymentMethodLabel(item.paymentMethodCode)}</strong>
                             <span className="ml-2 text-slate-500">{item.currencyCode}</span>
                             <b className="mt-2 block text-lg">
                                 {formatMoney(item.netAmount, item.currencyCode)}
@@ -430,10 +430,8 @@ export function StoreUsdtPanel() {
                             <span>
                                 <strong>订单 {intent.orderCode}</strong>
                                 <small className="ml-2 text-slate-500">
-                                    <span title={`系统状态：${intent.status}`}>
-                                        {storeUsdtPaymentIntentStatusLabel(intent.status)}
-                                    </span>{' '}
-                                    · {formatDateTime(intent.createdAt)}
+                                    <span>{storeUsdtPaymentIntentStatusLabel(intent.status)}</span> ·{' '}
+                                    {formatDateTime(intent.createdAt)}
                                 </small>
                                 <span className="mt-1 block font-mono text-[10px] text-slate-500">
                                     {intent.transactionId ?? '尚无交易号'}

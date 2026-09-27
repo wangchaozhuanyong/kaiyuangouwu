@@ -53,6 +53,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { getSystemLabel, serviceMessageDisplay } from '../../../common/src/display-localization';
+
 import {
     AutoCardConfigRecord,
     AutoCardDeliveryRecord,
@@ -1021,7 +1023,7 @@ function DeliveryTable({
                                 <StatusBadge state={delivery.state} text={text} />
                                 {delivery.lastError && (
                                     <div className="mt-1 max-w-64 text-xs text-destructive">
-                                        {delivery.lastError}
+                                        {serviceMessageDisplay(delivery.lastError, 'zh')}
                                     </div>
                                 )}
                             </TableCell>
@@ -1088,7 +1090,7 @@ function stateLabel(state: string, text: AutoCardText): string {
         SENT: text.sent,
         MANUAL_REVIEW: text.manualReview,
     };
-    return labels[state] ?? state;
+    return getSystemLabel(state, labels, 'zh', 'status');
 }
 
 function draftFromConfig(config: AutoCardConfigRecord): ConfigDraft {

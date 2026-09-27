@@ -465,6 +465,12 @@ html[data-storefront-preset='modern-oriental'] {
         object-position: center;
     }
 
+    /* The existing original-image preset preserves logos and artwork on phones too. */
+    .hero.hero-image-overlay .hero-scene-wrapper.is-original-image .hero-rich-backdrop {
+        object-fit: contain;
+        object-position: right bottom;
+    }
+
     .hero.hero-image-overlay .hero-rich-content {
         position: relative;
         top: auto;

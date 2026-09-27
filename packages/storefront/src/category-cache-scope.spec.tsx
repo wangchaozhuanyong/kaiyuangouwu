@@ -23,7 +23,10 @@ it('shows a trusted catalog count or a count-free apply action', () => {
     expect(categoryFilterActionLabel('en', null)).toBe('Apply filters');
 });
 
-it('queries the complete catalog when the route has no category filters', async () => {
+it.each([
+    { language: 'zh', name: '马来西亚特色食品与日常生活用品' },
+    { language: 'en', name: 'Everyday essentials and travel accessories' },
+])('queries the complete catalog and preserves the $language category label', async ({ language, name }) => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const container = document.createElement('div');
     const root = createRoot(container);
@@ -38,13 +41,13 @@ it('queries the complete catalog when the route has no category filters', async 
                             {
                                 api,
                                 products: [],
-                                collections: [],
+                                collections: [{ id: 'long-category', name, children: [] }],
                                 contentBlocks: [],
                                 loading: false,
                                 error: null,
                                 market: { code: 'my-malaysia', currencyCode: 'MYR' },
                                 locale: 'en-MY',
-                                language: 'en',
+                                language,
                                 activeCollectionId: 'all',
                                 activeChildId: 'all',
                                 sortMode: 'recommended',
@@ -72,7 +75,7 @@ it('queries the complete catalog when the route has no category filters', async 
             collectionId: undefined,
             sort: 'recommended',
         });
-        expect(container.textContent).toContain('All');
+        expect(container.querySelectorAll('.primary-category-label')[1]?.textContent).toBe(name);
     } finally {
         act(() => root.unmount());
         client.clear();

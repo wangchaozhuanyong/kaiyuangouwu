@@ -8,7 +8,9 @@ import {
 import { type StorefrontVisualPresetId } from '../../../storefront-content-plugin/src/visual-presets';
 import { productDescriptionText } from '../rich-text';
 import { NEUTRAL_STOREFRONT_IMAGE, NEUTRAL_STOREFRONT_SOCIAL_IMAGE } from '../storefront-images';
+import { storefrontDocumentUrl } from '../storefront-preview-parameters';
 import { type RouteName, type RouteState } from '../storefront-router';
+import { cacheStorefrontTheme } from '../storefront-theme-cache';
 import { productImage, setMetaContent, trimText } from '../storefront-utils';
 import { cacheLogoUrl } from '../StorefrontErrorBoundary';
 import { type Product, type StorefrontConfig } from '../types';
@@ -16,8 +18,10 @@ import { type Product, type StorefrontConfig } from '../types';
 export function useStorefrontBrandColors(
     config: StorefrontConfig | undefined,
     presetId: StorefrontVisualPresetId = 'classic',
+    options: { ready: boolean; cache: boolean } = { ready: true, cache: false },
 ) {
     useLayoutEffect(() => {
+        if (!options.ready) return;
         const root = document.documentElement;
         const palette = resolveStorefrontSemanticPalette(presetId, {
             backgroundColor: config?.brandBackgroundColor,
@@ -38,6 +42,9 @@ export function useStorefrontBrandColors(
         root.style.setProperty('color-scheme', colorScheme);
         if (themeColorMeta) themeColorMeta.content = palette.page;
         if (colorSchemeMeta) colorSchemeMeta.content = colorScheme;
+        root.removeAttribute('data-storefront-theme-pending');
+        if (options.cache && config?.code)
+            cacheStorefrontTheme(config.code, presetId, semanticPaletteCssVariables(palette));
         return () => {
             for (const property of Object.keys(colors)) root.style.removeProperty(property);
             if (previousColorScheme) root.style.setProperty('color-scheme', previousColorScheme);
@@ -48,7 +55,7 @@ export function useStorefrontBrandColors(
                 colorSchemeMeta.content = previousMetaColorScheme;
             }
         };
-    }, [config, presetId]);
+    }, [config, presetId, options.ready, options.cache]);
 }
 
 export function useStorefrontMetadata({
@@ -122,7 +129,7 @@ export function useStorefrontMetadata({
                 ? trimText(productDescriptionText(selectedProduct.description), 150)
                 : storeSummary;
         const imagePath = storefrontShareImage(route.name, selectedProduct, logoUrl);
-        const image = new URL(imagePath, window.location.origin).href;
+        const image = new URL(imagePath, storefrontDocumentUrl()).href;
         const imageAlt =
             route.name === 'product' && selectedProduct
                 ? selectedProduct.name
@@ -130,7 +137,7 @@ export function useStorefrontMetadata({
                   ? `${storefrontName}精选商品`
                   : `Featured products from ${storefrontName}`;
         const isIndexable = false;
-        const canonicalUrl = new URL(window.location.href);
+        const canonicalUrl = new URL(storefrontDocumentUrl());
         canonicalUrl.hash = '';
         if (!isIndexable) canonicalUrl.search = '';
 

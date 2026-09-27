@@ -4,7 +4,8 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { isImageAlreadyDecoded } from './safe-image';
+import { IMAGE_WAIT_EXPIRED_EVENT } from './image-readiness';
+import { ImagePlaceholder, isImageAlreadyDecoded } from './safe-image';
 import { SafeImage } from './storefront-ui/product-display';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -22,6 +23,194 @@ function requiredImage(host: ParentNode): HTMLImageElement {
 }
 
 describe('SafeImage', () => {
+    it.each([
+        ['zh', '图片暂时无法显示'],
+        ['en', 'Image temporarily unavailable'],
+    ] as const)('distinguishes loading, failed and replaced images in %s', (language, label) => {
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() =>
+                root.render(<SafeImage src="/missing-state-image.png" alt="Product" language={language} />),
+            );
+            expect(host.querySelector('[data-image-state=loading]')).not.toBeNull();
+            expect(host.querySelector('.image-status-label')).toBeNull();
+            act(() => {
+                requiredImage(host).dispatchEvent(new Event('error'));
+            });
+            expect(host.querySelector('[data-image-state=error]')).not.toBeNull();
+            expect(host.querySelector('.image-status-label')?.textContent).toBe(label);
+            expect(host.querySelector('[role=img]')?.getAttribute('aria-label')).toContain(label);
+
+            const nextLanguage = language === 'zh' ? 'en' : 'zh';
+            act(() =>
+                root.render(
+                    <SafeImage src="/missing-state-image.png" alt="Product" language={nextLanguage} />,
+                ),
+            );
+            expect(host.querySelector('.image-status-label')?.textContent).not.toBe(label);
+            act(() =>
+                root.render(
+                    <SafeImage src="/replacement-state-image.png" alt="Product" language={language} />,
+                ),
+            );
+            expect(host.querySelector('[data-image-state=loading]')).not.toBeNull();
+            expect(host.querySelector('.image-status-label')).toBeNull();
+        } finally {
+            act(() => root.unmount());
+        }
+    });
+
+    it('keeps compact missing media accessible without fitting copy into a tiny thumbnail', () => {
+        const markup = renderToStaticMarkup(<ImagePlaceholder compact alt="商品" language="zh" />);
+        expect(markup).toContain('商品 · 暂无商品图片');
+        expect(markup).not.toContain('image-status-label');
+    });
+
+    it('gives a late-promoted lazy image its own network deadline', async () => {
+        vi.useFakeTimers();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() => root.render(<SafeImage src="/below-fold.png" alt="Product" loading="lazy" />));
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(60_000);
+            });
+            expect(requiredImage(host).getAttribute('src')).toBe('/below-fold.png');
+            expect(host.querySelector('[data-safe-image=timeout]')).toBeNull();
+            act(() => {
+                const image = requiredImage(host);
+                image.loading = 'eager';
+                image.dispatchEvent(new Event(IMAGE_WAIT_EXPIRED_EVENT));
+            });
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(14_999);
+            });
+            expect(requiredImage(host).getAttribute('src')).toBe('/below-fold.png');
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(1);
+            });
+            expect(host.querySelector('img')).toBeNull();
+        } finally {
+            act(() => root.unmount());
+            vi.useRealTimers();
+        }
+    });
+
+    it('does not expire a lazy image which has not been promoted into page loading', async () => {
+        vi.useFakeTimers();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() => root.render(<SafeImage src="/below-fold.png" alt="Product" loading="lazy" />));
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(60_000);
+            });
+            expect(requiredImage(host).getAttribute('src')).toBe('/below-fold.png');
+            expect(host.querySelector('[data-safe-image=timeout]')).toBeNull();
+        } finally {
+            act(() => root.unmount());
+            vi.useRealTimers();
+        }
+    });
+    it('clears the previous deadline when the image source changes', async () => {
+        vi.useFakeTimers();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() =>
+                root.render(<SafeImage src="/previous.png" alt="Product" srcSet="/previous-large.png 2x" />),
+            );
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(10_000);
+            });
+            act(() =>
+                root.render(<SafeImage src="/current.png" alt="Product" srcSet="/current-large.png 2x" />),
+            );
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(5_100);
+            });
+            expect(requiredImage(host).getAttribute('src')).toBe('/current.png');
+            const image = requiredImage(host);
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(10_000);
+            });
+            expect(host.querySelector('img')).toBeNull();
+            expect(image.hasAttribute('srcset')).toBe(false);
+        } finally {
+            act(() => root.unmount());
+            vi.useRealTimers();
+        }
+    });
+    it('releases the stalled responsive image preload while keeping other preloads', async () => {
+        vi.useFakeTimers();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const matching = document.createElement('link');
+        const unrelated = document.createElement('link');
+        matching.rel = unrelated.rel = 'preload';
+        matching.setAttribute('as', 'image');
+        unrelated.setAttribute('as', 'image');
+        matching.href = '/default-preload.png';
+        matching.setAttribute('imagesrcset', '/selected-preload.png 2x');
+        unrelated.href = '/next-route.png';
+        document.head.append(matching, unrelated);
+        try {
+            act(() =>
+                root.render(
+                    <SafeImage src="/small-preload.png" srcSet="/selected-preload.png 2x" alt="Product" />,
+                ),
+            );
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(15_000);
+            });
+            expect(matching.isConnected).toBe(false);
+            expect(unrelated.isConnected).toBe(true);
+            expect(host.querySelector('img')).toBeNull();
+        } finally {
+            act(() => root.unmount());
+            matching.remove();
+            unrelated.remove();
+            vi.useRealTimers();
+        }
+    });
+
+    it('shows a product-image message only after all image sources fail and clears it for a replacement', () => {
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() =>
+                root.render(
+                    <SafeImage
+                        src="/broken-product.png"
+                        fallbackSrc="/backup-product.png"
+                        alt="商品"
+                        fallbackLabel="暂无商品图"
+                    />,
+                ),
+            );
+            expect(host.textContent).not.toContain('暂无商品图');
+            act(() => {
+                requiredImage(host).dispatchEvent(new Event('error'));
+            });
+            expect(host.textContent).not.toContain('暂无商品图');
+            act(() => {
+                requiredImage(host).dispatchEvent(new Event('error'));
+            });
+            expect(host.textContent).toContain('暂无商品图');
+            expect(host.querySelector('[role=img]')?.getAttribute('aria-label')).toBe('商品 · 暂无商品图');
+
+            act(() =>
+                root.render(
+                    <SafeImage src="/replacement-product.png" alt="商品" fallbackLabel="暂无商品图" />,
+                ),
+            );
+            expect(host.textContent).not.toContain('暂无商品图');
+            expect(requiredImage(host).getAttribute('src')).toBe('/replacement-product.png');
+        } finally {
+            act(() => root.unmount());
+        }
+    });
     it('does not mark a failed decode as loaded or cache a broken image', async () => {
         const decode = vi
             .spyOn(HTMLImageElement.prototype, 'decode')
@@ -232,7 +421,9 @@ describe('SafeImage', () => {
             });
             expect(host.querySelector<HTMLElement>('[data-safe-image=error]')?.style.minHeight).toBe('240px');
             expect(host.querySelector('.safe-image-fallback')).not.toBeNull();
-            expect(host.querySelector('[role=img]')?.getAttribute('aria-label')).toBe('Product');
+            expect(host.querySelector('[role=img]')?.getAttribute('aria-label')).toBe(
+                'Product · 图片暂时无法显示',
+            );
         } finally {
             act(() => root.unmount());
         }

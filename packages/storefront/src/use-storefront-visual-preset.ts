@@ -9,6 +9,8 @@ import {
 
 import { type ShopApi } from './api';
 import { STOREFRONT_CONFIG_REFRESH_INTERVAL, storefrontQueryKeys } from './query-client';
+import { storefrontPreviewParameters } from './storefront-preview-parameters';
+import { restoredStorefrontTheme } from './storefront-theme-cache';
 import { type MarketConfig } from './types';
 
 export function applyStorefrontVisualPreset(root: HTMLElement, value: unknown): () => void {
@@ -35,8 +37,11 @@ export function useStorefrontVisualPreset(
     // The preview iframe is remounted for a skin switch; internal SPA navigation
     // must not discard its selected skin when the route drops query parameters.
     const [previewPreset] = useState(() =>
-        typeof window === 'undefined' ? null : readStorefrontPreviewPreset(window.location.search),
+        typeof window === 'undefined'
+            ? null
+            : readStorefrontPreviewPreset(storefrontPreviewParameters().toString()),
     );
+    const [restoredTheme] = useState(restoredStorefrontTheme);
     const query = useQuery({
         queryKey: [
             ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), languageCode),
@@ -49,19 +54,16 @@ export function useStorefrontVisualPreset(
         // Do not persist a style selection under an unverified store context.
     });
     // Theme loading stays independent of route rendering, so slow requests never unmount a form.
-    const presetId =
-        previewPreset ?? normalizeStorefrontVisualPreset(enabled ? query.data?.presetId : undefined);
+    const restoredPreset =
+        restoredTheme && (!enabled || restoredTheme.channelCode === market.code)
+            ? restoredTheme.presetId
+            : undefined;
+    const presetId = previewPreset ?? normalizeStorefrontVisualPreset(query.data?.presetId ?? restoredPreset);
+    const ready = Boolean(previewPreset || (enabled && (query.data || query.isError || restoredPreset)));
     useLayoutEffect(() => {
+        if (!ready) return;
         const cleanup = applyStorefrontVisualPreset(document.documentElement, presetId);
-        if (!previewPreset && query.data?.presetId) {
-            try {
-                sessionStorage.setItem('__storefront_preset__', presetId);
-                localStorage.setItem('__storefront_preset__', presetId);
-            } catch {
-                // Storage may be unavailable in private browsing mode
-            }
-        }
         return cleanup;
-    }, [presetId, previewPreset, query.data?.presetId]);
-    return { presetId };
+    }, [presetId, ready]);
+    return { presetId, ready, cache: !previewPreset && Boolean(query.data) };
 }

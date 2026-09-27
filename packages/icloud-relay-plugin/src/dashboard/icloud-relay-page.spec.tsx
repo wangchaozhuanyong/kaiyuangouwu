@@ -174,7 +174,8 @@ describe('registered legacy iCloud dashboard', () => {
             await client.refetchQueries({ queryKey: ['icloud', 'primary'] });
             await vi.waitFor(() => expect(container.textContent).toContain('同步异常'));
         });
-        expect(container.textContent).toContain('connect ETIMEDOUT');
+        expect(container.textContent).toContain('服务暂时不可用，请稍后重试');
+        expect(container.textContent).not.toContain('connect ETIMEDOUT');
         expect(container.textContent).not.toContain('密码错误');
     });
 });

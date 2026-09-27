@@ -180,7 +180,7 @@
     padding: 16px;
     background: var(--surface, #ffffff);
     border-radius: var(--radius-md, 12px);
-    border: 1px solid var(--border-subtle, #e2e8f0);
+    border: 0;
 }
 
 .skeleton-studio-title {
@@ -255,6 +255,27 @@
 
 .list-skeleton b:last-child {
     width: 68%;
+}
+
+@media (min-width: 1024px) {
+    .skeleton-catalog-list,
+    .list-skeleton.is-product-grid {
+        padding: 0;
+        grid-template-columns: var(--desktop-product-tracks);
+        gap: 24px 16px;
+    }
+
+    .list-skeleton.is-product-grid > span {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto 22px 18px;
+    }
+
+    .list-skeleton.is-product-grid i {
+        grid-row: auto;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

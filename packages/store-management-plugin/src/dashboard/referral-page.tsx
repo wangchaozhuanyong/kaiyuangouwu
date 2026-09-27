@@ -57,6 +57,13 @@ import {
 } from 'lucide-react';
 import { ReactNode, useEffect, useState } from 'react';
 
+import { getSystemLabel } from '../../../common/src/display-localization';
+import {
+    eventTypeDisplayLabel,
+    referralStatusDisplayLabel as statusLabel,
+    systemFieldDisplayLabel,
+} from '../../../common/src/system-display-labels';
+
 import {
     ReferralCustomerRecord,
     ReferralCustomerWalletRecord,
@@ -1617,7 +1624,7 @@ function RelationshipReport({
                                     <Td>
                                         <code>{item.inviteCodeSnapshot}</code>
                                         <Badge className="ml-2" variant="outline">
-                                            {item.source}
+                                            {systemFieldDisplayLabel('source', item.source)}
                                         </Badge>
                                     </Td>
                                     <Td>{formatDate(item.boundAt)}</Td>
@@ -1781,7 +1788,7 @@ function LedgerReport({
                                 <Td>
                                     {formatDate(item.createdAt)}
                                     <Badge className="mt-1 block w-fit" variant="outline">
-                                        {item.eventType}
+                                        {eventTypeDisplayLabel(item.eventType)}
                                     </Badge>
                                 </Td>
                                 <Td>
@@ -2566,32 +2573,17 @@ function formatDate(value: string): string {
     }).format(new Date(value));
 }
 function posterLabel(value: string): string {
-    return (
-        (
-            {
-                BRAND_MINIMAL: '模钥简约',
-                BENEFIT_RED_GOLD: '冰川蓝光',
-                PRODUCT_STORY: '青空流线',
-                PREMIUM_DARK: '深海科技',
-                CLOUD_BRIDGE_ORBIT: '模钥轨道',
-            } as Record<string, string>
-        )[value] ?? value
-    );
-}
-function statusLabel(value: string): string {
-    return (
-        (
-            {
-                PENDING: '待处理',
-                APPROVED: '已批准',
-                PAID: '已打款',
-                REJECTED: '已驳回',
-                CANCELLED: '已取消',
-                AVAILABLE: '已生效',
-                PARTIALLY_REVERSED: '部分扣回',
-                REVERSED: '已扣回',
-            } as Record<string, string>
-        )[value] ?? value
+    return getSystemLabel(
+        value,
+        {
+            BRAND_MINIMAL: '模钥简约',
+            BENEFIT_RED_GOLD: '冰川蓝光',
+            PRODUCT_STORY: '青空流线',
+            PREMIUM_DARK: '深海科技',
+            CLOUD_BRIDGE_ORBIT: '模钥轨道',
+        } as Record<string, string>,
+        'zh',
+        'status',
     );
 }
 function errorMessage(error: unknown): string {

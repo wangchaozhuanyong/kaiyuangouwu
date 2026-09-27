@@ -9,7 +9,8 @@
 }
 
 .checkout-items article + article {
-    border-top: 1px solid var(--skin-divider);
+    margin-top: 8px;
+    border-top: 0;
 }
 
 .checkout-items article > :is(img, picture, .responsive-picture, .image-placeholder) {

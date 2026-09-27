@@ -21,6 +21,12 @@ import { CheckCircle2, RefreshCw, ShieldAlert, ShieldCheck, ShieldX } from 'luci
 import { useState } from 'react';
 
 import {
+    eventTypeDisplayLabel,
+    severityDisplayLabel,
+    systemStatusDisplayLabel,
+} from '../../../common/src/system-display-labels';
+
+import {
     GovernanceRiskResult,
     governanceRiskQuery,
     reviewFraudRiskCaseMutation,
@@ -330,10 +336,12 @@ function GovernanceRiskPage() {
                                             <Badge
                                                 variant={item.severity === 'P1' ? 'destructive' : 'secondary'}
                                             >
-                                                {item.severity}
+                                                {severityDisplayLabel(item.severity)}
                                             </Badge>
                                             <strong>{item.caseCode}</strong>
-                                            <Badge variant="outline">{item.status}</Badge>
+                                            <Badge variant="outline">
+                                                {systemStatusDisplayLabel(item.status)}
+                                            </Badge>
                                             <span className="text-xs text-muted-foreground">
                                                 {t(messages.score)} {item.riskScore} · {t(messages.order)}{' '}
                                                 {item.orderId ?? '—'} · {t(messages.due)}{' '}
@@ -411,7 +419,7 @@ function GovernanceRiskPage() {
                                 {(data?.governanceAuditEntries.items ?? []).map(item => (
                                     <div key={item.id} className="rounded border p-3 text-xs">
                                         <strong>
-                                            #{item.sequence} {item.eventType}
+                                            #{item.sequence} {eventTypeDisplayLabel(item.eventType)}
                                         </strong>
                                         <p className="mt-1 text-muted-foreground">
                                             {item.resourceType} {item.resourceId} · {item.actorLabel}

@@ -1,3 +1,7 @@
+import {
+    localizedDisplayFields,
+    translatedDisplayFieldNames,
+} from '@vendure/common/lib/display-localization';
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 
 import { DEFAULT_LANGUAGE_CODE } from '../../../common/constants';
@@ -80,13 +84,42 @@ export function translateEntity<T extends Translatable & VendureEntity>(
         Object.getPrototypeOf(translatable),
         Object.getOwnPropertyDescriptors(translatable),
     );
+    // Projection must never modify the source entity's localized custom fields.
+    if (translated.customFields) translated.customFields = { ...translated.customFields };
+
+    const requestedLanguage = Array.isArray(languageCode) ? languageCode[0] : languageCode;
+    // Routing identifiers retain the framework fallback chain. Human copy in Chinese and
+    // English is resolved exclusively from the first requested language, including empty fields.
+    const strictDisplayLanguage = /^(?:zh|en)(?:_|$)/iu.test(requestedLanguage);
+    const exact: (Translation<VendureEntity> & { customFields?: Record<string, unknown> }) | undefined =
+        translatable.translations.find(item => item.languageCode === requestedLanguage);
+    const displayProjection = strictDisplayLanguage
+        ? localizedDisplayFields(
+              translatable.translations,
+              requestedLanguage,
+              translatedDisplayFieldNames(translation),
+          )
+        : {};
 
     for (const [key, value] of Object.entries(translation)) {
+        if (Object.prototype.hasOwnProperty.call(displayProjection, key)) {
+            translated[key] = displayProjection[key];
+            continue;
+        }
         if (key === 'customFields') {
             if (!translated.customFields) {
                 translated.customFields = {};
             }
             const customFields = value as Record<string, any>;
+            if (strictDisplayLanguage) {
+                const exactFields = exact?.customFields;
+                for (const field of Object.keys(customFields))
+                    translated.customFields[field] =
+                        exactFields && Object.prototype.hasOwnProperty.call(exactFields, field)
+                            ? exactFields[field]
+                            : '';
+                continue;
+            }
             let needsFallback = false;
             for (const cfValue of Object.values(customFields)) {
                 if (cfValue === '' || cfValue == null) {
@@ -119,6 +152,8 @@ export function translateEntity<T extends Translatable & VendureEntity>(
             } else {
                 Object.assign(translated.customFields, customFields);
             }
+        } else if (key === 'languageCode' && strictDisplayLanguage) {
+            translated.languageCode = requestedLanguage;
         } else if (key !== 'base' && key !== 'id' && key !== 'createdAt' && key !== 'updatedAt') {
             if (key !== 'languageCode' && (value == null || value === '')) {
                 if (fallbackTranslations === undefined) {

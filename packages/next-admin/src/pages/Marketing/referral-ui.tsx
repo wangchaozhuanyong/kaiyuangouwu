@@ -1,12 +1,14 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import React from 'react';
+import { missingDisplayLabel } from '../../../../common/src/display-localization';
+import { referralStatusDisplayLabel as statusLabel } from '../../../../common/src/system-display-labels';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { ReferralPosterRecord, ReferralProgramRecord } from '../../graphql/marketing.graphql';
-import { getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney, majorInputToMoney } from '../Sales/sales-utils';
 import { PosterDraft, ProgramDraft, WithdrawalAction } from './referrals-types';
+export { statusLabel };
 
 export function TableCard({
     title,
@@ -433,27 +435,11 @@ export function signedMoney(value: string, currency: string, allowNegative: bool
     const absolute = majorInputToMoney(String(Math.abs(number)), currency);
     return absolute == null ? null : number < 0 ? -absolute : absolute;
 }
-export function statusLabel(value: string) {
-    return (
-        (
-            {
-                PENDING: '待处理',
-                APPROVED: '已批准',
-                PAID: '已打款',
-                REJECTED: '已驳回',
-                CANCELLED: '已取消',
-                AVAILABLE: '已生效',
-                PARTIALLY_REVERSED: '部分扣回',
-                REVERSED: '已扣回',
-            } as Record<string, string>
-        )[value] ?? getStatusLabel(value)
-    );
-}
 export function posterLabel(value: string, program?: ReferralProgramRecord) {
     return (
         [...(program?.systemPosterTemplateConfigs ?? []), ...(program?.posterTemplateConfigs ?? [])].find(
             template => template.id === value,
-        )?.name ?? value
+        )?.name ?? missingDisplayLabel('template')
     );
 }
 export function withdrawalActionLabel(status: WithdrawalAction['status']) {

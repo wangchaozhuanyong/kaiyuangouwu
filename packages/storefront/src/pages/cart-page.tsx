@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
-import { Check, ChevronRight, Minus, Package, ShoppingBag, TicketPercent } from 'lucide-react';
+import { Check, ChevronRight, Minus, ShoppingBag, TicketPercent } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { cartLineCanSelect, cartSelectionState } from '../product-availability';
@@ -9,7 +9,7 @@ import { CartPageContext } from '../storefront-page-contexts';
 import { routeHref, routeNavigateOptions, type RouteState } from '../storefront-router';
 import { CartGroup, CouponSheet } from '../storefront-ui/cart-ui';
 import { EmptyState, InlineError, ListSkeleton } from '../storefront-ui/page-shell';
-import { formatMoney } from '../storefront-ui/product-display';
+import { formatMoney, ProductImagePlaceholder } from '../storefront-ui/product-display';
 import { ProductSection } from '../storefront-ui/product-section';
 import {
     ActiveCustomer,
@@ -379,9 +379,7 @@ export function CartPage() {
                                         <div>
                                             {invalidLines.map(line => (
                                                 <article key={line.id}>
-                                                    <div className="image-placeholder">
-                                                        <Package />
-                                                    </div>
+                                                    <ProductImagePlaceholder language={language} />
                                                     <span>
                                                         <strong>
                                                             {line.productVariant?.name ??
@@ -556,6 +554,7 @@ export function CartPage() {
                     </div>
                     {!locked && (
                         <ProductSection
+                            desktopRail
                             title={isZh ? '顺手带一件' : 'Complete the order'}
                             subtitle={isZh ? '继续挑选好物' : 'Discover more products'}
                             subtitlePlacement="end"

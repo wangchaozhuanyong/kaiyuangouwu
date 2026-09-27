@@ -52,6 +52,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { serviceMessageDisplay } from '../../../common/src/display-localization';
+import { systemFieldDisplayLabel, systemStatusDisplayLabel } from '../../../common/src/system-display-labels';
 import {
     errorMessage,
     majorToMinor,
@@ -64,6 +66,14 @@ import {
     sameAdminConfig,
     toLocalDayBoundary,
 } from '../image-generation-dashboard.helpers';
+import {
+    billingModeZh,
+    providerPurposeZh,
+    routingStrategyZh,
+    skillReleaseName,
+    skillUseCaseZh,
+    statusZh,
+} from '../image-generation-display';
 
 import {
     ImageAdminConfigRecord,
@@ -636,7 +646,7 @@ function ImageGenerationSettingsPage() {
                                         </div>
                                         {model.healthMessage ? (
                                             <div className="text-xs text-muted-foreground">
-                                                {model.healthMessage}
+                                                {serviceMessageDisplay(model.healthMessage, 'zh')}
                                                 {model.lastTestedAt
                                                     ? ` · ${new Date(model.lastTestedAt).toLocaleString()}`
                                                     : ''}
@@ -1503,7 +1513,10 @@ function ImageGenerationSettingsPage() {
                                                         <Badge>{statusZh(item.state)}</Badge>
                                                         {item.errorMessage ? (
                                                             <div className="max-w-48 text-xs text-destructive">
-                                                                {item.errorMessage}
+                                                                {serviceMessageDisplay(
+                                                                    item.errorMessage,
+                                                                    'zh',
+                                                                )}
                                                             </div>
                                                         ) : null}
                                                     </td>
@@ -1685,8 +1698,17 @@ function ImageGenerationSettingsPage() {
                                                                                     event.at,
                                                                                 ).toLocaleString()}
                                                                             </td>
-                                                                            <td>{event.stage}</td>
-                                                                            <td>{event.status}</td>
+                                                                            <td>
+                                                                                {systemFieldDisplayLabel(
+                                                                                    'stage',
+                                                                                    event.stage,
+                                                                                )}
+                                                                            </td>
+                                                                            <td>
+                                                                                {systemStatusDisplayLabel(
+                                                                                    event.status,
+                                                                                )}
+                                                                            </td>
                                                                             <td>
                                                                                 {event.amount == null
                                                                                     ? '—'
@@ -1791,7 +1813,7 @@ function ImageGenerationSettingsPage() {
                                                     </div>
                                                     {item.errorMessage ? (
                                                         <div className="text-xs text-destructive">
-                                                            {item.errorMessage}
+                                                            {serviceMessageDisplay(item.errorMessage, 'zh')}
                                                         </div>
                                                     ) : null}
                                                 </td>
@@ -2472,7 +2494,7 @@ function PromptModelManager({
                             </div>
                             {config.healthMessage ? (
                                 <div className="text-xs text-muted-foreground">
-                                    {config.healthMessage}
+                                    {serviceMessageDisplay(config.healthMessage, 'zh')}
                                     {config.lastTestedAt
                                         ? ` · ${new Date(config.lastTestedAt).toLocaleString()}`
                                         : ''}
@@ -2780,7 +2802,12 @@ function ProviderCredentialList({
                                             <ProviderHealthBadge config={config} />
                                             <div
                                                 className="mt-1 truncate text-xs text-muted-foreground"
-                                                title={config.providerHealthMessage ?? undefined}
+                                                title={
+                                                    serviceMessageDisplay(
+                                                        config.providerHealthMessage,
+                                                        'zh',
+                                                    ) ?? undefined
+                                                }
                                             >
                                                 {providerHealthSummary(config)}
                                             </div>
@@ -3513,16 +3540,6 @@ function formatProviderDate(value?: string | null): string {
     return Number.isNaN(date.getTime()) ? '时间未知' : date.toLocaleString();
 }
 
-function providerPurposeZh(purpose: ImageProviderAdminConfigRecord['purpose']): string {
-    return (
-        {
-            BOTH: '提示词和生图',
-            PROMPT: '仅提示词',
-            IMAGE: '仅生图',
-        } as const
-    )[purpose];
-}
-
 function providerName(scope: ImageProviderAdminConfigRecord['scope']): string {
     return scope === 'OPENAI' ? 'Codex / GPT' : 'Gemini';
 }
@@ -3557,79 +3574,6 @@ function emptyCredential(code: string): ImageProviderAdminConfigRecord {
 
 function percentage(value: number): string {
     return `${(Math.max(0, Math.min(1, value)) * 100).toFixed(1)}%`;
-}
-
-function skillUseCaseZh(useCase: string): string {
-    return (
-        (
-            {
-                'product-photo': '商品摄影',
-                'ecommerce-poster': '电商海报',
-                portrait: '成人商业人像',
-                'interior-design': '室内设计',
-                illustration: '插画',
-                'reference-edit': '参考图编辑',
-            } as Record<string, string>
-        )[useCase] ?? useCase
-    );
-}
-
-function routingStrategyZh(strategy: string): string {
-    return (
-        (
-            {
-                BALANCED: '质量、速度与成本均衡',
-                QUALITY: '质量优先',
-                SPEED: '速度优先',
-                COST: '成本优先',
-                UNKNOWN: '未记录',
-            } as Record<string, string>
-        )[strategy] ?? strategy
-    );
-}
-
-function skillReleaseName(release: { createdAt: string; sourceHash: string }): string {
-    const date = release.createdAt.slice(0, 10) || '日期未知';
-    return `${date} · ${release.sourceHash.slice(0, 8)}`;
-}
-
-function statusZh(status: string): string {
-    return (
-        (
-            {
-                HEALTHY: '正常',
-                UNHEALTHY: '异常',
-                UNTESTED: '未测试',
-                UNCONFIGURED: '未配置',
-                COOLDOWN: '冷却中',
-                ACTIVE: '当前使用',
-                INACTIVE: '未启用',
-                PENDING: '待处理',
-                UNKNOWN: '结果待确认',
-                QUEUED: '排队中',
-                RUNNING: '生成中',
-                PARTIAL_SUCCESS: '部分成功',
-                SUCCEEDED: '成功',
-                FAILED: '失败',
-                CANCELLED: '已取消',
-            } as Record<string, string>
-        )[status] ?? status
-    );
-}
-
-function billingModeZh(mode: string): string {
-    return (
-        (
-            {
-                FREE: '免费',
-                PAID: '付费',
-                MIXED: '免费+付费',
-                PENDING: '待结算',
-                RELEASED: '已释放',
-                REFUNDED: '已退款',
-            } as Record<string, string>
-        )[mode] ?? mode
-    );
 }
 
 function Field({

@@ -1,5 +1,6 @@
 import { customFieldValuesFromEntity } from '../../custom-fields/custom-field-utils';
 import { type FulfillmentType } from '../../graphql/commerce.graphql';
+import { getLocalizedEntityTranslation } from '../../utils/localized-entity-display';
 import { hasDirectProductAssignment } from '../../utils/product-collection-assignment';
 import {
     serializeProductEditor,
@@ -13,14 +14,12 @@ export function productEditorDraft(
     productExtensionFields: Parameters<typeof customFieldValuesFromEntity>[0],
     workspaceVariants?: Array<{ id: string; purchaseCostMicrounits?: number | null }>,
 ): Parameters<typeof serializeProductEditor>[0] {
-    const sourceTranslation =
-        product.translations.find(translation => translation.languageCode === SOURCE_LANGUAGE_CODE) ??
-        product.translations[0];
+    const sourceTranslation = getLocalizedEntityTranslation(product.translations, SOURCE_LANGUAGE_CODE);
     return {
-        productName: sourceTranslation?.name || product.name || '',
+        productName: sourceTranslation?.name ?? '',
         slug: sourceTranslation?.slug || product.slug || '',
         enabled: product.enabled,
-        description: sourceTranslation?.description || product.description || '',
+        description: sourceTranslation?.description ?? '',
         fulfillmentType:
             fixedFulfillmentType ??
             (product.customFields?.fulfillmentType === 'physical' ? 'physical' : 'digital'),
@@ -51,12 +50,8 @@ export function productEditorDraft(
                 id: variant.id,
                 sku: variant.sku || '',
                 name:
-                    variant.translations.find(
-                        translation => translation.languageCode === SOURCE_LANGUAGE_CODE,
-                    )?.name ||
-                    variant.name ||
-                    sourceTranslation?.name ||
-                    product.name ||
+                    getLocalizedEntityTranslation(variant.translations, SOURCE_LANGUAGE_CODE)?.name ??
+                    sourceTranslation?.name ??
                     '',
                 price: (variant.price / 100).toFixed(2),
                 costPrice,
