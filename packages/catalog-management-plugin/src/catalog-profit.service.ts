@@ -1,4 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import {
+    CONTROLLED_TEST_PAYMENT_METHOD_SQL_LIKE,
+    isControlledTestPaymentMethod,
+} from '@vendure/common/lib/controlled-test-payment';
 import { CurrencyCode, Permission } from '@vendure/common/lib/generated-types';
 import {
     ForbiddenError,
@@ -20,7 +24,6 @@ const MAX_REPORT_DAYS = 366;
 const MAX_REPORT_ORDERS = 20_000;
 const MAX_EXPENSE_IMPORT_ROWS = 5_000;
 const SETTLED_STATE = 'Settled';
-const TEST_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|sandbox|test)(?:$|[-_\s])|测试/iu;
 
 export interface CatalogProfitReportInput {
     from: Date | string;
@@ -403,9 +406,15 @@ export class CatalogProfitService {
             .innerJoin('order.channels', 'reportChannel', 'reportChannel.id = :channelId', {
                 channelId: ctx.channelId,
             })
-            .innerJoin('order.payments', 'settledPayment', 'settledPayment.state = :settledPaymentState', {
-                settledPaymentState: SETTLED_STATE,
-            })
+            .innerJoin(
+                'order.payments',
+                'settledPayment',
+                'settledPayment.state = :settledPaymentState AND settledPayment.method NOT LIKE :controlledTestMethod',
+                {
+                    settledPaymentState: SETTLED_STATE,
+                    controlledTestMethod: CONTROLLED_TEST_PAYMENT_METHOD_SQL_LIKE,
+                },
+            )
             .where('order.active = :active', { active: false })
             .andWhere('order.orderPlacedAt >= :from', { from: range.from })
             .andWhere('order.orderPlacedAt <= :to', { to: range.to })
@@ -578,9 +587,8 @@ export function calculateCatalogProfitReport(
     expensesByOrder: ReadonlyMap<string, OrderProfitExpenseSource> = new Map(),
 ) {
     const items = orders.flatMap<CatalogProfitOrderResult>(order => {
-        // Historical methods may have been removed. Keep their persisted method code as evidence,
-        // and also detect neutral method names backed by a registered test handler.
-        const payments = order.payments;
+        // Preserve historical methods; only the scoped checkout simulation is excluded from profit.
+        const payments = order.payments.filter(payment => !isControlledTestPaymentMethod(payment.method));
         const settledRevenueMicrounits =
             payments
                 .filter(payment => payment.state === SETTLED_STATE)

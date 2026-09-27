@@ -201,6 +201,48 @@ void test('prunes abandoned candidates and checks disk before worker pause and d
         if (passes) assert.match(result.stdout, /DEPLOY_DISK_OK/u);
         else assert.doesNotMatch(result.stdout, /DEPLOY_DISK_OK/u);
     }
+    const headroomStub = `set -Eeuo pipefail
+        target_sha=74207ba5d3b3f5d187ee82ee1bf411fba91429fa
+        archive_name=runtime.tar.gz
+        expected_bucket=reviewed-backup-bucket
+        previous_runtime=/fake/runtime
+        fail() { printf '%s\\n' "$1" >&2; exit 1; }
+        df() { printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n/dev/root %s 0 %s 0%% /\\n' \\
+            "$FIXTURE_DISK_TOTAL" "$FIXTURE_DISK_AVAILABLE"; }
+        du() { printf '%s\\t/fake/runtime\\n' "$FIXTURE_RUNTIME_KIB"; }
+        aws() {
+            expected='s3api head-object --bucket reviewed-backup-bucket'
+            expected+=' --key deployments/74207ba5d3b3f5d187ee82ee1bf411fba91429fa/runtime.tar.gz'
+            expected+=' --query ContentLength --output text'
+            [[ "$*" == "$expected" ]] || return 2
+            printf '%s\\n' "$FIXTURE_ARCHIVE_BYTES"
+            return "$FIXTURE_AWS_STATUS"
+        }`;
+    for (const [available, archiveBytes, awsStatus, passes] of [
+        ['8669144', '156515815', '0', true],
+        ['8200000', '156515815', '0', false],
+        ['8669144', '900000000', '0', false],
+        ['8669144', '156515815', '1', false],
+    ]) {
+        const result = spawnSync(
+            'bash',
+            ['-c', `${headroomStub}\n${headroom}\ncheck_production_disk_staging_headroom`],
+            {
+                encoding: 'utf8',
+                env: {
+                    ...process.env,
+                    FIXTURE_DISK_TOTAL: '49691512',
+                    FIXTURE_DISK_AVAILABLE: available,
+                    FIXTURE_RUNTIME_KIB: '700000',
+                    FIXTURE_ARCHIVE_BYTES: archiveBytes,
+                    FIXTURE_AWS_STATUS: awsStatus,
+                },
+            },
+        );
+        assert.equal(result.status, passes ? 0 : 1, `${available}/${archiveBytes}: ${result.stderr}`);
+        if (passes) assert.match(result.stdout, /DEPLOY_STAGING_DISK_OK/u);
+        else assert.doesNotMatch(result.stdout, /DEPLOY_STAGING_DISK_OK/u);
+    }
     const healthDiskGuard = health.match(
         /disk_usage_kib=.*?\n[\s\S]*?failures\+=\("root-disk-high"\)\nfi/u,
     )?.[0];
@@ -226,33 +268,6 @@ void test('prunes abandoned candidates and checks disk before worker pause and d
             },
         );
         assert.equal(result.status, passes ? 0 : 1, `health ${used}/1000: ${result.stderr}`);
-    }
-    const headroomStub = `set -Eeuo pipefail
-        fail() { printf '%s\\n' "$1" >&2; exit 1; }
-        previous_runtime=/runtime
-        df() { printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n/dev/root %s 0 %s 0%% /\\n' "$FIXTURE_TOTAL_KIB" "$FIXTURE_AVAILABLE_KIB"; }
-        du() { printf '%s\\t/runtime\\n' "$FIXTURE_RUNTIME_KIB"; }`;
-    for (const [total, available, runtime, passes] of [
-        [40000000, 6800000, 600000, false],
-        [50000000, 16000000, 600000, true],
-        [50000000, 16000000, 0, false],
-    ]) {
-        const result = spawnSync(
-            'bash',
-            ['-c', `${headroomStub}\n${headroom}\ncheck_production_disk_staging_headroom`],
-            {
-                encoding: 'utf8',
-                env: {
-                    ...process.env,
-                    FIXTURE_TOTAL_KIB: String(total),
-                    FIXTURE_AVAILABLE_KIB: String(available),
-                    FIXTURE_RUNTIME_KIB: String(runtime),
-                },
-            },
-        );
-        assert.equal(result.status, passes ? 0 : 1, `${total}/${available}/${runtime}: ${result.stderr}`);
-        if (passes) assert.match(result.stdout, /DEPLOY_STAGING_DISK_OK/u);
-        else assert.doesNotMatch(result.stdout, /DEPLOY_STAGING_DISK_OK/u);
     }
 });
 

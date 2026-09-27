@@ -1,3 +1,4 @@
+import { CONTROLLED_TEST_PAYMENT_METHOD_SQL_LIKE } from '@vendure/common/lib/controlled-test-payment';
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { CustomerStoreEntry, ID, Order, RequestContext, TransactionalConnection } from '@vendure/core';
 
@@ -178,8 +179,18 @@ export class ReferralReportQuery {
             .innerJoin(
                 'referralOrder.payments',
                 'settledTodayPayment',
-                'settledTodayPayment.state = :settledPaymentState AND settledTodayPayment.updatedAt >= :utcStart AND settledTodayPayment.updatedAt < :utcEnd',
-                { settledPaymentState: 'Settled', utcStart, utcEnd },
+                [
+                    'settledTodayPayment.state = :settledPaymentState',
+                    'settledTodayPayment.method NOT LIKE :controlledTestMethod',
+                    'settledTodayPayment.updatedAt >= :utcStart',
+                    'settledTodayPayment.updatedAt < :utcEnd',
+                ].join(' AND '),
+                {
+                    settledPaymentState: 'Settled',
+                    controlledTestMethod: CONTROLLED_TEST_PAYMENT_METHOD_SQL_LIKE,
+                    utcStart,
+                    utcEnd,
+                },
             )
             .leftJoinAndSelect('referralOrder.payments', 'metricPayment')
             .leftJoinAndSelect('metricPayment.refunds', 'metricRefund')
@@ -196,6 +207,7 @@ export class ReferralReportQuery {
                 'metricPayment.id',
                 'metricPayment.amount',
                 'metricPayment.state',
+                'metricPayment.method',
                 'metricPayment.updatedAt',
                 'metricRefund.id',
                 'metricRefund.total',
@@ -227,6 +239,15 @@ export class ReferralReportQuery {
                 .andWhere('referralOrder.state IN (:...settledStates)', {
                     settledStates: REFERRAL_METRIC_SETTLED_ORDER_STATES,
                 })
+                .innerJoin(
+                    'referralOrder.payments',
+                    'previousSettledPayment',
+                    'previousSettledPayment.state = :settledPaymentState AND previousSettledPayment.method NOT LIKE :controlledTestMethod',
+                    {
+                        settledPaymentState: 'Settled',
+                        controlledTestMethod: CONTROLLED_TEST_PAYMENT_METHOD_SQL_LIKE,
+                    },
+                )
                 .select('referralOrder.customerId', 'customerId')
                 .distinct(true)
                 .getRawMany<{ customerId: string | number }>();

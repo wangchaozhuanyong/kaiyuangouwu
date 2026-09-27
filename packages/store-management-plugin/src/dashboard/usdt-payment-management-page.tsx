@@ -32,6 +32,7 @@ import {
 import { Check, LoaderCircle, RefreshCw, ShieldCheck, WalletCards, X } from 'lucide-react';
 import { useState } from 'react';
 
+import { isControlledTestPaymentMethod } from '../../../common/src/controlled-test-payment';
 import { getSystemLabel, serviceMessageDisplay } from '../../../common/src/display-localization';
 import {
     paymentMethodDisplayLabel,
@@ -455,7 +456,8 @@ function PlatformPaymentStats({ stats }: { stats: StorePaymentStatsRecord[] }) {
                         {formatMoney(summary.currencyCode, summary.netAmount)}
                     </strong>
                     <p className="mt-2 text-sm text-muted-foreground">
-                        实收 {formatMoney(summary.currencyCode, summary.grossAmount)} · 退款{' '}
+                        {isControlledTestPaymentMethod(summary.paymentMethodCode) ? '模拟结算' : '实收'}{' '}
+                        {formatMoney(summary.currencyCode, summary.grossAmount)} · 退款{' '}
                         {formatMoney(summary.currencyCode, summary.refundedAmount)}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -507,7 +509,8 @@ function PlatformPaymentDetails({
                             退款 {formatMoney(detail.currencyCode, detail.refundedAmount)}
                         </span>
                         <span className="block font-medium">
-                            净收 {formatMoney(detail.currencyCode, detail.netAmount)}
+                            {isControlledTestPaymentMethod(detail.paymentMethodCode) ? '模拟净额' : '净收'}{' '}
+                            {formatMoney(detail.currencyCode, detail.netAmount)}
                         </span>
                         {detail.paymentMethodCode === 'usdt-trc20' ? (
                             <div className="mt-3">

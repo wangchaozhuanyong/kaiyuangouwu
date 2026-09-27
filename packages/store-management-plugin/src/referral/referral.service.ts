@@ -1,4 +1,5 @@
 import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { isControlledTestPaymentMethod } from '@vendure/common/lib/controlled-test-payment';
 import { RegisterCustomerInput } from '@vendure/common/lib/generated-shop-types';
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import {
@@ -870,6 +871,13 @@ export class ReferralService implements OnApplicationBootstrap {
             'business',
         );
         if (!order?.customer || order.totalWithTax <= 0) return;
+        // A simulated settlement must never mark an invitee as purchased or mint a referral reward.
+        const realSettledPayments = (order.payments ?? []).filter(
+            payment => payment.state === 'Settled' && !isControlledTestPaymentMethod(payment.method),
+        );
+        if (realSettledPayments.reduce((total, payment) => total + payment.amount, 0) < order.totalWithTax) {
+            return;
+        }
         const relationship = await this.connection.getRepository(ctx, ReferralRelationship).findOne({
             where: { channelId: ctx.channelId, inviteeCustomerId: order.customer.id },
         });
@@ -889,7 +897,7 @@ export class ReferralService implements OnApplicationBootstrap {
         if (config.rewardRateBps <= 0) return;
 
         const productNet = Math.max(0, order.totalWithTax - order.shippingWithTax);
-        const settledPayments = (order.payments ?? []).filter(payment => payment.state === 'Settled');
+        const settledPayments = realSettledPayments;
         const settledTotal = settledPayments.reduce((total, payment) => total + payment.amount, 0);
         const externalSettled = settledPayments
             .filter(payment => payment.method !== REFERRAL_BALANCE_PAYMENT_METHOD_CODE)

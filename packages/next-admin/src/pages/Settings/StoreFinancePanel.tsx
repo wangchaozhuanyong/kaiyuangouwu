@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { CircleDollarSign, RefreshCw, Save, ShieldCheck, WalletCards } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { isControlledTestPaymentMethod } from '../../../../common/src/controlled-test-payment';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 
 import { sensitiveActionContext } from '../../apollo';
@@ -392,7 +393,10 @@ export function StoreUsdtPanel() {
                 </div>
             </section>
             <section className="rounded-xl border border-slate-200 bg-white p-5">
-                <PanelHeading title="收款概览" description="同时对账 USDT 链上意向与所有支付方式净收。" />
+                <PanelHeading
+                    title="收款概览"
+                    description="按支付方式对账；受控模拟支付单列，不代表真实到账。"
+                />
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <Metric label="USDT 意向" value={String(stats?.totalCount ?? 0)} />
                     <Metric label="已到账" value={String(stats?.settledCount ?? 0)} />
@@ -411,7 +415,8 @@ export function StoreUsdtPanel() {
                                 {formatMoney(item.netAmount, item.currencyCode)}
                             </b>
                             <small className="text-slate-500">
-                                实收 {formatMoney(item.grossAmount, item.currencyCode)} · 退款{' '}
+                                {isControlledTestPaymentMethod(item.paymentMethodCode) ? '模拟结算' : '实收'}{' '}
+                                {formatMoney(item.grossAmount, item.currencyCode)} · 退款{' '}
                                 {formatMoney(item.refundedAmount, item.currencyCode)}
                             </small>
                         </article>

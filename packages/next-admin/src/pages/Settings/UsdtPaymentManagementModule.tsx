@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { Check, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, WalletCards, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { isControlledTestPaymentMethod } from '../../../../common/src/controlled-test-payment';
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { systemStatusDisplayLabel } from '../../../../common/src/system-display-labels';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
@@ -246,7 +247,7 @@ export function UsdtPaymentManagementModule() {
                         <section className={sectionClass}>
                             <Heading
                                 title="支付与退款报表"
-                                detail="按网店和统一时间（UTC）日期筛选，已结算支付计入实收，退款计入净收。"
+                                detail="按网店和统一时间（UTC）日期筛选；受控模拟支付单列，不代表真实到账。"
                             />
                             <div className="mt-4 grid gap-3 md:grid-cols-3">
                                 <label className={labelClass}>
@@ -313,7 +314,10 @@ export function UsdtPaymentManagementModule() {
                                             {formatMoney(item.netAmount, item.currencyCode)}
                                         </b>
                                         <small className="text-slate-500">
-                                            实收 {formatMoney(item.grossAmount, item.currencyCode)} · 退款{' '}
+                                            {isControlledTestPaymentMethod(item.paymentMethodCode)
+                                                ? '模拟结算'
+                                                : '实收'}{' '}
+                                            {formatMoney(item.grossAmount, item.currencyCode)} · 退款{' '}
                                             {formatMoney(item.refundedAmount, item.currencyCode)}
                                         </small>
                                     </article>
