@@ -33,7 +33,6 @@ import {
 import { CircleDollarSign, LoaderCircle, RefreshCw, Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { isControlledTestPaymentMethod } from '../../../common/src/controlled-test-payment';
 import { getSystemLabel, serviceMessageDisplay } from '../../../common/src/display-localization';
 import {
     paymentMethodDisplayLabel,
@@ -678,9 +677,7 @@ function StorePaymentStats({ stats }: { stats: StorePaymentStatsRecord[] }) {
                     </div>
                     <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
                         <MetadataItem
-                            label={
-                                isControlledTestPaymentMethod(summary.paymentMethodCode) ? '模拟结算' : '实收'
-                            }
+                            label="实收"
                             value={formatMoney(summary.currencyCode, summary.grossAmount)}
                         />
                         <MetadataItem
@@ -688,9 +685,7 @@ function StorePaymentStats({ stats }: { stats: StorePaymentStatsRecord[] }) {
                             value={formatMoney(summary.currencyCode, summary.refundedAmount)}
                         />
                         <MetadataItem
-                            label={
-                                isControlledTestPaymentMethod(summary.paymentMethodCode) ? '模拟净额' : '净收'
-                            }
+                            label="净收"
                             value={formatMoney(summary.currencyCode, summary.netAmount)}
                         />
                     </div>
@@ -747,8 +742,7 @@ function StorePaymentDetailList({
                             退款 {formatMoney(detail.currencyCode, detail.refundedAmount)}
                         </span>
                         <span className="block font-medium">
-                            {isControlledTestPaymentMethod(detail.paymentMethodCode) ? '模拟净额' : '净收'}{' '}
-                            {formatMoney(detail.currencyCode, detail.netAmount)}
+                            净收 {formatMoney(detail.currencyCode, detail.netAmount)}
                         </span>
                         {detail.paymentMethodCode === 'usdt-trc20' ? (
                             <div className="mt-3">
