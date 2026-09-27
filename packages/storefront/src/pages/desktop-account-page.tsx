@@ -28,6 +28,8 @@ interface DesktopAccountPageProps extends Omit<AccountPageProps, 'api' | 'logoUr
     referralEnabled: boolean;
     referralPending: boolean;
     referralBalance: number | undefined;
+    referralBalanceStatus: 'loading' | 'error' | 'ready';
+    onRetryReferral: () => void;
     navigate: (route: RouteState) => void;
 }
 
@@ -49,6 +51,8 @@ export function DesktopAccountPage({
     referralEnabled,
     referralPending,
     referralBalance,
+    referralBalanceStatus,
+    onRetryReferral,
     navigate,
 }: DesktopAccountPageProps) {
     const isZh = language === 'zh';
@@ -109,6 +113,8 @@ export function DesktopAccountPage({
                 referralEnabled={referralEnabled}
                 referralPending={referralPending}
                 referralBalance={referralBalance}
+                referralBalanceStatus={referralBalanceStatus}
+                onRetryReferral={onRetryReferral}
                 currencyCode={market.currencyCode}
                 locale={locale}
                 navigate={navigate}
