@@ -187,6 +187,7 @@
 }
 .account-identity-promotion-actions {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-end;
     justify-content: space-between;
     gap: 12px;
@@ -197,7 +198,7 @@
     font-size: 12px;
 }
 .account-identity-promotion-balance {
-    min-width: 0;
+    min-width: min-content;
     flex: 1;
 }
 .account-identity-promotion-actions strong {
@@ -211,6 +212,9 @@
     line-height: 1.1;
     font-variant-numeric: tabular-nums;
     overflow-wrap: anywhere;
+}
+.account-identity-promotion-actions strong > span {
+    white-space: nowrap;
 }
 .account-identity-promotion-currency {
     font-size: 12px;
@@ -302,6 +306,6 @@
 
 @media (max-width: 359px), (min-width: 1024px) and (max-width: 1199px) {
     .account-identity-promotion-actions strong {
-        font-size: 28px;
+        font-size: 24px;
     }
 }
