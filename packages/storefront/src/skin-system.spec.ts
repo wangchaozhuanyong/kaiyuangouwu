@@ -290,6 +290,9 @@ describe('storefront skin system', () => {
         expect(desktopRow).toContain('border-radius: 0;');
         expect(desktopRow).toContain('box-shadow: none;');
         expect(stylesheet('./styles/desktop-pages.css')).toMatch(
+            /\.desktop-cart-product\s*\{[^}]*grid-row:\s*1 \/ span 2;/,
+        );
+        expect(stylesheet('./styles/desktop-pages.css')).toMatch(
             /\.desktop-cart-row\s*\+\s*\.desktop-cart-row\s*\{[^}]*border-top:\s*1px solid var\(--line-subtle\);/,
         );
         const accountAssets = stylesheet('./styles/account-identity.css').match(
