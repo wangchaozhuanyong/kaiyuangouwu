@@ -19,7 +19,9 @@ export const isDocumentation = file =>
 // control checks, but must not turn a later CSS release into a runtime release.
 export const isAutomationOnly = file =>
     file.startsWith('.github/') ||
-    file === 'deploy/artifact-inputs.mjs' ||
+    ['deploy/artifact-inputs.mjs', 'deploy/frontend-ssm.mjs', 'deploy/deploy-frontends-from-s3.sh'].includes(
+        file,
+    ) ||
     /^scripts\/(ci-|release-|lint-check\.mjs$)/u.test(file) ||
     /^(deploy\/|packages\/dev-server\/scripts\/).*\.spec\.mjs$/u.test(file);
 
