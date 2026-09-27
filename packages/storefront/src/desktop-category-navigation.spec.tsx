@@ -147,6 +147,10 @@ describe('desktop catalog category navigation', () => {
         expect(markup).not.toContain('一级分类');
         expect(markup).not.toContain('二级分类');
         expect(markup).toContain('desktop-subcategory-sidebar');
+        expect(markup).not.toContain('desktop-catalog-hero');
+        expect(markup).not.toContain('商品与服务');
+        expect(markup).not.toContain('综合');
+        expect(markup).toContain('<h1 class="desktop-catalog-label">');
         expect(markup).not.toContain('load-more-button');
         expect(markup).toContain('aria-label="店铺政策"');
         expect(markup).not.toContain('desktop-services-link');

@@ -378,14 +378,7 @@ defineNextAdminExtension({
         {
             id: 'storefront-decoration',
             path: '/storefront/decoration',
-            legacyPaths: [
-                '/storefront-carousel',
-                '/storefront-navigation',
-                {
-                    path: '/desktop-category-banners',
-                    target: '/storefront/decoration?panel=desktop-category-banners',
-                },
-            ],
+            legacyPaths: ['/storefront-carousel', '/storefront-navigation'],
             title: '商城装修',
             component: StorefrontModule,
             permissions: ['ReadStorefrontContent'],

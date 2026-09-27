@@ -20,7 +20,7 @@ function product(overrides: Partial<Product>): Product {
 }
 
 describe('product card subtitle', () => {
-    it('uses an inset borderless surface and keeps product images square', () => {
+    it('uses a borderless surface and keeps product images square', () => {
         const stylesheet = readStorefrontStylesheet(['./styles/product-card.css']);
 
         expect(stylesheet).toMatch(

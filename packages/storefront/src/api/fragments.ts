@@ -367,7 +367,7 @@ export const cartFields = `
             saleableStockLevel
             autoCardAvailableStock
             featuredAsset { id preview }
-            product { id name featuredAsset { id preview } }
+            product { id name description featuredAsset { id preview } }
             customFields { fulfillmentType digitalDeliveryMode }
         }
     }

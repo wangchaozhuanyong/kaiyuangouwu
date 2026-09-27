@@ -11,6 +11,7 @@ import {
 } from './extension-api';
 import './installed-extensions';
 import {
+    DEPRECATED_LEGACY_ROUTES,
     LEGACY_EXTENSION_SURFACES,
     LEGACY_ROUTE_CAPABILITIES,
     LEGACY_SOURCE_SURFACE_CAPABILITIES,
@@ -51,7 +52,7 @@ function legacyRoutePathsFromSource() {
 }
 
 describe('legacy capability parity contract', () => {
-    it('maps all 34 local plugin routes to the exact new capability', () => {
+    it('maps all 33 supported local plugin routes to the exact new capability', () => {
         const actual = getNextAdminExtensionLegacyRoutes()
             .map(({ path, target }) => ({ legacyPath: path, target }))
             .sort((left, right) => left.legacyPath.localeCompare(right.legacyPath));
@@ -60,15 +61,21 @@ describe('legacy capability parity contract', () => {
             target,
         })).sort((left, right) => left.legacyPath.localeCompare(right.legacyPath));
 
-        expect(LEGACY_ROUTE_CAPABILITIES).toHaveLength(34);
+        expect(LEGACY_ROUTE_CAPABILITIES).toHaveLength(33);
         expect(actual).toEqual(expected);
-        expect(new Set(actual.map(item => item.legacyPath)).size).toBe(34);
-        // The old Dashboard editor was retired; NextAdmin keeps its URL as a compatibility redirect.
+        expect(new Set(actual.map(item => item.legacyPath)).size).toBe(33);
         expect(legacyRoutePathsFromSource()).toEqual(
-            LEGACY_ROUTE_CAPABILITIES.filter(item => item.legacyPath !== '/desktop-category-banners')
-                .map(item => item.legacyPath)
-                .sort(),
+            LEGACY_ROUTE_CAPABILITIES.map(item => item.legacyPath).sort(),
         );
+    });
+
+    it('does not register the user-retired category banner editor', () => {
+        expect(DEPRECATED_LEGACY_ROUTES).toContain('/desktop-category-banners');
+        expect(
+            getNextAdminExtensionLegacyRoutes().some(route =>
+                DEPRECATED_LEGACY_ROUTES.some(path => route.path === path),
+            ),
+        ).toBe(false);
     });
 
     it('requires every declared route and native capability to be migrated', () => {

@@ -35,7 +35,7 @@ describe('desktop catalog navigation', () => {
             /\.desktop-catalog-toolbar\s*\{[^}]*padding:\s*10px 12px;[^}]*border-radius:\s*var\(--skin-card-radius\);[^}]*background:\s*var\(--surface\);[^}]*box-shadow:\s*var\(--skin-card-shadow\);/u,
         );
         expect(stylesheet).toMatch(
-            /\.desktop-catalog-actions\s*\{[^}]*margin-left:\s*auto;[^}]*background:\s*var\(--soft\);/u,
+            /\.desktop-catalog-actions\s*\{[^}]*margin-left:\s*auto;[^}]*background:\s*transparent;/u,
         );
     });
 

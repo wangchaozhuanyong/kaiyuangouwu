@@ -28,7 +28,12 @@ import { routeHref } from '../storefront-router';
 import { MarketConfig, StoreCustomerCoupon, StorefrontCart, StorefrontLanguage } from '../types';
 
 import { Sheet } from './page-shell';
-import { formatMoney, ProductImagePlaceholder, ProductVariantImage } from './product-display';
+import {
+    formatMoney,
+    ProductImagePlaceholder,
+    ProductVariantImage,
+    sanitizeProductSubtitle,
+} from './product-display';
 
 export function CartGroup({
     title,
@@ -155,6 +160,11 @@ function DesktopCartLine({
     const variant = line.productVariant;
     const productId = variant?.product.id;
     const name = variant?.name ?? (isZh ? '商品已失效' : 'Unavailable item');
+    const description = sanitizeProductSubtitle(
+        variant?.product.description,
+        variant?.product.name ?? name,
+        96,
+    );
     const currency = variant?.currencyCode ?? market.currencyCode;
     const stockError = quantityStockMessage(variant, line.quantity, language);
     const stock = productAvailability(variant).stock;
@@ -177,9 +187,17 @@ function DesktopCartLine({
                     <Link
                         to={routeHref({ name: 'product', id: variant.product.id })}
                         className="desktop-cart-product-link"
+                        title={name}
                     >
                         <ProductVariantImage language={language} variant={variant} alt={name} />
-                        <strong>{name}</strong>
+                        <span className="desktop-cart-product-copy">
+                            <strong>{name}</strong>
+                            {description && (
+                                <small className="desktop-cart-product-description" title={description}>
+                                    {description}
+                                </small>
+                            )}
+                        </span>
                     </Link>
                 ) : (
                     <strong>{name}</strong>
@@ -229,9 +247,11 @@ function DesktopCartLine({
                     aria-pressed={favorite}
                     onClick={() => productId && onFavorite(productId, name)}
                 >
+                    <Heart aria-hidden="true" />
                     {isZh ? (favorite ? '取消收藏' : '移入收藏') : favorite ? 'Unsave' : 'Save'}
                 </button>
                 <button type="button" disabled={loading} onClick={() => onRemove(line.id)}>
+                    <Trash2 aria-hidden="true" />
                     {isZh ? '删除' : 'Remove'}
                 </button>
                 <button
@@ -240,6 +260,7 @@ function DesktopCartLine({
                     aria-pressed={pinned}
                     onClick={() => onPin(line.id, name)}
                 >
+                    <Pin aria-hidden="true" />
                     {isZh ? (pinned ? '取消置顶' : '置顶') : pinned ? 'Unpin' : 'Pin'}
                 </button>
                 <button
@@ -247,6 +268,7 @@ function DesktopCartLine({
                     disabled={loading || !productId}
                     onClick={() => productId && void onShare(productId, name)}
                 >
+                    <Share2 aria-hidden="true" />
                     {isZh ? '分享' : 'Share'}
                 </button>
             </div>

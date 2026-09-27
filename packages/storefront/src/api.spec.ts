@@ -1095,6 +1095,51 @@ describe('ShopApi storefront mutations', () => {
         expect(fetchMock.mock.calls[3][1]?.headers).not.toHaveProperty('authorization');
     });
 
+    it('requests and preserves the existing product description in cart responses', async () => {
+        const description = '<p>轻巧杯身，适合日常携带</p>';
+        const fetchMock = mockGraphQlResponse({
+            storefrontCart: {
+                id: 'cart-description',
+                revision: 1,
+                state: 'OPEN',
+                projectedRevision: 1,
+                totalQuantity: 2,
+                selectedLineCount: 1,
+                selectedQuantity: 2,
+                selectionState: 'ALL',
+                checkoutOrder: null,
+                lines: [
+                    {
+                        id: 'line-description',
+                        quantity: 2,
+                        selected: true,
+                        available: true,
+                        productVariant: {
+                            id: 'variant-description',
+                            name: '随行杯',
+                            sku: 'CUP',
+                            priceWithTax: 4500,
+                            currencyCode: 'MYR',
+                            saleableStockLevel: 10,
+                            featuredAsset: null,
+                            product: {
+                                id: 'product-description',
+                                name: '随行杯',
+                                description,
+                                featuredAsset: null,
+                            },
+                            customFields: { fulfillmentType: 'physical' },
+                        },
+                    },
+                ],
+            },
+        });
+        const cart = await new ShopApi(market).cart();
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as { query: string };
+        expect(request.query).toContain('product { id name description featuredAsset { id preview } }');
+        expect(cart.lines[0].productVariant?.product.description).toBe(description);
+    });
+
     it('passes the original order quantity when adding an item again', async () => {
         const cart = {
             id: 'cart-1',

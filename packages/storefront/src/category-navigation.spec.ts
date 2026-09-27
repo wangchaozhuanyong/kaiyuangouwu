@@ -82,21 +82,19 @@ describe('category navigation responsive spacing', () => {
         );
     });
 
-    it('uses the connected search treatment without a duplicate visible title', () => {
+    it('uses a compact search entry and leaves the submit action on the search page', () => {
         expect(categoryPageSource).not.toContain('category-title-lockup');
         expect(categoryPageSource).not.toContain('category-mobile-heading');
         expect(categoryPageSource).not.toContain("{isZh ? '选购商品' : 'Shop'}");
+        expect(categoryPageSource).not.toContain('search-trigger-action');
         expect(stylesheet).toMatch(
             /\.category-topbar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*padding-inline:\s*16px;/,
         );
-        expect(stylesheet).toMatch(
-            /\.category-topbar > \.search-trigger\s*\{[^}]*padding:\s*0;[^}]*border-radius:\s*8px;[^}]*box-shadow:\s*none;/,
+        expect(presetStylesheet).toMatch(
+            /\.category-topbar > \.search-trigger\s*\{[^}]*width:\s*100%;[^}]*height:\s*36px;/,
         );
-        expect(stylesheet).toMatch(
-            /\.category-topbar \.search-trigger-action\s*\{[^}]*height:\s*auto;[^}]*align-self:\s*stretch;[^}]*border-radius:\s*0;/,
-        );
-        expect(stylesheet).toMatch(
-            /\.category-topbar > \.search-trigger\s*\{[^}]*width:\s*100%;[^}]*height:\s*44px;/,
+        expect(presetStylesheet).toMatch(
+            /\.category-topbar > \.search-trigger\s*\{[^}]*border-radius:\s*var\(--skin-control-radius\);[^}]*background:\s*var\(--control-surface\);/,
         );
         expect(stylesheet).toMatch(
             /@media \(min-width:\s*600px\)[\s\S]*?\.category-topbar\s*\{[^}]*height:\s*128px;[^}]*padding:\s*72px 24px 12px;/,
@@ -124,37 +122,31 @@ describe('category navigation responsive spacing', () => {
         expect(presetStylesheet).not.toContain('.sort-bar.is-scroll-hidden');
     });
 
-    it('balances the primary category row and uses a category-list symbol for the all entry', () => {
-        expect(stylesheet).toMatch(/\.primary-category-strip\s*\{[^}]*height:\s*70px;[^}]*padding:\s*0;/);
-        expect(stylesheet).toMatch(/\.primary-categories\s*\{[^}]*padding:\s*0 4px 0 10px;/);
-        expect(stylesheet).toMatch(/\.primary-categories-all\s*\{[^}]*padding:\s*0 4px 0 0;/);
+    it('uses a compact vertical All entry to expand categories without a duplicate all-products item', () => {
+        expect(categoryPageSource).not.toContain('primary-categories-all-icon');
+        expect(categoryPageSource).not.toContain("onCollectionChange('all', 'all')");
+        expect(categoryPageSource).toContain('aria-controls="all-primary-categories"');
+        expect(categoryPageSource).toContain('aria-expanded={allCategoriesOpen}');
         expect(stylesheet).toMatch(
-            /@media \(min-width:\s*1024px\)[\s\S]*?\.primary-category-strip\s*\{[^}]*height:\s*79px;[^}]*padding-block:\s*0 11px;/,
-        );
-        expect(categoryPageSource).toContain('<svg viewBox="0 0 40 40" fill="none">');
-        expect(categoryPageSource).not.toContain('allCategoriesGoldIcon');
-        expect(stylesheet).toMatch(
-            /\.category-page \.primary-categories-all-icon\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--control-surface\);/,
+            /\.category-page \.primary-categories-all\s*\{[^}]*width:\s*36px;[^}]*position:\s*absolute;[^}]*right:\s*calc\(-1 \* var\(--page-section-inset, 8px\)\);/,
         );
         expect(stylesheet).toMatch(
-            /\.category-page \.primary-category-strip\s*\{[^}]*margin:\s*0 var\(--page-section-inset, 16px\);[^}]*gap:\s*0;/,
-        );
-        expect(stylesheet).toMatch(
-            /\.category-page \.primary-categories-all\s*\{[^}]*width:\s*56px;[^}]*min-width:\s*56px;[^}]*flex:\s*0 0 56px;/,
+            /\.category-page \.primary-categories-all-label\s*\{[^}]*writing-mode:\s*vertical-rl;/,
         );
     });
 
-    it('aligns the mobile all-category row with the sort toolbar', () => {
-        expect(stylesheet).toMatch(/\.category-subcat-sidebar\s*\{[^}]*padding:\s*0 0 12px;/);
+    it('removes the secondary All count and keeps the sort choices on the product surface', () => {
+        expect(categoryPageSource).not.toContain('subcat-side-all');
+        expect(categoryPageSource).not.toContain('subcat-side-count');
+        expect(categoryPageSource).not.toContain("{isZh ? '综合' : 'Default'}");
         expect(stylesheet).toMatch(
-            /\.subcat-side-all\s*\{[^}]*height:\s*44px;[^}]*min-height:\s*44px;[^}]*padding-block:\s*0;[^}]*flex-shrink:\s*0;/,
+            /\.category-page \.category-results \.sort-bar\s*\{[^}]*border-radius:\s*0;[^}]*background:\s*var\(--category-results-surface\);/,
         );
-        expect(stylesheet).toMatch(/\.category-results \.sort-bar\s*\{[^}]*height:\s*44px;/);
     });
 
-    it('aligns mobile search, primary navigation, sorting and product rows to one inset', () => {
+    it('aligns mobile search and primary navigation with a compact shared inset', () => {
         expect(stylesheet).toMatch(
-            /@media \(max-width:\s*1023px\)[\s\S]*?\.category-page\s*\{[^}]*--page-section-inset:\s*16px;/,
+            /@media \(max-width:\s*1023px\)[\s\S]*?\.category-navigation-shell\s*\{[^}]*--page-section-inset:\s*8px;/,
         );
         expect(stylesheet).toMatch(
             /\.category-navigation-shell > \.topbar\.category-topbar\s*\{[^}]*height:\s*52px;[^}]*padding:\s*4px var\(--page-section-inset, 16px\);/,
@@ -163,16 +155,16 @@ describe('category navigation responsive spacing', () => {
             /\.category-page \.primary-category-strip\s*\{[^}]*margin:\s*0 var\(--page-section-inset, 16px\);/,
         );
         expect(presetStylesheet).toMatch(
-            /\.category-page \.category-results \.sort-bar\s*\{[^}]*margin:\s*12px var\(--page-section-inset, 16px\) 0;/,
+            /\.category-page \.category-results \.sort-bar\s*\{[^}]*margin:\s*0 var\(--page-section-inset, 16px\);/,
         );
         expect(stylesheet).toMatch(
             /\.category-product-list\s*\{[^}]*padding:\s*8px var\(--page-section-inset, 10px\) 12px;/,
         );
     });
 
-    it('keeps a 12px gap above and below the mobile sorting surface', () => {
+    it('centers the mobile sorting row without an extra top gap', () => {
         expect(presetStylesheet).toMatch(
-            /\.category-page \.category-results \.sort-bar\s*\{[^}]*margin:\s*12px var\(--page-section-inset, 16px\) 0;/,
+            /\.category-page \.category-results \.sort-bar\s*\{[^}]*height:\s*52px;[^}]*margin:\s*0 var\(--page-section-inset, 16px\);[^}]*align-items:\s*center;/,
         );
         expect(stylesheet).toMatch(/\.category-page \.category-product-list\s*\{[^}]*padding-top:\s*12px;/);
     });
@@ -188,8 +180,8 @@ describe('category navigation responsive spacing', () => {
         expect(sidebarRule).toMatch(/background:\s*var\(--soft\);/);
         expect(sidebarRule).toMatch(/border-right:\s*0;/);
         expect(itemRule).not.toMatch(/border-left/);
-        expect(activeItemRule).toMatch(/background:\s*var\(--selection\);/);
-        expect(activeItemRule).toMatch(/color:\s*var\(--selection-foreground\);/);
+        expect(activeItemRule).toMatch(/background:\s*var\(--category-results-surface\);/);
+        expect(activeItemRule).toMatch(/color:\s*var\(--text\);/);
         expect(activeItemRule).toMatch(/box-shadow:\s*none;/);
         expect(resultsRule).toMatch(/background:\s*var\(--category-results-surface\);/);
     });
@@ -212,11 +204,7 @@ describe('category navigation responsive spacing', () => {
         );
     });
 
-    it('allows complete Chinese labels while balancing visible mobile slots', () => {
-        const mobileChineseCategoryPrefix =
-            String.raw`@media \(max-width:\s*1023px\)[\s\S]*?` +
-            String.raw`html:not\(\[lang='en'\]\) \.category-page `;
-
+    it('allows complete category labels without stretching sparse navigation items', () => {
         expect(stylesheet).toMatch(
             /\.category-page \.primary-category-label\s*\{[^}]*height:\s*auto;[^}]*overflow:\s*visible;[^}]*white-space:\s*normal;/,
         );
@@ -228,35 +216,9 @@ describe('category navigation responsive spacing', () => {
             /@media \(max-width:\s*1023px\)[\s\S]*?\.category-page \.primary-category-strip\s*\{[^}]*margin-inline:\s*var\(--page-section-inset, 16px\);[^}]*padding-inline:\s*0;/,
         );
         expect(stylesheet).toMatch(
-            new RegExp(mobileChineseCategoryPrefix + String.raw`\.primary-category-strip\s*\{[^}]*gap:\s*0;`),
+            /\.category-page \.primary-category-strip \.primary-categories button\s*\{[^}]*width:\s*72px;[^}]*flex:\s*0 0 72px;/,
         );
-        expect(stylesheet).toMatch(
-            new RegExp(
-                mobileChineseCategoryPrefix +
-                    String.raw`\.primary-categories\s*\{[^}]*width:\s*auto;` +
-                    String.raw`[^}]*flex:\s*var\(--primary-category-visible-slots, 4\) 1 0;[^}]*gap:\s*0;`,
-            ),
-        );
-        expect(stylesheet).toMatch(
-            new RegExp(
-                mobileChineseCategoryPrefix +
-                    String.raw`\.primary-category-strip \.primary-categories button\s*\{` +
-                    String.raw`[^}]*width:\s*calc\(100% / var\(--primary-category-visible-slots, 4\)\);` +
-                    String.raw`[^}]*min-width:\s*calc\(100% / var\(--primary-category-visible-slots, 4\)\);` +
-                    String.raw`[^}]*max-width:\s*calc\(100% / var\(--primary-category-visible-slots, 4\)\);` +
-                    String.raw`[^}]*flex:\s*0 0 calc\(100% / var\(--primary-category-visible-slots, 4\)\);`,
-            ),
-        );
-        expect(stylesheet).toMatch(
-            new RegExp(
-                mobileChineseCategoryPrefix +
-                    String.raw`\.primary-categories-all\s*\{[^}]*width:\s*auto;` +
-                    String.raw`[^}]*min-width:\s*0;[^}]*flex:\s*1 1 0;`,
-            ),
-        );
-        expect(categoryPageSource).toContain(
-            "'--primary-category-visible-slots': Math.min(primaryCollections.length + 1, 4)",
-        );
+        expect(categoryPageSource).not.toContain('--primary-category-visible-slots');
         expect(stylesheet).toMatch(/\.primary-category-image\s*\{[^}]*width:\s*48px;[^}]*height:\s*48px;/);
         expect(stylesheet).toMatch(/\.primary-categories button\s*\{[^}]*gap:\s*2px;/);
     });

@@ -317,11 +317,12 @@
         align-items: center;
         gap: 2px;
         padding: 4px;
-        border: 0;
+        border: 1px solid var(--hero-pagination-color);
         border-radius: var(--skin-control-radius);
-        background: var(--hero-copy-background);
-        color: var(--hero-copy-foreground);
-        box-shadow: var(--skin-card-shadow);
+        background: transparent;
+        color: var(--hero-pagination-active-color);
+        box-shadow: none;
+        text-shadow: var(--hero-image-text-shadow, var(--hero-title-shadow));
     }
     .desktop-hero-arrow {
         width: 36px;

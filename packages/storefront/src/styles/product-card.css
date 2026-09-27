@@ -8,8 +8,8 @@
     flex-direction: column;
     min-width: 0;
     container-type: inline-size;
-    overflow: visible;
-    padding: var(--product-card-inset);
+    overflow: hidden;
+    padding: 0;
     border: 0;
     border-radius: var(--skin-control-radius);
     background: var(--product-card-surface, var(--surface));
@@ -18,7 +18,7 @@
     transition: background-color var(--experience-motion-fast) var(--experience-ease-standard);
 }
 
-/* Managed artwork colors apply to the section; inset product surfaces keep skin contrast. */
+/* Managed artwork colors apply to the section; product surfaces keep skin contrast. */
 .managed-content-section .product-card {
     --text: var(--skin-foreground);
     --muted: color-mix(in srgb, var(--skin-foreground) 72%, transparent);
@@ -39,6 +39,7 @@
     flex: 1;
     flex-direction: column;
     min-width: 0;
+    padding: 0 var(--product-card-inset) var(--product-card-inset);
 }
 
 .product-card:focus-within {
