@@ -626,7 +626,7 @@ describe('complete cart domain on MySQL', () => {
 
 // Controlled checkout uses the real cart, payment, fulfillment and store plugins against a disposable DB.
 describe('controlled test payments', () => {
-    it('allows all checkout customers, settles the amount due and follows normal order and fulfillment steps', async () => {
+    it('limits QA settlement to its marked item while preserving normal order and fulfillment steps', async () => {
         const client = new SimpleGraphQLClient(config, `http://127.0.0.1:${config.apiOptions.port}/shop-api`);
         const guest = new SimpleGraphQLClient(config, `http://127.0.0.1:${config.apiOptions.port}/shop-api`);
         const other = new SimpleGraphQLClient(config, `http://127.0.0.1:${config.apiOptions.port}/shop-api`);
@@ -668,6 +668,7 @@ describe('controlled test payments', () => {
         const customer = created.createCustomer;
         expect(customer.user?.verified, customer.message).toBe(true);
         const code = `controlled-test-payment-${channel.id}`;
+        const qaMarker = 'Controlled QA checkout marker';
         const input = {
             code,
             enabled: false,
@@ -681,7 +682,11 @@ describe('controlled test payments', () => {
             checker: { code: 'controlled-test-payment-checker', arguments: [] },
             handler: {
                 code: 'controlled-test-payment-handler',
-                arguments: [{ name: 'channelId', value: JSON.stringify(channel.id) }],
+                arguments: [
+                    { name: 'channelId', value: JSON.stringify(channel.id) },
+                    { name: 'qaSku', value: JSON.stringify('CART-QA-0') },
+                    { name: 'qaMarker', value: JSON.stringify(qaMarker) },
+                ],
             },
         };
         const createMethod = gql`
@@ -788,9 +793,10 @@ describe('controlled test payments', () => {
             expect(result.status, result.message).toBe('APPLIED');
             return result.cart;
         };
-        const prepare = async (c: SimpleGraphQLClient, email: string) => {
+        const prepare = async (c: SimpleGraphQLClient, email: string, note = qaMarker) => {
             await commandFor(c, { changes: { add: [{ productVariantId: variants[0], quantity: 1 }] } });
             await commandFor(c, { beginCheckout: true });
+            await commandFor(c, { order: { note } });
             if (c === guest)
                 await c.query(
                     gql`
@@ -827,18 +833,19 @@ describe('controlled test payments', () => {
                 ?.isEligible,
         ).toBe(true);
 
-        // Everyone who can complete the ordinary checkout can use the enabled method.
-        await prepare(guest, 'guest-test@example.test');
+        // Other checkout customers can use ordinary payment, but an unmarked order
+        // must not be offered the QA method.
+        await prepare(guest, 'guest-test@example.test', 'Guest ordinary order');
         expect(
             (await guest.query(eligible)).eligiblePaymentMethods.find((m: any) => m.code === code)
                 ?.isEligible,
-        ).toBe(true);
+        ).toBeFalsy();
         await other.asUserWithCredentials('outside-payment@example.test', 'local-controlled-test-only');
-        await prepare(other, 'outside-payment@example.test');
+        await prepare(other, 'outside-payment@example.test', 'Other ordinary order');
         expect(
             (await other.query(eligible)).eligiblePaymentMethods.find((m: any) => m.code === code)
                 ?.isEligible,
-        ).toBe(true);
+        ).toBeFalsy();
 
         const connection = server.app.get(TransactionalConnection);
         const snapshot = async () => {
@@ -916,13 +923,16 @@ describe('controlled test payments', () => {
         );
         expect(Number(normalDelivery[0].count)).toBe(1);
         for (const account of [guest, other]) {
-            const accountPaid = (await account.query(pay, { method: code })).addPaymentToOrder;
+            expect((await account.query(pay, { method: code })).addPaymentToOrder.errorCode).toBe(
+                'INELIGIBLE_PAYMENT_METHOD_ERROR',
+            );
+            const accountPaid = (await account.query(pay, { method: 'cart-local-fixture' }))
+                .addPaymentToOrder;
             expect(accountPaid.state, accountPaid.message).toBe('PaymentSettled');
             expect(accountPaid.payments[0]).toMatchObject({
                 state: 'Settled',
                 amount: accountPaid.totalWithTax,
             });
-            expect(accountPaid.payments[0].metadata.public.testPayment).toBe(true);
         }
 
         // Concurrent submissions must place exactly one ordinary order, payment and delivery.
@@ -962,7 +972,10 @@ describe('controlled test payments', () => {
                 )
             )[0];
         const stockBefore = await physicalStock();
-        const mixedPaid = (await shopClient.query(pay, { method: code })).addPaymentToOrder;
+        expect((await shopClient.query(pay, { method: code })).addPaymentToOrder.errorCode).toBe(
+            'INELIGIBLE_PAYMENT_METHOD_ERROR',
+        );
+        const mixedPaid = (await shopClient.query(pay, { method: 'cart-local-fixture' })).addPaymentToOrder;
         expect(mixedPaid.state, mixedPaid.message).toBe('PaymentSettled');
         const stockAfterPayment = await physicalStock();
         expect(Number(stockAfterPayment.stockAllocated)).toBe(Number(stockBefore.stockAllocated) + 1);

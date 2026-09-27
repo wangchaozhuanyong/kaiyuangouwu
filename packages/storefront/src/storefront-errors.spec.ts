@@ -28,6 +28,9 @@ describe('customer-facing error language boundary', () => {
         expect(
             storefrontErrorMessage(new ShopApiError('CART_PROJECTION_ERROR', 'Order cannot be edited'), 'zh'),
         ).not.toContain('库存');
+        expect(
+            storefrontErrorMessage(new ShopApiError('CART_PROJECTION_ERROR', 'PAYMENT_UNAVAILABLE'), 'zh'),
+        ).toContain('尚未配置可用的支付方式');
         const error = Object.assign(new ShopApiError('INSUFFICIENT_STOCK_ERROR', 'Out of stock'), {
             selectionRejected: true,
         });

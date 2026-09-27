@@ -9,6 +9,7 @@ import {
     InternalServerError,
     isGraphQlErrorResult,
     LanguageCode,
+    Order,
     OrderLimitError,
     OrderService,
     PaymentMethod,
@@ -71,6 +72,41 @@ interface CartProjectionOptions {
 const NON_PRODUCTION_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|sandbox|test)(?:$|[-_\s])|测试/iu;
 const INTERNAL_BALANCE_PAYMENT_CODES = new Set(['referral-balance', 'referral-balance-payment']);
 const CONTROLLED_TEST_PAYMENT_HANDLER_CODE = 'controlled-test-payment-handler';
+
+export function testPaymentArguments(method: Pick<PaymentMethod, 'handler'>): Record<string, string> {
+    return Object.fromEntries(
+        method.handler.args.map(arg => {
+            // The Admin editor serializes text as JSON strings; the standard API may use raw text.
+            let value = String(arg.value);
+            try {
+                const parsed: unknown = JSON.parse(value);
+                if (typeof parsed === 'string') value = parsed;
+            } catch {
+                // Raw configurable-operation text.
+            }
+            return [arg.name, value];
+        }),
+    );
+}
+
+export function controlledTestPaymentScopeMatchesOrder(
+    args: Record<string, string>,
+    order: Pick<Order, 'code' | 'lines' | 'customFields'>,
+): boolean {
+    if (!args.orderCode && !(args.qaSku && args.qaMarker)) return false;
+    if (args.orderCode && args.orderCode !== order.code) return false;
+    if (args.qaSku || args.qaMarker) {
+        if (!args.qaSku || !args.qaMarker) return false;
+        if (
+            order.lines.length !== 1 ||
+            order.lines[0]?.productVariant?.sku !== args.qaSku ||
+            order.lines[0]?.quantity !== 1 ||
+            (order.customFields as { customerNote?: string } | undefined)?.customerNote !== args.qaMarker
+        )
+            return false;
+    }
+    return true;
+}
 
 export function isRegisteredProductionPaymentMethod(
     method: Pick<PaymentMethod, 'code' | 'handler' | 'translations'>,
@@ -475,7 +511,7 @@ export class StorefrontCartService {
         if (
             process.env.NODE_ENV === 'production' &&
             projected.checkoutOrder.totalWithTax > 0 &&
-            !(await this.hasProductionPaymentMethod(ctx, paymentCurrencyCode))
+            !(await this.hasProductionPaymentMethod(ctx, paymentCurrencyCode, projected.checkoutOrder))
         ) {
             const message =
                 ctx.languageCode === LanguageCode.zh_Hans
@@ -516,6 +552,7 @@ export class StorefrontCartService {
     private async hasProductionPaymentMethod(
         ctx: RequestContext,
         paymentCurrencyCode: string,
+        order: Order,
     ): Promise<boolean> {
         const registeredHandlerCodes = new Set(
             this.configService.paymentOptions.paymentMethodHandlers.map(handler => handler.code),
@@ -527,8 +564,11 @@ export class StorefrontCartService {
             where: { enabled: true, channels: { id: ctx.channelId } },
             relations: { channels: true, translations: true },
         });
-        return methods.some(method =>
-            isRegisteredProductionPaymentMethod(method, registeredHandlerCodes, paymentCurrencyCode),
+        return methods.some(
+            method =>
+                isRegisteredProductionPaymentMethod(method, registeredHandlerCodes, paymentCurrencyCode) &&
+                (method.handler.code !== CONTROLLED_TEST_PAYMENT_HANDLER_CODE ||
+                    controlledTestPaymentScopeMatchesOrder(testPaymentArguments(method), order)),
         );
     }
 

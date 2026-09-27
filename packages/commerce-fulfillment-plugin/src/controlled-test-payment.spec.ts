@@ -30,10 +30,13 @@ describe('test payments use the normal checkout workflow', () => {
         lockOrder.mockResolvedValue({ affected: 1 });
         order = {
             id: 1,
+            code: 'QA-ORDER-1',
             active: true,
             state: 'ArrangingPayment',
             totalWithTax: 1000,
             couponCodes: [],
+            lines: [{ quantity: 1, productVariant: { sku: 'QA-CHECKOUT' } }],
+            customFields: { customerNote: 'QA marker' },
             payments: [],
             customer: { id: 7, user: { id: 9, verified: true, deletedAt: null } },
         };
@@ -42,7 +45,14 @@ describe('test payments use the normal checkout workflow', () => {
             id: 3,
             enabled: true,
             code: 'controlled-test-payment-T_2',
-            handler: { code: 'controlled-test-payment-handler', args: [{ name: 'channelId', value: 'T_2' }] },
+            handler: {
+                code: 'controlled-test-payment-handler',
+                args: [
+                    { name: 'channelId', value: 'T_2' },
+                    { name: 'qaSku', value: 'QA-CHECKOUT' },
+                    { name: 'qaMarker', value: 'QA marker' },
+                ],
+            },
             checker: { code: 'controlled-test-payment-checker', args: [] },
         };
         connection.findOneInChannel.mockImplementation((_ctx, entity) =>
@@ -98,13 +108,51 @@ describe('test payments use the normal checkout workflow', () => {
         },
     );
 
-    it('accepts existing JSON-encoded channel arguments and ignores the retired whitelist', async () => {
+    it('accepts JSON-encoded arguments and ignores the retired whitelist', async () => {
         method.handler.args = [
             { name: 'channelId', value: JSON.stringify('T_2') },
+            { name: 'qaSku', value: JSON.stringify('QA-CHECKOUT') },
+            { name: 'qaMarker', value: JSON.stringify('QA marker') },
             { name: 'customerIds', value: 'old-customer' },
         ];
         expect(await registered.checker.check(ctx, order, [], method)).toBe(true);
         expect(await pay()).toMatchObject({ state: 'Settled' });
+    });
+
+    it('rejects an old channel-wide method without order or QA item scope', async () => {
+        method.handler.args = [{ name: 'channelId', value: 'T_2' }];
+        expect(await registered.checker.check(ctx, order, [], method)).toBe(false);
+        await expect(pay()).rejects.toThrow('测试支付未开启');
+    });
+
+    it('exposes a configured QA method only to its specified order', async () => {
+        method.handler.args.push({ name: 'orderCode', value: 'QA-ORDER-1' });
+        expect(await registered.checker.check(ctx, order, [], method)).toBe(true);
+        expect(await pay()).toMatchObject({ state: 'Settled' });
+
+        order.code = 'ANOTHER-ORDER';
+        expect(await registered.checker.check(ctx, order, [], method)).toBe(false);
+        await expect(pay()).rejects.toThrow('测试支付未开启');
+        expect(await transition()).toContain('测试支付条件');
+    });
+
+    it('limits a pre-order QA method to the exact single SKU and private order note', async () => {
+        method.handler.args.push(
+            { name: 'qaSku', value: 'QA-CHECKOUT' },
+            { name: 'qaMarker', value: 'QA marker' },
+        );
+        expect(await registered.checker.check(ctx, order, [], method)).toBe(true);
+        expect(await pay()).toMatchObject({ state: 'Settled' });
+
+        order.customFields.customerNote = 'other note';
+        expect(await registered.checker.check(ctx, order, [], method)).toBe(false);
+        await expect(pay()).rejects.toThrow('测试支付未开启');
+        order.customFields.customerNote = 'QA marker';
+        order.lines[0].productVariant.sku = 'OTHER';
+        expect(await registered.checker.check(ctx, order, [], method)).toBe(false);
+        order.lines[0].productVariant.sku = 'QA-CHECKOUT';
+        order.lines.push({ quantity: 1, productVariant: { sku: 'QA-CHECKOUT' } });
+        expect(await registered.checker.check(ctx, order, [], method)).toBe(false);
     });
 
     it('supports discounted totals and settles only the remainder after previous payments and refunds', async () => {

@@ -128,7 +128,7 @@ export class StorefrontCatalogService {
             );
         }
 
-        if (input.collectionId != null || input.fulfillmentType != null) {
+        if (input.collectionId != null || input.fulfillmentType != null || input.inStockOnly) {
             qb.innerJoin(ProductVariant, 'catalog_variant', 'catalog_variant.id = si.productVariantId');
         }
         if (input.collectionId != null) {
@@ -152,7 +152,38 @@ export class StorefrontCatalogService {
             });
         }
         if (input.inStockOnly) {
-            qb.andWhere('si.inStock = :catalogInStock', { catalogInStock: true });
+            const variantColumns = this.connection.rawConnection.getMetadata(ProductVariant).columns;
+            const fulfillmentColumn = variantColumns.find(
+                column => column.propertyPath === 'customFields.fulfillmentType',
+            );
+            const deliveryModeColumn = variantColumns.find(
+                column => column.propertyPath === 'customFields.digitalDeliveryMode',
+            );
+            if (!fulfillmentColumn || !deliveryModeColumn) {
+                throw new UserInputError('商品库存规则尚未配置');
+            }
+            const escape = this.connection.rawConnection.driver.escape.bind(
+                this.connection.rawConnection.driver,
+            );
+            const autoCardVariant =
+                `catalog_variant.${escape(fulfillmentColumn.databaseName)} = :catalogDigitalFulfillment ` +
+                `AND catalog_variant.${escape(deliveryModeColumn.databaseName)} = :catalogAutoCardMode`;
+            // Auto-card saleability comes from the enabled card pool, not Vendure's search index.
+            // Keep this condition in the candidate query so totalItems and pagination stay accurate.
+            const availableCard =
+                `EXISTS (SELECT 1 FROM ${escape('auto_card_config')} catalog_card_config ` +
+                `INNER JOIN ${escape('auto_card_pool_item')} catalog_card_item ` +
+                `ON catalog_card_item.${escape('configId')} = catalog_card_config.id ` +
+                `AND catalog_card_item.state = :catalogAvailableCardState ` +
+                `WHERE catalog_card_config.${escape('channelId')} = :catalogChannelId ` +
+                `AND catalog_card_config.${escape('productVariantId')} = si.productVariantId ` +
+                `AND catalog_card_config.enabled = :catalogCardConfigEnabled)`;
+            qb.andWhere(`CASE WHEN ${autoCardVariant} THEN ${availableCard} ELSE si.inStock END`, {
+                catalogDigitalFulfillment: 'digital',
+                catalogAutoCardMode: 'auto_card',
+                catalogAvailableCardState: 'AVAILABLE',
+                catalogCardConfigEnabled: true,
+            });
         }
         if (input.minPriceWithTax != null) {
             qb.having('MIN(si.priceWithTax) >= :catalogMinPriceWithTax', {

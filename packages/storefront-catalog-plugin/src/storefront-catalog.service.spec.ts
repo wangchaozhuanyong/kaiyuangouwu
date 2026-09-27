@@ -1,6 +1,16 @@
 import 'reflect-metadata';
 
+import { createRequire } from 'node:module';
 import { describe, expect, it, vi } from 'vitest';
+
+// The workspace's Node type declarations predate node:sqlite, while CI runs Node 24.
+const { DatabaseSync } = createRequire(`${process.cwd()}/package.json`)('node:sqlite') as {
+    DatabaseSync: new (filename: string) => {
+        exec(sql: string): void;
+        prepare(sql: string): { get(params: Record<string, unknown>): unknown };
+        close(): void;
+    };
+};
 
 import {
     normalizeCatalogInput,
@@ -43,7 +53,10 @@ function createCatalogService(queryBuilder = fluentQueryBuilder()) {
     const rawConnection = {
         createQueryBuilder: vi.fn(() => countBuilder),
         getMetadata: vi.fn(() => ({
-            columns: [{ propertyPath: 'customFields.fulfillmentType', databaseName: 'fulfillmentType' }],
+            columns: [
+                { propertyPath: 'customFields.fulfillmentType', databaseName: 'fulfillmentType' },
+                { propertyPath: 'customFields.digitalDeliveryMode', databaseName: 'digitalDeliveryMode' },
+            ],
         })),
         driver: { escape: (value: string) => `"${value}"` },
     };
@@ -105,8 +118,16 @@ describe('StorefrontCatalogService query construction', () => {
         expect(queryBuilder.andWhere).toHaveBeenCalledWith('si.languageCode = :catalogLanguageCode', {
             catalogLanguageCode: 'zh_Hans',
         });
-        expect(queryBuilder.andWhere).toHaveBeenCalledWith('si.inStock = :catalogInStock', {
-            catalogInStock: true,
+        const stockCondition = queryBuilder.andWhere.mock.calls.find(
+            ([condition]) => typeof condition === 'string' && condition.startsWith('CASE WHEN'),
+        );
+        expect(stockCondition).toBeDefined();
+        expect(stockCondition?.[0]).toContain('catalog_variant."digitalDeliveryMode" = :catalogAutoCardMode');
+        expect(stockCondition?.[0]).toContain('catalog_card_item.state = :catalogAvailableCardState');
+        expect(stockCondition?.[0]).toContain('ELSE si.inStock END');
+        expect(stockCondition?.[1]).toMatchObject({
+            catalogAutoCardMode: 'auto_card',
+            catalogAvailableCardState: 'AVAILABLE',
         });
         expect(queryBuilder.innerJoin).toHaveBeenCalledWith(
             'catalog_variant.collections',
@@ -139,6 +160,69 @@ describe('StorefrontCatalogService query construction', () => {
 
         expect(queryBuilder.addOrderBy).toHaveBeenCalledWith(expression, direction);
         expect(queryBuilder.addOrderBy).toHaveBeenLastCalledWith('si.productId', 'ASC');
+    });
+
+    it('uses live channel-scoped card stock while retaining indexed stock for other delivery modes', () => {
+        const { service, queryBuilder } = createCatalogService();
+        (service as any).createCandidateQuery(context, normalizeCatalogInput({ inStockOnly: true }));
+        const [condition, values] =
+            queryBuilder.andWhere.mock.calls.find(
+                ([clause]) => typeof clause === 'string' && clause.startsWith('CASE WHEN'),
+            ) ?? [];
+        expect(condition).toBeDefined();
+
+        const db = new DatabaseSync(':memory:');
+        try {
+            db.exec(`
+                CREATE TABLE auto_card_config (id INTEGER, channelId TEXT, productVariantId TEXT, enabled INTEGER);
+                CREATE TABLE auto_card_pool_item (configId INTEGER, state TEXT);
+            `);
+            const query = db.prepare(`
+                SELECT ${condition} AS included
+                FROM (SELECT :searchInStock AS inStock, :variantId AS productVariantId) si
+                CROSS JOIN (
+                    SELECT :fulfillmentType AS fulfillmentType, :deliveryMode AS digitalDeliveryMode
+                ) catalog_variant
+            `);
+            const included = (
+                options: {
+                    channelId?: string;
+                    deliveryMode?: string | null;
+                    fulfillmentType?: string | null;
+                    searchInStock?: number;
+                } = {},
+            ) =>
+                Number(
+                    (
+                        query.get({
+                            ...values,
+                            catalogCardConfigEnabled: 1,
+                            catalogChannelId: options.channelId ?? 'channel-1',
+                            searchInStock: options.searchInStock ?? 1,
+                            variantId: 'variant-1',
+                            fulfillmentType: options.fulfillmentType ?? 'digital',
+                            deliveryMode:
+                                options.deliveryMode === undefined ? 'auto_card' : options.deliveryMode,
+                        }) as { included: number }
+                    ).included,
+                );
+
+            expect(included()).toBe(0);
+            expect(included({ deliveryMode: 'manual_service' })).toBe(1);
+            expect(included({ deliveryMode: null })).toBe(1);
+            expect(included({ deliveryMode: 'manual_service', searchInStock: 0 })).toBe(0);
+
+            db.exec(`
+                INSERT INTO auto_card_config VALUES (1, 'channel-1', 'variant-1', 1);
+                INSERT INTO auto_card_pool_item VALUES (1, 'AVAILABLE');
+            `);
+            expect(included()).toBe(1);
+            expect(included({ channelId: 'channel-2' })).toBe(0);
+            db.exec(`UPDATE auto_card_pool_item SET state = 'ASSIGNED' WHERE configId = 1`);
+            expect(included()).toBe(0);
+        } finally {
+            db.close();
+        }
     });
 
     it('limits sales to placed, non-cancelled orders in the current Channel with stable fallbacks', () => {

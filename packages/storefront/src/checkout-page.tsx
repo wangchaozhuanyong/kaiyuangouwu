@@ -309,7 +309,11 @@ export function CheckoutPage({
             .then(items => {
                 setDeliveryEmails(items);
                 const matching = items.find(item => item.emailAddress === order?.customFields.deliveryEmail);
-                setSelectedDeliveryEmailId(matching?.id ?? items.find(item => item.isDefault)?.id ?? '');
+                setSelectedDeliveryEmailId(
+                    order?.customFields.deliveryEmail
+                        ? (matching?.id ?? '')
+                        : (items.find(item => item.isDefault)?.id ?? ''),
+                );
             })
             .catch(() => {
                 if (!controller.signal.aborted) setDeliveryEmails([]);

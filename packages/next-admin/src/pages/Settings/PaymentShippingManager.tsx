@@ -90,7 +90,7 @@ function TestPaymentAvailabilityNotice({
             </p>
             <p className="mt-1">
                 {available
-                    ? '启用后所有客户均可选择。按订单应付金额模拟付款成功，订单进入正常已付款、库存与交付流程；无需真实转账。'
+                    ? '只对指定 SKU 且订单备注完全一致的订单开放。按订单应付金额模拟付款成功，订单进入正常已付款、库存与交付流程；无需真实转账。'
                     : '当前服务器未开放测试支付，请联系平台管理员开启测试支付开关。'}
             </p>
             {available && onConfigure && (
@@ -540,7 +540,7 @@ function MethodEditorDialog({
     const [checkerArgs, setCheckerArgs] = useState(() => argsToForm(item?.checker, checkerDefinitions));
     const [handlerArgs, setHandlerArgs] = useState(() =>
         initialTestPayment && !item
-            ? { channelId: data.activeChannel.id }
+            ? { channelId: data.activeChannel.id, qaSku: '', qaMarker: '', orderCode: '' }
             : argsToForm(
                   state.kind === 'payment' ? state.item?.handler : undefined,
                   data.paymentMethodHandlers,
@@ -739,6 +739,9 @@ function MethodEditorDialog({
                     return onError('USDT 支付方式由下方专用收款配置自动管理，不能在这里创建或修改');
                 }
                 if (!handlerCode) return onError('请选择支付处理器');
+                if (isControlledTest && (!handlerArgs.qaSku?.trim() || !handlerArgs.qaMarker?.trim())) {
+                    return onError('请填写测试商品 SKU 和完整订单备注，仅允许这笔测试商品使用模拟支付');
+                }
                 const input = {
                     ...(item?.id ? { id: item.id } : {}),
                     code: isControlledTest ? `controlled-test-payment-${data.activeChannel.id}` : code.trim(),
@@ -746,7 +749,14 @@ function MethodEditorDialog({
                     checker,
                     handler: operationInput(
                         handlerCode,
-                        isControlledTest ? { channelId: data.activeChannel.id } : handlerArgs,
+                        isControlledTest
+                            ? {
+                                  channelId: data.activeChannel.id,
+                                  qaSku: handlerArgs.qaSku.trim(),
+                                  qaMarker: handlerArgs.qaMarker.trim(),
+                                  orderCode: handlerArgs.orderCode?.trim() ?? '',
+                              }
+                            : handlerArgs,
                         mainDefinitions,
                     ),
                     translations,
@@ -868,7 +878,8 @@ function MethodEditorDialog({
                     )}
                     {isControlledTest ? (
                         <p className="text-xs leading-5 text-slate-700">
-                            启用后本店所有客户均可使用测试支付。
+                            填写测试商品 SKU
+                            和完整订单备注后启用，再用同样备注建立测试订单。取得订单号后可进一步锁定；支付成功后请关闭此方式。
                         </p>
                     ) : (
                         <OperationEditor
@@ -897,7 +908,12 @@ function MethodEditorDialog({
                                     if (nextCode === testPaymentHandler) {
                                         setCode(`controlled-test-payment-${data.activeChannel.id}`);
                                         setEnabled(false);
-                                        setHandlerArgs({ channelId: data.activeChannel.id });
+                                        setHandlerArgs({
+                                            channelId: data.activeChannel.id,
+                                            qaSku: '',
+                                            qaMarker: '',
+                                            orderCode: '',
+                                        });
                                     } else setHandlerArgs(defaultArgs(nextCode, mainDefinitions));
                                 }}
                                 onValuesChange={setHandlerArgs}

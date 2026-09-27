@@ -128,6 +128,10 @@ export const storefrontErrorCopy = {
         '此支付方式暂时不可用，请选择其他支付方式。',
         'This payment method is unavailable. Please choose another method.',
     ),
+    PAYMENT_UNAVAILABLE: copy(
+        '当前店铺尚未配置可用的支付方式，暂时无法提交订单。',
+        'This store has no available payment method. The order cannot be submitted yet.',
+    ),
     PAYMENT_REVIEW_REQUIRED: copy(
         '付款记录需要人工核对，请勿重复付款。请在订单详情中查看处理状态或联系客服。',
         'Your payment needs review. Do not pay again. Check the order details or contact support.',
