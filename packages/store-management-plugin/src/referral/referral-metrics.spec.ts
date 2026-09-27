@@ -46,4 +46,13 @@ describe('referral today metrics', () => {
             }),
         ).toBe(0);
     });
+
+    it('does not count a controlled simulation as net sales', () => {
+        expect(
+            settledOrderNetTotal({
+                totalWithTax: 10_000,
+                payments: [{ method: 'controlled-test-payment-5', amount: 10_000, state: 'Settled' }],
+            }),
+        ).toBe(0);
+    });
 });

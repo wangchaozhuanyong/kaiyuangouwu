@@ -1,4 +1,5 @@
 import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { isControlledTestPaymentMethod } from '@vendure/common/lib/controlled-test-payment';
 import { CurrencyCode, Permission } from '@vendure/common/lib/generated-types';
 import {
     EventBus,
@@ -247,13 +248,16 @@ export class MarketingAttributionService implements OnApplicationBootstrap {
             const metric = metricFor(metrics, dimensionsFrom(attribution));
             const payments = attribution.order.payments ?? [];
             const settledRevenue = payments
-                .filter(payment => payment.state === 'Settled')
+                .filter(
+                    payment => payment.state === 'Settled' && !isControlledTestPaymentMethod(payment.method),
+                )
                 .reduce((total, payment) => total + payment.amount, 0);
             if (settledRevenue <= 0) continue;
             metric.orderCount += 1;
             metric.settledRevenueMicrounits += settledRevenue * 10;
             metric.refundedRevenueMicrounits +=
                 payments
+                    .filter(payment => !isControlledTestPaymentMethod(payment.method))
                     .flatMap(payment => payment.refunds ?? [])
                     .filter(refund => refund.state === 'Settled')
                     .reduce((total, refund) => total + refund.total, 0) * 10;

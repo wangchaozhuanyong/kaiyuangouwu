@@ -55,6 +55,13 @@ describe('referral today metrics queries', () => {
                         },
                     ],
                 },
+                {
+                    id: 'simulated-order',
+                    customerId: 'customer-4',
+                    currencyCode: 'CNY',
+                    totalWithTax: 50,
+                    payments: [{ method: 'controlled-test-payment-5', amount: 50, state: 'Settled' }],
+                },
             ],
         });
         const previousBuyersQuery = queryBuilder({ rawMany: [{ customerId: 'customer-1' }] });
@@ -121,6 +128,7 @@ describe('referral today metrics queries', () => {
         );
         expect(settlementJoin?.[2]).toContain('settledTodayPayment.updatedAt >= :utcStart');
         expect(settlementJoin?.[2]).toContain('settledTodayPayment.updatedAt < :utcEnd');
+        expect(settlementJoin?.[2]).toContain('settledTodayPayment.method NOT LIKE :controlledTestMethod');
         expect(settlementJoin?.[3]).toMatchObject({
             utcStart: expect.stringMatching(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}$/),
             utcEnd: expect.stringMatching(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}$/),
@@ -186,6 +194,7 @@ describe('referral today metrics queries', () => {
                 id: 'order-1',
                 customer: { id: 'customer-1' },
                 totalWithTax: 10_000,
+                payments: [{ method: 'card', amount: 10_000, state: 'Settled' }],
             }),
         };
         const service = new ReferralService(
@@ -203,5 +212,37 @@ describe('referral today metrics queries', () => {
 
         expect(relationship.firstPaidOrderAt).toBe(settledAt);
         expect(saveRelationship).toHaveBeenCalledWith(relationship, { reload: false });
+    });
+
+    it('does not count a simulated settlement as an invited purchase', async () => {
+        const saveRelationship = vi.fn();
+        const connection = {
+            getRepository: vi.fn((_ctx, entity) => {
+                if (entity === ReferralRelationship) {
+                    return { findOne: vi.fn(), save: saveRelationship };
+                }
+                throw new Error(`Unexpected repository: ${String(entity)}`);
+            }),
+        };
+        const orderService = {
+            findOne: vi.fn().mockResolvedValue({
+                id: 'simulated-order',
+                customer: { id: 'customer-1' },
+                totalWithTax: 50,
+                payments: [{ method: 'controlled-test-payment-5', amount: 50, state: 'Settled' }],
+            }),
+        };
+        const service = new ReferralService(
+            connection as any,
+            {} as any,
+            orderService as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            { signingSecret: 'test-storefront-visitor-hash-secret' } as any,
+        );
+        await (service as any).rewardSettledOrder({ channelId: 'channel-1' }, 'simulated-order', new Date());
+        expect(saveRelationship).not.toHaveBeenCalled();
+        expect(connection.getRepository).not.toHaveBeenCalled();
     });
 });

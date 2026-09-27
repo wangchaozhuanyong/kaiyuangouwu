@@ -123,6 +123,19 @@ describe('catalog profit report calculation', () => {
         });
     });
 
+    it('keeps controlled checkout simulations out of realized profit', () => {
+        const result = calculateCatalogProfitReport(
+            [
+                order({
+                    payments: [{ method: 'controlled-test-payment-2', amount: 10_000, state: 'Settled' }],
+                }),
+            ],
+            new Map(),
+        );
+        expect(result.summary.orderCount).toBe(0);
+        expect(result.items).toEqual([]);
+    });
+
     it('includes a neutral method name backed by a test handler', () => {
         const result = calculateCatalogProfitReport(
             [

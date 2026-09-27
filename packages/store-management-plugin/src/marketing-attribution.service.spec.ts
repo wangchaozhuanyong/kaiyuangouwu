@@ -105,6 +105,12 @@ describe('marketing attribution closure', () => {
                         amount: 10_000,
                         refunds: [{ state: 'Settled', total: 2_000 }],
                     },
+                    {
+                        method: 'controlled-test-payment-2',
+                        state: 'Settled',
+                        amount: 600,
+                        refunds: [],
+                    },
                 ],
             },
         };

@@ -68,20 +68,29 @@ check_production_disk_usage() {
 
 check_production_disk_staging_headroom() {
     local maximum="${VENDURE_MAXIMUM_DISK_USAGE_PERCENT:-85}"
-    local total_kib available_kib runtime_kib reserve_kib required_kib
+    local total_kib available_kib runtime_kib archive_bytes archive_kib runtime_budget_kib reserve_kib required_kib
     [[ "${maximum}" =~ ^([1-9][0-9]?|100)$ ]] || fail 'invalid production disk usage limit'
     read -r total_kib available_kib < <(df -Pk / | awk 'NR == 2 { print $2, $4 }')
     runtime_kib="$(du -sk "${previous_runtime}" | awk '{ print $1 }')"
+    archive_bytes="$(aws s3api head-object \
+        --bucket "${expected_bucket}" \
+        --key "deployments/${target_sha}/${archive_name}" \
+        --query ContentLength --output text)" ||
+        fail 'could not read the verified runtime archive size'
     [[ "${total_kib}" =~ ^[1-9][0-9]*$ && "${available_kib}" =~ ^[0-9]+$ &&
-        "${runtime_kib}" =~ ^[1-9][0-9]*$ ]] || fail 'could not measure production disk staging headroom'
-    # Allow room for both the downloaded archive and extracted runtime while
-    # preserving the same disk-health reserve used after artifact verification.
+        "${runtime_kib}" =~ ^[1-9][0-9]*$ && "${archive_bytes}" =~ ^[1-9][0-9]*$ ]] ||
+        fail 'could not measure production disk staging headroom'
+    # Stage one archive and one extracted runtime. Budget 10% growth over the
+    # current runtime plus 64 MiB for extraction metadata and checksums.
     reserve_kib=$(( (total_kib * (100 - maximum) + 99) / 100 ))
-    required_kib=$(( reserve_kib + 2 * runtime_kib ))
+    archive_kib=$(( (archive_bytes + 1023) / 1024 ))
+    runtime_budget_kib=$(( (runtime_kib * 110 + 99) / 100 ))
+    required_kib=$(( reserve_kib + archive_kib + runtime_budget_kib + 65536 ))
+    printf 'DEPLOY_STAGING_DISK available_kib=%s required_kib=%s archive_kib=%s runtime_budget_kib=%s\n' \
+        "${available_kib}" "${required_kib}" "${archive_kib}" "${runtime_budget_kib}"
     (( available_kib > required_kib )) ||
         fail 'root disk cannot stage a release within the health limit; review retention or expand the volume'
-    printf 'DEPLOY_STAGING_DISK_OK available_kib=%s required_kib=%s\n' \
-        "${available_kib}" "${required_kib}"
+    printf 'DEPLOY_STAGING_DISK_OK\n'
 }
 
 if [[ ! "${target_sha}" =~ ^[0-9a-f]{40}$ ]]; then

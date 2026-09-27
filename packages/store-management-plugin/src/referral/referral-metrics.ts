@@ -1,3 +1,5 @@
+import { isControlledTestPaymentMethod } from '@vendure/common/lib/controlled-test-payment';
+
 export const REFERRAL_METRIC_SETTLED_ORDER_STATES = [
     'PaymentSettled',
     'PartiallyShipped',
@@ -14,6 +16,7 @@ interface MetricRefund {
 interface MetricPayment {
     state: string;
     amount: number;
+    method?: string;
     refunds?: MetricRefund[];
 }
 
@@ -23,7 +26,9 @@ interface MetricOrder {
 }
 
 export function settledOrderNetTotal(order: MetricOrder): number {
-    const settledPayments = (order.payments ?? []).filter(payment => payment.state === 'Settled');
+    const settledPayments = (order.payments ?? []).filter(
+        payment => payment.state === 'Settled' && !isControlledTestPaymentMethod(payment.method),
+    );
     const settledPaymentTotal = settledPayments.reduce((total, payment) => total + payment.amount, 0);
     if (settledPaymentTotal < order.totalWithTax) return 0;
     const settledRefundTotal = settledPayments
