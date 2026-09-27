@@ -228,30 +228,21 @@
 .security-item-icon {
     width: 36px;
     height: 36px;
-    border-radius: 10px;
     display: grid;
     place-items: center;
     flex-shrink: 0;
 }
 
 .security-item-icon.icon-password {
-    background: var(--accent-soft);
     color: var(--danger);
 }
 
 .security-item-icon.icon-address {
-    background: var(--soft);
     color: var(--success);
 }
 
 .security-item-icon.icon-shield {
-    background: var(--accent-soft);
     color: var(--accent-ink);
-}
-
-.security-item-icon.icon-avatar-history {
-    background: #f5f3ff;
-    color: #7c3aed;
 }
 
 .security-avatar-history {
@@ -547,9 +538,6 @@
     height: 44px;
     margin-bottom: 16px;
     place-items: center;
-    border-radius: 14px;
-    color: #075985;
-    background: #e0f2fe;
 }
 
 .security-privacy-dialog h2 {

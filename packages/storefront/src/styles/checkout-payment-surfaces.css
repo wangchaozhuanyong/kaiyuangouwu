@@ -311,11 +311,6 @@
 }
 
 .payment-method-list label > svg:first-of-type {
-    width: 36px;
-    height: 36px;
-    padding: 8px;
-    border-radius: 6px;
-    background: var(--soft);
     color: var(--text);
 }
 
@@ -452,9 +447,6 @@
     width: 56px;
     height: 56px;
     margin: 0 auto 12px;
-    border-radius: 50%;
-    background: #ecfdf5;
-    color: #047857;
     display: grid;
     place-items: center;
 }
@@ -524,16 +516,6 @@
 .order-confirmation-actions button.primary-action {
     color: var(--accent-foreground);
     background: var(--accent);
-}
-
-.icon-data-export {
-    color: #0369a1;
-    background: #e0f2fe;
-}
-
-.icon-account-closure {
-    color: #b91c1c;
-    background: #fee2e2;
 }
 
 .checkout-address-loading {

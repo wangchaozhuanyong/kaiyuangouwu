@@ -419,9 +419,7 @@
         display: inline-flex;
         width: 30px;
         height: 30px;
-        border-radius: var(--skin-control-radius);
         color: var(--accent-ink);
-        background: var(--accent-soft);
     }
     .desktop-store-layout .home-page .coupon-hub-header {
         margin-bottom: 16px;
@@ -1342,11 +1340,6 @@
         flex: none;
         width: 38px;
         height: 38px;
-        border-radius: var(--skin-control-radius);
-    }
-    .proto-tool-left > .colorful-icon-badge svg {
-        width: 19px;
-        height: 19px;
     }
     .proto-tool-image-frame {
         display: block;

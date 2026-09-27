@@ -295,11 +295,6 @@
     min-height: 72px;
     gap: 10px;
 }
-.account-page .account-order-shortcuts > button > span,
-.account-page .account-order-shortcuts > button > span svg {
-    width: 26px;
-    height: 26px;
-}
 .account-page .account-order-shortcuts > button small {
     font-size: 12px;
 }
@@ -313,13 +308,7 @@
 }
 .account-logistics-empty > svg {
     flex-shrink: 0;
-    width: 42px;
-    height: 42px;
-    padding: 8px;
-    border-radius: 16px;
-    background: var(--soft);
-    color: var(--oriental-gold, var(--accent));
-    border: 1px solid var(--line);
+    color: var(--accent);
     stroke-width: 1.8;
 }
 .account-logistics-empty small {
@@ -339,15 +328,11 @@
 .account-page .account-service-grid > button > span {
     width: 38px;
     height: 38px;
-    border-radius: 15px;
 }
 .account-page .account-service-grid > button[data-icon-tone] > span {
     color: var(--semantic-icon-foreground);
-    background: var(--semantic-icon-background);
 }
 .account-page .account-service-grid > button > span svg {
-    width: 24px;
-    height: 24px;
     stroke-width: 1.8;
 }
 .account-page .account-service-grid > button > b {
@@ -506,29 +491,11 @@
 .notification-icon {
     width: 42px;
     height: 42px;
-    border-radius: 50%;
-    background: var(--soft);
     color: var(--muted);
     display: grid;
     place-items: center;
 }
 
-.notification-icon.is-pending {
-    background: #fff5dd;
-    color: #9a6500;
-}
-
-.notification-icon.is-progress {
-    background: #edf5ff;
-    color: #2f66a5;
-}
-
-.notification-icon.is-complete {
-    background: #edf8f2;
-    color: #287451;
-}
-
-.notification-icon svg,
 .notification-list > button > svg {
     width: 18px;
     height: 18px;
@@ -786,13 +753,9 @@
         width: 28px;
         height: 28px;
         place-items: center;
-        border-radius: var(--skin-control-radius);
         color: var(--semantic-icon-foreground, var(--accent-ink));
-        background: var(--semantic-icon-background, var(--accent-soft));
     }
     .account-page .account-order-shortcuts > button > span svg {
-        width: 16px;
-        height: 16px;
         stroke-width: 1.8;
     }
     .account-page .account-order-shortcuts > button > span b {
@@ -822,9 +785,6 @@
         border-radius: var(--radius-md);
         background: var(--surface);
         box-shadow: var(--shadow-sm);
-    }
-    .account-page .account-logistics-empty > svg {
-        border: 0;
     }
     .account-page .account-recommendations > .section-header {
         min-height: 56px;

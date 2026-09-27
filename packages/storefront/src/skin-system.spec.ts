@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import postcss from 'postcss';
 import { describe, expect, it } from 'vitest';
 
 import { storefrontVisualPresets } from '../../storefront-content-plugin/src/visual-presets';
@@ -18,6 +19,49 @@ function presetRootBlock(source: string, presetId: string): string {
 }
 
 describe('storefront skin system', () => {
+    it('owns transparent decorative icons globally without page or skin frames', () => {
+        const owner = stylesheet('./styles/semantic-icons.css');
+        const slots = owner
+            .slice(owner.indexOf(':is(') + 4, owner.indexOf(') {'))
+            .split(',')
+            .map(value => value.trim());
+        const classes = slots.filter(value => /^\.[\w-]+$/u.test(value));
+        const violations: string[] = [];
+        for (const file of readdirSync(path.join(__dirname, 'styles'))
+            .filter(name => name.endsWith('.css') && name !== 'semantic-icons.css')
+            .map(name => `./styles/${name}`)
+            .concat('./styles.css')) {
+            postcss.parse(stylesheet(file)).walkRules(rule => {
+                const icon =
+                    classes.some(value => new RegExp(`\\${value}(?![\\w-])`).test(rule.selector)) ||
+                    /\.(account-order-shortcuts|account-service-grid)\s*>\s*button(?:\[[^\]]+\])?\s*>\s*span(?:\s+svg)?$/u.test(
+                        rule.selector,
+                    ) ||
+                    [
+                        '.account-logistics-empty > svg',
+                        '.desktop-account-support > svg:first-child',
+                        '.payment-method-list label > svg:first-of-type',
+                        '.ai-studio-settlement-refund > svg',
+                    ].some(value => rule.selector.endsWith(value));
+                if (!icon) return;
+                rule.walkDecls(declaration => {
+                    if (
+                        /^(background(?:-.+)?|border(?:-.+)?|box-shadow|backdrop-filter)$/u.test(
+                            declaration.prop,
+                        )
+                    ) {
+                        violations.push(`${file}: ${rule.selector}: ${declaration.prop}`);
+                    }
+                });
+            });
+        }
+        expect(violations).toEqual([]);
+        expect(owner).toContain('background: transparent;');
+        expect(owner).toContain('border-radius: 0;');
+        expect(owner).toContain('width: 24px;');
+        expect(owner).not.toContain('!important');
+    });
+
     it('rejects decorative separators throughout client CSS, utility maps and components', () => {
         const files: string[] = [];
         const visit = (directory: string) => {
@@ -245,6 +289,9 @@ describe('storefront skin system', () => {
         expect(desktopRow).toContain('border-top: 0;');
         expect(desktopRow).toContain('border-radius: 0;');
         expect(desktopRow).toContain('box-shadow: none;');
+        expect(stylesheet('./styles/desktop-pages.css')).toMatch(
+            /\.desktop-cart-product\s*\{[^}]*grid-row:\s*1 \/ span 2;/,
+        );
         expect(stylesheet('./styles/desktop-pages.css')).toMatch(
             /\.desktop-cart-row\s*\+\s*\.desktop-cart-row\s*\{[^}]*border-top:\s*1px solid var\(--line-subtle\);/,
         );

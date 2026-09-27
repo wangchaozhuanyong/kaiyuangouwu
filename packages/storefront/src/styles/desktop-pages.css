@@ -633,6 +633,7 @@
         text-align: right;
     }
     .desktop-cart-product {
+        grid-row: 1 / span 2;
         display: flex;
         align-items: center;
         min-width: 0;

@@ -1,4 +1,4 @@
-import { expect as browserExpect, chromium, type BrowserContext } from '@playwright/test';
+import { expect as browserExpect, chromium, type BrowserContext, type Route } from '@playwright/test';
 import { AssetType, LanguageCode } from '@vendure/common/lib/generated-types';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
@@ -131,21 +131,61 @@ const testOutput =
 async function prepareClientPreview(context: BrowserContext) {
     // This content-only SQL.js fixture has no currency, fulfillment or announcement
     // plugins. Keep branding, skin, channel and managed content on the real Shop API.
-    await context.route('http://127.0.0.1:5301/shop-api**', async route => {
+    // This local content fixture does not mount StoreDomainPlugin. Supply owned
+    // synthetic ACTIVE domains, then forward their read-only queries to this SQL.js API.
+    // This is fixture wiring, not public domain acceptance or a production bypass.
+    await context.route('http://127.0.0.1:5299/admin-api**', async route => {
+        const body = route.request().postDataJSON() as { query: string; variables?: { channelId?: string } };
+        if (!/query NextAdminStorefrontPreviewDomains\b/.test(body.query)) {
+            await route.continue();
+            return;
+        }
+        const store = stores.find(value => value.id === body.variables?.channelId);
+        await route.fulfill({
+            json: {
+                data: {
+                    storeDomains: store
+                        ? [
+                              {
+                                  id: `fixture-${store.id}`,
+                                  domain: `store-${store.id}.unification.test`,
+                                  status: 'ACTIVE',
+                                  isPrimary: true,
+                                  channel: { id: store.id },
+                              },
+                          ]
+                        : [],
+                },
+            },
+        });
+    });
+    const contentPreview = async (route: Route) => {
+        const headers = {
+            'access-control-allow-origin': '*',
+            'access-control-allow-headers': 'content-type,vendure-token',
+            'access-control-allow-methods': 'POST,OPTIONS',
+        };
+        if (route.request().method() === 'OPTIONS') {
+            await route.fulfill({ status: 204, headers });
+            return;
+        }
+
+        const endpoint = 'http://127.0.0.1:5299/shop-api' + new URL(route.request().url()).search;
         const body = route.request().postDataJSON() as { query: string };
         if (/query StorefrontProducts\b/.test(body.query)) {
-            await route.fulfill({ json: { data: { products: { items: [] } } } });
+            await route.fulfill({ headers, json: { data: { products: { items: [] } } } });
             return;
         }
         if (/query StorefrontConfig\b/.test(body.query)) {
             const query = body.query
                 .replace(/availableStorefrontProvinces\s*\{[^}]*\}/u, '')
                 .replace(/storefrontCurrencyConfiguration\s*\{[^}]*\}/u, '');
-            const response = await route.fetch({ postData: { ...body, query } });
+            const response = await route.fetch({ url: endpoint, postData: { ...body, query } });
             const result = await response.json();
             expect(result.errors).toBeUndefined();
             const currency = result.data.activeChannel.defaultCurrencyCode;
             await route.fulfill({
+                headers,
                 json: {
                     data: {
                         ...result.data,
@@ -182,18 +222,22 @@ async function prepareClientPreview(context: BrowserContext) {
                     },
                 }),
             );
-            const response = await route.fetch({ postData: { ...body, query } });
+            const response = await route.fetch({ url: endpoint, postData: { ...body, query } });
             const result = await response.json();
             expect(result.errors).toBeUndefined();
             await route.fulfill({
+                headers,
                 json: {
                     data: { ...result.data, activeSystemAnnouncements: [], activeStorefrontFlashSales: [] },
                 },
             });
             return;
         }
-        await route.continue();
-    });
+        const forwarded = await route.fetch({ url: endpoint });
+        await route.fulfill({ response: forwarded, headers: { ...forwarded.headers(), ...headers } });
+    };
+    await context.route('http://127.0.0.1:5301/shop-api**', contentPreview);
+    await context.route(/^https:\/\/store-\d+\.unification\.test\/shop-api/, contentPreview);
 }
 
 beforeAll(async () => {
@@ -702,9 +746,9 @@ describe('unified storefront Admin API to Shop API', () => {
                         `http://127.0.0.1:5300/e2e/unification/index.html?channel=${store.token}&name=Store-${index}`,
                     );
                     if (index < 2) {
-                        await browserExpect(page.locator('.quick-grid > button')).toHaveCount(
-                            width >= 1024 ? 5 : 8,
-                        );
+                        await browserExpect(
+                            page.locator(width >= 1024 ? '.desktop-quick-tile' : '.quick-grid > button'),
+                        ).toHaveCount(width >= 1024 ? 5 : 8);
                         if (width >= 1024) await page.getByRole('button', { name: '下一组快捷入口' }).click();
                         await browserExpect(page.locator('.quick-grid')).toContainText(`店${index}入口7`);
                         await browserExpect(page.locator('.hero')).toHaveCount(index === 1 ? 1 : 0);
@@ -1077,9 +1121,9 @@ describe('unified storefront Admin API to Shop API', () => {
                         await browserExpect(page.locator('.home-page')).toHaveCount(1);
                         await browserExpect(page.locator('.is-desktop-grouped')).toHaveCount(0);
                         if (index < 2)
-                            await browserExpect(page.locator('.quick-grid > button')).toHaveCount(
-                                width >= 1024 ? 5 : 8,
-                            );
+                            await browserExpect(
+                                page.locator(width >= 1024 ? '.desktop-quick-tile' : '.quick-grid > button'),
+                            ).toHaveCount(width >= 1024 ? 5 : 8);
                         await browserExpect(page.locator('details.desktop-store-highlights')).toHaveCount(0);
                         expect(
                             await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
@@ -1563,7 +1607,7 @@ describe('unified storefront Admin API to Shop API', () => {
             await backend.close();
         }
     }, 90000);
-    it('publishes page banners from the current Admin to Shop, preserves mobile layouts and store isolation', async () => {
+    it('preserves retired category content while publishing active service banners across stores', async () => {
         adminClient.setChannelToken(stores[0].token);
         shopClient.setChannelToken(stores[0].token);
         const asset = await server.app
@@ -1673,7 +1717,27 @@ describe('unified storefront Admin API to Shop API', () => {
                 ],
             },
         });
+        const retiredCode = `desktop-category-banner-${parent.id}`;
+        await adminClient.query(CREATE, {
+            input: {
+                code: retiredCode,
+                type: 'CUSTOM',
+                enabled: true,
+                position: 0,
+                imageAssetId: String(asset.id),
+                settings: {
+                    purpose: 'desktop-category-banner',
+                    categoryId: parent.id,
+                    mode: 'image',
+                    layout: 'background',
+                    focal: 'right',
+                },
+                translations: copy('历史分类横幅', 'Retired category banner'),
+                items: [],
+            },
+        });
         const before = await adminClient.query(READ);
+        const retiredBefore = before.storefrontContentBlocks.find((block: any) => block.code === retiredCode);
         const servicesBefore = before.storefrontContentBlocks.find(
             (block: any) => block.type === 'CLIENT_PLUGINS',
         );
@@ -1711,13 +1775,6 @@ describe('unified storefront Admin API to Shop API', () => {
         try {
             await Promise.all([frontend.listen(), backend.listen()]);
             const page = await context.newPage();
-            const openBanner = async (target: typeof page) => {
-                await target.goto(uri + '&panel=decoration');
-                await target.getByRole('button', { name: '装修设置', exact: true }).click();
-                await browserExpect(
-                    target.getByRole('region', { name: '电脑端分类横幅' }).getByLabel('横幅展示方式'),
-                ).toBeEnabled();
-            };
             const chooseImage = async (target: typeof page, scope: ReturnType<typeof page.locator>) => {
                 await scope.getByRole('button', { name: '从素材库选择', exact: true }).click();
                 await target
@@ -1730,56 +1787,21 @@ describe('unified storefront Admin API to Shop API', () => {
                         );
                     });
             };
-            await openBanner(page);
-            const panel = page.getByRole('region', { name: '电脑端分类横幅' });
-            await panel.getByLabel('横幅展示方式').selectOption('image');
-            await chooseImage(page, panel);
-            await panel.getByRole('button', { name: '保存分类横幅' }).click();
-            await browserExpect(panel.getByRole('status')).toContainText('已保存');
-            const stale = await context.newPage();
-            await openBanner(stale);
-            await panel.getByLabel('图片焦点').selectOption('right');
-            await panel.getByRole('button', { name: '保存分类横幅' }).click();
-            await browserExpect(panel.getByRole('status')).toContainText('已保存');
-            const stalePanel = stale.getByRole('region', { name: '电脑端分类横幅' });
-            await stalePanel.getByLabel('图片焦点').selectOption('left');
-            await stalePanel.getByRole('button', { name: '保存分类横幅' }).click();
-            await browserExpect(stalePanel.getByRole('alert')).toContainText(/刷新|其他管理员|更新/);
-            await browserExpect(stalePanel.getByLabel('图片焦点')).toHaveValue('left');
-            await stalePanel.getByRole('button', { name: '重新读取并放弃修改' }).click();
-            await browserExpect(stalePanel.getByLabel('图片焦点')).toHaveValue('right');
-            await stale.close();
-            await panel.getByLabel('横幅设置范围').selectOption(parent.id);
-            await panel.getByLabel('横幅展示方式').selectOption('image');
-            await chooseImage(page, panel);
-            await panel.getByLabel('图片版式').selectOption('background');
-            await panel.getByRole('button', { name: '保存分类横幅' }).click();
-            await browserExpect(panel.getByRole('status')).toContainText('已保存');
-            await panel.getByLabel('横幅设置范围').selectOption(child.id);
-            await panel.getByLabel('横幅展示方式').selectOption('text');
-            await panel.getByRole('button', { name: '保存分类横幅' }).click();
-            await browserExpect(panel.getByRole('status')).toContainText('已保存');
-            await page.screenshot({ path: join(output, 'admin-category-banner.png'), fullPage: true });
+            await page.goto(uri + '&panel=decoration');
+            await page.getByRole('button', { name: '装修设置', exact: true }).click();
+            await browserExpect(page.getByRole('region', { name: '电脑端分类横幅' })).toHaveCount(0);
+            await browserExpect(page.getByRole('button', { name: '保存分类横幅' })).toHaveCount(0);
+            await page.screenshot({
+                path: join(output, 'admin-category-banner-retired.png'),
+                fullPage: true,
+            });
             const shop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
             await shop.emulateMedia({ reducedMotion: 'reduce' });
             const categoryUrl = `http://127.0.0.1:5300/e2e/unification/index.html?channel=${stores[0].token}&page=category&category=${parent.id}&child=${child.id}`;
             await shop.goto(categoryUrl);
-            await browserExpect(shop.locator('.desktop-catalog-hero')).toContainText('横幅子分类');
-            await browserExpect(shop.locator('.desktop-catalog-hero img')).toHaveCount(0);
-            await panel.getByLabel('横幅展示方式').selectOption('inherit');
-            await panel.getByRole('button', { name: '保存分类横幅' }).click();
-            await browserExpect(panel.getByRole('status')).toContainText('已保存');
-            await shop.reload();
-            await browserExpect(shop.locator('.desktop-catalog-hero')).toHaveClass(/is-background/);
-            await browserExpect(shop.locator('.desktop-catalog-hero img')).toHaveAttribute(
-                'src',
-                /page-banner.svg/,
-            );
+            await browserExpect(shop.locator('.desktop-catalog-heading h1')).toContainText('横幅子分类');
+            await browserExpect(shop.locator('.desktop-catalog-hero')).toHaveCount(0);
             await page.getByRole('button', { name: '关闭装修设置' }).click();
-            await page.getByLabel('测试店铺').selectOption(stores[1].token);
-            await page.getByRole('button', { name: '装修设置', exact: true }).click();
-            await browserExpect(panel.getByLabel('横幅展示方式')).toHaveValue('inherit');
-            await browserExpect(panel.getByRole('img', { name: '分类横幅图片预览' })).toHaveCount(0);
             await page.goto(uri + '&panel=services');
             await browserExpect(page.getByRole('heading', { name: /商业服务页文案/ })).toBeVisible();
             const serviceImage = page.locator('fieldset').filter({ hasText: '电脑端商业服务页首配图' });
@@ -1837,25 +1859,14 @@ describe('unified storefront Admin API to Shop API', () => {
                                   : '.support-center-content',
                         ),
                     ).toBeVisible();
-                    if (width >= 1024 && route === 'category') {
-                        const hero = await shop.locator('.desktop-catalog-hero').boundingBox();
-                        const side = await shop.locator('.desktop-catalog-sidebar').boundingBox();
-                        const frame = await shop
-                            .locator('.desktop-catalog-hero .safe-image-frame')
-                            .boundingBox();
-                        if (!hero || !side || !frame)
-                            throw new Error('Desktop category banner geometry is missing');
-                        expect(hero.height).toBeGreaterThanOrEqual(136);
-                        expect(hero.x).toBeGreaterThan(side.x + side.width);
-                        // Background mode preserves the whole image above its separate copy.
-                        // Its height follows the selected asset ratio, so a 2:1 fixture is taller
-                        // than the recommended 1600 × 480 banner without being clipped.
-                        expect(frame.height).toBeGreaterThan(130);
-                        expect(hero.height).toBeGreaterThanOrEqual(frame.height);
-                        expect(hero.height - frame.height).toBeLessThan(160);
-                        expect(frame.width).toBeGreaterThanOrEqual(hero.width - 1);
-                    }
-                    if (width >= 1024) {
+                    if (route === 'category') {
+                        await browserExpect(shop.locator('.desktop-catalog-hero')).toHaveCount(0);
+                        if (width >= 1024) {
+                            await browserExpect(shop.locator('.desktop-catalog-heading h1')).toContainText(
+                                '横幅子分类',
+                            );
+                        }
+                    } else if (width >= 1024) {
                         await browserExpect(shop.locator(selector + ' img')).toHaveAttribute(
                             'src',
                             /page-banner.svg/,
@@ -1882,6 +1893,10 @@ describe('unified storefront Admin API to Shop API', () => {
                     });
                 }
             }
+            const retiredAfter = (await adminClient.query(READ)).storefrontContentBlocks.find(
+                (block: any) => block.code === retiredCode,
+            );
+            expect(retiredAfter).toEqual(retiredBefore);
             shopClient.setChannelToken(stores[1].token);
             expect(
                 (await shopClient.query(SHOP_READ)).storefrontContentBlocks.some((block: any) =>

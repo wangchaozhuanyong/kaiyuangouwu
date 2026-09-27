@@ -70,6 +70,7 @@ describe('runtime channel branding', () => {
             act(() => root.render(<Fixture logo={null} background="#F5F7FB" />));
             expect(color('--bg')).toBe('#f1f5f9');
             expect(color('--accent')).toBe('#234567');
+            expect(color('--skin-tool-security-foreground')).toBe('#1d4ed8');
 
             act(() => root.render(<Fixture logo={null} background="#F5F7FB" presetId="modern-oriental" />));
             // Read actual CSS without Vite's CSS transform so this also checks the palette contract.
@@ -100,12 +101,14 @@ describe('runtime channel branding', () => {
             act(() => root.render(<Fixture logo={null} background="#070B14" />));
             expect(color('--bg')).toBe('#f1f5f9');
             expect(color('--accent')).toBe('#234567');
+            expect(color('--skin-tool-security-foreground')).toBe('#1d4ed8');
             expect(color('--accent-hover')).toBe('#a9621c');
             expect(color('--store-primary')).toBe('#234567');
             expect(color('--auth-store-background')).toBe('#f1f5f9');
 
             act(() => root.render(<Fixture logo={null} presetId="neo-minimalist" />));
             expect(color('color-scheme')).toBe('dark');
+            expect(color('--skin-tool-security-foreground')).toBe('#93c5fd');
             expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe(
                 '#070b14',
             );

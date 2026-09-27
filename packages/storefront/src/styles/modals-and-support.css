@@ -489,9 +489,6 @@
 .support-channel-icon {
     width: 40px;
     height: 40px;
-    border-radius: 50%;
-    background: #eef2f7;
-    color: #0f2344;
     display: grid;
     place-items: center;
     flex-shrink: 0;
@@ -503,23 +500,6 @@
     height: 20px;
     display: block;
     object-fit: contain;
-}
-
-.support-channel-row[data-channel='wechat'] .support-channel-icon,
-.support-channel-row[data-channel='whatsapp'] .support-channel-icon {
-    background: #e9f9ef;
-    color: #10a958;
-}
-
-.support-channel-row[data-channel='telegram'] .support-channel-icon {
-    background: #e8f5fd;
-    color: #229ed9;
-}
-
-.support-channel-row[data-channel='qq'] .support-channel-icon,
-.support-channel-row[data-channel='qq_group'] .support-channel-icon {
-    background: #edf4ff;
-    color: #3478d4;
 }
 
 .support-channel-copy {

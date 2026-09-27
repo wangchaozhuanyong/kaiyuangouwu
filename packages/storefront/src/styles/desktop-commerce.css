@@ -362,11 +362,6 @@
         display: inline-flex;
         width: 30px;
         height: 30px;
-        border-radius: var(--skin-control-radius);
-    }
-    .desktop-store-layout .section-header-icon-pill svg {
-        width: 17px;
-        height: 17px;
     }
     .desktop-store-layout .product-grid-card {
         border: 0;
@@ -610,7 +605,7 @@
         padding: 0;
         font-size: 13px;
     }
-    .desktop-account-page :is(header, .desktop-account-heading) svg {
+    .desktop-account-page :is(header, .desktop-account-heading) button svg {
         width: 16px;
         height: 16px;
     }
@@ -777,9 +772,7 @@
         width: 36px;
         height: 36px;
         place-items: center;
-        border-radius: var(--skin-control-radius);
         color: var(--semantic-icon-foreground, var(--accent-ink));
-        background: var(--semantic-icon-background, var(--accent-soft));
     }
     .desktop-order-statuses button > span:nth-child(2) {
         min-width: 0;
@@ -794,10 +787,6 @@
         color: var(--accent-ink);
         font-size: 16px;
         font-weight: 600;
-    }
-    .desktop-order-status-icon svg {
-        width: 19px;
-        height: 19px;
     }
     .desktop-orders-empty {
         display: flex;
@@ -1041,13 +1030,7 @@
         font-size: 11px;
     }
     .desktop-account-support > svg:first-child {
-        width: 30px;
-        height: 30px;
         flex: none;
-        padding: 7px;
-        border-radius: var(--skin-control-radius);
-        background: var(--text);
-        color: var(--surface);
     }
     .desktop-account-support svg:last-child {
         margin-left: auto;

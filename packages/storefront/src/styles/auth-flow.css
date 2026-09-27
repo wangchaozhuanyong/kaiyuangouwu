@@ -24,18 +24,12 @@
 .auth-page .auth-hero-benefit-icon {
     width: 30px;
     height: 30px;
-    border: 1px solid rgb(109 207 255 / 35%);
-    border-radius: 10px;
-    background: rgb(5 49 112 / 62%);
     color: var(--auth-hero-accent-color);
     display: grid;
     place-items: center;
-    box-shadow: 0 8px 18px rgb(1 12 39 / 18%);
 }
 
 .auth-page .auth-hero-benefit-icon svg {
-    width: 15px;
-    height: 15px;
     stroke-width: 2;
 }
 
@@ -168,12 +162,6 @@
     .auth-page .auth-hero-benefit-icon {
         width: 26px;
         height: 26px;
-        border-radius: 9px;
-    }
-
-    .auth-page .auth-hero-benefit-icon svg {
-        width: 13px;
-        height: 13px;
     }
 
     .auth-page .auth-hero-benefit-copy {
@@ -838,16 +826,11 @@
 .coupon-empty-icon {
     width: 60px;
     height: 60px;
-    border-radius: 50%;
-    background: var(--accent-soft);
-    color: #ef554a;
     display: grid;
     place-items: center;
 }
 
 .coupon-empty-icon svg {
-    width: 28px;
-    height: 28px;
     stroke-width: 2.3;
 }
 
@@ -1999,12 +1982,6 @@
     .auth-page .auth-hero-benefit-icon {
         width: 25px;
         height: 25px;
-        border-radius: 8px;
-    }
-
-    .auth-page .auth-hero-benefit-icon svg {
-        width: 13px;
-        height: 13px;
     }
 
     .auth-page .auth-hero-benefit-copy {
@@ -2042,9 +2019,6 @@
     .auth-page .auth-hero-benefit-icon {
         width: 28px;
         height: 28px;
-        border-radius: 9px;
-        background: rgb(16 98 193 / 58%);
-        box-shadow: 0 5px 14px rgb(0 8 28 / 24%);
     }
 
     .auth-page .auth-hero-benefit-copy strong {
@@ -2565,17 +2539,10 @@
 .auth-assurance-icon {
     width: 34px;
     height: 34px;
-    border-radius: var(--skin-icon-radius, var(--skin-control-radius));
-    background: var(--soft);
     color: var(--accent-ink);
     display: grid;
     place-items: center;
     flex: 0 0 auto;
-}
-
-.auth-assurance-icon svg {
-    width: 17px;
-    height: 17px;
 }
 
 @media (max-width: 1023px) {

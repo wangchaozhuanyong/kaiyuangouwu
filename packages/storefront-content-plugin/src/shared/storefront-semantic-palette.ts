@@ -362,7 +362,10 @@ export function resolveStorefrontSkinTreatment(presetId: StorefrontVisualPresetI
     return { ...SKIN_TREATMENTS[presetId] };
 }
 
-export function storefrontSkinCssVariables(presetId: StorefrontVisualPresetId): Record<string, string> {
+export function storefrontSkinCssVariables(
+    presetId: StorefrontVisualPresetId,
+    palette: StorefrontSemanticPalette = resolveStorefrontSemanticPalette(presetId),
+): Record<string, string> {
     const treatment = resolveStorefrontSkinTreatment(presetId);
     const variables: Record<string, string> = {
         '--skin-divider': treatment.divider,
@@ -376,8 +379,25 @@ export function storefrontSkinCssVariables(presetId: StorefrontVisualPresetId): 
         '--skin-hero-shadow': treatment.heroShadow,
         '--skin-header-shadow': treatment.headerShadow,
     };
+    // Transparent icons sit directly on the shared surfaces, including hover states.
+    // Derive their contrast from the resolved palette rather than a former icon tile.
+    const iconSurfaces = [
+        palette.page,
+        palette.surface,
+        palette.elevated,
+        palette.subtle,
+        palette.accentSoft,
+        palette.interactionHover,
+        palette.interactionPressed,
+    ];
+    const direction = storefrontRelativeLuminance(palette.text) < 0.5 ? 'dark' : 'light';
     for (const [tone, colors] of Object.entries(TOOL_ICON_TONES[presetId])) {
-        variables[`--skin-tool-${tone}-foreground`] = colors.foreground;
+        variables[`--skin-tool-${tone}-foreground`] = makeAccessibleAgainstAll(
+            colors.foreground,
+            iconSurfaces,
+            3,
+            direction,
+        );
         variables[`--skin-tool-${tone}-background`] = colors.background;
     }
     return variables;
