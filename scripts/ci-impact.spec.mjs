@@ -21,6 +21,22 @@ test('a storefront spacing change never launches backend, codegen or database ch
         assert.equal(plan[key], false, key);
     assert.equal(plan.lane, 'frontend');
 });
+test('static deployment entry repairs select controls and reuse frontend checks', () => {
+    const controls = ['deploy/frontend-ssm.mjs', 'deploy/deploy-frontends-from-s3.sh'];
+    const controlPlan = classifyChanges(controls, inventory);
+    assert.equal(controlPlan.lane, 'none');
+    assert.equal(controlPlan.controls, true);
+    assert.deepEqual(controlPlan.frontends, []);
+    assert.deepEqual(controlPlan.packages, []);
+    const cumulative = classifyChanges(
+        [...controls, 'packages/storefront-content-plugin/src/shared/hero-scene.css'],
+        inventory,
+    );
+    assert.equal(cumulative.lane, 'frontend');
+    assert.deepEqual(cumulative.frontends, ['storefront']);
+    assert.deepEqual(cumulative.databases, []);
+    assert.equal(classifyChanges([...controls, 'packages/core/src/api/auth.ts'], inventory).lane, 'runtime');
+});
 test('admin UI stays in its own scope, while mixed app changes include both apps', () => {
     assert.deepEqual(
         classifyChanges(['packages/next-admin/src/pages/Catalog/Button.tsx'], inventory).frontends,

@@ -7,6 +7,7 @@ readonly components="${4:-}"
 readonly repository=/var/www/kaiyuangouwu
 readonly releases_dir=/var/www/kaiyuangouwu-frontend-releases
 readonly artifact_bucket=yunqiao-vendure-prod-backup-079740175286-apne1
+readonly controls_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 [[ "$target_sha" =~ ^[a-f0-9]{40}$ ]] || fail 'Expected full source SHA'
 [[ "$archive_sha256" =~ ^[a-f0-9]{64}$ ]] || fail 'Expected artifact checksum'
@@ -29,7 +30,7 @@ readonly storefront_sha="$(read_frontend_sha /var/www/kaiyuangouwu-storefront-cu
 readonly admin_sha="$(read_frontend_sha /var/www/kaiyuangouwu-next-admin-current/frontend-release.json)"
 git diff --no-renames --name-only -z "$backend_sha" "$target_sha" -- | \
     STOREFRONT_SHA="$storefront_sha" ADMIN_SHA="$admin_sha" TARGET_SHA="$target_sha" \
-    node deploy/frontend-release.mjs scope "$components"
+    node "$controls_root/deploy/frontend-release.mjs" scope "$components"
 # A full release installs both pointers and the Nginx routing before static releases are possible.
 IFS=',' read -r -a apps <<< "$components"
 for app in "${apps[@]}"; do
@@ -76,7 +77,7 @@ p.write_text(json.dumps(value)+'\n')
 PYVAULT
     # Detect missing companion files or an active vault using a runtime-bound
     # root before changing either public frontend pointer.
-    sudo -n nginx -T 2>/dev/null | node deploy/frontend-release.mjs vault-routing "$staging/payload/storefront"
+    sudo -n nginx -T 2>/dev/null | node "$controls_root/deploy/frontend-release.mjs" vault-routing "$staging/payload/storefront"
 fi
 if [[ -e "$candidate" ]]; then
     diff --recursive --brief "$candidate" "$staging/payload" || fail 'Existing immutable candidate differs from the verified payload'
@@ -84,5 +85,5 @@ else
     chmod -R a+rX "$staging/payload"
     mv "$staging/payload" "$candidate"
 fi
-sudo -n node deploy/frontend-release.mjs activate "$components" "$candidate" "${archive_name%.tar.gz}"
+sudo -n node "$controls_root/deploy/frontend-release.mjs" activate "$components" "$candidate" "${archive_name%.tar.gz}"
 printf 'FRONTEND_DEPLOYED_OK sha=%s components=%s\n' "$target_sha" "$components"

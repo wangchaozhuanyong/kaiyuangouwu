@@ -35,6 +35,55 @@ import {
     verifyFrontend,
     verifyTwoFactor,
 } from './frontend-release.mjs';
+import { frontendDeployCommand } from './frontend-ssm.mjs';
+
+test('static deployment runs target control files while preserving the active backend checkout', t => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'frontend-target-controls-')));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const repository = join(root, 'repository');
+    mkdirSync(join(repository, 'deploy'), { recursive: true });
+    mkdirSync(join(repository, 'scripts'));
+    const git = (...args) => execFileSync('git', args, { cwd: repository, encoding: 'utf8' }).trim();
+    git('init', '-b', 'main');
+    git('config', 'user.email', 'release-test@example.invalid');
+    git('config', 'user.name', 'Release test');
+    writeFileSync(join(repository, 'deploy/deploy-frontends-from-s3.sh'), 'exit 99\n');
+    writeFileSync(join(repository, 'scripts/rule.mjs'), 'console.log("old runtime rules")\n');
+    git('add', '.');
+    git('commit', '-m', 'active runtime');
+    const active = git('rev-parse', 'HEAD');
+    writeFileSync(
+        join(repository, 'deploy/deploy-frontends-from-s3.sh'),
+        'set -eu\nnode "$(dirname -- "$0")/../scripts/rule.mjs" "$@"\n',
+    );
+    writeFileSync(
+        join(repository, 'scripts/rule.mjs'),
+        'console.log("TARGET_CONTROLS_OK " + process.argv.slice(2).join(" "))\n',
+    );
+    git('add', '.');
+    git('commit', '-m', 'reviewed static rules');
+    const target = git('rev-parse', 'HEAD');
+    git('remote', 'add', 'origin', repository);
+    git('checkout', '--detach', active);
+    const command = frontendDeployCommand({
+        sha: target,
+        archive: `frontends-${target}-123-1.tar.gz`,
+        checksum: 'a'.repeat(64),
+        components: 'storefront',
+    })
+        .replace('sudo -H -u ubuntu /bin/bash', '/bin/bash')
+        .replaceAll('/var/www/kaiyuangouwu-frontend-releases', join(root, 'frontends'))
+        .replaceAll('/var/www/kaiyuangouwu', repository);
+    const deployed = spawnSync('bash', ['-c', command], { encoding: 'utf8' });
+    assert.equal(deployed.status, 0, deployed.stderr);
+    assert.ok(deployed.stdout.includes(`TARGET_CONTROLS_OK ${target} frontends-${target}-123-1.tar.gz`));
+    assert.equal(git('rev-parse', 'HEAD'), active);
+    assert.equal(git('status', '--porcelain'), '');
+    const stale = spawnSync('bash', ['-c', command.replaceAll(target, active)], { encoding: 'utf8' });
+    assert.notEqual(stale.status, 0);
+    assert.ok(stale.stderr.includes('Target is no longer current main'));
+    assert.equal(git('rev-parse', 'HEAD'), active);
+});
 
 const sha = value => createHash('sha256').update(value).digest('hex');
 function fixture(t) {
