@@ -11,7 +11,60 @@ import {
     missingPlan,
     requiredJobs,
 } from './ci-check-inputs.mjs';
-import { emitPlan, inspection, isDocumentation, packageInventory } from './ci-impact.mjs';
+import {
+    emitPlan,
+    inspection,
+    isDocumentation,
+    packageInventory,
+    STATIC_APPS,
+    staticStyleOwner,
+} from './ci-impact.mjs';
+
+export function frontendEvidencePlan(
+    plan,
+    revisions,
+    changedFiles = (from, to) =>
+        git('diff', '--no-renames', '--name-only', from, to, '--').split('\n').filter(Boolean),
+) {
+    // Scope runtime safety against the backend first. Independent frontend pointers
+    // only narrow check coverage after the complete diff was classified as static.
+    if (plan.lane !== 'frontend' || plan.full) return plan;
+    const observed = { storefront: revisions.storefrontSha, 'next-admin': revisions.adminSha };
+    const pending = new Map();
+    for (const component of STATIC_APPS) {
+        const sha = observed[component];
+        if (!sha || sha === 'unknown') continue;
+        assert.match(sha, /^[a-f0-9]{40}$/u, `Invalid observed ${component} revision`);
+        assert.match(revisions.targetSha, /^[a-f0-9]{40}$/u);
+        pending.set(component, new Set(changedFiles(sha, revisions.targetSha)));
+    }
+    if (!pending.size) return plan;
+    const owner = file =>
+        staticStyleOwner(file) || STATIC_APPS.find(app => file.startsWith(`packages/${app}/`));
+    const files = plan.files.filter(file => !pending.has(owner(file)) || pending.get(owner(file)).has(file));
+    return {
+        ...plan,
+        files,
+        frontends: plan.frontends.filter(component => files.some(file => owner(file) === component)),
+        ...(plan.lintFiles ? { lintFiles: plan.lintFiles.filter(file => files.includes(file)) } : {}),
+    };
+}
+
+function releaseInspection(base, target, full = false) {
+    return frontendEvidencePlan(
+        inspection(base, target, full),
+        {
+            storefrontSha: process.env.STOREFRONT_SHA,
+            adminSha: process.env.ADMIN_SHA,
+            targetSha: git('rev-parse', target),
+        },
+        (from, to) => {
+            git('merge-base', '--is-ancestor', base, from);
+            git('merge-base', '--is-ancestor', from, to);
+            return git('diff', '--no-renames', '--name-only', from, to, '--').split('\n').filter(Boolean);
+        },
+    );
+}
 
 export function coversChanges(evidence, required) {
     return (
@@ -280,7 +333,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         const repository = process.env.GITHUB_REPOSITORY;
         assert.match(repository ?? '', /^[\w.-]+\/[\w.-]+$/u);
         const full = process.argv[5] === 'true';
-        const plan = inspection(base, target, full);
+        const plan = releaseInspection(base, target, full);
         const coverage =
             full || !checkRequirements(plan, packageInventory()).length
                 ? { missing: checkRequirements(plan, packageInventory()), reused: [] }
@@ -296,7 +349,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     } else if (command === 'find') {
         const repository = process.env.GITHUB_REPOSITORY;
         assert.match(repository ?? '', /^[\w.-]+\/[\w.-]+$/u);
-        const plan = inspection(base, target);
+        const plan = releaseInspection(base, target);
         const result = await findInputCoverage({ repository, targetSha: git('rev-parse', target), plan });
         output('run_id', !result.missing.length && result.anchor ? result.anchor.runId : '');
     } else if (command === 'verify') {
@@ -314,7 +367,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         const result = await findInputCoverage({
             repository,
             targetSha: git('rev-parse', target),
-            plan: inspection(base, target),
+            plan: releaseInspection(base, target),
             includeRunId: runId,
             currentRunId: process.env.GITHUB_RUN_ID,
         });

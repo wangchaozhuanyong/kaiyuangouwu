@@ -20,11 +20,69 @@ import {
     coversChanges,
     findEvidence,
     findInputCoverage,
+    frontendEvidencePlan,
     hasTrustedPullRequest,
     isTrustedRun,
     requestGitHubApi,
     validateExecutedChecks,
 } from './release-evidence.mjs';
+
+test('static evidence checks each app against its active pointer while retaining cumulative runtime safety', () => {
+    const source = 'a'.repeat(40);
+    const target = 'b'.repeat(40);
+    const oldStore = 'packages/storefront/src/pages/search-page.tsx';
+    const newStore = 'packages/storefront/src/styles/desktop-commerce.css';
+    const oldAdmin = 'packages/next-admin/e2e/carousel/fixture.tsx';
+    const hero = 'packages/storefront-content-plugin/src/shared/hero-scene.css';
+    const controls = 'scripts/release-evidence.mjs';
+    const cumulative = classifyChanges([oldStore, newStore, oldAdmin, hero, controls]);
+    const scoped = frontendEvidencePlan(
+        cumulative,
+        { storefrontSha: source, adminSha: source, targetSha: target },
+        () => [newStore, controls],
+    );
+    assert.deepEqual(scoped.files, [newStore, controls]);
+    assert.deepEqual(scoped.frontends, ['storefront']);
+    assert.equal(scoped.controls, true);
+    assert.equal(scoped.lane, 'frontend');
+    const checks = checkRequirements(scoped, []);
+    const frontend = checks.find(check => check.id === 'frontend:storefront');
+    assert.deepEqual(frontend.files, [newStore]);
+    assert.ok(
+        !checks.some(check => check.file === oldStore || check.file === oldAdmin || check.file === hero),
+    );
+    const editedAgain = frontendEvidencePlan(cumulative, { storefrontSha: source, targetSha: target }, () => [
+        oldStore,
+        newStore,
+        hero,
+    ]);
+    assert.ok(editedAgain.files.includes(oldStore));
+    assert.ok(editedAgain.files.includes(hero));
+    assert.ok(editedAgain.files.includes(oldAdmin), 'missing app pointer keeps conservative coverage');
+    for (const file of [
+        'packages/core/src/api/auth.ts',
+        'packages/dev-server/migrations/change.ts',
+        'packages/storefront/vite.config.ts',
+    ]) {
+        const runtime = classifyChanges([...cumulative.files, file]);
+        assert.equal(runtime.lane, 'runtime');
+        assert.equal(
+            frontendEvidencePlan(
+                runtime,
+                { storefrontSha: source, adminSha: source, targetSha: target },
+                () => [],
+            ),
+            runtime,
+        );
+    }
+    assert.equal(
+        frontendEvidencePlan(cumulative, { storefrontSha: 'unknown', adminSha: 'unknown' }, () => []),
+        cumulative,
+    );
+    assert.throws(() =>
+        frontendEvidencePlan(cumulative, { storefrontSha: 'invalid', targetSha: target }, () => []),
+    );
+});
 
 test('GitHub evidence reads retry one transient HTTP failure without retrying invalid proof or client errors', () => {
     const delays = [];
