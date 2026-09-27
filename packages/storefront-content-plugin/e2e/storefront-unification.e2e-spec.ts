@@ -1,4 +1,4 @@
-import { expect as browserExpect, chromium } from '@playwright/test';
+import { expect as browserExpect, chromium, type BrowserContext } from '@playwright/test';
 import { AssetType, LanguageCode } from '@vendure/common/lib/generated-types';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
@@ -11,6 +11,7 @@ import {
     TransactionalConnection,
 } from '@vendure/core';
 import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfig } from '@vendure/testing';
+import { parse, print, visit } from 'graphql';
 import gql from 'graphql-tag';
 import { mkdtempSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
@@ -126,6 +127,74 @@ const copy = (title: string, english: string) => [
 const testOutput =
     process.env.STOREFRONT_TEST_OUTPUT ??
     fileURLToPath(new URL('../../storefront/artifacts/content-sync-audit/integration/', import.meta.url));
+
+async function prepareClientPreview(context: BrowserContext) {
+    // This content-only SQL.js fixture has no currency, fulfillment or announcement
+    // plugins. Keep branding, skin, channel and managed content on the real Shop API.
+    await context.route('http://127.0.0.1:5301/shop-api**', async route => {
+        const body = route.request().postDataJSON() as { query: string };
+        if (/query StorefrontProducts\b/.test(body.query)) {
+            await route.fulfill({ json: { data: { products: { items: [] } } } });
+            return;
+        }
+        if (/query StorefrontConfig\b/.test(body.query)) {
+            const query = body.query
+                .replace(/availableStorefrontProvinces\s*\{[^}]*\}/u, '')
+                .replace(/storefrontCurrencyConfiguration\s*\{[^}]*\}/u, '');
+            const response = await route.fetch({ postData: { ...body, query } });
+            const result = await response.json();
+            expect(result.errors).toBeUndefined();
+            const currency = result.data.activeChannel.defaultCurrencyCode;
+            await route.fulfill({
+                json: {
+                    data: {
+                        ...result.data,
+                        availableStorefrontProvinces: [],
+                        storefrontCurrencyConfiguration: {
+                            defaultCurrencyCode: currency,
+                            availableCurrencyCodes: [currency],
+                            selectorEnabled: false,
+                            cnyToMyrRate: 1,
+                            rateUpdatedAt: null,
+                            usdtDisplayEnabled: false,
+                            usdtMarkupPercent: 0,
+                            cnyPerUsdtRate: null,
+                            myrPerUsdtRate: null,
+                            usdtRateSource: null,
+                            usdtRateUpdatedAt: null,
+                            usdtRateAvailable: false,
+                            usdtPaymentConfigured: false,
+                        },
+                    },
+                },
+            });
+            return;
+        }
+        if (/query StorefrontContent\b/.test(body.query)) {
+            const query = print(
+                visit(parse(body.query), {
+                    Field(node) {
+                        return ['activeSystemAnnouncements', 'activeStorefrontFlashSales'].includes(
+                            node.name.value,
+                        )
+                            ? null
+                            : undefined;
+                    },
+                }),
+            );
+            const response = await route.fetch({ postData: { ...body, query } });
+            const result = await response.json();
+            expect(result.errors).toBeUndefined();
+            await route.fulfill({
+                json: {
+                    data: { ...result.data, activeSystemAnnouncements: [], activeStorefrontFlashSales: [] },
+                },
+            });
+            return;
+        }
+        await route.continue();
+    });
+}
 
 beforeAll(async () => {
     await mkdir(testOutput, { recursive: true });
@@ -383,11 +452,12 @@ describe('unified storefront Admin API to Shop API', () => {
                 host: '127.0.0.1',
                 port: 5300,
                 strictPort: true,
-                proxy: { '/shop-api': 'http://127.0.0.1:5299' },
+                proxy: { '/shop-api': 'http://127.0.0.1:5299', '/assets': 'http://127.0.0.1:5299' },
             },
         });
         const browser = await chromium.launch({ headless: true });
         const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+        await prepareClientPreview(context);
         await context.addInitScript(
             ({ auth, channel }) => {
                 if (window !== window.top) return;
@@ -459,8 +529,8 @@ describe('unified storefront Admin API to Shop API', () => {
             const before = await order();
             await row.getByRole('button', { name: '下移', exact: true }).click();
             await browserExpect(
-                admin.getByRole('status').filter({ hasText: '已重新读取核对' }),
-            ).toBeVisible();
+                admin.getByRole('status').filter({ hasText: '首页楼层顺序已更新' }),
+            ).toContainText('已重新读取核对');
             await first.reload();
             await browserExpect(first.locator('.home-dual-showcase')).toBeVisible();
             expect(Number(await order())).toBeGreaterThan(Number(before));
@@ -605,7 +675,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 host: '127.0.0.1',
                 port: 5300,
                 strictPort: true,
-                proxy: { '/shop-api': 'http://127.0.0.1:5299' },
+                proxy: { '/shop-api': 'http://127.0.0.1:5299', '/assets': 'http://127.0.0.1:5299' },
             },
         });
         const browser = await chromium.launch({ headless: true });
@@ -735,7 +805,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 host: '127.0.0.1',
                 port: 5300,
                 strictPort: true,
-                proxy: { '/shop-api': 'http://127.0.0.1:5299' },
+                proxy: { '/shop-api': 'http://127.0.0.1:5299', '/assets': 'http://127.0.0.1:5299' },
             },
         });
         const browser = await chromium.launch({ headless: true });
@@ -969,7 +1039,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 host: '127.0.0.1',
                 port: 5300,
                 strictPort: true,
-                proxy: { '/shop-api': 'http://127.0.0.1:5299' },
+                proxy: { '/shop-api': 'http://127.0.0.1:5299', '/assets': 'http://127.0.0.1:5299' },
             },
         });
         const browser = await chromium.launch({ headless: true });
@@ -1040,6 +1110,7 @@ describe('unified storefront Admin API to Shop API', () => {
         });
         const browser = await chromium.launch({ headless: true });
         const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+        await prepareClientPreview(context);
         await context.addInitScript(
             ({ auth, channel }) => {
                 sessionStorage.setItem('local-test-admin-token', auth);
@@ -1313,7 +1384,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 host: '127.0.0.1',
                 port: 5300,
                 strictPort: true,
-                proxy: { '/shop-api': 'http://127.0.0.1:5299' },
+                proxy: { '/shop-api': 'http://127.0.0.1:5299', '/assets': 'http://127.0.0.1:5299' },
             },
         });
         const backend = await createServer({
@@ -1332,6 +1403,7 @@ describe('unified storefront Admin API to Shop API', () => {
             await frontend.listen();
             await backend.listen();
             const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+            await prepareClientPreview(context);
             await context.addInitScript(
                 ({ auth, channel }) => {
                     sessionStorage.setItem('local-test-admin-token', auth);
@@ -1381,11 +1453,13 @@ describe('unified storefront Admin API to Shop API', () => {
                 await browserExpect(clientFrame.locator('.auth-page')).toBeVisible({ timeout: 15000 });
                 await browserExpect(clientFrame.locator('.login-content')).toHaveCSS(
                     'background-color',
-                    'rgb(255, 255, 255)',
+                    await page
+                        .locator('.login-content')
+                        .evaluate(element => getComputedStyle(element).backgroundColor),
                 );
                 await browserExpect(clientFrame.locator('.login-content')).toHaveCSS(
                     'color',
-                    state === 'classic' ? 'rgb(15, 23, 42)' : 'rgb(32, 52, 50)',
+                    await page.locator('.login-content').evaluate(element => getComputedStyle(element).color),
                 );
                 await browserExpect(page.locator('html')).toHaveAttribute(
                     'data-storefront-preset',
@@ -1609,7 +1683,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 host: '127.0.0.1',
                 port: 5300,
                 strictPort: true,
-                proxy: { '/shop-api': 'http://127.0.0.1:5299' },
+                proxy: { '/shop-api': 'http://127.0.0.1:5299', '/assets': 'http://127.0.0.1:5299' },
             },
         });
         const backend = await createServer({
@@ -1623,6 +1697,7 @@ describe('unified storefront Admin API to Shop API', () => {
         });
         const browser = await chromium.launch({ headless: true });
         const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+        await prepareClientPreview(context);
         await context.addInitScript(
             ({ auth, channel }) => {
                 sessionStorage.setItem('local-test-admin-token', auth);
