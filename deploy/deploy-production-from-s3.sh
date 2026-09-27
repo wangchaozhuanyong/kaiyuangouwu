@@ -49,16 +49,21 @@ fail() {
 }
 
 check_production_disk_usage() {
-    local usage maximum="${VENDURE_MAXIMUM_DISK_USAGE_PERCENT:-85}"
+    local disk_values total_kib used_kib usage_percent maximum="${VENDURE_MAXIMUM_DISK_USAGE_PERCENT:-85}"
     [[ "${maximum}" =~ ^([1-9][0-9]?|100)$ ]] || fail 'invalid production disk usage limit'
-    if ! usage="$(df --output=pcent / | tail -n 1 | tr -d '[:space:]%')"; then
+    if ! disk_values="$(df -Pk / | awk 'NR == 2 { print $2, $3 }')"; then
         fail 'could not read production disk usage'
     fi
-    [[ "${usage}" =~ ^(0|[1-9][0-9]?|100)$ ]] || fail 'invalid production disk usage reading'
-    if ((usage >= maximum)); then
-        fail "root disk usage ${usage}% reaches the ${maximum}% health limit; review Production Operations retention before another release"
+    read -r total_kib used_kib <<< "${disk_values}"
+    [[ "${total_kib}" =~ ^[1-9][0-9]*$ && "${used_kib}" =~ ^[0-9]+$ ]] ||
+        fail 'invalid production disk usage reading'
+    ((used_kib <= total_kib)) || fail 'invalid production disk usage reading'
+    usage_percent=$((used_kib * 100 / total_kib))
+    if ((used_kib * 100 >= total_kib * maximum)); then
+        fail "root disk usage reaches the ${maximum}% health limit; review Production Operations retention before another release"
     fi
-    printf 'DEPLOY_DISK_OK usage_percent=%s limit_percent=%s\n' "${usage}" "${maximum}"
+    printf 'DEPLOY_DISK_OK usage_percent_floor=%s used_kib=%s total_kib=%s limit_percent=%s\n' \
+        "${usage_percent}" "${used_kib}" "${total_kib}" "${maximum}"
 }
 
 check_production_disk_staging_headroom() {

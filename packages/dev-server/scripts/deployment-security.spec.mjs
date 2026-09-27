@@ -172,29 +172,60 @@ void test('prunes abandoned candidates and checks disk before worker pause and d
     assert.ok(health.includes('${VENDURE_MAXIMUM_DISK_USAGE_PERCENT:-85}'));
     const stub = `set -Eeuo pipefail
         fail() { printf '%s\\n' "$1" >&2; exit 1; }
-        df() { printf 'Use%%\\n %s%%\\n' "$FIXTURE_DISK_USAGE"; return "$FIXTURE_DF_STATUS"; }`;
-    for (const [usage, maximum, dfStatus, passes] of [
-        ['84', '', '0', true],
-        ['85', '', '0', false],
-        ['100', '', '0', false],
-        ['79', '80', '0', true],
-        ['80', '80', '0', false],
-        ['invalid', '', '0', false],
-        ['20', 'invalid', '0', false],
-        ['20', '', '1', false],
+        df() {
+            printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n/dev/root %s %s 0 0%% /\\n' \\
+                "$FIXTURE_DISK_TOTAL" "$FIXTURE_DISK_USED"
+            return "$FIXTURE_DF_STATUS"
+        }`;
+    for (const [total, used, maximum, dfStatus, passes] of [
+        ['1000', '849', '', '0', true],
+        ['1000', '850', '', '0', false],
+        ['1000', '1000', '', '0', false],
+        ['1000', '799', '80', '0', true],
+        ['1000', '800', '80', '0', false],
+        ['invalid', '200', '', '0', false],
+        ['1000', '200', 'invalid', '0', false],
+        ['1000', '200', '', '1', false],
     ]) {
         const result = spawnSync('bash', ['-c', `${stub}\n${guard}\ncheck_production_disk_usage`], {
             encoding: 'utf8',
             env: {
                 ...process.env,
-                FIXTURE_DISK_USAGE: usage,
+                FIXTURE_DISK_TOTAL: total,
+                FIXTURE_DISK_USED: used,
                 FIXTURE_DF_STATUS: dfStatus,
                 VENDURE_MAXIMUM_DISK_USAGE_PERCENT: maximum,
             },
         });
-        assert.equal(result.status, passes ? 0 : 1, `${usage}/${maximum}: ${result.stderr}`);
+        assert.equal(result.status, passes ? 0 : 1, `${used}/${total}/${maximum}: ${result.stderr}`);
         if (passes) assert.match(result.stdout, /DEPLOY_DISK_OK/u);
         else assert.doesNotMatch(result.stdout, /DEPLOY_DISK_OK/u);
+    }
+    const healthDiskGuard = health.match(
+        /disk_usage_kib=.*?\n[\s\S]*?failures\+=\("root-disk-high"\)\nfi/u,
+    )?.[0];
+    assert.ok(healthDiskGuard);
+    for (const [used, passes] of [
+        ['849', true],
+        ['850', false],
+    ]) {
+        const result = spawnSync(
+            'bash',
+            [
+                '-c',
+                `${stub}\nmaximum_disk_usage_percent=85\nfailures=()\n${healthDiskGuard}\n[[ \${#failures[@]} -eq 0 ]]`,
+            ],
+            {
+                encoding: 'utf8',
+                env: {
+                    ...process.env,
+                    FIXTURE_DISK_TOTAL: '1000',
+                    FIXTURE_DISK_USED: used,
+                    FIXTURE_DF_STATUS: '0',
+                },
+            },
+        );
+        assert.equal(result.status, passes ? 0 : 1, `health ${used}/1000: ${result.stderr}`);
     }
     const headroomStub = `set -Eeuo pipefail
         fail() { printf '%s\\n' "$1" >&2; exit 1; }
