@@ -685,9 +685,6 @@
         box-shadow: none;
         font-size: 14px;
     }
-    .desktop-cart-row + .desktop-cart-row {
-        border-top: 1px solid color-mix(in srgb, var(--line) 25%, transparent);
-    }
     .desktop-cart-columns > :last-child,
     .desktop-cart-row > .desktop-cart-amount {
         text-align: right;

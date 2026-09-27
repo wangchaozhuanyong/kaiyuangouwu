@@ -106,6 +106,13 @@ describe('storefront skin system', () => {
         expect(desktopRow).toContain('border-top: 0;');
         expect(desktopRow).toContain('border-radius: 0;');
         expect(desktopRow).toContain('box-shadow: none;');
+        expect(stylesheet('./styles/desktop-pages.css')).not.toMatch(
+            /\.desktop-cart-row\s*\+\s*\.desktop-cart-row\s*\{[^}]*border(?:-top)?:/,
+        );
+        const accountAssets = stylesheet('./styles/account-identity.css').match(
+            /\.account-identity-assets\s*\{([^}]*)\}/,
+        )?.[1];
+        expect(accountAssets).not.toContain('border-top:');
     });
 
     it('owns populated logistics surfaces in one semantic component stylesheet', () => {
