@@ -10,8 +10,27 @@ import { contentPublicationLabels, contentPublicationStatus } from './storefront
 const state = vi.hoisted(() => ({
     token: 'fixture',
     data: { activeChannel: { id: 'store', code: 'shop', token: 'fixture' } },
+    domains: [
+        {
+            domain: 'shop.example.test',
+            status: 'ACTIVE',
+            isPrimary: true,
+            channel: { id: 'store', code: 'shop' },
+        },
+    ],
+    domainLoading: false,
+    domainError: null as Error | null,
 }));
-vi.mock('@apollo/client/react', () => ({ useQuery: () => ({ data: state.data }) }));
+vi.mock('@apollo/client/react', () => ({
+    useQuery: (query: { definitions: Array<{ name?: { value: string } }> }) =>
+        query.definitions.some(definition => definition.name?.value === 'NextAdminStorefrontPreviewDomains')
+            ? {
+                  data: { storeDomains: state.domains },
+                  loading: state.domainLoading,
+                  error: state.domainError,
+              }
+            : { data: state.data },
+}));
 vi.mock('../../apollo', () => ({ ADMIN_API_URL: '/admin-api', getActiveChannelToken: () => state.token }));
 vi.stubGlobal(
     'ResizeObserver',
@@ -25,6 +44,17 @@ afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
     vi.restoreAllMocks();
     state.token = 'fixture';
+    state.data = { activeChannel: { id: 'store', code: 'shop', token: 'fixture' } };
+    state.domains = [
+        {
+            domain: 'shop.example.test',
+            status: 'ACTIVE',
+            isPrimary: true,
+            channel: { id: 'store', code: 'shop' },
+        },
+    ];
+    state.domainLoading = false;
+    state.domainError = null;
 });
 
 async function renderPreview(development = false) {
@@ -144,6 +174,107 @@ describe('real client decoration preview', () => {
         expect(host.querySelector('iframe')).toBeNull();
     });
 
+    it('does not open a preview while domains load or if only pending/other-store domains exist', async () => {
+        state.domainLoading = true;
+        const { host, render, fetchMock } = await renderPreview();
+        expect(host.querySelector('iframe')).toBeNull();
+        expect(fetchMock).not.toHaveBeenCalled();
+        state.domainLoading = false;
+        state.domains[0].status = 'PENDING';
+        await render();
+        expect(host.querySelector('[role="alert"]')?.textContent).toContain('没有已验证');
+        expect(host.querySelector('iframe')).toBeNull();
+        state.domains[0].status = 'ACTIVE';
+        state.domains[0].channel.id = 'previous-store';
+        await render();
+        expect(host.querySelector('iframe')).toBeNull();
+        state.domainError = new Error('Permission denied');
+        await render();
+        expect(host.querySelector('[role="alert"]')?.textContent).toContain('域名查看权限');
+    });
+
+    it('aborts previous-store reads and never relays a late response after switching Channel', async () => {
+        const { host, render, fetchMock } = await renderPreview();
+        const frame = host.querySelector('iframe')!;
+        const session = new DOMParser().parseFromString(frame.srcdoc, 'text/html').documentElement.dataset
+            .decorationSession;
+        const send = vi.spyOn(frame.contentWindow!, 'postMessage');
+        let resolveRead!: (response: Response) => void;
+        fetchMock.mockClear().mockImplementation(
+            () =>
+                new Promise<Response>(resolve => {
+                    resolveRead = resolve;
+                }),
+        );
+        await act(async () =>
+            window.dispatchEvent(
+                new MessageEvent('message', {
+                    source: frame.contentWindow,
+                    origin: window.location.origin,
+                    data: {
+                        type: 'decoration-query',
+                        id: 'old-read',
+                        session,
+                        query: 'query Read { activeChannel { id code } }',
+                    },
+                }),
+            ),
+        );
+        const options = fetchMock.mock.calls[0][1]!;
+        expect(options.signal?.aborted).toBe(false);
+        state.token = 'other-token';
+        state.data = { activeChannel: { id: 'other-store', code: 'other', token: 'other-token' } };
+        state.domains = [
+            {
+                domain: 'other.example.test',
+                status: 'ACTIVE',
+                isPrimary: true,
+                channel: { id: 'other-store', code: 'other' },
+            },
+        ];
+        fetchMock.mockResolvedValue(
+            new Response(
+                '<script type="module" src="/dashboard/assets/storefrontPreview-fixture.js"></script>',
+            ),
+        );
+        await render();
+        expect(options.signal?.aborted).toBe(true);
+        await act(async () =>
+            resolveRead(
+                new Response(JSON.stringify({ data: { activeChannel: { id: 'store', code: 'shop' } } })),
+            ),
+        );
+        expect(send).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'old-read' }), expect.anything());
+        const nextFrame = host.querySelector('iframe')!;
+        const nextSession = new DOMParser().parseFromString(nextFrame.srcdoc, 'text/html').documentElement
+            .dataset.decorationSession;
+        fetchMock
+            .mockClear()
+            .mockResolvedValue(
+                new Response(
+                    JSON.stringify({ data: { activeChannel: { id: 'other-store', code: 'other' } } }),
+                ),
+            );
+        await act(async () =>
+            window.dispatchEvent(
+                new MessageEvent('message', {
+                    source: nextFrame.contentWindow,
+                    origin: window.location.origin,
+                    data: {
+                        type: 'decoration-query',
+                        id: 'new-read',
+                        session: nextSession,
+                        query: 'query Read { activeChannel { id code } }',
+                    },
+                }),
+            ),
+        );
+        expect(fetchMock).toHaveBeenCalledWith(
+            expect.objectContaining({ origin: 'https://other.example.test' }),
+            expect.objectContaining({ credentials: 'omit' }),
+        );
+    });
+
     it('relays only queries for the selected store without forwarding session credentials', async () => {
         const { host, fetchMock } = await renderPreview();
         const frame = host.querySelector('iframe')!;
@@ -173,7 +304,11 @@ describe('real client decoration preview', () => {
         expect(fetchMock).not.toHaveBeenCalled();
         await request('query Read { activeChannel { id code } }');
         expect(fetchMock).toHaveBeenCalledWith(
-            expect.objectContaining({ pathname: '/shop-api', search: '?languageCode=en' }),
+            expect.objectContaining({
+                origin: 'https://shop.example.test',
+                pathname: '/shop-api',
+                search: '?languageCode=en',
+            }),
             expect.objectContaining({
                 credentials: 'omit',
                 headers: { 'content-type': 'application/json', 'vendure-token': 'fixture' },

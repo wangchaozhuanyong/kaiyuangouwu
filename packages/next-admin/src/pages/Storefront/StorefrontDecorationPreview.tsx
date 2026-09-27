@@ -1,15 +1,18 @@
 import { useQuery } from '@apollo/client/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { StorefrontVisualPresetId } from '../../../../storefront-content-plugin/src/visual-presets';
-import { ADMIN_API_URL, getActiveChannelToken } from '../../apollo';
+import { getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     STOREFRONT_CONTENT_QUERY,
+    STOREFRONT_PREVIEW_DOMAINS_QUERY,
     type StorefrontContentBlock,
     type StorefrontContentResult,
     type StorefrontLanguageCode,
+    type StorefrontPreviewDomainsResult,
 } from '../../graphql/storefront.graphql';
+import { storefrontPreviewShopApiUrl } from './storefront-client-preview-url';
 import {
     decorationDraft,
     isReadOnlyPreviewQuery,
@@ -37,6 +40,19 @@ function ClientFrame({
     const channelCode = channel?.code;
     const channelToken = channel?.token;
     const consistent = channel && (!getActiveChannelToken() || channel.token === getActiveChannelToken());
+    const domainsQuery = useQuery<StorefrontPreviewDomainsResult>(STOREFRONT_PREVIEW_DOMAINS_QUERY, {
+        variables: { channelId: channelId ?? '' },
+        skip: !consistent || !channelId,
+        fetchPolicy: 'no-cache',
+    });
+    const apiHref = domainsQuery.loading
+        ? null
+        : storefrontPreviewShopApiUrl(domainsQuery.data?.storeDomains, channelId);
+    const domainError = domainsQuery.error
+        ? '当前店铺域名读取失败，请检查域名查看权限与店铺配置。'
+        : consistent && channelId && !domainsQuery.loading && !apiHref
+          ? '当前店铺没有已验证的可用域名，请先在店铺域名配置中完成验证。'
+          : '';
     const frame = useRef<HTMLIFrameElement>(null);
     const host = useRef<HTMLDivElement>(null);
     const [hostWidth, setHostWidth] = useState(390);
@@ -66,10 +82,6 @@ function ClientFrame({
     const width = viewport === 'desktop' ? 1440 : 390;
     const height = viewport === 'desktop' ? 900 : 844;
     const scale = Math.min(1, hostWidth / width);
-    const apiUrl = new URL(ADMIN_API_URL, window.location.origin);
-    apiUrl.pathname = apiUrl.pathname.replace(/\/admin-api\/?$/, '/shop-api');
-    apiUrl.search = '';
-    const apiHref = apiUrl.href;
 
     useEffect(() => {
         const element = host.current;
@@ -81,7 +93,7 @@ function ClientFrame({
     }, []);
 
     useEffect(() => {
-        if (!consistent || !channelId) return;
+        if (!consistent || !channelId || !apiHref) return;
         const controller = new AbortController();
         void Promise.resolve()
             .then(() => {
@@ -115,13 +127,16 @@ function ClientFrame({
                 if (!controller.signal.aborted) setError(reason.message || '预览加载失败');
             });
         return () => controller.abort();
-    }, [consistent, channelId, session, retry]);
+    }, [consistent, channelId, apiHref, session, retry]);
 
     useEffect(() => {
-        if (!consistent || !channelId || !channelToken) return;
+        if (!consistent || !channelId || !channelToken || !apiHref) return;
         const controller = new AbortController();
-        const send = (payload: Record<string, unknown>) =>
+        const send = (payload: Record<string, unknown>) => {
+            if (controller.signal.aborted) return;
+            if (getActiveChannelToken() && getActiveChannelToken() !== channelToken) return;
             frame.current?.contentWindow?.postMessage({ ...payload, session }, window.location.origin);
+        };
         const receive = async (event: MessageEvent) => {
             if (
                 event.origin !== window.location.origin ||
@@ -151,6 +166,7 @@ function ClientFrame({
                         body: JSON.stringify({ query: document, variables }),
                     });
                     const payload = await response.json();
+                    if (!response.ok || payload.errors) throw new Error('店铺接口读取失败');
                     if (payload.data?.activeChannel?.code && payload.data.activeChannel.code !== channelCode)
                         throw new Error('店铺接口与当前店铺不一致');
                     if (payload.data?.activeChannel?.id && payload.data.activeChannel.id !== channelId)
@@ -197,12 +213,17 @@ function ClientFrame({
                     当前店铺配置读取失败。
                 </p>
             )}
-            {!query.error && (!consistent || (!documentHtml && !error)) && (
+            {!query.error && !domainError && (!consistent || (!documentHtml && !error)) && (
                 <p role="status" className="p-3 text-xs">
                     正在加载客户端预览…
                 </p>
             )}
-            {error && (
+            {domainError && (
+                <p role="alert" className="p-3 text-xs text-red-700">
+                    {domainError}
+                </p>
+            )}
+            {!domainError && error && (
                 <div role="alert" className="p-3 text-xs text-red-700">
                     {error}{' '}
                     <button type="button" className="underline" onClick={() => setRetry(value => value + 1)}>
@@ -219,7 +240,7 @@ function ClientFrame({
                     position: 'relative',
                 }}
             >
-                {documentHtml && consistent && (
+                {documentHtml && consistent && apiHref && (
                     <iframe
                         ref={frame}
                         key={`${channel?.id}:${retry}`}

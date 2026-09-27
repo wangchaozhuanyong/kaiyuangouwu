@@ -45,6 +45,7 @@ import {
     extractEntryTicket,
     extractStorefrontAssetUrl,
     verifyDashboardAssets,
+    verifyDashboardPreviewShopApi,
     verifyProductionRelease,
     verifyStorefrontAssets,
 } from '../../../deploy/verify-production-release.mjs';
@@ -86,7 +87,9 @@ async function startFixtureServer({
                 return;
             }
             response.writeHead(200, { 'content-type': 'application/json' });
-            response.end('{"data":{"__typename":"Query","activeChannel":{"code":"fixture-store"}}}');
+            response.end(
+                '{"data":{"__typename":"Query","activeChannel":{"code":"fixture-store"},"storefrontContent":[]}}',
+            );
             return;
         }
         if (request.method === 'GET' && requestUrl.pathname === '/promo') {
@@ -247,27 +250,66 @@ test('rejects a dashboard origin without its same-origin health route', async ()
     );
 });
 
-test('rejects a broken console preview route even when storefront browsing and both health routes work', async () => {
-    for (const status of [404, 200]) {
-        const fetchImpl = async url => {
-            const requestUrl = new URL(url);
-            if (requestUrl.pathname === '/health') {
-                return new Response('{"status":"ok"}', { status: 200 });
+test('preview reads the selected public store and checks its browser CORS and Channel', async () => {
+    for (const failure of [
+        null,
+        'preflight-origin',
+        'preflight-headers',
+        'response-origin',
+        'wrong-channel',
+        'unknown-domain',
+        'html',
+        'graphql-error',
+    ]) {
+        const fetchImpl = async (url, init) => {
+            assert.equal(new URL(url).origin, 'https://store.example.com', 'must not use console Shop API');
+            assert.equal(init.headers.origin, 'https://console.example.com');
+            const headers = {
+                'access-control-allow-origin': 'https://console.example.com',
+                'access-control-allow-methods': 'POST',
+                'access-control-allow-headers': 'content-type,vendure-token',
+            };
+            if (init.method === 'OPTIONS') {
+                if (failure === 'preflight-origin') delete headers['access-control-allow-origin'];
+                if (failure === 'preflight-headers') headers['access-control-allow-headers'] = 'content-type';
+                return new Response(null, { status: 204, headers });
             }
-            if (requestUrl.origin === 'https://store.example.com' && requestUrl.pathname === '/shop-api') {
-                return new Response('{"data":{"__typename":"Query"}}', { status: 200 });
-            }
-            return new Response('<html>Missing preview route</html>', { status });
+            assert.equal(init.credentials, 'omit');
+            assert.ok(!init.headers.cookie && !init.headers.authorization);
+            assert.match(JSON.parse(init.body).query, /storefrontContent/u);
+            if (failure === 'response-origin') delete headers['access-control-allow-origin'];
+            if (failure === 'unknown-domain')
+                return new Response('{"errors":[{"extensions":{"code":"STORE_DOMAIN_NOT_FOUND"}}]}', {
+                    status: 404,
+                    headers,
+                });
+            if (failure === 'html') return new Response('<html>fallback</html>', { status: 200, headers });
+            return new Response(
+                JSON.stringify(
+                    failure === 'graphql-error'
+                        ? { errors: [{ message: 'unavailable' }] }
+                        : {
+                              data: {
+                                  __typename: 'Query',
+                                  activeChannel: {
+                                      code: failure === 'wrong-channel' ? 'other-store' : 'selected-store',
+                                  },
+                                  storefrontContent: [],
+                              },
+                          },
+                ),
+                { status: 200, headers },
+            );
         };
-        await assert.rejects(
-            verifyProductionRelease({
+        const run = () =>
+            verifyDashboardPreviewShopApi({
                 storefrontUrl: 'https://store.example.com',
                 dashboardUrl: 'https://console.example.com/dashboard/',
+                expectedChannelCode: 'selected-store',
                 fetchImpl,
-                timeoutMs: 1_000,
-            }),
-            /Dashboard preview Shop API: (?:expected HTTP 200, received 404|response was not valid JSON)/u,
-        );
+            });
+        if (failure) await assert.rejects(run(), /Dashboard preview Shop API/u);
+        else await run();
     }
 });
 
