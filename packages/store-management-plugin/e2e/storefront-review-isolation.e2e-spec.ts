@@ -421,6 +421,9 @@ describe('storefront review account and channel isolation', () => {
                 }
             }
         `;
+        shopClient.setAuthToken('');
+        shopClient.setRequestHeader('Authorization', null);
+        expect((await shopClient.query(settings)).storefrontReviewSettings.enabled).toBe(true);
         await shopClient.asUserWithCredentials(customerEmail, 'ReviewIsolationPass123!');
         const eventAbort = new AbortController();
         const eventTimeout = setTimeout(() => eventAbort.abort(), 10_000);

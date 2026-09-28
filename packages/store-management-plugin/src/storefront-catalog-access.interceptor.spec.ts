@@ -40,6 +40,7 @@ describe('public storefront browsing boundary', () => {
         'activeSystemAnnouncements',
         'storefrontContentSettings',
         'storefrontProductReviews',
+        'storefrontReviewSettings',
         'activeStoreCommerceMode',
         'icloudQueryMails',
     ])('allows anonymous public browsing: %s', field => {

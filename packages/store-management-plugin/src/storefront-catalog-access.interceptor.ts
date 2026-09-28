@@ -12,6 +12,7 @@ const publicQueries = new Set([
     'storefrontCatalog',
     'storefrontProductSales',
     'storefrontProductReviews',
+    'storefrontReviewSettings',
     'activeStorefrontFlashSales',
     'activeStorefrontCoupons',
     'activeSystemAnnouncements',
