@@ -153,6 +153,29 @@ those two generated metadata cache files. APT rebuilds them when needed.
 Installed packages, APT configuration, package lists, application files,
 backups and logs are outside the plan.
 
+If more disk staging space is needed, inspect Snap's downloaded cache files:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=plan-snap-cache-cleanup
+```
+
+The plan selects only regular files in `/var/lib/snapd/cache` with one hard link,
+reports their allocated disk blocks and modification times, and binds the
+source and running runtime to a hash. Installed Snap revisions in
+`/var/lib/snapd/snaps` and cache files still hard-linked to them are excluded.
+Review the exact candidates and effective size before applying:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=apply-snap-cache-cleanup-reviewed \
+    -f expected_plan_sha256=<reviewed-plan-sha256>
+```
+
+The write revalidates the plan under the deployment lock, removes only the
+reviewed cache files, and refreshes production health. If any cache entry or
+runtime changes, a new plan is required.
+
 ## Audit one product before changing store ownership
 
 Use the fixed read-only audit for a specific product and the exact running runtime:

@@ -32,6 +32,7 @@ const DEPLOY_LOCK = '/run/lock/vendure-production-deploy.lock';
 const APT_ARCHIVES_DIRECTORY = '/var/cache/apt/archives';
 const APT_METADATA_DIRECTORY = '/var/cache/apt';
 const APT_METADATA_FILENAMES = Object.freeze(['pkgcache.bin', 'srcpkgcache.bin']);
+const SNAP_DOWNLOAD_CACHE_DIRECTORY = '/var/lib/snapd/cache';
 const BACKUP_DIRECTORY = '/var/backups/vendure-mysql';
 const PRODUCTION_ENVIRONMENT_FILE = '/var/www/kaiyuangouwu/packages/dev-server/.env';
 const OFFSITE_FILE_BACKUP_URI = 's3://yunqiao-vendure-prod-backup-079740175286-apne1/files';
@@ -115,6 +116,8 @@ function validateRequest(environment) {
             'apply-apt-archive-cleanup-reviewed',
             'plan-apt-metadata-cleanup',
             'apply-apt-metadata-cleanup-reviewed',
+            'plan-snap-cache-cleanup',
+            'apply-snap-cache-cleanup-reviewed',
             'plan-offsite-file-backup-config',
             'apply-offsite-file-backup-config-reviewed',
             'plan-two-factor-backup',
@@ -145,6 +148,7 @@ function validateRequest(environment) {
             'apply-deployment-cache-cleanup-reviewed',
             'apply-apt-archive-cleanup-reviewed',
             'apply-apt-metadata-cleanup-reviewed',
+            'apply-snap-cache-cleanup-reviewed',
             'apply-offsite-file-backup-config-reviewed',
             'backup-two-factor-reviewed',
             'apply-order-sales-ownership-backfill-reviewed',
@@ -588,18 +592,78 @@ function inspectAptMetadataCleanup(sourceSha, { cacheDirectory = APT_METADATA_DI
 
 function applyAptMetadataCleanup(
     request,
-    {
-        inspect = sourceSha => inspectAptMetadataCleanup(sourceSha),
-        remove = file => unlinkSync(file),
-    } = {},
+    { inspect = sourceSha => inspectAptMetadataCleanup(sourceSha), remove = file => unlinkSync(file) } = {},
 ) {
     assert.equal(request.operation, 'apply-apt-metadata-cleanup-reviewed');
     const plan = inspect(request.sourceSha);
     assert.equal(plan.schema, 'vendure-apt-metadata-cleanup');
     assert.ok(plan.candidates.length > 0 && plan.totalKib > 0, 'No APT metadata cache is available');
-    assert.equal(planDigest(plan, request.sourceSha), request.expectedPlanSha256, 'APT metadata plan changed');
+    assert.equal(
+        planDigest(plan, request.sourceSha),
+        request.expectedPlanSha256,
+        'APT metadata plan changed',
+    );
     const revalidatedPlan = inspect(request.sourceSha);
     assert.deepEqual(revalidatedPlan, plan, 'APT metadata changed before cleanup');
+    for (const candidate of revalidatedPlan.candidates) remove(candidate.file);
+    return revalidatedPlan;
+}
+
+function inspectSnapCacheCleanup(
+    sourceSha,
+    { cacheDirectory = SNAP_DOWNLOAD_CACHE_DIRECTORY, ...options } = {},
+) {
+    const scope = inspectDeploymentCacheCleanup(sourceSha, {
+        ...options,
+        directories: [{ label: 'snap-download-cache', directory: cacheDirectory }],
+    });
+    assert.equal(scope.candidates.length, 1, 'Snap download cache is unavailable');
+    const candidates = readdirSync(cacheDirectory)
+        .sort()
+        .flatMap(name => {
+            const file = path.join(cacheDirectory, name);
+            const stat = lstatSync(file);
+            assert.ok(stat.isFile() && !stat.isSymbolicLink(), 'Snap cache entry must be a regular file');
+            assert.equal(realpathSync(file), file, 'Snap cache entry path changed');
+            // snapd hard-links installed revisions into its cache. Only an unlinked
+            // download cache entry can return disk blocks to this filesystem.
+            if (stat.nlink !== 1) return [];
+            return [
+                {
+                    file,
+                    sizeBytes: stat.size,
+                    allocatedKib: Math.ceil(stat.blocks / 2),
+                    modifiedAtMs: stat.mtimeMs,
+                    changedAtMs: stat.ctimeMs,
+                    device: stat.dev,
+                    inode: stat.ino,
+                },
+            ];
+        });
+    return {
+        format: 1,
+        schema: 'vendure-snap-download-cache-cleanup',
+        repositorySha: scope.repositorySha,
+        runtimeSha: scope.runtimeSha,
+        candidates,
+        totalKib: candidates.reduce((total, candidate) => total + candidate.allocatedKib, 0),
+    };
+}
+
+function applySnapCacheCleanup(
+    request,
+    { inspect = sourceSha => inspectSnapCacheCleanup(sourceSha), remove = file => unlinkSync(file) } = {},
+) {
+    assert.equal(request.operation, 'apply-snap-cache-cleanup-reviewed');
+    const plan = inspect(request.sourceSha);
+    assert.equal(plan.schema, 'vendure-snap-download-cache-cleanup');
+    assert.ok(
+        plan.candidates.length > 0 && plan.totalKib > 0,
+        'No unlinked Snap cache entries are available',
+    );
+    assert.equal(planDigest(plan, request.sourceSha), request.expectedPlanSha256, 'Snap cache plan changed');
+    const revalidatedPlan = inspect(request.sourceSha);
+    assert.deepEqual(revalidatedPlan, plan, 'Snap cache changed before cleanup');
     for (const candidate of revalidatedPlan.candidates) remove(candidate.file);
     return revalidatedPlan;
 }
@@ -1654,7 +1718,28 @@ function runLocked(environment = process.env) {
             `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: request.expectedPlanSha256, removedFileCount: plan.candidates.length, reviewedKib: plan.totalKib, disk, healthRefresh })}\n`,
         );
         assert.equal(healthRefresh.status, 'ok', 'APT metadata cleanup completed, but health refresh failed');
-        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=apply-apt-metadata-cleanup-reviewed\n');
+        process.stdout.write(
+            'PRODUCTION_OPERATIONS_COMPLETE operation=apply-apt-metadata-cleanup-reviewed\n',
+        );
+        return;
+    }
+    if (request.operation === 'plan-snap-cache-cleanup') {
+        const plan = inspectSnapCacheCleanup(request.sourceSha);
+        process.stdout.write(
+            `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: planDigest(plan, request.sourceSha), plan })}\n`,
+        );
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=plan-snap-cache-cleanup\n');
+        return;
+    }
+    if (request.operation === 'apply-snap-cache-cleanup-reviewed') {
+        const plan = applySnapCacheCleanup(request);
+        const disk = readCommand('df', ['-Pk', '/']);
+        const healthRefresh = readCommand('systemctl', ['start', 'vendure-production-healthcheck.service']);
+        process.stdout.write(
+            `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: request.expectedPlanSha256, removedFileCount: plan.candidates.length, reviewedKib: plan.totalKib, disk, healthRefresh })}\n`,
+        );
+        assert.equal(healthRefresh.status, 'ok', 'Snap cache cleanup completed, but health refresh failed');
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=apply-snap-cache-cleanup-reviewed\n');
         return;
     }
     if (request.operation === 'backup-database') {
@@ -1911,6 +1996,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+    applySnapCacheCleanup,
     applyAptMetadataCleanup,
     applyAptArchiveCleanup,
     applyDeploymentCacheCleanup,
@@ -1922,6 +2008,7 @@ module.exports = {
     inspectDeploymentCacheCleanup,
     inspectAptArchiveCleanup,
     inspectAptMetadataCleanup,
+    inspectSnapCacheCleanup,
     inspectOffsiteFileBackupConfig,
     inspectRepositoryState,
     planDigest,
