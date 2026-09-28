@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { isControlledTestPaymentMethod } from '@vendure/common/lib/controlled-test-payment';
 import { CacheService, Logger, Order, RequestContext, TransactionalConnection } from '@vendure/core';
 import { addDays, differenceInCalendarDays, endOfDay, startOfDay } from 'date-fns';
 import { createHash } from 'node:crypto';
@@ -49,7 +50,7 @@ export function metricDateKey(date: Date, timeZone = process.env.TZ?.trim()): st
 
 export function orderNetSales(order: Pick<Order, 'payments'>): number {
     return (order.payments ?? []).reduce((orderTotal, payment) => {
-        if (payment.state !== 'Settled') {
+        if (payment.state !== 'Settled' || isControlledTestPaymentMethod(payment.method)) {
             return orderTotal;
         }
         const refunded = (payment.refunds ?? [])
@@ -63,7 +64,9 @@ export function orderCountsTowardsSales(order: Pick<Order, 'state' | 'payments'>
     return (
         order.state !== 'Cancelled' &&
         order.state !== 'Draft' &&
-        (order.payments ?? []).some(payment => payment.state === 'Settled')
+        (order.payments ?? []).some(
+            payment => payment.state === 'Settled' && !isControlledTestPaymentMethod(payment.method),
+        )
     );
 }
 
