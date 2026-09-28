@@ -193,6 +193,18 @@ void test('inspection forwards only fixed query failure codes and never raw stde
             'Read-only storefront configuration inspection failed',
         );
     }
+    assert.equal(
+        operations.storefrontInspectionFailure({
+            stderr: 'Configuration guard login failed\nPRIVATE_STACK_TRACE\n',
+        }),
+        'STOREFRONT_CONFIGURATION_ASSERT_FAILED reason=LOGIN_FAILED',
+    );
+    assert.equal(
+        operations.storefrontInspectionFailure({
+            stderr: 'Configuration guard login failed PRIVATE_SECRET\n',
+        }),
+        'Read-only storefront configuration inspection failed',
+    );
 });
 
 void test('repository diagnostics distinguish tracked changes, renamed paths and untracked private files', t => {

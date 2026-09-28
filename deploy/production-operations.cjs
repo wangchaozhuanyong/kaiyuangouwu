@@ -1004,7 +1004,24 @@ function storefrontInspectionFailure(result) {
     const safeFailure = result.stderr?.match(
         /^STOREFRONT_CONFIGURATION_QUERY_FAILED operation=ConfigurationGuard(?:Login|Profiles|Content|Published) reason=(?:TIMEOUT|REQUEST_FAILED|HTTP_ERROR|INVALID_JSON|API_ERROR)$/mu,
     )?.[0];
-    return safeFailure || 'Read-only storefront configuration inspection failed';
+    if (safeFailure) return safeFailure;
+    const safeAssertions = [
+        ['Storefront verification credentials are unavailable', 'CREDENTIALS_UNAVAILABLE'],
+        ['Configuration guard login failed', 'LOGIN_FAILED'],
+        ['Configuration guard requires a verified primary domain for each Channel', 'INVALID_CHANNEL_DOMAIN'],
+        ['Configuration guard Channel mismatch', 'ADMIN_CHANNEL_MISMATCH'],
+        ['Shop API Channel mismatch', 'SHOP_CHANNEL_MISMATCH'],
+        ['Production preflight cannot access any storefronts', 'NO_STOREFRONTS'],
+        ['Production preflight requires a primary domain for every storefront', 'MISSING_STORE_DOMAIN'],
+        ['Production storefront domains must be unique', 'DUPLICATE_STORE_DOMAIN'],
+        ['Configuration summary exceeds the SSM evidence limit', 'SUMMARY_TOO_LARGE'],
+    ];
+    for (const [message, reason] of safeAssertions) {
+        if (result.stderr?.split('\n').some(line => line === message)) {
+            return `STOREFRONT_CONFIGURATION_ASSERT_FAILED reason=${reason}`;
+        }
+    }
+    return 'Read-only storefront configuration inspection failed';
 }
 
 function frontendRevisionEvidence(plan, pointerDirectory = '/var/www') {
