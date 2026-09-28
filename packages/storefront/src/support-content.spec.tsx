@@ -103,6 +103,19 @@ describe('support content', () => {
         expect(supportChannelDetail(telegram, 'zh')).toBe('');
     });
 
+    it('does not advertise service hours or unavailable contact routes when no channel is enabled', () => {
+        const unavailable = {
+            ...supportBlock,
+            items: supportBlock.items.map(item => ({ ...item, enabled: false })),
+        };
+        expect(storefrontSupportChannels(unavailable)).toEqual([]);
+
+        const markup = renderToStaticMarkup(<SupportContent content={unavailable} language="zh" />);
+        expect(markup).toContain('客服联系方式暂未启用');
+        expect(markup).not.toContain('support-hours-card');
+        expect(markup).not.toContain('可通过客服联系方式咨询');
+    });
+
     it('renders the selected brand two-tone service strip and contact actions', () => {
         const markup = renderToStaticMarkup(<SupportContent content={supportBlock} language="zh" />);
 

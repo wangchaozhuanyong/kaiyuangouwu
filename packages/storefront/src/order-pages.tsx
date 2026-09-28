@@ -2289,7 +2289,9 @@ function OrderCard({
                             {firstLineName}
                         </strong>
                         <small>
-                            {isZh ? `共 ${order.totalQuantity} 件` : `${order.totalQuantity} items`}
+                            {isZh
+                                ? `共 ${order.totalQuantity} 件`
+                                : `${order.totalQuantity} ${order.totalQuantity === 1 ? 'item' : 'items'}`}
                             {order.lines.length > 1
                                 ? isZh
                                     ? ` · ${order.lines.length} 种商品`
@@ -2374,7 +2376,9 @@ function OrderCard({
             <footer className={orderPageClassName('order-card-footer')}>
                 <div className={orderPageClassName('order-total-summary')}>
                     <span className={orderPageClassName('order-total-count')}>
-                        {isZh ? `共 ${order.totalQuantity} 件` : `${order.totalQuantity} items`}
+                        {isZh
+                            ? `共 ${order.totalQuantity} 件`
+                            : `${order.totalQuantity} ${order.totalQuantity === 1 ? 'item' : 'items'}`}
                     </span>
                     <span className={orderPageClassName('order-total-label')}>
                         {isPendingPayment ? compactCopy.orders.due : isZh ? '实付' : 'Total'}

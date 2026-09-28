@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from './api';
 import { DesktopLayoutContext } from './desktop-layout';
+import { languageCodeFor } from './i18n';
 import { LogisticsPage, LogisticsTrackingSheet, OrderDetailPage, OrdersPage } from './order-pages';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
 import { orderPageStyles } from './tailwind/order-page-styles';
@@ -75,7 +76,7 @@ function renderOrders(cachedOrders?: Order[], language: StorefrontLanguage = 'zh
         client.setQueryData(
             storefrontQueryKeys.customerOrders(
                 storefrontQueryKeys.market(market),
-                market.defaultLanguageCode,
+                languageCodeFor(language),
                 customer.id,
                 {
                     tab: 'all',
@@ -164,6 +165,14 @@ describe('OrdersPage route query', () => {
         expect(markup).not.toContain('order-total-summary');
         expect(markup).not.toContain('再来一单');
         expect(renderOrders([order])).toContain('再来一单');
+    });
+
+    it('uses the singular English item label for one-item orders in both layouts', () => {
+        for (const desktop of [false, true]) {
+            const markup = renderOrders([order], 'en', desktop);
+            expect(markup).toContain('1 item');
+            expect(markup).not.toContain('1 items');
+        }
     });
 
     it('includes completed orders in the same lifecycle filters on mobile', () => {
