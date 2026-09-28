@@ -701,6 +701,48 @@ function backupMetadata() {
     }
 }
 
+function inspectFixedLogInventory() {
+    const journalRoot = '/var/log/journal';
+    const ssmRoot = '/var/log/amazon/ssm';
+    const journalFiles = existsSync(journalRoot)
+        ? readdirSync(journalRoot, { withFileTypes: true }).flatMap(entry => {
+              if (!entry.isDirectory()) return [];
+              const directory = path.join(journalRoot, entry.name);
+              return readdirSync(directory, { withFileTypes: true }).flatMap(file => {
+                  if (!file.isFile() || !/\.journal~?$/u.test(file.name)) return [];
+                  const stat = lstatSync(path.join(directory, file.name));
+                  return [{ archived: file.name.includes('@'), allocatedKib: Math.ceil(stat.blocks / 2) }];
+              });
+          })
+        : [];
+    const ssmFiles = existsSync(ssmRoot)
+        ? readdirSync(ssmRoot, { withFileTypes: true })
+              .filter(entry => entry.isFile())
+              .map(entry => {
+                  const stat = lstatSync(path.join(ssmRoot, entry.name));
+                  return {
+                      name: entry.name,
+                      allocatedKib: Math.ceil(stat.blocks / 2),
+                      modifiedAt: new Date(stat.mtimeMs).toISOString(),
+                  };
+              })
+              .sort((a, b) => b.allocatedKib - a.allocatedKib)
+              .slice(0, 15)
+        : [];
+    return {
+        journal: {
+            activeKib: journalFiles
+                .filter(file => !file.archived)
+                .reduce((sum, file) => sum + file.allocatedKib, 0),
+            archivedKib: journalFiles
+                .filter(file => file.archived)
+                .reduce((sum, file) => sum + file.allocatedKib, 0),
+            archivedFileCount: journalFiles.filter(file => file.archived).length,
+        },
+        ssmFiles,
+    };
+}
+
 function readRepositoryGit(arguments_) {
     return execFileSync(
         'sudo',
@@ -814,6 +856,7 @@ function diagnose(request) {
         rootFilesystem: readCommand('findmnt', ['-no', 'SOURCE,FSTYPE', '/']),
         rootBlockDevices: readCommand('lsblk', ['-b', '-n', '-o', 'NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE']),
         journalDiskUsage: readCommand('journalctl', ['--disk-usage']),
+        fixedLogInventory: inspectFixedLogInventory(),
         releaseSize: readCommand('du', ['-skx', '/var/www/kaiyuangouwu-releases']),
         diskFootprintKib: Object.fromEntries(
             Object.entries(diskFootprintPaths).map(([label, directory]) => [
