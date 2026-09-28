@@ -3,10 +3,12 @@ import {
     CheckCircle2,
     ChevronDown,
     ChevronRight,
+    ImagePlus,
     MessageSquare,
     Package,
     RefreshCw,
     Star,
+    X,
 } from 'lucide-react';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
@@ -335,6 +337,9 @@ export function ReviewCenterPage({
                                         <ReviewStars rating={review.rating} />
                                         <strong>{review.title}</strong>
                                         <p>{review.body}</p>
+                                        {review.images?.length > 0 && (
+                                            <ReviewImageGallery images={review.images} language={language} />
+                                        )}
                                         {review.merchantResponse && (
                                             <blockquote>
                                                 <strong>{isZh ? '商家回复' : 'Store response'}</strong>
@@ -431,15 +436,22 @@ export function ProductReviewsSection({
                                 <span>{review.customerName}</span>
                                 <small>{formatReviewDate(review.createdAt, language)}</small>
                             </header>
-                            <ReviewStars rating={review.rating} />
-                            <strong>{review.title}</strong>
-                            <p>{review.body}</p>
-                            {review.orderLineId && (
-                                <em>
-                                    <CheckCircle2 aria-hidden="true" />
-                                    {isZh ? '已关联订单' : 'Linked to order'}
-                                </em>
-                            )}
+                            <div className="product-review-main">
+                                <div className="product-review-copy">
+                                    <ReviewStars rating={review.rating} />
+                                    <strong>{review.title}</strong>
+                                    <p>{review.body}</p>
+                                    {review.orderLineId && (
+                                        <em>
+                                            <CheckCircle2 aria-hidden="true" />
+                                            {isZh ? '已关联订单' : 'Linked to order'}
+                                        </em>
+                                    )}
+                                </div>
+                                {review.images?.length > 0 && (
+                                    <ReviewImageGallery images={review.images} language={language} />
+                                )}
+                            </div>
                             {review.merchantResponse && (
                                 <blockquote>
                                     <strong>{isZh ? '商家回复' : 'Store response'}</strong>
@@ -464,6 +476,35 @@ export function ProductReviewsSection({
     );
 }
 
+function ReviewImageGallery({
+    images,
+    language,
+}: {
+    images: StorefrontReview['images'];
+    language: StorefrontLanguage;
+}) {
+    const isZh = language === 'zh';
+    return (
+        <div className="product-review-images" aria-label={isZh ? '评价图片' : 'Review images'}>
+            {images.map((image, index) => (
+                <a
+                    key={image.id}
+                    href={image.preview}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={isZh ? `查看评价图片 ${index + 1}` : `View review image ${index + 1}`}
+                >
+                    <SafeImage
+                        src={image.preview}
+                        alt={isZh ? `评价图片 ${index + 1}` : `Review image ${index + 1}`}
+                        loading="lazy"
+                    />
+                </a>
+            ))}
+        </div>
+    );
+}
+
 function ReviewComposer({
     formRef,
     candidate,
@@ -482,8 +523,15 @@ function ReviewComposer({
     const [title, setTitle] = useState('');
     const [body, setBody] = useState('');
     const [anonymous, setAnonymous] = useState(false);
+    const [images, setImages] = useState<File[]>([]);
+    const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    useEffect(() => {
+        const urls = images.map(file => URL.createObjectURL(file));
+        setImagePreviews(urls);
+        return () => urls.forEach(url => URL.revokeObjectURL(url));
+    }, [images]);
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (rating < 1 || rating > 5) {
@@ -507,6 +555,7 @@ function ReviewComposer({
                 title: title.trim(),
                 body: body.trim(),
                 anonymous,
+                images,
             });
         } catch (submitError) {
             setError(storefrontErrorMessage(submitError, language));
@@ -566,6 +615,69 @@ function ReviewComposer({
                     disabled={submitting}
                 />
             </label>
+            <div className="review-image-picker">
+                <span>{isZh ? '评价图片（最多 4 张）' : 'Review images (up to 4)'}</span>
+                <div className="review-image-previews">
+                    {imagePreviews.map((url, index) => (
+                        <div className="review-image-preview" key={url}>
+                            <img
+                                src={url}
+                                alt={isZh ? `待上传图片 ${index + 1}` : `Image to upload ${index + 1}`}
+                            />
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setImages(current => current.filter((_, position) => position !== index))
+                                }
+                                disabled={submitting}
+                                aria-label={isZh ? `移除图片 ${index + 1}` : `Remove image ${index + 1}`}
+                            >
+                                <X aria-hidden="true" />
+                            </button>
+                        </div>
+                    ))}
+                    {images.length < 4 && (
+                        <label className="review-image-add">
+                            <ImagePlus aria-hidden="true" />
+                            <span>{isZh ? '添加图片' : 'Add images'}</span>
+                            <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                multiple
+                                disabled={submitting}
+                                onChange={event => {
+                                    const selected = Array.from(event.target.files ?? []);
+                                    event.target.value = '';
+                                    if (images.length + selected.length > 4) {
+                                        setError(
+                                            isZh ? '每条评价最多上传 4 张图片' : 'Up to 4 images per review',
+                                        );
+                                        return;
+                                    }
+                                    if (
+                                        selected.some(
+                                            file =>
+                                                file.size > 5 * 1024 * 1024 ||
+                                                !['image/jpeg', 'image/png', 'image/webp'].includes(
+                                                    file.type,
+                                                ),
+                                        )
+                                    ) {
+                                        setError(
+                                            isZh
+                                                ? '仅支持 5MB 以内的 JPG、PNG 或 WebP 图片'
+                                                : 'Use JPG, PNG or WebP images under 5 MB',
+                                        );
+                                        return;
+                                    }
+                                    setError('');
+                                    setImages(current => [...current, ...selected]);
+                                }}
+                            />
+                        </label>
+                    )}
+                </div>
+            </div>
             <label className="review-anonymous-option">
                 <input
                     type="checkbox"

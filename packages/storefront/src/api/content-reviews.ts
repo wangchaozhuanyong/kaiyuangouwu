@@ -668,14 +668,23 @@ export class ContentReviewsApi extends BaseDomainApi {
     }
 
     async submitReview(input: SubmitStorefrontReviewInput): Promise<StorefrontReview> {
-        const result = await this.request<{ submitStorefrontReview: StorefrontReview }>(
-            `
-                mutation SubmitStorefrontReview($input: SubmitStorefrontReviewInput!) {
-                    submitStorefrontReview(input: $input) { ${storefrontReviewFields} }
-                }
-            `,
-            { input },
-        );
+        const { images = [], ...reviewInput } = input;
+        const mutation = `
+            mutation SubmitStorefrontReview($input: SubmitStorefrontReviewInput!, $files: [Upload!]) {
+                submitStorefrontReview(input: $input, files: $files) { ${storefrontReviewFields} }
+            }
+        `;
+        const result = images.length
+            ? await this.uploadFiles<{ submitStorefrontReview: StorefrontReview }>(
+                  mutation,
+                  { input: reviewInput },
+                  images,
+                  '评价提交超时，请到我的评价确认结果',
+                  'files',
+              )
+            : await this.request<{ submitStorefrontReview: StorefrontReview }>(mutation, {
+                  input: reviewInput,
+              });
         return result.submitStorefrontReview;
     }
 }

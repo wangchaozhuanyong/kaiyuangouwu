@@ -158,6 +158,26 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
+                        // Product details and verified reviews use skin-toned reading separators.
+                        if (
+                            [
+                                'styles/product-detail-surfaces.css|.detail-params dl > div|bottom',
+                                'styles/product-detail-surfaces.css|.detail-empty-review|top',
+                                'styles/ai-product-covers.css|.review-candidate-row + .review-candidate-row|top',
+                                'styles/ai-product-covers.css|.my-review-list article + article|top',
+                                'styles/ai-product-covers.css|.product-review-list article + article|top',
+                                'styles/ai-product-covers.css|.product-review-list blockquote|top',
+                                'styles/ai-product-covers.css|.my-review-list blockquote|top',
+                            ].some(
+                                rule =>
+                                    rule ===
+                                    `${path.relative(__dirname, file)}|${selector.trim()}|${border[1]}`,
+                            ) &&
+                            border[2].trim() ===
+                                '1px solid color-mix(in srgb, var(--skin-divider) 75%, transparent)'
+                        ) {
+                            continue;
+                        }
                         // Approved compact cart rows need one shallow reading separator.
                         if (
                             file === path.join(__dirname, 'styles/desktop-pages.css') &&
@@ -463,7 +483,7 @@ describe('storefront skin system', () => {
         );
     });
 
-    it('gives transparent product rows one owner and preserves square art with reading separators', () => {
+    it('gives transparent product rows one owner and preserves media with reading separators', () => {
         for (const file of [
             'home-showcase',
             'ai-product-covers',
@@ -596,7 +616,7 @@ describe('storefront skin system', () => {
     it('uses semantic surfaces for review panels and their form controls', () => {
         const source = stylesheet('./styles/ai-product-covers.css');
         expect(source).toMatch(/\.review-composer\s*\{[^}]*background:\s*var\(--surface\);/);
-        expect(source).toMatch(/\.review-composer textarea\s*\{[^}]*background:\s*var\(--control-surface\);/);
+        expect(source).toMatch(/\.review-composer textarea\s*\{[^}]*background:\s*var\(--surface\);/);
         expect(source).toMatch(/\.review-submit\s*\{[^}]*color:\s*var\(--accent-foreground\);/);
         expect(source).toMatch(/\.review-rating-input button\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;/);
         expect(source).toMatch(/\.review-state.is-approved\s*\{[^}]*var\(--success\)/);
@@ -605,12 +625,11 @@ describe('storefront skin system', () => {
         expect(source).toContain('outline: var(--experience-focus-width) solid var(--focus);');
     });
 
-    it('keeps panel headings and review lists free of decorative rules across component and layout owners', () => {
+    it('keeps panel headings and non-review lists free of decorative rules across component and layout owners', () => {
         const borderlessSelectors = [
             '.section-header',
             '.review-center-section > header',
             '.review-composer > header',
-            '.review-candidate-row',
             '.my-review-list article',
             '.product-review-list article',
             '.coupon-center-cart-link',
@@ -641,6 +660,21 @@ describe('storefront skin system', () => {
             }
         }
         expect([...seen].sort()).toEqual([...borderlessSelectors].sort());
+    });
+
+    it('uses skin dividers and no gray row fills for product details and reviews', () => {
+        const detail = stylesheet('./styles/product-detail-surfaces.css');
+        const review = stylesheet('./styles/ai-product-covers.css');
+        expect(detail).toMatch(
+            /\.detail-params dl > div\s*\{[^}]*border-bottom: 1px solid color-mix\(in srgb, var\(--skin-divider\)/,
+        );
+        expect(detail).not.toMatch(/\.product-detail-page \.detail-params dl > div\s*\{[^}]*background:/);
+        expect(detail).toMatch(
+            /\.detail-empty-review\s*\{[^}]*border-top: 1px solid color-mix\(in srgb, var\(--skin-divider\)/,
+        );
+        expect(detail).not.toMatch(/\.detail-empty-review\s*\{[^}]*background:/);
+        expect(review).toMatch(/\.product-review-list article \+ article\s*\{[^}]*var\(--skin-divider\)/);
+        expect(review).toMatch(/\.review-candidate-row\s*\{[^}]*background: transparent;/);
     });
 
     it('shares one lazy semantic aftercare owner across order details and confirmation', () => {

@@ -34,6 +34,7 @@ interface StorefrontReviewItem {
     rating: number;
     title: string;
     body: string;
+    images: Array<{ id: string; preview: string }>;
     customerName: string;
     anonymous: boolean;
     customerId?: string | null;
@@ -516,11 +517,40 @@ export function ReviewsModule() {
                                     {stateLabels[selectedReview.state]}
                                 </span>
                             </div>
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                <div className="font-semibold text-slate-900">{selectedReview.title}</div>
-                                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                                    {selectedReview.body}
-                                </p>
+                            <div className="border-t border-slate-200 pt-4">
+                                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-4">
+                                    <div className="min-w-0">
+                                        <div className="font-semibold text-slate-900">
+                                            {selectedReview.title}
+                                        </div>
+                                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                                            {selectedReview.body}
+                                        </p>
+                                    </div>
+                                    {!!selectedReview.images?.length && (
+                                        <div
+                                            className="grid grid-cols-2 content-start gap-1.5"
+                                            aria-label="评价图片"
+                                        >
+                                            {selectedReview.images.map((image, index) => (
+                                                <a
+                                                    key={image.id}
+                                                    href={image.preview}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    aria-label={`查看评价图片 ${index + 1}`}
+                                                    className="h-16 w-16 overflow-hidden rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+                                                >
+                                                    <img
+                                                        src={image.preview}
+                                                        alt={`评价图片 ${index + 1}`}
+                                                        className="h-full w-full object-cover"
+                                                    />
+                                                </a>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="mt-3 text-[10px] text-slate-400">
                                     {selectedReview.customerName} · 客户 ID {selectedReview.customerId ?? '—'}
                                     {selectedReview.anonymous ? ' · 前台匿名展示' : ''}

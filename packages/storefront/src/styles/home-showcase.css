@@ -2525,6 +2525,7 @@ html[lang='en'] .quick-grid b {
 }
 
 .primary-category-image > img,
+.primary-category-image > .responsive-picture,
 .primary-category-image > .responsive-picture > img,
 .primary-category-image > .image-placeholder,
 .primary-category-placeholder {
@@ -2533,9 +2534,14 @@ html[lang='en'] .quick-grid b {
 }
 
 .primary-category-image > img,
+.primary-category-image > .responsive-picture,
+.primary-category-image > .responsive-picture > img {
+    border-radius: calc(var(--skin-control-radius) - 2px);
+}
+
+.primary-category-image > img,
 .primary-category-image > .responsive-picture > img {
     object-fit: contain;
-    border-radius: 0;
 }
 
 .primary-category-placeholder {
@@ -2758,9 +2764,14 @@ html[lang='en'] .primary-categories button {
 }
 
 .all-primary-category-image > img,
+.all-primary-category-image > .responsive-picture,
+.all-primary-category-image > .responsive-picture > img {
+    border-radius: calc(var(--skin-control-radius) - 2px);
+}
+
+.all-primary-category-image > img,
 .all-primary-category-image > .responsive-picture > img {
     object-fit: contain;
-    border-radius: 0;
 }
 
 .all-primary-category-grid button > span:last-child {
@@ -2871,7 +2882,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 }
 
 .category-layout {
-    --category-results-surface: var(--bg);
+    --category-results-surface: var(--surface);
 
     flex: 1;
     min-height: 0;
@@ -3222,6 +3233,24 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
     }
 }
 
+@media (max-width: 767px) {
+    .category-page .all-primary-category-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        column-gap: 8px;
+        row-gap: 8px;
+    }
+
+    .category-page .all-primary-category-image {
+        width: min(56px, 100%);
+        height: auto;
+        aspect-ratio: 1;
+    }
+
+    .category-page .all-primary-category-grid button > span:last-child {
+        padding-inline: 2px;
+    }
+}
+
 .business-services-page {
     --page-surface: var(--bg);
     padding-inline: 16px;
@@ -3324,10 +3353,14 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         min-height: 96px;
         margin: 10px 0 14px;
         padding: 14px 16px;
-        border: 1px solid var(--skin-divider);
+        border: 0;
         border-radius: var(--skin-card-radius);
-        background: var(--surface);
-        box-shadow: none;
+        background: linear-gradient(
+            115deg,
+            color-mix(in srgb, var(--accent) 18%, var(--surface)),
+            color-mix(in srgb, var(--accent) 7%, var(--surface))
+        );
+        box-shadow: var(--skin-card-shadow);
     }
 
     .business-services-page .business-services-heading-copy {

@@ -622,7 +622,7 @@ export function SwipeableCartLine({
                     {variant ? (
                         <ProductVariantImage language={language} variant={variant} alt={variant.name} />
                     ) : (
-                        <ProductImagePlaceholder language={language} />
+                        <ProductImagePlaceholder language={language} compact />
                     )}
                 </div>
                 <div className="cart-line-copy">

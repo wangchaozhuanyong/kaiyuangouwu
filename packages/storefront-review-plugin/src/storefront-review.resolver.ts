@@ -4,6 +4,7 @@ import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendur
 import { StorefrontReviewService } from './storefront-review.service';
 import {
     ModerateStorefrontReviewInput,
+    ReviewImageUpload,
     StorefrontReviewListOptions,
     SubmitStorefrontReviewInput,
 } from './types';
@@ -36,8 +37,12 @@ export class StorefrontReviewShopResolver {
     @Transaction()
     @Mutation()
     @Allow(Permission.Authenticated)
-    submitStorefrontReview(@Ctx() ctx: RequestContext, @Args('input') input: SubmitStorefrontReviewInput) {
-        return this.reviewService.submit(ctx, input);
+    submitStorefrontReview(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: SubmitStorefrontReviewInput,
+        @Args('files') files?: Array<Promise<ReviewImageUpload>>,
+    ) {
+        return this.reviewService.submit(ctx, input, files);
     }
 }
 

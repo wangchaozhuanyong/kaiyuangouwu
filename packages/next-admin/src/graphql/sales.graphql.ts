@@ -758,6 +758,10 @@ export const GET_STOREFRONT_REVIEWS = gql`
                 rating
                 title
                 body
+                images {
+                    id
+                    preview
+                }
                 customerName
                 anonymous
                 customerId

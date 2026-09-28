@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import { ContentTranslationService, isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import {
+    AssetService,
     Customer,
     CustomerService,
     EntityNotFoundError,
@@ -10,8 +11,10 @@ import {
     RequestContext,
     TransactionalConnection,
     UserInputError,
+    processCustomerImage,
     translateDeep,
 } from '@vendure/core';
+import { Readable } from 'node:stream';
 import { FindOptionsWhere, In, Like } from 'typeorm';
 
 import { StorefrontReview } from './entities/storefront-review.entity';
@@ -19,6 +22,7 @@ import { storefrontReviewStates } from './review.constants';
 import { StorefrontReviewChangedEvent } from './storefront-review-changed.event';
 import {
     ModerateStorefrontReviewInput,
+    ReviewImageUpload,
     StorefrontReviewCandidate,
     StorefrontReviewListOptions,
     SubmitStorefrontReviewInput,
@@ -27,6 +31,8 @@ import {
 const TITLE_MAX_LENGTH = 120;
 const BODY_MAX_LENGTH = 2_000;
 const RESPONSE_MAX_LENGTH = 2_000;
+const REVIEW_IMAGE_LIMIT = 4;
+const REVIEW_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const ELIGIBLE_REVIEW_ORDER_STATES = [
     'PaymentSettled',
     'TestPaymentSettled',
@@ -48,6 +54,7 @@ export class StorefrontReviewService {
         private readonly connection: TransactionalConnection,
         private readonly customerService: CustomerService,
         private readonly translations: ContentTranslationService,
+        private readonly assets: AssetService,
         @Optional() private readonly eventBus?: EventBus,
     ) {}
 
@@ -171,9 +178,16 @@ export class StorefrontReviewService {
         };
     }
 
-    async submit(ctx: RequestContext, input: SubmitStorefrontReviewInput): Promise<StorefrontReview> {
+    async submit(
+        ctx: RequestContext,
+        input: SubmitStorefrontReviewInput,
+        files: Array<Promise<ReviewImageUpload>> = [],
+    ): Promise<StorefrontReview> {
         const customer = await this.activeCustomerOrThrow(ctx);
         this.validateSubmission(input);
+        if (!Array.isArray(files) || files.length > REVIEW_IMAGE_LIMIT) {
+            throw new UserInputError('每条评价最多上传 4 张图片');
+        }
         await this.lockOrderLine(ctx, input.orderLineId);
         const line = await this.connection.getRepository(ctx, OrderLine).findOne({
             where: {
@@ -203,37 +217,100 @@ export class StorefrontReviewService {
         }
         const variant = translateDeep(line.productVariant, ctx.languageCode, ['product']);
         const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ').trim();
-        const review = await this.connection.getRepository(ctx, StorefrontReview).save(
-            new StorefrontReview({
-                state: 'PENDING',
-                rating: input.rating,
-                title: input.title.trim(),
-                body: input.body.trim(),
-                customerName: this.maskCustomerName(customerName || customer.emailAddress),
-                anonymous: input.anonymous === true,
-                productName: variant.product?.name || variant.name,
-                sku: variant.sku,
-                merchantResponse: null,
-                merchantResponseZh: null,
-                merchantResponseEn: null,
-                moderatedAt: null,
-                channel: ctx.channel,
-                channelId: ctx.channelId,
-                customer,
-                customerId: customer.id,
-                order: line.order,
-                orderId: line.order.id,
-                orderLine: line,
-                orderLineId: line.id,
-                product: variant.product,
-                productId: variant.productId,
-                productVariant: line.productVariant,
-                productVariantId: line.productVariant.id,
-            }),
-        );
+        const images = await this.createReviewImages(ctx, files);
+        let review: StorefrontReview;
+        try {
+            review = await this.connection.getRepository(ctx, StorefrontReview).save(
+                new StorefrontReview({
+                    state: 'PENDING',
+                    rating: input.rating,
+                    title: input.title.trim(),
+                    body: input.body.trim(),
+                    imageAssets: images,
+                    customerName: this.maskCustomerName(customerName || customer.emailAddress),
+                    anonymous: input.anonymous === true,
+                    productName: variant.product?.name || variant.name,
+                    sku: variant.sku,
+                    merchantResponse: null,
+                    merchantResponseZh: null,
+                    merchantResponseEn: null,
+                    moderatedAt: null,
+                    channel: ctx.channel,
+                    channelId: ctx.channelId,
+                    customer,
+                    customerId: customer.id,
+                    order: line.order,
+                    orderId: line.order.id,
+                    orderLine: line,
+                    orderLineId: line.id,
+                    product: variant.product,
+                    productId: variant.productId,
+                    productVariant: line.productVariant,
+                    productVariantId: line.productVariant.id,
+                }),
+            );
+        } catch (error) {
+            await this.removeReviewImages(ctx, images);
+            throw error;
+        }
         const saved = await this.getMineOrThrow(ctx, review.id, customer.id);
         await this.publishChanged(ctx, saved, false);
         return saved;
+    }
+
+    private async createReviewImages(
+        ctx: RequestContext,
+        files: Array<Promise<ReviewImageUpload>>,
+    ): Promise<Array<{ id: string; preview: string }>> {
+        if (!files.length) return [];
+        const prepared: Array<{ bytes: Buffer; extension: string; mimeType: string }> = [];
+        for (const pendingFile of files) {
+            const file = await pendingFile;
+            if (!file.mimetype.startsWith('image/')) throw new UserInputError('只能上传图片文件');
+            const chunks: Buffer[] = [];
+            let size = 0;
+            for await (const chunk of file.createReadStream()) {
+                const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+                size += bytes.length;
+                if (size > REVIEW_IMAGE_MAX_BYTES) throw new UserInputError('每张评价图片不能超过 5MB');
+                chunks.push(bytes);
+            }
+            const normalized = await processCustomerImage(Buffer.concat(chunks), 'reference');
+            const extension = normalized[0] === 0xff ? 'jpg' : normalized[0] === 0x89 ? 'png' : 'webp';
+            const mimeType = extension === 'jpg' ? 'image/jpeg' : `image/${extension}`;
+            prepared.push({ bytes: normalized, extension, mimeType });
+        }
+        const images: Array<{ id: string; preview: string }> = [];
+        try {
+            for (const image of prepared) {
+                const asset = await this.assets.create(ctx, {
+                    file: Promise.resolve({
+                        filename: `review.${image.extension}`,
+                        mimetype: image.mimeType,
+                        createReadStream: () => Readable.from([image.bytes]),
+                    }),
+                });
+                if (!('preview' in asset)) throw new UserInputError('评价图片上传失败，请重试');
+                images.push({ id: String(asset.id), preview: asset.preview });
+            }
+        } catch (error) {
+            await this.removeReviewImages(ctx, images);
+            throw error;
+        }
+        return images;
+    }
+
+    private async removeReviewImages(
+        ctx: RequestContext,
+        images: Array<{ id: string; preview: string }>,
+    ): Promise<void> {
+        if (!images.length) return;
+        await this.assets
+            .delete(
+                ctx,
+                images.map(image => image.id),
+            )
+            .catch(() => undefined);
     }
 
     async moderate(ctx: RequestContext, input: ModerateStorefrontReviewInput): Promise<StorefrontReview> {

@@ -2526,6 +2526,7 @@ function ProductVariantImage({
             <ProductImagePlaceholder
                 language={language}
                 className={orderPageClassName('image-placeholder')}
+                compact
             />
         );
     return (
@@ -2545,7 +2546,11 @@ function OrderImage({ order, language }: { order: OrderSummary; language: Storef
     return variant ? (
         <ProductVariantImage language={language} variant={variant} alt={variant.name} />
     ) : (
-        <ProductImagePlaceholder language={language} className={orderPageClassName('image-placeholder')} />
+        <ProductImagePlaceholder
+            language={language}
+            className={orderPageClassName('image-placeholder')}
+            compact
+        />
     );
 }
 

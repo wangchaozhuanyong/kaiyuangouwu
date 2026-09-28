@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StorefrontReviewService } from './storefront-review.service';
@@ -90,10 +91,15 @@ function createHarness(
         ),
         recordPreparedFields: vi.fn(() => Promise.resolve(undefined)),
     };
+    const assets = {
+        create: vi.fn().mockResolvedValue({ id: 'review-image-1', preview: '/assets/review-image-1.webp' }),
+        delete: vi.fn().mockResolvedValue({ result: 'DELETED' }),
+    };
     const service = new StorefrontReviewService(
         connection as any,
         customerService as any,
         translations as any,
+        assets as any,
     );
     const ctx = {
         activeUserId: 'user-1',
@@ -101,7 +107,7 @@ function createHarness(
         channel: { id: 'channel-1' },
         languageCode: 'en',
     } as any;
-    return { service, ctx, reviewRepository, orderLineQueryBuilder, orderLineRepository };
+    return { service, ctx, reviewRepository, orderLineQueryBuilder, orderLineRepository, assets };
 }
 
 const validInput = {
@@ -112,6 +118,51 @@ const validInput = {
 };
 
 describe('StorefrontReviewService', () => {
+    it('stores sanitized image references with a pending review', async () => {
+        const test = createHarness();
+        const png = Buffer.from(
+            'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEUlEQVQImWP4z8DwH4QZYAwAR8oH+Xm0fdIAAAAASUVORK5CYII=',
+            'base64',
+        );
+        await test.service.submit(test.ctx, validInput, [
+            Promise.resolve({
+                filename: 'photo.png',
+                mimetype: 'image/png',
+                createReadStream: () => Readable.from([png]),
+            }),
+        ]);
+        expect(test.assets.create).toHaveBeenCalledOnce();
+        expect(test.reviewRepository.save).toHaveBeenCalledWith(
+            expect.objectContaining({
+                state: 'PENDING',
+                imageAssets: [{ id: 'review-image-1', preview: '/assets/review-image-1.webp' }],
+            }),
+        );
+    });
+
+    it('rejects more than four review images before creating assets', async () => {
+        const test = createHarness();
+        await expect(
+            test.service.submit(test.ctx, validInput, Array(5).fill(Promise.resolve({}))),
+        ).rejects.toThrow('最多上传 4 张');
+        expect(test.assets.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects unsupported image bytes before creating any public asset', async () => {
+        const test = createHarness();
+        await expect(
+            test.service.submit(test.ctx, validInput, [
+                Promise.resolve({
+                    filename: 'vector.svg',
+                    mimetype: 'image/svg+xml',
+                    createReadStream: () => Readable.from([Buffer.from('<svg/>')]),
+                }),
+            ]),
+        ).rejects.toThrow('图片安全检查未通过');
+        expect(test.assets.create).not.toHaveBeenCalled();
+        expect(test.reviewRepository.save).not.toHaveBeenCalled();
+    });
+
     it.each(['sqlite', 'better-sqlite3', 'sqljs'])(
         'uses a transaction write for %s review submissions',
         async databaseType => {

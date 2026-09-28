@@ -357,13 +357,13 @@
         color: var(--interaction-ink);
     }
     .desktop-product-buying .detail-options button.is-active {
-        color: var(--selection-foreground);
-        background: var(--selection);
-        box-shadow: none;
+        color: var(--text);
+        background: var(--paper);
+        box-shadow: inset 0 0 0 1.5px var(--accent);
     }
     .desktop-product-buying .detail-options button.is-active:hover:not(:disabled) {
-        background: var(--selection-hover);
-        color: var(--selection-foreground);
+        background: var(--paper);
+        color: var(--text);
     }
     .desktop-product-buying .detail-quantity {
         box-shadow: none;

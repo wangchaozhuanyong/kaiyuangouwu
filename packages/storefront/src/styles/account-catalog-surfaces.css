@@ -464,15 +464,15 @@
         padding: 8px;
         border: 0;
         border-radius: var(--skin-control-radius);
-        background: var(--soft);
+        background: transparent;
         color: var(--text);
         scroll-snap-align: start;
     }
     .account-page .account-order-shortcuts > button:hover {
-        background: var(--control-surface-hover);
+        background: transparent;
     }
     .account-page .account-order-shortcuts > button:active {
-        background: var(--control-surface-pressed);
+        background: transparent;
     }
     .account-page .account-order-shortcuts > button > span {
         position: relative;

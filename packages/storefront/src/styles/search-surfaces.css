@@ -157,18 +157,16 @@
     gap: 8px;
 }
 .search-tags > button {
-    max-width: calc(50% - 4px);
+    max-width: 100%;
     min-height: 32px;
     padding: 6px 12px;
-    overflow: hidden;
     border: 0;
     border-radius: var(--skin-control-radius);
     background: var(--control-surface, var(--soft));
     color: var(--text);
     font-size: 12px;
     line-height: 20px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
 }
 .search-tags > small {
     color: var(--muted);
@@ -194,9 +192,8 @@
     font-size: 13px;
 }
 .search-term-list button > span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 .search-term-list svg {
     width: 12px;
@@ -230,11 +227,7 @@
     object-fit: contain;
 }
 .search-category-links span {
-    display: -webkit-box;
     width: 100%;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
     overflow-wrap: anywhere;
     text-align: center;
     line-height: 1.4;
@@ -441,6 +434,9 @@
         display: block;
         background: var(--surface);
     }
+    .search-page :is(.search-discovery, .search-results, .search-suggestions) {
+        padding-inline: 24px;
+    }
     .search-page .search-header {
         position: static;
         grid-template-columns: 36px minmax(0, 1fr) 64px auto;
@@ -457,10 +453,17 @@
     }
     .search-page .search-discovery {
         display: grid;
-        grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+        grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
         grid-template-rows: auto auto 1fr;
         align-items: start;
-        gap: 28px 48px;
+        gap: 28px 32px;
+    }
+    .search-page .search-term-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .search-page .search-discovery .product-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 24px 12px;
     }
     .search-discovery > section {
         grid-column: 1;
@@ -492,7 +495,10 @@
 }
 @media (min-width: 1280px) {
     .search-page .search-discovery .product-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+    .search-page .search-results .product-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
     }
 }
 @media (max-width: 360px) {

@@ -398,7 +398,7 @@ export function CartPage() {
                                         <div>
                                             {invalidLines.map(line => (
                                                 <article key={line.id}>
-                                                    <ProductImagePlaceholder language={language} />
+                                                    <ProductImagePlaceholder language={language} compact />
                                                     <span>
                                                         <strong>
                                                             {line.productVariant?.name ??

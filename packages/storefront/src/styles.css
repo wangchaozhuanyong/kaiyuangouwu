@@ -275,6 +275,7 @@ img {
     inset: 0;
     display: grid;
     place-items: center;
+    container: image-fallback / inline-size;
     color: var(--muted);
     background: var(--product-media-bg);
     background-size: contain;
@@ -290,6 +291,14 @@ img {
 .safe-image-fallback > svg {
     width: 28px;
     height: 28px;
+}
+@container image-fallback (max-width: 100px) {
+    .product-image-placeholder-label {
+        display: none;
+    }
+    .product-image-placeholder-copy {
+        gap: 0;
+    }
 }
 .image-placeholder {
     background: var(--product-media-bg);

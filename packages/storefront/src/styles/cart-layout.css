@@ -140,7 +140,7 @@
 
 .cart-group > header {
     min-height: 46px;
-    padding: 0 14px;
+    padding: 0 14px 0 12px;
     background: var(--soft);
     display: flex;
     align-items: center;

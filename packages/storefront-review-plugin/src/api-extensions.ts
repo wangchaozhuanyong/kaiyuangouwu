@@ -7,6 +7,11 @@ const commonReviewTypes = gql`
         REJECTED
     }
 
+    type StorefrontReviewImage {
+        id: ID!
+        preview: String!
+    }
+
     type StorefrontReview implements Node {
         id: ID!
         createdAt: DateTime!
@@ -15,6 +20,7 @@ const commonReviewTypes = gql`
         rating: Int!
         title: String!
         body: String!
+        images: [StorefrontReviewImage!]!
         customerName: String!
         anonymous: Boolean!
         productName: String!
@@ -73,7 +79,7 @@ export const shopApiExtensions = gql`
     }
 
     extend type Mutation {
-        submitStorefrontReview(input: SubmitStorefrontReviewInput!): StorefrontReview!
+        submitStorefrontReview(input: SubmitStorefrontReviewInput!, files: [Upload!]): StorefrontReview!
     }
 `;
 

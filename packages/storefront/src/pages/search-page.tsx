@@ -545,7 +545,7 @@ export function SearchPage() {
                         subtitle={isZh ? '从店内在售商品开始' : 'Available from this store'}
                         subtitlePlacement="end"
                         appearance="plain"
-                        products={products.slice(0, desktop ? 6 : 2)}
+                        products={products.slice(0, desktop ? 10 : 2)}
                         market={market}
                         locale={locale}
                         language={language}

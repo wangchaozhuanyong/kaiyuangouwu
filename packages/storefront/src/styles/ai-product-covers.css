@@ -606,8 +606,8 @@
 }
 
 .group-select > span {
-    width: 20px;
-    height: 20px;
+    width: 21px;
+    height: 21px;
     flex: none;
     border: 1.5px solid #bec4c1;
     border-radius: 50%;
@@ -857,7 +857,6 @@
 .review-candidate-list {
     padding: 0 12px 12px;
     display: grid;
-    gap: 8px;
 }
 
 .review-candidate-row {
@@ -865,8 +864,7 @@
     min-height: 84px;
     padding: 12px;
     border: 0;
-    border-radius: var(--skin-control-radius);
-    background: var(--control-surface);
+    background: transparent;
     color: var(--text);
     display: grid;
     grid-template-columns: 54px minmax(0, 1fr) auto;
@@ -877,7 +875,11 @@
 
 .review-candidate-row:hover,
 .review-candidate-row[aria-expanded='true'] {
-    background: var(--control-surface-hover);
+    color: var(--accent-ink);
+}
+
+.review-candidate-row + .review-candidate-row {
+    border-top: 1px solid color-mix(in srgb, var(--skin-divider) 75%, transparent);
 }
 
 .review-candidate-row:focus-visible,
@@ -1045,12 +1047,11 @@
     padding: 8px;
     border: 0;
     border-radius: var(--skin-control-radius);
-    background: var(--control-surface);
+    background: transparent;
     color: var(--muted);
 }
 
 .review-rating-input button.is-active {
-    background: var(--warning-bg);
     color: var(--warning-text);
 }
 
@@ -1071,12 +1072,96 @@
     padding: 10px 12px;
     border: 1px solid var(--line);
     border-radius: var(--skin-control-radius);
-    background: var(--control-surface);
+    background: var(--surface);
     color: var(--text);
     font: inherit;
     transition:
         border-color 180ms ease,
         box-shadow 180ms ease;
+}
+
+.review-image-picker {
+    margin-top: 16px;
+}
+
+.review-image-picker > span {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.review-image-previews {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.review-image-preview,
+.review-image-add {
+    position: relative;
+    width: 76px;
+    height: 76px;
+    overflow: hidden;
+    border-radius: var(--skin-media-radius);
+}
+
+.review-image-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.review-image-preview button {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 26px;
+    height: 26px;
+    padding: 4px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+}
+
+.review-image-preview button svg {
+    width: 100%;
+    height: 100%;
+}
+
+.review-image-add {
+    margin: 0;
+    border: 1px dashed var(--skin-divider);
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 3px;
+    color: var(--accent-ink);
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.review-image-add svg {
+    width: 22px;
+    height: 22px;
+}
+
+.review-image-add input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.review-image-add:focus-within,
+.review-image-preview button:focus-visible,
+.product-review-images a:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
 }
 
 .review-composer input:focus,
@@ -1129,7 +1214,6 @@
 .my-review-list {
     padding: 0 12px 12px;
     display: grid;
-    gap: 10px;
 }
 
 .my-review-list article,
@@ -1140,8 +1224,12 @@
 }
 
 .my-review-list article {
-    border-radius: var(--skin-control-radius);
-    background: var(--control-surface);
+    padding-inline: 0;
+    background: transparent;
+}
+
+.my-review-list article + article {
+    border-top: 1px solid color-mix(in srgb, var(--skin-divider) 75%, transparent);
 }
 
 .my-review-list article > header,
@@ -1232,6 +1320,13 @@
     line-height: 1.55;
 }
 
+.my-review-list blockquote {
+    padding: 12px 0 0;
+    border-top: 1px solid color-mix(in srgb, var(--skin-divider) 75%, transparent);
+    border-radius: 0;
+    background: transparent;
+}
+
 .my-review-list blockquote strong,
 .product-review-list blockquote strong {
     margin-bottom: 4px;
@@ -1242,8 +1337,81 @@
 .product-review-list {
     margin-top: 12px;
     border: 0;
-    border-radius: 8px;
+}
+
+.product-review-list article {
+    padding: 16px 0;
+}
+
+.product-review-list article + article {
+    border-top: 1px solid color-mix(in srgb, var(--skin-divider) 75%, transparent);
+}
+
+.product-review-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 12px;
+}
+
+.product-review-copy {
+    min-width: 0;
+}
+
+.product-review-copy > strong {
+    display: block;
+    margin-top: 8px;
+}
+
+.product-review-copy > p {
+    margin: 6px 0 0;
+    color: var(--text-soft);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.product-review-images {
+    display: grid;
+    grid-template-columns: repeat(2, 64px);
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.product-review-images a {
+    width: 64px;
+    height: 64px;
     overflow: hidden;
+    border-radius: var(--skin-media-radius);
+    display: block;
+}
+
+.product-review-images .safe-image-frame,
+.product-review-images .safe-image {
+    width: 100%;
+    height: 100%;
+}
+
+.product-review-images .safe-image {
+    object-fit: cover;
+}
+
+@media (max-width: 350px) {
+    .product-review-images {
+        grid-template-columns: repeat(2, 52px);
+    }
+
+    .product-review-images a {
+        width: 52px;
+        height: 52px;
+    }
+}
+
+.product-review-list blockquote {
+    padding: 12px 0 0;
+    border-top: 1px solid color-mix(in srgb, var(--skin-divider) 75%, transparent);
+    border-radius: 0;
+    background: transparent;
 }
 
 .product-review-list article > header {
@@ -1251,9 +1419,9 @@
     font-size: 12px;
 }
 
-.product-review-list article > em {
+.product-review-copy > em {
     margin-top: 9px;
-    color: #287451;
+    color: var(--accent-ink);
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -1261,7 +1429,7 @@
     font-style: normal;
 }
 
-.product-review-list article > em svg {
+.product-review-copy > em svg {
     width: 14px;
 }
 

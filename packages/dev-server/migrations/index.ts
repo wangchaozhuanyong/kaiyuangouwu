@@ -138,6 +138,7 @@ import { AddNotificationReadState1790208120000 } from './1790208120000-add-notif
 import { AddAfterSalesEvidence1790258400000 } from './1790258400000-add-after-sales-evidence';
 import { AddCustomerServiceFeedback1790310000000 } from './1790310000000-add-customer-service-feedback';
 import { AddCustomerProductActivity1790310060000 } from './1790310060000-add-customer-product-activity';
+import { AddReviewImages1790310120000 } from './1790310120000-add-review-images';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -280,4 +281,5 @@ export const devServerMigrations = [
     AddAfterSalesEvidence1790258400000,
     AddCustomerServiceFeedback1790310000000,
     AddCustomerProductActivity1790310060000,
+    AddReviewImages1790310120000,
 ];

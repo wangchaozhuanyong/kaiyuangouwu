@@ -1767,6 +1767,7 @@ function ProductVariantImage({
             <ProductImagePlaceholder
                 language={language}
                 className={checkoutPageClassName('image-placeholder')}
+                compact
             />
         );
     return (
