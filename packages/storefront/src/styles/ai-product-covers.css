@@ -1392,7 +1392,7 @@
     height: 100%;
 }
 
-.product-review-images .safe-image {
+.product-review-images :is(.safe-image, .safe-image-preview) {
     object-fit: cover;
 }
 

@@ -165,3 +165,22 @@
 .empty-state-icon {
     color: var(--muted);
 }
+
+/* Text-led shortcuts remain usable while their same-image previews are downloading. */
+:is(.colorful-icon-img-wrap, .primary-category-image, .all-primary-category-image):has(
+    [data-safe-image='loading']
+) {
+    background: transparent;
+}
+:is(.colorful-icon-img-wrap, .primary-category-image, .all-primary-category-image)
+    [data-safe-image='loading'],
+:is(.colorful-icon-img-wrap, .primary-category-image, .all-primary-category-image)
+    [data-safe-image='loading']
+    > .safe-image-fallback {
+    background: transparent;
+}
+:is(.colorful-icon-img-wrap, .primary-category-image, .all-primary-category-image)
+    [data-safe-image='loading']
+    .safe-image-preview-loading {
+    visibility: hidden;
+}

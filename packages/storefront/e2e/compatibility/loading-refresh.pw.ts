@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { fixtureData } from '../visual-presets/fixtures.mjs';
+
 async function authorizeLocalStorefront(page: Page) {
     if (process.env.COMPAT_BASE_URL) return;
     const productionAccessCookie = process.env.COMPAT_STOREFRONT_ENTRY_COOKIE;
@@ -18,12 +20,10 @@ async function authorizeLocalStorefront(page: Page) {
 }
 
 async function isolateRouteLoadingFromShopApi(page: Page) {
+    // Keep the route/chunk checks deterministic without making services depend on a live Shop API.
+    const data = fixtureData('neo-minimalist', false);
     await page.route('**/shop-api?**', async route => {
-        await route.fulfill({
-            status: 503,
-            contentType: 'application/json',
-            body: JSON.stringify({ errors: [{ message: 'Route-loading compatibility fixture' }] }),
-        });
+        await route.fulfill({ json: { data } });
     });
 }
 
@@ -161,7 +161,7 @@ test('懒加载页面样式不会被误判为新版本', async ({ page }) => {
 });
 
 // Uses the local readiness fixture server; never contacts a production API.
-test('首屏图片冷加载与缓存刷新不被解码等待遮住', async ({ page }, testInfo) => {
+test('首屏预览承接解码等待，冷加载与缓存刷新均保持稳定', async ({ page }, testInfo) => {
     test.skip(process.env.COMPAT_MEDIA_FIXTURE !== '1', 'Requires the controlled local media fixture');
     await page.addInitScript(() => {
         // The native method is called below with the image as its explicit receiver.
@@ -183,7 +183,8 @@ test('首屏图片冷加载与缓存刷新不被解码等待遮住', async ({ pa
     const nonce = `media-${Date.now()}-${testInfo.project.name}`;
     await page.goto(`/?qaMedia=${nonce}`, { waitUntil: 'domcontentloaded' });
     const hero = page.locator('.hero .safe-image-frame').first();
-    const picture = hero.locator('img');
+    const picture = hero.locator(':scope > img');
+    const preview = hero.locator('.safe-image-preview');
     await expect(hero).toBeVisible();
     const before = await hero.boundingBox();
     await expect
@@ -194,12 +195,15 @@ test('首屏图片冷加载与缓存刷新不被解码等待遮住', async ({ pa
         )
         .toBe(true);
     await expect(picture).toHaveJSProperty('complete', true);
-    await expect(picture).toHaveCSS('opacity', '1');
+    await expect(picture).toHaveCSS('opacity', '0');
     await expect(picture).toHaveCSS('z-index', '1');
+    await expect(preview).toBeVisible();
+    await expect(preview).toHaveCSS('opacity', '1');
     await expect(hero).not.toHaveClass(/is-loaded/);
     await page.screenshot({ path: testInfo.outputPath('image-visible-before-decode.png') });
     await page.evaluate(() => (window as unknown as { __qaReleaseDecode: () => void }).__qaReleaseDecode());
     await expect(hero).toHaveClass(/is-loaded/);
+    await expect(picture).toHaveCSS('opacity', '1');
     expect(await hero.boundingBox()).toEqual(before);
     const source = await picture.evaluate(image => (image as HTMLImageElement).currentSrc);
     const cold = await page.evaluate(
@@ -214,7 +218,7 @@ test('首屏图片冷加载与缓存刷新不被解码等待遮住', async ({ pa
     expect(cold[0].transferSize).toBeGreaterThan(0);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(picture).toHaveJSProperty('complete', true);
-    await expect(picture).toHaveCSS('opacity', '1');
+    await expect(picture).toHaveCSS('opacity', '0');
     await page.evaluate(() => (window as unknown as { __qaReleaseDecode: () => void }).__qaReleaseDecode());
     await expect(hero).toHaveClass(/is-loaded/);
     const warm = await page.evaluate(

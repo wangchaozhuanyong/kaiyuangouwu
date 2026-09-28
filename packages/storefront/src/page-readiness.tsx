@@ -24,6 +24,7 @@ interface PageReadinessProps {
     requestKey?: string;
     children: ReactNode;
     pending: boolean;
+    navigationPreparing?: boolean;
     online: boolean;
     language: 'zh' | 'en';
     onRetry: () => void;
@@ -41,6 +42,7 @@ export function PageReadinessBoundary(props: PageReadinessProps) {
     const {
         children,
         pending,
+        navigationPreparing = false,
         online,
         language,
         onRetry,
@@ -128,6 +130,9 @@ export function PageReadinessBoundary(props: PageReadinessProps) {
             dataReadyAt ??= now;
             const waiting: HTMLImageElement[] = [];
             for (const image of Array.from(root.querySelectorAll('img'))) {
+                // The small preview is decorative; a slow preview must not hold readiness
+                // after its full-size image has already decoded.
+                if (image.classList.contains('safe-image-preview')) continue;
                 // Measure the reserved SafeImage frame while its placeholder remains visible.
                 const visual = image.closest('[data-safe-image]') ?? image;
                 if (!isFirstViewportElement(visual, root)) continue;
@@ -245,17 +250,25 @@ export function PageReadinessBoundary(props: PageReadinessProps) {
         <div
             className="page-readiness"
             data-page-readiness={phase}
-            aria-busy={phase === 'preparing' ? 'true' : undefined}
+            aria-busy={phase === 'preparing' || navigationPreparing ? 'true' : undefined}
         >
             <div ref={stage} className="page-readiness-stage">
                 {children}
             </div>
-            {phase === 'preparing' && showProgress && (
+            {((phase === 'preparing' && showProgress) || navigationPreparing) && (
                 <div
                     className="page-readiness-progress"
                     role="status"
                     aria-live="polite"
-                    aria-label={language === 'zh' ? '页面正在加载' : 'Page loading'}
+                    aria-label={
+                        navigationPreparing
+                            ? language === 'zh'
+                                ? '正在打开商品'
+                                : 'Opening product'
+                            : language === 'zh'
+                              ? '页面正在加载'
+                              : 'Page loading'
+                    }
                 >
                     <span aria-hidden="true" />
                 </div>

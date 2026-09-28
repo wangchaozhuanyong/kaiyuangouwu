@@ -655,7 +655,7 @@ describe('HomePage flash-sale product count', () => {
         },
     );
 
-    it('preloads the visible carousel images and uses compact thumbnail derivatives', () => {
+    it('keeps offscreen carousel images lazy and uses compact thumbnail derivatives', () => {
         const items = flashSale.items.slice(0, 5).map((item, index) => ({
             ...item,
             imageUrl: `/assets/preview/flash-${index + 1}.jpg`,
@@ -671,8 +671,9 @@ describe('HomePage flash-sale product count', () => {
             />,
         );
 
-        expect(markup.match(/loading="eager"/g) ?? []).toHaveLength(4);
-        expect(markup.match(/loading="lazy"/g) ?? []).toHaveLength(1);
+        expect(markup.match(/loading="eager"/g) ?? []).toHaveLength(0);
+        expect(markup.match(/loading="lazy"/g) ?? []).toHaveLength(10);
+        expect(markup).not.toContain('fetchPriority="high"');
         expect(markup).toContain('preset=storefront-thumbnail-160');
         expect(markup).toContain('sizes="(min-width: 1024px) 220px, (min-width: 420px) 126px, 30vw"');
         expect(markup).toMatch(/<header class="section-header">[\s\S]*role="timer"[\s\S]*<\/header>/);

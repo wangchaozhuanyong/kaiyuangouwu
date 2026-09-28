@@ -128,6 +128,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                     requestKey={readinessIdentity}
                     navigationKey={readinessIdentity}
                     pending={Boolean(state.pageDataPending || state.isNavigationPending)}
+                    navigationPreparing={state.isPreparingProduct}
                     online={online}
                     language={language}
                     onRetry={() => window.location.reload()}

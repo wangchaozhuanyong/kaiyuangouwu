@@ -71,6 +71,7 @@ export function SafeImage(props: SafeImageProps) {
     const identity = [
         props.src,
         props.fallbackSrc ?? '',
+        props.placeholderSrc ?? '',
         props.imageKind ?? '',
         props.srcSet ?? '',
         props.sizes ?? '',
@@ -136,6 +137,8 @@ function SafeImageSource({
     const [failed, setFailed] = useState(false);
     const [fallbackHeight, setFallbackHeight] = useState<number>();
     const [timedOut, setTimedOut] = useState(false);
+    const [previewReady, setPreviewReady] = useState(false);
+    const previewRef = useRef<HTMLImageElement>(null);
     const sources = imageSources(currentSrc, responsive ? imageKind : undefined, imageProps.sizes);
     const sourceKey = [sources.src, sources.srcSet ?? imageProps.srcSet ?? '', sources.sizes ?? ''].join(
         '\u0000',
@@ -153,14 +156,20 @@ function SafeImageSource({
     const latestSourceKey = useRef(sourceKey);
     latestSourceKey.current = sourceKey;
     const loaded = loadedCandidate.startsWith(sourceKey + '\u0001') && !failed;
-    const heroPlaceholder =
-        imageKind === 'hero' ? imageSources(src, imageKind, imageProps.sizes).placeholderSrc : undefined;
+    const automaticPlaceholder = imageKind
+        ? imageSources(src, imageKind, imageProps.sizes).placeholderSrc
+        : undefined;
     const placeholder =
         retainedSrc ||
         (placeholderSrc && imageKind
             ? (storefrontPlaceholderUrl(placeholderSrc, imageKind) ?? placeholderSrc)
             : placeholderSrc) ||
-        heroPlaceholder;
+        automaticPlaceholder;
+
+    useLayoutEffect(() => {
+        const preview = previewRef.current;
+        if (preview?.complete && preview.naturalWidth > 0) setPreviewReady(true);
+    }, [placeholder]);
 
     function useFallback() {
         if (!active.current) return;
@@ -285,28 +294,6 @@ function SafeImageSource({
             data-safe-image={state}
             style={{ minHeight: failed ? fallbackHeight : undefined }}
         >
-            <span
-                className="safe-image-fallback"
-                aria-hidden={failed || timedOut ? undefined : true}
-                style={placeholder ? { backgroundImage: `url(${JSON.stringify(placeholder)})` } : undefined}
-            >
-                {!placeholder && failed && fallbackLabel ? (
-                    <span className="product-image-placeholder-copy">
-                        {showFallbackIcon && <Package />}
-                        <span className="product-image-placeholder-label">{fallbackLabel}</span>
-                    </span>
-                ) : (
-                    !placeholder &&
-                    showFallbackIcon && (
-                        <ImagePlaceholder
-                            state={failed ? 'error' : timedOut ? 'timeout' : 'loading'}
-                            alt={alt}
-                            compact={imageKind === 'thumbnail' || imageKind === 'icon'}
-                            language={language}
-                        />
-                    )
-                )}
-            </span>
             {!failed ? (
                 <img
                     {...imageProps}
@@ -329,6 +316,51 @@ function SafeImageSource({
                     aria-label={alt ? [alt, fallbackLabel].filter(Boolean).join(' · ') : undefined}
                 />
             )}
+            <span
+                className="safe-image-fallback"
+                aria-hidden={failed ? undefined : true}
+                style={
+                    !failed && retainedSrc
+                        ? { backgroundImage: `url(${JSON.stringify(retainedSrc)})` }
+                        : undefined
+                }
+            >
+                {!failed && placeholder && !retainedSrc ? (
+                    <>
+                        {!previewReady && (
+                            <span className="safe-image-preview-loading" aria-hidden="true">
+                                <span className="page-loading-spinner" />
+                            </span>
+                        )}
+                        <img
+                            ref={previewRef}
+                            className={`safe-image-preview${previewReady ? ' is-ready' : ''}`}
+                            src={placeholder}
+                            alt=""
+                            aria-hidden="true"
+                            loading={imageProps.loading === 'lazy' ? 'lazy' : 'eager'}
+                            decoding="async"
+                            fetchPriority="auto"
+                            onLoad={() => setPreviewReady(true)}
+                        />
+                    </>
+                ) : failed && fallbackLabel ? (
+                    <span className="product-image-placeholder-copy">
+                        {showFallbackIcon && <Package />}
+                        <span className="product-image-placeholder-label">{fallbackLabel}</span>
+                    </span>
+                ) : (
+                    (!placeholder || failed) &&
+                    showFallbackIcon && (
+                        <ImagePlaceholder
+                            state={failed ? 'error' : 'loading'}
+                            alt={alt}
+                            compact={imageKind === 'thumbnail' || imageKind === 'icon'}
+                            language={language}
+                        />
+                    )
+                )}
+            </span>
         </span>
     );
 }

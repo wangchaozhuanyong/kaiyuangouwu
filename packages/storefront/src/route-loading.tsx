@@ -36,10 +36,6 @@ export function pageSkeletonVariantForPathname(pathname: string): RouteSkeletonV
     return 'default';
 }
 
-function SkeletonBar({ className }: { className?: string }) {
-    return <span className={className} aria-hidden="true" />;
-}
-
 export function PageSkeleton({
     label = 'Loading',
     language,
@@ -51,96 +47,14 @@ export function PageSkeleton({
     variant?: RouteSkeletonVariant;
     root?: boolean;
 }) {
+    const ariaLabel = label === 'Loading' ? loadingPageLabel(language) : label;
     const content = (
-        <>
-            {variant === 'catalog' ? (
-                <>
-                    <SkeletonBar className="skeleton-route-header" />
-                    <span className="skeleton-chip-row" aria-hidden="true">
-                        <SkeletonBar />
-                        <SkeletonBar />
-                        <SkeletonBar />
-                    </span>
-                    <span className="skeleton-catalog-list" aria-hidden="true">
-                        <SkeletonBar />
-                        <SkeletonBar />
-                        <SkeletonBar />
-                        <SkeletonBar />
-                    </span>
-                </>
-            ) : variant === 'detail' ? (
-                <>
-                    <SkeletonBar className="skeleton-detail-media" />
-                    <span className="skeleton-detail-copy" aria-hidden="true">
-                        <SkeletonBar />
-                        <SkeletonBar />
-                        <SkeletonBar />
-                    </span>
-                </>
-            ) : variant === 'services' ? (
-                <>
-                    <SkeletonBar className="skeleton-route-header" />
-                    <span className="skeleton-service-grid" aria-hidden="true">
-                        <SkeletonBar />
-                        <SkeletonBar />
-                        <SkeletonBar />
-                        <SkeletonBar />
-                    </span>
-                </>
-            ) : variant === 'account' ? (
-                <>
-                    <SkeletonBar className="skeleton-account-card" />
-                    <span className="skeleton-account-grid" aria-hidden="true">
-                        <SkeletonBar />
-                        <SkeletonBar />
-                        <SkeletonBar />
-                        <SkeletonBar />
-                    </span>
-                </>
-            ) : variant === 'checkout' ? (
-                <>
-                    <SkeletonBar className="skeleton-checkout-card" />
-                    <SkeletonBar className="skeleton-checkout-action" />
-                </>
-            ) : variant === 'studio' ? (
-                <>
-                    <SkeletonBar className="skeleton-route-header" />
-                    <div className="skeleton-studio-composer" aria-hidden="true">
-                        <SkeletonBar className="skeleton-studio-title" />
-                        <SkeletonBar className="skeleton-studio-textarea" />
-                        <span className="skeleton-studio-row">
-                            <SkeletonBar />
-                            <SkeletonBar />
-                        </span>
-                    </div>
-                    <div className="skeleton-studio-options" aria-hidden="true">
-                        <SkeletonBar className="skeleton-studio-options-title" />
-                        <span className="skeleton-studio-options-row">
-                            <SkeletonBar />
-                            <SkeletonBar />
-                            <SkeletonBar />
-                        </span>
-                    </div>
-                    <SkeletonBar className="skeleton-studio-action" />
-                </>
-            ) : (
-                <>
-                    <SkeletonBar className="skeleton-hero" />
-                    <SkeletonBar className="skeleton-line" />
-                    <span className="skeleton-home-grid" aria-hidden="true">
-                        <SkeletonBar />
-                        <SkeletonBar />
-                        <SkeletonBar />
-                        <SkeletonBar />
-                    </span>
-                    <SkeletonBar className="skeleton-block" />
-                    <SkeletonBar className="skeleton-block" />
-                </>
-            )}
-        </>
+        <span className="page-loading-indicator">
+            <span className="page-loading-spinner" aria-hidden="true" />
+            <span>{ariaLabel}</span>
+        </span>
     );
     const className = `page-skeleton page-skeleton--route page-skeleton--${variant}`;
-    const ariaLabel = label === 'Loading' ? loadingPageLabel(language) : label;
     if (root) {
         return (
             <main

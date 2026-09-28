@@ -105,6 +105,13 @@
         width: 100%;
         height: 100%;
     }
+    .desktop-quick-media [data-safe-image='loading'],
+    .desktop-quick-media [data-safe-image='loading'] > .safe-image-fallback {
+        background: transparent;
+    }
+    .desktop-quick-media [data-safe-image='loading'] .safe-image-preview-loading {
+        visibility: hidden;
+    }
     .desktop-quick-media img {
         width: 100%;
         height: 100%;

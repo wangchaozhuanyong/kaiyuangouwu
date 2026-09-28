@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { StorefrontContext, type StorefrontContextValue } from '../../StorefrontContext';
 import { type MarketConfig, type Product } from '../../types';
 
 import { ProductCard } from './product-card';
@@ -94,6 +95,30 @@ describe('shared product navigation', () => {
         expect(link.contains(favorite)).toBe(false);
         act(() => favorite.click());
         expect(onFavorite).toHaveBeenCalledOnce();
+        expect(onOpen).not.toHaveBeenCalled();
+    });
+
+    it('uses the shared product navigation when rendered inside the storefront', () => {
+        const navigate = vi.fn();
+        act(() =>
+            root.render(
+                <StorefrontContext.Provider value={{ navigate } as unknown as StorefrontContextValue}>
+                    <ProductRow
+                        product={product}
+                        market={market}
+                        language="zh"
+                        locale={market.locale}
+                        onOpen={onOpen}
+                    />
+                </StorefrontContext.Provider>,
+            ),
+        );
+        act(() => {
+            element<HTMLAnchorElement>('a').dispatchEvent(
+                new MouseEvent('click', { bubbles: true, cancelable: true }),
+            );
+        });
+        expect(navigate).toHaveBeenCalledWith({ name: 'product', id: product.id });
         expect(onOpen).not.toHaveBeenCalled();
     });
 

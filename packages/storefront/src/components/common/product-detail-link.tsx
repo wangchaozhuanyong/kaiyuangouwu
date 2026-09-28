@@ -1,7 +1,8 @@
-import { type PropsWithChildren } from 'react';
+import { type PropsWithChildren, useContext } from 'react';
 
 import { routeHref } from '../../storefront-router';
 import { prefetchProductAsset } from '../../storefront-ui/product-display';
+import { StorefrontContext } from '../../StorefrontContext';
 import { type Product, type StorefrontLanguage } from '../../types';
 
 /** Keep media and copy inside their navigation target; sibling overlays can lose hit testing to images. */
@@ -19,6 +20,7 @@ export function ProductDetailLink({
     className: string;
     title?: string;
 }>) {
+    const storefront = useContext(StorefrontContext);
     return (
         <a
             className={className}
@@ -37,7 +39,8 @@ export function ProductDetailLink({
                     return;
                 }
                 event.preventDefault();
-                onOpen();
+                if (storefront) storefront.navigate({ name: 'product', id: product.id });
+                else onOpen();
             }}
             onPointerEnter={() => prefetchProductAsset(product)}
             onPointerDown={() => prefetchProductAsset(product)}

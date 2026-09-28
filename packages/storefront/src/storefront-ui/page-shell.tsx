@@ -521,13 +521,10 @@ export function ListSkeleton({
             role="status"
             aria-label={label}
         >
-            {Array.from({ length: layout === 'products' ? 6 : 4 }, (_, item) => (
-                <span key={item}>
-                    <i />
-                    <b />
-                    <b />
-                </span>
-            ))}
+            <span className="page-loading-indicator">
+                <span className="page-loading-spinner" aria-hidden="true" />
+                <span>{label}</span>
+            </span>
         </div>
     );
 }

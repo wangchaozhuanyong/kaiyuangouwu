@@ -49,9 +49,15 @@ function content(store, real) {
         type: 'TRUST_BAR',
         position: 1,
         imageUrl: null,
-        items: ['商品信息', '订单可查', '帮助中心', '账户服务'].map((label, index) => ({
+        items: [
+            ['商品信息', '查看规格、价格与库存'],
+            ['订单可查', '查看订单与交付状态'],
+            ['帮助中心', '查看帮助与服务信息'],
+            ['账户服务', '管理个人资料与账户信息'],
+        ].map(([label, description], index) => ({
             id: `trust-${index}`,
             label,
+            description,
             enabled: true,
             position: index,
         })),
@@ -171,7 +177,7 @@ try {
                     );
                 }
                 if (width >= 1024) {
-                    expect(geometry.imageFit).toBe('contain');
+                    expect(geometry.imageFit).toBe('cover');
                     expect(geometry.trust).not.toBeNull();
                     await expect(page.locator('.home-trust-item')).toHaveCount(4);
                     if (width >= 1440)

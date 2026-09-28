@@ -1,6 +1,7 @@
 import { lazyRouteComponent } from '@tanstack/react-router';
 
 import { resolveQueryLoadState } from '../loading-state';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { BusinessServicesPageContext, SupportPageContext } from '../storefront-page-contexts';
 import { FlashSalePage, RecommendationPage } from '../storefront-ui/content-ui';
 import { AsyncRouteStatePage } from '../storefront-ui/page-shell';
@@ -159,8 +160,8 @@ export function ReviewsRoutePage() {
                 routeName="reviews"
                 state={runtime.reviewSettingsStatus === 'error' ? 'error' : 'loading'}
                 error={
-                    runtime.reviewSettingsQuery.error instanceof Error
-                        ? runtime.reviewSettingsQuery.error.message
+                    runtime.reviewSettingsStatus === 'error'
+                        ? storefrontErrorMessage(runtime.reviewSettingsQuery.error, runtime.language)
                         : ''
                 }
                 language={runtime.language}
