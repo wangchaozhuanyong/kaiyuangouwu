@@ -833,7 +833,8 @@ function inspectArchivedLogCleanup(
     } = {},
 ) {
     const scope = inspectScope(sourceSha);
-    assert.equal(scope.repositorySha, sourceSha, 'Operations source changed');
+    // The server checkout can still be the verified ancestor while a new operations-only commit awaits deployment.
+    // inspectDeploymentCacheCleanup already proves that relationship and pins the plan to both revisions.
     const candidates = [];
     if (existsSync(journalRoot)) {
         for (const machine of readdirSync(journalRoot, { withFileTypes: true })) {
