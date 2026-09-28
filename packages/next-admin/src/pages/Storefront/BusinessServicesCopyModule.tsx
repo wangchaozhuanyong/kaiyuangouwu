@@ -440,6 +440,7 @@ function copyDraft(source?: StorefrontContentBlock): StorefrontContentBlock {
     if (source) {
         return {
             ...source,
+            imageAssetId: source.imageAsset?.id ?? source.imageAssetId ?? null,
             settings: { ...(source.settings ?? {}), businessServicesCopyVersion: COPY_VERSION },
             translations: normalizedTranslations(source.translations),
             items: [...source.items],
