@@ -47,13 +47,21 @@ describe('progressive page readiness', () => {
         vi.restoreAllMocks();
         vi.useRealTimers();
     });
-    function render(children: ReactNode, pending = false, key = 'first', online = true, requestKey = key) {
+    function render(
+        children: ReactNode,
+        pending = false,
+        key = 'first',
+        online = true,
+        requestKey = key,
+        navigationPreparing = false,
+    ) {
         act(() =>
             root.render(
                 <PageReadinessBoundary
                     navigationKey={key}
                     requestKey={requestKey}
                     pending={pending}
+                    navigationPreparing={navigationPreparing}
                     online={online}
                     language="zh"
                     onBack={vi.fn()}
@@ -104,6 +112,26 @@ describe('progressive page readiness', () => {
         expect(phase()).toBe('ready');
         expect(host.querySelector('[role=status]')).toBeNull();
         expect(host.querySelector('.page-readiness-stage')?.hasAttribute('inert')).toBe(false);
+    });
+
+    it('shows one progress signal over the current page during product preparation', async () => {
+        render(<main>Current page</main>);
+        await advance();
+        expect(phase()).toBe('ready');
+        render(<main>Current page</main>, false, 'first', true, 'first', true);
+        expect(host.querySelector('main')?.textContent).toBe('Current page');
+        expect(host.querySelectorAll('.page-readiness-progress')).toHaveLength(1);
+        expect(host.querySelector('[aria-label="正在打开商品"]')).not.toBeNull();
+        expect(host.querySelector('[data-page-readiness]')?.getAttribute('aria-busy')).toBe('true');
+    });
+
+    it('does not wait for a decorative preview once the full image is decoded', async () => {
+        render(<SafeImage src="/assets/preview/banner.jpg" alt="Banner" imageKind="hero" />);
+        const image = requiredImage(host);
+        expect(host.querySelector('.safe-image-preview')).not.toBeNull();
+        await complete(image);
+        await advance();
+        expect(phase()).toBe('ready');
     });
 
     it('does not wait for images or query placeholders outside the first viewport', async () => {

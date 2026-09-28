@@ -1655,6 +1655,9 @@
         object-position: center;
         filter: none;
     }
+    .desktop-store-layout .auth-page.auth-page-has-image .auth-hero .safe-image-preview {
+        object-position: center;
+    }
     .desktop-store-layout .auth-page.auth-page-has-image .auth-hero-message {
         position: relative;
         inset: auto;

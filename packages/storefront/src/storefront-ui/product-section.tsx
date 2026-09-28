@@ -24,9 +24,11 @@ export function ProductSection({
     selection,
     kind,
     desktopRail = false,
+    prioritizeFirstImage = true,
     appearance,
 }: {
     desktopRail?: boolean;
+    prioritizeFirstImage?: boolean;
     title?: string;
     kind?: SectionKind;
     appearance?: 'card' | 'plain';
@@ -74,7 +76,7 @@ export function ProductSection({
                             locale={locale}
                             language={language}
                             appearance={appearance}
-                            priority={index === 0}
+                            priority={prioritizeFirstImage && index === 0}
                             imageSizes="(min-width: 1024px) 200px, calc(50vw - 24px)"
                             favorite={favoriteProductIds?.includes(product.id)}
                             onOpen={() => onProduct(product)}

@@ -27,6 +27,7 @@ vi.mock('@tanstack/react-router', () => ({
 describe('storefront navigation state', () => {
     let root: ReturnType<typeof createRoot>;
     let value: ReturnType<typeof useStorefrontNavigation>;
+    let prepareProduct: ((id: string) => Promise<void>) | undefined;
     const collections: CollectionSummary[] = [
         {
             id: 'first',
@@ -40,17 +41,21 @@ describe('storefront navigation state', () => {
         },
     ];
     function Harness() {
-        value = useStorefrontNavigation({ collections });
+        value = useStorefrontNavigation({ collections, prepareProduct });
         return null;
     }
     beforeEach(() => {
+        prepareProduct = undefined;
         router.navigate.mockClear();
         router.state.location = { pathname: '/category', search: {}, searchStr: '' };
         router.state.resolvedLocation = router.state.location;
         router.state.status = 'idle';
         root = createRoot(document.createElement('div'));
     });
-    afterEach(() => act(() => root.unmount()));
+    afterEach(() => {
+        act(() => root.unmount());
+        vi.useRealTimers();
+    });
 
     it('keeps the URL all-products default and remembers explicit filters when returning', () => {
         act(() => root.render(<Harness />));
@@ -88,6 +93,41 @@ describe('storefront navigation state', () => {
         act(() => root.render(<Harness />));
         expect(value.route.name).toBe('product');
         expect(value.displayedRoute.name).toBe('category');
+    });
+
+    it('keeps the current page while product data is prepared', async () => {
+        let finishPreparation!: () => void;
+        prepareProduct = vi.fn(
+            () =>
+                new Promise<void>(resolve => {
+                    finishPreparation = resolve;
+                }),
+        );
+        act(() => root.render(<Harness />));
+        act(() => value.navigate({ name: 'product', id: 'p1' }));
+        expect(value.isPreparingProduct).toBe(true);
+        expect(router.navigate).not.toHaveBeenCalled();
+        await act(() => {
+            finishPreparation();
+            return Promise.resolve();
+        });
+        expect(value.isPreparingProduct).toBe(false);
+        expect(router.navigate).toHaveBeenCalledWith(
+            expect.objectContaining({ to: '/product', search: expect.objectContaining({ id: 'p1' }) }),
+        );
+    });
+
+    it('continues to the product after the bounded preparation wait', async () => {
+        vi.useFakeTimers();
+        prepareProduct = vi.fn(() => new Promise<void>(() => undefined));
+        act(() => root.render(<Harness />));
+        act(() => value.navigate({ name: 'product', id: 'p1' }));
+        expect(value.isPreparingProduct).toBe(true);
+        await act(async () => vi.advanceTimersByTimeAsync(1_800));
+        expect(value.isPreparingProduct).toBe(false);
+        expect(router.navigate).toHaveBeenCalledWith(
+            expect.objectContaining({ to: '/product', search: expect.objectContaining({ id: 'p1' }) }),
+        );
     });
 
     it('opens a content product target and ignores empty targets', () => {

@@ -377,6 +377,11 @@ html[data-storefront-preset='modern-oriental'] {
     object-position: right center;
 }
 
+.hero.hero-image-overlay .safe-image-preview {
+    object-fit: cover;
+    object-position: right center;
+}
+
 .hero.hero-image-overlay .hero-rich-content {
     position: absolute;
     z-index: 2;
@@ -462,6 +467,10 @@ html[data-storefront-preset='modern-oriental'] {
     /* Marketing artwork fills the compact phone frame; product media is unaffected. */
     .hero.hero-image-overlay .hero-rich-backdrop {
         object-fit: cover;
+        object-position: center;
+    }
+
+    .hero.hero-image-overlay .safe-image-preview {
         object-position: center;
     }
 

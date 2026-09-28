@@ -1354,6 +1354,7 @@ export function HomePage() {
                             >
                                 <ProductSection
                                     kind="best-sellers"
+                                    prioritizeFirstImage={false}
                                     title={bestSellersTitle}
                                     subtitle={bestSellersBlock?.subtitle}
                                     action={isZh ? '更多' : 'More'}
@@ -1374,6 +1375,7 @@ export function HomePage() {
                             >
                                 <ProductSection
                                     kind="recommendations"
+                                    prioritizeFirstImage={false}
                                     title={resolveManagedContentCopy(
                                         recommendationsBlock,
                                         'title',
@@ -1572,6 +1574,7 @@ function ManagedContentSection({
         return (
             <ProductSection
                 title={block.title}
+                prioritizeFirstImage={false}
                 subtitle={block.subtitle}
                 products={selectedProducts}
                 market={market}
@@ -1893,6 +1896,7 @@ function FeaturedCollectionSection({
                             {expanded && (
                                 <ProductSection
                                     products={products.slice(5)}
+                                    prioritizeFirstImage={false}
                                     market={market}
                                     locale={locale}
                                     language={language}

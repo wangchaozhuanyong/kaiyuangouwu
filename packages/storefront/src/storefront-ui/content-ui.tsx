@@ -283,9 +283,31 @@ export function FlashSaleSection({
 }) {
     const isZh = language === 'zh';
     const countdown = useFlashSaleCountdown(endsAt, language);
+    const sectionRef = useRef<HTMLElement>(null);
+    const [nearViewport, setNearViewport] = useState(false);
+    useEffect(() => {
+        if (!items.length || nearViewport) return;
+        if (typeof IntersectionObserver === 'undefined') {
+            setNearViewport(true);
+            return;
+        }
+        const section = sectionRef.current;
+        if (!section) return;
+        const observer = new IntersectionObserver(
+            entries => {
+                if (entries.some(entry => entry.isIntersecting)) {
+                    setNearViewport(true);
+                    observer.disconnect();
+                }
+            },
+            { rootMargin: '300px 0px', threshold: 0.01 },
+        );
+        observer.observe(section);
+        return () => observer.disconnect();
+    }, [items.length, nearViewport]);
     if (!items.length) return null;
     return (
-        <section className="content-section flash-sale-section">
+        <section ref={sectionRef} className="content-section flash-sale-section">
             <SectionHeader
                 kind="flash-sale"
                 title={title}
@@ -328,6 +350,7 @@ export function FlashSaleSection({
                                 productName={item.productName}
                                 index={index}
                                 layout={layout}
+                                nearViewport={nearViewport}
                                 badge={isZh ? '限时价' : 'Limited price'}
                             />
                             <strong className="flash-sale-name">{item.productName}</strong>
@@ -363,6 +386,7 @@ function FlashSaleImage({
     productName,
     index,
     layout,
+    nearViewport,
     badge,
 }: {
     language: StorefrontLanguage;
@@ -370,20 +394,23 @@ function FlashSaleImage({
     productName: string;
     index: number;
     layout: 'carousel' | 'grid';
+    nearViewport: boolean;
     badge: string;
 }) {
     const frameRef = useRef<HTMLSpanElement>(null);
-    const [preload, setPreload] = useState(index < 4);
+    const [nearRail, setNearRail] = useState(false);
+    const preload = nearViewport && (index < 4 || nearRail);
 
     useEffect(() => {
-        if (preload || layout !== 'carousel' || typeof IntersectionObserver === 'undefined') return;
+        if (!nearViewport || preload || layout !== 'carousel' || typeof IntersectionObserver === 'undefined')
+            return;
         const frame = frameRef.current;
         const scroller = frame?.closest('.flash-sale-grid');
         if (!frame || !(scroller instanceof HTMLElement)) return;
         const observer = new IntersectionObserver(
             entries => {
                 if (entries.some(entry => entry.isIntersecting)) {
-                    setPreload(true);
+                    setNearRail(true);
                     observer.disconnect();
                 }
             },
@@ -395,7 +422,7 @@ function FlashSaleImage({
         );
         observer.observe(frame);
         return () => observer.disconnect();
-    }, [layout, preload]);
+    }, [layout, nearViewport, preload]);
 
     return (
         <span ref={frameRef} className="flash-sale-image">
@@ -411,7 +438,7 @@ function FlashSaleImage({
                             : '(min-width: 1024px) 220px, (min-width: 420px) 160px, 42vw'
                     }
                     loading={preload ? 'eager' : 'lazy'}
-                    fetchPriority={index < 2 ? 'high' : 'auto'}
+                    fetchPriority="auto"
                 />
             ) : (
                 <ProductImagePlaceholder language={language} />

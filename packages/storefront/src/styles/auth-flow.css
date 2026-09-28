@@ -1201,11 +1201,13 @@
     filter: none;
 }
 
-.auth-page-login .auth-hero > .safe-image-frame > img {
+.auth-page-login .auth-hero > .safe-image-frame > img,
+.auth-page-login .auth-hero .safe-image-preview {
     object-position: 32% 50%;
 }
 
-.auth-page-register .auth-hero > .safe-image-frame > img {
+.auth-page-register .auth-hero > .safe-image-frame > img,
+.auth-page-register .auth-hero .safe-image-preview {
     object-position: 52% 50%;
 }
 
@@ -2014,7 +2016,8 @@
         height: var(--auth-managed-hero-height);
     }
 
-    .auth-page .auth-hero-managed > .safe-image-frame > img {
+    .auth-page .auth-hero-managed > .safe-image-frame > img,
+    .auth-page .auth-hero-managed .safe-image-preview {
         object-position: 50% 100%;
     }
 

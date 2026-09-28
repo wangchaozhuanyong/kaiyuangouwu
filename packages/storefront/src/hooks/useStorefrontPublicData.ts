@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { SEND_CLIENT_CHANNEL_TOKEN } from '../api/helpers';
 import { normalizeHeroAutoplayIntervalSeconds } from '../hero-carousel';
 import { uiCopy } from '../i18n';
 import { offlineLoadError, QueryLoadState } from '../loading-state';
@@ -48,7 +49,9 @@ export function useStorefrontPublicData({
             'public',
         ],
         queryFn: ({ signal }) => api.storefrontConfig(signal),
-        staleTime: 0,
+        // The bootstrap copies the just-received config to the resolved market key.
+        // Avoid immediately repeating the same request when the server owns Channel routing.
+        staleTime: SEND_CLIENT_CHANNEL_TOKEN ? 0 : 5_000,
         refetchInterval: STOREFRONT_CONFIG_REFRESH_INTERVAL,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });

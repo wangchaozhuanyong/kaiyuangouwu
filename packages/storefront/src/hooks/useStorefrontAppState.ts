@@ -7,7 +7,12 @@ import { resumeAuthenticatedCheckout } from '../checkout-authentication';
 import { clearStudioCache } from '../pages/ai-image-studio-cache';
 import { resolveCurrentCheckoutOrder } from '../payment-readiness';
 import { cartLineCanSelect } from '../product-availability';
-import { storefrontQueryKeys } from '../query-client';
+import {
+    PUBLIC_QUERY_GC_TIME,
+    PUBLIC_QUERY_STALE_TIME,
+    publicQueryMeta,
+    storefrontQueryKeys,
+} from '../query-client';
 import { invalidateStorefrontRealtimeQueries } from '../realtime-updates';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { preloadRouteMedia } from '../route-media-preload';
@@ -106,6 +111,33 @@ export function useStorefrontAppState() {
     const toastTimer = useRef<number | null>(null);
     const checkoutStartingRef = useRef(false);
 
+    const prepareProductNavigation = useCallback(
+        async (id: string) => {
+            const queryKey = storefrontQueryKeys.product(
+                storefrontQueryKeys.market(market),
+                vendureLanguageCode,
+                id,
+            );
+            await Promise.all([
+                preloadStorefrontRouteComponent('product'),
+                queryClient.getQueryData(queryKey)
+                    ? Promise.resolve()
+                    : queryClient.fetchQuery({
+                          queryKey,
+                          queryFn: async ({ signal }) => {
+                              const product = await api.product(id, signal);
+                              if (!product) throw new Error('Product not found');
+                              return product;
+                          },
+                          staleTime: PUBLIC_QUERY_STALE_TIME,
+                          gcTime: PUBLIC_QUERY_GC_TIME,
+                          meta: publicQueryMeta(),
+                      }),
+            ]);
+        },
+        [api, market, queryClient, vendureLanguageCode],
+    );
+
     const {
         route,
         displayedRoute,
@@ -122,7 +154,13 @@ export function useStorefrontAppState() {
         goBack,
         updateCategory,
         openContentTarget,
-    } = useStorefrontNavigation({ collections, contentBlocks, products });
+        isPreparingProduct,
+    } = useStorefrontNavigation({
+        collections,
+        contentBlocks,
+        products,
+        prepareProduct: storefrontContextResolved ? prepareProductNavigation : undefined,
+    });
 
     // React DOM deduplicates resource hints. Calling this during render lets a restored public
     // query cache announce the LCP candidate before the route component commits its image node.
@@ -772,6 +810,7 @@ export function useStorefrontAppState() {
         // their content/query skeletons, so an unrelated content request never blocks the app.
         pageDataPending: !storefrontContextResolved && !configQuery.isError,
         isNavigationPending,
+        isPreparingProduct,
         storefrontContextValue,
         customer,
         customerLoadState,

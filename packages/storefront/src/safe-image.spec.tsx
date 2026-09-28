@@ -339,7 +339,7 @@ describe('SafeImage', () => {
         }
     });
     it.each(['card', 'detail', 'thumbnail'] as const)(
-        'loads %s images at responsive resolution without enlarging a tiny placeholder',
+        'loads %s images with a lazy same-image preview and a full-quality final candidate',
         imageKind => {
             const markup = renderToStaticMarkup(
                 <SafeImage
@@ -351,9 +351,13 @@ describe('SafeImage', () => {
             );
 
             expect(markup).toContain('safe-image-frame');
-            expect(markup).not.toContain('has-placeholder');
+            expect(markup).toContain('has-placeholder');
             expect(markup).not.toContain('background-image');
-            expect(markup).not.toContain('storefront-placeholder');
+            expect(markup).toContain('storefront-placeholder');
+            expect(markup).toContain('safe-image-preview');
+            expect(markup).toContain('loading="lazy"');
+            expect(markup).toContain('fetchPriority="auto"');
+            expect(markup).toContain('safe-image-preview-loading');
             expect(markup).toContain('srcSet=');
             expect(markup).toContain('q=90');
             expect(markup).not.toContain('safe-image is-loaded');
@@ -391,10 +395,16 @@ describe('SafeImage', () => {
                 image.dispatchEvent(new Event('error'));
             });
             expect(image.getAttribute('srcset')).toBeNull();
-            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toContain(
+            expect(host.querySelector<HTMLImageElement>('.safe-image-preview')?.src).toContain(
                 'storefront-placeholder-wide-64',
             );
             expect(host.querySelector('.safe-image-fallback svg')).toBeNull();
+            act(() => {
+                image.dispatchEvent(new Event('error'));
+            });
+            expect(host.querySelector('.safe-image-preview')).toBeNull();
+            expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+            expect(host.querySelector('[data-image-state=error]')).not.toBeNull();
         } finally {
             act(() => root.unmount());
         }
