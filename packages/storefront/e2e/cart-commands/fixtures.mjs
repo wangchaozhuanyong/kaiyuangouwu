@@ -140,7 +140,7 @@ const quotaWindow = {
     remaining: 10,
     windowEndsAt: '2030-01-01T00:00:00Z',
 };
-export function fixtureData(presetId = 'modern-oriental', signedIn = true) {
+export function fixtureData(presetId = 'neo-minimalist', signedIn = true) {
     return {
         storefrontVisualPreset: { channelId: 'qa-channel', presetId, revision: 'qa-1' },
         activeChannel: {

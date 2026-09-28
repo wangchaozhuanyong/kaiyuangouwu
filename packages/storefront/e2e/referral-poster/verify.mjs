@@ -43,8 +43,8 @@ await frontend.listen();
 const results = [];
 try {
     for (const [name, engine, options, preset] of [
-        ['desktop', chromium, { viewport: { width: 1440, height: 1000 } }, 'modern-oriental'],
-        ['mobile', webkit, { ...devices['iPhone 13'] }, 'modern-oriental'],
+        ['desktop', chromium, { viewport: { width: 1440, height: 1000 } }],
+        ['mobile', webkit, { ...devices['iPhone 13'] }],
         ['desktop-dark', chromium, { viewport: { width: 1440, height: 1000 } }, 'neo-minimalist'],
     ]) {
         const browser = await engine.launch({ headless: true });

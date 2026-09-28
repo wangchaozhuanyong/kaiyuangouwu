@@ -17,7 +17,7 @@
                     typeof candidate.savedAt === 'number' &&
                     candidate.savedAt <= Date.now() &&
                     Date.now() - candidate.savedAt < 7 * 86400000 &&
-                    /^(classic|modern-oriental|neo-minimalist)$/.test(candidate.presetId) &&
+                    /^(classic|neo-minimalist|neo-minimalist)$/.test(candidate.presetId) &&
                     candidate.colors &&
                     typeof candidate.colors === 'object'
                 )

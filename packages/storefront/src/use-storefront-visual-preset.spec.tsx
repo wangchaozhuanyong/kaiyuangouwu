@@ -36,7 +36,7 @@ describe('embedded storefront skin', () => {
         window.history.replaceState(
             null,
             '',
-            '/?storefrontPreviewEmbedded=1&storefrontPreviewPreset=modern-oriental',
+            '/?storefrontPreviewEmbedded=1&storefrontPreviewPreset=neo-minimalist',
         );
         const host = document.createElement('div');
         document.body.append(host);
@@ -58,14 +58,14 @@ describe('embedded storefront skin', () => {
                     createElement(QueryClientProvider, { client: queryClient }, createElement(Probe)),
                 ),
             );
-            expect(document.documentElement.dataset.storefrontPreset).toBe('modern-oriental');
+            expect(document.documentElement.dataset.storefrontPreset).toBe('neo-minimalist');
             window.history.replaceState(null, '', '/category');
             act(() =>
                 root.render(
                     createElement(QueryClientProvider, { client: queryClient }, createElement(Probe)),
                 ),
             );
-            expect(document.documentElement.dataset.storefrontPreset).toBe('modern-oriental');
+            expect(document.documentElement.dataset.storefrontPreset).toBe('neo-minimalist');
             expect(readPublishedSkin).not.toHaveBeenCalled();
         } finally {
             act(() => root.unmount());
@@ -80,7 +80,7 @@ it('updates an already visible guest skin from the saved store configuration', a
     const host = document.createElement('div');
     const root = createRoot(host);
     const client = new QueryClient();
-    let presetId = 'modern-oriental';
+    let presetId = 'neo-minimalist';
     const api = { storefrontVisualPreset: vi.fn(() => Promise.resolve({ presetId })) } as unknown as Pick<
         ShopApi,
         'storefrontVisualPreset'
@@ -96,7 +96,7 @@ it('updates an already visible guest skin from the saved store configuration', a
         await act(async () => {
             await vi.advanceTimersByTimeAsync(1);
         });
-        expect(document.documentElement.dataset.storefrontPreset).toBe('modern-oriental');
+        expect(document.documentElement.dataset.storefrontPreset).toBe('neo-minimalist');
         presetId = 'neo-minimalist';
         await act(async () => {
             await vi.advanceTimersByTimeAsync(STOREFRONT_CONFIG_REFRESH_INTERVAL);
@@ -116,7 +116,7 @@ function restoreBeforePaint() {
     runInNewContext(restoreScript, { window, document, location: window.location, URLSearchParams, Date });
 }
 
-it.each(['classic', 'modern-oriental', 'neo-minimalist'] as const)(
+it.each(['classic', 'neo-minimalist', 'neo-minimalist'] as const)(
     'keeps the complete %s palette across prepaint, context resolution and a delayed skin response',
     async presetId => {
         const colors = semanticPaletteCssVariables(

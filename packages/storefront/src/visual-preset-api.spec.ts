@@ -78,7 +78,7 @@ describe('visual preset Shop API compatibility', () => {
                             activeChannel: { id: 'store-a' },
                             storefrontVisualPreset: {
                                 channelId: 'store-a',
-                                presetId: 'modern-oriental',
+                                presetId: 'neo-minimalist',
                                 revision: '2',
                             },
                         },
@@ -88,7 +88,7 @@ describe('visual preset Shop API compatibility', () => {
         vi.stubGlobal('fetch', fetchMock);
         await expect(new ShopApi(market).storefrontVisualPreset()).resolves.toEqual({
             channelId: 'store-a',
-            presetId: 'modern-oriental',
+            presetId: 'neo-minimalist',
             desktopLayout: 'classic',
             revision: '2',
         });

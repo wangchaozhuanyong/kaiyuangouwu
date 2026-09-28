@@ -190,8 +190,8 @@
 }
 
 .ai-studio-optimized {
-    background: #ecfdf5;
-    color: #047857;
+    background: color-mix(in srgb, var(--success) 10%, var(--surface));
+    color: var(--success);
 }
 
 .ai-studio-optimized button {
@@ -201,8 +201,8 @@
 }
 
 .ai-studio-error {
-    background: #fef2f2;
-    color: #b91c1c;
+    background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+    color: var(--danger);
 }
 
 .ai-studio-reference {
@@ -222,7 +222,8 @@
     padding: 9px 12px;
     border: 1px dashed var(--line);
     border-radius: 10px;
-    background: #fafafa;
+    background: var(--surface);
+    color: var(--text);
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -799,19 +800,19 @@
 
 .ai-generation-status.is-succeeded,
 .ai-generation-status.is-partial_success {
-    background: #ecfdf5;
-    color: #047857;
+    background: color-mix(in srgb, var(--success) 10%, var(--surface));
+    color: var(--success);
 }
 
 .ai-generation-status.is-running,
 .ai-generation-status.is-queued {
-    background: #eff6ff;
-    color: #1d4ed8;
+    background: var(--accent-soft);
+    color: var(--accent-ink);
 }
 
 .ai-generation-status.is-unknown {
-    background: #fffbeb;
-    color: #b45309;
+    background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+    color: var(--warning);
 }
 
 .ai-generation-grid {

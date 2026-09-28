@@ -31,7 +31,7 @@ const market: MarketConfig = {
     label: 'Local review fixture',
 };
 const api = new ShopApi(market);
-applyStorefrontVisualPreset(document.documentElement, 'modern-oriental');
+applyStorefrontVisualPreset(document.documentElement, 'neo-minimalist');
 
 function Fixture() {
     const desktop = useDesktopViewport();

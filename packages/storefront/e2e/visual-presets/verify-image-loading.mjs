@@ -13,7 +13,7 @@ const distRoot = path.join(storefrontRoot, 'dist');
 const output = path.join(storefrontRoot, 'artifacts/image-loading-qa');
 const stores = [
     { name: 'moyao', preset: 'neo-minimalist' },
-    { name: 'damatong', preset: 'modern-oriental' },
+    { name: 'damatong', preset: 'classic' },
 ];
 const viewports = [
     { name: 'mobile', width: 390, height: 844, reducedMotion: 'reduce' },

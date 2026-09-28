@@ -294,7 +294,7 @@ export const featureHelpContent = {
     'storefront.visual-preset': {
         purpose: '预览并应用当前店铺的商城皮肤，统一配色、字体、圆角和阴影。',
         requirements: ['先核对当前店铺', '应用需要装修内容编辑权限', '出现版本冲突时重新载入后再选择'],
-        example: '例如：选择现代东方，查看手机和电脑组件示例，确认后点击应用到当前店铺。',
+        example: '例如：选择经典，查看手机和电脑组件示例，确认后点击应用到当前店铺。',
         impact: '预览不会发布；应用仅影响当前店铺，恢复默认皮肤可还原配色，商品和装修内容继续保留。',
     },
     'storefront.support-faq': {

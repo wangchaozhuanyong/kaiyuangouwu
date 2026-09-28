@@ -233,32 +233,6 @@ function resolveClassicPalette(brand: StorefrontBrandPaletteInput): StorefrontSe
 }
 
 const FIXED_PALETTES: Record<Exclude<StorefrontVisualPresetId, 'classic'>, StorefrontSemanticPalette> = {
-    'modern-oriental': {
-        page: '#f3f4f0',
-        surface: '#ffffff',
-        elevated: '#ffffff',
-        subtle: '#edf1ee',
-        text: '#203432',
-        muted: '#63716d',
-        brand: '#9f3b30',
-        accent: '#b34431',
-        accentHover: '#923526',
-        accentSoft: '#f8e7df',
-        accentInk: '#a33b2b',
-        onAccent: '#ffffff',
-        selection: '#20564f',
-        selectionHover: '#16443e',
-        onSelection: '#ffffff',
-        interactionHover: '#dcece5',
-        interactionPressed: '#c7ddd3',
-        interactionInk: '#20564f',
-        border: '#807563',
-        borderStrong: '#5f574a',
-        focus: '#2472a5',
-        success: '#285d46',
-        warning: '#855213',
-        danger: '#942c27',
-    },
     'neo-minimalist': {
         page: '#070b14',
         surface: '#0e1421',
@@ -301,18 +275,7 @@ const SKIN_TREATMENTS: Record<StorefrontVisualPresetId, StorefrontSkinTreatment>
         heroShadow: '0 6px 24px rgba(15, 23, 42, 0.06)',
         headerShadow: '0 2px 10px rgba(15, 23, 42, 0.04)',
     },
-    'modern-oriental': {
-        divider: '#ded2c0',
-        displayFont: "'Songti SC', 'STSong', 'Noto Serif CJK SC', 'SimSun', Georgia, serif",
-        cardRadius: '14px',
-        heroRadius: '18px',
-        controlRadius: '8px',
-        mediaRadius: '10px',
-        cardShadow: '0 2px 12px rgba(67, 48, 27, 0.045)',
-        cardHoverShadow: '0 9px 22px rgba(23, 58, 53, 0.15)',
-        heroShadow: '0 8px 28px rgba(55, 39, 22, 0.07)',
-        headerShadow: '0 2px 12px rgba(55, 39, 22, 0.045)',
-    },
+
     'neo-minimalist': {
         divider: '#2a3548',
         displayFont:
@@ -342,13 +305,7 @@ const TOOL_ICON_TONES: Record<
         coupon: { foreground: '#92400e', background: '#fef3c7' },
         support: { foreground: '#b42318', background: '#fee4e2' },
     },
-    'modern-oriental': {
-        security: { foreground: '#245b66', background: '#dcebea' },
-        mail: { foreground: '#27604b', background: '#deebdf' },
-        studio: { foreground: '#76513a', background: '#eee1d5' },
-        coupon: { foreground: '#855b18', background: '#f2e5c8' },
-        support: { foreground: '#913128', background: '#f1ddd3' },
-    },
+
     'neo-minimalist': {
         security: { foreground: '#93c5fd', background: '#19304f' },
         mail: { foreground: '#5eead4', background: '#113b3a' },

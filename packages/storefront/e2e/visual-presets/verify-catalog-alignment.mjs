@@ -9,13 +9,13 @@ const baseUrl = process.env.STOREFRONT_VISUAL_BASE_URL || 'http://127.0.0.1:5189
 const publicCollections = JSON.parse(await readFile(path.join(output, 'damatong-collections.json'), 'utf8'))
     .data.collections;
 const assetMap = JSON.parse(await readFile(path.join(output, 'asset-map.json'), 'utf8'));
-const presets = ['classic', 'modern-oriental', 'neo-minimalist'];
+const presets = ['classic', 'neo-minimalist'];
 const cases = presets.flatMap(preset =>
     [320, 390, 430, 1023].map(width => ({ preset, width, language: 'zh', count: 6 })),
 );
 cases.push(
-    ...[320, 390, 1023].map(width => ({ preset: 'modern-oriental', width, language: 'en', count: 6 })),
-    ...[0, 1, 2].map(count => ({ preset: 'modern-oriental', width: 390, language: 'zh', count })),
+    ...[320, 390, 1023].map(width => ({ preset: 'neo-minimalist', width, language: 'en', count: 6 })),
+    ...[0, 1, 2].map(count => ({ preset: 'neo-minimalist', width: 390, language: 'zh', count })),
 );
 const results = [];
 await mkdir(output, { recursive: true });
@@ -93,7 +93,7 @@ try {
         if (language === 'zh') expect(geometry.first.width).toBeCloseTo(geometry.all.width, 0);
         const name = `${preset}-${width}-${language}-${count}`;
         await page.screenshot({ path: path.join(output, `${name}.png`) });
-        if (preset === 'modern-oriental' && width === 390 && language === 'zh' && count === 6) {
+        if (preset === 'neo-minimalist' && width === 390 && language === 'zh' && count === 6) {
             await page.screenshot({
                 path: path.join(output, 'after-category-top-390.png'),
                 clip: { x: 0, y: 0, width, height: geometry.product.y },

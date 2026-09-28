@@ -11,11 +11,11 @@ try {
     await page.goto('http://127.0.0.1:5187/e2e/visual-presets/index.html');
     await expect(page.getByRole('heading', { name: /^店铺皮肤/ })).toBeVisible();
     await expect(page.getByRole('radio', { name: /现有皮肤/ })).toBeChecked();
-    await page.getByRole('radio', { name: /现代东方/ }).check();
+    await page.getByRole('radio', { name: /经典/ }).check();
     await page.getByRole('button', { name: '预览效果', exact: true }).click();
     await expect(page.getByRole('dialog', { name: '店铺皮肤效果预览' })).toBeVisible();
     const frame = page.frameLocator('iframe[title="皮肤组件预览"]');
-    await expect(frame.locator('html')).toHaveAttribute('data-storefront-preset', 'modern-oriental');
+    await expect(frame.locator('html')).toHaveAttribute('data-storefront-preset', 'neo-minimalist');
     await expect(frame.locator('body')).toHaveCSS('background-color', 'rgb(246, 242, 234)');
     await expect(frame.locator('.hero-rich-cta-btn')).toHaveCSS('background-color', 'rgb(166, 61, 50)');
     await expect(page.getByTestId('save-count')).toHaveText('0');
@@ -36,15 +36,15 @@ try {
     await page.getByRole('button', { name: '关闭预览' }).click();
     await page.getByRole('button', { name: '应用到当前店铺' }).click();
     await expect(page.getByRole('region', { name: '店铺皮肤' }).getByRole('status')).toContainText(
-        '已应用现代东方',
+        '已应用经典',
     );
     await expect(page.getByTestId('save-count')).toHaveText('1');
     await page.getByRole('button', { name: '重新载入' }).click();
-    await expect(page.getByRole('radio', { name: /现代东方/ })).toBeChecked();
+    await expect(page.getByRole('radio', { name: /经典/ })).toBeChecked();
     await page.getByRole('combobox', { name: '测试店铺' }).selectOption('b');
     await expect(page.getByRole('radio', { name: /现有皮肤/ })).toBeChecked();
     await page.getByRole('combobox', { name: '测试店铺' }).selectOption('a');
-    await expect(page.getByRole('radio', { name: /现代东方/ })).toBeChecked();
+    await expect(page.getByRole('radio', { name: /经典/ })).toBeChecked();
     await page.screenshot({
         path: `${output}/admin-skin-selector.png`,
         fullPage: true,
@@ -55,7 +55,7 @@ try {
         '已应用现有皮肤',
     );
     await page.getByRole('checkbox', { name: '模拟保存冲突' }).check();
-    await page.getByRole('radio', { name: /现代东方/ }).check();
+    await page.getByRole('radio', { name: /经典/ }).check();
     await page.getByRole('button', { name: '应用到当前店铺' }).click();
     await expect(page.getByRole('alert')).toContainText('其他管理员');
     await page.getByRole('button', { name: '重新载入' }).click();
@@ -108,13 +108,13 @@ try {
     await page.getByRole('checkbox', { name: '模拟保存冲突' }).uncheck();
     await expect(page.getByRole('radio', { name: /现有皮肤/ })).toBeChecked();
     await page.getByRole('checkbox', { name: '模拟回读失败' }).check();
-    await page.getByRole('radio', { name: /现代东方/ }).check();
+    await page.getByRole('radio', { name: /经典/ }).check();
     await page.getByRole('button', { name: '应用到当前店铺' }).click();
     await expect(page.getByRole('alert')).toContainText('皮肤已保存，但重新读取失败');
-    await expect(page.getByTestId('persisted-preset')).toHaveText('modern-oriental');
-    await expect(page.getByRole('radio', { name: /现代东方 当前使用/ })).toBeChecked();
+    await expect(page.getByTestId('persisted-preset')).toHaveText('neo-minimalist');
+    await expect(page.getByRole('radio', { name: /经典 当前使用/ })).toBeChecked();
     await expect(page.getByRole('region', { name: '店铺皮肤' }).getByRole('status')).toContainText(
-        '已应用现代东方',
+        '已应用经典',
     );
     await page.screenshot({
         path: `${output}/admin-saved-readback-failed.png`,

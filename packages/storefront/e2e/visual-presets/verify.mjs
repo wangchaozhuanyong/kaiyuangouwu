@@ -14,10 +14,10 @@ const requestedRoute = process.env.STOREFRONT_VISUAL_ROUTE;
 const requestedWidth = Number(process.env.STOREFRONT_VISUAL_WIDTH || 0);
 const requestedContent = process.env.STOREFRONT_VISUAL_CONTENT || 'normal';
 const verifyProductNavigation = requestedContent.startsWith('product-navigation');
-const presets = requestedPreset ? [requestedPreset] : ['classic', 'modern-oriental', 'neo-minimalist'];
+const presets = requestedPreset ? [requestedPreset] : ['classic', 'neo-minimalist'];
 const expectedPaletteSignature = {
     classic: { page: '#f1f5f9', surface: '#ffffff', text: '#0f172a', brand: '#3558aa' },
-    'modern-oriental': { page: '#f3f4f0', surface: '#ffffff', text: '#203432', brand: '#9f3b30' },
+
     'neo-minimalist': { page: '#070b14', surface: '#0e1421', text: '#f4f7fb', brand: '#8b5cf6' },
 };
 const routes = [
@@ -386,21 +386,20 @@ try {
                         const option = getComputedStyle(document.querySelector('.detail-options button'));
                         return {
                             controlRadius: root.getPropertyValue('--skin-control-radius').trim(),
-                            priceRadius: price.borderRadius,
                             priceBackground: price.backgroundColor,
+                            priceDivider: price.borderBottomWidth,
                             optionRadius: option.borderRadius,
                         };
                     });
-                    expect(productSurface.priceRadius, `${preset}/${width}/product price radius`).toBe(
-                        productSurface.controlRadius,
-                    );
                     expect(productSurface.optionRadius, `${preset}/${width}/product option radius`).toBe(
                         productSurface.controlRadius,
                     );
-                    expect(
-                        productSurface.priceBackground,
-                        `${preset}/${width}/product price surface`,
-                    ).not.toBe('rgba(0, 0, 0, 0)');
+                    expect(productSurface.priceBackground, `${preset}/${width}/product price surface`).toBe(
+                        'rgba(0, 0, 0, 0)',
+                    );
+                    expect(productSurface.priceDivider, `${preset}/${width}/product price divider`).toBe(
+                        '1px',
+                    );
                     const description = page.locator('.detail-description');
                     await expect(description.locator('img, video, audio, iframe')).toHaveCount(0);
                     const [descriptionBox, tabsBox] = await Promise.all([
@@ -1239,6 +1238,16 @@ try {
                             'notifications',
                         ].includes(name))
                 ) {
+                    if (name === 'product') {
+                        const imageFrame = page.locator('.detail-gallery .safe-image-frame');
+                        await expect(imageFrame).toHaveAttribute('data-safe-image', 'ready');
+                        await imageFrame.evaluate(
+                            () =>
+                                new Promise(resolve =>
+                                    requestAnimationFrame(() => requestAnimationFrame(resolve)),
+                                ),
+                        );
+                    }
                     await page.screenshot({
                         path: `${output}/${preset}-${width}-${name}.png`,
                         fullPage: true,
@@ -1687,6 +1696,20 @@ try {
                     primaryContrast,
                 });
 
+                if (name === 'product' && width <= 390) {
+                    const serviceLabels = await page.locator('.detail-service-bar span').evaluateAll(items =>
+                        items.map(item => ({
+                            whiteSpace: getComputedStyle(item).whiteSpace,
+                            clipped: item.scrollWidth > item.clientWidth + 1,
+                        })),
+                    );
+                    expect(serviceLabels, `${preset}/${width}/product service labels`).toHaveLength(3);
+                    expect(
+                        serviceLabels.every(item => item.whiteSpace === 'nowrap' && !item.clipped),
+                        `${preset}/${width}/product service labels stay on one visible line: ${JSON.stringify(serviceLabels)}`,
+                    ).toBe(true);
+                }
+
                 if (name === 'category' && width >= 1024) {
                     await page.locator('.proto-search-open').click();
                     await expect(page).toHaveURL(/\/search$/);
@@ -1695,9 +1718,9 @@ try {
                 }
 
                 if (name === 'home' && width >= 1024) {
-                    const tools = page.locator('.quick-grid > button');
+                    const tools = page.locator('.quick-grid .desktop-quick-tile');
                     await expect(tools).toHaveCount(5);
-                    await expect(page.locator('.quick-grid h2')).toContainText('快捷入口');
+                    await expect(page.locator('.quick-grid')).toHaveAttribute('aria-label', '快捷入口');
                     await expect(page.locator('.desktop-quick-pagination')).toHaveCount(0);
                     await expect(tools.filter({ hasText: '商品分类' })).toBeVisible();
                     await expect(tools.filter({ hasText: '优惠中心' })).toBeVisible();
@@ -1866,7 +1889,7 @@ try {
         if (url.pathname.includes('shop-api')) {
             return route.fulfill({
                 contentType: 'application/json',
-                body: JSON.stringify({ data: fixtureData('modern-oriental', false) }),
+                body: JSON.stringify({ data: fixtureData('neo-minimalist', false) }),
             });
         }
         if (url.pathname.includes('/storefront-realtime')) return route.fulfill({ status: 204, body: '' });
@@ -1883,7 +1906,7 @@ try {
     await expect(previewPage.frameLocator('iframe').locator('.business-services-page')).toBeVisible({
         timeout: 15000,
     });
-    for (const preset of ['classic', 'modern-oriental', 'neo-minimalist']) {
+    for (const preset of ['classic', 'neo-minimalist']) {
         await previewPage.getByLabel('皮肤').selectOption(preset);
         await expect(previewPage.locator('iframe')).toHaveAttribute(
             'src',

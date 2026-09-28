@@ -157,6 +157,9 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                 cartQuantity={cart?.totalQuantity ?? 0}
                             />
                         )}
+                        {!previewEmbedded && (
+                            <StorefrontUpdatePrompt language={language} route={renderedRouteName} />
+                        )}
                         <div
                             className={
                                 desktop
@@ -251,8 +254,6 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                     )}
 
                     <StorefrontTrafficPreference api={storefrontContextValue.api} language={language} />
-
-                    <StorefrontUpdatePrompt language={language} />
                 </PageReadinessBoundary>
             </DesktopLayoutContext.Provider>
         </StorefrontContext.Provider>

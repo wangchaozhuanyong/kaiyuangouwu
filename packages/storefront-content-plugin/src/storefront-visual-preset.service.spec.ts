@@ -52,10 +52,10 @@ describe('channel-scoped storefront visual presets', () => {
         const { service, ctx, rows, eventBus } = setup();
         const saved = await service.update(ctx('a'), {
             channelId: 'a',
-            presetId: 'modern-oriental',
+            presetId: 'neo-minimalist',
             expectedRevision: 'default',
         });
-        expect(saved.presetId).toBe('modern-oriental');
+        expect(saved.presetId).toBe('neo-minimalist');
         expect((await service.get(ctx('b'))).presetId).toBe('classic');
         expect(rows.get('a')).toMatchObject({ enabled: false, code: STOREFRONT_VISUAL_PRESET_CODE });
         expect(eventBus.publish.mock.calls[0][0]).toMatchObject({ ctx: { channelId: 'a' } });
@@ -74,7 +74,7 @@ describe('channel-scoped storefront visual presets', () => {
         await expect(
             service.update(ctx('b'), {
                 channelId: 'a',
-                presetId: 'modern-oriental',
+                presetId: 'neo-minimalist',
                 expectedRevision: 'default',
             }),
         ).rejects.toThrow(/店铺已切换/);
@@ -84,13 +84,13 @@ describe('channel-scoped storefront visual presets', () => {
         expect(repository.save).not.toHaveBeenCalled();
         await service.update(ctx('a'), {
             channelId: 'a',
-            presetId: 'modern-oriental',
+            presetId: 'neo-minimalist',
             expectedRevision: 'default',
         });
         await expect(
             service.update(ctx('a'), { channelId: 'a', presetId: 'classic', expectedRevision: 'default' }),
         ).rejects.toThrow(/其他管理员/);
-        expect((await service.get(ctx('a'))).presetId).toBe('modern-oriental');
+        expect((await service.get(ctx('a'))).presetId).toBe('neo-minimalist');
         expect(repository.save).toHaveBeenCalledTimes(1);
         expect(repository.findOne).toHaveBeenCalledWith({
             where: { channelId: 'a', code: STOREFRONT_VISUAL_PRESET_CODE },
@@ -123,7 +123,7 @@ describe('channel-scoped storefront visual presets', () => {
         const { service, ctx, rows } = setup();
         const skin = await service.update(ctx('a'), {
             channelId: 'a',
-            presetId: 'modern-oriental',
+            presetId: 'neo-minimalist',
             expectedRevision: 'default',
         });
         const row = rows.get('a');
@@ -134,7 +134,7 @@ describe('channel-scoped storefront visual presets', () => {
             desktopLayout: 'catalog',
             expectedRevision: skin.revision,
         });
-        expect(layout).toMatchObject({ presetId: 'modern-oriental', desktopLayout: 'catalog' });
+        expect(layout).toMatchObject({ presetId: 'neo-minimalist', desktopLayout: 'catalog' });
         expect(rows.get('a')?.settings?.retained).toBe('keep');
         await expect(
             service.update(ctx('a'), {

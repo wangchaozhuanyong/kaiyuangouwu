@@ -300,9 +300,7 @@ img {
 }
 .safe-image-frame.is-loaded > .safe-image-fallback {
     opacity: 0;
-    display: none;
     pointer-events: none;
-    transition: none;
 }
 .safe-image-fallback > svg {
     width: 28px;

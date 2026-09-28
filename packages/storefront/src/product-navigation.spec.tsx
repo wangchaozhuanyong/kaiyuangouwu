@@ -589,7 +589,7 @@ describe('product image navigation layers', () => {
         const stylesheet = readStorefrontStylesheet(['./styles/visual-presets.css']);
 
         expect(stylesheet).not.toMatch(
-            /html\[data-storefront-preset='modern-oriental'\]\s+\.product-detail-header/,
+            /html\[data-storefront-preset='neo-minimalist'\]\s+\.product-detail-header/,
         );
         expect(stylesheet).not.toMatch(
             /html\[data-storefront-preset\]\s+:is\(\s*\.topbar:not\(\.product-detail-header\)/,
@@ -624,10 +624,8 @@ describe('product image navigation layers', () => {
             String.raw`\.desktop-product-buying\s+\.detail-options\s+button`,
         );
 
-        expect(priceRule).toMatch(/border-radius:\s*var\(--skin-control-radius\);/);
-        expect(priceRule).toMatch(
-            /background:\s*color-mix\(in srgb, var\(--accent\) 7%, var\(--surface-elevated, var\(--surface\)\)\);/,
-        );
+        expect(priceRule).toMatch(/border-bottom:\s*1px solid var\(--line-subtle\);/);
+        expect(priceRule).toMatch(/background:\s*transparent;/);
         expect(optionRule).toMatch(/border-radius:\s*var\(--skin-control-radius\);/);
     });
 

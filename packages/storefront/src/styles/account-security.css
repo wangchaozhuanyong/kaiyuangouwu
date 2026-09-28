@@ -245,6 +245,10 @@
     color: var(--accent-ink);
 }
 
+.security-item-icon.icon-avatar-history {
+    color: var(--accent-ink);
+}
+
 .security-avatar-history {
     padding: 4px 14px;
 }
@@ -255,7 +259,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    color: #64748b;
+    color: var(--muted);
     font-size: 12px;
 }
 
@@ -277,8 +281,8 @@
 .security-avatar-history-image.is-empty {
     display: grid;
     place-items: center;
-    background: #f1f5f9;
-    color: #94a3b8;
+    background: var(--soft);
+    color: var(--muted);
 }
 
 .security-avatar-history-copy {
@@ -290,12 +294,12 @@
 }
 
 .security-avatar-history-copy strong {
-    color: #334155;
+    color: var(--text);
     font-size: 12px;
 }
 
 .security-avatar-history-copy small {
-    color: #94a3b8;
+    color: var(--muted);
     font-size: 10px;
 }
 
@@ -353,7 +357,7 @@
 
 .security-risk-message {
     margin: -4px 14px 12px 62px;
-    color: #b45309;
+    color: var(--warning);
     font-size: 12px;
     line-height: 1.5;
 }
@@ -367,18 +371,18 @@
     min-height: 88px;
     padding: 10px 12px;
     resize: vertical;
-    border: 1px solid #cbd5e1;
-    border-radius: 10px;
-    background: #ffffff;
-    color: #0f172a;
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--surface-elevated);
+    color: var(--text);
     font: inherit;
     font-size: 13px;
     line-height: 1.5;
 }
 
 .security-risk-appeal textarea:focus {
-    border-color: #2563eb;
-    outline: 3px solid rgba(37, 99, 235, 0.12);
+    border-color: var(--focus);
+    outline: 3px solid color-mix(in srgb, var(--focus) 22%, transparent);
 }
 
 .security-risk-appeal > div {
@@ -391,10 +395,10 @@
 .security-risk-open {
     min-height: 34px;
     padding: 0 12px;
-    border: 1px solid #cbd5e1;
-    border-radius: 9px;
-    background: #ffffff;
-    color: #334155;
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
     font-size: 12px;
     font-weight: 700;
     cursor: pointer;
@@ -402,9 +406,15 @@
 
 .security-risk-appeal button:first-child,
 .security-risk-open {
-    border-color: #2563eb;
-    background: #2563eb;
-    color: #ffffff;
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-foreground);
+}
+
+.security-risk-appeal button:focus-visible,
+.security-risk-open:focus-visible {
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
 }
 
 .security-risk-open {
@@ -538,6 +548,7 @@
     height: 44px;
     margin-bottom: 16px;
     place-items: center;
+    color: var(--accent-ink);
 }
 
 .security-privacy-dialog h2 {
@@ -613,13 +624,13 @@
 }
 
 .security-privacy-dialog-actions .is-primary {
-    color: white;
+    color: var(--accent-foreground);
     background: var(--accent);
 }
 
 .security-privacy-dialog-actions .is-danger {
-    color: white;
-    background: #b91c1c;
+    color: var(--bg);
+    background: var(--danger);
 }
 
 .security-privacy-dialog-actions button:disabled,

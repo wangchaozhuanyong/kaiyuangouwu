@@ -429,8 +429,8 @@ export function ProductDetailPage() {
                             ? '商家处理'
                             : 'Merchant processed'
                     : isZh
-                      ? '配送可追踪'
-                      : 'Tracked delivery'}
+                      ? '本地发货'
+                      : 'Local dispatch'}
             </span>
             <span>
                 <RotateCcw aria-hidden="true" />
@@ -443,8 +443,8 @@ export function ProductDetailPage() {
                           ? '支持7天无理由'
                           : 'Seven-day no-reason return'
                       : isZh
-                        ? '退款需商家审核'
-                        : 'Refund subject to review'}
+                        ? '退款须审核'
+                        : 'Refund review'}
             </span>
         </section>
     );

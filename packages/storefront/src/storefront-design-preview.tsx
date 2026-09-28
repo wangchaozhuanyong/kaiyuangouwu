@@ -247,7 +247,7 @@ export function StorefrontDesignPreview() {
         <main className="storefront-design-preview">
             <header className="storefront-preview-toolbar">
                 <div>
-                    <strong>三套皮肤·统一模板预览</strong>
+                    <strong>皮肤·统一模板预览</strong>
                     <span>
                         {desktopPageFamilyByRoute[route]} · {route} ·
                         仅内嵌店铺页面会上线，预览控件与模拟状态不会上线

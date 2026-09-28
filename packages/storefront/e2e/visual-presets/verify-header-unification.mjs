@@ -10,7 +10,7 @@ const results = [];
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 try {
-    for (const preset of ['classic', 'modern-oriental', 'neo-minimalist']) {
+    for (const preset of ['classic', 'neo-minimalist']) {
         for (const width of [320, 390]) {
             for (const language of ['zh', 'en']) {
                 const page = await browser.newPage({
