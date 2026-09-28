@@ -6,6 +6,12 @@ export interface FeatureHelpContent {
 }
 
 export const featureHelpContent = {
+    'sales.manual-digital-delivery': {
+        purpose: '查看付款后生成的人工数字交付任务，准备每件商品的成品包并跟踪邮件发送结果。',
+        requirements: ['核对订单号、收件邮箱和成品数量', '发布或重发前确认成品内容及附件正确'],
+        example: '例如：为一件已付款的数字商品保存成品草稿，核对内容后发布，再查看发送尝试与失败原因。',
+        impact: '保存草稿不会发邮件；发布或重发会向订单交付邮箱发送内容，并记录处理事件。',
+    },
     'sales.profit': {
         purpose:
             '按当前店铺、币种和下单日期核算已结算支付、退款、优惠、税费、商品历史成本、物流成本、支付手续费和拒付损失。',

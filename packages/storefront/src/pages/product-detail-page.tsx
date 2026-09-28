@@ -592,7 +592,7 @@ export function ProductDetailPage() {
                     {(
                         [
                             ['description', isZh ? '商品详情' : 'Description'],
-                            ['reviews', isZh ? '真实评价' : 'Reviews'],
+                            ['reviews', isZh ? '用户评价' : 'Reviews'],
                             ['params', isZh ? '商品参数' : 'Specifications'],
                             ['after-sales', isZh ? '配送与售后' : 'Delivery and returns'],
                         ] as const
