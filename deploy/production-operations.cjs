@@ -21,6 +21,7 @@ const {
     renameSync,
     rmSync,
     statSync,
+    unlinkSync,
     writeSync,
 } = require('node:fs');
 const path = require('node:path');
@@ -29,6 +30,8 @@ const retention = require('./systemd/vendure-production-release-retention.cjs');
 
 const DEPLOY_LOCK = '/run/lock/vendure-production-deploy.lock';
 const APT_ARCHIVES_DIRECTORY = '/var/cache/apt/archives';
+const APT_METADATA_DIRECTORY = '/var/cache/apt';
+const APT_METADATA_FILENAMES = Object.freeze(['pkgcache.bin', 'srcpkgcache.bin']);
 const BACKUP_DIRECTORY = '/var/backups/vendure-mysql';
 const PRODUCTION_ENVIRONMENT_FILE = '/var/www/kaiyuangouwu/packages/dev-server/.env';
 const OFFSITE_FILE_BACKUP_URI = 's3://yunqiao-vendure-prod-backup-079740175286-apne1/files';
@@ -110,6 +113,8 @@ function validateRequest(environment) {
             'apply-deployment-cache-cleanup-reviewed',
             'plan-apt-archive-cleanup',
             'apply-apt-archive-cleanup-reviewed',
+            'plan-apt-metadata-cleanup',
+            'apply-apt-metadata-cleanup-reviewed',
             'plan-offsite-file-backup-config',
             'apply-offsite-file-backup-config-reviewed',
             'plan-two-factor-backup',
@@ -139,6 +144,7 @@ function validateRequest(environment) {
             'retain-reviewed',
             'apply-deployment-cache-cleanup-reviewed',
             'apply-apt-archive-cleanup-reviewed',
+            'apply-apt-metadata-cleanup-reviewed',
             'apply-offsite-file-backup-config-reviewed',
             'backup-two-factor-reviewed',
             'apply-order-sales-ownership-backfill-reviewed',
@@ -553,6 +559,48 @@ function applyAptArchiveCleanup(
     const revalidatedPlan = inspect(request.sourceSha);
     assert.deepEqual(revalidatedPlan, plan, 'APT cache changed before cleanup');
     clean(revalidatedPlan.candidates[0].directory);
+    return revalidatedPlan;
+}
+
+function inspectAptMetadataCleanup(sourceSha, { cacheDirectory = APT_METADATA_DIRECTORY, ...options } = {}) {
+    const scope = inspectDeploymentCacheCleanup(sourceSha, {
+        ...options,
+        directories: [{ label: 'apt-cache', directory: cacheDirectory }],
+    });
+    assert.equal(scope.candidates.length, 1, 'APT cache directory is unavailable');
+    const candidates = APT_METADATA_FILENAMES.flatMap(filename => {
+        const file = path.join(cacheDirectory, filename);
+        if (!existsSync(file)) return [];
+        const stat = lstatSync(file);
+        assert.ok(stat.isFile() && !stat.isSymbolicLink(), 'APT metadata cache must be a regular file');
+        assert.equal(realpathSync(file), file, 'APT metadata cache path changed');
+        return [{ file, sizeBytes: stat.size, modifiedAtMs: stat.mtimeMs }];
+    });
+    return {
+        format: 1,
+        schema: 'vendure-apt-metadata-cleanup',
+        repositorySha: scope.repositorySha,
+        runtimeSha: scope.runtimeSha,
+        candidates,
+        totalKib: candidates.reduce((total, candidate) => total + Math.ceil(candidate.sizeBytes / 1024), 0),
+    };
+}
+
+function applyAptMetadataCleanup(
+    request,
+    {
+        inspect = sourceSha => inspectAptMetadataCleanup(sourceSha),
+        remove = file => unlinkSync(file),
+    } = {},
+) {
+    assert.equal(request.operation, 'apply-apt-metadata-cleanup-reviewed');
+    const plan = inspect(request.sourceSha);
+    assert.equal(plan.schema, 'vendure-apt-metadata-cleanup');
+    assert.ok(plan.candidates.length > 0 && plan.totalKib > 0, 'No APT metadata cache is available');
+    assert.equal(planDigest(plan, request.sourceSha), request.expectedPlanSha256, 'APT metadata plan changed');
+    const revalidatedPlan = inspect(request.sourceSha);
+    assert.deepEqual(revalidatedPlan, plan, 'APT metadata changed before cleanup');
+    for (const candidate of revalidatedPlan.candidates) remove(candidate.file);
     return revalidatedPlan;
 }
 
@@ -1590,6 +1638,25 @@ function runLocked(environment = process.env) {
         process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=apply-apt-archive-cleanup-reviewed\n');
         return;
     }
+    if (request.operation === 'plan-apt-metadata-cleanup') {
+        const plan = inspectAptMetadataCleanup(request.sourceSha);
+        process.stdout.write(
+            `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: planDigest(plan, request.sourceSha), plan })}\n`,
+        );
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=plan-apt-metadata-cleanup\n');
+        return;
+    }
+    if (request.operation === 'apply-apt-metadata-cleanup-reviewed') {
+        const plan = applyAptMetadataCleanup(request);
+        const disk = readCommand('df', ['-Pk', '/']);
+        const healthRefresh = readCommand('systemctl', ['start', 'vendure-production-healthcheck.service']);
+        process.stdout.write(
+            `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: request.expectedPlanSha256, removedFileCount: plan.candidates.length, reviewedKib: plan.totalKib, disk, healthRefresh })}\n`,
+        );
+        assert.equal(healthRefresh.status, 'ok', 'APT metadata cleanup completed, but health refresh failed');
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=apply-apt-metadata-cleanup-reviewed\n');
+        return;
+    }
     if (request.operation === 'backup-database') {
         const result = runDatabaseBackup(request);
         process.stdout.write(
@@ -1844,6 +1911,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+    applyAptMetadataCleanup,
     applyAptArchiveCleanup,
     applyDeploymentCacheCleanup,
     applyOffsiteFileBackupConfig,
@@ -1853,6 +1921,7 @@ module.exports = {
     inspectProductionReleases,
     inspectDeploymentCacheCleanup,
     inspectAptArchiveCleanup,
+    inspectAptMetadataCleanup,
     inspectOffsiteFileBackupConfig,
     inspectRepositoryState,
     planDigest,

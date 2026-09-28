@@ -131,6 +131,28 @@ then runs `apt-get clean` against that fixed directory and refreshes production
 health. It does not remove installed packages, application files, release
 directories, backups or logs. A zero-size or changed plan fails closed.
 
+If downloaded archives are empty but `/var/cache/apt` remains large, inspect
+only APT's generated `pkgcache.bin` and `srcpkgcache.bin` metadata files:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=plan-apt-metadata-cleanup
+```
+
+The plan lists each existing regular file, its size and modification time,
+the running runtime, and a source-bound hash. After reviewing the exact files:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=apply-apt-metadata-cleanup-reviewed \
+    -f expected_plan_sha256=<reviewed-plan-sha256>
+```
+
+The write revalidates the file list under the deployment lock and unlinks only
+those two generated metadata cache files. APT rebuilds them when needed.
+Installed packages, APT configuration, package lists, application files,
+backups and logs are outside the plan.
+
 ## Audit one product before changing store ownership
 
 Use the fixed read-only audit for a specific product and the exact running runtime:

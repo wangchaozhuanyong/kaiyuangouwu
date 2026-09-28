@@ -426,6 +426,56 @@ void test('APT archive cleanup is source-pinned and refuses an altered or empty 
     );
 });
 
+void test('APT metadata cleanup removes only the two reviewed generated files', t => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-apt-metadata-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const directory = realpathSync(root);
+    const packageCache = path.join(directory, 'pkgcache.bin');
+    const sourceCache = path.join(directory, 'srcpkgcache.bin');
+    const sentinel = path.join(directory, 'sources.list');
+    writeFileSync(packageCache, 'p'.repeat(12 * 1024));
+    writeFileSync(sourceCache, 's'.repeat(5 * 1024));
+    writeFileSync(sentinel, 'preserve');
+    const inspect = () =>
+        operations.inspectAptMetadataCleanup(sourceSha, {
+            cacheDirectory: directory,
+            inspectRepository: () => ({
+                status: 'ok',
+                head: sourceSha,
+                originMainMatchesOperationsSource: true,
+                trackedClean: true,
+            }),
+            inspectRuntime: () => ({
+                markerSha: 'b'.repeat(40),
+                currentRuntime: path.join(directory, '..', 'runtime'),
+            }),
+            assertRepositoryRevision: (observed, expected) => assert.equal(observed, expected),
+        });
+    const plan = inspect();
+    assert.deepEqual(
+        plan.candidates.map(candidate => candidate.file),
+        [packageCache, sourceCache],
+    );
+    assert.equal(plan.totalKib, 17);
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'apply-apt-metadata-cleanup-reviewed',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_PLAN_SHA256: operations.planDigest(plan, sourceSha),
+    });
+    assert.throws(() =>
+        operations.applyAptMetadataCleanup(
+            { ...request, expectedPlanSha256: 'f'.repeat(64) },
+            { inspect, remove: () => assert.fail('must not remove') },
+        ),
+    );
+    operations.applyAptMetadataCleanup(request, { inspect, remove: file => rmSync(file) });
+    assert.equal(existsSync(packageCache), false);
+    assert.equal(existsSync(sourceCache), false);
+    assert.equal(readFileSync(sentinel, 'utf8'), 'preserve');
+    symlinkSync(sentinel, packageCache);
+    assert.throws(inspect, /regular file/u);
+});
+
 void test('a failing PM2 command cannot leak its stderr or error message', t => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-pm2-redaction-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
