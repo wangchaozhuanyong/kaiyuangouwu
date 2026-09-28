@@ -66,6 +66,8 @@ const authorityRank: Record<AdministratorAccessAuthority, number> = {
     STAFF: 1,
 };
 
+const channelBootstrapRoleCodes = new Set(['__super_admin_role__', '__customer_role__']);
+
 const mailboxIntegrationRoleCode = 'id-business-mailbox-integration';
 const mailboxIntegrationPermissions = [
     'CreateIcloudRelay',
@@ -542,15 +544,29 @@ export class AdministratorAccessService {
             where: { scope: 'PLATFORM', status: 'ACTIVE' },
             relations: { administrator: { user: { roles: { channels: true } } } },
         });
+        const existingChannelIds = (await this.connection.getRepository(ctx, Channel).find())
+            .filter(existing => !idsAreEqual(existing.id, channel.id))
+            .map(existing => existing.id);
         const roles = new Map<string, Role>();
         for (const profile of platformProfiles) {
             for (const role of profile.administrator.user.roles) roles.set(String(role.id), role);
         }
         for (const role of roles.values()) {
-            await this.assertPlatformRoleOwnership(ctx, role);
-            if (!role.channels.some(existing => idsAreEqual(existing.id, channel.id))) {
-                await this.roleService.assignRoleToChannel(ctx, role.id, channel.id);
-            }
+            // Channel creation assigns Vendure's built-in roles separately. They include
+            // customers and legacy administrators that do not have managed access profiles.
+            if (channelBootstrapRoleCodes.has(role.code)) continue;
+            if (role.channels.some(existing => idsAreEqual(existing.id, channel.id))) continue;
+
+            // Only a role that already spans every existing channel is a platform role.
+            // Leave store-scoped and partially migrated roles untouched during provisioning.
+            const alreadyPlatformWide =
+                existingChannelIds.length > 0 &&
+                existingChannelIds.every(channelId =>
+                    role.channels.some(existing => idsAreEqual(existing.id, channelId)),
+                );
+            if (!alreadyPlatformWide || !(await this.hasOnlyPlatformRoleOwners(ctx, role))) continue;
+
+            await this.roleService.assignRoleToChannel(ctx, role.id, channel.id);
         }
     }
 
@@ -674,19 +690,23 @@ export class AdministratorAccessService {
     }
 
     private async assertPlatformRoleOwnership(ctx: RequestContext, role: Role): Promise<void> {
+        if (!(await this.hasOnlyPlatformRoleOwners(ctx, role))) {
+            throw new UserInputError('角色同时关联店铺或未归属账号，不能作为跨店岗位扩展');
+        }
+    }
+
+    private async hasOnlyPlatformRoleOwners(ctx: RequestContext, role: Role): Promise<boolean> {
         const assignedUsers = await this.connection.getRepository(ctx, User).find({
             where: { roles: { id: role.id } },
         });
-        if (assignedUsers.length === 0) return;
+        if (assignedUsers.length === 0) return true;
         const assignedProfiles = await this.connection.getRepository(ctx, AdministratorAccessProfile).find({
             where: { userId: In(assignedUsers.map(user => user.id)) },
         });
-        if (
-            assignedProfiles.length !== assignedUsers.length ||
-            assignedProfiles.some(profile => profile.scope !== 'PLATFORM')
-        ) {
-            throw new UserInputError('角色同时关联店铺或未归属账号，不能作为跨店岗位扩展');
-        }
+        return (
+            assignedProfiles.length === assignedUsers.length &&
+            assignedProfiles.every(profile => profile.scope === 'PLATFORM')
+        );
     }
 
     private assertCanCreate(
