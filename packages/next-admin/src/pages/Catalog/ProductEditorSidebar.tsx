@@ -51,6 +51,11 @@ export function ProductEditorSidebar() {
     };
 
     if (!isCreateMode && !productData?.product) return null;
+    const storedFulfillmentType = productData?.product?.customFields?.fulfillmentType;
+    const displayedFulfillmentType =
+        !isCreateMode && (storedFulfillmentType === 'digital' || storedFulfillmentType === 'physical')
+            ? storedFulfillmentType
+            : effectiveFulfillmentType;
 
     return (
         <aside
@@ -260,9 +265,9 @@ export function ProductEditorSidebar() {
                     </div>
                 </div>
                 <div className="border-t border-slate-100 px-4 py-2.5 text-[10px] text-slate-400">
-                    当前类型：
+                    {storedFulfillmentType && !isCreateMode ? '已存储类型：' : '当前类型：'}
                     <span className="font-bold text-slate-600">
-                        {effectiveFulfillmentType === 'digital' ? '虚拟商品' : '实物商品'}
+                        {displayedFulfillmentType === 'digital' ? '虚拟商品' : '实物商品'}
                     </span>
                 </div>
             </div>
