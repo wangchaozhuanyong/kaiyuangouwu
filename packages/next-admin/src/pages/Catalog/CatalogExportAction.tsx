@@ -43,6 +43,7 @@ export function CatalogExportAction() {
         setError('');
         setSummary(null);
         setIntegrityWarning('');
+        setStockLocationId('');
         setIntegrityPending(true);
         void client
             .query<{ catalogIntegritySummary: IntegritySummary }>({
@@ -93,11 +94,6 @@ export function CatalogExportAction() {
             }
 
             setLocations(nextLocations);
-            setStockLocationId(current =>
-                nextLocations.some(location => location.id === current)
-                    ? current
-                    : (nextLocations[0]?.id ?? ''),
-            );
 
             if (nextLocations.length === 0) {
                 setError('未检测到可用仓库，请先在系统设置中配置仓库后再导出商品。');
@@ -215,6 +211,9 @@ export function CatalogExportAction() {
                                 </select>
                                 <span className="block text-[11px] text-slate-500">
                                     主表的库存量和上下限来自该仓库；库存是绝对值。
+                                </span>
+                                <span className="block text-[11px] text-amber-700">
+                                    请明确选择本次回导对应的仓库；系统不会代选。
                                 </span>
                             </label>
                             {integrityPending && !summary && (
