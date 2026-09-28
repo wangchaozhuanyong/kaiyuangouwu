@@ -46,7 +46,7 @@ function storeFixture(id = '1') {
     return {
         channelId: id,
         channelCode: `store-${id}`,
-        profile: { id, primaryDomain: `store-${id}.example.test` },
+        profile: { id, status: 'DRAFT', primaryDomain: `store-${id}.example.test` },
         settings: { heroAutoplayIntervalSeconds: 6, configuredBlockTypes: ['HERO'] },
         sharing: {
             defaultPosterTemplate: 'white',
@@ -305,7 +305,7 @@ void test('all Channel reads use scoped tokens and both client locale inputs wit
     assert.equal(calls.filter(call => call.query.startsWith('mutation')).length, 1);
 });
 
-void test('the native default Channel without an active domain is excluded after store migration', async () => {
+void test('draft Channels without a domain are excluded from public storefront inspection', async () => {
     const store = storeFixture();
     const calls = [];
     const request = async (_url, options) => {
@@ -319,6 +319,7 @@ void test('the native default Channel without an active domain is excluded after
                     channels: [
                         { id: '0', code: '__default_channel__', token: 'PRIVATE_PLATFORM_TOKEN' },
                         { id: store.channelId, code: store.channelCode, token: 'PRIVATE_STORE_TOKEN' },
+                        { id: '3', code: 'new-draft-store', token: 'PRIVATE_DRAFT_TOKEN' },
                     ],
                 },
             };
@@ -327,10 +328,17 @@ void test('the native default Channel without an active domain is excluded after
                 storeProfiles: [
                     {
                         id: 'platform-profile',
+                        status: 'DRAFT',
                         primaryDomain: null,
                         channel: { id: '0', code: '__default_channel__' },
                     },
                     { ...store.profile, channel: { id: store.channelId, code: store.channelCode } },
+                    {
+                        id: 'draft-profile',
+                        status: 'DRAFT',
+                        primaryDomain: null,
+                        channel: { id: '3', code: 'new-draft-store' },
+                    },
                 ],
             };
         } else if (query.includes('ConfigurationGuardPublished')) {
@@ -359,6 +367,10 @@ void test('the native default Channel without an active domain is excluded after
     assert.deepEqual(
         result.stores.map(item => item.channelCode),
         [store.channelCode],
+    );
+    assert.throws(
+        () => assertExpectedProductionScope(result, ['new-draft-store']),
+        /required Channel new-draft-store/u,
     );
     assert.equal(calls.length, 5);
 });
@@ -437,7 +449,7 @@ void test('real loopback transport reads each store through its verified domain 
     );
 });
 
-void test('missing verified domain fails before any public read instead of falling back to a submitted token', async () => {
+void test('active Channel without a verified domain fails before any public read', async () => {
     const queries = [];
     await assert.rejects(
         captureStorefrontConfiguration({
@@ -458,6 +470,7 @@ void test('missing verified domain fails before any public read instead of falli
                               {
                                   id: '1',
                                   channel: { id: '1', code: 'configured-store' },
+                                  status: 'ACTIVE',
                                   primaryDomain: null,
                               },
                           ],
