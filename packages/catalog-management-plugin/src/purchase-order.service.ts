@@ -773,6 +773,7 @@ function purchaseOrderView(order: PurchaseOrder, inventoryLots: InventoryLot[] =
                 creditMicrounits: Number(line.creditMicrounits),
             })),
         })),
+        events: order.events ?? [],
     };
 }
 
