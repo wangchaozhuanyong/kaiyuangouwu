@@ -312,7 +312,7 @@ export class AccountApi extends BaseDomainApi {
                     activeCustomer {
                         pending: orders(options: {
                             take: 0
-                            filter: { state: { in: ["AddingItems", "ArrangingPayment"] } }
+                            filter: { state: { eq: "ArrangingPayment" } }
                         }) { totalItems }
                         shipping: orders(options: {
                             take: 0

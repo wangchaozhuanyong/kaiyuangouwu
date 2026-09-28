@@ -70,7 +70,16 @@ export function orderNotification(
     language: StorefrontLanguage,
 ): { title: string; detail: string; tone: 'pending' | 'progress' | 'complete' | 'muted' } {
     const isZh = language === 'zh';
-    if (['AddingItems', 'ArrangingPayment'].includes(order.state)) {
+    if (order.state === 'AddingItems') {
+        return {
+            title: isZh ? '商品仍在购物车' : 'Items are still in the cart',
+            detail: isZh
+                ? `购物车 ${order.code} 尚未提交结算`
+                : `Cart ${order.code} has not been checked out`,
+            tone: 'muted',
+        };
+    }
+    if (order.state === 'ArrangingPayment') {
         return {
             title: isZh ? '订单等待支付' : 'Order awaiting payment',
             detail: isZh ? `订单 ${order.code} 已保留，可继续支付或修改` : `Order ${order.code} is saved`,
@@ -127,12 +136,17 @@ export function addressText(address: CustomerAddress): string {
         .join(' ');
 }
 
-export const orderStateLabel = orderStateDisplayLabel;
+export const orderStateLabel = (state: string, language: StorefrontLanguage): string =>
+    state === 'AddingItems'
+        ? language === 'zh'
+            ? '购物车中'
+            : 'In cart'
+        : orderStateDisplayLabel(state, language);
 
 export const fulfillmentStateLabel = fulfillmentStateDisplayLabel;
 
 export function orderStatesForTab(tab: OrderTab): string[] | undefined {
-    if (tab === 'pending') return ['AddingItems', 'ArrangingPayment'];
+    if (tab === 'pending') return ['ArrangingPayment'];
     if (tab === 'shipping') return ['PaymentAuthorized', 'PaymentSettled'];
     if (tab === 'receiving') return ['Shipped', 'PartiallyShipped'];
     if (tab === 'completed') return ['Delivered'];
