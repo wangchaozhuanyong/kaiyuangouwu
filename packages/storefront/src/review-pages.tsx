@@ -434,10 +434,12 @@ export function ProductReviewsSection({
                             <ReviewStars rating={review.rating} />
                             <strong>{review.title}</strong>
                             <p>{review.body}</p>
-                            <em>
-                                <CheckCircle2 aria-hidden="true" />
-                                {isZh ? '已验证购买' : 'Verified purchase'}
-                            </em>
+                            {review.orderLineId && (
+                                <em>
+                                    <CheckCircle2 aria-hidden="true" />
+                                    {isZh ? '已关联订单' : 'Linked to order'}
+                                </em>
+                            )}
                             {review.merchantResponse && (
                                 <blockquote>
                                     <strong>{isZh ? '商家回复' : 'Store response'}</strong>
@@ -452,7 +454,7 @@ export function ProductReviewsSection({
                     <MessageSquare aria-hidden="true" />
                     <span>
                         <strong>
-                            {isZh ? '等待第一条真实评价' : 'Waiting for the first verified review'}
+                            {isZh ? '等待第一条审核通过的评价' : 'Waiting for the first approved review'}
                         </strong>
                         <small>{isZh ? '评价将在审核通过后显示' : 'Approved reviews appear here'}</small>
                     </span>
@@ -476,7 +478,7 @@ function ReviewComposer({
     onSubmit: (input: SubmitStorefrontReviewInput) => Promise<void>;
 }) {
     const isZh = language === 'zh';
-    const [rating, setRating] = useState(5);
+    const [rating, setRating] = useState(0);
     const [title, setTitle] = useState('');
     const [body, setBody] = useState('');
     const [anonymous, setAnonymous] = useState(false);
@@ -484,6 +486,10 @@ function ReviewComposer({
     const [submitting, setSubmitting] = useState(false);
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        if (rating < 1 || rating > 5) {
+            setError(isZh ? '请先选择商品评分' : 'Choose a rating before submitting');
+            return;
+        }
         if (title.trim().length < 2 || title.trim().length > 120) {
             setError(isZh ? '评价标题需为 2 到 120 个字符' : 'Title must be 2 to 120 characters');
             return;
@@ -534,6 +540,7 @@ function ReviewComposer({
                             className={value <= rating ? 'is-active' : undefined}
                             onClick={() => setRating(value)}
                             aria-label={isZh ? `${value} 星` : `${value} stars`}
+                            aria-pressed={value === rating}
                         >
                             <Star aria-hidden="true" />
                         </button>
