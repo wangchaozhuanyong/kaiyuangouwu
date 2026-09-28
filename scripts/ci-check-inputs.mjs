@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
-import { affectedFrontendsForFile, DATABASES, isDocumentation } from './ci-impact.mjs';
+import {
+    affectedFrontendsForFile,
+    architectureBudgetInput,
+    DATABASES,
+    isDocumentation,
+} from './ci-impact.mjs';
 
 const unique = values => [...new Set(values)].sort();
 const digest = value => createHash('sha256').update(value).digest('hex');
@@ -180,14 +185,13 @@ export function checkFingerprint(ref, check, inventory, reader, fullFrontend = f
                 /^packages\/dev-server\/scripts\/.*\.spec\.mjs$/u.test(path)
             )
                 return false;
+            if (check.kind === 'architecture') return architectureBudgetInput(path);
             if (sharedInput(path)) return true;
             if (
                 check.kind === 'frontend' &&
                 check.packages.some(name => affectedFrontendsForFile(path).includes(name))
             )
                 return true;
-            if (check.kind === 'architecture')
-                return path.startsWith('packages/') || path.startsWith('scripts/architecture-debt');
             if (check.kind === 'migration')
                 return /migrations?\/|\.entity\.ts$|check-migration-registry/u.test(path);
             if (check.kind === 'controls') return controlInput(path);

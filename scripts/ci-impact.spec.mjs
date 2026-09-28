@@ -1,7 +1,10 @@
+import yaml from 'js-yaml';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-import { classifyChanges } from './ci-impact.mjs';
+import { architectureBudgetInput, classifyChanges } from './ci-impact.mjs';
+import { assertPrHeadContainsBase } from './ci-pr-base.mjs';
 
 const inventory = [
     { directory: 'storefront', name: '@vendure/storefront' },
@@ -10,9 +13,60 @@ const inventory = [
     { directory: 'common', name: '@vendure/common' },
     { directory: 'dev-server', name: 'dev-server', dependencies: { '@vendure/core': '3' } },
     { directory: 'catalog-management-plugin', name: 'catalog', dependencies: { '@vendure/core': '3' } },
+    { directory: 'store-management-plugin', name: 'store-management' },
     { directory: 'other-plugin', name: 'other', dependencies: { catalog: '1' } },
     { directory: 'icloud-relay-plugin', name: 'icloud', dependencies: { '@vendure/core': '3' } },
 ];
+test('ordinary source does not trigger global architecture budgets; budgeted inputs still do', () => {
+    for (const file of [
+        'packages/store-management-plugin/src/administrator-access.service.ts',
+        'packages/storefront/src/styles/cart-layout.css',
+    ]) {
+        assert.equal(architectureBudgetInput(file), false, file);
+        assert.equal(classifyChanges([file], inventory).architecture, false, file);
+    }
+    for (const file of [
+        'packages/storefront/src/styles.css',
+        'packages/store-management-plugin/src/dashboard/AdminPanel.tsx',
+        'scripts/architecture-debt-baseline.json',
+    ]) {
+        assert.equal(architectureBudgetInput(file), true, file);
+        assert.equal(classifyChanges([file], inventory).architecture, true, file);
+    }
+    assert.equal(
+        classifyChanges(['packages/storefront/src/styles/cart-layout.css'], inventory, { full: true })
+            .architecture,
+        true,
+    );
+});
+test('PR CI rejects an old main base before planning expensive checks', () => {
+    const base = 'a'.repeat(40);
+    const calls = [];
+    assert.equal(
+        assertPrHeadContainsBase(base, 'HEAD', (binary, args) => calls.push([binary, args])),
+        true,
+    );
+    assert.deepEqual(calls, [['git', ['merge-base', '--is-ancestor', base, 'HEAD']]]);
+    assert.throws(
+        () =>
+            assertPrHeadContainsBase(base, 'HEAD', () => {
+                throw new Error('not an ancestor');
+            }),
+        /refresh the branch before its first CI run/u,
+    );
+    assert.equal(
+        assertPrHeadContainsBase('', 'HEAD', () => assert.fail('non-PR CI must skip')),
+        false,
+    );
+    const workflow = yaml.load(
+        readFileSync(new URL('../.github/workflows/build_and_test.yml', import.meta.url), 'utf8'),
+    );
+    const steps = workflow.jobs['detect-changes'].steps.map(step => step.name);
+    assert.ok(
+        steps.indexOf('Reject a PR candidate based on old main before expensive checks') <
+            steps.indexOf('Explain the affected checks'),
+    );
+});
 test('a storefront spacing change never launches backend, codegen or database checks', () => {
     const plan = classifyChanges(['packages/storefront/src/styles/cart-layout.css'], inventory);
     assert.deepEqual(plan.frontends, ['next-admin', 'storefront']);
