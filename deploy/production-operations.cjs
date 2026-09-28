@@ -32,6 +32,7 @@ const DEPLOY_LOCK = '/run/lock/vendure-production-deploy.lock';
 const APT_ARCHIVES_DIRECTORY = '/var/cache/apt/archives';
 const APT_METADATA_DIRECTORY = '/var/cache/apt';
 const APT_METADATA_FILENAMES = Object.freeze(['pkgcache.bin', 'srcpkgcache.bin']);
+const APT_LISTS_DIRECTORY = '/var/lib/apt/lists';
 const SNAP_DOWNLOAD_CACHE_DIRECTORY = '/var/lib/snapd/cache';
 const BACKUP_DIRECTORY = '/var/backups/vendure-mysql';
 const PRODUCTION_ENVIRONMENT_FILE = '/var/www/kaiyuangouwu/packages/dev-server/.env';
@@ -116,6 +117,8 @@ function validateRequest(environment) {
             'apply-apt-archive-cleanup-reviewed',
             'plan-apt-metadata-cleanup',
             'apply-apt-metadata-cleanup-reviewed',
+            'plan-apt-lists-cleanup',
+            'apply-apt-lists-cleanup-reviewed',
             'plan-snap-cache-cleanup',
             'apply-snap-cache-cleanup-reviewed',
             'plan-offsite-file-backup-config',
@@ -148,6 +151,7 @@ function validateRequest(environment) {
             'apply-deployment-cache-cleanup-reviewed',
             'apply-apt-archive-cleanup-reviewed',
             'apply-apt-metadata-cleanup-reviewed',
+            'apply-apt-lists-cleanup-reviewed',
             'apply-snap-cache-cleanup-reviewed',
             'apply-offsite-file-backup-config-reviewed',
             'backup-two-factor-reviewed',
@@ -607,6 +611,73 @@ function applyAptMetadataCleanup(
     assert.deepEqual(revalidatedPlan, plan, 'APT metadata changed before cleanup');
     for (const candidate of revalidatedPlan.candidates) remove(candidate.file);
     return revalidatedPlan;
+}
+
+function inspectAptListsCleanup(sourceSha, { listsDirectory = APT_LISTS_DIRECTORY, ...options } = {}) {
+    const scope = inspectDeploymentCacheCleanup(sourceSha, {
+        ...options,
+        directories: [{ label: 'apt-package-lists', directory: listsDirectory }],
+    });
+    assert.equal(scope.candidates.length, 1, 'APT package lists are unavailable');
+    const candidates = [];
+    const protectedFiles = [];
+    for (const entry of readdirSync(listsDirectory, { withFileTypes: true })) {
+        const file = path.join(listsDirectory, entry.name);
+        if (entry.isDirectory()) {
+            assert.ok(['partial', 'auxfiles'].includes(entry.name), 'Unexpected APT lists directory');
+            assert.equal(readdirSync(file).length, 0, 'APT list transfer is in progress');
+            continue;
+        }
+        const stat = lstatSync(file);
+        assert.ok(stat.isFile() && !stat.isSymbolicLink(), 'APT list entry must be a regular file');
+        assert.equal(realpathSync(file), file, 'APT list entry path changed');
+        const item = {
+            file,
+            sizeBytes: stat.size,
+            allocatedKib: Math.ceil(stat.blocks / 2),
+            modifiedAtMs: stat.mtimeMs,
+            changedAtMs: stat.ctimeMs,
+            device: stat.dev,
+            inode: stat.ino,
+        };
+        if (entry.name === 'lock' || /(?:^|_)(?:InRelease|Release(?:\.gpg)?)$/u.test(entry.name)) {
+            protectedFiles.push(item);
+        } else {
+            candidates.push(item);
+        }
+    }
+    candidates.sort((a, b) => a.file.localeCompare(b.file));
+    protectedFiles.sort((a, b) => a.file.localeCompare(b.file));
+    return {
+        format: 1,
+        schema: 'vendure-apt-lists-cleanup',
+        repositorySha: scope.repositorySha,
+        runtimeSha: scope.runtimeSha,
+        candidates,
+        protectedFiles,
+        totalKib: candidates.reduce((total, candidate) => total + candidate.allocatedKib, 0),
+    };
+}
+
+function applyAptListsCleanup(
+    request,
+    {
+        inspect = sourceSha => inspectAptListsCleanup(sourceSha),
+        clean = () =>
+            execFileSync('apt-get', ['-o', `Dir::State::lists=${APT_LISTS_DIRECTORY}`, 'distclean'], {
+                timeout: 120000,
+                stdio: ['ignore', 'ignore', 'pipe'],
+            }),
+    } = {},
+) {
+    assert.equal(request.operation, 'apply-apt-lists-cleanup-reviewed');
+    const plan = inspect(request.sourceSha);
+    assert.equal(plan.schema, 'vendure-apt-lists-cleanup');
+    assert.ok(plan.candidates.length > 0 && plan.totalKib > 0, 'No APT list indexes are available');
+    assert.equal(planDigest(plan, request.sourceSha), request.expectedPlanSha256, 'APT lists plan changed');
+    assert.deepEqual(inspect(request.sourceSha), plan, 'APT lists changed before cleanup');
+    clean();
+    return plan;
 }
 
 function inspectSnapCacheCleanup(
@@ -1783,6 +1854,25 @@ function runLocked(environment = process.env) {
         );
         return;
     }
+    if (request.operation === 'plan-apt-lists-cleanup') {
+        const plan = inspectAptListsCleanup(request.sourceSha);
+        process.stdout.write(
+            `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: planDigest(plan, request.sourceSha), plan })}\n`,
+        );
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=plan-apt-lists-cleanup\n');
+        return;
+    }
+    if (request.operation === 'apply-apt-lists-cleanup-reviewed') {
+        const plan = applyAptListsCleanup(request);
+        const disk = readCommand('df', ['-Pk', '/']);
+        const healthRefresh = readCommand('systemctl', ['start', 'vendure-production-healthcheck.service']);
+        process.stdout.write(
+            `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: request.expectedPlanSha256, reviewedKib: plan.totalKib, reviewedFileCount: plan.candidates.length, disk, healthRefresh })}\n`,
+        );
+        assert.equal(healthRefresh.status, 'ok', 'APT lists cleanup completed, but health refresh failed');
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=apply-apt-lists-cleanup-reviewed\n');
+        return;
+    }
     if (request.operation === 'plan-snap-cache-cleanup') {
         const plan = inspectSnapCacheCleanup(request.sourceSha);
         process.stdout.write(
@@ -2056,6 +2146,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+    applyAptListsCleanup,
     applySnapCacheCleanup,
     applyAptMetadataCleanup,
     applyAptArchiveCleanup,
@@ -2068,6 +2159,7 @@ module.exports = {
     inspectDeploymentCacheCleanup,
     inspectAptArchiveCleanup,
     inspectAptMetadataCleanup,
+    inspectAptListsCleanup,
     inspectSnapCacheCleanup,
     inspectOffsiteFileBackupConfig,
     inspectRepositoryState,

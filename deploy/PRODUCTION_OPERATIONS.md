@@ -153,6 +153,32 @@ those two generated metadata cache files. APT rebuilds them when needed.
 Installed packages, APT configuration, package lists, application files,
 backups and logs are outside the plan.
 
+If the release still needs disk space, inspect the downloaded APT package
+indexes stored under `/var/lib/apt/lists`:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=plan-apt-lists-cleanup
+```
+
+The plan lists each regular index file and its allocated size, while keeping
+`InRelease`, `Release`, `Release.gpg`, and the APT lock outside the cleanup. It
+requires empty `partial` and `auxfiles` directories, a clean tracked source
+checkout, and a stable running runtime. Apply only if the reviewed size covers
+the release shortfall:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=apply-apt-lists-cleanup-reviewed \
+    -f expected_plan_sha256=<reviewed-plan-sha256>
+```
+
+The write revalidates the exact plan under the deployment lock and runs APT's
+`distclean`, which preserves release signature metadata. Future package
+maintenance must run `apt-get update` to fetch the package indexes again.
+Installed packages, APT sources, backup data, logs, and release files are not
+part of this cleanup.
+
 If more disk staging space is needed, inspect Snap's downloaded cache files:
 
 ```bash

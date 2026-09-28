@@ -477,6 +477,64 @@ void test('APT metadata cleanup removes only the two reviewed generated files', 
     assert.throws(inspect, /regular file/u);
 });
 
+void test('APT index cleanup preserves signed release metadata and refuses altered plans', t => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-apt-lists-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const directory = realpathSync(root);
+    const packages = path.join(directory, 'ubuntu_dists_noble_main_binary-amd64_Packages.lz4');
+    const release = path.join(directory, 'ubuntu_dists_noble_InRelease');
+    const lock = path.join(directory, 'lock');
+    const partial = path.join(directory, 'partial');
+    writeFileSync(packages, 'p'.repeat(8192));
+    writeFileSync(release, 'signed release');
+    writeFileSync(lock, '');
+    mkdirSync(partial);
+    const inspect = () =>
+        operations.inspectAptListsCleanup(sourceSha, {
+            listsDirectory: directory,
+            inspectRepository: () => ({
+                status: 'ok',
+                head: sourceSha,
+                originMainMatchesOperationsSource: true,
+                trackedClean: true,
+            }),
+            inspectRuntime: () => ({
+                markerSha: 'b'.repeat(40),
+                currentRuntime: path.join(root, '..', 'runtime'),
+            }),
+            assertRepositoryRevision: (observed, expected) => assert.equal(observed, expected),
+        });
+    const plan = inspect();
+    assert.deepEqual(
+        plan.candidates.map(candidate => candidate.file),
+        [packages],
+    );
+    assert.deepEqual(
+        plan.protectedFiles.map(candidate => candidate.file),
+        [lock, release],
+    );
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'apply-apt-lists-cleanup-reviewed',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_PLAN_SHA256: operations.planDigest(plan, sourceSha),
+    });
+    assert.throws(() =>
+        operations.applyAptListsCleanup(
+            { ...request, expectedPlanSha256: 'f'.repeat(64) },
+            { inspect, clean: () => assert.fail('must not clean') },
+        ),
+    );
+    operations.applyAptListsCleanup(request, { inspect, clean: () => rmSync(packages) });
+    assert.equal(existsSync(packages), false);
+    assert.equal(readFileSync(release, 'utf8'), 'signed release');
+    assert.equal(existsSync(lock), true);
+    writeFileSync(path.join(partial, 'download'), 'unfinished');
+    assert.throws(inspect, /transfer is in progress/u);
+    rmSync(path.join(partial, 'download'));
+    symlinkSync(release, packages);
+    assert.throws(inspect, /regular file/u);
+});
+
 void test('Snap cache cleanup reviews only unlinked downloads and preserves installed revisions', t => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-snap-cache-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
