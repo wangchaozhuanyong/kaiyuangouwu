@@ -159,19 +159,9 @@ export function AccountIdentity({
                         <div>
                             <h3>
                                 <span>{isZh ? '邀请好友' : 'Invite friends'}</span>
-                                <span>{isZh ? '奖励归你' : 'Earn rewards'}</span>
+                                <span>{isZh ? '分享有礼' : 'Earn rewards'}</span>
                             </h3>
-                            <p>
-                                {isZh ? (
-                                    <>
-                                        好友注册并成功消费，
-                                        <br />
-                                        奖励仅发放给邀请人。
-                                    </>
-                                ) : (
-                                    'When an invited friend makes a purchase, only you earn rewards.'
-                                )}
-                            </p>
+                            <p>{isZh ? '好友成功消费，即可获得奖励。' : 'Your friend buys, you earn.'}</p>
                         </div>
                         <img
                             className="account-identity-promotion-gift"
