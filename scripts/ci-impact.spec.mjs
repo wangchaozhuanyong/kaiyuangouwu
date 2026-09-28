@@ -15,14 +15,18 @@ const inventory = [
 ];
 test('a storefront spacing change never launches backend, codegen or database checks', () => {
     const plan = classifyChanges(['packages/storefront/src/styles/cart-layout.css'], inventory);
-    assert.deepEqual(plan.frontends, ['storefront']);
+    assert.deepEqual(plan.frontends, ['next-admin', 'storefront']);
     assert.deepEqual(plan.packages, []);
     for (const key of ['e2e', 'icloud', 'translation', 'codegen', 'dependencies', 'full', 'controls'])
         assert.equal(plan[key], false, key);
     assert.equal(plan.lane, 'frontend');
 });
 test('static deployment entry repairs select controls and reuse frontend checks', () => {
-    const controls = ['deploy/frontend-ssm.mjs', 'deploy/deploy-frontends-from-s3.sh'];
+    const controls = [
+        'deploy/frontend-release.mjs',
+        'deploy/frontend-ssm.mjs',
+        'deploy/deploy-frontends-from-s3.sh',
+    ];
     const controlPlan = classifyChanges(controls, inventory);
     assert.equal(controlPlan.lane, 'none');
     assert.equal(controlPlan.controls, true);
@@ -33,7 +37,7 @@ test('static deployment entry repairs select controls and reuse frontend checks'
         inventory,
     );
     assert.equal(cumulative.lane, 'frontend');
-    assert.deepEqual(cumulative.frontends, ['storefront']);
+    assert.deepEqual(cumulative.frontends, ['next-admin', 'storefront']);
     assert.deepEqual(cumulative.databases, []);
     assert.equal(classifyChanges([...controls, 'packages/core/src/api/auth.ts'], inventory).lane, 'runtime');
 });
@@ -48,7 +52,19 @@ test('admin UI stays in its own scope, while mixed app changes include both apps
         ['next-admin', 'storefront'],
     );
 });
-test('2FA styles and components select only the static frontend lane', () => {
+test('storefront runtime source updates Admin preview, while client tests and isolated tool do not', () => {
+    assert.deepEqual(
+        classifyChanges(['packages/storefront/src/styles/home-showcase.css'], inventory).frontends,
+        ['next-admin', 'storefront'],
+    );
+    assert.deepEqual(classifyChanges(['packages/storefront/src/home-page.spec.tsx'], inventory).frontends, [
+        'storefront',
+    ]);
+    assert.deepEqual(classifyChanges(['packages/storefront/two-factor-tool/main.tsx'], inventory).frontends, [
+        'storefront',
+    ]);
+});
+test('2FA changes stay in the static lane and rebuild Admin only when imported by its preview', () => {
     for (const file of [
         'packages/storefront/src/client-plugins/two-factor/two-factor-page.css',
         'packages/storefront/src/client-plugins/two-factor/two-factor-page.tsx',
@@ -57,7 +73,10 @@ test('2FA styles and components select only the static frontend lane', () => {
     ]) {
         const plan = classifyChanges([file], inventory);
         assert.equal(plan.lane, 'frontend', file);
-        assert.deepEqual(plan.frontends, ['storefront']);
+        assert.deepEqual(
+            plan.frontends,
+            file.startsWith('packages/storefront/src/') ? ['next-admin', 'storefront'] : ['storefront'],
+        );
         assert.deepEqual(plan.packages, []);
         assert.deepEqual(plan.databases, []);
         assert.equal(plan.full, false);
@@ -169,7 +188,7 @@ test('CI-only changes are checked without deploying, and cannot accumulate into 
     assert.deepEqual(controls.packages, []);
     const frontend = classifyChanges([...files, 'packages/storefront/src/page.css'], inventory);
     assert.equal(frontend.lane, 'frontend');
-    assert.deepEqual(frontend.frontends, ['storefront']);
+    assert.deepEqual(frontend.frontends, ['next-admin', 'storefront']);
     for (const file of [
         'deploy/nginx/damatong.conf',
         'deploy/deploy-production-from-s3.sh',
@@ -178,11 +197,11 @@ test('CI-only changes are checked without deploying, and cannot accumulate into 
         assert.equal(classifyChanges([...files, file], inventory).lane, 'runtime', file);
 });
 
-test('shared hero CSS belongs to storefront while shared executable changes retain runtime scope', () => {
+test('shared hero CSS rebuilds the client and Admin preview while shared executable changes retain runtime scope', () => {
     const css = 'packages/storefront-content-plugin/src/shared/hero-scene.css';
     const plan = classifyChanges([css], inventory);
     assert.equal(plan.lane, 'frontend');
-    assert.deepEqual(plan.frontends, ['storefront']);
+    assert.deepEqual(plan.frontends, ['next-admin', 'storefront']);
     assert.deepEqual(plan.packages, []);
     assert.deepEqual(plan.databases, []);
     assert.equal(plan.publishing, false);

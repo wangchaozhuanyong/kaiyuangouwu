@@ -597,6 +597,14 @@ test('compilation follows source inputs across release-script commits, and front
         hashFor({ 'packages/next-admin/src/App.tsx': 'admin2' }, 'storefront'),
         hashFor({}, 'storefront'),
     );
+    assert.notEqual(
+        hashFor({ 'packages/storefront/src/page.tsx': 'store2' }, 'next-admin'),
+        hashFor({}, 'next-admin'),
+    );
+    assert.equal(
+        hashFor({ 'packages/storefront/two-factor-tool/main.tsx': 'tool-only' }, 'next-admin'),
+        hashFor({}, 'next-admin'),
+    );
     for (const changes of [
         { 'packages/storefront/src/page.tsx': 'store2' },
         { 'bun.lock': 'lock2' },

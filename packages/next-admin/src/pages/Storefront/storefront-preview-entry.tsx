@@ -9,6 +9,7 @@ import { storefrontQueryClient } from '../../../../storefront/src/query-client';
 import { setStorefrontPreviewParameters } from '../../../../storefront/src/storefront-preview-parameters';
 import { StorefrontErrorBoundary } from '../../../../storefront/src/StorefrontErrorBoundary';
 import type { StorefrontContentResponse } from '../../../../storefront/src/types';
+// This preview bundles the client styles; storefront source changes must rebuild the Admin too.
 import '../../../../storefront/src/storefront-styles';
 import {
     applyDecorationDraft,

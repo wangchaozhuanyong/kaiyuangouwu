@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
-import { DATABASES, isDocumentation, staticStyleOwner } from './ci-impact.mjs';
+import { affectedFrontendsForFile, DATABASES, isDocumentation } from './ci-impact.mjs';
 
 const unique = values => [...new Set(values)].sort();
 const digest = value => createHash('sha256').update(value).digest('hex');
@@ -53,9 +53,10 @@ export function checkRequirements(plan, inventory) {
                 plan.full === true ||
                 plan.frontendFull === true ||
                 !plan.files.some(
-                    file => file.startsWith(`packages/${name}/`) && /\.(css|[cm]?[jt]sx?)$/u.test(file),
+                    file =>
+                        affectedFrontendsForFile(file).includes(name) && /\.(css|[cm]?[jt]sx?)$/u.test(file),
                 ),
-            files: plan.files.filter(file => file.startsWith(`packages/${name}/`)),
+            files: plan.files.filter(file => affectedFrontendsForFile(file).includes(name)),
         });
     for (const flag of Object.keys(jobsForFlag))
         if (
@@ -180,7 +181,11 @@ export function checkFingerprint(ref, check, inventory, reader, fullFrontend = f
             )
                 return false;
             if (sharedInput(path)) return true;
-            if (check.kind === 'frontend' && check.packages.includes(staticStyleOwner(path))) return true;
+            if (
+                check.kind === 'frontend' &&
+                check.packages.some(name => affectedFrontendsForFile(path).includes(name))
+            )
+                return true;
             if (check.kind === 'architecture')
                 return path.startsWith('packages/') || path.startsWith('scripts/architecture-debt');
             if (check.kind === 'migration')
