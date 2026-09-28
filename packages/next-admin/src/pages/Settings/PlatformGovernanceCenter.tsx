@@ -340,7 +340,7 @@ export function PlatformGovernanceCenter({
                         >
                             {profiles.map(profile => (
                                 <option key={profile.id} value={profile.id}>
-                                    {storeName(profile)} · {getChannelDisplayName(profile.channel)}
+                                    {storeName(profile)}
                                 </option>
                             ))}
                         </select>
