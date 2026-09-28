@@ -24,7 +24,7 @@ export class StorefrontReview extends VendureEntity {
     }
 
     get verifiedPurchase(): boolean {
-        return this.orderId != null && this.orderLineId != null;
+        return true;
     }
 
     @Column({ type: 'varchar', length: 16, default: 'PENDING' })

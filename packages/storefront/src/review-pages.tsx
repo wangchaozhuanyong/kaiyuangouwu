@@ -434,7 +434,7 @@ export function ProductReviewsSection({
                             <ReviewStars rating={review.rating} />
                             <strong>{review.title}</strong>
                             <p>{review.body}</p>
-                            {review.verifiedPurchase && (
+                            {review.orderLineId && (
                                 <em>
                                     <CheckCircle2 aria-hidden="true" />
                                     {isZh ? '已关联订单' : 'Linked to order'}

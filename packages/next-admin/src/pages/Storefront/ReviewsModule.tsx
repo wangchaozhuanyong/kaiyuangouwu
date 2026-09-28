@@ -351,14 +351,12 @@ export function ReviewsModule() {
                                                     <td className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] font-semibold">
                                                         <span
                                                             className={
-                                                                review.verifiedPurchase
+                                                                review.orderLineId
                                                                     ? 'text-emerald-700'
                                                                     : 'text-slate-400'
                                                             }
                                                         >
-                                                            {review.verifiedPurchase
-                                                                ? '已关联订单'
-                                                                : '未关联订单'}
+                                                            {review.orderLineId ? '已关联订单' : '未关联订单'}
                                                         </span>
                                                     </td>
                                                     <td className="h-[52px] max-w-60 px-3 py-0">
