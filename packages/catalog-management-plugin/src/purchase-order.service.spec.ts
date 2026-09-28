@@ -42,6 +42,43 @@ describe('purchase payable state', () => {
     ] as const)('derives %s total, %s credit and %s paid as %s', (total, credit, paid, expected) => {
         expect(derivePurchasePaymentStatus(total, credit, paid)).toBe(expected);
     });
+
+    it.each([
+        [0, 0],
+        [1_000, 1_000],
+    ])(
+        'rejects a payment dispute with %s total and %s credit when nothing was paid',
+        async (total, credit) => {
+            const order = {
+                id: 7,
+                channelId: 1,
+                status: 'CLOSED',
+                totalMicrounits: String(total),
+                returnCreditMicrounits: String(credit),
+                paidMicrounits: '0',
+            } as PurchaseOrder;
+            const query = {
+                where: vi.fn().mockReturnThis(),
+                andWhere: vi.fn().mockReturnThis(),
+                getOne: vi.fn().mockResolvedValue(order),
+            };
+            const repository = {
+                manager: { connection: { options: { type: 'sqljs' } } },
+                createQueryBuilder: vi.fn().mockReturnValue(query),
+                save: vi.fn(),
+            };
+            const connection = {
+                withTransaction: vi.fn((ctx, work) => work(ctx)),
+                getRepository: vi.fn().mockReturnValue(repository),
+            };
+            const service = new PurchaseOrderService(connection as never, {} as never, {} as never);
+
+            await expect(service.disputePayment({ channelId: 1 } as never, 7, 'QA 争议')).rejects.toThrow(
+                '无应付或已付款金额，不能标记付款争议',
+            );
+            expect(repository.save).not.toHaveBeenCalled();
+        },
+    );
 });
 
 describe('return-to-supplier credit', () => {

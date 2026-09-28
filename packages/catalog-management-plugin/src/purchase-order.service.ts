@@ -377,6 +377,12 @@ export class PurchaseOrderService {
             if (['DRAFT', 'CANCELLED'].includes(order.status)) {
                 throw new UserInputError('当前采购单不能标记付款争议');
             }
+            if (
+                Number(order.totalMicrounits) <= Number(order.returnCreditMicrounits) &&
+                Number(order.paidMicrounits) === 0
+            ) {
+                throw new UserInputError('无应付或已付款金额，不能标记付款争议');
+            }
             order.paymentStatus = 'DISPUTED';
             await this.connection.getRepository(txCtx, PurchaseOrder).save(order);
             await this.appendEvent(txCtx, order.id, 'PAYMENT_DISPUTED', '付款状态已标记为争议', {
