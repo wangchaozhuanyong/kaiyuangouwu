@@ -311,7 +311,7 @@ export function ClientPluginsModule() {
                                         </h2>
                                     </div>
                                     <p className="mt-1 text-[11px] text-slate-400">
-                                        同一位置的插件依照下方顺序展示；选择“指定分类”时必须勾选至少一项
+                                        分类页同一位置按下方顺序展示；商业服务页先显示工具，再显示客服与优惠券，组内按下方顺序。选择“指定分类”时必须勾选至少一项。
                                     </p>
                                 </div>
                                 {draft.items.length ? (
