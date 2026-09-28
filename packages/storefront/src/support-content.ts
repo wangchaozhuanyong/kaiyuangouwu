@@ -18,6 +18,7 @@ export function supportPageTitle(
 
 export function storefrontSupportChannels(block: StorefrontContentBlock): StorefrontSupportChannel[] {
     return block.items
+        .filter(item => item.enabled)
         .flatMap(item => {
             const key = supportChannelKey(item);
             return key ? [{ key, item }] : [];

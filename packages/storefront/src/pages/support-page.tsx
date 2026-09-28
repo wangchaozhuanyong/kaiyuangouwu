@@ -190,29 +190,39 @@ export function SupportContent({
             {content.subtitle.trim() ? <p className="support-page-intro">{content.subtitle.trim()}</p> : null}
             <div className="support-workspace">
                 <div className="support-contact-panel">
-                    <h2>{isZh ? '联系我们' : 'Contact us'}</h2>
-                    <section className="support-hours-card" aria-labelledby="support-hours-title">
-                        <div className="support-hours-heading">
-                            <div className="support-hours-title-wrap">
-                                <div className="support-hours-rail" aria-hidden="true">
-                                    <Clock3 size={18} />
+                    <h2>
+                        {channels.length
+                            ? isZh
+                                ? '联系我们'
+                                : 'Contact us'
+                            : isZh
+                              ? '客服信息'
+                              : 'Support information'}
+                    </h2>
+                    {channels.length ? (
+                        <section className="support-hours-card" aria-labelledby="support-hours-title">
+                            <div className="support-hours-heading">
+                                <div className="support-hours-title-wrap">
+                                    <div className="support-hours-rail" aria-hidden="true">
+                                        <Clock3 size={18} />
+                                    </div>
+                                    <h2 id="support-hours-title">
+                                        {isZh ? '客服服务时间' : 'Customer-service hours'}
+                                    </h2>
                                 </div>
-                                <h2 id="support-hours-title">
-                                    {isZh ? '客服服务时间' : 'Customer-service hours'}
-                                </h2>
+                                <span>{service.days}</span>
                             </div>
-                            <span>{service.days}</span>
-                        </div>
-                        <div className="support-hours-main">
-                            <strong className="support-hours-time">{service.time}</strong>
-                            {service.note ? (
-                                <div className="support-hours-note">
-                                    <MessageCircle size={15} aria-hidden="true" />
-                                    <p>{service.note}</p>
-                                </div>
-                            ) : null}
-                        </div>
-                    </section>
+                            <div className="support-hours-main">
+                                <strong className="support-hours-time">{service.time}</strong>
+                                {service.note ? (
+                                    <div className="support-hours-note">
+                                        <MessageCircle size={15} aria-hidden="true" />
+                                        <p>{service.note}</p>
+                                    </div>
+                                ) : null}
+                            </div>
+                        </section>
+                    ) : null}
 
                     {channels.length ? (
                         <section
@@ -313,9 +323,13 @@ export function SupportContent({
                         </div>
                         {!filteredFaqs.length && (
                             <p role="status">
-                                {isZh
-                                    ? '没有找到相关问题，请联系客服。'
-                                    : 'No matching questions. Please contact support.'}
+                                {channels.length
+                                    ? isZh
+                                        ? '没有找到相关问题，请联系客服。'
+                                        : 'No matching questions. Please contact support.'
+                                    : isZh
+                                      ? '没有找到相关问题。'
+                                      : 'No matching questions found.'}
                             </p>
                         )}
                         {filteredFaqs.length > 0 && (
@@ -347,9 +361,13 @@ export function SupportContent({
                     <section className="support-faq-card">
                         <h2>{isZh ? '常见问题' : 'Frequently asked questions'}</h2>
                         <p>
-                            {isZh
-                                ? '商家暂未发布常见问题，可通过客服联系方式咨询。'
-                                : 'No FAQs have been published. Please use the support channels to get help.'}
+                            {channels.length
+                                ? isZh
+                                    ? '商家暂未发布常见问题，可通过客服联系方式咨询。'
+                                    : 'No FAQs have been published. Please use the support channels to get help.'
+                                : isZh
+                                  ? '商家暂未发布常见问题。'
+                                  : 'No FAQs have been published.'}
                         </p>
                     </section>
                 )}

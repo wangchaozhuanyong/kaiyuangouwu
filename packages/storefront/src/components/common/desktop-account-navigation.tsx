@@ -20,7 +20,7 @@ import {
 import { SafeImage } from '../../safe-image';
 import { RouteState } from '../../storefront-router';
 import { useStorefront } from '../../StorefrontContext';
-import { supportServiceDetails } from '../../support-content';
+import { storefrontSupportChannels, supportServiceDetails } from '../../support-content';
 
 type AccountPath =
     | '/account'
@@ -111,7 +111,10 @@ export function isDesktopAccountRoute(name: RouteState['name']) {
 
 export function DesktopAccountNavigation() {
     const { route, language, customer, supportContent } = useStorefront();
-    const service = supportContent ? supportServiceDetails(supportContent, language) : null;
+    const service =
+        supportContent && storefrontSupportChannels(supportContent).length
+            ? supportServiceDetails(supportContent, language)
+            : null;
     const isZh = language === 'zh';
     const name = customer
         ? `${customer.lastName}${customer.firstName}`.trim() || customer.emailAddress
@@ -201,13 +204,21 @@ export function DesktopAccountNavigation() {
             >
                 <Headphones aria-hidden="true" />
                 <span>
-                    <strong>{isZh ? '在线客服' : 'Customer support'}</strong>
+                    <strong>
+                        {service
+                            ? isZh
+                                ? '在线客服'
+                                : 'Customer support'
+                            : isZh
+                              ? '帮助中心'
+                              : 'Help center'}
+                    </strong>
                     <small>
                         {service
                             ? `${service.days} ${service.time}`
                             : isZh
-                              ? '查看帮助与联系方式'
-                              : 'Help and contact details'}
+                              ? '查看帮助与服务说明'
+                              : 'Help and service information'}
                     </small>
                 </span>
                 <ChevronRight aria-hidden="true" />
