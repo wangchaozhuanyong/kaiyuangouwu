@@ -80,6 +80,22 @@ export class ContentTranslationRetryService {
                 }
                 const snapshot = await this.adapter.load(this.connection.rawConnection.manager, state);
                 if (!snapshot) {
+                    // A newly created variant can be queued before its Channel and translation rows
+                    // become visible to the outbox worker. Bound setup retries by attempt count,
+                    // independent of the database and worker time zones.
+                    if (row.entityType === 'ProductVariant' && row.attempts < 30) {
+                        await repository.update(this.criteria(state), {
+                            status: 'PENDING',
+                            attempts: row.attempts + 1,
+                            leaseToken: null,
+                            leaseUntil: null,
+                            nextAttemptAt: new Date(Date.now() + 10_000),
+                            error: '等待新建 SKU 的店铺归属和翻译记录就绪',
+                            lastErrorCode: 'VARIANT_SETUP_PENDING',
+                        });
+                        result.deferred++;
+                        continue;
+                    }
                     await repository.update(this.criteria(state), {
                         status: 'CANCELLED',
                         leaseToken: null,
@@ -90,6 +106,14 @@ export class ContentTranslationRetryService {
                     });
                     result.deferred++;
                     continue;
+                }
+                if (row.lastErrorCode === 'VARIANT_SETUP_PENDING') {
+                    await repository.update(this.criteria(state), {
+                        attempts: 0,
+                        lastErrorCode: null,
+                        error: null,
+                    });
+                    state.attempts = 0;
                 }
                 if (
                     snapshot.reusableTarget &&

@@ -10,7 +10,7 @@ import {
     OneToMany,
     PrimaryGeneratedColumn,
 } from 'typeorm';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { ContentTranslationRetryService } from './content-translation-retry.service.js';
 import { ContentTranslationService, contentTranslationInternals } from './content-translation.service.js';
@@ -60,13 +60,27 @@ class FacetTranslation {
     @Column('varchar') name: string;
     @ManyToOne(() => Facet, facet => facet.translations) base: Facet;
 }
+@Entity()
+class ProductVariant {
+    @PrimaryGeneratedColumn() id: number;
+    @ManyToMany(() => Channel) @JoinTable() channels: Channel[];
+    @OneToMany(() => ProductVariantTranslation, translation => translation.base)
+    translations: ProductVariantTranslation[];
+}
+@Entity()
+class ProductVariantTranslation {
+    @PrimaryGeneratedColumn() id: number;
+    @Column('varchar') languageCode: string;
+    @Column('varchar') name: string;
+    @ManyToOne(() => ProductVariant, variant => variant.translations) base: ProductVariant;
+}
 PrimaryGeneratedColumn()(ContentTranslationState.prototype, 'id');
 PrimaryGeneratedColumn()(SettingsStoreEntry.prototype, 'id');
 let db: DataSource;
 let source: ItemTranslation;
 let target: ItemTranslation;
 let state: ContentTranslationState;
-let translate: ReturnType<typeof vi.fn>;
+let translate: Mock<(request: any) => Promise<any>>;
 let service: ContentTranslationService;
 let retry: ContentTranslationRetryService;
 let adapter: TranslationContentAdapter;
@@ -95,6 +109,8 @@ beforeEach(async () => {
             Channel,
             Facet,
             FacetTranslation,
+            ProductVariant,
+            ProductVariantTranslation,
             StorefrontContentBlock,
             StorefrontContentItem,
             ItemTranslation,
@@ -331,6 +347,81 @@ describe('durable translation outbox with an isolated SQL database', () => {
         expect(translate).not.toHaveBeenCalled();
         expect((await readState()).status).toBe('CANCELLED');
         expect(await english()).toBe('Previous services');
+    });
+
+    it('waits for a newly created variant to join its Channel before translating', async () => {
+        await db.getRepository(ContentTranslationState).update(state.id, { status: 'CANCELLED' });
+        const channel = await db.getRepository(Channel).save({ id: 1 });
+        const variant = await db.getRepository(ProductVariant).save({ channels: [] });
+        await db.getRepository(ProductVariantTranslation).save([
+            { base: variant, languageCode: 'zh_Hans', name: '模拟配送' },
+            { base: variant, languageCode: 'en', name: '' },
+        ]);
+        const queued = await service.recordState(ctx, {
+            channelId: channel.id,
+            entityType: 'ProductVariant',
+            entityId: variant.id,
+            fieldPath: 'name',
+            sourceText: '模拟配送',
+            translatedText: '',
+            status: 'PENDING',
+            origin: 'AUTO',
+        });
+
+        expect(await retry.retryPending()).toEqual({ scanned: 1, translated: 0, deferred: 1 });
+        expect(
+            await db.getRepository(ContentTranslationState).findOneByOrFail({ id: queued.id }),
+        ).toMatchObject({
+            status: 'PENDING',
+            attempts: 1,
+            lastErrorCode: 'VARIANT_SETUP_PENDING',
+            nextAttemptAt: new Date(Date.now() + 10_000),
+        });
+        expect(translate).not.toHaveBeenCalled();
+
+        await db.createQueryBuilder().relation(ProductVariant, 'channels').of(variant).add(channel);
+        translate.mockRejectedValueOnce(new TranslationProviderError('RATE_LIMIT'));
+        advance(10_001);
+        expect(await retry.retryPending()).toEqual({ scanned: 1, translated: 0, deferred: 1 });
+        expect(
+            await db.getRepository(ContentTranslationState).findOneByOrFail({ id: queued.id }),
+        ).toMatchObject({ status: 'PENDING', attempts: 1, lastErrorCode: 'RATE_LIMIT' });
+        advance(60_001);
+        expect(await retry.retryPending()).toEqual({ scanned: 1, translated: 1, deferred: 0 });
+        expect(
+            (await db.getRepository(ContentTranslationState).findOneByOrFail({ id: queued.id })).status,
+        ).toBe('AUTO_TRANSLATED');
+        expect(
+            (
+                await db.getRepository(ProductVariantTranslation).findOneByOrFail({
+                    base: { id: variant.id },
+                    languageCode: 'en',
+                })
+            ).name,
+        ).toBe('Business services');
+    });
+
+    it('cancels a variant assigned only to another Channel after thirty setup retries', async () => {
+        await db.getRepository(ContentTranslationState).update(state.id, { status: 'CANCELLED' });
+        const foreignChannel = await db.getRepository(Channel).save({ id: 2 });
+        const variant = await db.getRepository(ProductVariant).save({ channels: [foreignChannel] });
+        const queued = await service.recordState(ctx, {
+            channelId: 1,
+            entityType: 'ProductVariant',
+            entityId: variant.id,
+            fieldPath: 'name',
+            sourceText: '模拟配送',
+            translatedText: '',
+            status: 'PENDING',
+            origin: 'AUTO',
+        });
+        await db.getRepository(ContentTranslationState).update(queued.id, { attempts: 30 });
+
+        expect(await retry.retryPending()).toEqual({ scanned: 1, translated: 0, deferred: 1 });
+        expect(
+            await db.getRepository(ContentTranslationState).findOneByOrFail({ id: queued.id }),
+        ).toMatchObject({ status: 'CANCELLED', lastErrorCode: 'SOURCE_UNAVAILABLE' });
+        expect(translate).not.toHaveBeenCalled();
     });
 
     it('cancels deleted records without consuming provider capacity', async () => {
