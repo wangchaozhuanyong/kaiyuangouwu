@@ -39,6 +39,13 @@ export class StorefrontReview extends VendureEntity {
     @Column({ type: 'text' })
     body: string;
 
+    @Column({ type: 'simple-json', nullable: true })
+    imageAssets: Array<{ id: string; preview: string }> | null;
+
+    get images(): Array<{ id: string; preview: string }> {
+        return this.imageAssets ?? [];
+    }
+
     @Column({ type: 'varchar', length: 120 })
     customerName: string;
 

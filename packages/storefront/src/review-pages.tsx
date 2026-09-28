@@ -1,12 +1,14 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     CheckCircle2,
     ChevronDown,
     ChevronRight,
+    ImagePlus,
     MessageSquare,
     Package,
     RefreshCw,
     Star,
+    X,
 } from 'lucide-react';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
@@ -21,7 +23,7 @@ import {
     storefrontQueryKeys,
 } from './query-client';
 import { storefrontErrorMessage } from './storefront-errors';
-import { SubHeader } from './storefront-ui/page-shell';
+import { EmptyState, SubHeader } from './storefront-ui/page-shell';
 import { SafeImage } from './storefront-ui/product-display';
 import {
     ActiveCustomer,
@@ -40,6 +42,8 @@ function reviewVariantLabel(candidate: StorefrontReviewCandidate): string {
     const suffix = variantName.slice(productName.length);
     return /^[\s·•/|，,、-]/u.test(suffix) ? suffix.replace(/^[\s·•/|，,、-]+/u, '').trim() : variantName;
 }
+
+const REVIEW_PAGE_SIZE = 20;
 
 export function ReviewCenterPage({
     api,
@@ -76,36 +80,29 @@ export function ReviewCenterPage({
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
-    const candidatesQuery = useQuery({
+    const candidatesQuery = useInfiniteQuery({
         queryKey: storefrontQueryKeys.reviewCandidates(
             storefrontQueryKeys.market(market),
             languageCodeFor(language),
             customer?.id ?? '',
         ),
-        queryFn: ({ signal }) => api.reviewCandidates(signal),
+        queryFn: ({ pageParam, signal }) =>
+            api.reviewCandidates({ skip: pageParam, take: REVIEW_PAGE_SIZE }, signal),
+        initialPageParam: 0,
+        getNextPageParam: (lastPage, pages) =>
+            lastPage.length === REVIEW_PAGE_SIZE
+                ? pages.reduce((total, page) => total + page.length, 0)
+                : undefined,
         enabled: Boolean(customer),
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const reviews = reviewsQuery.data ?? [];
-    const candidates = candidatesQuery.data ?? [];
+    const candidates = candidatesQuery.data?.pages.flat() ?? [];
     const [selected, setSelected] = useState<StorefrontReviewCandidate | null>(null);
     const [activeList, setActiveList] = useState<'pending' | 'submitted'>('pending');
     const [showAllCandidates, setShowAllCandidates] = useState(false);
     const composerRef = useRef<HTMLFormElement>(null);
-    const candidateImages = new Map(
-        customer?.orders.items.flatMap(order =>
-            order.lines.map(
-                line =>
-                    [
-                        line.id,
-                        line.productVariant.featuredAsset?.preview ??
-                            line.productVariant.product.featuredAsset?.preview ??
-                            null,
-                    ] as const,
-            ),
-        ) ?? [],
-    );
     const visibleCandidates = showAllCandidates ? candidates : candidates.slice(0, 4);
     useEffect(() => {
         if (selected) composerRef.current?.scrollIntoView({ block: 'start' });
@@ -137,7 +134,7 @@ export function ReviewCenterPage({
         <main className="page subpage review-center-page">
             <SubHeader title={isZh ? '评价中心' : 'Reviews'} language={language} onBack={onBack} />
             {!customer ? (
-                <ReviewEmptyState
+                <EmptyState
                     icon={<MessageSquare />}
                     title={isZh ? '登录后管理评价' : 'Sign in to manage reviews'}
                     detail={isZh ? '已购买商品的评价资格会显示在这里' : 'Eligible purchases appear here'}
@@ -154,7 +151,7 @@ export function ReviewCenterPage({
               (candidatesQuery.isPaused && candidatesQuery.data === undefined) ||
               reviewsQuery.isError ||
               candidatesQuery.isError ? (
-                <ReviewEmptyState
+                <EmptyState
                     icon={<RefreshCw />}
                     title={isZh ? '评价记录加载失败' : 'Could not load reviews'}
                     detail={
@@ -182,7 +179,9 @@ export function ReviewCenterPage({
                                     aria-controls="review-pending-panel"
                                     onClick={() => setActiveList('pending')}
                                 >
-                                    {isZh ? `待评价 ${candidates.length}` : `To review ${candidates.length}`}
+                                    {isZh
+                                        ? `待评价 ${candidates.length}${candidatesQuery.hasNextPage ? '+' : ''}`
+                                        : `To review ${candidates.length}${candidatesQuery.hasNextPage ? '+' : ''}`}
                                 </button>
                                 <button
                                     type="button"
@@ -221,12 +220,15 @@ export function ReviewCenterPage({
                                         : 'Choose an item and share your experience'}
                                 </small>
                             </div>
-                            <span>{candidates.length}</span>
+                            <span>
+                                {candidates.length}
+                                {candidatesQuery.hasNextPage ? '+' : ''}
+                            </span>
                         </header>
                         {candidates.length ? (
                             <div className="review-candidate-list" id="review-candidate-list">
                                 {visibleCandidates.map(candidate => {
-                                    const imageUrl = candidateImages.get(candidate.orderLineId);
+                                    const imageUrl = candidate.imageUrl;
                                     const variantLabel = reviewVariantLabel(candidate);
                                     return (
                                         <button
@@ -272,23 +274,46 @@ export function ReviewCenterPage({
                                         </button>
                                     );
                                 })}
-                                {candidates.length > 4 && (
+                                {(candidates.length > 4 || candidatesQuery.hasNextPage) && (
                                     <button
                                         type="button"
                                         className="review-candidate-more"
                                         aria-expanded={showAllCandidates}
                                         aria-controls="review-candidate-list"
-                                        onClick={() => setShowAllCandidates(value => !value)}
+                                        disabled={candidatesQuery.isFetchingNextPage}
+                                        onClick={() => {
+                                            if (!showAllCandidates) setShowAllCandidates(true);
+                                            else if (candidatesQuery.hasNextPage)
+                                                void candidatesQuery.fetchNextPage();
+                                            else setShowAllCandidates(false);
+                                        }}
                                     >
                                         {showAllCandidates
-                                            ? isZh
-                                                ? '收起列表'
-                                                : 'Show fewer'
+                                            ? candidatesQuery.isFetchingNextPage
+                                                ? isZh
+                                                    ? '加载中…'
+                                                    : 'Loading…'
+                                                : candidatesQuery.hasNextPage
+                                                  ? isZh
+                                                      ? '加载更多商品'
+                                                      : 'Load more items'
+                                                  : isZh
+                                                    ? '收起列表'
+                                                    : 'Show fewer'
                                             : isZh
-                                              ? `查看其余 ${candidates.length - 4} 件商品`
-                                              : `Show ${candidates.length - 4} more items`}
-                                        <ChevronDown aria-hidden="true" />
+                                              ? '查看其余商品'
+                                              : 'Show more items'}
+                                        {!showAllCandidates || !candidatesQuery.hasNextPage ? (
+                                            <ChevronDown aria-hidden="true" />
+                                        ) : null}
                                     </button>
+                                )}
+                                {candidatesQuery.isFetchNextPageError && (
+                                    <p className="review-center-hint" role="alert">
+                                        {isZh
+                                            ? '加载更多商品失败，请重试'
+                                            : 'Could not load more items. Try again.'}
+                                    </p>
                                 )}
                             </div>
                         ) : (
@@ -335,6 +360,9 @@ export function ReviewCenterPage({
                                         <ReviewStars rating={review.rating} />
                                         <strong>{review.title}</strong>
                                         <p>{review.body}</p>
+                                        {review.images?.length > 0 && (
+                                            <ReviewImageGallery images={review.images} language={language} />
+                                        )}
                                         {review.merchantResponse && (
                                             <blockquote>
                                                 <strong>{isZh ? '商家回复' : 'Store response'}</strong>
@@ -352,7 +380,7 @@ export function ReviewCenterPage({
                                     : 'No submitted reviews yet. Choose an item above to write your first one.'}
                             </p>
                         ) : (
-                            <ReviewEmptyState
+                            <EmptyState
                                 compact
                                 icon={<MessageSquare />}
                                 title={isZh ? '还没有评价' : 'No reviews yet'}
@@ -384,26 +412,34 @@ export function ProductReviewsSection({
     language: StorefrontLanguage;
 }) {
     const isZh = language === 'zh';
-    const query = useQuery({
+    const query = useInfiniteQuery({
         queryKey: storefrontQueryKeys.productReviews(
             storefrontQueryKeys.market(market),
             languageCodeFor(language),
             productId,
         ),
-        queryFn: ({ signal }) => api.productReviews(productId, signal),
+        queryFn: ({ pageParam, signal }) =>
+            api.productReviews(productId, { skip: pageParam, take: REVIEW_PAGE_SIZE }, signal),
+        initialPageParam: 0,
+        getNextPageParam: (lastPage, pages) => {
+            if (lastPage.items.length === 0) return undefined;
+            const loaded = pages.reduce((total, page) => total + page.items.length, 0);
+            return loaded < lastPage.totalItems ? loaded : undefined;
+        },
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
     });
-    const reviews = query.data?.items ?? [];
-    const average = query.data?.averageRating ?? 0;
+    const reviews = query.data?.pages.flatMap(page => page.items) ?? [];
+    const totalItems = query.data?.pages[0]?.totalItems ?? 0;
+    const average = query.data?.pages[0]?.averageRating ?? 0;
     return (
         <section className="detail-block detail-review-block">
             <header>
                 <strong>{isZh ? '用户评价' : 'Reviews'}</strong>
                 <span>
                     {reviews.length
-                        ? `${average.toFixed(1)} · ${query.data?.totalItems ?? reviews.length}`
+                        ? `${average.toFixed(1)} · ${totalItems}`
                         : isZh
                           ? '暂无评价'
                           : 'No reviews yet'}
@@ -414,7 +450,8 @@ export function ProductReviewsSection({
                     <span />
                     <span />
                 </div>
-            ) : (query.isPaused && query.data === undefined) || query.isError ? (
+            ) : (query.isPaused && query.data === undefined) ||
+              (query.isError && query.data === undefined) ? (
                 <button className="product-review-retry" type="button" onClick={() => void query.refetch()}>
                     <RefreshCw aria-hidden="true" />
                     {query.isPaused
@@ -431,15 +468,22 @@ export function ProductReviewsSection({
                                 <span>{review.customerName}</span>
                                 <small>{formatReviewDate(review.createdAt, language)}</small>
                             </header>
-                            <ReviewStars rating={review.rating} />
-                            <strong>{review.title}</strong>
-                            <p>{review.body}</p>
-                            {review.orderLineId && (
-                                <em>
-                                    <CheckCircle2 aria-hidden="true" />
-                                    {isZh ? '已关联订单' : 'Linked to order'}
-                                </em>
-                            )}
+                            <div className="product-review-main">
+                                <div className="product-review-copy">
+                                    <ReviewStars rating={review.rating} />
+                                    <strong>{review.title}</strong>
+                                    <p>{review.body}</p>
+                                    {review.orderLineId && (
+                                        <em>
+                                            <CheckCircle2 aria-hidden="true" />
+                                            {isZh ? '已关联订单' : 'Linked to order'}
+                                        </em>
+                                    )}
+                                </div>
+                                {review.images?.length > 0 && (
+                                    <ReviewImageGallery images={review.images} language={language} />
+                                )}
+                            </div>
                             {review.merchantResponse && (
                                 <blockquote>
                                     <strong>{isZh ? '商家回复' : 'Store response'}</strong>
@@ -448,6 +492,27 @@ export function ProductReviewsSection({
                             )}
                         </article>
                     ))}
+                    {query.hasNextPage && (
+                        <button
+                            className="product-review-retry"
+                            type="button"
+                            disabled={query.isFetchingNextPage}
+                            onClick={() => void query.fetchNextPage()}
+                        >
+                            {query.isFetchingNextPage
+                                ? isZh
+                                    ? '加载中…'
+                                    : 'Loading…'
+                                : isZh
+                                  ? '查看更多评价'
+                                  : 'Load more reviews'}
+                        </button>
+                    )}
+                    {query.isFetchNextPageError && (
+                        <p className="review-center-hint" role="alert">
+                            {isZh ? '加载更多评价失败，请重试' : 'Could not load more reviews. Try again.'}
+                        </p>
+                    )}
                 </div>
             ) : (
                 <div className="detail-empty-review">
@@ -461,6 +526,35 @@ export function ProductReviewsSection({
                 </div>
             )}
         </section>
+    );
+}
+
+function ReviewImageGallery({
+    images,
+    language,
+}: {
+    images: StorefrontReview['images'];
+    language: StorefrontLanguage;
+}) {
+    const isZh = language === 'zh';
+    return (
+        <div className="product-review-images" aria-label={isZh ? '评价图片' : 'Review images'}>
+            {images.map((image, index) => (
+                <a
+                    key={image.id}
+                    href={image.preview}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={isZh ? `查看评价图片 ${index + 1}` : `View review image ${index + 1}`}
+                >
+                    <SafeImage
+                        src={image.preview}
+                        alt={isZh ? `评价图片 ${index + 1}` : `Review image ${index + 1}`}
+                        loading="lazy"
+                    />
+                </a>
+            ))}
+        </div>
     );
 }
 
@@ -482,8 +576,15 @@ function ReviewComposer({
     const [title, setTitle] = useState('');
     const [body, setBody] = useState('');
     const [anonymous, setAnonymous] = useState(false);
+    const [images, setImages] = useState<File[]>([]);
+    const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    useEffect(() => {
+        const urls = images.map(file => URL.createObjectURL(file));
+        setImagePreviews(urls);
+        return () => urls.forEach(url => URL.revokeObjectURL(url));
+    }, [images]);
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (rating < 1 || rating > 5) {
@@ -507,6 +608,7 @@ function ReviewComposer({
                 title: title.trim(),
                 body: body.trim(),
                 anonymous,
+                images,
             });
         } catch (submitError) {
             setError(storefrontErrorMessage(submitError, language));
@@ -566,6 +668,69 @@ function ReviewComposer({
                     disabled={submitting}
                 />
             </label>
+            <div className="review-image-picker">
+                <span>{isZh ? '评价图片（最多 4 张）' : 'Review images (up to 4)'}</span>
+                <div className="review-image-previews">
+                    {imagePreviews.map((url, index) => (
+                        <div className="review-image-preview" key={url}>
+                            <img
+                                src={url}
+                                alt={isZh ? `待上传图片 ${index + 1}` : `Image to upload ${index + 1}`}
+                            />
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setImages(current => current.filter((_, position) => position !== index))
+                                }
+                                disabled={submitting}
+                                aria-label={isZh ? `移除图片 ${index + 1}` : `Remove image ${index + 1}`}
+                            >
+                                <X aria-hidden="true" />
+                            </button>
+                        </div>
+                    ))}
+                    {images.length < 4 && (
+                        <label className="review-image-add">
+                            <ImagePlus aria-hidden="true" />
+                            <span>{isZh ? '添加图片' : 'Add images'}</span>
+                            <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                multiple
+                                disabled={submitting}
+                                onChange={event => {
+                                    const selected = Array.from(event.target.files ?? []);
+                                    event.target.value = '';
+                                    if (images.length + selected.length > 4) {
+                                        setError(
+                                            isZh ? '每条评价最多上传 4 张图片' : 'Up to 4 images per review',
+                                        );
+                                        return;
+                                    }
+                                    if (
+                                        selected.some(
+                                            file =>
+                                                file.size > 5 * 1024 * 1024 ||
+                                                !['image/jpeg', 'image/png', 'image/webp'].includes(
+                                                    file.type,
+                                                ),
+                                        )
+                                    ) {
+                                        setError(
+                                            isZh
+                                                ? '仅支持 5MB 以内的 JPG、PNG 或 WebP 图片'
+                                                : 'Use JPG, PNG or WebP images under 5 MB',
+                                        );
+                                        return;
+                                    }
+                                    setError('');
+                                    setImages(current => [...current, ...selected]);
+                                }}
+                            />
+                        </label>
+                    )}
+                </div>
+            </div>
             <label className="review-anonymous-option">
                 <input
                     type="checkbox"
@@ -615,33 +780,6 @@ function ReviewStateBadge({
         REJECTED: isZh ? '未通过' : 'Not approved',
     };
     return <span className={`review-state is-${state.toLowerCase()}`}>{labels[state]}</span>;
-}
-
-function ReviewEmptyState({
-    icon,
-    title,
-    detail,
-    action,
-    onAction,
-    compact = false,
-}: {
-    icon: React.ReactNode;
-    title: string;
-    detail: string;
-    action: string;
-    onAction: () => void;
-    compact?: boolean;
-}) {
-    return (
-        <section className={compact ? 'empty-state is-compact' : 'empty-state'}>
-            <span>{icon}</span>
-            <strong>{title}</strong>
-            <small>{detail}</small>
-            <button type="button" onClick={onAction}>
-                {action}
-            </button>
-        </section>
-    );
 }
 
 function formatReviewDate(value: string, language: StorefrontLanguage): string {

@@ -3,7 +3,7 @@ import { DehydratedState, QueryClient, QueryKey, dehydrate, hydrate } from '@tan
 import { ShopApiTimeoutError } from './api';
 
 export const PUBLIC_QUERY_STALE_TIME = 60_000;
-// Guests have no authenticated event stream. Refresh visible configuration periodically.
+// Periodic refresh remains a fallback when the public event stream is disconnected.
 export const STOREFRONT_CONFIG_REFRESH_INTERVAL = 30_000;
 export const ROUTE_QUERY_STALE_TIME = 60_000;
 export const PUBLIC_QUERY_GC_TIME = 30 * 60_000;
@@ -227,9 +227,17 @@ export const storefrontQueryKeys = {
         [
             ...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId),
             'review-candidates',
+            'pages',
         ] as const,
     productReviews: (marketCode: string, languageCode: string, productId: string) =>
-        [...storefrontQueryKeys.scope(marketCode, languageCode), 'product-reviews', productId] as const,
+        [
+            ...storefrontQueryKeys.scope(marketCode, languageCode),
+            'product-reviews',
+            productId,
+            'pages',
+        ] as const,
+    reviewSettings: (marketCode: string, languageCode: string) =>
+        [...storefrontQueryKeys.scope(marketCode, languageCode), 'review-settings'] as const,
     referralProgram: (marketCode: string, languageCode: string) =>
         [...storefrontQueryKeys.scope(marketCode, languageCode), 'referral-program'] as const,
     customerReferral: (marketCode: string, languageCode: string, customerId: string) =>

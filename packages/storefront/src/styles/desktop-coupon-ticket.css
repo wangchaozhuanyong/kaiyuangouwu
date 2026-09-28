@@ -1,31 +1,31 @@
 @media (min-width: 1024px) {
     .desktop-coupon-ticket {
-        --coupon-face: #a63d32;
+        --coupon-face: var(--coupon-rose-ink);
         display: grid;
         grid-template-columns: 120px minmax(0, 1fr);
         min-width: 0;
         min-height: 118px;
         overflow: hidden;
         border: 1px solid var(--line);
-        border-radius: 7px;
+        border-radius: var(--skin-card-radius);
         background: var(--surface);
         color: var(--text);
     }
     .desktop-coupon-ticket.coupon-face-gold {
-        --coupon-face: #71592f;
+        --coupon-face: var(--coupon-gold-ink);
     }
     .desktop-coupon-ticket.coupon-face-blue {
-        --coupon-face: #334a52;
+        --coupon-face: var(--coupon-blue-ink);
     }
     .desktop-coupon-ticket.coupon-face-emerald {
-        --coupon-face: #326457;
+        --coupon-face: var(--coupon-emerald-ink);
     }
     .desktop-coupon-ticket.is-selected {
         border-color: var(--coupon-face);
         box-shadow: inset 0 0 0 1px var(--coupon-face);
     }
     .desktop-coupon-ticket.is-unavailable {
-        --coupon-face: #626b70;
+        --coupon-face: var(--muted);
     }
     .desktop-coupon-value {
         display: flex;
@@ -35,8 +35,8 @@
         gap: 9px;
         min-width: 0;
         padding: 16px 10px;
-        background: var(--coupon-face);
-        color: #fff;
+        background: color-mix(in srgb, var(--coupon-face) 10%, var(--surface));
+        color: var(--coupon-face);
         text-align: center;
     }
     .desktop-coupon-value > div {

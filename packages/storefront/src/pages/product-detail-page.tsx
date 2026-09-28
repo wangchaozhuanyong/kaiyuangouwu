@@ -53,6 +53,7 @@ export interface ProductDetailPageProps {
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
+    reviewEnabled?: boolean;
     storefrontName: string;
     logoUrl: string | null;
     initialVariantId?: string;
@@ -96,6 +97,7 @@ export function ProductDetailPage() {
         market,
         locale,
         language,
+        reviewEnabled = true,
         storefrontName,
         logoUrl,
         flashSaleItems,
@@ -126,6 +128,9 @@ export function ProductDetailPage() {
         setQuantity(1);
         setActiveSection('description');
     }, [initialVariant?.id, product.id]);
+    useEffect(() => {
+        if (!reviewEnabled && activeSection === 'reviews') setActiveSection('description');
+    }, [activeSection, reviewEnabled]);
     const variant = product.variants.find(item => item.id === variantId) ?? initialVariant;
     const availability = productAvailability(variant);
     const purchaseQuantity = Math.min(quantity, Math.max(1, availability.stock ?? quantity));
@@ -599,20 +604,22 @@ export function ProductDetailPage() {
                             ['params', isZh ? '商品参数' : 'Specifications'],
                             ['after-sales', isZh ? '配送与售后' : 'Delivery and returns'],
                         ] as const
-                    ).map(([section, label]) => (
-                        <button
-                            key={section}
-                            type="button"
-                            className={activeSection === section ? 'is-active' : undefined}
-                            aria-pressed={activeSection === section}
-                            onClick={() => setActiveSection(section)}
-                        >
-                            {label}
-                        </button>
-                    ))}
+                    )
+                        .filter(([section]) => reviewEnabled || section !== 'reviews')
+                        .map(([section, label]) => (
+                            <button
+                                key={section}
+                                type="button"
+                                className={activeSection === section ? 'is-active' : undefined}
+                                aria-pressed={activeSection === section}
+                                onClick={() => setActiveSection(section)}
+                            >
+                                {label}
+                            </button>
+                        ))}
                 </nav>
             )}
-            {(!desktop || activeSection === 'reviews') && (
+            {reviewEnabled && (!desktop || activeSection === 'reviews') && (
                 <ProductReviewsSection api={api} productId={product.id} market={market} language={language} />
             )}
             {(!desktop || activeSection === 'params') && (

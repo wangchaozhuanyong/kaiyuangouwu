@@ -77,6 +77,8 @@ export function useStorefrontAppState() {
         productsQuery,
         collections,
         contentQuery,
+        reviewSettingsQuery,
+        reviewSettingsStatus,
         configQuery,
         commerceModeQuery,
         contentBlocks,
@@ -169,7 +171,7 @@ export function useStorefrontAppState() {
     }, [cartState.confirmed, queryClient, market.code, market.currencyCode, vendureLanguageCode]);
 
     useEffect(() => {
-        if (!storefrontContextResolved || !customerAuthenticated) return;
+        if (!storefrontContextResolved) return;
         const controller = new AbortController();
         void api.watchRealtime(event => {
             void invalidateStorefrontRealtimeQueries(queryClient, event, {
@@ -636,6 +638,8 @@ export function useStorefrontAppState() {
         productsQuery,
         collections,
         contentBlocks,
+        reviewSettingsStatus,
+        reviewSettingsQuery,
         managedContentProducts,
         heroAutoplayIntervalSeconds,
         configuredBlockTypes,

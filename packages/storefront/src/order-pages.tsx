@@ -45,7 +45,7 @@ import { PageSkeleton } from './route-loading';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
-import { SubHeader, Subpage } from './storefront-ui/page-shell';
+import { EmptyState, SubHeader, Subpage } from './storefront-ui/page-shell';
 import {
     ProductImagePlaceholder,
     productImageUnavailableLabel,
@@ -1126,6 +1126,7 @@ export function OrderDetailPage({
     order,
     locale,
     language,
+    reviewEnabled = true,
     storefrontName,
     onBack,
     onBuyAgain,
@@ -1141,6 +1142,7 @@ export function OrderDetailPage({
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
+    reviewEnabled?: boolean;
     storefrontName: string;
     onBack: () => void;
     onBuyAgain: (order: Order) => Promise<void>;
@@ -1193,8 +1195,12 @@ export function OrderDetailPage({
     const statusHint =
         order.state === 'TestPaymentSettled'
             ? isZh
-                ? '订单已付款成功（测试模式），可正常测试发货、物流、评价及客服全流程'
-                : 'Payment successful (test mode). Full fulfillment, logistics, review, and support workflows are enabled.'
+                ? reviewEnabled
+                    ? '订单已付款成功（测试模式），可正常测试发货、物流、评价及客服全流程'
+                    : '订单已付款成功（测试模式），可正常测试发货、物流及客服流程'
+                : reviewEnabled
+                  ? 'Payment successful (test mode). Full fulfillment, logistics, review, and support workflows are enabled.'
+                  : 'Payment successful (test mode). Fulfillment, logistics, and support workflows are enabled.'
             : readyDownloads.length
               ? isZh
                   ? '数字商品已可下载，链接为短效安全链接'
@@ -1582,6 +1588,7 @@ export function OrderDetailPage({
                     order={order}
                     locale={locale}
                     language={language}
+                    reviewEnabled={reviewEnabled}
                     onClose={() => setLogisticsSheetOpen(false)}
                     onContactSupport={navigateToSupport}
                     onNotify={onNotify}
@@ -1595,6 +1602,7 @@ export function LogisticsTrackingSheet({
     order,
     locale,
     language,
+    reviewEnabled = true,
     onClose,
     onContactSupport,
     onNotify,
@@ -1602,6 +1610,7 @@ export function LogisticsTrackingSheet({
     order: Order;
     locale: string;
     language: StorefrontLanguage;
+    reviewEnabled?: boolean;
     onClose: () => void;
     onContactSupport: () => void;
     onNotify?: (message: string) => void;
@@ -1813,7 +1822,9 @@ export function LogisticsTrackingSheet({
                                             <strong>{isZh ? '包裹已签收' : 'Package delivered'}</strong>
                                             <p>
                                                 {isZh
-                                                    ? '您的商品已成功送达，感谢您的信任与支持，欢迎参与商品评价！'
+                                                    ? reviewEnabled
+                                                        ? '您的商品已成功送达，感谢您的信任与支持，欢迎参与商品评价！'
+                                                        : '您的商品已成功送达，感谢您的信任与支持！'
                                                     : 'Package has been delivered successfully. Thank you for your support!'}
                                             </p>
                                             <time>
@@ -2492,33 +2503,6 @@ function orderProductPresentation(
     };
 }
 
-function EmptyState({
-    icon,
-    title,
-    detail,
-    action,
-    onAction,
-}: {
-    icon: ReactNode;
-    title: string;
-    detail?: string;
-    action?: string;
-    onAction?: () => void;
-}) {
-    return (
-        <section className={orderPageClassName('empty-state')}>
-            <span>{icon}</span>
-            <h2>{title}</h2>
-            {detail && <p>{detail}</p>}
-            {action && (
-                <button type="button" onClick={onAction}>
-                    {action}
-                </button>
-            )}
-        </section>
-    );
-}
-
 function InlineError({
     message,
     action,
@@ -2553,6 +2537,7 @@ function ProductVariantImage({
             <ProductImagePlaceholder
                 language={language}
                 className={orderPageClassName('image-placeholder')}
+                compact
             />
         );
     return (
@@ -2572,7 +2557,11 @@ function OrderImage({ order, language }: { order: OrderSummary; language: Storef
     return variant ? (
         <ProductVariantImage language={language} variant={variant} alt={variant.name} />
     ) : (
-        <ProductImagePlaceholder language={language} className={orderPageClassName('image-placeholder')} />
+        <ProductImagePlaceholder
+            language={language}
+            className={orderPageClassName('image-placeholder')}
+            compact
+        />
     );
 }
 

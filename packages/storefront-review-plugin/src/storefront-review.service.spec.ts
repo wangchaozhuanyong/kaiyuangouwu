@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StorefrontReviewService } from './storefront-review.service';
@@ -17,7 +18,12 @@ function createHarness(
         lastName: '小明',
         emailAddress: 'customer@example.com',
     } as any;
-    const product = { id: 'product-1', name: 'Production guide', translations: [] } as any;
+    const product = {
+        id: 'product-1',
+        name: 'Production guide',
+        translations: [],
+        featuredAsset: { preview: '/assets/product.webp' },
+    } as any;
     const variant = {
         id: 'variant-1',
         productId: product.id,
@@ -90,10 +96,17 @@ function createHarness(
         ),
         recordPreparedFields: vi.fn(() => Promise.resolve(undefined)),
     };
+    const assets = {
+        create: vi.fn().mockResolvedValue({ id: 'review-image-1', preview: '/assets/review-image-1.webp' }),
+        delete: vi.fn().mockResolvedValue({ result: 'DELETED' }),
+    };
+    const reviewSettings = { get: vi.fn().mockResolvedValue({ enabled: true }) };
     const service = new StorefrontReviewService(
         connection as any,
         customerService as any,
         translations as any,
+        assets as any,
+        reviewSettings as any,
     );
     const ctx = {
         activeUserId: 'user-1',
@@ -101,7 +114,15 @@ function createHarness(
         channel: { id: 'channel-1' },
         languageCode: 'en',
     } as any;
-    return { service, ctx, reviewRepository, orderLineQueryBuilder, orderLineRepository };
+    return {
+        service,
+        ctx,
+        reviewRepository,
+        orderLineQueryBuilder,
+        orderLineRepository,
+        assets,
+        reviewSettings,
+    };
 }
 
 const validInput = {
@@ -112,6 +133,67 @@ const validInput = {
 };
 
 describe('StorefrontReviewService', () => {
+    it('hides public and customer reviews and rejects submissions when the store disables reviews', async () => {
+        const test = createHarness();
+        test.reviewSettings.get.mockResolvedValue({ enabled: false });
+
+        await expect(test.service.findApprovedForProduct(test.ctx, 'product-1')).resolves.toEqual({
+            items: [],
+            totalItems: 0,
+            averageRating: 0,
+        });
+        await expect(test.service.findMine(test.ctx)).resolves.toEqual([]);
+        await expect(test.service.findCandidates(test.ctx)).resolves.toEqual([]);
+        await expect(test.service.submit(test.ctx, validInput)).rejects.toThrow('已关闭评价功能');
+        expect(test.reviewRepository.findAndCount).not.toHaveBeenCalled();
+        expect(test.reviewRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('stores sanitized image references with a pending review', async () => {
+        const test = createHarness();
+        const png = Buffer.from(
+            'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEUlEQVQImWP4z8DwH4QZYAwAR8oH+Xm0fdIAAAAASUVORK5CYII=',
+            'base64',
+        );
+        await test.service.submit(test.ctx, validInput, [
+            Promise.resolve({
+                filename: 'photo.png',
+                mimetype: 'image/png',
+                createReadStream: () => Readable.from([png]),
+            }),
+        ]);
+        expect(test.assets.create).toHaveBeenCalledOnce();
+        expect(test.reviewRepository.save).toHaveBeenCalledWith(
+            expect.objectContaining({
+                state: 'PENDING',
+                imageAssets: [{ id: 'review-image-1', preview: '/assets/review-image-1.webp' }],
+            }),
+        );
+    });
+
+    it('rejects more than four review images before creating assets', async () => {
+        const test = createHarness();
+        await expect(
+            test.service.submit(test.ctx, validInput, Array(5).fill(Promise.resolve({}))),
+        ).rejects.toThrow('最多上传 4 张');
+        expect(test.assets.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects unsupported image bytes before creating any public asset', async () => {
+        const test = createHarness();
+        await expect(
+            test.service.submit(test.ctx, validInput, [
+                Promise.resolve({
+                    filename: 'vector.svg',
+                    mimetype: 'image/svg+xml',
+                    createReadStream: () => Readable.from([Buffer.from('<svg/>')]),
+                }),
+            ]),
+        ).rejects.toThrow('图片安全检查未通过');
+        expect(test.assets.create).not.toHaveBeenCalled();
+        expect(test.reviewRepository.save).not.toHaveBeenCalled();
+    });
+
     it.each(['sqlite', 'better-sqlite3', 'sqljs'])(
         'uses a transaction write for %s review submissions',
         async databaseType => {
@@ -169,8 +251,23 @@ describe('StorefrontReviewService', () => {
                 productId: 'product-1',
                 productName: 'Production guide',
                 fulfillmentType: 'physical',
+                imageUrl: '/assets/product.webp',
             }),
         ]);
+    });
+
+    it('paginates eligible order lines after excluding reviewed lines', async () => {
+        const test = createHarness();
+        test.reviewRepository.find.mockResolvedValueOnce([{ orderLineId: 'reviewed-line' }]);
+
+        await test.service.findCandidates(test.ctx, { skip: 20, take: 20 });
+
+        const options = test.orderLineRepository.find.mock.calls[0][0];
+        expect(options.skip).toBe(20);
+        expect(options.take).toBe(20);
+        expect(options.where.id).toMatchObject({ _type: 'not' });
+        expect(options.relations.productVariant.featuredAsset).toBe(true);
+        expect(options.relations.productVariant.product.featuredAsset).toBe(true);
     });
 
     it('creates a verified pending review from a customer-owned delivered order line', async () => {

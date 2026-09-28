@@ -176,7 +176,7 @@ describe('category navigation responsive spacing', () => {
         const activeItemRule = stylesheet.match(/\.subcat-side-item\.is-active\s*\{([^}]*)\}/)?.[1] ?? '';
         const resultsRule = stylesheet.match(/\.category-results\s*\{([^}]*)\}/)?.[1] ?? '';
 
-        expect(layoutRule).toMatch(/--category-results-surface:\s*var\(--bg\);/);
+        expect(layoutRule).toMatch(/--category-results-surface:\s*var\(--surface\);/);
         expect(sidebarRule).toMatch(/background:\s*var\(--soft\);/);
         expect(sidebarRule).toMatch(/border-right:\s*0;/);
         expect(itemRule).not.toMatch(/border-left/);

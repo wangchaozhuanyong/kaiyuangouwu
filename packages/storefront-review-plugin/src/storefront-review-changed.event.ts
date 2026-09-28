@@ -14,3 +14,11 @@ export class StorefrontReviewChangedEvent extends VendureEvent {
         super();
     }
 }
+
+export class StorefrontReviewSettingsChangedEvent extends VendureEvent {
+    readonly realtimeEventKind = 'storefront-review-settings-changed';
+
+    constructor(public readonly ctx: RequestContext) {
+        super();
+    }
+}

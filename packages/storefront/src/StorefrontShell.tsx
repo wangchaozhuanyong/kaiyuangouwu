@@ -80,6 +80,19 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     const renderedRouteName = protectedRoute && !customer ? 'login' : displayedRoute.name;
 
     useEffect(() => {
+        if (
+            storefrontContextValue.reviewSettingsStatus === 'disabled' &&
+            storefrontContextValue.route.name === 'reviews'
+        ) {
+            storefrontContextValue.navigate({ name: 'account' }, true);
+        }
+    }, [
+        storefrontContextValue.reviewSettingsStatus,
+        storefrontContextValue.navigate,
+        storefrontContextValue.route.name,
+    ]);
+
+    useEffect(() => {
         if (!previewEmbedded || !previewSession) return;
         const receivePreviewNavigation = (event: MessageEvent) => {
             if (event.origin !== window.location.origin) return;

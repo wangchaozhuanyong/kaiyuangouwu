@@ -612,18 +612,31 @@ export class ContentReviewsApi extends BaseDomainApi {
         return result.confirmMyAfterSalesReplacement;
     }
 
-    async productReviews(productId: string, signal?: AbortSignal): Promise<StorefrontReviewList> {
+    async reviewSettings(signal?: AbortSignal): Promise<{ enabled: boolean }> {
+        const result = await this.request<{ storefrontReviewSettings: { enabled: boolean } }>(
+            `query StorefrontReviewSettings { storefrontReviewSettings { enabled } }`,
+            undefined,
+            signal,
+        );
+        return result.storefrontReviewSettings;
+    }
+
+    async productReviews(
+        productId: string,
+        options: { skip?: number; take?: number } = { take: 20 },
+        signal?: AbortSignal,
+    ): Promise<StorefrontReviewList> {
         const result = await this.request<{ storefrontProductReviews: StorefrontReviewList }>(
             `
-                query StorefrontProductReviews($productId: ID!) {
-                    storefrontProductReviews(productId: $productId, options: { take: 20 }) {
+                query StorefrontProductReviews($productId: ID!, $options: StorefrontReviewListOptions) {
+                    storefrontProductReviews(productId: $productId, options: $options) {
                         totalItems
                         averageRating
                         items { ${storefrontReviewFields} }
                     }
                 }
             `,
-            { productId },
+            { productId, options },
             signal,
         );
         return result.storefrontProductReviews;
@@ -642,11 +655,14 @@ export class ContentReviewsApi extends BaseDomainApi {
         return result.myStorefrontReviews;
     }
 
-    async reviewCandidates(signal?: AbortSignal): Promise<StorefrontReviewCandidate[]> {
+    async reviewCandidates(
+        options: { skip?: number; take?: number } = {},
+        signal?: AbortSignal,
+    ): Promise<StorefrontReviewCandidate[]> {
         const result = await this.request<{ myStorefrontReviewCandidates: StorefrontReviewCandidate[] }>(
             `
-                query MyStorefrontReviewCandidates {
-                    myStorefrontReviewCandidates {
+                query MyStorefrontReviewCandidates($options: StorefrontReviewListOptions) {
+                    myStorefrontReviewCandidates(options: $options) {
                         orderLineId
                         orderId
                         orderCode
@@ -658,24 +674,34 @@ export class ContentReviewsApi extends BaseDomainApi {
                         variantName
                         sku
                         fulfillmentType
+                        imageUrl
                     }
                 }
             `,
-            undefined,
+            { options },
             signal,
         );
         return result.myStorefrontReviewCandidates;
     }
 
     async submitReview(input: SubmitStorefrontReviewInput): Promise<StorefrontReview> {
-        const result = await this.request<{ submitStorefrontReview: StorefrontReview }>(
-            `
-                mutation SubmitStorefrontReview($input: SubmitStorefrontReviewInput!) {
-                    submitStorefrontReview(input: $input) { ${storefrontReviewFields} }
-                }
-            `,
-            { input },
-        );
+        const { images = [], ...reviewInput } = input;
+        const mutation = `
+            mutation SubmitStorefrontReview($input: SubmitStorefrontReviewInput!, $files: [Upload!]) {
+                submitStorefrontReview(input: $input, files: $files) { ${storefrontReviewFields} }
+            }
+        `;
+        const result = images.length
+            ? await this.uploadFiles<{ submitStorefrontReview: StorefrontReview }>(
+                  mutation,
+                  { input: reviewInput },
+                  images,
+                  '评价提交超时，请到我的评价确认结果',
+                  'files',
+              )
+            : await this.request<{ submitStorefrontReview: StorefrontReview }>(mutation, {
+                  input: reviewInput,
+              });
         return result.submitStorefrontReview;
     }
 }

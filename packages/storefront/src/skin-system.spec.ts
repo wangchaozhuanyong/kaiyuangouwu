@@ -19,6 +19,63 @@ function presetRootBlock(source: string, presetId: string): string {
 }
 
 describe('storefront skin system', () => {
+    it('gives shared empty states one appearance owner instead of route and desktop overrides', () => {
+        const violations: string[] = [];
+        for (const file of readdirSync(path.join(__dirname, 'styles')).filter(name =>
+            name.endsWith('.css'),
+        )) {
+            if (['state-surfaces.css', 'semantic-icons.css'].includes(file)) continue;
+            postcss.parse(stylesheet(`./styles/${file}`)).walkRules(rule => {
+                if (!/\.empty-state(?:[\s.:[>,-]|$)/u.test(rule.selector)) return;
+                rule.walkDecls(declaration => {
+                    // Parents may place a state in a grid or remove an outer margin, never repaint it.
+                    if (!['grid-column', 'width', 'margin-block'].includes(declaration.prop)) {
+                        violations.push(`${file}: ${rule.selector}: ${declaration.prop}`);
+                    }
+                });
+            });
+        }
+        expect(violations).toEqual([]);
+        for (const file of [
+            'addresses-page.tsx',
+            'order-pages.tsx',
+            'payment-pages.tsx',
+            'checkout-page.tsx',
+            'account-security-page.tsx',
+            'review-pages.tsx',
+        ]) {
+            expect(stylesheet(`./${file}`)).not.toMatch(/function (?:Review)?EmptyState\(/u);
+        }
+        const states = stylesheet('./styles/state-surfaces.css');
+        expect(states).not.toMatch(/#[\da-f]{3,8}\b|\bwhite\b|!important/iu);
+        expect(states).toContain('var(--experience-control-min)');
+        expect(states).toContain('var(--accent-foreground)');
+        expect(states).toContain('var(--skin-control-radius)');
+    });
+
+    it('keeps coupon appearance out of desktop layout and unrelated global styles', () => {
+        for (const file of ['desktop-pages.css', 'ai-product-covers.css', 'visual-presets.css']) {
+            expect(stylesheet(`./styles/${file}`)).not.toMatch(/\.coupon-(?:center|activity)-/u);
+        }
+        expect(stylesheet('./styles/desktop-coupon-ticket.css')).not.toMatch(/#[\da-f]{3,8}\b/iu);
+        expect(stylesheet('./pages/coupon-center-page.tsx')).not.toContain(
+            'coupon-center-instructions coupon-center-guide',
+        );
+    });
+
+    it('keeps notification and referral geometry in their responsive owners', () => {
+        for (const file of ['account-catalog-surfaces.css', 'desktop-pages.css', 'visual-presets.css']) {
+            expect(stylesheet(`./styles/${file}`)).not.toMatch(
+                /\.(notification|referral|desktop-referral)-/u,
+            );
+        }
+        for (const page of ['notifications', 'referral']) {
+            const css = stylesheet(`./styles/${page}.css`);
+            expect(css).not.toMatch(/#[\da-f]{3,8}\b|!important|data-storefront-preset/iu);
+            expect(stylesheet(`./pages/${page}-page.tsx`)).toContain(`../styles/${page}.css`);
+        }
+    });
+
     it('owns transparent decorative icons globally without page or skin frames', () => {
         const owner = stylesheet('./styles/semantic-icons.css');
         const slots = owner
@@ -101,12 +158,41 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
+                        // Product details and verified reviews use skin-toned reading separators.
+                        if (
+                            [
+                                'styles/product-detail-surfaces.css|.detail-params dl > div|bottom',
+                                'styles/product-detail-surfaces.css|.detail-empty-review|top',
+                                'styles/ai-product-covers.css|.review-candidate-row + .review-candidate-row|top',
+                                'styles/ai-product-covers.css|.my-review-list article + article|top',
+                                'styles/ai-product-covers.css|.product-review-list article + article|top',
+                                'styles/ai-product-covers.css|.product-review-list blockquote|top',
+                                'styles/ai-product-covers.css|.my-review-list blockquote|top',
+                            ].some(
+                                rule =>
+                                    rule ===
+                                    `${path.relative(__dirname, file)}|${selector.trim()}|${border[1]}`,
+                            ) &&
+                            border[2].trim() ===
+                                '1px solid color-mix(in srgb, var(--skin-divider) 75%, transparent)'
+                        ) {
+                            continue;
+                        }
                         // Approved compact cart rows need one shallow reading separator.
                         if (
                             file === path.join(__dirname, 'styles/desktop-pages.css') &&
                             selector.trim() === '.desktop-cart-row + .desktop-cart-row' &&
                             border[1] === 'top' &&
                             border[2].trim() === '1px solid var(--line-subtle)'
+                        ) {
+                            continue;
+                        }
+                        // The user's fresh profile-card reference includes three separated shortcuts.
+                        if (
+                            file === path.join(__dirname, 'styles/account-identity.css') &&
+                            selector.trim() === '.account-identity-assets > button + button' &&
+                            border[1] === 'left' &&
+                            border[2].trim() === '1px solid #d3e5fb'
                         ) {
                             continue;
                         }
@@ -397,7 +483,7 @@ describe('storefront skin system', () => {
         );
     });
 
-    it('gives transparent product rows one owner and preserves square art with reading separators', () => {
+    it('gives transparent product rows one owner and preserves media with reading separators', () => {
         for (const file of [
             'home-showcase',
             'ai-product-covers',
@@ -530,7 +616,7 @@ describe('storefront skin system', () => {
     it('uses semantic surfaces for review panels and their form controls', () => {
         const source = stylesheet('./styles/ai-product-covers.css');
         expect(source).toMatch(/\.review-composer\s*\{[^}]*background:\s*var\(--surface\);/);
-        expect(source).toMatch(/\.review-composer textarea\s*\{[^}]*background:\s*var\(--control-surface\);/);
+        expect(source).toMatch(/\.review-composer textarea\s*\{[^}]*background:\s*var\(--surface\);/);
         expect(source).toMatch(/\.review-submit\s*\{[^}]*color:\s*var\(--accent-foreground\);/);
         expect(source).toMatch(/\.review-rating-input button\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;/);
         expect(source).toMatch(/\.review-state.is-approved\s*\{[^}]*var\(--success\)/);
@@ -539,12 +625,11 @@ describe('storefront skin system', () => {
         expect(source).toContain('outline: var(--experience-focus-width) solid var(--focus);');
     });
 
-    it('keeps panel headings and review lists free of decorative rules across component and layout owners', () => {
+    it('keeps panel headings and non-review lists free of decorative rules across component and layout owners', () => {
         const borderlessSelectors = [
             '.section-header',
             '.review-center-section > header',
             '.review-composer > header',
-            '.review-candidate-row',
             '.my-review-list article',
             '.product-review-list article',
             '.coupon-center-cart-link',
@@ -575,6 +660,21 @@ describe('storefront skin system', () => {
             }
         }
         expect([...seen].sort()).toEqual([...borderlessSelectors].sort());
+    });
+
+    it('uses skin dividers and no gray row fills for product details and reviews', () => {
+        const detail = stylesheet('./styles/product-detail-surfaces.css');
+        const review = stylesheet('./styles/ai-product-covers.css');
+        expect(detail).toMatch(
+            /\.detail-params dl > div\s*\{[^}]*border-bottom: 1px solid color-mix\(in srgb, var\(--skin-divider\)/,
+        );
+        expect(detail).not.toMatch(/\.product-detail-page \.detail-params dl > div\s*\{[^}]*background:/);
+        expect(detail).toMatch(
+            /\.detail-empty-review\s*\{[^}]*border-top: 1px solid color-mix\(in srgb, var\(--skin-divider\)/,
+        );
+        expect(detail).not.toMatch(/\.detail-empty-review\s*\{[^}]*background:/);
+        expect(review).toMatch(/\.product-review-list article \+ article\s*\{[^}]*var\(--skin-divider\)/);
+        expect(review).toMatch(/\.review-candidate-row\s*\{[^}]*background: transparent;/);
     });
 
     it('shares one lazy semantic aftercare owner across order details and confirmation', () => {

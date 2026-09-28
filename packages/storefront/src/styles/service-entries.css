@@ -156,12 +156,23 @@
     min-height: 0;
     gap: 0 12px;
     padding: 18px;
+    border: 1px solid
+        color-mix(
+            in srgb,
+            var(--service-card-ink, var(--text)) 24%,
+            var(--service-card-surface, var(--paper))
+        );
     border-radius: var(--skin-card-radius, 16px);
     box-shadow: var(--skin-card-shadow, var(--shadow-sm));
 }
 
 .is-business-services-main .category-client-plugin:hover {
     transform: translateY(-2px);
+    border-color: color-mix(
+        in srgb,
+        var(--service-card-ink, var(--text)) 34%,
+        var(--service-card-surface, var(--paper))
+    );
     box-shadow: var(--skin-card-hover-shadow, var(--shadow-md));
 }
 

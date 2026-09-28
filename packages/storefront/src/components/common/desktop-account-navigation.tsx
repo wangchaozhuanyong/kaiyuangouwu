@@ -110,7 +110,7 @@ export function isDesktopAccountRoute(name: RouteState['name']) {
 }
 
 export function DesktopAccountNavigation() {
-    const { route, language, customer, supportContent } = useStorefront();
+    const { route, language, customer, supportContent, reviewSettingsStatus } = useStorefront();
     const service =
         supportContent && storefrontSupportChannels(supportContent).length
             ? supportServiceDetails(supportContent, language)
@@ -147,54 +147,56 @@ export function DesktopAccountNavigation() {
             {desktopAccountGroups.map(group => (
                 <div className="desktop-account-group" key={group.label[0]}>
                     <span className="desktop-account-group-title">{group.label[isZh ? 0 : 1]}</span>
-                    {group.items.map(section => {
-                        const selected =
-                            (section.routes as readonly string[]).includes(route.name) &&
-                            (route.name !== 'orders' ||
-                                (section.tab === 'service'
-                                    ? route.tab === 'service'
-                                    : route.tab !== 'service'));
-                        const label = (
-                            <>
-                                <section.icon
-                                    className="desktop-account-navigation-icon"
-                                    aria-hidden="true"
-                                />
-                                <span>{section.label[isZh ? 0 : 1]}</span>
-                                <span className="desktop-account-navigation-state" aria-hidden="true">
-                                    {selected ? <Check /> : <ChevronRight />}
-                                </span>
-                            </>
-                        );
-                        return section.tab === 'service' ? (
-                            <Link
-                                key="after-sales"
-                                to="/orders"
-                                search={{ tab: 'service' }}
-                                aria-current={selected ? 'page' : undefined}
-                            >
-                                {label}
-                            </Link>
-                        ) : section.path === '/orders' ? (
-                            <Link
-                                key="orders"
-                                to="/orders"
-                                search={{ tab: undefined }}
-                                activeOptions={{ explicitUndefined: true }}
-                                aria-current={selected ? 'page' : undefined}
-                            >
-                                {label}
-                            </Link>
-                        ) : (
-                            <Link
-                                key={section.path}
-                                to={section.path}
-                                aria-current={selected ? 'page' : undefined}
-                            >
-                                {label}
-                            </Link>
-                        );
-                    })}
+                    {group.items
+                        .filter(section => section.path !== '/reviews' || reviewSettingsStatus === 'enabled')
+                        .map(section => {
+                            const selected =
+                                (section.routes as readonly string[]).includes(route.name) &&
+                                (route.name !== 'orders' ||
+                                    (section.tab === 'service'
+                                        ? route.tab === 'service'
+                                        : route.tab !== 'service'));
+                            const label = (
+                                <>
+                                    <section.icon
+                                        className="desktop-account-navigation-icon"
+                                        aria-hidden="true"
+                                    />
+                                    <span>{section.label[isZh ? 0 : 1]}</span>
+                                    <span className="desktop-account-navigation-state" aria-hidden="true">
+                                        {selected ? <Check /> : <ChevronRight />}
+                                    </span>
+                                </>
+                            );
+                            return section.tab === 'service' ? (
+                                <Link
+                                    key="after-sales"
+                                    to="/orders"
+                                    search={{ tab: 'service' }}
+                                    aria-current={selected ? 'page' : undefined}
+                                >
+                                    {label}
+                                </Link>
+                            ) : section.path === '/orders' ? (
+                                <Link
+                                    key="orders"
+                                    to="/orders"
+                                    search={{ tab: undefined }}
+                                    activeOptions={{ explicitUndefined: true }}
+                                    aria-current={selected ? 'page' : undefined}
+                                >
+                                    {label}
+                                </Link>
+                            ) : (
+                                <Link
+                                    key={section.path}
+                                    to={section.path}
+                                    aria-current={selected ? 'page' : undefined}
+                                >
+                                    {label}
+                                </Link>
+                            );
+                        })}
                 </div>
             ))}
             <Link

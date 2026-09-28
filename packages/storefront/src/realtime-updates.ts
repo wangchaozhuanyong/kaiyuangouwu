@@ -205,7 +205,7 @@ export function storefrontRealtimeQueryMatches(
     if (!matchesPrefix(key, ['storefront', scope.marketCode, scope.languageCode])) return false;
     const section = key[3];
 
-    if (topics.has('config') && section === 'config') return true;
+    if (topics.has('config') && (section === 'config' || section === 'review-settings')) return true;
     if (
         topics.has('content') &&
         (section === 'content' || section === 'visual-preset' || couponCampaignQueryMatches(key, scope))

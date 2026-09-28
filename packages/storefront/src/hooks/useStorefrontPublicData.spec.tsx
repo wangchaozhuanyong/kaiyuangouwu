@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+/* eslint-disable @typescript-eslint/require-await -- Async mocks match the storefront API contract. */
 import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -31,6 +32,7 @@ it('loads public content and products without a customer and preserves them acro
         products: vi.fn(() => Promise.resolve([{ id: '1', name: 'Published product' }])),
         collections: vi.fn(() => Promise.resolve([])),
         activeStoreCommerceMode: vi.fn(() => Promise.resolve('RETAIL')),
+        reviewSettings: vi.fn(() => Promise.resolve({ enabled: true })),
     };
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const element = document.createElement('div');
@@ -86,6 +88,73 @@ it('loads public content and products without a customer and preserves them acro
     }
 });
 
+it('hides review navigation when a channel settings event invalidates the public setting', async () => {
+    let enabled = true;
+    const api = {
+        storefrontConfig: vi.fn(async () => ({})),
+        storefrontContent: vi.fn(async () => ({
+            blocks: [
+                {
+                    id: 'nav',
+                    type: 'NAVIGATION',
+                    items: [
+                        { id: 'review-link', targetValue: '/reviews' },
+                        { id: 'home-link', targetValue: '/' },
+                    ],
+                },
+            ],
+            flashSales: [],
+            systemAnnouncements: [],
+            settings: {},
+        })),
+        products: vi.fn(async () => []),
+        collections: vi.fn(async () => []),
+        activeStoreCommerceMode: vi.fn(async () => 'RETAIL'),
+        reviewSettings: vi.fn(async () => ({ enabled })),
+    };
+    const market = enabledMarkets[0];
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const element = document.createElement('div');
+    const root = createRoot(element);
+    function Fixture() {
+        const data = useStorefrontPublicData({
+            api: api as unknown as ShopApi,
+            market,
+            language: 'zh',
+            vendureLanguageCode: 'zh_Hans',
+            storefrontContextResolved: true,
+            customerAuthenticated: false,
+        });
+        return (
+            <span>
+                {data.reviewSettingsStatus}:
+                {data.navigationBlock?.items.map(item => item.targetValue).join(',')}
+            </span>
+        );
+    }
+    try {
+        await act(async () =>
+            root.render(
+                <QueryClientProvider client={client}>
+                    <Fixture />
+                </QueryClientProvider>,
+            ),
+        );
+        await act(() => vi.waitFor(() => expect(element.textContent).toContain('enabled:/reviews,/')));
+        enabled = false;
+        await act(async () => {
+            await client.invalidateQueries({
+                queryKey: storefrontQueryKeys.reviewSettings(storefrontQueryKeys.market(market), 'zh_Hans'),
+            });
+        });
+        await act(() => vi.waitFor(() => expect(element.textContent).toContain('disabled:/')));
+        expect(element.textContent).not.toContain('/reviews');
+    } finally {
+        act(() => root.unmount());
+        client.clear();
+    }
+});
+
 it('refreshes guest configuration and toggles without reloading and stops in the background', async () => {
     vi.useFakeTimers();
     focusManager.setFocused(true);
@@ -104,6 +173,7 @@ it('refreshes guest configuration and toggles without reloading and stops in the
         products: vi.fn(() => Promise.resolve([])),
         collections: vi.fn(() => Promise.resolve([])),
         activeStoreCommerceMode: vi.fn(() => Promise.resolve('RETAIL')),
+        reviewSettings: vi.fn(() => Promise.resolve({ enabled: true })),
     };
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const element = document.createElement('div');
@@ -188,6 +258,7 @@ it('rechecks freshly restored content on mount and isolates the two stores', asy
         products: vi.fn(() => Promise.resolve([])),
         collections: vi.fn(() => Promise.resolve([])),
         activeStoreCommerceMode: vi.fn(() => Promise.resolve('RETAIL')),
+        reviewSettings: vi.fn(() => Promise.resolve({ enabled: true })),
     });
     const apiA = apiFor('Damatong core');
     const apiB = apiFor('Moyao core');

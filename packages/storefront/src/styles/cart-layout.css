@@ -1,10 +1,10 @@
 /* Cart layout shared by mobile and desktop. */
 
-.cart-page {
+.page.cart-page {
     --page-bottom-fixed-height: calc(var(--bottom-navigation-height) + var(--cart-checkout-bar-height));
 }
 
-.cart-page.is-empty {
+.page.cart-page.is-empty {
     --page-bottom-fixed-height: var(--bottom-navigation-height);
     background: var(--paper);
 }
@@ -140,7 +140,7 @@
 
 .cart-group > header {
     min-height: 46px;
-    padding: 0 14px;
+    padding: 0 14px 0 12px;
     background: var(--soft);
     display: flex;
     align-items: center;

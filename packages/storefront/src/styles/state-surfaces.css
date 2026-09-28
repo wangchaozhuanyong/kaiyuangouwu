@@ -1,0 +1,84 @@
+/* Shared state owner: pages provide content, skins provide semantic tokens.
+   Route and desktop styles must not repaint or resize these components. */
+.empty-state {
+    display: grid;
+    min-width: 0;
+    min-height: 240px;
+    align-content: center;
+    justify-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 24px var(--experience-page-gutter-mobile);
+    background: transparent;
+    color: var(--text);
+    text-align: center;
+}
+.empty-state.is-compact {
+    min-height: 0;
+}
+.empty-state > :is(h2, strong) {
+    max-width: 32em;
+    margin: 4px 0 0;
+    overflow-wrap: anywhere;
+    color: var(--text);
+    font-size: 17px;
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-tight);
+}
+.empty-state > :is(p, small) {
+    max-width: 36em;
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: var(--line-height-relaxed);
+}
+.empty-state > button {
+    min-width: 100px;
+    min-height: var(--experience-control-min);
+    max-width: 100%;
+    margin-top: 8px;
+    padding: 10px 20px;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--accent);
+    color: var(--accent-foreground);
+    font: inherit;
+    font-size: 14px;
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-body);
+    overflow-wrap: anywhere;
+    cursor: pointer;
+}
+.empty-state > button:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+.empty-state > button:disabled {
+    background: var(--accent-disabled-bg);
+    color: var(--accent-disabled-text);
+    cursor: default;
+}
+.inline-error {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-height: var(--experience-control-min);
+    margin: 9px var(--page-section-inset, 10px) 0;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--surface));
+    border-radius: var(--skin-control-radius);
+    background: var(--surface);
+    color: var(--danger);
+    overflow-wrap: anywhere;
+}
+.inline-error button {
+    min-height: var(--experience-control-min);
+    padding: 0 7px;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: transparent;
+    color: var(--danger);
+    font: inherit;
+    font-weight: var(--font-weight-semibold);
+}

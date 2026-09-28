@@ -31,6 +31,7 @@ describe('product review rating', () => {
             variantName: 'QA 商品',
             sku: 'QA-SKU',
             fulfillmentType: 'physical',
+            imageUrl: null,
         } satisfies StorefrontReviewCandidate;
         const api = {
             myReviews: vi.fn().mockResolvedValue([]),
@@ -57,9 +58,10 @@ describe('product review rating', () => {
         const marketCode = storefrontQueryKeys.market(market);
         const languageCode = languageCodeFor('zh');
         client.setQueryData(storefrontQueryKeys.customerReviews(marketCode, languageCode, customer.id), []);
-        client.setQueryData(storefrontQueryKeys.reviewCandidates(marketCode, languageCode, customer.id), [
-            candidate,
-        ]);
+        client.setQueryData(storefrontQueryKeys.reviewCandidates(marketCode, languageCode, customer.id), {
+            pages: [[candidate]],
+            pageParams: [0],
+        });
         const scrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
         Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
             configurable: true,

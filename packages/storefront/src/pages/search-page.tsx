@@ -545,7 +545,7 @@ export function SearchPage() {
                         subtitle={isZh ? '从店内在售商品开始' : 'Available from this store'}
                         subtitlePlacement="end"
                         appearance="plain"
-                        products={products.slice(0, desktop ? 6 : 2)}
+                        products={products.slice(0, desktop ? 10 : 2)}
                         market={market}
                         locale={locale}
                         language={language}
@@ -636,6 +636,7 @@ export function SearchPage() {
                         <ListSkeleton label={isZh ? '正在搜索商品' : 'Searching products'} />
                     ) : searchError && !results.length ? (
                         <EmptyState
+                            compact
                             icon={<CircleAlert />}
                             title={isZh ? '搜索暂时不可用' : 'Search unavailable'}
                             detail={searchError}
@@ -694,6 +695,7 @@ export function SearchPage() {
                     ) : (
                         <div className="search-empty">
                             <EmptyState
+                                compact
                                 icon={<Search />}
                                 title={isZh ? '暂未找到相关商品' : 'No matching products'}
                                 detail={

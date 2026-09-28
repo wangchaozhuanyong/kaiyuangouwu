@@ -1,0 +1,459 @@
+/* Coupon page and ticket metadata share one owner on all viewports.
+   The skin adapter supplies colors; it never changes this layout. */
+.coupon-center-workspace {
+    min-width: 0;
+    margin: 12px var(--page-section-inset, var(--experience-page-gutter-mobile)) 0;
+}
+.coupon-center-guide {
+    margin: 20px var(--page-section-inset, var(--experience-page-gutter-mobile)) 24px;
+    padding: 16px;
+    border-radius: var(--skin-card-radius);
+    background: var(--surface);
+    color: var(--text);
+}
+.coupon-center-guide h2 {
+    margin: 0 0 16px;
+    font-size: 15px;
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-body);
+}
+.coupon-center-guide dl {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+}
+.coupon-center-guide dl > div {
+    display: grid;
+    grid-template-columns: 5.5em minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    font-size: 13px;
+    line-height: var(--line-height-relaxed);
+}
+.coupon-center-guide dt {
+    color: var(--text);
+    font-weight: var(--font-weight-semibold);
+}
+.coupon-center-guide dd {
+    margin: 0;
+    color: var(--text-soft);
+    overflow-wrap: anywhere;
+}
+.coupon-center-tabs {
+    margin: 0;
+    padding: 4px;
+    border: 0;
+    border-radius: var(--skin-card-radius);
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.coupon-center-tabs button {
+    min-width: 0;
+    min-height: 48px;
+    padding: 6px 4px;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: transparent;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 12px;
+}
+
+.coupon-center-tabs button.is-active {
+    background: var(--selection);
+    color: var(--selection-foreground);
+    font-weight: var(--font-weight-semibold);
+}
+
+.coupon-center-tabs button.is-active:hover:not(:disabled) {
+    background: var(--selection-hover);
+    color: var(--selection-foreground);
+}
+
+.coupon-center-tabs small {
+    font-family: var(--font-numeric);
+    font-size: 10px;
+}
+
+.coupon-center-panel {
+    margin: 12px 0 0;
+}
+
+.coupon-activity-card {
+    --coupon-accent: var(--accent-ink);
+    --coupon-surface: var(--surface);
+    --coupon-border: var(--line-subtle);
+    --coupon-hero-surface: var(--accent-soft);
+    overflow: hidden;
+    border: 1px solid var(--coupon-border);
+    border-radius: var(--skin-card-radius);
+    background: var(--coupon-surface);
+    color: var(--coupon-accent);
+    box-shadow: var(--skin-card-shadow);
+    transition:
+        transform 180ms ease,
+        opacity 180ms ease;
+}
+
+.coupon-activity-card.coupon-ticket-rose {
+    --coupon-accent: var(--coupon-rose-ink);
+}
+.coupon-activity-card.coupon-ticket-gold {
+    --coupon-accent: var(--coupon-gold-ink);
+}
+.coupon-activity-card.coupon-ticket-blue {
+    --coupon-accent: var(--coupon-blue-ink);
+}
+.coupon-activity-card.coupon-ticket-emerald {
+    --coupon-accent: var(--coupon-emerald-ink);
+}
+.coupon-activity-card[class*='coupon-ticket-'] {
+    --coupon-border: color-mix(in srgb, var(--coupon-accent) 30%, var(--line-subtle));
+    --coupon-hero-surface: color-mix(in srgb, var(--coupon-accent) 12%, var(--surface));
+}
+.coupon-activity-card.is-claimed {
+    opacity: 1;
+    box-shadow: none;
+}
+
+.coupon-activity-hero {
+    min-height: 0;
+    padding: 12px 14px 14px;
+    border-radius: 0 0 50% 50% / 0 0 11px 11px;
+    background: var(--coupon-hero-surface);
+    color: var(--coupon-accent);
+    display: flex;
+    flex-direction: column;
+}
+
+.coupon-activity-topline {
+    min-height: var(--experience-control-min);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.coupon-activity-tag {
+    padding: 5px 10px;
+    border: 1px solid var(--coupon-border);
+    border-radius: 999px;
+    color: inherit;
+    font-size: 11px;
+    font-weight: var(--font-weight-bold);
+    line-height: 1.2;
+}
+
+.coupon-activity-action {
+    min-width: 88px;
+    min-height: var(--experience-control-min);
+    padding: 0 11px;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--accent);
+    color: var(--accent-foreground);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.coupon-activity-action:active {
+    transform: scale(0.97);
+}
+
+.coupon-activity-action.is-claimed {
+    cursor: default;
+    background: var(--control-surface);
+    color: var(--muted);
+}
+.coupon-activity-action:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+.coupon-activity-action .coupon-btn-text-wrap {
+    gap: 4px;
+    color: inherit;
+    font-size: 12px;
+}
+
+.coupon-activity-action.is-unavailable {
+    min-width: 100px;
+    padding: 4px 10px;
+}
+
+.coupon-activity-action.is-unavailable .coupon-btn-text-wrap {
+    flex-direction: column;
+    gap: 1px;
+    line-height: 1.05;
+}
+
+.coupon-activity-action.is-unavailable .coupon-btn-text-wrap small {
+    color: inherit;
+    font-size: 9px;
+    font-weight: var(--font-weight-medium);
+    opacity: 0.9;
+}
+
+.coupon-activity-value {
+    min-width: 0;
+    margin-top: 7px;
+    color: inherit;
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 5px;
+    font-family: var(--font-number, system-ui, -apple-system, sans-serif);
+    font-variant-numeric: tabular-nums;
+    line-height: 0.9;
+}
+
+.coupon-activity-value strong {
+    min-width: 0;
+    color: inherit;
+    font-size: clamp(40px, 12vw, 48px);
+    font-weight: 900;
+    letter-spacing: -0.06em;
+}
+
+.coupon-activity-value small {
+    color: inherit;
+    font-size: 16px;
+    font-weight: var(--font-weight-bold);
+}
+
+.coupon-activity-hero > p {
+    max-width: 100%;
+    margin: 9px auto 0;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.coupon-activity-hero > p strong {
+    color: inherit;
+    font-weight: var(--font-weight-bold);
+}
+
+.coupon-center-ticket-list {
+    display: grid;
+    gap: 12px;
+}
+
+.coupon-center-ticket-item {
+    min-width: 0;
+}
+
+.coupon-center-ticket.coupon-ticket-card {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 78px;
+    grid-template-columns: minmax(0, 1fr) 82px;
+    scroll-snap-align: none;
+}
+
+.coupon-center-ticket .coupon-ticket-main {
+    padding: 7px 2px 7px 8px;
+    grid-template-columns: 62px minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    column-gap: 10px;
+}
+
+.coupon-center-ticket .coupon-ticket-value {
+    width: 62px;
+    height: auto;
+    grid-row: 1 / 4;
+    align-self: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.coupon-center-ticket .coupon-ticket-action {
+    padding: 0 9px 0 2px;
+}
+
+.coupon-center-ticket .coupon-claim-btn {
+    width: 100%;
+    min-width: 0;
+    height: 34px;
+    padding: 0 2px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--coupon-accent);
+    box-shadow: none;
+}
+
+.coupon-center-ticket .coupon-btn-text-wrap {
+    gap: 2px;
+    font-size: 12px;
+    letter-spacing: 0;
+}
+
+.coupon-center-ticket-meta {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    grid-column: 2;
+    grid-row: 3;
+    align-self: start;
+    color: var(--muted);
+    font-size: 9.5px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.coupon-ticket-status {
+    min-height: 32px;
+    padding: 5px 7px;
+    border-radius: 999px;
+    background: var(--soft);
+    color: var(--text-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.3;
+    text-align: center;
+}
+
+.coupon-ticket-status.is-used {
+    flex-direction: row;
+}
+
+.coupon-center-instructions {
+    margin: 0;
+    padding: 10px 14px;
+    background: var(--surface);
+}
+
+.coupon-center-instructions dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+    gap: 8px 16px;
+}
+
+.coupon-center-instructions dl > div {
+    min-width: 0;
+    padding: 0;
+    border-bottom: 0;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.coupon-center-instructions dt {
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 700;
+}
+
+.coupon-center-instructions dt svg {
+    width: 13px;
+    height: 13px;
+    color: var(--coupon-accent);
+}
+
+.coupon-center-instructions dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--muted);
+}
+
+.coupon-center-error {
+    display: block;
+    margin: 0;
+}
+
+.coupon-center-query-state {
+    margin: 0;
+}
+
+.coupon-center-query-state.is-inline {
+    margin: 0 0 12px;
+}
+
+.coupon-hub-query-state {
+    padding: 10px 0 2px;
+}
+
+.coupon-center-cart-link {
+    width: 100%;
+    min-height: 46px;
+    margin-top: 16px;
+    padding: 12px;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--accent-ink);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13px;
+    font-weight: var(--font-weight-semibold);
+    text-align: left;
+}
+
+.coupon-center-cart-link svg {
+    width: 17px;
+    flex-shrink: 0;
+}
+.coupon-center-cart-link:hover {
+    background: var(--control-surface-hover);
+}
+.coupon-center-cart-link:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+}
+
+@media (min-width: 1024px) {
+    .coupon-center-workspace {
+        margin-top: 0;
+    }
+    .coupon-center-tabs {
+        width: fit-content;
+        min-width: min(100%, 400px);
+    }
+    .coupon-center-ticket-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+    }
+    .coupon-center-guide {
+        margin-top: 24px;
+        padding: 20px;
+    }
+    .coupon-center-guide dl {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 24px;
+    }
+    .coupon-center-guide dl > div {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 6px;
+    }
+}
+
+@media (min-width: 1024px) and (max-width: 1199px) {
+    .coupon-center-ticket-list {
+        grid-template-columns: 1fr;
+    }
+}

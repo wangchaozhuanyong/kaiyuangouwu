@@ -244,17 +244,22 @@ export function productImageUnavailableLabel(language: StorefrontLanguage): stri
 export function ProductImagePlaceholder({
     language = 'zh',
     className = '',
+    compact = false,
 }: {
     language?: StorefrontLanguage;
     className?: string;
+    compact?: boolean;
 }) {
+    const label = productImageUnavailableLabel(language);
     return (
-        <div className={`image-placeholder product-image-placeholder ${className}`.trim()}>
-            <span className="product-image-placeholder-copy">
+        <div
+            className={`image-placeholder product-image-placeholder ${className}`.trim()}
+            role={compact ? 'img' : undefined}
+            aria-label={compact ? label : undefined}
+        >
+            <span className="product-image-placeholder-copy" aria-hidden={compact ? true : undefined}>
                 <Package aria-hidden="true" />
-                <span className="product-image-placeholder-label">
-                    {productImageUnavailableLabel(language)}
-                </span>
+                {!compact && <span className="product-image-placeholder-label">{label}</span>}
             </span>
         </div>
     );
@@ -344,7 +349,7 @@ export function ProductVariantImage({
     const image = variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview;
 
     if (!image || image.includes('placeholder') || image.includes('default-hero')) {
-        return <ProductImagePlaceholder language={language} />;
+        return <ProductImagePlaceholder language={language} compact />;
     }
 
     return (
@@ -371,7 +376,7 @@ export function OrderImage({
     return variant ? (
         <ProductVariantImage variant={variant} alt={variant.name} language={language} />
     ) : (
-        <ProductImagePlaceholder language={language} />
+        <ProductImagePlaceholder language={language} compact />
     );
 }
 

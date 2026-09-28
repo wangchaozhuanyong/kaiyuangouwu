@@ -59,10 +59,39 @@ export abstract class BaseDomainApi {
         file: File,
         timeoutMessage: string,
     ): Promise<T> {
+        return this.uploadFiles(query, variables, [file], timeoutMessage, 'file');
+    }
+
+    protected async uploadFiles<T>(
+        query: string,
+        variables: Record<string, unknown>,
+        files: File[],
+        timeoutMessage: string,
+        variableName: string,
+    ): Promise<T> {
         const form = new FormData();
-        form.set('operations', JSON.stringify({ query, variables: { ...variables, file: null } }));
-        form.set('map', JSON.stringify({ 0: ['variables.file'] }));
-        form.set('0', file, file.name);
+        form.set(
+            'operations',
+            JSON.stringify({
+                query,
+                variables: {
+                    ...variables,
+                    [variableName]: variableName === 'file' ? null : files.map(() => null),
+                },
+            }),
+        );
+        form.set(
+            'map',
+            JSON.stringify(
+                Object.fromEntries(
+                    files.map((_, index) => [
+                        index,
+                        [`variables.${variableName}${variableName === 'file' ? '' : `.${index}`}`],
+                    ]),
+                ),
+            ),
+        );
+        files.forEach((file, index) => form.set(String(index), file, file.name));
         const headers: Record<string, string> = {
             'language-code': this.languageCode,
             'Apollo-Require-Preflight': 'true',

@@ -10,6 +10,12 @@ export interface SubmitStorefrontReviewInput {
     anonymous?: boolean;
 }
 
+export interface ReviewImageUpload {
+    filename: string;
+    mimetype: string;
+    createReadStream(): NodeJS.ReadableStream;
+}
+
 export interface StorefrontReviewListOptions {
     skip?: number | null;
     take?: number | null;
@@ -29,6 +35,7 @@ export interface StorefrontReviewCandidate {
     variantName: string;
     sku: string;
     fulfillmentType: 'physical' | 'digital';
+    imageUrl: string | null;
 }
 
 export interface ModerateStorefrontReviewInput {

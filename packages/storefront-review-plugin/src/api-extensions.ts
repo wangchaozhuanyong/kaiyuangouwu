@@ -7,6 +7,11 @@ const commonReviewTypes = gql`
         REJECTED
     }
 
+    type StorefrontReviewImage {
+        id: ID!
+        preview: String!
+    }
+
     type StorefrontReview implements Node {
         id: ID!
         createdAt: DateTime!
@@ -15,6 +20,7 @@ const commonReviewTypes = gql`
         rating: Int!
         title: String!
         body: String!
+        images: [StorefrontReviewImage!]!
         customerName: String!
         anonymous: Boolean!
         productName: String!
@@ -33,6 +39,10 @@ const commonReviewTypes = gql`
         averageRating: Float!
     }
 
+    type StorefrontReviewSettings {
+        enabled: Boolean!
+    }
+
     type StorefrontReviewCandidate {
         orderLineId: ID!
         orderId: ID!
@@ -45,6 +55,7 @@ const commonReviewTypes = gql`
         variantName: String!
         sku: String!
         fulfillmentType: String!
+        imageUrl: String
     }
 
     input StorefrontReviewListOptions {
@@ -67,13 +78,14 @@ export const shopApiExtensions = gql`
     ${commonReviewTypes}
 
     extend type Query {
+        storefrontReviewSettings: StorefrontReviewSettings!
         storefrontProductReviews(productId: ID!, options: StorefrontReviewListOptions): StorefrontReviewList!
         myStorefrontReviews: [StorefrontReview!]!
-        myStorefrontReviewCandidates: [StorefrontReviewCandidate!]!
+        myStorefrontReviewCandidates(options: StorefrontReviewListOptions): [StorefrontReviewCandidate!]!
     }
 
     extend type Mutation {
-        submitStorefrontReview(input: SubmitStorefrontReviewInput!): StorefrontReview!
+        submitStorefrontReview(input: SubmitStorefrontReviewInput!, files: [Upload!]): StorefrontReview!
     }
 `;
 
@@ -90,11 +102,17 @@ export const adminApiExtensions = gql`
         response: String
     }
 
+    input UpdateStorefrontReviewSettingsInput {
+        enabled: Boolean!
+    }
+
     extend type Query {
+        storefrontReviewSettings: StorefrontReviewSettings!
         storefrontReviews(options: StorefrontReviewListOptions): StorefrontReviewList!
     }
 
     extend type Mutation {
+        updateStorefrontReviewSettings(input: UpdateStorefrontReviewSettingsInput!): StorefrontReviewSettings!
         moderateStorefrontReview(input: ModerateStorefrontReviewInput!): StorefrontReview!
     }
 `;

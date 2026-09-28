@@ -48,9 +48,6 @@ import type {
     StorefrontContentResponse,
     StorefrontCouponCampaign,
     StorefrontRegistrationConsentInput,
-    StorefrontReview,
-    StorefrontReviewCandidate,
-    StorefrontReviewList,
     StorefrontUsdtCheckoutQuote,
     SubmitAfterSalesReturnShipmentInput,
     SubmitStorefrontReviewInput,
@@ -297,21 +294,20 @@ export class ShopApi {
         return this.contentReviewsApi.confirmAfterSalesReplacement(input);
     }
 
-    async productReviews(productId: string, signal?: AbortSignal): Promise<StorefrontReviewList> {
-        return this.contentReviewsApi.productReviews(productId, signal);
-    }
+    reviewSettings = (signal?: AbortSignal) => this.contentReviewsApi.reviewSettings(signal);
 
-    async myReviews(signal?: AbortSignal): Promise<StorefrontReview[]> {
-        return this.contentReviewsApi.myReviews(signal);
-    }
+    productReviews = (
+        productId: string,
+        options: { skip?: number; take?: number } = { take: 20 },
+        signal?: AbortSignal,
+    ) => this.contentReviewsApi.productReviews(productId, options, signal);
 
-    async reviewCandidates(signal?: AbortSignal): Promise<StorefrontReviewCandidate[]> {
-        return this.contentReviewsApi.reviewCandidates(signal);
-    }
+    myReviews = (signal?: AbortSignal) => this.contentReviewsApi.myReviews(signal);
 
-    async submitReview(input: SubmitStorefrontReviewInput): Promise<StorefrontReview> {
-        return this.contentReviewsApi.submitReview(input);
-    }
+    reviewCandidates = (options: { skip?: number; take?: number } = {}, signal?: AbortSignal) =>
+        this.contentReviewsApi.reviewCandidates(options, signal);
+
+    submitReview = (input: SubmitStorefrontReviewInput) => this.contentReviewsApi.submitReview(input);
 
     async login(emailAddress: string, password: string): Promise<void> {
         await this.accountApi.login(emailAddress, password);

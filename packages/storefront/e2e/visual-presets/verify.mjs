@@ -79,6 +79,8 @@ const results = [];
 const contrastFailures = [];
 
 function opaqueRgb(value) {
+    const srgb = /^color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)\)$/u.exec(value);
+    if (srgb) return srgb.slice(1, 4).map(channel => Number(channel) * 255);
     const match = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/u.exec(value);
     if (!match || (match[4] != null && Number(match[4]) !== 1)) {
         throw new Error(`Expected an opaque RGB control color, received ${value}`);
@@ -613,7 +615,16 @@ try {
                             return { left: rect.left, top: rect.top };
                         }),
                     }));
-                    await expect(cards.first()).toHaveCSS('border-top-width', '0px');
+                    const cardEdge = await cards.first().evaluate(element => {
+                        const style = getComputedStyle(element);
+                        return {
+                            width: style.borderTopWidth,
+                            color: style.borderTopColor,
+                            surface: style.backgroundColor,
+                        };
+                    });
+                    expect(cardEdge.width, `${preset}/${width}/services card edge`).toBe('1px');
+                    expect(textContrast(cardEdge.color, cardEdge.surface)).toBeGreaterThanOrEqual(1.3);
                     const firstCardBox = await cards.first().boundingBox();
                     expect(
                         firstCardBox?.height,

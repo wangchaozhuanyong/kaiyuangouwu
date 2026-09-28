@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { IMAGE_WAIT_EXPIRED_EVENT } from './image-readiness';
 import { ImagePlaceholder, isImageAlreadyDecoded } from './safe-image';
-import { SafeImage } from './storefront-ui/product-display';
+import { ProductImagePlaceholder, ProductVariantImage, SafeImage } from './storefront-ui/product-display';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -65,6 +65,43 @@ describe('SafeImage', () => {
         const markup = renderToStaticMarkup(<ImagePlaceholder compact alt="商品" language="zh" />);
         expect(markup).toContain('商品 · 暂无商品图片');
         expect(markup).not.toContain('image-status-label');
+    });
+
+    it('keeps order thumbnails compact when neither variant nor product has an image', () => {
+        const variant = {
+            id: 'variant-1',
+            name: '订单商品',
+            sku: 'SKU-1',
+            priceWithTax: 100,
+            currencyCode: 'MYR',
+            featuredAsset: null,
+            product: { id: 'product-1', name: '订单商品', featuredAsset: null },
+            customFields: { fulfillmentType: 'physical' },
+        } satisfies Parameters<typeof ProductVariantImage>[0]['variant'];
+        const missing = renderToStaticMarkup(
+            <ProductVariantImage variant={variant} alt={variant.name} language="zh" />,
+        );
+        expect(missing).toContain('role="img" aria-label="暂无商品图"');
+        expect(missing).not.toContain('product-image-placeholder-label');
+
+        const available = renderToStaticMarkup(
+            <ProductVariantImage
+                variant={{
+                    ...variant,
+                    product: {
+                        ...variant.product,
+                        featuredAsset: { id: 'asset-1', preview: '/product.jpg' },
+                    },
+                }}
+                alt={variant.name}
+                language="zh"
+            />,
+        );
+        expect(available).toContain('<img');
+        expect(available).toContain('/product.jpg');
+        expect(renderToStaticMarkup(<ProductImagePlaceholder language="zh" />)).toContain(
+            'product-image-placeholder-label',
+        );
     });
 
     it('gives a late-promoted lazy image its own network deadline', async () => {
@@ -207,6 +244,32 @@ describe('SafeImage', () => {
             );
             expect(host.textContent).not.toContain('暂无商品图');
             expect(requiredImage(host).getAttribute('src')).toBe('/replacement-product.png');
+        } finally {
+            act(() => root.unmount());
+        }
+    });
+
+    it('keeps a failed thumbnail labelled for assistive technology', () => {
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() =>
+                root.render(
+                    <SafeImage
+                        src="/broken-thumbnail.png"
+                        alt="订单商品"
+                        fallbackLabel="暂无商品图"
+                        imageKind="thumbnail"
+                    />,
+                ),
+            );
+            act(() => {
+                requiredImage(host).dispatchEvent(new Event('error'));
+            });
+            expect(host.querySelector('.safe-image-fallback svg')).not.toBeNull();
+            expect(host.querySelector('[role=img]')?.getAttribute('aria-label')).toBe(
+                '订单商品 · 暂无商品图',
+            );
         } finally {
             act(() => root.unmount());
         }

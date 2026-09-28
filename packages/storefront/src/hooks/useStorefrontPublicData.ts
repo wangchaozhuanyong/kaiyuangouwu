@@ -66,6 +66,23 @@ export function useStorefrontPublicData({
         meta: publicQueryMeta(),
     });
 
+    const reviewSettingsQuery = useQuery({
+        queryKey: storefrontQueryKeys.reviewSettings(storefrontQueryKeys.market(market), vendureLanguageCode),
+        queryFn: ({ signal }) => api.reviewSettings(signal),
+        enabled: storefrontContextResolved,
+        staleTime: 0,
+        refetchInterval: STOREFRONT_CONFIG_REFRESH_INTERVAL,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        meta: publicQueryMeta(),
+    });
+    const reviewSettingsStatus = reviewSettingsQuery.isError
+        ? 'error'
+        : reviewSettingsQuery.data
+          ? reviewSettingsQuery.data.enabled
+              ? 'enabled'
+              : 'disabled'
+          : 'loading';
+
     const commerceModeQuery = useQuery({
         queryKey: storefrontQueryKeys.commerceMode(storefrontQueryKeys.market(market)),
         queryFn: ({ signal }) => api.activeStoreCommerceMode(signal),
@@ -83,7 +100,14 @@ export function useStorefrontPublicData({
 
     const contentBlocks = contentQuery.data?.blocks ?? [];
 
-    const navigationBlock = contentBlocks.find(block => block.type === 'NAVIGATION');
+    const configuredNavigationBlock = contentBlocks.find(block => block.type === 'NAVIGATION');
+    const navigationBlock =
+        configuredNavigationBlock && reviewSettingsStatus !== 'enabled'
+            ? {
+                  ...configuredNavigationBlock,
+                  items: configuredNavigationBlock.items.filter(item => item.targetValue !== '/reviews'),
+              }
+            : configuredNavigationBlock;
 
     const activeFlashSales = contentQuery.data?.flashSales ?? [];
 
@@ -174,6 +198,8 @@ export function useStorefrontPublicData({
         collectionsQuery,
         configQuery,
         contentQuery,
+        reviewSettingsQuery,
+        reviewSettingsStatus,
         commerceModeQuery,
         products,
         collections,

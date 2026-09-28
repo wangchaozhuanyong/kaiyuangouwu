@@ -758,6 +758,10 @@ export const GET_STOREFRONT_REVIEWS = gql`
                 rating
                 title
                 body
+                images {
+                    id
+                    preview
+                }
                 customerName
                 anonymous
                 customerId
@@ -772,6 +776,22 @@ export const GET_STOREFRONT_REVIEWS = gql`
             }
             totalItems
             averageRating
+        }
+    }
+`;
+
+export const GET_STOREFRONT_REVIEW_SETTINGS = gql`
+    query GetAdminStorefrontReviewSettings {
+        storefrontReviewSettings {
+            enabled
+        }
+    }
+`;
+
+export const UPDATE_STOREFRONT_REVIEW_SETTINGS = gql`
+    mutation UpdateAdminStorefrontReviewSettings($input: UpdateStorefrontReviewSettingsInput!) {
+        updateStorefrontReviewSettings(input: $input) {
+            enabled
         }
     }
 `;

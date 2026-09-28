@@ -35,7 +35,7 @@
     aspect-ratio: var(--product-media-ratio);
     overflow: hidden;
     border: 0;
-    border-radius: 0;
+    border-radius: var(--skin-media-radius);
     background: var(--product-media-bg);
 }
 
@@ -43,7 +43,7 @@
     display: block;
     width: 100%;
     height: 100%;
-    border-radius: 0;
+    border-radius: inherit;
     object-fit: contain;
     object-position: center;
 }
@@ -192,7 +192,4 @@
     border-radius: 0;
     background: transparent;
     box-shadow: none;
-}
-.search-page .product-row-image {
-    border-radius: var(--skin-media-radius);
 }

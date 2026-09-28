@@ -254,6 +254,7 @@ export interface StorefrontReview {
     rating: number;
     title: string;
     body: string;
+    images: Array<{ id: string; preview: string }>;
     customerName: string;
     anonymous: boolean;
     productName: string;
@@ -284,6 +285,7 @@ export interface StorefrontReviewCandidate {
     variantName: string;
     sku: string;
     fulfillmentType: FulfillmentType;
+    imageUrl: string | null;
 }
 
 export interface SubmitStorefrontReviewInput {
@@ -292,6 +294,7 @@ export interface SubmitStorefrontReviewInput {
     title: string;
     body: string;
     anonymous?: boolean;
+    images?: File[];
 }
 
 export interface CheckoutFulfillment {

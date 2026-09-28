@@ -290,6 +290,24 @@ describe('storefront realtime query targeting', () => {
         ).toBe(false);
     });
 
+    it('refreshes review visibility only in the affected store after a config event', () => {
+        const changed = event({ topics: ['config'], entityType: 'StorefrontReviewSettings' });
+        expect(
+            storefrontRealtimeQueryMatches(
+                { queryKey: storefrontQueryKeys.reviewSettings('store-a', 'zh_Hans') },
+                changed,
+                scope,
+            ),
+        ).toBe(true);
+        expect(
+            storefrontRealtimeQueryMatches(
+                { queryKey: storefrontQueryKeys.reviewSettings('store-b', 'zh_Hans') },
+                changed,
+                scope,
+            ),
+        ).toBe(false);
+    });
+
     it('targets private order and coupon queries for the active customer', () => {
         const changed = event({ topics: ['orders', 'coupons'] });
 

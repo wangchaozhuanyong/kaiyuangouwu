@@ -64,6 +64,10 @@ describe('catalog rendering boundary', () => {
             retryAccount: vi.fn(),
             ...overrides,
         };
+        state.storefrontContextValue = {
+            route: state.displayedRoute,
+            ...(state.storefrontContextValue as Record<string, unknown>),
+        };
         act(() => root.render(<StorefrontShell state={state as never} />));
     };
     it('never mounts catalog content while account validation is pending', () => {
@@ -161,6 +165,16 @@ describe('catalog rendering boundary', () => {
         expect(element.textContent).toContain('PAGE_CONTENT');
         expect(element.textContent).toContain('CATALOG_NAVIGATION');
         expect(element.textContent).not.toContain('CHECKING_ACCOUNT');
+    });
+
+    it('returns to the account page when reviews are disabled for the Channel', () => {
+        const navigate = vi.fn();
+        render({
+            displayedRoute: { name: 'reviews' },
+            storefrontContextValue: { navigate, reviewSettingsStatus: 'disabled' },
+        });
+
+        expect(navigate).toHaveBeenCalledWith({ name: 'account' }, true);
     });
 
     it('keeps the preview navigation bridge after an internal route drops query parameters', () => {

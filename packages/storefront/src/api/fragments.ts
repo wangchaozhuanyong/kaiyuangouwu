@@ -332,6 +332,7 @@ export const storefrontReviewFields = `
     rating
     title
     body
+    images { id preview }
     customerName
     anonymous
     productName
