@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 import { OnApplicationBootstrap } from '@nestjs/common';
-import { AssetServerPlugin } from '@vendure/asset-server-plugin';
+import { AssetServerPlugin, SharpAssetPreviewStrategy } from '@vendure/asset-server-plugin';
 import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
 import {
     AutoCardDeliveryReadyEvent,
@@ -549,6 +549,9 @@ class ReadonlySettingsTestPlugin implements OnApplicationBootstrap {
  * Config settings used during development
  */
 export const devConfig: VendureConfig = {
+    assetOptions: {
+        uploadedImageFormat: 'webp',
+    },
     apiOptions: {
         hostname: process.env.VENDURE_HOSTNAME || (IS_PRODUCTION ? '127.0.0.1' : undefined),
         port: Number(process.env.PORT) || Number(process.env.API_PORT) || API_PORT,
@@ -1011,6 +1014,9 @@ export const devConfig: VendureConfig = {
             assetUploadDir,
             namingStrategy: customerImages.namingStrategy,
             storageStrategyFactory: customerImages.storageStrategyFactory,
+            previewStrategy: new SharpAssetPreviewStrategy({
+                webpOptions: { quality: 95, effort: 4 },
+            }),
             presets: storefrontAssetPresets,
             cacheHeader: 'private, no-store',
             imageTransformStrategy: createCatalogImageTransformStrategies(BOOTSTRAP_BASE_SCHEMA),

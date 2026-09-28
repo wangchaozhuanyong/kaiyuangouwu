@@ -135,6 +135,9 @@ function validateRequest(environment) {
             'plan-moyao-default-store-migration',
             'apply-moyao-default-store-migration-reviewed',
             'verify-moyao-default-store-migration',
+            'plan-asset-webp-migration',
+            'apply-asset-webp-migration-reviewed',
+            'verify-asset-webp-migration',
             'preflight-release',
             'postflight-release',
         ].includes(operation),
@@ -157,6 +160,7 @@ function validateRequest(environment) {
             'backup-two-factor-reviewed',
             'apply-order-sales-ownership-backfill-reviewed',
             'apply-moyao-default-store-migration-reviewed',
+            'apply-asset-webp-migration-reviewed',
         ].includes(operation)
     ) {
         assert.match(expectedPlanSha256, /^[a-f0-9]{64}$/u, 'A reviewed plan SHA-256 is required');
@@ -190,6 +194,9 @@ function validateRequest(environment) {
             'plan-moyao-default-store-migration',
             'apply-moyao-default-store-migration-reviewed',
             'verify-moyao-default-store-migration',
+            'plan-asset-webp-migration',
+            'apply-asset-webp-migration-reviewed',
+            'verify-asset-webp-migration',
         ].includes(operation)
     ) {
         assert.match(expectedRuntimeSha, /^[a-f0-9]{40}$/u, 'An exact expected runtime SHA is required');
@@ -1476,6 +1483,99 @@ function runMoyaoDefaultStoreMigration(
     };
 }
 
+function runAssetWebpMigration(
+    request,
+    {
+        inspect = inspectProductionReleases,
+        health = productionHealthSnapshot,
+        spawn = spawnSync,
+        backup = startVerifiedMysqlBackup,
+        script = path.join(
+            __dirname,
+            'repository',
+            'packages',
+            'dev-server',
+            'scripts',
+            'asset-webp-migration.mjs',
+        ),
+    } = {},
+) {
+    const apply = request.operation === 'apply-asset-webp-migration-reviewed';
+    const verify = request.operation === 'verify-asset-webp-migration';
+    assert.ok(apply || verify || request.operation === 'plan-asset-webp-migration');
+    const before = inspect();
+    assert.equal(before.markerSha, request.expectedRuntimeSha, 'Production runtime SHA changed');
+    const healthBefore = health();
+    assertProductionHealthSnapshot(healthBefore, 'before');
+    const run = (operation, expectedDigest = '') => {
+        const result = spawn(
+            '/usr/bin/node',
+            [
+                '--env-file=/var/www/kaiyuangouwu/packages/dev-server/.env',
+                script,
+                operation,
+                ...(expectedDigest ? [expectedDigest] : []),
+            ],
+            {
+                encoding: 'utf8',
+                timeout: 540000,
+                maxBuffer: 65536,
+                stdio: ['ignore', 'pipe', 'pipe'],
+                env: { ...process.env, STORE_ISOLATION_MODULE_ROOT: before.currentRuntime },
+            },
+        );
+        assert.equal(result.status, 0, `Asset WebP ${operation} failed`);
+        const output = JSON.parse(String(result.stdout || '').trim());
+        assert.ok(Number.isSafeInteger(output.remaining) && output.remaining >= 0);
+        if (operation !== 'verify') {
+            assert.equal(output.schema, 'vendure-asset-webp-migration-v1');
+            assert.match(output.operationDigest, /^[a-f0-9]{64}$/u);
+            assert.ok(
+                Number.isSafeInteger(output.selected) && output.selected >= 0 && output.selected <= 100,
+            );
+        }
+        return output;
+    };
+    let plan;
+    let backupEvidence;
+    let verification;
+    if (verify) {
+        verification = run('verify');
+    } else {
+        plan = run('plan');
+        if (apply) {
+            assert.ok(plan.selected > 0, 'Asset WebP migration has no remaining candidates');
+            assert.equal(plan.operationDigest, request.expectedPlanSha256, 'Asset WebP plan changed');
+            backupEvidence = backup();
+            assert.deepEqual(
+                run('apply', request.expectedPlanSha256),
+                plan,
+                'Applied batch differs from reviewed plan',
+            );
+            verification = run('verify');
+            assert.ok(
+                verification.metadataRemaining < plan.metadataRemaining ||
+                    verification.databaseRemaining < plan.remaining,
+                'Asset WebP migration did not make progress',
+            );
+        }
+    }
+    const after = inspect();
+    assert.deepEqual(after, before, 'Production release changed during asset migration');
+    const healthAfter = health();
+    assertProductionHealthSnapshot(healthAfter, 'after');
+    return {
+        sourceSha: request.sourceSha,
+        runtimeSha: before.markerSha,
+        healthBefore,
+        healthAfter,
+        ...(plan ? { plan } : {}),
+        ...(backupEvidence ? { backup: backupEvidence } : {}),
+        ...(verification ? { verification } : {}),
+        applied: apply,
+    };
+}
+
 function assertProductionHealthSnapshot(snapshot, stage) {
     assert.equal(snapshot.status, 'ok', `Production health state is unavailable ${stage} the audit`);
     assert.match(
@@ -1917,6 +2017,21 @@ function runLocked(environment = process.env) {
         return;
     }
     if (
+        [
+            'plan-asset-webp-migration',
+            'apply-asset-webp-migration-reviewed',
+            'verify-asset-webp-migration',
+        ].includes(request.operation)
+    ) {
+        const result = runAssetWebpMigration(request);
+        process.stdout.write(
+            `PRODUCTION_ASSET_WEBP_REVISIONS source=${request.sourceSha} runtime=${result.runtimeSha}\n`,
+        );
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+        process.stdout.write(`PRODUCTION_OPERATIONS_COMPLETE operation=${request.operation}\n`);
+        return;
+    }
+    if (
         ['plan-order-sales-ownership-backfill', 'apply-order-sales-ownership-backfill-reviewed'].includes(
             request.operation,
         )
@@ -2172,6 +2287,7 @@ module.exports = {
     runDatabaseBackup,
     runOrderSalesOwnershipBackfill,
     runMoyaoDefaultStoreMigration,
+    runAssetWebpMigration,
     readOffsiteFileBackupSettings,
     startVerifiedMysqlBackup,
     validateMigrationAuditOutput,

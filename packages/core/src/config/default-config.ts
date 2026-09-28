@@ -143,6 +143,7 @@ export const defaultConfig: RuntimeVendureConfig = {
         assetNamingStrategy: new DefaultAssetNamingStrategy(),
         assetStorageStrategy: new NoAssetStorageStrategy(),
         assetPreviewStrategy: new NoAssetPreviewStrategy(),
+        uploadedImageFormat: 'original',
         permittedFileTypes: ['image/*', 'video/*', 'audio/*', '.pdf'],
         uploadMaxFileSize: 20971520,
     },

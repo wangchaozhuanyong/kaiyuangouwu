@@ -71,6 +71,9 @@ on:
                     - plan-moyao-default-store-migration
                     - apply-moyao-default-store-migration-reviewed
                     - verify-moyao-default-store-migration
+                    - plan-asset-webp-migration
+                    - apply-asset-webp-migration-reviewed
+                    - verify-asset-webp-migration
             expected_plan_sha256:
                 description: Exact plan SHA-256 from the corresponding read-only plan; required for reviewed writes
                 required: false
@@ -138,13 +141,13 @@ jobs:
                   }
                   [[ "$OPS_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
                   case "$OPS_OPERATION" in
-                    preflight-release|postflight-release|diagnose|backup-database|plan-deployment-cache-cleanup|plan-apt-archive-cleanup|plan-apt-metadata-cleanup|plan-apt-lists-cleanup|plan-snap-cache-cleanup|plan-offsite-file-backup-config|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|audit-store-isolation-data|audit-administrator-product-readiness|plan-order-sales-ownership-backfill|plan-moyao-default-store-migration|verify-moyao-default-store-migration)
+                    preflight-release|postflight-release|diagnose|backup-database|plan-deployment-cache-cleanup|plan-apt-archive-cleanup|plan-apt-metadata-cleanup|plan-apt-lists-cleanup|plan-snap-cache-cleanup|plan-offsite-file-backup-config|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|audit-store-isolation-data|audit-administrator-product-readiness|plan-order-sales-ownership-backfill|plan-moyao-default-store-migration|verify-moyao-default-store-migration|plan-asset-webp-migration|verify-asset-webp-migration)
                       [[ -z "$OPS_EXPECTED_PLAN_SHA256" ]] || {
                         echo 'Operations without reviewed data changes must not include an expected plan' >&2
                         exit 1
                       }
                       ;;
-                    retain-reviewed|apply-deployment-cache-cleanup-reviewed|apply-apt-archive-cleanup-reviewed|apply-apt-metadata-cleanup-reviewed|apply-apt-lists-cleanup-reviewed|apply-snap-cache-cleanup-reviewed|apply-offsite-file-backup-config-reviewed|backup-two-factor-reviewed|apply-order-sales-ownership-backfill-reviewed|apply-moyao-default-store-migration-reviewed)
+                    retain-reviewed|apply-deployment-cache-cleanup-reviewed|apply-apt-archive-cleanup-reviewed|apply-apt-metadata-cleanup-reviewed|apply-apt-lists-cleanup-reviewed|apply-snap-cache-cleanup-reviewed|apply-offsite-file-backup-config-reviewed|backup-two-factor-reviewed|apply-order-sales-ownership-backfill-reviewed|apply-moyao-default-store-migration-reviewed|apply-asset-webp-migration-reviewed)
                       [[ "$OPS_EXPECTED_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
                         echo 'Reviewed writes require the exact lowercase plan SHA-256' >&2
                         exit 1
@@ -163,7 +166,7 @@ jobs:
                     echo 'Only release validation accepts expected Channel codes' >&2
                     exit 1
                   fi
-                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "audit-administrator-product-readiness" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" ]]; then
+                  if [[ "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "audit-administrator-product-readiness" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" || "$OPS_OPERATION" == "plan-asset-webp-migration" || "$OPS_OPERATION" == "apply-asset-webp-migration-reviewed" || "$OPS_OPERATION" == "verify-asset-webp-migration" ]]; then
                     [[ "$OPS_EXPECTED_RUNTIME_SHA" =~ ^[0-9a-f]{40}$ ]] || {
                       echo 'Pinned store-data operations require an exact expected runtime SHA' >&2
                       exit 1
@@ -238,6 +241,7 @@ jobs:
                       'backup-database',
                       'apply-order-sales-ownership-backfill-reviewed',
                       'apply-moyao-default-store-migration-reviewed',
+                      'apply-asset-webp-migration-reviewed',
                   }
                   if operation_name in backup_operations:
                       backup_tools = [
@@ -295,6 +299,8 @@ jobs:
                       lines.append(transport('packages/dev-server/scripts/order-sales-ownership-backfill.mjs', 'repository/packages/dev-server/scripts/order-sales-ownership-backfill.mjs'))
                   if 'moyao-default-store-migration' in operation_name:
                       lines.append(transport('packages/dev-server/scripts/moyao-default-store-migration.mjs', 'repository/packages/dev-server/scripts/moyao-default-store-migration.mjs'))
+                  if 'asset-webp-migration' in operation_name:
+                      lines.append(transport('packages/dev-server/scripts/asset-webp-migration.mjs', 'repository/packages/dev-server/scripts/asset-webp-migration.mjs'))
                   lines.append(
                       f'env OPS_OPERATION={operation} OPS_EXPECTED_PLAN_SHA256={expected_plan} OPS_SOURCE_SHA={source_sha} OPS_EXPECTED_CHANNEL_CODES={expected_channels} OPS_EXPECTED_RUNTIME_SHA={expected_runtime} OPS_PRODUCT_ID={product_id} /usr/bin/node "$operations_dir/production-operations.cjs"'
                   )
