@@ -47,6 +47,12 @@ export function ProductBasicTab() {
     };
 
     if (!isCreateMode && !productData?.product) return null;
+    const storedFulfillmentType = productData?.product?.customFields?.fulfillmentType;
+    const legacyTypeMismatch =
+        !isCreateMode &&
+        !!storedFulfillmentType &&
+        !!fixedFulfillmentType &&
+        storedFulfillmentType !== fixedFulfillmentType;
 
     return (
         <div className="space-y-4">
@@ -118,16 +124,33 @@ export function ProductBasicTab() {
                         <div>
                             <div className="mb-2 text-xs font-bold text-slate-700">商品类型</div>
                             {fixedFulfillmentType ? (
-                                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-800">
+                                <div
+                                    className={`rounded-lg border p-3 text-xs leading-5 ${legacyTypeMismatch ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-blue-200 bg-blue-50 text-blue-800'}`}
+                                >
                                     当前店铺为
                                     <strong>
                                         {commerceMode === 'DIGITAL_ONLY' ? '仅虚拟商品' : '仅实物商品'}
                                     </strong>
-                                    模式，本商品固定为
-                                    <strong>
-                                        {fixedFulfillmentType === 'digital' ? '虚拟商品' : '实物商品'}
-                                    </strong>
-                                    。
+                                    模式，
+                                    {legacyTypeMismatch ? (
+                                        <>
+                                            此历史商品已存储为
+                                            <strong>
+                                                {storedFulfillmentType === 'digital'
+                                                    ? '虚拟商品'
+                                                    : '实物商品'}
+                                            </strong>
+                                            ，与当前店铺模式不符，暂不能保存。
+                                        </>
+                                    ) : (
+                                        <>
+                                            本商品固定为
+                                            <strong>
+                                                {fixedFulfillmentType === 'digital' ? '虚拟商品' : '实物商品'}
+                                            </strong>
+                                            。
+                                        </>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-2 gap-2">
