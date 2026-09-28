@@ -215,7 +215,10 @@ export function ReviewsModule() {
             >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h2 className="text-sm font-semibold text-slate-900">客户端评价功能</h2>
+                        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                            客户端评价功能
+                            <FeatureHelpButton topic="storefront.reviews" title="客户端评价功能" />
+                        </h2>
                         <p className="mt-1 text-xs text-slate-500">
                             关闭后隐藏客户端评价入口与内容，并停止新评价提交；后台历史评价仍可管理。
                         </p>
