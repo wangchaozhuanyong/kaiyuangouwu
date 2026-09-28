@@ -22,6 +22,18 @@ async function renderCatalog({
     channelCode = 'meiyijia',
     digital = false,
     stockAllocated = 0,
+    productTotal = 1,
+    assignmentTotal = 1,
+    requests,
+}: {
+    empty?: boolean;
+    initialEntry?: string;
+    channelCode?: string;
+    digital?: boolean;
+    stockAllocated?: number;
+    productTotal?: number;
+    assignmentTotal?: number;
+    requests?: Array<{ name: string; variables: Record<string, unknown> }>;
 } = {}) {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const rootCollection = {
@@ -37,6 +49,7 @@ async function renderCatalog({
         link: new ApolloLink(
             operation =>
                 new Observable(observer => {
+                    requests?.push({ name: operation.operationName ?? '', variables: operation.variables });
                     if (operation.operationName === 'GetProducts') {
                         if (empty) {
                             observer.next({ data: { products: { totalItems: 0, items: [] } } });
@@ -46,7 +59,7 @@ async function renderCatalog({
                         observer.next({
                             data: {
                                 products: {
-                                    totalItems: 1,
+                                    totalItems: productTotal,
                                     items: [
                                         {
                                             id: 'product-1',
@@ -185,7 +198,7 @@ async function renderCatalog({
                         observer.next({
                             data: {
                                 catalogProductChannelAssignments: {
-                                    totalItems: 1,
+                                    totalItems: assignmentTotal,
                                     channels: [
                                         {
                                             id: 'channel-default',
@@ -200,21 +213,24 @@ async function renderCatalog({
                                             isDefault: false,
                                         },
                                     ],
-                                    items: [
-                                        {
-                                            id: 'product-1',
-                                            name: '白利群2',
-                                            enabled: true,
-                                            channels: [
-                                                {
-                                                    id: 'channel-default',
-                                                    code: '__default_channel__',
-                                                    displayName: '平台管理（不经营）',
-                                                    isDefault: true,
-                                                },
-                                            ],
-                                        },
-                                    ],
+                                    items:
+                                        assignmentTotal === 0
+                                            ? []
+                                            : [
+                                                  {
+                                                      id: 'product-1',
+                                                      name: '白利群2',
+                                                      enabled: true,
+                                                      channels: [
+                                                          {
+                                                              id: 'channel-default',
+                                                              code: '__default_channel__',
+                                                              displayName: '平台管理（不经营）',
+                                                              isDefault: true,
+                                                          },
+                                                      ],
+                                                  },
+                                              ],
                                 },
                             },
                         });
@@ -341,6 +357,45 @@ describe('CatalogModule category columns', () => {
 });
 
 describe('CatalogModule filtered empty results', () => {
+    it('paginates assignment exceptions using the filtered server total', async () => {
+        const requests: Array<{ name: string; variables: Record<string, unknown> }> = [];
+        const container = await renderCatalog({
+            initialEntry: '/?channel=UNASSIGNED',
+            productTotal: 201,
+            assignmentTotal: 0,
+            requests,
+        });
+
+        expect(container.textContent).toContain('共 0 件商品，当前第 1 / 1 页');
+        expect(
+            Array.from(container.querySelectorAll('button')).find(button =>
+                button.textContent?.includes('下一页'),
+            )?.disabled,
+        ).toBe(true);
+        expect(
+            requests.find(request => request.name === 'GetCatalogChannelAssignments')?.variables,
+        ).toMatchObject({ assignmentFilter: { mode: 'UNASSIGNED' }, options: { skip: 0, take: 20 } });
+    });
+
+    it('loads exception rows by the server-selected product ids', async () => {
+        const requests: Array<{ name: string; variables: Record<string, unknown> }> = [];
+        const container = await renderCatalog({
+            initialEntry: '/?channel=MULTI_STORE',
+            productTotal: 201,
+            assignmentTotal: 1,
+            requests,
+        });
+
+        expect(container.textContent).toContain('共 1 件商品，当前第 1 / 1 页');
+        expect(container.textContent).toContain('白利群2');
+        expect(
+            requests.find(request => request.name === 'GetCatalogChannelAssignments')?.variables,
+        ).toMatchObject({ assignmentFilter: { mode: 'MULTI' } });
+        expect(requests.find(request => request.name === 'GetProducts')?.variables).toMatchObject({
+            options: { skip: 0, filter: { id: { in: ['product-1'] } } },
+        });
+    });
+
     it('clears a category URL from another store after loading the current store categories', async () => {
         const container = await renderCatalog({ initialEntry: '/?category=other-store' });
 

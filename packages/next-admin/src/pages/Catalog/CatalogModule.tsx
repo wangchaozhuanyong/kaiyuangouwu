@@ -244,8 +244,10 @@ export function CatalogModule() {
         return () => window.clearTimeout(timeout);
     }, [notification]);
 
-    // 构造真实 GraphQL 服务端查询参数 (服务端筛选过滤)
-    const queryVariables = useMemo(() => {
+    // 商品归属异常必须先在服务端筛选，再分页；当前页内过滤会漏掉后续页的异常商品。
+    const assignmentMode = channelParameter === 'UNASSIGNED' ? 'UNASSIGNED' : 'MULTI';
+    const isAssignmentFilter = channelParameter !== 'ALL';
+    const baseFilter = useMemo(() => {
         const filter: Record<string, unknown> = {};
         if (deferredSearchTerm.trim()) {
             filter.name = { contains: deferredSearchTerm.trim() };
@@ -259,21 +261,55 @@ export function CatalogModule() {
             filter.collectionId = { eq: categoryId };
         }
 
-        return {
+        return Object.keys(filter).length > 0 ? filter : undefined;
+    }, [categoryId, deferredSearchTerm, statusFilter]);
+    const assignmentQuery = useQuery<CatalogChannelAssignmentsData>(GET_CATALOG_CHANNEL_ASSIGNMENTS, {
+        variables: {
             options: {
                 skip: page * pageSize,
                 take: pageSize,
-                filter: Object.keys(filter).length > 0 ? filter : undefined,
+                filter: baseFilter,
+                sort: { [sortField]: sortDirection },
+            },
+            assignmentFilter: { mode: assignmentMode },
+        },
+        skip: !isAssignmentFilter,
+        fetchPolicy: 'cache-and-network',
+        notifyOnNetworkStatusChange: true,
+    });
+    const assignmentIds = useMemo(
+        () => assignmentQuery.data?.catalogProductChannelAssignments.items.map(item => item.id) ?? [],
+        [assignmentQuery.data],
+    );
+    const queryVariables = useMemo(() => {
+        const filter = isAssignmentFilter ? { id: { in: assignmentIds } } : baseFilter;
+        return {
+            options: {
+                skip: isAssignmentFilter ? 0 : page * pageSize,
+                take: pageSize,
+                filter,
                 sort: { [sortField]: sortDirection },
             },
         };
-    }, [categoryId, deferredSearchTerm, statusFilter, page, pageSize, sortDirection, sortField]);
+    }, [assignmentIds, baseFilter, isAssignmentFilter, page, pageSize, sortDirection, sortField]);
 
-    const { data, loading, error, refetch } = useQuery<GetProductsData>(GET_PRODUCTS, {
+    const productQuery = useQuery<GetProductsData>(GET_PRODUCTS, {
         variables: queryVariables,
+        skip: isAssignmentFilter && (assignmentQuery.loading || assignmentIds.length === 0),
         fetchPolicy: 'cache-first',
         notifyOnNetworkStatusChange: true,
     });
+    const { data } = productQuery;
+    const loading = assignmentQuery.loading || productQuery.loading;
+    const error = (isAssignmentFilter ? assignmentQuery.error : undefined) ?? productQuery.error;
+    const refetch = async () => {
+        if (isAssignmentFilter) {
+            await assignmentQuery.refetch();
+            if (assignmentIds.length) await productQuery.refetch();
+        } else {
+            await productQuery.refetch();
+        }
+    };
     const activeChannelQuery = useQuery<GetCatalogChannelsData>(GET_CATALOG_CHANNELS, {
         fetchPolicy: 'cache-first',
     });
@@ -329,22 +365,19 @@ export function CatalogModule() {
         setNotification({ type, message });
     };
 
-    const totalItems = data?.products?.totalItems ?? 0;
+    const totalItems = isAssignmentFilter
+        ? (assignmentQuery.data?.catalogProductChannelAssignments.totalItems ?? 0)
+        : (data?.products?.totalItems ?? 0);
     const totalPages = Math.ceil(totalItems / pageSize) || 1;
-    const productList = useMemo(() => data?.products?.items ?? [], [data?.products?.items]);
+    const productList = useMemo(
+        () => (isAssignmentFilter && (loading || !assignmentIds.length) ? [] : (data?.products?.items ?? [])),
+        [assignmentIds, data?.products?.items, isAssignmentFilter, loading],
+    );
     const displayProducts = useMemo(() => {
-        if (channelParameter === 'ALL') return productList;
-        return productList.filter(product => {
-            const assigned = channelAssignmentsByProduct.get(product.id) ?? [];
-            if (channelParameter === 'UNASSIGNED') {
-                return assigned.length <= 1 && assigned.some(c => c.isDefault);
-            }
-            if (channelParameter === 'MULTI_STORE') {
-                return assigned.length > 1;
-            }
-            return assigned.some(c => c.id === channelParameter);
-        });
-    }, [productList, channelParameter, channelAssignmentsByProduct]);
+        if (!isAssignmentFilter) return productList;
+        const ids = new Set(assignmentIds);
+        return productList.filter(product => ids.has(product.id));
+    }, [assignmentIds, isAssignmentFilter, productList]);
 
     const operationsByProduct = new Map(
         (operationsQuery.data?.catalogProductOperations ?? []).map(summary => [summary.productId, summary]),
@@ -580,7 +613,7 @@ export function CatalogModule() {
                     {/* Table Data / Loading / Empty State */}
                     <div className="overflow-x-auto flex-1 relative">
                         {/* 加载态：骨架屏 */}
-                        {loading && !data && (
+                        {loading && (isAssignmentFilter || !data) && (
                             <div className="p-8 space-y-4">
                                 {[1, 2, 3, 4, 5].map(i => (
                                     <div
