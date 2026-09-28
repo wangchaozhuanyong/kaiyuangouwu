@@ -17,17 +17,26 @@ describe('shared control surfaces', () => {
         );
     });
 
-    it('keeps shortcut row hierarchy in the shared module-action contract', () => {
+    it('keeps image shortcuts legible and keyboard-visible beside shared module actions', () => {
         const stylesheet = readStorefrontStylesheet([
             './styles/desktop-home.css',
             './styles/visual-presets.css',
         ]);
 
         expect(stylesheet).toMatch(
-            /\.desktop-store-layout[\s\S]*?\.quick-grid button\s*\{[^}]*background:\s*var\(--module-action-surface,/,
+            /\.desktop-store-layout \.homepage-modules \.home-intro-grid \.desktop-quick-tile\s*\{[^}]*background:\s*var\(--soft\);/,
         );
         expect(stylesheet).toMatch(
-            /\.quick-grid button:hover\s*\{[^}]*background:\s*var\(--module-action-surface-hover,/,
+            /\.desktop-quick-tile::after\s*\{[^}]*z-index:\s*1;[^}]*background:\s*linear-gradient\(/,
+        );
+        expect(stylesheet).toMatch(
+            /\.desktop-store-layout \.home-intro-grid \.quick-grid b\s*\{[^}]*z-index:\s*2;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.desktop-quick-tile:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--focus\);/,
+        );
+        expect(stylesheet).toMatch(
+            /\.desktop-quick-tile:hover::after\s*\{[^}]*background:\s*linear-gradient\(/,
         );
         expect(stylesheet).toMatch(/--proto-tool-item-bg:\s*var\(--module-action-surface\);/);
         expect(stylesheet).toMatch(/--proto-tool-item-hover-bg:\s*var\(--module-action-surface-hover\);/);
