@@ -615,6 +615,14 @@ export function InventoryWarehouseModule() {
         }
     };
 
+    const closeStockAdjustment = () => {
+        if (adjusting) return;
+        setSelectedStock(null);
+        setAdjustAmount('');
+        setAdjustReason('');
+        setActionError('');
+    };
+
     const handleAdjustSubmit = async () => {
         if (!selectedStock) return;
         const increment = Number(adjustAmount);
@@ -1921,13 +1929,11 @@ export function InventoryWarehouseModule() {
             {selectedStock && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs"
-                    onClick={() => !adjusting && setSelectedStock(null)}
+                    onClick={closeStockAdjustment}
                 >
                     <AccessibleDialogSurface
                         accessibleName="库存操作"
-                        onRequestClose={() => {
-                            if (!adjusting) setSelectedStock(null);
-                        }}
+                        onRequestClose={closeStockAdjustment}
                         className="w-full max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-6 text-xs shadow-2xl"
                         onClick={event => event.stopPropagation()}
                     >
@@ -1938,7 +1944,7 @@ export function InventoryWarehouseModule() {
                             </h3>
                             <button
                                 type="button"
-                                onClick={() => setSelectedStock(null)}
+                                onClick={closeStockAdjustment}
                                 disabled={adjusting}
                                 className="text-slate-400"
                                 aria-label="关闭库存调整"
@@ -1996,8 +2002,8 @@ export function InventoryWarehouseModule() {
                         <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
                             <button
                                 type="button"
-                                onClick={() => setSelectedStock(null)}
-                                disabled={adjusting || !adjustReason.trim()}
+                                onClick={closeStockAdjustment}
+                                disabled={adjusting}
                                 className="rounded-lg bg-slate-100 px-4 py-2 font-bold text-slate-700"
                             >
                                 取消
