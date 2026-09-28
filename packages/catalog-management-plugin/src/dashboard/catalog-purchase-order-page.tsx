@@ -562,6 +562,7 @@ function OrderDetailSheet({
         enabled: Boolean(id),
     });
     const order = detail.data?.catalogPurchaseOrder;
+    const amount = (value: number) => money(value, order?.currencyCode ?? 'CNY');
     const mutate = useMutation({
         mutationFn: ({
             document,
@@ -597,19 +598,10 @@ function OrderDetailSheet({
                             {order.overdue && <Badge variant="destructive">逾期未收齐</Badge>}
                         </div>
                         <div className="grid gap-3 rounded-lg border p-4 text-sm sm:grid-cols-4">
-                            <Metric
-                                label="采购总额"
-                                value={money(order.totalMicrounits, order.currencyCode)}
-                            />
-                            <Metric
-                                label="退供贷项"
-                                value={money(order.returnCreditMicrounits, order.currencyCode)}
-                            />
-                            <Metric label="已付" value={money(order.paidMicrounits, order.currencyCode)} />
-                            <Metric
-                                label="待付"
-                                value={money(order.outstandingMicrounits, order.currencyCode)}
-                            />
+                            <Metric label="采购总额" value={amount(order.totalMicrounits)} />
+                            <Metric label="退供贷项" value={amount(order.returnCreditMicrounits)} />
+                            <Metric label="已付" value={amount(order.paidMicrounits)} />
+                            <Metric label="待付" value={amount(order.outstandingMicrounits)} />
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {order.status === 'DRAFT' && (
@@ -1159,13 +1151,8 @@ function dateTime(value: string): string {
     );
 }
 function paymentLabel(order: CatalogPurchaseOrderRecord): string {
-    if (
-        order.outstandingMicrounits === 0 &&
-        order.paidMicrounits === 0 &&
-        order.paymentStatus !== 'DISPUTED'
-    ) {
+    if (!order.outstandingMicrounits && !order.paidMicrounits && order.paymentStatus !== 'DISPUTED')
         return '无需付款';
-    }
     return { UNPAID: '未付', PARTIALLY_PAID: '部分已付', PAID: '已付清', DISPUTED: '付款争议' }[
         order.paymentStatus
     ];
