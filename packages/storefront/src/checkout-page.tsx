@@ -425,7 +425,7 @@ export function CheckoutPage({
             navigateTo({ name: 'login', returnTo: mode });
             return;
         }
-        if (!cart || !order) return;
+        if (!cart || !order || order.totalQuantity <= 0 || order.lines.length === 0) return;
         if (requiresShipping && !addressComplete) {
             if (!customerLoading) manageAddress();
             return;
@@ -539,7 +539,7 @@ export function CheckoutPage({
         }
     };
 
-    if (!order || !cart) {
+    if (!order || !cart || (!cartPending && (order.totalQuantity <= 0 || order.lines.length === 0))) {
         return (
             <Subpage
                 title={

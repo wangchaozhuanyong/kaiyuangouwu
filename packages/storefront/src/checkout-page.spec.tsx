@@ -181,6 +181,50 @@ function renderCheckout(
 }
 
 describe('CheckoutPage digital delivery', () => {
+    it('shows an empty state for both routes when cart lines exist but none are selected', () => {
+        const productOrder = orderFor('DIGITAL');
+        const emptyOrder = {
+            ...productOrder,
+            lines: [],
+            totalQuantity: 0,
+            subTotalWithTax: 0,
+            totalWithTax: 0,
+        };
+        const cart = cartFor(productOrder);
+        const unselectedCart: StorefrontCart = {
+            ...cart,
+            selectedLineCount: 0,
+            selectedQuantity: 0,
+            selectionState: 'NONE',
+            lines: cart.lines.map(item => ({ ...item, selected: false })),
+            checkoutOrder: emptyOrder,
+        };
+
+        for (const mode of ['checkout', 'purchase'] as const) {
+            const markup = renderToStaticMarkup(
+                createElement(CheckoutPage, {
+                    mode,
+                    api: {} as ShopApi,
+                    cart: unselectedCart,
+                    order: emptyOrder,
+                    customer: null,
+                    market,
+                    locale: market.locale,
+                    language: 'zh' as const,
+                    onBack: vi.fn(),
+                    onSessionChange: vi.fn(),
+                    onCartChange: vi.fn(),
+                    onNotify: vi.fn(),
+                    coupons: [],
+                    onApplyCoupon: vi.fn().mockResolvedValue(null),
+                    onRemoveCoupon: vi.fn().mockResolvedValue(null),
+                }),
+            );
+            expect(markup).toContain('没有可结算商品');
+            expect(markup).not.toContain('（0件）需支付');
+        }
+    });
+
     it('keeps address before items and places the coupon action in the amount summary', () => {
         const container = document.createElement('div');
         container.innerHTML = renderCheckout(orderFor('PHYSICAL'));
