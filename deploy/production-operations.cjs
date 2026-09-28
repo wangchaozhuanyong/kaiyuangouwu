@@ -28,6 +28,7 @@ const path = require('node:path');
 const retention = require('./systemd/vendure-production-release-retention.cjs');
 
 const DEPLOY_LOCK = '/run/lock/vendure-production-deploy.lock';
+const APT_ARCHIVES_DIRECTORY = '/var/cache/apt/archives';
 const BACKUP_DIRECTORY = '/var/backups/vendure-mysql';
 const PRODUCTION_ENVIRONMENT_FILE = '/var/www/kaiyuangouwu/packages/dev-server/.env';
 const OFFSITE_FILE_BACKUP_URI = 's3://yunqiao-vendure-prod-backup-079740175286-apne1/files';
@@ -107,6 +108,8 @@ function validateRequest(environment) {
             'retain-reviewed',
             'plan-deployment-cache-cleanup',
             'apply-deployment-cache-cleanup-reviewed',
+            'plan-apt-archive-cleanup',
+            'apply-apt-archive-cleanup-reviewed',
             'plan-offsite-file-backup-config',
             'apply-offsite-file-backup-config-reviewed',
             'plan-two-factor-backup',
@@ -135,6 +138,7 @@ function validateRequest(environment) {
         [
             'retain-reviewed',
             'apply-deployment-cache-cleanup-reviewed',
+            'apply-apt-archive-cleanup-reviewed',
             'apply-offsite-file-backup-config-reviewed',
             'backup-two-factor-reviewed',
             'apply-order-sales-ownership-backfill-reviewed',
@@ -521,6 +525,37 @@ function applyDeploymentCacheCleanup(
     return revalidatedPlan;
 }
 
+function inspectAptArchiveCleanup(sourceSha, { cacheDirectory = APT_ARCHIVES_DIRECTORY, ...options } = {}) {
+    const plan = inspectDeploymentCacheCleanup(sourceSha, {
+        ...options,
+        directories: [{ label: 'apt-package-archives', directory: cacheDirectory }],
+    });
+    return { ...plan, schema: 'vendure-apt-archive-cleanup' };
+}
+
+function applyAptArchiveCleanup(
+    request,
+    {
+        inspect = sourceSha => inspectAptArchiveCleanup(sourceSha),
+        clean = directory =>
+            execFileSync('apt-get', ['-o', `Dir::Cache::archives=${directory}`, 'clean'], {
+                timeout: 120000,
+                stdio: ['ignore', 'ignore', 'pipe'],
+            }),
+    } = {},
+) {
+    assert.equal(request.operation, 'apply-apt-archive-cleanup-reviewed');
+    const plan = inspect(request.sourceSha);
+    assert.equal(plan.schema, 'vendure-apt-archive-cleanup');
+    assert.equal(plan.candidates.length, 1, 'APT archive directory is unavailable');
+    assert.ok(plan.totalKib > 0, 'No APT archive cache is available to clean');
+    assert.equal(planDigest(plan, request.sourceSha), request.expectedPlanSha256, 'APT cache plan changed');
+    const revalidatedPlan = inspect(request.sourceSha);
+    assert.deepEqual(revalidatedPlan, plan, 'APT cache changed before cleanup');
+    clean(revalidatedPlan.candidates[0].directory);
+    return revalidatedPlan;
+}
+
 // Only fixed, non-secret diagnostics are returned. Command stderr and PM2 environment
 // objects must never be included in the workflow log.
 function readCommand(command, arguments_) {
@@ -642,6 +677,11 @@ function diagnose(request) {
         databaseBackups: '/var/backups/vendure-mysql',
         fileBackups: '/var/backups/vendure-files',
         systemCache: '/var/cache',
+        aptArchives: APT_ARCHIVES_DIRECTORY,
+        aptMetadata: '/var/cache/apt',
+        manCache: '/var/cache/man',
+        fontconfigCache: '/var/cache/fontconfig',
+        snapCache: '/var/lib/snapd/cache',
         ubuntuHome: '/home/ubuntu',
     };
     const result = {
@@ -1531,6 +1571,25 @@ function runLocked(environment = process.env) {
         );
         return;
     }
+    if (request.operation === 'plan-apt-archive-cleanup') {
+        const plan = inspectAptArchiveCleanup(request.sourceSha);
+        process.stdout.write(
+            `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: planDigest(plan, request.sourceSha), plan })}\n`,
+        );
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=plan-apt-archive-cleanup\n');
+        return;
+    }
+    if (request.operation === 'apply-apt-archive-cleanup-reviewed') {
+        const plan = applyAptArchiveCleanup(request);
+        const disk = readCommand('df', ['-Pk', '/']);
+        const healthRefresh = readCommand('systemctl', ['start', 'vendure-production-healthcheck.service']);
+        process.stdout.write(
+            `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: request.expectedPlanSha256, reviewedKib: plan.totalKib, disk, healthRefresh })}\n`,
+        );
+        assert.equal(healthRefresh.status, 'ok', 'APT cleanup completed, but health refresh failed');
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=apply-apt-archive-cleanup-reviewed\n');
+        return;
+    }
     if (request.operation === 'backup-database') {
         const result = runDatabaseBackup(request);
         process.stdout.write(
@@ -1785,6 +1844,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+    applyAptArchiveCleanup,
     applyDeploymentCacheCleanup,
     applyOffsiteFileBackupConfig,
     frontendRevisionEvidence,
@@ -1792,6 +1852,7 @@ module.exports = {
     encodeBeforeReport,
     inspectProductionReleases,
     inspectDeploymentCacheCleanup,
+    inspectAptArchiveCleanup,
     inspectOffsiteFileBackupConfig,
     inspectRepositoryState,
     planDigest,

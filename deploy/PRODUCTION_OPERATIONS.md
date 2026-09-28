@@ -109,6 +109,28 @@ The write revalidates the full plan under the production deployment lock,
 removes only those reviewed cache directories, and reruns the production health
 check. Any source, runtime, cache-size or candidate change requires a new plan.
 
+If that plan has no candidates and a release is short of disk staging space, inspect
+the fixed APT package archive directory without touching installed packages:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=plan-apt-archive-cleanup
+```
+
+The plan reports `/var/cache/apt/archives`, its size, the source SHA and the
+running runtime. Review the size before applying the exact plan hash:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=apply-apt-archive-cleanup-reviewed \
+    -f expected_plan_sha256=<reviewed-plan-sha256>
+```
+
+The write rechecks the source, runtime and cache size under the deployment lock,
+then runs `apt-get clean` against that fixed directory and refreshes production
+health. It does not remove installed packages, application files, release
+directories, backups or logs. A zero-size or changed plan fails closed.
+
 ## Audit one product before changing store ownership
 
 Use the fixed read-only audit for a specific product and the exact running runtime:
