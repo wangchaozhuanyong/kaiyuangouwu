@@ -1,4 +1,4 @@
-import { ChevronRight, Heart, Share2, TicketPercent, UsersRound } from 'lucide-react';
+import { ChevronRight, Heart, Share2, TicketPercent } from 'lucide-react';
 
 import { SafeImage } from '../../safe-image';
 import { type RouteState } from '../../storefront-router';
@@ -156,13 +156,31 @@ export function AccountIdentity({
                     aria-label={isZh ? '邀请与推广' : 'Invite and share'}
                 >
                     <div className="account-identity-promotion-title">
-                        <span>
-                            <UsersRound aria-hidden="true" />
-                        </span>
                         <div>
-                            <h3>{isZh ? '邀请好友，一起发现好物' : 'Invite friends to discover more'}</h3>
-                            <p>{isZh ? '查看邀请记录与返利明细' : 'View invitations and reward details'}</p>
+                            <h3>
+                                <span>{isZh ? '邀请好友' : 'Invite friends'}</span>
+                                <span>{isZh ? '奖励归你' : 'Earn rewards'}</span>
+                            </h3>
+                            <p>
+                                {isZh ? (
+                                    <>
+                                        好友注册并成功消费，
+                                        <br />
+                                        奖励仅发放给邀请人。
+                                    </>
+                                ) : (
+                                    'When an invited friend makes a purchase, only you earn rewards.'
+                                )}
+                            </p>
                         </div>
+                        <img
+                            className="account-identity-promotion-gift"
+                            src="/storefront/illustrations/referral-gift.webp"
+                            alt=""
+                            width={384}
+                            height={384}
+                            decoding="async"
+                        />
                     </div>
                     <div className="account-identity-promotion-actions">
                         <div className="account-identity-promotion-balance" aria-live="polite">

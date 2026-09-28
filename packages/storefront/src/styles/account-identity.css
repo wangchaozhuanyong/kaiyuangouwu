@@ -1,4 +1,4 @@
-/* User-approved account identity theme: fixed across store skins, without managed artwork. */
+/* User-approved shared account theme. Referral artwork and blue surfaces follow the supplied reference across skins. */
 .account-identity-card {
     padding: 18px 20px 16px;
     border-radius: 14px;
@@ -144,57 +144,64 @@
     min-width: 0;
     flex-direction: column;
     justify-content: space-between;
-    gap: 28px;
+    gap: 18px;
     margin-top: 12px;
     padding: 20px;
-    border-radius: 14px;
-    background: #e2ecf2;
-    color: #18394a;
+    border-radius: 22px;
+    background: linear-gradient(135deg, #fff 0%, #f5faff 55%, #eaf3ff 100%);
+    color: #10233e;
+    box-shadow: 0 7px 24px rgb(33 82 138 / 7%);
 }
 .account-identity-promotion-title {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-}
-.account-identity-promotion-title > span {
     display: grid;
-    width: 34px;
-    height: 34px;
-    flex: none;
-    place-items: center;
-    color: #244b61;
+    grid-template-columns: minmax(0, 1fr) clamp(92px, 34%, 160px);
+    align-items: center;
+    gap: 6px;
 }
 .account-identity-promotion-title > div {
     min-width: 0;
 }
-.account-identity-promotion-title svg {
-    width: 32px;
-    height: 32px;
-}
 .account-identity-promotion-title h3 {
-    margin: 0 0 5px;
+    margin: 0 0 12px;
     color: inherit;
-    font-size: 16px;
-    font-weight: 650;
-    line-height: 1.5;
+    font-size: 26px;
+    font-weight: 750;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
     overflow-wrap: anywhere;
 }
+.account-identity-promotion-title h3 > span {
+    display: block;
+}
 .account-identity-promotion-title p {
+    max-width: 27em;
     margin: 0;
-    color: #566f7e;
-    font-size: 12px;
-    line-height: 1.5;
+    color: #506480;
+    font-size: 13px;
+    line-height: 1.65;
+    text-wrap: pretty;
+}
+.account-identity-promotion-gift {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    align-self: start;
+    pointer-events: none;
 }
 .account-identity-promotion-actions {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-end;
+    align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 14px;
+    padding: 15px;
+    border-radius: 17px;
+    background: linear-gradient(110deg, #eaf4ff, #dcecff);
 }
 .account-identity-promotion-actions p {
-    margin: 0 0 8px;
-    color: #566f7e;
+    margin: 0 0 7px;
+    color: #506480;
     font-size: 12px;
 }
 .account-identity-promotion-balance {
@@ -206,9 +213,9 @@
     flex-wrap: wrap;
     align-items: baseline;
     gap: 6px;
-    color: inherit;
+    color: #0062e9;
     font-size: 32px;
-    font-weight: 650;
+    font-weight: 750;
     line-height: 1.1;
     font-variant-numeric: tabular-nums;
     overflow-wrap: anywhere;
@@ -217,31 +224,32 @@
     white-space: nowrap;
 }
 .account-identity-promotion-currency {
-    font-size: 12px;
+    color: #506480;
+    font-size: 13px;
     font-weight: 600;
 }
 .account-identity-promotion-actions > button {
     display: inline-flex;
     min-width: 112px;
-    min-height: 44px;
+    min-height: 48px;
     flex: none;
     align-items: center;
     justify-content: center;
-    gap: 7px;
-    padding: 0 12px;
+    gap: 6px;
+    padding: 0 16px;
     border: 0;
-    border-radius: 8px;
-    background: #244b61;
+    border-radius: 18px;
+    background: #0062e9;
     color: #fff;
-    font-size: 12px;
-    font-weight: 550;
+    font-size: 13px;
+    font-weight: 650;
 }
 .account-identity-promotion-actions > button:hover {
-    background: #173349;
+    background: #004fc2;
 }
 .account-identity-promotion-actions svg {
-    width: 15px;
-    height: 15px;
+    width: 17px;
+    height: 17px;
 }
 .account-identity-promotion-status {
     display: flex;
@@ -256,12 +264,12 @@
     padding: 0 4px;
     border: 0;
     background: transparent;
-    color: #244b61;
+    color: #004fc2;
     text-decoration: underline;
     font-size: 12px;
 }
 .account-identity-promotion button:focus-visible {
-    outline-color: #244b61;
+    outline-color: #004fc2;
 }
 .account-identity-guest-actions {
     display: flex;
@@ -297,7 +305,7 @@
     }
     .desktop-account-page .account-identity-promotion {
         margin-top: 0;
-        padding: 24px;
+        padding: 20px;
     }
     .desktop-account-page .account-identity:not(:has(.account-identity-promotion)) {
         grid-template-columns: minmax(0, 1fr);
@@ -307,5 +315,25 @@
 @media (max-width: 359px), (min-width: 1024px) and (max-width: 1199px) {
     .account-identity-promotion-actions strong {
         font-size: 24px;
+    }
+}
+
+@media (max-width: 359px), (min-width: 1024px) and (max-width: 1279px) {
+    .account-identity-promotion {
+        padding: 16px;
+    }
+    .account-identity-promotion-title h3 {
+        font-size: 22px;
+    }
+    .account-identity-promotion-title p {
+        font-size: 12px;
+    }
+    .account-identity-promotion-actions {
+        gap: 10px;
+        padding: 12px;
+    }
+    .account-identity-promotion-actions > button {
+        min-width: 104px;
+        padding-inline: 12px;
     }
 }
