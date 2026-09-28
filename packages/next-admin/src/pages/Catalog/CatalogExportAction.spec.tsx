@@ -32,7 +32,7 @@ describe('CatalogExportAction', () => {
         vi.clearAllMocks();
     });
 
-    it('loads warehouses and enables export buttons while integrity check is still pending', async () => {
+    it('requires an explicit warehouse while integrity check is still pending', async () => {
         mocks.query.mockImplementation(({ query }: { query: any }) => {
             const queryString = query?.loc?.source?.body ?? '';
             if (queryString.includes('NextAdminCatalogIntegritySummary')) {
@@ -74,11 +74,12 @@ describe('CatalogExportAction', () => {
             expect(host.textContent).toContain('默认回导仓库');
             expect(host.textContent).toContain('正在检查商品完整性');
 
-            // Select should contain the loaded warehouses and default to first warehouse
+            // Warehouses are global, so a different store's first warehouse must not be selected.
             const select = host.querySelector('select') as HTMLSelectElement;
             expect(select).not.toBeNull();
             expect(select.options.length).toBe(3); // "请选择仓库", "主仓库", "备用仓"
-            expect(select.value).toBe('loc-1');
+            expect(select.value).toBe('');
+            expect(host.textContent).toContain('请明确选择本次回导对应的仓库');
 
             // Export buttons should be enabled since a warehouse is selected
             const exportXlsxBtn = [...host.querySelectorAll('button')].find(btn =>
@@ -90,8 +91,21 @@ describe('CatalogExportAction', () => {
 
             expect(exportXlsxBtn).toBeDefined();
             expect(exportCsvBtn).toBeDefined();
+            expect((exportXlsxBtn as HTMLButtonElement).disabled).toBe(true);
+            expect((exportCsvBtn as HTMLButtonElement).disabled).toBe(true);
+
+            await act(async () => {
+                select.value = 'loc-2';
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            });
             expect((exportXlsxBtn as HTMLButtonElement).disabled).toBe(false);
             expect((exportCsvBtn as HTMLButtonElement).disabled).toBe(false);
+
+            await act(async () => {
+                host.querySelector<HTMLButtonElement>('button[aria-label="关闭"]')?.click();
+                openButton.click();
+            });
+            expect((host.querySelector('select') as HTMLSelectElement).value).toBe('');
         } finally {
             await act(async () => root.unmount());
             host.remove();
@@ -126,7 +140,7 @@ describe('CatalogExportAction', () => {
             const exportXlsxBtn = [...host.querySelectorAll('button')].find(btn =>
                 btn.textContent?.includes('导出可回导 XLSX'),
             );
-            expect((exportXlsxBtn as HTMLButtonElement).disabled).toBe(false);
+            expect((exportXlsxBtn as HTMLButtonElement).disabled).toBe(true);
         } finally {
             await act(async () => root.unmount());
             host.remove();
@@ -248,6 +262,11 @@ describe('CatalogExportAction', () => {
             const exportButton = [...host.querySelectorAll('button')].find(button =>
                 button.textContent?.includes('导出可回导 XLSX'),
             );
+            await act(async () => {
+                const select = host.querySelector('select') as HTMLSelectElement;
+                select.value = 'loc-1';
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            });
             await act(async () => {
                 exportButton?.click();
                 await Promise.resolve();
