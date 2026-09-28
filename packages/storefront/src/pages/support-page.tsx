@@ -6,7 +6,6 @@ import type { ShopApi } from '../api';
 
 import '../styles/modals-and-support.css';
 
-import { supportFaqItems } from '../../../storefront-content-plugin/src/support-faq';
 import qqIcon from '../assets/support/qq.svg';
 import telegramIcon from '../assets/support/telegram.svg';
 import wechatIcon from '../assets/support/wechat.svg';
@@ -17,6 +16,7 @@ import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
 import {
     StorefrontSupportChannel,
     SupportChannelKey,
+    publishedSupportFaqs,
     storefrontSupportChannels,
     supportChannelDetail,
     supportPageTitle,
@@ -111,14 +111,7 @@ export function SupportContent({
     const isZh = language === 'zh';
     const service = supportServiceDetails(content, language);
     const channels = storefrontSupportChannels(content);
-    const faqs = supportFaqItems(content.settings).filter(
-        item =>
-            item.enabled &&
-            item.questionZh.trim() &&
-            item.answerZh.trim() &&
-            item.questionEn.trim() &&
-            item.answerEn.trim(),
-    );
+    const faqs = publishedSupportFaqs(content);
 
     const filteredFaqs = filterSupportFaqs(faqs, faqSearch, language);
     const faqPageCount = Math.max(1, Math.ceil(filteredFaqs.length / 8));
@@ -142,6 +135,22 @@ export function SupportContent({
         setQrImageFailed(false);
         setQrImageRetryKey(value => value + 1);
     };
+
+    if (!channels.length && !faqs.length) {
+        return (
+            <div className="support-center-content">
+                <EmptyState
+                    icon={<Headphones />}
+                    title={supportPageTitle(content, language)}
+                    detail={
+                        isZh
+                            ? '商家尚未启用联系方式或常见问题，暂时无法通过这里咨询。'
+                            : 'No contact channels or FAQs are available yet.'
+                    }
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="support-center-content">
