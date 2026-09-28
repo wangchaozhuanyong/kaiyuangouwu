@@ -718,6 +718,10 @@ export function InventoryWarehouseModule() {
         if (savingLocation) return;
         setIsLocationModalOpen(false);
         setEditingLocation(null);
+        setLocationName('');
+        setLocationDescription('');
+        setTransferToLocationId('');
+        setActionError('');
     };
 
     const handleSaveLocation = async () => {
@@ -2028,9 +2032,7 @@ export function InventoryWarehouseModule() {
                 >
                     <AccessibleDialogSurface
                         accessibleName="库存点编辑"
-                        onRequestClose={() => {
-                            if (!savingLocation) closeLocationModal();
-                        }}
+                        onRequestClose={closeLocationModal}
                         className="w-full max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-6 text-xs shadow-2xl"
                         onClick={event => event.stopPropagation()}
                     >
