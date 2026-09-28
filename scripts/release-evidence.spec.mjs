@@ -471,6 +471,23 @@ test('shared dependency, lockfile, test commands, global environment and deleted
         );
     }
 });
+test('architecture proof depends on budgeted files rather than every unrelated package edit', () => {
+    const check = checkRequirements(
+        classifyChanges(['packages/storefront/src/styles.css'], inputInventory),
+        inputInventory,
+    ).find(item => item.id === 'architecture');
+    assert.ok(check);
+    const unrelated = inputFixture({ 'packages/core/src/service.ts': 'new business code' }).reader;
+    assert.equal(
+        checkFingerprint(sourceSha, check, inputInventory, unrelated),
+        checkFingerprint(targetSha, check, inputInventory, unrelated),
+    );
+    const budgeted = inputFixture({ 'packages/storefront/src/styles.css': 'new budgeted style' }).reader;
+    assert.notEqual(
+        checkFingerprint(sourceSha, check, inputInventory, budgeted),
+        checkFingerprint(targetSha, check, inputInventory, budgeted),
+    );
+});
 test('routing and job conditions alone do not invalidate unchanged business checks', () => {
     const routed = workflow.replace("if: needs.detect-changes.outputs.e2e_mysql == 'true'", 'if: false');
     assert.equal(jobRecipe(workflow, 'e2e-mysql'), jobRecipe(routed, 'e2e-mysql'));

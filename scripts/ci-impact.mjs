@@ -20,6 +20,18 @@ export const affectedFrontendsForFile = file =>
     ]);
 export const DATABASES = ['mysql', 'sqljs', 'postgres', 'mariadb'];
 const sorted = values => [...new Set(values)].sort();
+const architectureDebtBaseline = JSON.parse(
+    readFileSync(new URL('./architecture-debt-baseline.json', import.meta.url), 'utf8'),
+);
+export const architectureBudgetInput = file =>
+    ['scripts/architecture-debt-audit.mjs', 'scripts/architecture-debt-baseline.json'].includes(file) ||
+    architectureDebtBaseline.fileBudgets.some(budget => budget.path === file) ||
+    architectureDebtBaseline.groupBudgets.some(group =>
+        group.paths.some(
+            prefix =>
+                file.startsWith(`${prefix}/`) && group.extensions.some(extension => file.endsWith(extension)),
+        ),
+    );
 export const isDocumentation = file =>
     /^(docs\/|\.github\/ISSUE_TEMPLATE\/)/u.test(file) ||
     /(^|\/)(README[^/]*|CHANGELOG[^/]*|AGENTS)\.md$/u.test(file);
@@ -34,7 +46,7 @@ export const isAutomationOnly = file =>
         'deploy/frontend-ssm.mjs',
         'deploy/deploy-frontends-from-s3.sh',
     ].includes(file) ||
-    /^scripts\/(ci-|release-|lint-check\.mjs$)/u.test(file) ||
+    /^scripts\/(ci-|release-|architecture-debt|lint-check\.mjs$)/u.test(file) ||
     /^(deploy\/|packages\/dev-server\/scripts\/).*\.spec\.mjs$/u.test(file);
 
 export function packageInventory(root = process.cwd()) {
@@ -184,7 +196,7 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
         controls,
         migration,
         publishing,
-        architecture: full || executable.length > 0,
+        architecture: full || executable.some(architectureBudgetInput),
         codegen,
         e2e,
         databases,

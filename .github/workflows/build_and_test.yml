@@ -126,6 +126,10 @@ jobs:
               with:
                   ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
                   fetch-depth: 0
+            - name: Reject a PR candidate based on old main before expensive checks
+              env:
+                  PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+              run: node scripts/ci-pr-base.mjs "$PR_BASE_SHA"
             - name: Explain the affected checks
               id: check
               env:
