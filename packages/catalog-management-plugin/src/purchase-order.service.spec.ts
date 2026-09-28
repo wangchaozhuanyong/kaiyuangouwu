@@ -75,6 +75,62 @@ describe('supplier performance score', () => {
     });
 });
 
+describe('purchase order list view', () => {
+    it('returns an empty event list when the summary query does not load events', async () => {
+        const order = {
+            id: 7,
+            status: 'DRAFT',
+            totalMicrounits: '0',
+            paidMicrounits: '0',
+            returnCreditMicrounits: '0',
+            expectedAt: null,
+            lines: [],
+        } as unknown as PurchaseOrder;
+        const query = {
+            leftJoinAndSelect: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis(),
+            orderBy: vi.fn().mockReturnThis(),
+            addOrderBy: vi.fn().mockReturnThis(),
+            skip: vi.fn().mockReturnThis(),
+            take: vi.fn().mockReturnThis(),
+            getManyAndCount: vi.fn().mockResolvedValue([[order], 1]),
+        };
+        const repository = { createQueryBuilder: vi.fn().mockReturnValue(query) };
+        const connection = { getRepository: vi.fn().mockReturnValue(repository) };
+        const service = new PurchaseOrderService(connection as never, {} as never, {} as never);
+
+        const result = await service.findAll({ channelId: 1 } as never);
+
+        expect(result.totalItems).toBe(1);
+        expect(result.items[0].events).toEqual([]);
+        expect(result.items[0].receipts).toEqual([]);
+        expect(result.items[0].supplierReturns).toEqual([]);
+    });
+
+    it('preserves loaded events on the order detail', async () => {
+        const event = { id: 12, type: 'CREATED', summary: '已创建' };
+        const order = {
+            id: 7,
+            channelId: 1,
+            stockLocationId: 2,
+            status: 'DRAFT',
+            totalMicrounits: '0',
+            paidMicrounits: '0',
+            returnCreditMicrounits: '0',
+            expectedAt: null,
+            lines: [],
+            events: [event],
+        } as unknown as PurchaseOrder;
+        const repository = { findOne: vi.fn().mockResolvedValue(order) };
+        const connection = { getRepository: vi.fn().mockReturnValue(repository) };
+        const service = new PurchaseOrderService(connection as never, {} as never, {} as never);
+
+        const result = await service.findOne({ channelId: 1 } as never, 7);
+
+        expect(result.events).toEqual([event]);
+    });
+});
+
 describe('purchase receipt idempotency', () => {
     it('returns the existing order without touching stock when the idempotency key already exists', async () => {
         const order = {
