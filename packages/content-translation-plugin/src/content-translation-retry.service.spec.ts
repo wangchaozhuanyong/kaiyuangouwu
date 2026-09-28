@@ -373,13 +373,20 @@ describe('durable translation outbox with an isolated SQL database', () => {
             await db.getRepository(ContentTranslationState).findOneByOrFail({ id: queued.id }),
         ).toMatchObject({
             status: 'PENDING',
+            attempts: 1,
             lastErrorCode: 'VARIANT_SETUP_PENDING',
             nextAttemptAt: new Date(Date.now() + 10_000),
         });
         expect(translate).not.toHaveBeenCalled();
 
         await db.createQueryBuilder().relation(ProductVariant, 'channels').of(variant).add(channel);
+        translate.mockRejectedValueOnce(new TranslationProviderError('RATE_LIMIT'));
         advance(10_001);
+        expect(await retry.retryPending()).toEqual({ scanned: 1, translated: 0, deferred: 1 });
+        expect(
+            await db.getRepository(ContentTranslationState).findOneByOrFail({ id: queued.id }),
+        ).toMatchObject({ status: 'PENDING', attempts: 1, lastErrorCode: 'RATE_LIMIT' });
+        advance(60_001);
         expect(await retry.retryPending()).toEqual({ scanned: 1, translated: 1, deferred: 0 });
         expect(
             (await db.getRepository(ContentTranslationState).findOneByOrFail({ id: queued.id })).status,
@@ -394,7 +401,7 @@ describe('durable translation outbox with an isolated SQL database', () => {
         ).toBe('Business services');
     });
 
-    it('cancels a variant assigned only to another Channel after five minutes', async () => {
+    it('cancels a variant assigned only to another Channel after thirty setup retries', async () => {
         await db.getRepository(ContentTranslationState).update(state.id, { status: 'CANCELLED' });
         const foreignChannel = await db.getRepository(Channel).save({ id: 2 });
         const variant = await db.getRepository(ProductVariant).save({ channels: [foreignChannel] });
@@ -408,7 +415,7 @@ describe('durable translation outbox with an isolated SQL database', () => {
             status: 'PENDING',
             origin: 'AUTO',
         });
-        advance(5 * 60_000);
+        await db.getRepository(ContentTranslationState).update(queued.id, { attempts: 30 });
 
         expect(await retry.retryPending()).toEqual({ scanned: 1, translated: 0, deferred: 1 });
         expect(
