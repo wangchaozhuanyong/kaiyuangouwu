@@ -80,6 +80,24 @@ export class ContentTranslationRetryService {
                 }
                 const snapshot = await this.adapter.load(this.connection.rawConnection.manager, state);
                 if (!snapshot) {
+                    // A newly created variant can be queued before its Channel and translation rows
+                    // become visible to the outbox worker. Give that setup a bounded window;
+                    // long-lived or cross-shop tasks still cancel without calling the provider.
+                    if (
+                        row.entityType === 'ProductVariant' &&
+                        Date.now() - row.createdAt.getTime() < 5 * 60_000
+                    ) {
+                        await repository.update(this.criteria(state), {
+                            status: 'PENDING',
+                            leaseToken: null,
+                            leaseUntil: null,
+                            nextAttemptAt: new Date(Date.now() + 10_000),
+                            error: '等待新建 SKU 的店铺归属和翻译记录就绪',
+                            lastErrorCode: 'VARIANT_SETUP_PENDING',
+                        });
+                        result.deferred++;
+                        continue;
+                    }
                     await repository.update(this.criteria(state), {
                         status: 'CANCELLED',
                         leaseToken: null,
