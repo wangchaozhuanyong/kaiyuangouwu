@@ -227,6 +227,18 @@ export function CatalogModule() {
     });
 
     useEffect(() => {
+        const collections = collectionsQuery.data?.collections;
+        if (
+            categoryId &&
+            collections &&
+            collections.items.length === collections.totalItems &&
+            !collections.items.some(collection => collection.id === categoryId)
+        ) {
+            setFilter('category', '');
+        }
+    }, [categoryId, collectionsQuery.data, setFilter]);
+
+    useEffect(() => {
         if (!notification) return;
         const timeout = window.setTimeout(() => setNotification(null), 3500);
         return () => window.clearTimeout(timeout);

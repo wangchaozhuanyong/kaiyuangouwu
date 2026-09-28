@@ -341,6 +341,14 @@ describe('CatalogModule category columns', () => {
 });
 
 describe('CatalogModule filtered empty results', () => {
+    it('clears a category URL from another store after loading the current store categories', async () => {
+        const container = await renderCatalog({ initialEntry: '/?category=other-store' });
+
+        expect(container.querySelector<HTMLSelectElement>('[aria-label="按商品分类筛选"]')?.value).toBe('');
+        expect(container.textContent).toContain('白利群2');
+        expect(container.textContent).not.toContain('重置筛选');
+    });
+
     it('describes the default store as an independent store instead of an aggregate catalog', async () => {
         const container = await renderCatalog({ channelCode: '__default_channel__' });
 

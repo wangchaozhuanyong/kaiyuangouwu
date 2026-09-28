@@ -6,6 +6,7 @@ import { sensitiveActionPasswordLink } from './apollo-sensitive-action';
 import { CUSTOM_FIELD_POSSIBLE_TYPES } from './custom-fields/custom-fields.graphql';
 import { runAdminActionWithFeedback } from './utils/admin-action-feedback';
 import { getAdminDisplayLanguage } from './utils/admin-language';
+import { clearAllListSearch } from './utils/list-state-storage';
 
 const AUTH_TOKEN_KEY = 'vendure-auth-token';
 const AUTH_PERSISTENCE_KEY = 'vendure-auth-persistence';
@@ -318,6 +319,7 @@ export const switchActiveChannel = async (channelToken: string) => {
     try {
         replaceActiveChannelToken(channelToken);
         await client.clearStore();
+        clearAllListSearch();
     } catch (error) {
         replaceActiveChannelToken(previousChannelToken);
         throw error;
