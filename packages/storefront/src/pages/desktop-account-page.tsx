@@ -297,9 +297,9 @@ export function DesktopAccountPage({
                         <button type="button" onClick={() => navigate({ name: 'support' })}>
                             <Headphones aria-hidden="true" />
                             <span>
-                                <strong>{isZh ? '联系客服' : 'Customer service'}</strong>
+                                <strong>{isZh ? '帮助中心' : 'Help center'}</strong>
                                 <small>
-                                    {isZh ? '商品、订单与售后咨询' : 'Products, orders and after-sales'}
+                                    {isZh ? '查看帮助与服务信息' : 'View help and service information'}
                                 </small>
                             </span>
                             <ChevronRight aria-hidden="true" />

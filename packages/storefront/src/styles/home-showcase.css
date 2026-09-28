@@ -693,6 +693,10 @@ html[lang='en'] .quick-grid b {
     gap: 10px;
 }
 
+.home-dual-showcase > .showcase-card:only-child {
+    grid-column: 1 / -1;
+}
+
 .showcase-card {
     --showcase-accent-rgb: 99 91 255;
     --showcase-accent-text: #8cebf7;
