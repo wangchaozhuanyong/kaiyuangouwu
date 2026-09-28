@@ -80,6 +80,9 @@ void test('release workflow ships the fixed live preflight inputs and migration 
     assert.match(workflow, /len\(payload\.encode\('utf-8'\)\) <= 80_000/u);
     assert.match(workflow, /git merge-base --is-ancestor "\$OPS_EXPECTED_RUNTIME_SHA" "\$OPS_SOURCE_SHA"/u);
     assert.match(workflow, /audit-administrator-product-readiness/u);
+    assert.match(workflow, /plan-asset-webp-migration/u);
+    assert.match(workflow, /apply-asset-webp-migration-reviewed/u);
+    assert.match(workflow, /transport\('packages\/dev-server\/scripts\/asset-webp-migration\.mjs'/u);
     assert.match(workflow, /\[\[ "\$OPS_PRODUCT_ID" =~ \^\[1-9\]\[0-9\]\*\$ \]\]/u);
     assert.match(workflow, /OPS_PRODUCT_ID=\{product_id\}/u);
     assert.match(
@@ -142,6 +145,11 @@ void test('release workflow ships the fixed live preflight inputs and migration 
         ],
         [...commonFiles, 'packages/dev-server/scripts/order-sales-ownership-backfill.mjs'],
         [...commonFiles, 'packages/dev-server/scripts/moyao-default-store-migration.mjs'],
+        [
+            ...commonFiles,
+            ...backupFiles.map(file => `deploy/systemd/${file}`),
+            'packages/dev-server/scripts/asset-webp-migration.mjs',
+        ],
         [...commonFiles, 'deploy/systemd/vendure-backup-s3-guard.py'],
     ];
     const encodedBytes = bundles.map(files =>
@@ -157,6 +165,71 @@ void test('release workflow ships the fixed live preflight inputs and migration 
     assert.ok(
         Math.max(...encodedBytes) < 78_000,
         `Largest compressed production operation bundle uses ${Math.max(...encodedBytes)} bytes`,
+    );
+});
+
+void test('asset WebP migration requires a pinned runtime, reviewed plan and verified backup', () => {
+    const digest = 'b'.repeat(64);
+    const plan = {
+        schema: 'vendure-asset-webp-migration-v1',
+        remaining: 2,
+        metadataRemaining: 2,
+        selected: 2,
+        operationDigest: digest,
+    };
+    const calls = [];
+    const runtime = { markerSha: sourceSha, currentRuntime: '/var/www/runtime' };
+    const result = operations.runAssetWebpMigration(
+        {
+            operation: 'apply-asset-webp-migration-reviewed',
+            sourceSha,
+            expectedRuntimeSha: sourceSha,
+            expectedPlanSha256: digest,
+        },
+        {
+            inspect: () => runtime,
+            health: () => ({
+                status: 'ok',
+                output: 'Result=success\nExecMainStatus=0\nActiveState=inactive',
+            }),
+            backup: () => {
+                calls.push('backup');
+                return { offsite: true };
+            },
+            spawn: (_binary, args) => {
+                calls.push(args.at(-2) === 'apply' ? 'apply' : args.at(-1));
+                return {
+                    status: 0,
+                    stdout: JSON.stringify(
+                        args.includes('verify')
+                            ? { remaining: 0, databaseRemaining: 0, metadataRemaining: 0 }
+                            : plan,
+                    ),
+                };
+            },
+        },
+    );
+    assert.deepEqual(calls, ['plan', 'backup', 'apply', 'verify']);
+    assert.equal(result.verification.remaining, 0);
+    assert.equal(result.applied, true);
+    assert.throws(() =>
+        operations.runAssetWebpMigration(
+            {
+                operation: 'apply-asset-webp-migration-reviewed',
+                sourceSha,
+                expectedRuntimeSha: sourceSha,
+                expectedPlanSha256: 'c'.repeat(64),
+            },
+            {
+                inspect: () => runtime,
+                health: () => ({
+                    status: 'ok',
+                    output: 'Result=success\nExecMainStatus=0\nActiveState=inactive',
+                }),
+                backup: () => assert.fail('An altered plan must not create a backup or write'),
+                spawn: () => ({ status: 0, stdout: JSON.stringify(plan) }),
+            },
+        ),
     );
 });
 

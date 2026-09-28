@@ -759,6 +759,14 @@ export interface AssetOptions {
     assetPreviewStrategy?: AssetPreviewStrategy;
     /**
      * @description
+     * Format in which uploaded image Assets are stored. `webp` transcodes the source and
+     * its preview before persistence. Non-image Assets retain their original format.
+     *
+     * @default original
+     */
+    uploadedImageFormat?: 'original' | 'webp';
+    /**
+     * @description
      * An array of the permitted file types that may be uploaded as Assets. Each entry
      * should be in the form of a valid
      * [unique file type specifier](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/file#Unique_file_type_specifiers)

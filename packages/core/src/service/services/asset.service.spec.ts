@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -17,7 +17,7 @@ afterEach(async () => {
     for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 
-async function fixture(failure?: string) {
+async function fixture(failure?: string, uploadedImageFormat: 'original' | 'webp' = 'original') {
     const root = await mkdtemp(path.join(tmpdir(), 'asset-compensation-'));
     roots.push(root);
     let rollback!: () => void;
@@ -43,6 +43,8 @@ async function fixture(failure?: string) {
                 assetStorageStrategy: new LocalAssetStorageStrategy(root),
                 assetNamingStrategy: new HashedAssetNamingStrategy(),
                 assetPreviewStrategy: preview,
+                uploadedImageFormat,
+                uploadMaxFileSize: 20 * 1024 * 1024,
             },
         } as any,
         {} as any,
@@ -76,7 +78,7 @@ async function fixture(failure?: string) {
         const details = await Promise.all(entries.map(entry => stat(path.join(root, entry))));
         return entries.filter((_entry, index) => details[index].isFile());
     };
-    return { service, root, input, files, rollback };
+    return { service, root, input, files, rollback, preview };
 }
 
 describe('Asset upload filesystem compensation', () => {
@@ -105,5 +107,55 @@ describe('Asset upload filesystem compensation', () => {
         const test = await fixture();
         await test.service.create({ languageCode: 'en' } as any, test.input);
         expect(await test.files()).toHaveLength(2);
+    });
+    it.each(['png', 'jpeg'] as const)(
+        'stores uploaded %s source and preview as WebP with matching asset metadata',
+        async format => {
+            const test = await fixture(undefined, 'webp');
+            const original = sharp({ create: { width: 12, height: 9, channels: 3, background: '#369' } });
+            const bytes = await (format === 'png' ? original.png() : original.jpeg()).toBuffer();
+            test.input.file = Promise.resolve({
+                filename: `shop-photo.${format === 'jpeg' ? 'jpg' : 'png'}`,
+                mimetype: `image/${format}`,
+                createReadStream: () => Readable.from(bytes),
+            });
+            const asset = await test.service.create({ languageCode: 'en' } as any, test.input);
+            expect(asset).toMatchObject({ mimeType: 'image/webp', fileSize: expect.any(Number) });
+            if (!('source' in asset)) throw new Error('Expected an uploaded Asset');
+            expect(asset.source).toMatch(/\.webp$/u);
+            expect(asset.preview).toMatch(/\.webp$/u);
+            expect(asset.translations[0].name).toBe(`shop-photo.${format === 'jpeg' ? 'jpg' : 'png'}`);
+            expect(asset.fileSize).toBe((await readFile(path.join(test.root, asset.source))).length);
+            for (const file of [asset.source, asset.preview]) {
+                expect(await sharp(await readFile(path.join(test.root, file))).metadata()).toMatchObject({
+                    format: 'webp',
+                    width: 12,
+                    height: 9,
+                });
+            }
+        },
+    );
+    it('rejects an undecodable image without saving a non-WebP source', async () => {
+        const test = await fixture(undefined, 'webp');
+        test.input.file = Promise.resolve({
+            filename: 'broken.png',
+            mimetype: 'image/png',
+            createReadStream: () => Readable.from(Buffer.from('not an image')),
+        });
+        const result = await test.service.create({ languageCode: 'en' } as any, test.input);
+        expect(result).toMatchObject({ __typename: 'MimeTypeError' });
+        expect(await test.files()).toEqual([]);
+    });
+    it('normalizes a custom PNG preview to WebP', async () => {
+        const test = await fixture(undefined, 'webp');
+        const png = await sharp({ create: { width: 6, height: 6, channels: 3, background: '#fff' } })
+            .png()
+            .toBuffer();
+        vi.spyOn(test.preview, 'generatePreviewImage').mockResolvedValue(png);
+        const asset = await test.service.create({ languageCode: 'en' } as any, test.input);
+        if (!('preview' in asset)) throw new Error('Expected an uploaded Asset');
+        expect((await sharp(await readFile(path.join(test.root, asset.preview))).metadata()).format).toBe(
+            'webp',
+        );
     });
 });

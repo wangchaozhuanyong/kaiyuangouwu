@@ -19,6 +19,7 @@ import { ReadStream } from 'fs';
 import { IncomingMessage } from 'http';
 import mime from 'mime-types';
 import path from 'path';
+import sharp from 'sharp';
 import { Readable, Stream } from 'stream';
 import { IsNull } from 'typeorm';
 import { FindOneOptions } from 'typeorm/find-options/FindOneOptions';
@@ -104,6 +105,21 @@ async function detectMimeTypeFromContents(buffer: Buffer): Promise<string | unde
  * sufficient to identify the content type without buffering the whole upload.
  */
 const CONTENT_DETECTION_SAMPLE_BYTES = 4100;
+
+async function readUploadBytes(stream: Readable, maxBytes: number): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of stream) {
+        const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        size += bytes.length;
+        if (size > maxBytes) {
+            stream.destroy();
+            throw new Error('Image exceeds the configured asset upload size limit');
+        }
+        chunks.push(bytes);
+    }
+    return Buffer.concat(chunks, size);
+}
 
 /**
  * Reads up to `byteCount` leading bytes from a stream for inspection so the uploaded content
@@ -731,7 +747,32 @@ export class AssetService implements OnModuleInit {
         }
 
         const { assetPreviewStrategy, assetStorageStrategy } = assetOptions;
-        const sourceFileName = await this.getSourceFileName(ctx, filename);
+        const isImage =
+            getAssetType(mimetype) === AssetType.IMAGE ||
+            (contentMimeType != null && getAssetType(contentMimeType) === AssetType.IMAGE);
+        const convertToWebp = assetOptions.uploadedImageFormat === 'webp' && isImage;
+        let sourceBytes: Buffer | undefined;
+        if (convertToWebp) {
+            const originalBytes = complete
+                ? head
+                : await readUploadBytes(stream as Readable, assetOptions.uploadMaxFileSize);
+            if (originalBytes.length > assetOptions.uploadMaxFileSize) {
+                throw new Error('Image exceeds the configured asset upload size limit');
+            }
+            try {
+                sourceBytes = await sharp(originalBytes, { animated: true, failOn: 'truncated' })
+                    .rotate()
+                    .webp({ quality: 95, effort: 4 })
+                    .toBuffer();
+            } catch {
+                return new MimeTypeError({ fileName: filename, mimeType: mimetype });
+            }
+        }
+        const storedMimeType = convertToWebp ? 'image/webp' : mimetype;
+        const storedFileName = convertToWebp
+            ? `${path.basename(filename, path.extname(filename))}.webp`
+            : filename;
+        const sourceFileName = await this.getSourceFileName(ctx, storedFileName);
         const previewFileName = await this.getPreviewFileName(ctx, sourceFileName);
 
         const writtenFiles: string[] = [];
@@ -759,14 +800,24 @@ export class AssetService implements OnModuleInit {
             // If the stream was fully consumed during the peek (a small file), `head` holds the
             // whole content and the stream cannot be replayed; write the buffer directly.
             // Otherwise the peeked bytes were unshifted back, so write the full stream.
-            const sourceFileIdentifier = complete
-                ? await assetStorageStrategy.writeFileFromBuffer(sourceFileName, head)
-                : await assetStorageStrategy.writeFileFromStream(sourceFileName, stream);
+            const sourceFileIdentifier = sourceBytes
+                ? await assetStorageStrategy.writeFileFromBuffer(sourceFileName, sourceBytes)
+                : complete
+                  ? await assetStorageStrategy.writeFileFromBuffer(sourceFileName, head)
+                  : await assetStorageStrategy.writeFileFromStream(sourceFileName, stream);
             writtenFiles.push(sourceFileIdentifier);
             const sourceFile = await assetStorageStrategy.readFileToBuffer(sourceFileIdentifier);
             let preview: Buffer;
             try {
-                preview = await assetPreviewStrategy.generatePreviewImage(ctx, mimetype, sourceFile);
+                const generatedPreview = await assetPreviewStrategy.generatePreviewImage(
+                    ctx,
+                    storedMimeType,
+                    sourceFile,
+                );
+                preview =
+                    convertToWebp && (await sharp(generatedPreview).metadata()).format !== 'webp'
+                        ? await sharp(generatedPreview).webp({ quality: 95, effort: 4 }).toBuffer()
+                        : generatedPreview;
             } catch (e: any) {
                 const message: string = typeof e.message === 'string' ? e.message : e.message.toString();
                 Logger.error(`Could not create Asset preview image: ${message}`, undefined, e.stack);
@@ -777,7 +828,7 @@ export class AssetService implements OnModuleInit {
                 preview,
             );
             writtenFiles.push(previewFileIdentifier);
-            const type = getAssetType(mimetype);
+            const type = getAssetType(storedMimeType);
             const { width, height } = await this.getDimensions(
                 type === AssetType.IMAGE ? sourceFile : preview,
             );
@@ -788,7 +839,7 @@ export class AssetService implements OnModuleInit {
                 width,
                 height,
                 fileSize: sourceFile.byteLength,
-                mimeType: mimetype,
+                mimeType: storedMimeType,
                 source: sourceFileIdentifier,
                 preview: previewFileIdentifier,
                 focalPoint: null,

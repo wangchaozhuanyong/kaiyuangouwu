@@ -549,6 +549,9 @@ class ReadonlySettingsTestPlugin implements OnApplicationBootstrap {
  * Config settings used during development
  */
 export const devConfig: VendureConfig = {
+    assetOptions: {
+        uploadedImageFormat: 'webp',
+    },
     apiOptions: {
         hostname: process.env.VENDURE_HOSTNAME || (IS_PRODUCTION ? '127.0.0.1' : undefined),
         port: Number(process.env.PORT) || Number(process.env.API_PORT) || API_PORT,
