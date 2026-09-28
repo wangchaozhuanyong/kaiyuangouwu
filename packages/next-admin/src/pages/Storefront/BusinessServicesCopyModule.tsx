@@ -177,11 +177,15 @@ export function BusinessServicesCopyModule() {
             if (!stillCurrent()) return;
             const refreshed = verifyContentChannel((await query.refetch()).data, channel.id);
             if (!stillCurrent()) return;
-            verifySavedBlock(
+            const savedBlock = verifySavedBlock(
                 refreshed.storefrontContentBlocks.find(block => block.id === saved.id),
                 { id: saved.id, ...input },
                 saved,
             );
+            const savedDraft = copyDraft(savedBlock);
+            setDraft(savedDraft);
+            setOriginalDraft(savedDraft);
+            setSignature(`${channel.id}:${savedBlock.id}:${savedBlock.updatedAt}`);
             setNotice('已保存到当前店铺，并重新读取核对；中文文案将按翻译设置同步。');
         } catch (cause) {
             if (!stillCurrent()) return;

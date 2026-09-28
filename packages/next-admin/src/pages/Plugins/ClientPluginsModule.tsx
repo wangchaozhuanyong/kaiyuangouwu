@@ -186,9 +186,17 @@ export function ClientPluginsModule() {
                     variables: { input: storefrontBlockInput(draft) },
                 });
             }
+            const refreshed = await content.refetch();
+            if (!refreshed.data) throw new Error('保存后未读到插件配置，请刷新后核对');
+            if (refreshed.data.activeChannel.id !== content.data.activeChannel.id) return;
+            const savedBlock = refreshed.data.storefrontContentBlocks.find(
+                block => block.type === 'CLIENT_PLUGINS' && block.code === 'storefront-client-plugins',
+            );
+            if (!savedBlock) throw new Error('保存后未读到插件配置，请刷新后核对');
+            setDraft(createDraft(savedBlock));
+            setLoadedSignature(`${refreshed.data.activeChannel.id}:${savedBlock.id}:${savedBlock.updatedAt}`);
             setNotice('客户端插件配置已保存');
             setActionError('');
-            await content.refetch();
         } catch (error) {
             setActionError(errorText(error));
             setNotice('');
