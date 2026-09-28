@@ -484,6 +484,9 @@ export function storefrontBlockValidation(block: StorefrontContentBlock): string
         return '启用核心品类前至少需要一张已启用卡片';
     }
     if (block.targetType !== 'NONE' && !block.targetValue?.trim()) return '请填写跳转目标';
+    if (block.targetType === 'URL' && !isStorefrontTargetUrl(block.targetValue)) {
+        return '跳转链接必须是站内路径或 HTTP(S) 地址';
+    }
     const startsAt = block.startsAt ? new Date(block.startsAt).getTime() : null;
     const endsAt = block.endsAt ? new Date(block.endsAt).getTime() : null;
     if (startsAt !== null && Number.isNaN(startsAt)) return '开始展示时间无效';
@@ -515,6 +518,13 @@ export function storefrontBlockValidation(block: StorefrontContentBlock): string
         }
         if (block.type !== 'SUPPORT' && item.targetType !== 'NONE' && !item.targetValue?.trim()) {
             return `请填写第 ${index + 1} 个子项的跳转目标`;
+        }
+        if (
+            block.type !== 'SUPPORT' &&
+            item.targetType === 'URL' &&
+            !isStorefrontTargetUrl(item.targetValue)
+        ) {
+            return `第 ${index + 1} 个子项的跳转链接必须是站内路径或 HTTP(S) 地址`;
         }
         if (block.type === 'SUPPORT' && item.enabled) {
             const channel =
@@ -599,6 +609,11 @@ function isHttpUrl(value: string | null): boolean {
     } catch {
         return false;
     }
+}
+
+function isStorefrontTargetUrl(value: string | null): boolean {
+    const target = value?.trim();
+    return Boolean(target && (target.startsWith('/') || target.startsWith('#/') || isHttpUrl(target)));
 }
 
 export function toLocalDateTime(value: string | null): string {

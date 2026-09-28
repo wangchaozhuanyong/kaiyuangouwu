@@ -5,6 +5,7 @@ import {
     fromLocalDateTime,
     newAccountHeroBlock,
     newContentBlock,
+    newContentItem,
     normalizeSupportAccount,
     storefrontBlockInput,
     storefrontBlockValidation,
@@ -195,6 +196,28 @@ describe('storefront support content editor', () => {
                     item.translations.every(translation => !translation.label),
             ),
         ).toBe(true);
+    });
+});
+
+describe('storefront content URL targets', () => {
+    it('rejects unsafe block and item URLs before saving', () => {
+        const block = newContentBlock('STORY', 0);
+        block.targetType = 'URL';
+        block.targetValue = 'javascript:alert(1)';
+        expect(storefrontBlockValidation(block)).toBe('跳转链接必须是站内路径或 HTTP(S) 地址');
+
+        block.targetValue = '/promo';
+        const item = newContentItem(0);
+        item.translations[0].label = '了解更多';
+        item.targetType = 'URL';
+        item.targetValue = 'file:///etc/passwd';
+        block.items = [item];
+        expect(storefrontBlockValidation(block)).toBe('第 1 个子项的跳转链接必须是站内路径或 HTTP(S) 地址');
+
+        item.targetValue = 'https://example.com/promo';
+        expect(storefrontBlockValidation(block)).toBeNull();
+        block.targetValue = '#/category';
+        expect(storefrontBlockValidation(block)).toBeNull();
     });
 });
 
