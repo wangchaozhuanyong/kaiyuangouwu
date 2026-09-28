@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { FormEvent, MouseEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
-import { fulfillmentStateDisplayLabel, orderStateDisplayLabel } from '../../common/src/display-localization';
+import { fulfillmentStateDisplayLabel } from '../../common/src/display-localization';
 
 import { ShopApi } from './api';
 import { formatBusinessDate } from './business-time';
@@ -45,6 +45,7 @@ import { PageSkeleton } from './route-loading';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
+import { orderStateLabel, orderStatesForTab } from './storefront-ui/order-ui';
 import { EmptyState, SubHeader, Subpage } from './storefront-ui/page-shell';
 import {
     ProductImagePlaceholder,
@@ -1168,6 +1169,7 @@ export function OrderDetailPage({
         );
     }
     const inTransit = ['Shipped', 'PartiallyShipped'].includes(order.state);
+    const inCart = order.state === 'AddingItems';
     const pending = ['AddingItems', 'ArrangingPayment'].includes(order.state);
     const fulfillments = order.fulfillments ?? [];
     const digitalDeliveries = order.digitalDeliveries ?? [];
@@ -1205,21 +1207,25 @@ export function OrderDetailPage({
               ? isZh
                   ? '数字商品已可下载，链接为短效安全链接'
                   : 'Your digital products are ready. Download links are short-lived.'
-              : pending
+              : inCart
                 ? isZh
-                    ? '订单等待支付，请在支付页完成付款'
-                    : 'Complete payment to continue'
-                : inTransit
+                    ? '商品仍在购物车，尚未提交结算'
+                    : 'Items are still in the cart and checkout has not started'
+                : pending
                   ? isZh
-                      ? '商品正在运输中，请留意物流更新'
-                      : 'Your order is in transit'
-                  : ['PaymentAuthorized', 'PaymentSettled'].includes(order.state)
+                      ? '订单等待支付，请在支付页完成付款'
+                      : 'Complete payment to continue'
+                  : inTransit
                     ? isZh
-                        ? '商家正在准备你的商品'
-                        : 'The merchant is preparing your order'
-                    : isZh
-                      ? '订单状态已更新'
-                      : 'Order status updated';
+                        ? '商品正在运输中，请留意物流更新'
+                        : 'Your order is in transit'
+                    : ['PaymentAuthorized', 'PaymentSettled'].includes(order.state)
+                      ? isZh
+                          ? '商家正在准备你的商品'
+                          : 'The merchant is preparing your order'
+                      : isZh
+                        ? '订单状态已更新'
+                        : 'Order status updated';
     const navigateToSupport = () => {
         void navigate(routeNavigateOptions({ name: 'support', orderCode: order.code }) as never);
     };
@@ -1234,7 +1240,7 @@ export function OrderDetailPage({
             <PriceSummary order={order} locale={locale} language={language} />
         </section>
     );
-    const orderActions = (
+    const orderActions = !inCart && (
         <div className={orderPageClassName('order-detail-actions')}>
             {canCancel && (
                 <button
@@ -1297,7 +1303,7 @@ export function OrderDetailPage({
                 <em>{orderLinePolicyLabel(line, language)}</em>
             </div>
             <span>
-                <b>{formatMoney(line.linePriceWithTax, line.productVariant.currencyCode, locale)}</b>
+                <b>{formatMoney(line.linePriceWithTax, order.currencyCode, locale)}</b>
                 <small>×{line.quantity}</small>
             </span>
         </article>
@@ -2262,21 +2268,32 @@ function OrderCard({
 }) {
     const isZh = language === 'zh';
     const compactCopy = compactUiCopy[language];
-    const isPendingPayment = ['AddingItems', 'ArrangingPayment'].includes(order.state);
+    const isCart = order.state === 'AddingItems';
+    const isPendingPayment = order.state === 'ArrangingPayment';
     const isPaidOrShipping = ['PaymentAuthorized', 'PaymentSettled'].includes(order.state);
     const isShipped = ['Shipped', 'PartiallyShipped'].includes(order.state);
     const isDelivered = order.state === 'Delivered' || order.state === 'TestPaymentSettled';
     const isCancelled = order.state === 'Cancelled';
+    const totalLabel = isCart
+        ? isZh
+            ? '预估合计'
+            : 'Estimated total'
+        : isPendingPayment
+          ? compactCopy.orders.due
+          : isZh
+            ? '实付'
+            : 'Total';
 
-    const stateModifier = isPendingPayment
-        ? 'is-pending'
-        : isShipped
-          ? 'is-shipped'
-          : isPaidOrShipping
-            ? 'is-shipping'
-            : isDelivered
-              ? 'is-delivered'
-              : 'is-cancelled';
+    const stateModifier =
+        isCart || isPendingPayment
+            ? 'is-pending'
+            : isShipped
+              ? 'is-shipped'
+              : isPaidOrShipping
+                ? 'is-shipping'
+                : isDelivered
+                  ? 'is-delivered'
+                  : 'is-cancelled';
 
     const line = order.lines[0];
     const firstLineName = line?.productVariant.name ?? (isZh ? '订单商品' : 'Order item');
@@ -2310,9 +2327,7 @@ function OrderCard({
                                 : ''}
                         </small>
                         <span className="order-summary-total">
-                            <small>
-                                {isPendingPayment ? compactCopy.orders.due : isZh ? '实付' : 'Total'}
-                            </small>
+                            <small>{totalLabel}</small>
                             <strong>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</strong>
                         </span>
                     </span>
@@ -2391,9 +2406,7 @@ function OrderCard({
                             ? `共 ${order.totalQuantity} 件`
                             : `${order.totalQuantity} ${order.totalQuantity === 1 ? 'item' : 'items'}`}
                     </span>
-                    <span className={orderPageClassName('order-total-label')}>
-                        {isPendingPayment ? compactCopy.orders.due : isZh ? '实付' : 'Total'}
-                    </span>
+                    <span className={orderPageClassName('order-total-label')}>{totalLabel}</span>
                     <strong className={orderPageClassName('order-total-amount')}>
                         {formatMoney(order.totalWithTax, order.currencyCode, locale)}
                     </strong>
@@ -2406,7 +2419,7 @@ function OrderCard({
                     >
                         {isZh ? '查看详情' : 'Details'}
                     </button>
-                    {isPendingPayment ? (
+                    {isCart ? null : isPendingPayment ? (
                         <button
                             type="button"
                             className={orderPageClassName('order-btn primary-btn')}
@@ -2895,8 +2908,6 @@ function afterSalesReasonLabel(reason: AfterSalesReason, language: StorefrontLan
     return labels[reason][language];
 }
 
-const orderStateLabel = orderStateDisplayLabel;
-
 const fulfillmentStateLabel = fulfillmentStateDisplayLabel;
 
 function latestOrderFulfillment(
@@ -3051,12 +3062,4 @@ function digitalDeliveryStatus(
         FILE_MISSING: language === 'zh' ? '内容准备中，请联系商家' : 'Content is being prepared',
     };
     return labels[status];
-}
-
-function orderStatesForTab(tab: OrderTab): string[] | undefined {
-    if (tab === 'pending') return ['AddingItems', 'ArrangingPayment'];
-    if (tab === 'shipping') return ['PaymentAuthorized', 'PaymentSettled'];
-    if (tab === 'receiving') return ['Shipped', 'PartiallyShipped'];
-    if (tab === 'completed') return ['Delivered'];
-    return undefined;
 }

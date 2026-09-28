@@ -10,6 +10,7 @@ import { DesktopLayoutContext } from './desktop-layout';
 import { languageCodeFor } from './i18n';
 import { LogisticsPage, LogisticsTrackingSheet, OrderDetailPage, OrdersPage } from './order-pages';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
+import { orderNotification, orderStateLabel, orderStatesForTab } from './storefront-ui/order-ui';
 import { orderPageStyles } from './tailwind/order-page-styles';
 import { ActiveCustomer, MarketConfig, Order, StorefrontLanguage } from './types';
 
@@ -140,6 +141,20 @@ function renderLogistics(cachedOrders?: Order[]) {
 }
 
 describe('OrdersPage route query', () => {
+    it('shows an unsubmitted cart as a cart without offering payment', () => {
+        const cartOrder = { ...order, state: 'AddingItems', orderPlacedAt: null };
+        for (const desktop of [false, true]) {
+            const markup = renderOrders([cartOrder], 'zh', desktop);
+            expect(markup).toContain('购物车中');
+            expect(markup).toContain('预估合计');
+            expect(markup).not.toContain('立即付款');
+            expect(markup).not.toContain('实付');
+        }
+        expect(orderStatesForTab('pending')).toEqual(['ArrangingPayment']);
+        expect(orderStateLabel('ArrangingPayment', 'zh')).toBe('待付款');
+        expect(orderNotification(cartOrder, 'zh').title).toBe('商品仍在购物车');
+    });
+
     it('renders a desktop order summary with the real total and payment entry', () => {
         const pending = { ...order, state: 'ArrangingPayment', totalQuantity: 6, totalWithTax: 10800 };
         const markup = renderOrders([pending], 'zh', true);
@@ -307,6 +322,32 @@ describe('OrderDetailPage fulfillment actions', () => {
             }),
         );
     }
+
+    it('uses the order currency for historic lines even when the variant currency changed', () => {
+        const markup = renderDetail({
+            ...order,
+            lines: [
+                {
+                    ...order.lines[0],
+                    linePriceWithTax: 304,
+                    productVariant: { ...order.lines[0].productVariant, currencyCode: 'CNY' },
+                },
+            ],
+            subTotalWithTax: 304,
+            totalWithTax: 304,
+        });
+        expect(markup).toContain('MYR\u00a03.04');
+        expect(markup).not.toContain('¥3.04');
+    });
+
+    it('does not offer payment or a broken reopen action for an unsubmitted cart', () => {
+        const markup = renderDetail({ ...order, state: 'AddingItems', orderPlacedAt: null });
+        expect(markup).toContain('购物车中');
+        expect(markup).toContain('商品仍在购物车，尚未提交结算');
+        expect(markup).not.toContain('返回修改订单');
+        expect(markup).not.toContain('订单等待支付');
+        expect(markup).not.toContain('page-action-bar');
+    });
 
     it('shows included tax, delivery timing and the safe cancellation entry for authorized physical orders', () => {
         const markup = renderDetail({
