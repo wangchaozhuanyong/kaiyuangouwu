@@ -79,7 +79,10 @@ export function NotificationsPage() {
     const navigate = useNavigate();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const router = useRouter();
-    const goBack = () => router.history.back();
+    const goBack = () => {
+        if (router.history.canGoBack()) router.history.back();
+        else navigateTo({ name: 'home' });
+    };
     const { api, customer, market, locale, language } = NotificationsPageContext.useValue();
     const isZh = language === 'zh';
     const orders = customer?.orders.items ?? [];

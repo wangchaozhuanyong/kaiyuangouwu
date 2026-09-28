@@ -36,7 +36,10 @@ export function BrowsingHistoryPage() {
     const navigate = useNavigate();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const router = useRouter();
-    const goBack = () => router.history.back();
+    const goBack = () => {
+        if (router.history.canGoBack()) router.history.back();
+        else navigateTo({ name: 'home' });
+    };
     const {
         api,
         productIds,

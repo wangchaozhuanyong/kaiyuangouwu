@@ -1,5 +1,5 @@
 /* eslint-disable import/order -- prettier-plugin-organize-imports places type-only imports after runtime imports. */
-import { useRouter } from '@tanstack/react-router';
+import { useNavigate, useRouter } from '@tanstack/react-router';
 import { ChevronRight, Clock3, Copy, Headphones, MessageCircle, QrCode, Star, ThumbsUp } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { ShopApi } from '../api';
@@ -12,6 +12,7 @@ import wechatIcon from '../assets/support/wechat.svg';
 import whatsappIcon from '../assets/support/whatsapp.svg';
 import { SafeImage } from '../safe-image';
 import { SupportPageContext } from '../storefront-page-contexts';
+import { routeNavigateOptions } from '../storefront-router';
 import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
 import {
     StorefrontSupportChannel,
@@ -46,8 +47,12 @@ const channelIcons: Record<SupportChannelKey, string> = {
 };
 
 export function SupportPage() {
+    const navigate = useNavigate();
     const router = useRouter();
-    const goBack = () => router.history.back();
+    const goBack = () => {
+        if (router.history.canGoBack()) router.history.back();
+        else void navigate(routeNavigateOptions({ name: 'home' }) as never);
+    };
     const { api, customer, content, language, orderCode, focus, onNotify, onSignIn } =
         SupportPageContext.useValue();
     const isZh = language === 'zh';
