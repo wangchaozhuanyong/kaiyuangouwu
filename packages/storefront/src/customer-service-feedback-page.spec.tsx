@@ -28,7 +28,19 @@ const content = {
     targetValue: null,
     ctaLabel: '',
     settings: {},
-    items: [],
+    items: [
+        {
+            id: 'support-telegram',
+            enabled: true,
+            position: 0,
+            imageUrl: null,
+            targetType: 'URL',
+            targetValue: 'https://t.me/support_test',
+            settings: { supportChannel: 'TELEGRAM' },
+            label: 'Telegram',
+            description: '',
+        },
+    ],
 } as StorefrontContentBlock;
 
 const saved: CustomerServiceFeedback = {
