@@ -871,9 +871,10 @@ void test('reviewed archived-log cleanup excludes active logs and rejects a chan
         operations.inspectArchivedLogCleanup(sourceSha, {
             journalRoot,
             ssmRoot,
-            inspectScope: () => ({ repositorySha: sourceSha, runtimeSha: 'b'.repeat(40) }),
+            inspectScope: () => ({ repositorySha: 'c'.repeat(40), runtimeSha: 'b'.repeat(40) }),
         });
     const plan = inspect();
+    assert.equal(plan.repositorySha, 'c'.repeat(40));
     assert.deepEqual(
         plan.candidates.map(candidate => candidate.file),
         [rotated, archive].sort(),
