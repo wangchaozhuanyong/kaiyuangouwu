@@ -45,7 +45,7 @@ import { PageSkeleton } from './route-loading';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
-import { SubHeader, Subpage } from './storefront-ui/page-shell';
+import { EmptyState, SubHeader, Subpage } from './storefront-ui/page-shell';
 import {
     ProductImagePlaceholder,
     productImageUnavailableLabel,
@@ -2480,33 +2480,6 @@ function orderProductPresentation(
         description: hasAdditionalLines ? additionalItemsDescription : presentation.description,
         tags: isZh ? ['数字商品', presentation.tag] : ['Digital item', presentation.tag],
     };
-}
-
-function EmptyState({
-    icon,
-    title,
-    detail,
-    action,
-    onAction,
-}: {
-    icon: ReactNode;
-    title: string;
-    detail?: string;
-    action?: string;
-    onAction?: () => void;
-}) {
-    return (
-        <section className={orderPageClassName('empty-state')}>
-            <span>{icon}</span>
-            <h2>{title}</h2>
-            {detail && <p>{detail}</p>}
-            {action && (
-                <button type="button" onClick={onAction}>
-                    {action}
-                </button>
-            )}
-        </section>
-    );
 }
 
 function InlineError({

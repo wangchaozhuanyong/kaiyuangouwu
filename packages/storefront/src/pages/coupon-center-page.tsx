@@ -1,3 +1,4 @@
+import '../styles/coupon-center.css';
 // organize-imports-ignore
 import type { ShopApi } from '../api';
 import { useQuery } from '@tanstack/react-query';
@@ -458,7 +459,7 @@ export function CouponCenterPage() {
                     </small>
                 ) : null}
             </div>
-            <section className="coupon-center-instructions coupon-center-guide">
+            <section className="coupon-center-guide">
                 <h2>{isZh ? '使用说明' : 'Using your coupons'}</h2>
                 <p>
                     {isZh

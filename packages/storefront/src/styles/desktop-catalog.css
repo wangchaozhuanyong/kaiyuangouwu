@@ -454,9 +454,6 @@
         gap: 28px 24px;
         align-items: stretch;
     }
-    .desktop-catalog-results > .empty-state {
-        min-height: 360px;
-    }
     .desktop-catalog-extras {
         display: grid;
         gap: 16px;

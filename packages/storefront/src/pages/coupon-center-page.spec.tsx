@@ -58,11 +58,13 @@ describe('coupon center query states', () => {
 });
 
 describe('coupon center instruction layout', () => {
-    it('vertically aligns each instruction label with its value', () => {
+    it('keeps long rules readable in responsive label and value columns', () => {
         const stylesheet = readStorefrontStylesheet();
 
         expect(stylesheet).toMatch(
-            /\.coupon-center-instructions dl > div\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*72px minmax\(0, 1fr\);[^}]*align-items:\s*center;/,
+            /\.coupon-center-instructions dl > div\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\);[^}]*align-items:\s*center;/,
         );
+        expect(stylesheet).toMatch(/\.coupon-center-instructions dd\s*\{[^}]*overflow-wrap:\s*anywhere;/);
+        expect(stylesheet).toContain('repeat(auto-fit, minmax(min(100%, 150px), 1fr))');
     });
 });

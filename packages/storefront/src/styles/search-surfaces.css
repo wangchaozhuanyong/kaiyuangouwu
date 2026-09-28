@@ -384,13 +384,6 @@
 .search-page .search-results > .product-section {
     margin-top: 28px;
 }
-.search-page .empty-state {
-    min-height: 0;
-    padding: 32px 0;
-    background: transparent;
-    box-shadow: none;
-    border: 0;
-}
 .search-empty .search-browse {
     margin-top: 16px;
 }

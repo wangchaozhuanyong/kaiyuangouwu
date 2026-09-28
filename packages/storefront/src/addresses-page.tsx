@@ -22,7 +22,7 @@ import { PageSkeleton } from './route-loading';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
-import { SubHeader, Subpage } from './storefront-ui/page-shell';
+import { EmptyState, SubHeader, Subpage } from './storefront-ui/page-shell';
 import {
     ActiveCustomer,
     CustomerAddress,
@@ -767,30 +767,6 @@ export function AddressesPage({
     );
 }
 
-function EmptyState({
-    icon,
-    title,
-    detail,
-    action,
-    onAction,
-}: {
-    icon: ReactNode;
-    title: string;
-    detail?: string;
-    action: string;
-    onAction: () => void;
-}) {
-    return (
-        <section className="empty-state">
-            <span>{icon}</span>
-            <h2>{title}</h2>
-            {detail && <p>{detail}</p>}
-            <button type="button" onClick={onAction}>
-                {action}
-            </button>
-        </section>
-    );
-}
 function Field({
     name,
     label,

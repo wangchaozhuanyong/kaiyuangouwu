@@ -21,7 +21,7 @@ import {
     storefrontQueryKeys,
 } from './query-client';
 import { storefrontErrorMessage } from './storefront-errors';
-import { SubHeader } from './storefront-ui/page-shell';
+import { EmptyState, SubHeader } from './storefront-ui/page-shell';
 import { SafeImage } from './storefront-ui/product-display';
 import {
     ActiveCustomer,
@@ -137,7 +137,7 @@ export function ReviewCenterPage({
         <main className="page subpage review-center-page">
             <SubHeader title={isZh ? '评价中心' : 'Reviews'} language={language} onBack={onBack} />
             {!customer ? (
-                <ReviewEmptyState
+                <EmptyState
                     icon={<MessageSquare />}
                     title={isZh ? '登录后管理评价' : 'Sign in to manage reviews'}
                     detail={isZh ? '已购买商品的评价资格会显示在这里' : 'Eligible purchases appear here'}
@@ -154,7 +154,7 @@ export function ReviewCenterPage({
               (candidatesQuery.isPaused && candidatesQuery.data === undefined) ||
               reviewsQuery.isError ||
               candidatesQuery.isError ? (
-                <ReviewEmptyState
+                <EmptyState
                     icon={<RefreshCw />}
                     title={isZh ? '评价记录加载失败' : 'Could not load reviews'}
                     detail={
@@ -352,7 +352,7 @@ export function ReviewCenterPage({
                                     : 'No submitted reviews yet. Choose an item above to write your first one.'}
                             </p>
                         ) : (
-                            <ReviewEmptyState
+                            <EmptyState
                                 compact
                                 icon={<MessageSquare />}
                                 title={isZh ? '还没有评价' : 'No reviews yet'}
@@ -608,33 +608,6 @@ function ReviewStateBadge({
         REJECTED: isZh ? '未通过' : 'Not approved',
     };
     return <span className={`review-state is-${state.toLowerCase()}`}>{labels[state]}</span>;
-}
-
-function ReviewEmptyState({
-    icon,
-    title,
-    detail,
-    action,
-    onAction,
-    compact = false,
-}: {
-    icon: React.ReactNode;
-    title: string;
-    detail: string;
-    action: string;
-    onAction: () => void;
-    compact?: boolean;
-}) {
-    return (
-        <section className={compact ? 'empty-state is-compact' : 'empty-state'}>
-            <span>{icon}</span>
-            <strong>{title}</strong>
-            <small>{detail}</small>
-            <button type="button" onClick={onAction}>
-                {action}
-            </button>
-        </section>
-    );
 }
 
 function formatReviewDate(value: string, language: StorefrontLanguage): string {

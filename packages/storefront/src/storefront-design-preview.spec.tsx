@@ -22,6 +22,29 @@ afterEach(() => {
 });
 
 describe('storefront design preview', () => {
+    it('shows the preview shell without waiting for a storefront theme in the parent document', async () => {
+        mocks.storefrontConfig.mockResolvedValue({});
+        document.documentElement.setAttribute('data-storefront-theme-pending', '');
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        try {
+            await act(async () => {
+                root.render(<StorefrontDesignPreview />);
+                await Promise.resolve();
+            });
+            expect(document.documentElement.hasAttribute('data-storefront-theme-pending')).toBe(false);
+            expect(host.querySelector('iframe')?.src).toContain('storefrontPreviewEmbedded=1');
+        } finally {
+            await act(async () => {
+                root.unmount();
+                await Promise.resolve();
+            });
+            host.remove();
+            document.documentElement.removeAttribute('data-storefront-theme-pending');
+        }
+    });
+
     it('offers all routes, skins, viewport boundaries and review states', () => {
         const markup = renderToStaticMarkup(<StorefrontDesignPreview />);
         for (const route of storefrontRouteNames) expect(markup).toContain(`value="${route}"`);

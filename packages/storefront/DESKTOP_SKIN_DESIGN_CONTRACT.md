@@ -23,6 +23,8 @@
 - 皮肤身份选择器只能定义根级 CSS 变量。`skin-system.spec.ts` 同时检查前台源和实际共用的 `storefront-content-plugin/src/shared`，防止跨包组件重新引入皮肤覆盖。
 - 皮肤生命周期检查必须覆盖经典、新中式、科技极简往返切换和卸载清理；浏览器检查必须包含首次进入分类页，以及连续进入账户、订单、工具页再返回分类后的计算样式一致性。
 - 独立工具文档必须初始化共享语义令牌，不能假设外层商城 CSS 会跨文档继承；不得为视觉改动扩展会话或跨域授权协议。
+- 空状态统一复用 `storefront-ui/page-shell.tsx` 的 `EmptyState`；外观和共享行内错误由 `styles/state-surfaces.css` 管理，图标仍归 `semantic-icons.css`。页面通过 `compact` 表达紧凑场景，不复制组件、不在桌面或懒加载样式中重设高度、按钮和表面。
+- 优惠券中心的布局、说明与活动券归 `styles/coupon-center.css`，桌面券组件归 `desktop-coupon-ticket.css`；两者消费同一组语义色。说明区与券内元信息不共用表面类，断点规则随各自所有者维护。
 
 动效只用于解释状态变化，优先使用 `transform` 与 `opacity`，普通反馈控制在 120–180ms，强调反馈不超过 240ms；禁止 `transition: all`。用户选择减少动态效果时必须即时完成状态变化。视觉滤镜、模糊和阴影不能成为列表滚动的持续计算负担。
 

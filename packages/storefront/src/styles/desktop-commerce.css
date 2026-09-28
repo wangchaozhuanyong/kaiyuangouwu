@@ -1516,10 +1516,6 @@
         gap: 24px 16px;
         align-items: stretch;
     }
-    .desktop-catalog-results > .empty-state {
-        min-height: 340px;
-        background: var(--paper, #fff);
-    }
     .desktop-catalog-extras {
         margin-top: 32px;
     }
@@ -1671,25 +1667,6 @@
     }
     .desktop-store-layout .orders-page > .after-sales-list {
         padding: 0;
-    }
-    .desktop-store-layout .orders-page > .empty-state {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        min-height: 240px;
-        margin: 0;
-        padding: 36px 24px;
-        border: 0;
-        border-radius: var(--skin-card-radius);
-        background: var(--surface);
-        box-shadow: var(--skin-card-shadow);
-    }
-    .desktop-store-layout .orders-page > .empty-state > h2 {
-        margin: 0;
-    }
-    .desktop-store-layout .orders-page > .empty-state > p {
-        margin: 8px 0 0;
     }
     .desktop-store-layout .order-summary-card {
         display: flex;

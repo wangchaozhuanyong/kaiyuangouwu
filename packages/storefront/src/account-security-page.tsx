@@ -18,7 +18,7 @@ import {
     UserX,
     X,
 } from 'lucide-react';
-import { ChangeEvent, ReactNode, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, useEffect, useRef, useState } from 'react';
 
 import { serviceMessageDisplay } from '../../common/src/display-localization';
 
@@ -29,7 +29,7 @@ import { SafeImage } from './safe-image';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
-import { SubHeader, Subpage } from './storefront-ui/page-shell';
+import { EmptyState, SubHeader, Subpage } from './storefront-ui/page-shell';
 import {
     ActiveCustomer,
     CustomerAvatarHistoryEntry,
@@ -1028,26 +1028,4 @@ function formatAvatarRetentionDate(value: string, language: StorefrontLanguage):
         month: 'short',
         day: 'numeric',
     }).format(date);
-}
-
-function EmptyState({
-    icon,
-    title,
-    action,
-    onAction,
-}: {
-    icon: ReactNode;
-    title: string;
-    action: string;
-    onAction: () => void;
-}) {
-    return (
-        <section className="empty-state">
-            <span>{icon}</span>
-            <h2>{title}</h2>
-            <button type="button" onClick={onAction}>
-                {action}
-            </button>
-        </section>
-    );
 }

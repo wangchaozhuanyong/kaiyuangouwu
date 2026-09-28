@@ -12,6 +12,7 @@ function inlineStylesheet(url: URL, ancestors = new Set<string>()): string {
 export function readStorefrontStylesheet(additionalStylePaths: string[] = []): string {
     const paths = [
         './styles/commerce-surfaces.css',
+        './styles/coupon-center.css',
         './styles.css',
         './styles/desktop-layout.css',
         './styles/account-catalog-surfaces.css',

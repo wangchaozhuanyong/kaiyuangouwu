@@ -183,6 +183,8 @@ export function StorefrontDesignPreview() {
     const canvasColor = resolveStorefrontSemanticPalette(preset, branding).page;
 
     useEffect(() => {
+        // The preview shell owns no storefront theme; its iframe resolves that theme separately.
+        document.documentElement.removeAttribute('data-storefront-theme-pending');
         document.title = '电脑端模板真实组件预览';
         let robots = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
         if (!robots) {

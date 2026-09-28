@@ -27,7 +27,7 @@ import { appliedCouponLabel } from './storefront-coupons';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions, RouteState } from './storefront-router';
 import { CouponSheet } from './storefront-ui/cart-ui';
-import { SubHeader, Subpage } from './storefront-ui/page-shell';
+import { EmptyState, SubHeader, Subpage } from './storefront-ui/page-shell';
 import {
     ProductImagePlaceholder,
     productImageUnavailableLabel,
@@ -1705,29 +1705,7 @@ function Sheet({
         </div>
     );
 }
-function EmptyState({
-    icon,
-    title,
-    action,
-    onAction,
-}: {
-    icon: ReactNode;
-    title: string;
-    action?: string;
-    onAction?: () => void;
-}) {
-    return (
-        <section className={checkoutPageClassName('empty-state')}>
-            <span>{icon}</span>
-            <h2>{title}</h2>
-            {action && (
-                <button type="button" onClick={onAction}>
-                    {action}
-                </button>
-            )}
-        </section>
-    );
-}
+
 function InlineError({ message }: { message: string }) {
     return (
         <div

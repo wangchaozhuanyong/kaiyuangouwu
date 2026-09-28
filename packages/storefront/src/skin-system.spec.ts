@@ -19,6 +19,50 @@ function presetRootBlock(source: string, presetId: string): string {
 }
 
 describe('storefront skin system', () => {
+    it('gives shared empty states one appearance owner instead of route and desktop overrides', () => {
+        const violations: string[] = [];
+        for (const file of readdirSync(path.join(__dirname, 'styles')).filter(name =>
+            name.endsWith('.css'),
+        )) {
+            if (['state-surfaces.css', 'semantic-icons.css'].includes(file)) continue;
+            postcss.parse(stylesheet(`./styles/${file}`)).walkRules(rule => {
+                if (!/\.empty-state(?:[\s.:[>,-]|$)/u.test(rule.selector)) return;
+                rule.walkDecls(declaration => {
+                    // Parents may place a state in a grid or remove an outer margin, never repaint it.
+                    if (!['grid-column', 'width', 'margin-block'].includes(declaration.prop)) {
+                        violations.push(`${file}: ${rule.selector}: ${declaration.prop}`);
+                    }
+                });
+            });
+        }
+        expect(violations).toEqual([]);
+        for (const file of [
+            'addresses-page.tsx',
+            'order-pages.tsx',
+            'payment-pages.tsx',
+            'checkout-page.tsx',
+            'account-security-page.tsx',
+            'review-pages.tsx',
+        ]) {
+            expect(stylesheet(`./${file}`)).not.toMatch(/function (?:Review)?EmptyState\(/u);
+        }
+        const states = stylesheet('./styles/state-surfaces.css');
+        expect(states).not.toMatch(/#[\da-f]{3,8}\b|\bwhite\b|!important/iu);
+        expect(states).toContain('var(--experience-control-min)');
+        expect(states).toContain('var(--accent-foreground)');
+        expect(states).toContain('var(--skin-control-radius)');
+    });
+
+    it('keeps coupon appearance out of desktop layout and unrelated global styles', () => {
+        for (const file of ['desktop-pages.css', 'ai-product-covers.css', 'visual-presets.css']) {
+            expect(stylesheet(`./styles/${file}`)).not.toMatch(/\.coupon-(?:center|activity)-/u);
+        }
+        expect(stylesheet('./styles/desktop-coupon-ticket.css')).not.toMatch(/#[\da-f]{3,8}\b/iu);
+        expect(stylesheet('./pages/coupon-center-page.tsx')).not.toContain(
+            'coupon-center-instructions coupon-center-guide',
+        );
+    });
+
     it('owns transparent decorative icons globally without page or skin frames', () => {
         const owner = stylesheet('./styles/semantic-icons.css');
         const slots = owner
