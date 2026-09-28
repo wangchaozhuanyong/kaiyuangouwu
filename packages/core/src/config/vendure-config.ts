@@ -30,6 +30,8 @@ import { ProductVariantPriceUpdateStrategy } from './catalog/product-variant-pri
 import { StockDisplayStrategy } from './catalog/stock-display-strategy';
 import { StockLocationStrategy } from './catalog/stock-location-strategy';
 import { CustomFields } from './custom-field/custom-field-types';
+// Prettier's import sorter and ESLint disagree on this path's order.
+// eslint-disable-next-line import/order
 import { EntityMetadataModifier } from './entity-metadata/entity-metadata-modifier';
 import { EntityDuplicator } from './entity/entity-duplicator';
 import { EntityIdStrategy } from './entity/entity-id-strategy';
