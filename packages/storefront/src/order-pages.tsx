@@ -2464,8 +2464,8 @@ function orderProductPresentation(
             description: hasAdditionalLines
                 ? additionalItemsDescription
                 : isZh
-                  ? '商家发货后可查看配送进度'
-                  : 'Track delivery after the item ships',
+                  ? '订单详情可查看配送信息'
+                  : 'Delivery information in order details',
             tags: isZh ? ['实体商品', '物流可查'] : ['Physical item', 'Tracking'],
         };
     }

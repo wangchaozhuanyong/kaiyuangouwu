@@ -198,7 +198,7 @@ describe('OrdersPage route query', () => {
         const markup = renderOrders([order]);
 
         expect(markup).toContain('订单测试商品');
-        expect(markup).toContain('商家发货后可查看配送进度');
+        expect(markup).toContain('订单详情可查看配送信息');
         expect(markup).toContain('实体商品');
         expect(markup).toContain('物流可查');
         expect(markup).not.toContain('商品信息');
