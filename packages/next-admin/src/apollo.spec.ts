@@ -13,10 +13,15 @@ import {
     uploadAdminFiles,
 } from './apollo';
 import { GET_INVENTORY_OVERVIEW } from './graphql/catalog-admin.graphql';
+import { getSavedListSearch, saveListSearch } from './utils/list-state-storage';
 
 function storage(values: Record<string, string> = {}) {
     const items = new Map(Object.entries(values));
     return {
+        get length() {
+            return items.size;
+        },
+        key: (index: number) => [...items.keys()][index] ?? null,
         getItem: (key: string) => items.get(key) ?? null,
         setItem: (key: string, value: string) => items.set(key, value),
         removeItem: (key: string) => items.delete(key),
@@ -256,6 +261,11 @@ describe('admin channel request routing', () => {
     });
 
     it('commits a store switch only after the selected Channel probe succeeds', async () => {
+        vi.stubGlobal('window', { location: { origin: 'https://admin.example.test' }, sessionStorage });
+        saveListSearch('/catalog/list', '?category=47');
+        saveListSearch('/sales/orders', '?status=paid');
+        expect(getSavedListSearch('/catalog/list')).toBe('?category=47');
+        expect(getSavedListSearch('/sales/orders')).toBe('?status=paid');
         request.mockResolvedValueOnce(
             Response.json({ data: { activeChannel: { token: 'store-b', __typename: 'Channel' } } }),
         );
@@ -266,10 +276,15 @@ describe('admin channel request routing', () => {
         expect(request.mock.calls[0][1]?.headers).toMatchObject({ 'vendure-token': 'store-b' });
         expect(clearStore).toHaveBeenCalledTimes(1);
         expect(getActiveChannelToken()).toBe('store-b');
+        expect(getSavedListSearch('/catalog/list')).toBeNull();
+        expect(getSavedListSearch('/sales/orders')).toBeNull();
         clearStore.mockRestore();
     });
 
     it('keeps the previous store when the selected Channel probe fails', async () => {
+        vi.stubGlobal('window', { location: { origin: 'https://admin.example.test' }, sessionStorage });
+        saveListSearch('/catalog/list', '?category=47');
+        expect(getSavedListSearch('/catalog/list')).toBe('?category=47');
         request.mockResolvedValueOnce(Response.json({ errors: [{ message: 'forbidden target Channel' }] }));
         const clearStore = vi.spyOn(client, 'clearStore');
 
@@ -277,6 +292,7 @@ describe('admin channel request routing', () => {
 
         expect(clearStore).not.toHaveBeenCalled();
         expect(getActiveChannelToken()).toBe('store-a');
+        expect(getSavedListSearch('/catalog/list')).toBe('?category=47');
         clearStore.mockRestore();
     });
 
