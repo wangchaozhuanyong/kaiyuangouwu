@@ -851,7 +851,7 @@ export function HomePage() {
               },
               {
                   label: isZh ? '帮助中心' : 'Help center',
-                  description: isZh ? '常见问题与客服入口' : 'Find answers and contact support',
+                  description: isZh ? '查看帮助与服务信息' : 'View help and service information',
                   icon: Headphones,
               },
               {
