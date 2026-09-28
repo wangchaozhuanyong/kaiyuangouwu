@@ -1,3 +1,4 @@
+import yaml from 'js-yaml';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -26,6 +27,19 @@ import {
     requestGitHubApi,
     validateExecutedChecks,
 } from './release-evidence.mjs';
+
+test('release evidence readers can verify merged PR CI with read-only GitHub token access', () => {
+    const readWorkflow = name =>
+        yaml.load(readFileSync(new URL(`../.github/workflows/${name}.yml`, import.meta.url), 'utf8'));
+    const release = readWorkflow('production_release');
+    for (const job of ['route', 'checks', 'frontend', 'build']) {
+        assert.equal(release.jobs[job].permissions['pull-requests'], 'read', job);
+    }
+    assert.equal(readWorkflow('build_and_test').jobs['detect-changes'].permissions['pull-requests'], 'read');
+    for (const name of ['build_production_runtime', 'deploy_frontends', 'deploy_storefront_fast_lane']) {
+        assert.equal(readWorkflow(name).permissions['pull-requests'], 'read', name);
+    }
+});
 
 test('static evidence checks each app against its active pointer while retaining cumulative runtime safety', () => {
     const source = 'a'.repeat(40);

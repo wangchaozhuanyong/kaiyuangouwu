@@ -24,6 +24,7 @@ permissions:
     contents: read
     actions: read
     id-token: write
+    pull-requests: read
 jobs:
     deploy:
         name: reuse and atomically deploy affected frontends

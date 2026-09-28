@@ -10,6 +10,7 @@ permissions:
     contents: read
     actions: read
     id-token: write
+    pull-requests: read
 jobs:
     release:
         uses: ./.github/workflows/production_release.yml

@@ -152,6 +152,7 @@ jobs:
         permissions:
             contents: read
             actions: read
+            pull-requests: read
         outputs:
             lane: ${{ steps.route.outputs.lane }}
             components: ${{ steps.route.outputs.components }}
@@ -192,6 +193,7 @@ jobs:
         permissions:
             contents: read
             actions: read
+            pull-requests: read
 
     ready:
         name: confirm applicable checks passed
@@ -225,6 +227,7 @@ jobs:
             contents: read
             actions: read
             id-token: write
+            pull-requests: read
 
     build:
         name: build immutable runtime
@@ -247,6 +250,7 @@ jobs:
         permissions:
             actions: read
             contents: read
+            pull-requests: read
 
     offhost_file_restore:
         name: prove complete offsite file restore before switching production
