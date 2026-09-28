@@ -62,6 +62,7 @@ import {
 } from '../../../graphql/catalog-import.graphql';
 import { GET_PRODUCTS } from '../../../graphql/catalog.graphql';
 import { useAdminPermissions } from '../../../hooks/use-admin-permissions';
+import { getChannelDisplayName } from '../../../utils/channel-display';
 import { toUserFacingError } from '../../../utils/user-facing-error';
 import { formatDateTime } from '../../Sales/sales-utils';
 import { CatalogExportAction } from '../CatalogExportAction';
@@ -78,6 +79,7 @@ interface ImportContextData {
         code: string;
         defaultCurrencyCode: string;
         availableCurrencyCodes: string[];
+        customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
     };
     stockLocations: { items: Array<{ id: string; name: string }> };
 }
@@ -159,7 +161,7 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
     );
     const effectiveStockLocationId = locations.some(location => location.id === stockLocationId)
         ? stockLocationId
-        : (locations[0]?.id ?? '');
+        : '';
     const effectiveCurrencyCode = activeChannel?.availableCurrencyCodes.includes(currencyCode)
         ? currencyCode
         : (activeChannel?.defaultCurrencyCode ?? '');
@@ -610,6 +612,7 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
                                     : ''
                             }
                             channelCode={activeChannel?.code ?? ''}
+                            channelName={activeChannel ? getChannelDisplayName(activeChannel) : ''}
                             availableCurrencyCodes={activeChannel?.availableCurrencyCodes ?? []}
                             locations={locations}
                             stockLocationId={effectiveStockLocationId}
@@ -703,6 +706,7 @@ function UploadPanel({
     contextLoading,
     contextError,
     channelCode,
+    channelName,
     availableCurrencyCodes,
     locations,
     stockLocationId,
@@ -730,6 +734,7 @@ function UploadPanel({
     contextLoading: boolean;
     contextError: string;
     channelCode: string;
+    channelName: string;
     availableCurrencyCodes: string[];
     locations: Array<{ id: string; name: string }>;
     stockLocationId: string;
@@ -791,7 +796,10 @@ function UploadPanel({
                 </label>
                 <label className="space-y-2">
                     <span className="text-xs font-bold text-slate-700">目标店铺</span>
-                    <input className={inputClass} value={channelCode} disabled />
+                    <input className={inputClass} value={channelName} disabled />
+                    <span className="block text-[11px] text-slate-500">
+                        导入文件“导入商店”列使用店铺编码：{channelCode}
+                    </span>
                 </label>
                 <label className="space-y-2">
                     <span className="text-xs font-bold text-slate-700">目标仓库</span>
@@ -808,6 +816,9 @@ function UploadPanel({
                             </option>
                         ))}
                     </select>
+                    <span className="block text-[11px] text-amber-700">
+                        请明确选择本次库存要写入的仓库；系统不会代选。
+                    </span>
                 </label>
                 <label className="space-y-2">
                     <span className="text-xs font-bold text-slate-700">目标币种</span>
