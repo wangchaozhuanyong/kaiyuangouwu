@@ -1,3 +1,5 @@
+import { supportFaqItems } from '../../storefront-content-plugin/src/support-faq';
+
 import { StorefrontContentBlock, StorefrontContentItem, StorefrontLanguage } from './types';
 
 export const supportChannelKeys = ['WECHAT', 'QQ', 'WHATSAPP', 'TELEGRAM', 'QQ_GROUP'] as const;
@@ -13,7 +15,21 @@ export function supportPageTitle(
     block: StorefrontContentBlock | undefined,
     language: StorefrontLanguage,
 ): string {
+    if (block && !storefrontSupportChannels(block).length && !publishedSupportFaqs(block).length) {
+        return language === 'zh' ? '客服暂未开通' : 'Support is not available yet';
+    }
     return block?.title.trim() || (language === 'zh' ? '客服中心' : 'Customer support');
+}
+
+export function publishedSupportFaqs(block: StorefrontContentBlock) {
+    return supportFaqItems(block.settings).filter(
+        item =>
+            item.enabled &&
+            item.questionZh.trim() &&
+            item.answerZh.trim() &&
+            item.questionEn.trim() &&
+            item.answerEn.trim(),
+    );
 }
 
 export function storefrontSupportChannels(block: StorefrontContentBlock): StorefrontSupportChannel[] {

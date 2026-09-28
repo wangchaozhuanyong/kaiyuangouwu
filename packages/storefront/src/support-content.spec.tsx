@@ -103,17 +103,20 @@ describe('support content', () => {
         expect(supportChannelDetail(telegram, 'zh')).toBe('');
     });
 
-    it('does not advertise service hours or unavailable contact routes when no channel is enabled', () => {
+    it('shows an unavailable state without a service rating when channels and FAQs are absent', () => {
         const unavailable = {
             ...supportBlock,
             items: supportBlock.items.map(item => ({ ...item, enabled: false })),
         };
         expect(storefrontSupportChannels(unavailable)).toEqual([]);
+        expect(supportPageTitle(unavailable, 'zh')).toBe('客服暂未开通');
+        expect(supportPageTitle(unavailable, 'en')).toBe('Support is not available yet');
 
         const markup = renderToStaticMarkup(<SupportContent content={unavailable} language="zh" />);
-        expect(markup).toContain('客服联系方式暂未启用');
+        expect(markup).toContain('客服暂未开通');
         expect(markup).not.toContain('support-hours-card');
-        expect(markup).not.toContain('可通过客服联系方式咨询');
+        expect(markup).not.toContain('support-evaluation-card');
+        expect(markup).not.toContain('客服配置');
     });
 
     it('renders the selected brand two-tone service strip and contact actions', () => {
@@ -182,6 +185,12 @@ describe('support content', () => {
         expect(chinese).not.toContain('未完成问题');
         expect(english).toContain('How is shipping calculated?');
         expect(english).not.toContain('如何确认运费？');
+
+        const faqOnly = { ...content, items: [] };
+        expect(supportPageTitle(faqOnly, 'zh')).toBe('客服配置');
+        expect(renderToStaticMarkup(<SupportContent content={faqOnly} language="zh" />)).toContain(
+            '如何确认运费？',
+        );
     });
 
     it('shows a configured banner image in the desktop support header', () => {
