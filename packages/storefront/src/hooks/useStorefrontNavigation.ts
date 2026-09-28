@@ -129,7 +129,7 @@ export function useStorefrontNavigation({
     );
 
     const goBack = useCallback(() => {
-        if (window.history.length > 1) router.history.back();
+        if (router.history.canGoBack()) router.history.back();
         else navigate({ name: 'home' }, true);
     }, [navigate, router.history]);
 
