@@ -297,16 +297,27 @@ export class ShopApi {
         return this.contentReviewsApi.confirmAfterSalesReplacement(input);
     }
 
-    async productReviews(productId: string, signal?: AbortSignal): Promise<StorefrontReviewList> {
-        return this.contentReviewsApi.productReviews(productId, signal);
+    async reviewSettings(signal?: AbortSignal): Promise<{ enabled: boolean }> {
+        return this.contentReviewsApi.reviewSettings(signal);
+    }
+
+    async productReviews(
+        productId: string,
+        options: { skip?: number; take?: number } = { take: 20 },
+        signal?: AbortSignal,
+    ): Promise<StorefrontReviewList> {
+        return this.contentReviewsApi.productReviews(productId, options, signal);
     }
 
     async myReviews(signal?: AbortSignal): Promise<StorefrontReview[]> {
         return this.contentReviewsApi.myReviews(signal);
     }
 
-    async reviewCandidates(signal?: AbortSignal): Promise<StorefrontReviewCandidate[]> {
-        return this.contentReviewsApi.reviewCandidates(signal);
+    async reviewCandidates(
+        options: { skip?: number; take?: number } = {},
+        signal?: AbortSignal,
+    ): Promise<StorefrontReviewCandidate[]> {
+        return this.contentReviewsApi.reviewCandidates(options, signal);
     }
 
     async submitReview(input: SubmitStorefrontReviewInput): Promise<StorefrontReview> {

@@ -1,6 +1,7 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendure/core';
 
+import { StorefrontReviewSettingsService } from './storefront-review-settings.service';
 import { StorefrontReviewService } from './storefront-review.service';
 import {
     ModerateStorefrontReviewInput,
@@ -11,7 +12,16 @@ import {
 
 @Resolver()
 export class StorefrontReviewShopResolver {
-    constructor(private readonly reviewService: StorefrontReviewService) {}
+    constructor(
+        private readonly reviewService: StorefrontReviewService,
+        private readonly reviewSettings: StorefrontReviewSettingsService,
+    ) {}
+
+    @Query()
+    @Allow(Permission.Public)
+    storefrontReviewSettings(@Ctx() ctx: RequestContext) {
+        return this.reviewSettings.get(ctx);
+    }
 
     @Query()
     storefrontProductReviews(
@@ -30,8 +40,11 @@ export class StorefrontReviewShopResolver {
 
     @Query()
     @Allow(Permission.Authenticated)
-    myStorefrontReviewCandidates(@Ctx() ctx: RequestContext) {
-        return this.reviewService.findCandidates(ctx);
+    myStorefrontReviewCandidates(
+        @Ctx() ctx: RequestContext,
+        @Args('options') options?: StorefrontReviewListOptions,
+    ) {
+        return this.reviewService.findCandidates(ctx, options);
     }
 
     @Transaction()
@@ -48,7 +61,23 @@ export class StorefrontReviewShopResolver {
 
 @Resolver()
 export class StorefrontReviewAdminResolver {
-    constructor(private readonly reviewService: StorefrontReviewService) {}
+    constructor(
+        private readonly reviewService: StorefrontReviewService,
+        private readonly reviewSettings: StorefrontReviewSettingsService,
+    ) {}
+
+    @Query()
+    @Allow(Permission.ReadCatalog)
+    storefrontReviewSettings(@Ctx() ctx: RequestContext) {
+        return this.reviewSettings.get(ctx);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.UpdateCatalog)
+    updateStorefrontReviewSettings(@Ctx() ctx: RequestContext, @Args('input') input: { enabled: boolean }) {
+        return this.reviewSettings.update(ctx, input.enabled);
+    }
 
     @Query()
     @Allow(Permission.ReadCatalog)

@@ -182,4 +182,41 @@ describe('desktop product purchase controls', () => {
         expect(host.querySelector('.detail-coupon-price')?.textContent).toContain('49');
         expect(host.querySelector('.detail-coupon-note')?.textContent).toContain('结算页为准');
     });
+
+    it('removes the review tab and review content when the store disables reviews', () => {
+        host = document.createElement('div');
+        document.body.append(host);
+        root = createRoot(host);
+        act(() =>
+            root.render(
+                <ProductDetailPageContext.Provider
+                    value={{
+                        api: {} as never,
+                        product,
+                        products: [],
+                        cartQuantity: 0,
+                        market,
+                        locale: market.locale,
+                        language: 'zh',
+                        reviewEnabled: false,
+                        storefrontName: 'Store',
+                        logoUrl: null,
+                        flashSaleItems: [],
+                        couponCampaigns: [],
+                        customerCoupons: [],
+                        addingVariantId: null,
+                        favorite: false,
+                        onAdd: vi.fn(),
+                        onBuyNow: vi.fn(),
+                        onFavorite: vi.fn(),
+                        onNotify: vi.fn(),
+                    }}
+                >
+                    <ProductDetailPage />
+                </ProductDetailPageContext.Provider>,
+            ),
+        );
+        expect(host.querySelector('.detail-content-tabs')?.textContent).not.toContain('真实评价');
+        expect(host.textContent).not.toContain('真实评价内容');
+    });
 });

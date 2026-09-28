@@ -152,6 +152,23 @@ export function RecommendationsRoutePage() {
 
 export function ReviewsRoutePage() {
     const runtime = useRuntime();
+    if (runtime.reviewSettingsStatus === 'disabled') return null;
+    if (runtime.reviewSettingsStatus !== 'enabled') {
+        return (
+            <AsyncRouteStatePage
+                routeName="reviews"
+                state={runtime.reviewSettingsStatus === 'error' ? 'error' : 'loading'}
+                error={
+                    runtime.reviewSettingsQuery.error instanceof Error
+                        ? runtime.reviewSettingsQuery.error.message
+                        : ''
+                }
+                language={runtime.language}
+                onBack={runtime.goBack}
+                onRetry={() => void runtime.reviewSettingsQuery.refetch()}
+            />
+        );
+    }
     return (
         <RouteGate name="reviews">
             <ReviewCenterPage

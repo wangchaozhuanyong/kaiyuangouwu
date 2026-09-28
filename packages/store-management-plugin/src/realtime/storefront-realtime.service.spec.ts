@@ -1,3 +1,4 @@
+import { EMPTY, Subject, filter } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StorefrontRealtimeService } from './storefront-realtime.service';
@@ -7,6 +8,34 @@ function service() {
 }
 
 describe('StorefrontRealtimeService', () => {
+    it('sends a review setting change to guests of only the affected store', () => {
+        const events = new Subject<Record<string, unknown>>();
+        const realtime = new StorefrontRealtimeService(
+            {
+                ofType: vi.fn(() => EMPTY),
+                filter: vi.fn(predicate => events.pipe(filter(predicate))),
+            } as never,
+            {} as never,
+        );
+        const storeA = vi.fn();
+        const storeB = vi.fn();
+        realtime.addClient({ channelId: 'store-a', send: storeA });
+        realtime.addClient({ channelId: 'store-b', send: storeB });
+        realtime.onApplicationBootstrap();
+        try {
+            events.next({
+                realtimeEventKind: 'storefront-review-settings-changed',
+                ctx: { channelId: 'store-a' },
+            });
+            expect(storeA).toHaveBeenCalledWith(
+                expect.objectContaining({ topics: ['config'], entityType: 'StorefrontReviewSettings' }),
+            );
+            expect(storeB).not.toHaveBeenCalled();
+        } finally {
+            realtime.onApplicationShutdown();
+        }
+    });
+
     it('delivers a public invalidation only to the affected Channel', () => {
         const realtime = service();
         const storeA = vi.fn();

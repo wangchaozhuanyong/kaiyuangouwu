@@ -35,6 +35,7 @@ export interface StorefrontReviewCandidate {
     variantName: string;
     sku: string;
     fulfillmentType: 'physical' | 'digital';
+    imageUrl: string | null;
 }
 
 export interface ModerateStorefrontReviewInput {

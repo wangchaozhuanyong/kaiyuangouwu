@@ -40,6 +40,7 @@ export function DesktopAccountPage({
     market,
     locale,
     language,
+    reviewEnabled = true,
     storefrontName,
     favoriteProductCount,
     couponCount,
@@ -304,14 +305,16 @@ export function DesktopAccountPage({
                             </span>
                             <ChevronRight aria-hidden="true" />
                         </button>
-                        <button type="button" onClick={() => navigate({ name: 'reviews' })}>
-                            <Star aria-hidden="true" />
-                            <span>
-                                <strong>{isZh ? '评价中心' : 'Reviews'}</strong>
-                                <small>{isZh ? '分享你的使用体验' : 'Share your experience'}</small>
-                            </span>
-                            <ChevronRight aria-hidden="true" />
-                        </button>
+                        {reviewEnabled && (
+                            <button type="button" onClick={() => navigate({ name: 'reviews' })}>
+                                <Star aria-hidden="true" />
+                                <span>
+                                    <strong>{isZh ? '评价中心' : 'Reviews'}</strong>
+                                    <small>{isZh ? '分享你的使用体验' : 'Share your experience'}</small>
+                                </span>
+                                <ChevronRight aria-hidden="true" />
+                            </button>
+                        )}
                     </div>
                 </section>
             </div>

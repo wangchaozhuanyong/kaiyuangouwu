@@ -56,6 +56,7 @@ export interface AccountPageProps {
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
+    reviewEnabled?: boolean;
     storefrontName: string;
     logoUrl: string | null;
     favoriteProductCount: number;
@@ -83,6 +84,7 @@ export function AccountPage() {
         market,
         locale,
         language,
+        reviewEnabled = true,
         storefrontName,
         logoUrl,
         favoriteProductCount,
@@ -195,6 +197,7 @@ export function AccountPage() {
                 market={market}
                 locale={locale}
                 language={language}
+                reviewEnabled={reviewEnabled}
                 storefrontName={storefrontName}
                 favoriteProductCount={favoriteProductCount}
                 couponCount={couponCount}
@@ -287,14 +290,16 @@ export function AccountPage() {
                         count={desktop ? countsQuery.data?.completed : counts.completed}
                         onClick={() => navigateTo({ name: 'orders', tab: 'completed' })}
                     />
-                    <AccountShortcut
-                        inlineCount={desktop}
-                        icon={<CircleCheck />}
-                        tone="reviews"
-                        label={isZh ? '评价' : 'Reviews'}
-                        count={undefined}
-                        onClick={() => navigateTo({ name: 'reviews' })}
-                    />
+                    {reviewEnabled && (
+                        <AccountShortcut
+                            inlineCount={desktop}
+                            icon={<CircleCheck />}
+                            tone="reviews"
+                            label={isZh ? '评价' : 'Reviews'}
+                            count={undefined}
+                            onClick={() => navigateTo({ name: 'reviews' })}
+                        />
+                    )}
                     <AccountShortcut
                         inlineCount={desktop}
                         icon={<RotateCcw />}
@@ -429,12 +434,14 @@ export function AccountPage() {
                         label={compactCopy.services.messages}
                         onClick={() => navigateTo({ name: 'notifications' })}
                     />
-                    <ServiceButton
-                        icon={<CircleCheck />}
-                        tone="coupon"
-                        label={compactCopy.services.reviews}
-                        onClick={() => navigateTo({ name: 'reviews' })}
-                    />
+                    {reviewEnabled && (
+                        <ServiceButton
+                            icon={<CircleCheck />}
+                            tone="coupon"
+                            label={compactCopy.services.reviews}
+                            onClick={() => navigateTo({ name: 'reviews' })}
+                        />
+                    )}
                     <ServiceButton
                         icon={<Headphones />}
                         tone="support"

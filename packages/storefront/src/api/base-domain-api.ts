@@ -86,7 +86,7 @@ export abstract class BaseDomainApi {
                 Object.fromEntries(
                     files.map((_, index) => [
                         index,
-                        [`variables.${variableName}${variableName === 'file' ? '' : `[${index}]`}`],
+                        [`variables.${variableName}${variableName === 'file' ? '' : `.${index}`}`],
                     ]),
                 ),
             ),

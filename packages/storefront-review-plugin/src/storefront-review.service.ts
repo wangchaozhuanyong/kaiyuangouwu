@@ -15,11 +15,12 @@ import {
     translateDeep,
 } from '@vendure/core';
 import { Readable } from 'node:stream';
-import { FindOptionsWhere, In, Like } from 'typeorm';
+import { FindOptionsWhere, In, Like, Not } from 'typeorm';
 
 import { StorefrontReview } from './entities/storefront-review.entity';
 import { storefrontReviewStates } from './review.constants';
 import { StorefrontReviewChangedEvent } from './storefront-review-changed.event';
+import { StorefrontReviewSettingsService } from './storefront-review-settings.service';
 import {
     ModerateStorefrontReviewInput,
     ReviewImageUpload,
@@ -55,6 +56,7 @@ export class StorefrontReviewService {
         private readonly customerService: CustomerService,
         private readonly translations: ContentTranslationService,
         private readonly assets: AssetService,
+        private readonly reviewSettings: StorefrontReviewSettingsService,
         @Optional() private readonly eventBus?: EventBus,
     ) {}
 
@@ -63,7 +65,10 @@ export class StorefrontReviewService {
         productId: ID,
         options: StorefrontReviewListOptions = {},
     ): Promise<StorefrontReviewList> {
-        const skip = this.boundedInteger(options.skip, 0, 0, 10_000);
+        if (!(await this.reviewSettings.get(ctx)).enabled) {
+            return { items: [], totalItems: 0, averageRating: 0 };
+        }
+        const skip = this.boundedInteger(options.skip, 0, 0, 1_000_000);
         const take = this.boundedInteger(options.take, 10, 1, 50);
         const repository = this.connection.getRepository(ctx, StorefrontReview);
         const where = { channelId: ctx.channelId, productId, state: 'APPROVED' as const };
@@ -84,6 +89,7 @@ export class StorefrontReviewService {
     }
 
     async findMine(ctx: RequestContext): Promise<StorefrontReview[]> {
+        if (!(await this.reviewSettings.get(ctx)).enabled) return [];
         const customer = await this.activeCustomerOrThrow(ctx);
         const reviews = await this.connection.getRepository(ctx, StorefrontReview).find({
             where: { channelId: ctx.channelId, customerId: customer.id },
@@ -92,7 +98,13 @@ export class StorefrontReviewService {
         return reviews.map(review => this.shopReview(review, ctx));
     }
 
-    async findCandidates(ctx: RequestContext): Promise<StorefrontReviewCandidate[]> {
+    async findCandidates(
+        ctx: RequestContext,
+        options: StorefrontReviewListOptions = {},
+    ): Promise<StorefrontReviewCandidate[]> {
+        if (!(await this.reviewSettings.get(ctx)).enabled) return [];
+        const skip = this.boundedInteger(options.skip, 0, 0, 1_000_000);
+        const take = this.boundedInteger(options.take, 100, 1, 100);
         const customer = await this.activeCustomerOrThrow(ctx);
         const reviewed = await this.connection.getRepository(ctx, StorefrontReview).find({
             select: { orderLineId: true },
@@ -103,6 +115,7 @@ export class StorefrontReviewService {
         );
         const lines = await this.connection.getRepository(ctx, OrderLine).find({
             where: {
+                ...(reviewedLineIds.size ? { id: Not(In([...reviewedLineIds])) } : {}),
                 order: {
                     customerId: customer.id,
                     salesChannelId: ctx.channelId,
@@ -111,31 +124,37 @@ export class StorefrontReviewService {
             },
             relations: {
                 order: true,
-                productVariant: { translations: true, product: { translations: true } },
+                productVariant: {
+                    translations: true,
+                    featuredAsset: true,
+                    product: { translations: true, featuredAsset: true },
+                },
             },
-            order: { order: { orderPlacedAt: 'DESC' } },
-            take: 500,
+            order: { order: { orderPlacedAt: 'DESC' }, id: 'DESC' },
+            skip,
+            take,
         });
-        return lines
-            .filter(line => !reviewedLineIds.has(String(line.id)))
-            .slice(0, 100)
-            .map(line => {
-                const variant = translateDeep(line.productVariant, ctx.languageCode, ['product']);
-                const fulfillmentType = this.fulfillmentType(line);
-                return {
-                    orderLineId: line.id,
-                    orderId: line.order.id,
-                    orderCode: line.order.code,
-                    orderState: line.order.state,
-                    orderPlacedAt: line.order.orderPlacedAt ?? null,
-                    productId: variant.productId,
-                    productVariantId: variant.id,
-                    productName: variant.product?.name || variant.name,
-                    variantName: variant.name,
-                    sku: variant.sku,
-                    fulfillmentType,
-                };
-            });
+        return lines.map(line => {
+            const variant = translateDeep(line.productVariant, ctx.languageCode, ['product']);
+            const fulfillmentType = this.fulfillmentType(line);
+            return {
+                orderLineId: line.id,
+                orderId: line.order.id,
+                orderCode: line.order.code,
+                orderState: line.order.state,
+                orderPlacedAt: line.order.orderPlacedAt ?? null,
+                productId: variant.productId,
+                productVariantId: variant.id,
+                productName: variant.product?.name || variant.name,
+                variantName: variant.name,
+                sku: variant.sku,
+                fulfillmentType,
+                imageUrl:
+                    line.productVariant.featuredAsset?.preview ??
+                    variant.product?.featuredAsset?.preview ??
+                    null,
+            };
+        });
     }
 
     async findForAdmin(
@@ -183,6 +202,9 @@ export class StorefrontReviewService {
         input: SubmitStorefrontReviewInput,
         files: Array<Promise<ReviewImageUpload>> = [],
     ): Promise<StorefrontReview> {
+        if (!(await this.reviewSettings.get(ctx)).enabled) {
+            throw new UserInputError('当前店铺已关闭评价功能');
+        }
         const customer = await this.activeCustomerOrThrow(ctx);
         this.validateSubmission(input);
         if (!Array.isArray(files) || files.length > REVIEW_IMAGE_LIMIT) {

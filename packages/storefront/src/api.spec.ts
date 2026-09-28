@@ -2184,8 +2184,8 @@ describe('ShopApi storefront mutations', () => {
             files: [null, null],
         });
         expect(JSON.parse(mapEntry)).toEqual({
-            0: ['variables.files[0]'],
-            1: ['variables.files[1]'],
+            0: ['variables.files.0'],
+            1: ['variables.files.1'],
         });
     });
 
@@ -2403,7 +2403,7 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('query StorefrontProductReviews');
         expect(request.query).toContain('verifiedPurchase');
         expect(request.query).toContain('averageRating');
-        expect(request.variables).toEqual({ productId: 'product-1' });
+        expect(request.variables).toEqual({ productId: 'product-1', options: { take: 20 } });
     });
 
     it('loads customer review moderation states', async () => {
@@ -2420,12 +2420,16 @@ describe('ShopApi storefront mutations', () => {
         const response = [{ orderLineId: 'line-7', productId: 'product-3' }];
         const fetchMock = mockGraphQlResponse({ myStorefrontReviewCandidates: response });
 
-        await expect(new ShopApi(market).reviewCandidates()).resolves.toEqual(response);
+        await expect(new ShopApi(market).reviewCandidates({ skip: 20, take: 20 })).resolves.toEqual(response);
 
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
         expect(request.query).toContain('query MyStorefrontReviewCandidates');
         expect(request.query).toContain('orderLineId');
         expect(request.query).toContain('fulfillmentType');
+        expect(request.query).toContain('imageUrl');
+        expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).variables).toEqual({
+            options: { skip: 20, take: 20 },
+        });
     });
 
     it('submits reviews without client-controlled customer or moderation fields', async () => {

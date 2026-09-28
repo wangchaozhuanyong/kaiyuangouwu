@@ -185,6 +185,15 @@ export class StorefrontRealtimeService implements OnApplicationBootstrap, OnAppl
             event => event.realtimeEventKind === 'storefront-review-changed',
             event => this.publishReviewChange(event),
         );
+        this.subscribeFiltered<StorefrontReviewSettingsChangedLike>(
+            event => event.realtimeEventKind === 'storefront-review-settings-changed',
+            event =>
+                this.publish({
+                    topics: ['config'],
+                    channelIds: [event.ctx.channelId],
+                    entityType: 'StorefrontReviewSettings',
+                }),
+        );
         this.subscribe(StorefrontDataChangedEvent, event =>
             this.publish({
                 topics: event.topics,
@@ -386,4 +395,9 @@ type StorefrontReviewChangedLike = VendureEvent & {
     customerId: ID;
     reviewId: ID;
     publicListingChanged: boolean;
+};
+
+type StorefrontReviewSettingsChangedLike = VendureEvent & {
+    realtimeEventKind: 'storefront-review-settings-changed';
+    ctx: RequestContext;
 };

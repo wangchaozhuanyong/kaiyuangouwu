@@ -21,6 +21,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
+import { AssetServerPlugin } from '../../asset-server-plugin/src/plugin';
 import { CommerceFulfillmentPlugin } from '../../commerce-fulfillment-plugin/src/commerce-fulfillment.plugin';
 import { StorefrontReviewPlugin } from '../../storefront-review-plugin/src/storefront-review.plugin';
 import { StoreProfile } from '../src/entities/store-profile.entity';
@@ -29,6 +30,13 @@ import { StoreManagementPlugin } from '../src/store-management.plugin';
 const config = mergeConfig(testConfig(), {
     authOptions: { requireVerification: false },
     plugins: [
+        AssetServerPlugin.init({
+            route: 'assets',
+            assetUploadDir: path.resolve(
+                __dirname,
+                '../../storefront/artifacts/readiness/review-isolation-browser/assets',
+            ),
+        }),
         CatalogManagementPlugin,
         StorefrontCartPlugin,
         StorefrontCatalogPlugin,
@@ -398,6 +406,79 @@ describe('storefront review account and channel isolation', () => {
         expect((await adminClient.query(ADMIN_REVIEWS)).storefrontReviews.totalItems).toBe(1);
     });
 
+    it('disables review reads and submissions only in the selected store and restores them on enable', async () => {
+        const settings = gql`
+            query ReviewIsolationSettings {
+                storefrontReviewSettings {
+                    enabled
+                }
+            }
+        `;
+        const updateSettings = gql`
+            mutation ReviewIsolationUpdateSettings($enabled: Boolean!) {
+                updateStorefrontReviewSettings(input: { enabled: $enabled }) {
+                    enabled
+                }
+            }
+        `;
+        await shopClient.asUserWithCredentials(customerEmail, 'ReviewIsolationPass123!');
+        const eventAbort = new AbortController();
+        const eventTimeout = setTimeout(() => eventAbort.abort(), 10_000);
+        const eventResponse = await fetch(
+            `http://127.0.0.1:${config.apiOptions.port}/storefront-realtime/events`,
+            {
+                headers: { accept: 'text/event-stream', 'vendure-token': primaryToken },
+                signal: eventAbort.signal,
+            },
+        );
+        expect(eventResponse.status).toBe(200);
+        const eventReader = eventResponse.body?.getReader();
+        if (!eventReader) throw new Error('Review settings event stream did not open');
+        const settingEvent = (async () => {
+            let received = '';
+            while (!received.includes('"entityType":"StorefrontReviewSettings"')) {
+                const next = await eventReader.read();
+                if (next.done) throw new Error('Review settings event stream closed');
+                received += new TextDecoder().decode(next.value);
+            }
+            return received;
+        })();
+        let previouslyVisible = 0;
+        try {
+            expect((await adminClient.query(settings)).storefrontReviewSettings.enabled).toBe(true);
+            previouslyVisible = (await shopClient.query(PUBLIC_REVIEWS, { productId }))
+                .storefrontProductReviews.totalItems;
+            expect(
+                (await adminClient.query(updateSettings, { enabled: false })).updateStorefrontReviewSettings
+                    .enabled,
+            ).toBe(false);
+            await expect(settingEvent).resolves.toContain('"entityType":"StorefrontReviewSettings"');
+            expect((await shopClient.query(settings)).storefrontReviewSettings.enabled).toBe(false);
+            expect((await shopClient.query(MY_REVIEWS)).myStorefrontReviews).toEqual([]);
+            expect((await shopClient.query(MY_REVIEWS)).myStorefrontReviewCandidates).toEqual([]);
+            expect(
+                (await shopClient.query(PUBLIC_REVIEWS, { productId })).storefrontProductReviews.totalItems,
+            ).toBe(0);
+            await expect(shopClient.query(SUBMIT_REVIEW, { orderLineId })).rejects.toThrow('已关闭评价功能');
+
+            adminClient.setChannelToken(secondaryToken);
+            shopClient.setChannelToken(secondaryToken);
+            expect((await adminClient.query(settings)).storefrontReviewSettings.enabled).toBe(true);
+            expect((await shopClient.query(settings)).storefrontReviewSettings.enabled).toBe(true);
+        } finally {
+            clearTimeout(eventTimeout);
+            eventAbort.abort();
+            adminClient.setChannelToken(primaryToken);
+            shopClient.setChannelToken(primaryToken);
+            await adminClient.query(updateSettings, { enabled: true });
+            shopClient.setAuthToken('');
+            shopClient.setRequestHeader('Authorization', null);
+        }
+        expect(
+            (await shopClient.query(PUBLIC_REVIEWS, { productId })).storefrontProductReviews.totalItems,
+        ).toBe(previouslyVisible);
+    });
+
     it('submits through the production review component and keeps another store empty on mobile', async () => {
         const { chromium, webkit, devices, expect: browserExpect } = await import('@playwright/test');
         const { createServer } = await import('vite');
@@ -478,7 +559,10 @@ describe('storefront review account and channel isolation', () => {
                 host: '127.0.0.1',
                 port: 0,
                 strictPort: false,
-                proxy: { '/shop-api': `http://127.0.0.1:${config.apiOptions.port}` },
+                proxy: {
+                    '/shop-api': `http://127.0.0.1:${config.apiOptions.port}`,
+                    '/assets': `http://127.0.0.1:${config.apiOptions.port}`,
+                },
             },
         });
         const output = path.resolve(
@@ -497,7 +581,24 @@ describe('storefront review account and channel isolation', () => {
                 `${baseUrl}?${new URLSearchParams({ channel, email: browserCustomerEmail }).toString()}`;
             const desktop = await desktopBrowser.newPage({ viewport: { width: 1440, height: 1000 } });
             const primaryErrors: string[] = [];
+            const reviewApiErrors: string[] = [];
             desktop.on('pageerror', error => primaryErrors.push(error.message));
+            desktop.on('requestfailed', request =>
+                reviewApiErrors.push(`request failed: ${request.url()} ${request.failure()?.errorText}`),
+            );
+            desktop.on('response', response => {
+                if (!response.url().includes('/shop-api') || response.request().method() !== 'POST') return;
+                void response
+                    .json()
+                    .then(body => {
+                        if (response.status() >= 400 || body.errors?.length) {
+                            reviewApiErrors.push(
+                                `${response.status()} ${JSON.stringify(body.errors ?? body)}`,
+                            );
+                        }
+                    })
+                    .catch(() => reviewApiErrors.push(`${response.status()} unreadable response`));
+            });
             await desktop.goto(fixtureUrl(primaryToken));
             try {
                 await browserExpect(desktop.locator('.review-candidate-row')).toHaveCount(1, {
@@ -517,13 +618,56 @@ describe('storefront review account and channel isolation', () => {
             await desktop.locator('.review-candidate-row').click();
             const composer = desktop.locator('.review-composer');
             await browserExpect(composer).toBeVisible();
-            await composer.locator('input:not([type="checkbox"])').fill('桌面真实接口评价');
+            await composer.locator('.review-rating-input button[aria-label="5 星"]').click();
+            await composer.getByRole('textbox', { name: '评价标题' }).fill('桌面真实接口评价');
             await composer.locator('textarea').fill('这是一条通过正式评价组件提交的本地跨店铺验收内容。');
+            await composer.locator('input[type="file"]').setInputFiles({
+                name: 'review.png',
+                mimeType: 'image/png',
+                buffer: Buffer.from(
+                    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEUlEQVQImWP4z8DwH4QZYAwAR8oH+Xm0fdIAAAAASUVORK5CYII=',
+                    'base64',
+                ),
+            });
             await composer.locator('input[type="checkbox"]').check();
             await composer.locator('.review-submit').click();
-            await browserExpect(desktop.locator('.my-review-list article')).toHaveCount(1, {
-                timeout: 20_000,
-            });
+            try {
+                await browserExpect(desktop.locator('.my-review-list article')).toHaveCount(1, {
+                    timeout: 20_000,
+                });
+            } catch (cause) {
+                throw new Error(
+                    `Review image submission did not complete: ${(await desktop.locator('.form-error').allTextContents()).join(' | ')}; ` +
+                        `API: ${reviewApiErrors.join(' | ')}; page errors: ${primaryErrors.join(' | ')}; assertion: ${String(cause)}`,
+                );
+            }
+            const storedImages = await adminClient.query(gql`
+                query ReviewIsolationBrowserImages {
+                    storefrontReviews {
+                        items {
+                            title
+                            images {
+                                id
+                                preview
+                            }
+                        }
+                    }
+                }
+            `);
+            expect(storedImages.storefrontReviews.items).toContainEqual(
+                expect.objectContaining({
+                    title: '桌面真实接口评价',
+                    images: [expect.objectContaining({ id: expect.any(String) })],
+                }),
+            );
+            await browserExpect(desktop.locator('.my-review-list .product-review-images img')).toHaveCount(1);
+            await browserExpect
+                .poll(() =>
+                    desktop
+                        .locator('.my-review-list .product-review-images img')
+                        .evaluate(image => (image as HTMLImageElement).naturalWidth),
+                )
+                .toBeGreaterThan(0);
             await browserExpect(desktop.getByText('评价已提交，审核通过后将公开展示')).toBeVisible();
             await desktop.screenshot({
                 path: path.join(output, 'desktop-primary-submitted.png'),
@@ -576,8 +720,57 @@ describe('storefront review account and channel isolation', () => {
             await mobileBrowser.close();
             await frontend.close();
         }
+        const pending = await adminClient.query(gql`
+            query ReviewIsolationPendingBrowserImage {
+                storefrontReviews(options: { state: PENDING, search: "桌面真实接口评价" }) {
+                    items {
+                        id
+                        images {
+                            id
+                            preview
+                        }
+                    }
+                }
+            }
+        `);
+        expect(pending.storefrontReviews.items).toHaveLength(1);
+        expect(pending.storefrontReviews.items[0].images).toHaveLength(1);
+        const browserReviewId = pending.storefrontReviews.items[0].id;
+        await adminClient.query(
+            gql`
+                mutation ReviewIsolationApproveBrowserImage($id: ID!) {
+                    moderateStorefrontReview(input: { id: $id, state: APPROVED }) {
+                        id
+                        state
+                    }
+                }
+            `,
+            { id: browserReviewId },
+        );
+        const publicWithImage = await shopClient.query(
+            gql`
+                query ReviewIsolationPublicImage($productId: ID!) {
+                    storefrontProductReviews(productId: $productId) {
+                        items {
+                            id
+                            images {
+                                id
+                                preview
+                            }
+                        }
+                    }
+                }
+            `,
+            { productId },
+        );
+        expect(publicWithImage.storefrontProductReviews.items).toContainEqual(
+            expect.objectContaining({
+                id: browserReviewId,
+                images: [expect.objectContaining({ id: expect.any(String) })],
+            }),
+        );
         const reviews = (await shopClient.query(MY_REVIEWS)).myStorefrontReviews;
         expect(reviews).toHaveLength(1);
-        expect(reviews).toContainEqual(expect.objectContaining({ state: 'PENDING', anonymous: true }));
+        expect(reviews).toContainEqual(expect.objectContaining({ state: 'APPROVED', anonymous: true }));
     }, 90_000);
 });

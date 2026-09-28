@@ -39,6 +39,10 @@ const commonReviewTypes = gql`
         averageRating: Float!
     }
 
+    type StorefrontReviewSettings {
+        enabled: Boolean!
+    }
+
     type StorefrontReviewCandidate {
         orderLineId: ID!
         orderId: ID!
@@ -51,6 +55,7 @@ const commonReviewTypes = gql`
         variantName: String!
         sku: String!
         fulfillmentType: String!
+        imageUrl: String
     }
 
     input StorefrontReviewListOptions {
@@ -73,9 +78,10 @@ export const shopApiExtensions = gql`
     ${commonReviewTypes}
 
     extend type Query {
+        storefrontReviewSettings: StorefrontReviewSettings!
         storefrontProductReviews(productId: ID!, options: StorefrontReviewListOptions): StorefrontReviewList!
         myStorefrontReviews: [StorefrontReview!]!
-        myStorefrontReviewCandidates: [StorefrontReviewCandidate!]!
+        myStorefrontReviewCandidates(options: StorefrontReviewListOptions): [StorefrontReviewCandidate!]!
     }
 
     extend type Mutation {
@@ -96,11 +102,17 @@ export const adminApiExtensions = gql`
         response: String
     }
 
+    input UpdateStorefrontReviewSettingsInput {
+        enabled: Boolean!
+    }
+
     extend type Query {
+        storefrontReviewSettings: StorefrontReviewSettings!
         storefrontReviews(options: StorefrontReviewListOptions): StorefrontReviewList!
     }
 
     extend type Mutation {
+        updateStorefrontReviewSettings(input: UpdateStorefrontReviewSettingsInput!): StorefrontReviewSettings!
         moderateStorefrontReview(input: ModerateStorefrontReviewInput!): StorefrontReview!
     }
 `;

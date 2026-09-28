@@ -14,10 +14,17 @@ import {
     XCircle,
 } from 'lucide-react';
 import { useState } from 'react';
+import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
-import { GET_STOREFRONT_REVIEWS, MODERATE_STOREFRONT_REVIEW } from '../../graphql/sales.graphql';
+import {
+    GET_STOREFRONT_REVIEWS,
+    GET_STOREFRONT_REVIEW_SETTINGS,
+    MODERATE_STOREFRONT_REVIEW,
+    UPDATE_STOREFRONT_REVIEW_SETTINGS,
+} from '../../graphql/sales.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -74,6 +81,10 @@ const stateClasses: Record<ReviewState, string> = {
 };
 
 export function ReviewsModule() {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canUpdateReviews = hasAnyPermission(['UpdateCatalog']);
+    const channelToken = getActiveChannelToken();
+    const channelContext = channelToken ? channelRequestContext(channelToken) : undefined;
     const [activeTab, setActiveTab] = useUrlTab<ReviewState>(REVIEW_TABS, 'pending');
     const [page, setPage] = useState(0);
     const [pageSize, setPageSize] = usePageSize(setPage);
@@ -83,6 +94,16 @@ export function ReviewsModule() {
     const [responseText, setResponseText] = useState('');
     const [notification, setNotification] = useState('');
     const [actionError, setActionError] = useState('');
+    const [settingsError, setSettingsError] = useState('');
+
+    const settingsQuery = useQuery<{ storefrontReviewSettings: { enabled: boolean } }>(
+        GET_STOREFRONT_REVIEW_SETTINGS,
+        { fetchPolicy: 'network-only', context: channelContext },
+    );
+    const [updateReviewSettings, { loading: savingSettings }] = useMutation<{
+        updateStorefrontReviewSettings: { enabled: boolean };
+    }>(UPDATE_STOREFRONT_REVIEW_SETTINGS, { context: channelContext });
+    const savedReviewSetting = settingsQuery.data?.storefrontReviewSettings.enabled;
 
     const { data, loading, error, refetch } = useQuery<ReviewData>(GET_STOREFRONT_REVIEWS, {
         variables: {
@@ -111,6 +132,26 @@ export function ReviewsModule() {
     const showNotice = (message: string) => {
         setNotification(message);
         window.setTimeout(() => setNotification(''), 4000);
+    };
+    const toggleReviews = async () => {
+        if (!canUpdateReviews || !channelToken) return;
+        const current = settingsQuery.data?.storefrontReviewSettings.enabled;
+        if (typeof current !== 'boolean') return;
+        const enabled = !current;
+        setSettingsError('');
+        try {
+            const response = await updateReviewSettings({ variables: { input: { enabled } } });
+            if (response.data?.updateStorefrontReviewSettings.enabled !== enabled) {
+                throw new Error('评价开关保存结果不一致');
+            }
+            const readback = await settingsQuery.refetch();
+            if (readback.data?.storefrontReviewSettings.enabled !== enabled) {
+                throw new Error('评价开关重新读取结果不一致');
+            }
+            showNotice(enabled ? '客户端评价功能已开启' : '客户端评价功能已关闭');
+        } catch (settingsMutationError) {
+            setSettingsError(toUserFacingError(settingsMutationError, '评价开关保存失败，请重试'));
+        }
     };
     const openReview = (review: StorefrontReviewItem) => {
         setSelectedReview(review);
@@ -168,6 +209,52 @@ export function ReviewsModule() {
                     </button>
                 </div>
             </header>
+            <section
+                className="border-b border-slate-200 bg-white px-5 py-4 sm:px-8"
+                aria-label="客户端评价设置"
+            >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-sm font-semibold text-slate-900">客户端评价功能</h2>
+                        <p className="mt-1 text-xs text-slate-500">
+                            关闭后隐藏客户端评价入口与内容，并停止新评价提交；后台历史评价仍可管理。
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        role="switch"
+                        aria-checked={savedReviewSetting ?? false}
+                        aria-label="客户端评价功能"
+                        onClick={() => void toggleReviews()}
+                        disabled={
+                            !canUpdateReviews ||
+                            !channelToken ||
+                            typeof savedReviewSetting !== 'boolean' ||
+                            settingsQuery.loading ||
+                            !!settingsQuery.error ||
+                            savingSettings
+                        }
+                        className={`min-h-11 rounded-lg px-4 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 ${savedReviewSetting ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-slate-700 hover:bg-slate-800'}`}
+                    >
+                        {settingsQuery.loading
+                            ? '读取中…'
+                            : savingSettings
+                              ? '保存中…'
+                              : settingsQuery.error
+                                ? '读取失败'
+                                : savedReviewSetting === true
+                                  ? '已开启 · 点击关闭'
+                                  : savedReviewSetting === false
+                                    ? '已关闭 · 点击开启'
+                                    : '等待设置…'}
+                    </button>
+                </div>
+                {(settingsError || settingsQuery.error) && (
+                    <p role="alert" className="mt-2 text-xs text-rose-700">
+                        {settingsError || toUserFacingError(settingsQuery.error, '评价开关读取失败')}
+                    </p>
+                )}
+            </section>
             <nav
                 aria-label="评价状态筛选"
                 className="scrollbar-hidden shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-5 sm:px-8"

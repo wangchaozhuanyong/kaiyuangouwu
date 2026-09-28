@@ -870,6 +870,7 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true, conte
                 ...(content === 'flash-sale-heading' ? ['FLASH_SALE'] : []),
             ],
         },
+        storefrontReviewSettings: { enabled: true },
         storefrontContent: [
             content === 'wide-hero'
                 ? { ...block, imageUrl: wideHeroImage, imageAsset: { width: 1600, height: 520 } }

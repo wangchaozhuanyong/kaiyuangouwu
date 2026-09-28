@@ -285,6 +285,7 @@ export interface StorefrontReviewCandidate {
     variantName: string;
     sku: string;
     fulfillmentType: FulfillmentType;
+    imageUrl: string | null;
 }
 
 export interface SubmitStorefrontReviewInput {

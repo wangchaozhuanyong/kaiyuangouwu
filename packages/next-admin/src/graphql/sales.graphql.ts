@@ -780,6 +780,22 @@ export const GET_STOREFRONT_REVIEWS = gql`
     }
 `;
 
+export const GET_STOREFRONT_REVIEW_SETTINGS = gql`
+    query GetAdminStorefrontReviewSettings {
+        storefrontReviewSettings {
+            enabled
+        }
+    }
+`;
+
+export const UPDATE_STOREFRONT_REVIEW_SETTINGS = gql`
+    mutation UpdateAdminStorefrontReviewSettings($input: UpdateStorefrontReviewSettingsInput!) {
+        updateStorefrontReviewSettings(input: $input) {
+            enabled
+        }
+    }
+`;
+
 export const MODERATE_STOREFRONT_REVIEW = gql`
     mutation ModerateAdminStorefrontReview($input: ModerateStorefrontReviewInput!) {
         moderateStorefrontReview(input: $input) {

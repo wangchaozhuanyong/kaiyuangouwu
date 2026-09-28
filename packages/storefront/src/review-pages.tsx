@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     CheckCircle2,
     ChevronDown,
@@ -43,6 +43,8 @@ function reviewVariantLabel(candidate: StorefrontReviewCandidate): string {
     return /^[\s·•/|，,、-]/u.test(suffix) ? suffix.replace(/^[\s·•/|，,、-]+/u, '').trim() : variantName;
 }
 
+const REVIEW_PAGE_SIZE = 20;
+
 export function ReviewCenterPage({
     api,
     customer,
@@ -78,36 +80,29 @@ export function ReviewCenterPage({
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
-    const candidatesQuery = useQuery({
+    const candidatesQuery = useInfiniteQuery({
         queryKey: storefrontQueryKeys.reviewCandidates(
             storefrontQueryKeys.market(market),
             languageCodeFor(language),
             customer?.id ?? '',
         ),
-        queryFn: ({ signal }) => api.reviewCandidates(signal),
+        queryFn: ({ pageParam, signal }) =>
+            api.reviewCandidates({ skip: pageParam, take: REVIEW_PAGE_SIZE }, signal),
+        initialPageParam: 0,
+        getNextPageParam: (lastPage, pages) =>
+            lastPage.length === REVIEW_PAGE_SIZE
+                ? pages.reduce((total, page) => total + page.length, 0)
+                : undefined,
         enabled: Boolean(customer),
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const reviews = reviewsQuery.data ?? [];
-    const candidates = candidatesQuery.data ?? [];
+    const candidates = candidatesQuery.data?.pages.flat() ?? [];
     const [selected, setSelected] = useState<StorefrontReviewCandidate | null>(null);
     const [activeList, setActiveList] = useState<'pending' | 'submitted'>('pending');
     const [showAllCandidates, setShowAllCandidates] = useState(false);
     const composerRef = useRef<HTMLFormElement>(null);
-    const candidateImages = new Map(
-        customer?.orders.items.flatMap(order =>
-            order.lines.map(
-                line =>
-                    [
-                        line.id,
-                        line.productVariant.featuredAsset?.preview ??
-                            line.productVariant.product.featuredAsset?.preview ??
-                            null,
-                    ] as const,
-            ),
-        ) ?? [],
-    );
     const visibleCandidates = showAllCandidates ? candidates : candidates.slice(0, 4);
     useEffect(() => {
         if (selected) composerRef.current?.scrollIntoView({ block: 'start' });
@@ -184,7 +179,9 @@ export function ReviewCenterPage({
                                     aria-controls="review-pending-panel"
                                     onClick={() => setActiveList('pending')}
                                 >
-                                    {isZh ? `待评价 ${candidates.length}` : `To review ${candidates.length}`}
+                                    {isZh
+                                        ? `待评价 ${candidates.length}${candidatesQuery.hasNextPage ? '+' : ''}`
+                                        : `To review ${candidates.length}${candidatesQuery.hasNextPage ? '+' : ''}`}
                                 </button>
                                 <button
                                     type="button"
@@ -223,12 +220,15 @@ export function ReviewCenterPage({
                                         : 'Choose an item and share your experience'}
                                 </small>
                             </div>
-                            <span>{candidates.length}</span>
+                            <span>
+                                {candidates.length}
+                                {candidatesQuery.hasNextPage ? '+' : ''}
+                            </span>
                         </header>
                         {candidates.length ? (
                             <div className="review-candidate-list" id="review-candidate-list">
                                 {visibleCandidates.map(candidate => {
-                                    const imageUrl = candidateImages.get(candidate.orderLineId);
+                                    const imageUrl = candidate.imageUrl;
                                     const variantLabel = reviewVariantLabel(candidate);
                                     return (
                                         <button
@@ -274,23 +274,46 @@ export function ReviewCenterPage({
                                         </button>
                                     );
                                 })}
-                                {candidates.length > 4 && (
+                                {(candidates.length > 4 || candidatesQuery.hasNextPage) && (
                                     <button
                                         type="button"
                                         className="review-candidate-more"
                                         aria-expanded={showAllCandidates}
                                         aria-controls="review-candidate-list"
-                                        onClick={() => setShowAllCandidates(value => !value)}
+                                        disabled={candidatesQuery.isFetchingNextPage}
+                                        onClick={() => {
+                                            if (!showAllCandidates) setShowAllCandidates(true);
+                                            else if (candidatesQuery.hasNextPage)
+                                                void candidatesQuery.fetchNextPage();
+                                            else setShowAllCandidates(false);
+                                        }}
                                     >
                                         {showAllCandidates
-                                            ? isZh
-                                                ? '收起列表'
-                                                : 'Show fewer'
+                                            ? candidatesQuery.isFetchingNextPage
+                                                ? isZh
+                                                    ? '加载中…'
+                                                    : 'Loading…'
+                                                : candidatesQuery.hasNextPage
+                                                  ? isZh
+                                                      ? '加载更多商品'
+                                                      : 'Load more items'
+                                                  : isZh
+                                                    ? '收起列表'
+                                                    : 'Show fewer'
                                             : isZh
-                                              ? `查看其余 ${candidates.length - 4} 件商品`
-                                              : `Show ${candidates.length - 4} more items`}
-                                        <ChevronDown aria-hidden="true" />
+                                              ? '查看其余商品'
+                                              : 'Show more items'}
+                                        {!showAllCandidates || !candidatesQuery.hasNextPage ? (
+                                            <ChevronDown aria-hidden="true" />
+                                        ) : null}
                                     </button>
+                                )}
+                                {candidatesQuery.isFetchNextPageError && (
+                                    <p className="review-center-hint" role="alert">
+                                        {isZh
+                                            ? '加载更多商品失败，请重试'
+                                            : 'Could not load more items. Try again.'}
+                                    </p>
                                 )}
                             </div>
                         ) : (
@@ -389,26 +412,34 @@ export function ProductReviewsSection({
     language: StorefrontLanguage;
 }) {
     const isZh = language === 'zh';
-    const query = useQuery({
+    const query = useInfiniteQuery({
         queryKey: storefrontQueryKeys.productReviews(
             storefrontQueryKeys.market(market),
             languageCodeFor(language),
             productId,
         ),
-        queryFn: ({ signal }) => api.productReviews(productId, signal),
+        queryFn: ({ pageParam, signal }) =>
+            api.productReviews(productId, { skip: pageParam, take: REVIEW_PAGE_SIZE }, signal),
+        initialPageParam: 0,
+        getNextPageParam: (lastPage, pages) => {
+            if (lastPage.items.length === 0) return undefined;
+            const loaded = pages.reduce((total, page) => total + page.items.length, 0);
+            return loaded < lastPage.totalItems ? loaded : undefined;
+        },
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
     });
-    const reviews = query.data?.items ?? [];
-    const average = query.data?.averageRating ?? 0;
+    const reviews = query.data?.pages.flatMap(page => page.items) ?? [];
+    const totalItems = query.data?.pages[0]?.totalItems ?? 0;
+    const average = query.data?.pages[0]?.averageRating ?? 0;
     return (
         <section className="detail-block detail-review-block">
             <header>
                 <strong>{isZh ? '用户评价' : 'Reviews'}</strong>
                 <span>
                     {reviews.length
-                        ? `${average.toFixed(1)} · ${query.data?.totalItems ?? reviews.length}`
+                        ? `${average.toFixed(1)} · ${totalItems}`
                         : isZh
                           ? '暂无评价'
                           : 'No reviews yet'}
@@ -419,7 +450,8 @@ export function ProductReviewsSection({
                     <span />
                     <span />
                 </div>
-            ) : (query.isPaused && query.data === undefined) || query.isError ? (
+            ) : (query.isPaused && query.data === undefined) ||
+              (query.isError && query.data === undefined) ? (
                 <button className="product-review-retry" type="button" onClick={() => void query.refetch()}>
                     <RefreshCw aria-hidden="true" />
                     {query.isPaused
@@ -460,6 +492,27 @@ export function ProductReviewsSection({
                             )}
                         </article>
                     ))}
+                    {query.hasNextPage && (
+                        <button
+                            className="product-review-retry"
+                            type="button"
+                            disabled={query.isFetchingNextPage}
+                            onClick={() => void query.fetchNextPage()}
+                        >
+                            {query.isFetchingNextPage
+                                ? isZh
+                                    ? '加载中…'
+                                    : 'Loading…'
+                                : isZh
+                                  ? '查看更多评价'
+                                  : 'Load more reviews'}
+                        </button>
+                    )}
+                    {query.isFetchNextPageError && (
+                        <p className="review-center-hint" role="alert">
+                            {isZh ? '加载更多评价失败，请重试' : 'Could not load more reviews. Try again.'}
+                        </p>
+                    )}
                 </div>
             ) : (
                 <div className="detail-empty-review">
