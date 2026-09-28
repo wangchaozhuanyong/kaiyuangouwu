@@ -48,9 +48,6 @@ import type {
     StorefrontContentResponse,
     StorefrontCouponCampaign,
     StorefrontRegistrationConsentInput,
-    StorefrontReview,
-    StorefrontReviewCandidate,
-    StorefrontReviewList,
     StorefrontUsdtCheckoutQuote,
     SubmitAfterSalesReturnShipmentInput,
     SubmitStorefrontReviewInput,
@@ -297,32 +294,20 @@ export class ShopApi {
         return this.contentReviewsApi.confirmAfterSalesReplacement(input);
     }
 
-    async reviewSettings(signal?: AbortSignal): Promise<{ enabled: boolean }> {
-        return this.contentReviewsApi.reviewSettings(signal);
-    }
+    reviewSettings = (signal?: AbortSignal) => this.contentReviewsApi.reviewSettings(signal);
 
-    async productReviews(
+    productReviews = (
         productId: string,
         options: { skip?: number; take?: number } = { take: 20 },
         signal?: AbortSignal,
-    ): Promise<StorefrontReviewList> {
-        return this.contentReviewsApi.productReviews(productId, options, signal);
-    }
+    ) => this.contentReviewsApi.productReviews(productId, options, signal);
 
-    async myReviews(signal?: AbortSignal): Promise<StorefrontReview[]> {
-        return this.contentReviewsApi.myReviews(signal);
-    }
+    myReviews = (signal?: AbortSignal) => this.contentReviewsApi.myReviews(signal);
 
-    async reviewCandidates(
-        options: { skip?: number; take?: number } = {},
-        signal?: AbortSignal,
-    ): Promise<StorefrontReviewCandidate[]> {
-        return this.contentReviewsApi.reviewCandidates(options, signal);
-    }
+    reviewCandidates = (options: { skip?: number; take?: number } = {}, signal?: AbortSignal) =>
+        this.contentReviewsApi.reviewCandidates(options, signal);
 
-    async submitReview(input: SubmitStorefrontReviewInput): Promise<StorefrontReview> {
-        return this.contentReviewsApi.submitReview(input);
-    }
+    submitReview = (input: SubmitStorefrontReviewInput) => this.contentReviewsApi.submitReview(input);
 
     async login(emailAddress: string, password: string): Promise<void> {
         await this.accountApi.login(emailAddress, password);
