@@ -4,7 +4,7 @@ import { readFileSync, realpathSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { classifyChanges, STATIC_APPS } from '../scripts/ci-impact.mjs';
+import { affectedFrontendsForFile, classifyChanges, STATIC_APPS } from '../scripts/ci-impact.mjs';
 
 import { loadProductionStorefronts } from './production-storefronts.mjs';
 import { assertServedStorefrontAssets, switchStorefront } from './storefront-release.mjs';
@@ -116,11 +116,11 @@ export const FRONTEND_POINTERS = {
 };
 export function frontendChangedSinceObserved(observedSha, targetSha, component) {
     return Boolean(
-        execFileSync(
-            'git',
-            ['diff', '--no-renames', '--name-only', observedSha, targetSha, '--', `packages/${component}/`],
-            { encoding: 'utf8' },
-        ).trim(),
+        execFileSync('git', ['diff', '--no-renames', '--name-only', observedSha, targetSha, '--'], {
+            encoding: 'utf8',
+        })
+            .split('\n')
+            .some(file => affectedFrontendsForFile(file).includes(component)),
     );
 }
 export function pendingFrontendComponents(

@@ -12,12 +12,12 @@ import {
     requiredJobs,
 } from './ci-check-inputs.mjs';
 import {
+    affectedFrontendsForFile,
     emitPlan,
     inspection,
     isDocumentation,
     packageInventory,
     STATIC_APPS,
-    staticStyleOwner,
 } from './ci-impact.mjs';
 
 export function frontendEvidencePlan(
@@ -39,13 +39,17 @@ export function frontendEvidencePlan(
         pending.set(component, new Set(changedFiles(sha, revisions.targetSha)));
     }
     if (!pending.size) return plan;
-    const owner = file =>
-        staticStyleOwner(file) || STATIC_APPS.find(app => file.startsWith(`packages/${app}/`));
-    const files = plan.files.filter(file => !pending.has(owner(file)) || pending.get(owner(file)).has(file));
+    const owners = file => affectedFrontendsForFile(file);
+    const isPending = (file, component) => !pending.has(component) || pending.get(component).has(file);
+    const files = plan.files.filter(file =>
+        owners(file).length ? owners(file).some(component => isPending(file, component)) : true,
+    );
     return {
         ...plan,
         files,
-        frontends: plan.frontends.filter(component => files.some(file => owner(file) === component)),
+        frontends: plan.frontends.filter(component =>
+            files.some(file => owners(file).includes(component) && isPending(file, component)),
+        ),
         ...(plan.lintFiles ? { lintFiles: plan.lintFiles.filter(file => files.includes(file)) } : {}),
     };
 }

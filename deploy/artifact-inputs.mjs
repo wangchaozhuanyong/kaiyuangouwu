@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { createInputReader, dependencies, jobRecipe } from '../scripts/ci-check-inputs.mjs';
-import { isDocumentation, packageInventory, staticStyleOwner } from '../scripts/ci-impact.mjs';
+import { affectedFrontendsForFile, isDocumentation, packageInventory } from '../scripts/ci-impact.mjs';
 
 // Source revision is provenance. These inputs decide whether compiled bytes can
 // be reused; the runtime archive and its revision metadata are still built afresh.
@@ -19,7 +19,7 @@ export function artifactSourceHash({
         .filter(({ path }) => {
             if (isDocumentation(path)) return false;
             if (/^packages\/dev-server\/scripts\/.*\.spec\.mjs$/u.test(path)) return false;
-            if (component && staticStyleOwner(path) === component) return true;
+            if (component && affectedFrontendsForFile(path).includes(component)) return true;
             if (path.startsWith('packages/')) return prefixes.some(prefix => path.startsWith(prefix));
             if (path.startsWith('deploy/'))
                 return [

@@ -9,6 +9,15 @@ export const STATIC_APPS = ['storefront', 'next-admin'];
 // This stylesheet is imported by storefront home-showcase.css; it has no server consumer.
 export const staticStyleOwner = file =>
     file === 'packages/storefront-content-plugin/src/shared/hero-scene.css' ? 'storefront' : undefined;
+// The Admin decoration preview compiles the storefront router and CSS into its own bundle.
+export const storefrontPreviewInput = file =>
+    (file.startsWith('packages/storefront/src/') && !/\.(spec|test)\.[cm]?[jt]sx?$/u.test(file)) ||
+    file === 'packages/storefront-content-plugin/src/shared/hero-scene.css';
+export const affectedFrontendsForFile = file =>
+    sorted([
+        ...(staticStyleOwner(file) || file.startsWith('packages/storefront/') ? ['storefront'] : []),
+        ...(file.startsWith('packages/next-admin/') || storefrontPreviewInput(file) ? ['next-admin'] : []),
+    ]);
 export const DATABASES = ['mysql', 'sqljs', 'postgres', 'mariadb'];
 const sorted = values => [...new Set(values)].sort();
 export const isDocumentation = file =>
@@ -19,9 +28,12 @@ export const isDocumentation = file =>
 // control checks, but must not turn a later CSS release into a runtime release.
 export const isAutomationOnly = file =>
     file.startsWith('.github/') ||
-    ['deploy/artifact-inputs.mjs', 'deploy/frontend-ssm.mjs', 'deploy/deploy-frontends-from-s3.sh'].includes(
-        file,
-    ) ||
+    [
+        'deploy/artifact-inputs.mjs',
+        'deploy/frontend-release.mjs',
+        'deploy/frontend-ssm.mjs',
+        'deploy/deploy-frontends-from-s3.sh',
+    ].includes(file) ||
     /^scripts\/(ci-|release-|lint-check\.mjs$)/u.test(file) ||
     /^(deploy\/|packages\/dev-server\/scripts\/).*\.spec\.mjs$/u.test(file);
 
@@ -77,6 +89,7 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
     const byName = new Map(inventory.map(pkg => [pkg.name, pkg.directory]));
     const selected = new Set(shared ? inventory.map(pkg => pkg.directory) : changedPackages);
     if (migration && inventory.some(pkg => pkg.directory === 'core')) selected.add('core');
+    if (executable.some(storefrontPreviewInput)) selected.add('next-admin');
     // Include downstream packages, while the runner builds only their necessary prerequisites.
     let added;
     do {

@@ -42,12 +42,13 @@ test('static evidence checks each app against its active pointer while retaining
         () => [newStore, controls],
     );
     assert.deepEqual(scoped.files, [newStore, controls]);
-    assert.deepEqual(scoped.frontends, ['storefront']);
+    assert.deepEqual(scoped.frontends, ['next-admin', 'storefront']);
     assert.equal(scoped.controls, true);
     assert.equal(scoped.lane, 'frontend');
     const checks = checkRequirements(scoped, []);
     const frontend = checks.find(check => check.id === 'frontend:storefront');
     assert.deepEqual(frontend.files, [newStore]);
+    assert.deepEqual(checks.find(check => check.id === 'frontend:next-admin').files, [newStore]);
     assert.ok(
         !checks.some(check => check.file === oldStore || check.file === oldAdmin || check.file === hero),
     );
@@ -81,6 +82,25 @@ test('static evidence checks each app against its active pointer while retaining
     );
     assert.throws(() =>
         frontendEvidencePlan(cumulative, { storefrontSha: 'invalid', targetSha: target }, () => []),
+    );
+});
+
+test('a current client still requires an older Admin preview to cover client CSS', () => {
+    const source = 'a'.repeat(40);
+    const oldAdmin = 'b'.repeat(40);
+    const target = 'c'.repeat(40);
+    const style = 'packages/storefront/src/styles/home-showcase.css';
+    const plan = classifyChanges([style]);
+    const scoped = frontendEvidencePlan(
+        plan,
+        { storefrontSha: source, adminSha: oldAdmin, targetSha: target },
+        from => (from === source ? [] : [style]),
+    );
+    assert.deepEqual(scoped.frontends, ['next-admin']);
+    assert.deepEqual(scoped.files, [style]);
+    assert.deepEqual(
+        checkRequirements(scoped, inputInventory).find(check => check.id === 'frontend:next-admin').files,
+        [style],
     );
 });
 
@@ -684,15 +704,19 @@ test('a later deployment failure preserves v2 successful CI-stage evidence, neve
     }
 });
 
-test('shared hero style changes invalidate storefront check input fingerprints', () => {
+test('client styles invalidate both client and Admin preview input fingerprints', () => {
     const css = 'packages/storefront-content-plugin/src/shared/hero-scene.css';
     const { reader } = inputFixture({ [css]: 'marketing-cover' });
-    const check = checkRequirements(
+    const checks = checkRequirements(
         classifyChanges(['packages/storefront/src/a.ts'], inputInventory),
         inputInventory,
-    )[0];
-    assert.notEqual(
-        checkFingerprint(sourceSha, check, inputInventory, reader),
-        checkFingerprint(targetSha, check, inputInventory, reader),
     );
+    for (const component of ['storefront', 'next-admin']) {
+        const check = checks.find(candidate => candidate.id === `frontend:${component}`);
+        assert.notEqual(
+            checkFingerprint(sourceSha, check, inputInventory, reader),
+            checkFingerprint(targetSha, check, inputInventory, reader),
+            component,
+        );
+    }
 });
