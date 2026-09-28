@@ -4,6 +4,7 @@ import {
     chmodSync,
     chownSync,
     existsSync,
+    linkSync,
     mkdirSync,
     mkdtempSync,
     readFileSync,
@@ -473,6 +474,54 @@ void test('APT metadata cleanup removes only the two reviewed generated files', 
     assert.equal(existsSync(sourceCache), false);
     assert.equal(readFileSync(sentinel, 'utf8'), 'preserve');
     symlinkSync(sentinel, packageCache);
+    assert.throws(inspect, /regular file/u);
+});
+
+void test('Snap cache cleanup reviews only unlinked downloads and preserves installed revisions', t => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-snap-cache-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    mkdirSync(path.join(root, 'cache'));
+    const directory = realpathSync(path.join(root, 'cache'));
+    const downloaded = path.join(directory, 'download-digest');
+    const installed = path.join(root, 'installed.snap');
+    const linkedCache = path.join(directory, 'installed-digest');
+    writeFileSync(downloaded, 'd'.repeat(8192));
+    writeFileSync(installed, 'i'.repeat(8192));
+    linkSync(installed, linkedCache);
+    const inspect = () =>
+        operations.inspectSnapCacheCleanup(sourceSha, {
+            cacheDirectory: directory,
+            inspectRepository: () => ({
+                status: 'ok',
+                head: sourceSha,
+                originMainMatchesOperationsSource: true,
+                trackedClean: true,
+            }),
+            inspectRuntime: () => ({ markerSha: 'b'.repeat(40), currentRuntime: path.join(root, 'runtime') }),
+            assertRepositoryRevision: (observed, expected) => assert.equal(observed, expected),
+        });
+    const plan = inspect();
+    assert.deepEqual(
+        plan.candidates.map(candidate => candidate.file),
+        [downloaded],
+    );
+    assert.ok(plan.totalKib > 0);
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'apply-snap-cache-cleanup-reviewed',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_PLAN_SHA256: operations.planDigest(plan, sourceSha),
+    });
+    assert.throws(() =>
+        operations.applySnapCacheCleanup(
+            { ...request, expectedPlanSha256: 'f'.repeat(64) },
+            { inspect, remove: () => assert.fail('must not remove') },
+        ),
+    );
+    operations.applySnapCacheCleanup(request, { inspect, remove: file => rmSync(file) });
+    assert.equal(existsSync(downloaded), false);
+    assert.equal(existsSync(linkedCache), true);
+    assert.equal(existsSync(installed), true);
+    symlinkSync(installed, downloaded);
     assert.throws(inspect, /regular file/u);
 });
 
