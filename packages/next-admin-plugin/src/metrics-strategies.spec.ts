@@ -51,6 +51,33 @@ describe('dashboard sales metrics', () => {
         expect(new AverageOrderValueMetric().calculateEntry({} as any, data).value).toBe(7080);
     });
 
+    it('excludes controlled test settlement from revenue and order count', () => {
+        const testPayment = {
+            state: 'Settled',
+            method: 'controlled-test-payment-2',
+            amount: 600,
+            refunds: [],
+        };
+        const orderPlacedAt = new Date(2026, 8, 28, 10, 0, 0);
+        const simulated = { state: 'Delivered', orderPlacedAt, payments: [testPayment] } as any;
+        const mixed = {
+            state: 'Delivered',
+            orderPlacedAt,
+            payments: [testPayment, { state: 'Settled', method: 'real-method', amount: 1200, refunds: [] }],
+        } as any;
+
+        expect(orderNetSales(simulated)).toBe(0);
+        expect(orderCountsTowardsSales(simulated)).toBe(false);
+        expect(orderNetSales(mixed)).toBe(1200);
+        expect(orderCountsTowardsSales(mixed)).toBe(true);
+        const day = buildMetricDataByDay([simulated, mixed], orderPlacedAt, orderPlacedAt).get(
+            metricDateKey(orderPlacedAt),
+        );
+        expect(new OrderCountMetric().calculateEntry({} as any, day as any).value).toBe(1);
+        expect(new OrderTotalMetric().calculateEntry({} as any, day as any).value).toBe(1200);
+        expect(new AverageOrderValueMetric().calculateEntry({} as any, day as any).value).toBe(1200);
+    });
+
     it('uses the configured business timezone for daily buckets', () => {
         const instant = new Date('2026-08-19T16:30:00.000Z');
 
