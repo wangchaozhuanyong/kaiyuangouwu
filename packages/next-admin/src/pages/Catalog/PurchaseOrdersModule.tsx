@@ -1,7 +1,7 @@
 import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
 import type { DocumentNode } from 'graphql';
 import { AlertTriangle, ClipboardCheck, Plus, RefreshCw, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -10,6 +10,7 @@ import {
     CATALOG_PURCHASE_CONTEXT_QUERY,
     CATALOG_PURCHASE_ORDER_QUERY,
     CATALOG_PURCHASE_ORDERS_QUERY,
+    CATALOG_PURCHASE_VARIANTS_QUERY,
     CATALOG_SUPPLIERS_QUERY,
     CLOSE_CATALOG_PURCHASE_ORDER_MUTATION,
     CREATE_CATALOG_PURCHASE_ORDER_MUTATION,
@@ -39,9 +40,12 @@ type ActionMode = 'RECEIVE' | 'RETURN' | 'PAY' | 'CLOSE' | 'CANCEL' | 'DISPUTE' 
 interface PurchaseContext {
     activeChannel: { id: string; defaultCurrencyCode: string };
     stockLocations: { items: Array<{ id: string; name: string }> };
-    productVariants: {
-        items: Array<{ id: string; name: string; sku: string; customFields?: Record<string, unknown> }>;
-    };
+}
+
+interface PurchaseVariant {
+    id: string;
+    name: string;
+    sku: string;
 }
 
 interface OrderDraft {
@@ -244,11 +248,32 @@ export function PurchaseOrdersModule() {
 function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved: (id: string) => void }) {
     const [draft, setDraft] = useState<OrderDraft>(() => emptyDraft());
     const [error, setError] = useState('');
+    const [skuSearch, setSkuSearch] = useState('');
+    const [selectedVariants, setSelectedVariants] = useState<Record<string, PurchaseVariant>>({});
+    const deferredSkuSearch = useDeferredValue(skuSearch.trim());
     const suppliers = useQuery<{ catalogSuppliers: { items: CatalogSupplierRecord[] } }>(
         CATALOG_SUPPLIERS_QUERY,
         { variables: { options: { take: 200, enabled: true } } },
     );
     const context = useQuery<PurchaseContext>(CATALOG_PURCHASE_CONTEXT_QUERY);
+    const variantsQuery = useQuery<{
+        productVariants: { items: PurchaseVariant[]; totalItems: number };
+    }>(CATALOG_PURCHASE_VARIANTS_QUERY, {
+        variables: {
+            options: {
+                take: 20,
+                sort: { name: 'ASC', id: 'ASC' },
+                filter: {
+                    _or: [
+                        { sku: { contains: deferredSkuSearch } },
+                        { name: { contains: deferredSkuSearch } },
+                    ],
+                },
+            },
+        },
+        skip: !deferredSkuSearch,
+        fetchPolicy: 'cache-and-network',
+    });
     const [create, createState] = useMutation<{
         createCatalogPurchaseOrder: CatalogPurchaseOrderRecord;
     }>(CREATE_CATALOG_PURCHASE_ORDER_MUTATION);
@@ -288,7 +313,7 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
             setError(toUserFacingError(cause, '采购单创建失败'));
         }
     };
-    const variants = context.data?.productVariants.items ?? [];
+    const variants = variantsQuery.data?.productVariants.items ?? [];
     return (
         <Modal title="新建采购单" onClose={onClose} wide>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -342,25 +367,75 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                         + 添加 SKU
                     </button>
                 </div>
+                <input
+                    value={skuSearch}
+                    onChange={event => setSkuSearch(event.target.value)}
+                    aria-label="搜索采购 SKU"
+                    placeholder="输入 SKU 或规格名搜索当前店铺"
+                    className={inputClass}
+                />
+                {context.error && (
+                    <p role="alert" className="text-xs text-red-600 dark:text-red-300">
+                        收货仓库加载失败，请重试。
+                        <button
+                            type="button"
+                            onClick={() => void context.refetch()}
+                            className="ml-2 underline"
+                        >
+                            重试
+                        </button>
+                    </p>
+                )}
+                {variantsQuery.error && (
+                    <p role="alert" className="text-xs text-red-600 dark:text-red-300">
+                        SKU 搜索失败，请重试。
+                        <button
+                            type="button"
+                            onClick={() => void variantsQuery.refetch()}
+                            className="ml-2 underline"
+                        >
+                            重试
+                        </button>
+                    </p>
+                )}
+                {deferredSkuSearch &&
+                    !variantsQuery.loading &&
+                    !variantsQuery.error &&
+                    variants.length === 0 && (
+                        <p className="text-xs text-slate-500">当前店铺没有匹配的 SKU。</p>
+                    )}
                 {draft.lines.map((line, index) => (
                     <div
                         key={index}
                         className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_110px_130px_32px]"
                     >
                         <select
+                            aria-label={`选择第 ${index + 1} 个采购 SKU`}
                             value={line.variantId}
-                            onChange={event =>
+                            onChange={event => {
+                                const variant = variants.find(item => item.id === event.target.value);
+                                if (variant) {
+                                    setSelectedVariants(current => ({ ...current, [variant.id]: variant }));
+                                }
                                 setDraft({
                                     ...draft,
                                     lines: replaceAt(draft.lines, index, {
                                         ...line,
                                         variantId: event.target.value,
                                     }),
-                                })
-                            }
+                                });
+                            }}
                             className={inputClass}
                         >
-                            <option value="">选择 SKU</option>
+                            <option value="">{deferredSkuSearch ? '选择 SKU' : '先搜索 SKU'}</option>
+                            {line.variantId &&
+                                selectedVariants[line.variantId] &&
+                                !variants.some(item => item.id === line.variantId) && (
+                                    <option value={line.variantId}>
+                                        {selectedVariants[line.variantId].name} ·{' '}
+                                        {selectedVariants[line.variantId].sku}
+                                    </option>
+                                )}
                             {variants
                                 .filter(
                                     item =>

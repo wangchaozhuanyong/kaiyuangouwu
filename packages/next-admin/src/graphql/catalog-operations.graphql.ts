@@ -529,19 +529,24 @@ export const CATALOG_PURCHASE_CONTEXT_QUERY = gql`
             id
             defaultCurrencyCode
         }
-        stockLocations(options: { take: 200 }) {
+        stockLocations(options: { take: 100 }) {
             items {
                 id
                 name
             }
         }
-        productVariants(options: { take: 200 }) {
+    }
+`;
+
+export const CATALOG_PURCHASE_VARIANTS_QUERY = gql`
+    query NextAdminCatalogPurchaseVariants($options: ProductVariantListOptions) {
+        productVariants(options: $options) {
             items {
                 id
                 name
                 sku
-                customFields
             }
+            totalItems
         }
     }
 `;
