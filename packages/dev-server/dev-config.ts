@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 import { OnApplicationBootstrap } from '@nestjs/common';
-import { AssetServerPlugin } from '@vendure/asset-server-plugin';
+import { AssetServerPlugin, SharpAssetPreviewStrategy } from '@vendure/asset-server-plugin';
 import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
 import {
     AutoCardDeliveryReadyEvent,
@@ -1014,6 +1014,9 @@ export const devConfig: VendureConfig = {
             assetUploadDir,
             namingStrategy: customerImages.namingStrategy,
             storageStrategyFactory: customerImages.storageStrategyFactory,
+            previewStrategy: new SharpAssetPreviewStrategy({
+                webpOptions: { quality: 95, effort: 4 },
+            }),
             presets: storefrontAssetPresets,
             cacheHeader: 'private, no-store',
             imageTransformStrategy: createCatalogImageTransformStrategies(BOOTSTRAP_BASE_SCHEMA),
