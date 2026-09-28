@@ -1641,7 +1641,8 @@ export function AppShell() {
                     ) : (
                         <Suspense fallback={<RouteLoadingFallback />}>
                             <AdminPermissionsProvider permissions={activePermissions}>
-                                <CustomFieldsProvider>
+                                {/* clearStore keeps mounted queries alive; switching stores must remount page queries. */}
+                                <CustomFieldsProvider key={channelData?.activeChannel.token}>
                                     <Outlet />
                                 </CustomFieldsProvider>
                             </AdminPermissionsProvider>
