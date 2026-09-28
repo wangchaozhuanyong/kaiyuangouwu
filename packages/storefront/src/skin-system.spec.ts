@@ -154,6 +154,15 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
+                        // The user's fresh profile-card reference includes three separated shortcuts.
+                        if (
+                            file === path.join(__dirname, 'styles/account-identity.css') &&
+                            selector.trim() === '.account-identity-assets > button + button' &&
+                            border[1] === 'left' &&
+                            border[2].trim() === '1px solid #d3e5fb'
+                        ) {
+                            continue;
+                        }
                         findings.push(`${file}: ${selector.trim()} ${declaration.trim()}`);
                     }
                     const thinWidth = /(?:^|;)\s*width:\s*[1-4]px\s*;/.test(body);

@@ -1,4 +1,4 @@
-import { ChevronRight, Heart, Share2, TicketPercent } from 'lucide-react';
+import { ChevronRight, Heart, Share2, Smile, TicketPercent } from 'lucide-react';
 
 import { SafeImage } from '../../safe-image';
 import { type RouteState } from '../../storefront-router';
@@ -101,12 +101,12 @@ export function AccountIdentity({
                                   : 'Sign in to manage orders and offers'}
                         </p>
                     </div>
+                    <div className="account-identity-greeting" aria-hidden="true">
+                        <span>Hello!</span>
+                        <small>NICE TO SEE YOU</small>
+                        <Smile />
+                    </div>
                 </div>
-                <p className="account-identity-description">
-                    {isZh
-                        ? '您的订单、优惠和分享，都在这里。'
-                        : 'Your orders, offers and sharing, in one place.'}
-                </p>
                 {customer ? (
                     <div
                         className="account-identity-assets"
