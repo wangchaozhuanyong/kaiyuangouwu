@@ -63,6 +63,19 @@ describe('storefront skin system', () => {
         );
     });
 
+    it('keeps notification and referral geometry in their responsive owners', () => {
+        for (const file of ['account-catalog-surfaces.css', 'desktop-pages.css', 'visual-presets.css']) {
+            expect(stylesheet(`./styles/${file}`)).not.toMatch(
+                /\.(notification|referral|desktop-referral)-/u,
+            );
+        }
+        for (const page of ['notifications', 'referral']) {
+            const css = stylesheet(`./styles/${page}.css`);
+            expect(css).not.toMatch(/#[\da-f]{3,8}\b|!important|data-storefront-preset/iu);
+            expect(stylesheet(`./pages/${page}-page.tsx`)).toContain(`../styles/${page}.css`);
+        }
+    });
+
     it('owns transparent decorative icons globally without page or skin frames', () => {
         const owner = stylesheet('./styles/semantic-icons.css');
         const slots = owner

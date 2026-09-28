@@ -13,7 +13,7 @@ import {
     Users,
     WalletCards,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 
 const REFERRAL_LIST_PAGE_SIZE = 10;
 
@@ -29,6 +29,8 @@ import { ReferralPageContext } from '../storefront-page-contexts';
 import { EmptyState, Subpage } from '../storefront-ui/page-shell';
 import { formatMoney } from '../storefront-ui/product-display';
 import { ActiveCustomer, MarketConfig, ReferralLedgerEntry, StorefrontLanguage } from '../types';
+
+import '../styles/referral.css';
 
 export interface ReferralPageProps {
     api: ShopApi;
@@ -87,6 +89,8 @@ export function ReferralPage() {
     );
     const [inviteePage, setInviteePage] = useState(1);
     const [ledgerPage, setLedgerPage] = useState(1);
+    const [recordTab, setRecordTab] = useState<'invitees' | 'ledger'>('invitees');
+    const recordId = useId();
 
     const invitees = useMemo(() => overview?.invitees ?? [], [overview?.invitees]);
     const inviteeTotalPages = Math.max(1, Math.ceil(invitees.length / REFERRAL_LIST_PAGE_SIZE));
@@ -184,7 +188,7 @@ export function ReferralPage() {
                     onAction={() => void overviewQuery.refetch()}
                 />
             ) : (
-                <div className="desktop-referral-content mx-auto grid w-full min-w-0 max-w-5xl grid-cols-1 gap-4 px-3 pb-10 pt-3 lg:grid-cols-[1.15fr_0.85fr] lg:px-6 [&>section]:min-w-0">
+                <div className="desktop-referral-content">
                     <section className="referral-invite">
                         <h1 className="referral-invite-title">
                             {isZh ? '邀请好友，获得奖励' : 'Invite friends, earn rewards'}
@@ -233,160 +237,200 @@ export function ReferralPage() {
                         </div>
                     </section>
 
-                    <section className="referral-overview grid grid-cols-2 gap-3">
-                        <SummaryCard
-                            icon={<WalletCards />}
-                            label={isZh ? '可用奖励' : 'Available'}
-                            value={formatMoney(wallet?.availableBalance ?? 0, market.currencyCode, locale)}
-                            accent="text-[var(--success)] bg-[color-mix(in_srgb,var(--success)_12%,var(--surface))]"
-                        />
-                        <SummaryCard
-                            icon={<Gift />}
-                            label={isZh ? '待生效' : 'Pending'}
-                            value={formatMoney(wallet?.pendingBalance ?? 0, market.currencyCode, locale)}
-                            accent="text-[var(--warning-text)] bg-[var(--warning-bg)]"
-                        />
-                        <SummaryCard
-                            icon={<Users />}
-                            label={isZh ? '已邀请' : 'Invited'}
-                            value={String(overview.invitedCount)}
-                            accent="text-[var(--accent-ink)] bg-[var(--accent-soft)]"
-                        />
-                        <SummaryCard
-                            icon={<ShoppingBag />}
-                            label={isZh ? '已消费好友' : 'Purchased'}
-                            value={String(overview.purchasedInviteeCount)}
-                            accent="text-[var(--text-soft)] bg-[var(--control-surface)]"
-                        />
-                        <div className="col-span-2 rounded-[var(--skin-card-radius)] border-0 bg-[var(--surface)] p-4 text-sm text-[var(--text-soft)] shadow-[var(--skin-card-shadow)]">
-                            <div className="mb-3 flex items-baseline justify-between gap-3">
-                                <strong className="text-sm font-semibold text-[var(--text)]">
-                                    {isZh ? '奖励概览' : 'Reward overview'}
-                                </strong>
-                                <RewardInfo isZh={isZh} releaseDelayDays={overview.releaseDelayDays} />
+                    <section className="referral-overview" aria-labelledby={`${recordId}-overview`}>
+                        <div className="referral-overview-heading">
+                            <h2 id={`${recordId}-overview`}>{isZh ? '奖励概览' : 'Reward overview'}</h2>
+                            <RewardInfo isZh={isZh} releaseDelayDays={overview.releaseDelayDays} />
+                        </div>
+                        <dl className="referral-stat-grid">
+                            <SummaryCard
+                                icon={<WalletCards />}
+                                label={isZh ? '可用奖励' : 'Available rewards'}
+                                value={formatMoney(
+                                    wallet?.availableBalance ?? 0,
+                                    market.currencyCode,
+                                    locale,
+                                )}
+                                prominent
+                            />
+                            <SummaryCard
+                                icon={<Gift />}
+                                label={isZh ? '待生效' : 'Pending rewards'}
+                                value={formatMoney(wallet?.pendingBalance ?? 0, market.currencyCode, locale)}
+                                prominent
+                            />
+                            <SummaryCard
+                                icon={<Users />}
+                                label={isZh ? '已邀请' : 'Invited'}
+                                value={String(overview.invitedCount)}
+                            />
+                            <SummaryCard
+                                icon={<ShoppingBag />}
+                                label={isZh ? '已消费好友' : 'Purchased friends'}
+                                value={String(overview.purchasedInviteeCount)}
+                            />
+                        </dl>
+                        <dl className="referral-reward-totals">
+                            <div>
+                                <dt>{isZh ? '累计获得' : 'Total earned'}</dt>
+                                <dd>
+                                    {formatMoney(
+                                        rewardSummary?.grossReward ?? 0,
+                                        market.currencyCode,
+                                        locale,
+                                    )}
+                                </dd>
                             </div>
-                            <dl className="m-0 grid grid-cols-2 gap-4 rounded-[var(--skin-control-radius)] bg-[var(--soft)] py-3 text-center">
-                                <div className="min-w-0 px-3">
-                                    <dt className="text-xs font-semibold text-[var(--muted)]">
-                                        {isZh ? '累计获得' : 'Total earned'}
-                                    </dt>
-                                    <dd className="mb-0 mt-1 [overflow-wrap:anywhere] text-base font-semibold tabular-nums text-[var(--text)]">
-                                        {formatMoney(
-                                            rewardSummary?.grossReward ?? 0,
-                                            market.currencyCode,
-                                            locale,
-                                        )}
-                                    </dd>
-                                </div>
-                                <div className="min-w-0 px-3">
-                                    <dt className="text-xs font-semibold text-[var(--muted)]">
-                                        {isZh ? '退款扣回' : 'Refund clawbacks'}
-                                    </dt>
-                                    <dd className="mb-0 mt-1 [overflow-wrap:anywhere] text-base font-semibold tabular-nums text-[var(--danger)]">
-                                        -
-                                        {formatMoney(
-                                            rewardSummary?.clawedBackReward ?? 0,
-                                            market.currencyCode,
-                                            locale,
-                                        )}
-                                    </dd>
-                                </div>
-                            </dl>
-                        </div>
+                            <div>
+                                <dt>{isZh ? '退款扣回' : 'Refund clawbacks'}</dt>
+                                <dd>
+                                    {formatMoney(
+                                        rewardSummary?.clawedBackReward ? -rewardSummary.clawedBackReward : 0,
+                                        market.currencyCode,
+                                        locale,
+                                    )}
+                                </dd>
+                            </div>
+                        </dl>
                     </section>
-
-                    <section className="rounded-[var(--skin-card-radius)] border-0 bg-[var(--surface)] p-4 shadow-[var(--skin-card-shadow)] lg:col-span-1">
-                        <div className="mb-3 flex items-baseline justify-between gap-3">
-                            <h2 className="m-0 text-lg font-semibold text-[var(--text)]">
-                                {isZh ? '邀请记录' : 'Invitees'}
-                            </h2>
-                            <span className="text-xs font-bold tabular-nums text-[var(--muted)]">
-                                {overview.invitedCount}
-                            </span>
+                    <section
+                        className="referral-records"
+                        aria-label={isZh ? '邀请与奖励记录' : 'Invitation and reward records'}
+                    >
+                        <div
+                            className="referral-record-tabs"
+                            role="tablist"
+                            aria-label={isZh ? '记录类型' : 'Record type'}
+                            onKeyDown={event => {
+                                const tabs = Array.from(
+                                    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+                                );
+                                const index = tabs.indexOf(event.target as HTMLButtonElement);
+                                if (index < 0) return;
+                                let next = index;
+                                if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') next = 1 - index;
+                                else if (event.key === 'Home') next = 0;
+                                else if (event.key === 'End') next = 1;
+                                else return;
+                                event.preventDefault();
+                                setRecordTab(next === 0 ? 'invitees' : 'ledger');
+                                tabs[next].focus();
+                            }}
+                        >
+                            <button
+                                type="button"
+                                role="tab"
+                                id={`${recordId}-invitees-tab`}
+                                aria-controls={`${recordId}-invitees-panel`}
+                                aria-selected={recordTab === 'invitees'}
+                                tabIndex={recordTab === 'invitees' ? 0 : -1}
+                                onClick={() => setRecordTab('invitees')}
+                            >
+                                {isZh ? '邀请记录' : 'Invitees'} <span>{overview.invitedCount}</span>
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                id={`${recordId}-ledger-tab`}
+                                aria-controls={`${recordId}-ledger-panel`}
+                                aria-selected={recordTab === 'ledger'}
+                                tabIndex={recordTab === 'ledger' ? 0 : -1}
+                                onClick={() => setRecordTab('ledger')}
+                            >
+                                {isZh ? '奖励流水' : 'Reward activity'} <span>{displayLedger.length}</span>
+                            </button>
                         </div>
-                        {overview.invitees.length ? (
-                            <>
-                                <div className="grid gap-2">
-                                    {paginatedInvitees.map(invitee => (
-                                        <div key={invitee.id} className="flex items-center gap-3 py-3">
-                                            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--accent-soft)] font-bold text-[var(--accent-ink)]">
-                                                {invitee.displayName.slice(0, 1)}
-                                            </span>
-                                            <div className="min-w-0 flex-1">
-                                                <strong className="block truncate text-sm text-[var(--text)]">
-                                                    {invitee.displayName}
-                                                </strong>
-                                                <small className="text-[var(--muted)]">
-                                                    {new Intl.DateTimeFormat(locale, {
-                                                        dateStyle: 'medium',
-                                                    }).format(new Date(invitee.boundAt))}
-                                                </small>
+                        <div
+                            className="referral-record-panel"
+                            role="tabpanel"
+                            id={`${recordId}-invitees-panel`}
+                            aria-labelledby={`${recordId}-invitees-tab`}
+                            tabIndex={0}
+                            hidden={recordTab !== 'invitees'}
+                        >
+                            {overview.invitees.length ? (
+                                <>
+                                    <div className="referral-record-list">
+                                        {paginatedInvitees.map(invitee => (
+                                            <div key={invitee.id} className="referral-record-row">
+                                                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--accent-soft)] font-bold text-[var(--accent-ink)]">
+                                                    {invitee.displayName.slice(0, 1)}
+                                                </span>
+                                                <div className="min-w-0 flex-1">
+                                                    <strong className="block truncate text-sm text-[var(--text)]">
+                                                        {invitee.displayName}
+                                                    </strong>
+                                                    <small className="text-[var(--muted)]">
+                                                        {new Intl.DateTimeFormat(locale, {
+                                                            dateStyle: 'medium',
+                                                        }).format(new Date(invitee.boundAt))}
+                                                    </small>
+                                                </div>
+                                                <span
+                                                    className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-bold ${invitee.firstPaidOrderAt ? 'bg-[color-mix(in_srgb,var(--success)_12%,var(--surface))] text-[var(--success)]' : 'bg-[var(--soft)] text-[var(--text-soft)]'}`}
+                                                >
+                                                    {invitee.firstPaidOrderAt
+                                                        ? isZh
+                                                            ? '已消费'
+                                                            : 'Purchased'
+                                                        : isZh
+                                                          ? '未消费'
+                                                          : 'No purchase'}
+                                                </span>
                                             </div>
-                                            <span
-                                                className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-bold ${invitee.firstPaidOrderAt ? 'bg-[color-mix(in_srgb,var(--success)_12%,var(--surface))] text-[var(--success)]' : 'bg-[var(--soft)] text-[var(--muted)]'}`}
-                                            >
-                                                {invitee.firstPaidOrderAt
-                                                    ? isZh
-                                                        ? '已消费'
-                                                        : 'Purchased'
-                                                    : isZh
-                                                      ? '未消费'
-                                                      : 'No purchase'}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                                <ListPagination
-                                    currentPage={safeInviteePage}
-                                    totalPages={inviteeTotalPages}
-                                    totalItems={overview.invitees.length}
-                                    onPageChange={setInviteePage}
-                                    isZh={isZh}
-                                />
-                            </>
-                        ) : (
-                            <p className="py-8 text-center text-sm text-[var(--muted)]">
-                                {isZh
-                                    ? '还没有邀请记录，分享给第一位好友吧'
-                                    : 'No invitees yet. Share with your first friend.'}
-                            </p>
-                        )}
-                    </section>
-
-                    <section className="rounded-[var(--skin-card-radius)] border-0 bg-[var(--surface)] p-4 shadow-[var(--skin-card-shadow)] lg:col-span-1">
-                        <div className="mb-3 flex items-baseline justify-between gap-3">
-                            <h2 className="m-0 text-lg font-semibold text-[var(--text)]">
-                                {isZh ? '奖励流水' : 'Reward activity'}
-                            </h2>
-                            <span className="text-xs font-bold tabular-nums text-[var(--muted)]">
-                                {displayLedger.length}
-                            </span>
+                                        ))}
+                                    </div>
+                                    <ListPagination
+                                        currentPage={safeInviteePage}
+                                        totalPages={inviteeTotalPages}
+                                        totalItems={overview.invitees.length}
+                                        onPageChange={setInviteePage}
+                                        isZh={isZh}
+                                    />
+                                </>
+                            ) : (
+                                <p className="referral-record-empty">
+                                    {isZh
+                                        ? '还没有邀请记录，分享给第一位好友吧'
+                                        : 'No invitees yet. Share with your first friend.'}
+                                </p>
+                            )}
                         </div>
-                        {displayLedger.length ? (
-                            <>
-                                <div className="grid gap-2">
-                                    {paginatedLedger.map(entry => (
-                                        <LedgerRow
-                                            key={entry.id}
-                                            entry={entry}
-                                            locale={locale}
-                                            language={language}
-                                        />
-                                    ))}
-                                </div>
-                                <ListPagination
-                                    currentPage={safeLedgerPage}
-                                    totalPages={ledgerTotalPages}
-                                    totalItems={displayLedger.length}
-                                    onPageChange={setLedgerPage}
-                                    isZh={isZh}
-                                />
-                            </>
-                        ) : (
-                            <p className="py-8 text-center text-sm text-[var(--muted)]">
-                                {isZh ? '暂无奖励流水' : 'No reward activity yet'}
-                            </p>
-                        )}
+
+                        <div
+                            className="referral-record-panel"
+                            role="tabpanel"
+                            id={`${recordId}-ledger-panel`}
+                            aria-labelledby={`${recordId}-ledger-tab`}
+                            tabIndex={0}
+                            hidden={recordTab !== 'ledger'}
+                        >
+                            {displayLedger.length ? (
+                                <>
+                                    <div className="referral-record-list">
+                                        {paginatedLedger.map(entry => (
+                                            <LedgerRow
+                                                key={entry.id}
+                                                entry={entry}
+                                                locale={locale}
+                                                language={language}
+                                            />
+                                        ))}
+                                    </div>
+                                    <ListPagination
+                                        currentPage={safeLedgerPage}
+                                        totalPages={ledgerTotalPages}
+                                        totalItems={displayLedger.length}
+                                        onPageChange={setLedgerPage}
+                                        isZh={isZh}
+                                    />
+                                </>
+                            ) : (
+                                <p className="referral-record-empty">
+                                    {isZh ? '暂无奖励流水' : 'No reward activity yet'}
+                                </p>
+                            )}
+                        </div>
                     </section>
                 </div>
             )}
@@ -414,26 +458,22 @@ function SummaryCard({
     icon,
     label,
     value,
-    accent,
+    prominent = false,
 }: {
     icon: React.ReactNode;
     label: string;
     value: string;
-    accent: string;
+    prominent?: boolean;
 }) {
     return (
-        <div className="flex min-h-32 flex-col items-center justify-center rounded-[var(--skin-card-radius)] border-0 bg-[var(--surface)] px-3 py-4 text-center shadow-[var(--skin-card-shadow)]">
-            <span
-                className={`grid size-10 shrink-0 place-items-center rounded-[var(--skin-control-radius)] ${accent} [&_svg]:size-[18px]`}
-            >
-                {icon}
-            </span>
-            <strong className="mt-3 block w-full [overflow-wrap:anywhere] text-center text-xl font-semibold leading-none tabular-nums text-[var(--text)]">
-                {value}
-            </strong>
-            <small className="mt-2 block text-center text-xs font-semibold leading-4 text-[var(--muted)]">
+        <div className={prominent ? 'referral-stat is-prominent' : 'referral-stat'}>
+            <dt>
+                <span className="referral-stat-icon" aria-hidden="true">
+                    {icon}
+                </span>
                 {label}
-            </small>
+            </dt>
+            <dd>{value}</dd>
         </div>
     );
 }
@@ -486,11 +526,9 @@ function LedgerRow({
     };
     const label = labels[entry.eventType]?.[language === 'zh' ? 0 : 1] ?? entry.eventType;
     return (
-        <div className="flex items-center gap-3 py-3">
-            <span
-                className={`grid size-9 shrink-0 place-items-center rounded-full ${isPositive ? 'bg-[color-mix(in_srgb,var(--success)_12%,var(--surface))] text-[var(--success)]' : 'bg-[color-mix(in_srgb,var(--danger)_10%,var(--surface))] text-[var(--danger)]'}`}
-            >
-                <WalletCards className="size-4" />
+        <div className="referral-record-row">
+            <span className="referral-stat-icon" aria-hidden="true">
+                <WalletCards />
             </span>
             <div className="min-w-0 flex-1">
                 <strong className="block truncate text-sm text-[var(--text)]">{label}</strong>
@@ -500,7 +538,9 @@ function LedgerRow({
                     )}
                 </small>
             </div>
-            <strong className={isPositive ? 'text-[var(--success)]' : 'text-[var(--text)]'}>
+            <strong
+                className={`referral-ledger-amount ${isPositive ? 'text-[var(--success)]' : 'text-[var(--text)]'}`}
+            >
                 {delta > 0 ? '+' : ''}
                 {formatMoney(delta, entry.currencyCode, locale)}
             </strong>

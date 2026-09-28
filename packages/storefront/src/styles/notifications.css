@@ -1,0 +1,218 @@
+/* One responsive owner for the notification toolbar and list in every skin. */
+.notification-workbench {
+    min-width: 0;
+    margin: 12px 16px 24px;
+}
+.notification-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.notification-toolbar h2 {
+    display: none;
+    margin: 0;
+    color: var(--text);
+    font-size: 20px;
+}
+.notification-toolbar > div {
+    display: flex;
+    gap: 6px;
+}
+.notification-toolbar button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.notification-toolbar button:hover:not(:disabled) {
+    background: var(--control-surface-hover);
+}
+.notification-toolbar button.is-active {
+    background: var(--selection);
+    color: var(--selection-foreground);
+}
+.notification-toolbar button.is-active:hover:not(:disabled) {
+    background: var(--selection-hover);
+}
+.notification-toolbar .notification-mark-all {
+    margin-left: auto;
+    padding-inline: 6px;
+    background: transparent;
+    color: var(--text-soft);
+    font-weight: 400;
+}
+.notification-count {
+    font-variant-numeric: tabular-nums;
+}
+.notification-toolbar button:disabled {
+    cursor: default;
+    opacity: 0.55;
+}
+.notification-workbench button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+}
+.notification-read-error {
+    margin: 12px 0;
+    color: var(--danger);
+    font-size: 13px;
+}
+.notification-read-error button {
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    text-decoration: underline;
+    cursor: pointer;
+}
+.notification-list {
+    display: grid;
+    gap: 10px;
+    margin: 12px 0 0;
+    padding: 0;
+}
+.notification-list > button {
+    position: relative;
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) 16px;
+    grid-template-areas: 'icon content arrow' 'icon time arrow';
+    align-content: center;
+    align-items: center;
+    gap: 6px 12px;
+    width: 100%;
+    min-height: 106px;
+    padding: 16px;
+    border: 0;
+    border-radius: var(--skin-card-radius);
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--skin-card-shadow);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.notification-list > button:hover {
+    background: var(--control-surface-hover);
+}
+.notification-icon {
+    grid-area: icon;
+    align-self: start;
+    width: 32px;
+    height: 32px;
+    color: var(--muted);
+}
+.notification-content {
+    grid-area: content;
+    min-width: 0;
+}
+.notification-content strong,
+.notification-content small {
+    display: block;
+    overflow-wrap: anywhere;
+}
+.notification-content strong {
+    font-size: 14px;
+    line-height: 1.5;
+    font-weight: 500;
+}
+.notification-list > button.is-unread strong {
+    font-weight: 700;
+}
+.notification-content small {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+.notification-time {
+    grid-area: time;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+}
+.notification-list > button > svg {
+    grid-area: arrow;
+    width: 16px;
+    height: 16px;
+    color: var(--muted);
+}
+.notification-list > button.is-unread::after {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--danger);
+    content: '';
+}
+.notification-read-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+@media (min-width: 1024px) {
+    .notification-workbench {
+        margin: 0;
+        padding: 24px;
+        border-radius: var(--skin-card-radius);
+        background: var(--surface);
+        box-shadow: var(--skin-card-shadow);
+    }
+    .notification-toolbar {
+        gap: 12px;
+    }
+    .notification-toolbar h2 {
+        display: block;
+        margin-right: auto;
+    }
+    .notification-toolbar .notification-mark-all {
+        margin-left: 0;
+    }
+    .notification-list {
+        gap: 4px;
+        margin-top: 20px;
+    }
+    .notification-list > button {
+        min-height: 88px;
+        padding: 16px 12px;
+        grid-template-columns: 32px minmax(0, 1fr) auto 16px;
+        grid-template-areas: 'icon content time arrow';
+        gap: 16px;
+        background: transparent;
+        box-shadow: none;
+    }
+    .notification-icon {
+        align-self: center;
+    }
+    .notification-content small {
+        -webkit-line-clamp: 1;
+    }
+    .notification-time {
+        white-space: nowrap;
+        font-size: 12px;
+    }
+    .notification-list > button.is-unread::after {
+        top: 12px;
+        right: 17px;
+    }
+}

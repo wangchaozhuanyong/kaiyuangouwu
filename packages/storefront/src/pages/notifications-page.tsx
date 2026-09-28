@@ -1,6 +1,17 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useRouter } from '@tanstack/react-router';
-import { Bell, ChevronRight, RotateCcw, WifiOff } from 'lucide-react';
+import {
+    Bell,
+    ChevronRight,
+    CircleCheck,
+    CircleX,
+    CreditCard,
+    Package,
+    RotateCcw,
+    Store,
+    Truck,
+    WifiOff,
+} from 'lucide-react';
 import { useState } from 'react';
 // eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
 import type { RouteState } from '../storefront-router';
@@ -25,7 +36,7 @@ import {
     StorefrontLanguage,
 } from '../types';
 
-// TODO: Fix internal imports later
+import '../styles/notifications.css';
 
 export interface NotificationsPageProps {
     api: ShopApi;
@@ -123,13 +134,14 @@ export function NotificationsPage() {
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const readKeys = new Set(readQuery.data ?? []);
+    const readStatusKnown = !readQuery.isLoading && !readQuery.isError && !readQuery.isPaused;
     const unreadCount = notifications.filter(
         entry => entry.reference && !readKeys.has(notificationReferenceKey(entry.reference)),
     ).length;
     const visibleNotifications =
         filter === 'unread' && !readQuery.isError
             ? notifications.filter(
-                  entry => !entry.reference || !readKeys.has(notificationReferenceKey(entry.reference)),
+                  entry => entry.reference && !readKeys.has(notificationReferenceKey(entry.reference)),
               )
             : notifications;
     const markRead = async (selected: StoreNotificationReference[]) => {
@@ -197,19 +209,19 @@ export function NotificationsPage() {
                                 className={filter === 'unread' ? 'is-active' : ''}
                                 onClick={() => setFilter('unread')}
                                 aria-pressed={filter === 'unread'}
-                                disabled={readQuery.isLoading || readQuery.isError}
+                                disabled={!readStatusKnown}
                             >
                                 {isZh ? '未读消息' : 'Unread'}{' '}
-                                {readQuery.isLoading ? '…' : readQuery.isError ? '—' : unreadCount}
+                                <span className="notification-count">
+                                    {readStatusKnown ? unreadCount : '—'}
+                                </span>
                             </button>
                         </div>
                         <button
                             type="button"
                             className="notification-mark-all"
                             onClick={() => void markRead(references)}
-                            disabled={
-                                marking || readQuery.isLoading || readQuery.isError || unreadCount === 0
-                            }
+                            disabled={marking || !readStatusKnown || unreadCount === 0}
                         >
                             {marking ? (isZh ? '保存中' : 'Saving') : isZh ? '全部标为已读' : 'Mark all read'}
                         </button>
@@ -239,17 +251,21 @@ export function NotificationsPage() {
                             const isRead = entry.reference
                                 ? readKeys.has(notificationReferenceKey(entry.reference))
                                 : false;
+                            const isUnread = Boolean(entry.reference && readStatusKnown && !isRead);
+                            const Icon =
+                                entry.kind === 'after-sales' ? RotateCcw : notificationOrderIcon(entry.order);
                             return (
                                 <button
                                     type="button"
-                                    className={isRead ? 'is-read' : 'is-unread'}
+                                    className={isUnread ? 'is-unread' : 'is-read'}
                                     key={
                                         entry.kind === 'after-sales'
                                             ? `after-sales-${entry.request.id}`
                                             : `order-${entry.order.id}`
                                     }
                                     onClick={() => {
-                                        if (entry.reference && !isRead) void markRead([entry.reference]);
+                                        if (entry.reference && readStatusKnown && !isRead)
+                                            void markRead([entry.reference]);
                                         navigateTo(
                                             entry.kind === 'after-sales'
                                                 ? { name: 'orders', tab: 'service' }
@@ -258,39 +274,45 @@ export function NotificationsPage() {
                                     }}
                                 >
                                     <span className={`notification-icon is-${notification.tone}`}>
-                                        {entry.kind === 'after-sales' ? (
-                                            <RotateCcw aria-hidden="true" />
-                                        ) : (
-                                            <Bell aria-hidden="true" />
-                                        )}
+                                        <Icon aria-hidden="true" />
                                     </span>
-                                    <span>
+                                    <span className="notification-content">
                                         <strong>{notification.title}</strong>
                                         <small>{notification.detail}</small>
-                                        <em>
-                                            {entry.date && Number.isFinite(Date.parse(entry.date))
-                                                ? formatBusinessDate(locale, entry.date, {
-                                                      month: 'short',
-                                                      day: 'numeric',
-                                                      hour: '2-digit',
-                                                      minute: '2-digit',
-                                                  })
-                                                : '--'}
-                                        </em>
-                                        {entry.reference && (
-                                            <span className="notification-read-status">
-                                                {isRead ? (isZh ? '已读' : 'Read') : isZh ? '未读' : 'Unread'}
-                                            </span>
-                                        )}
                                     </span>
+                                    <time
+                                        className="notification-time"
+                                        dateTime={
+                                            entry.date && Number.isFinite(Date.parse(entry.date))
+                                                ? entry.date
+                                                : undefined
+                                        }
+                                    >
+                                        {entry.date && Number.isFinite(Date.parse(entry.date))
+                                            ? formatBusinessDate(locale, entry.date, {
+                                                  month: 'short',
+                                                  day: 'numeric',
+                                                  hour: '2-digit',
+                                                  minute: '2-digit',
+                                              })
+                                            : '--'}
+                                    </time>
+                                    {entry.reference && readStatusKnown && (
+                                        <span className="notification-read-status">
+                                            {isRead ? (isZh ? '已读' : 'Read') : isZh ? '未读' : 'Unread'}
+                                        </span>
+                                    )}
                                     <ChevronRight aria-hidden="true" />
                                 </button>
                             );
                         })}
                         {!visibleNotifications.length && (
-                            <p className="notification-empty-filter">
-                                {isZh ? '没有未读消息' : 'No unread notifications'}
-                            </p>
+                            <EmptyState
+                                compact
+                                icon={<Bell />}
+                                title={isZh ? '没有未读消息' : 'No unread notifications'}
+                                detail={isZh ? '新消息会显示在这里' : 'New notifications will appear here'}
+                            />
                         )}
                     </div>
                 </section>
@@ -305,4 +327,15 @@ export function NotificationsPage() {
             )}
         </Subpage>
     );
+}
+
+function notificationOrderIcon(order: OrderSummary) {
+    if (['AddingItems', 'ArrangingPayment'].includes(order.state)) return CreditCard;
+    if (['PaymentAuthorized', 'PaymentSettled'].includes(order.state)) {
+        return order.checkoutFulfillment?.containsDigitalProducts ? Package : Store;
+    }
+    if (['Shipped', 'PartiallyShipped'].includes(order.state)) return Truck;
+    if (order.state === 'Delivered') return CircleCheck;
+    if (order.state === 'Cancelled') return CircleX;
+    return Bell;
 }
