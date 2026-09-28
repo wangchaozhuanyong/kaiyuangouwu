@@ -1161,9 +1161,6 @@
         width: 17px;
         height: 17px;
     }
-    .desktop-account-layout .account-history-products:not(.history-date-group) > .section-header {
-        display: none;
-    }
 
     .desktop-store-layout .address-list {
         padding: 0;

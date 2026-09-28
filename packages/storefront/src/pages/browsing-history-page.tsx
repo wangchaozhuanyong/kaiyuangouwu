@@ -139,7 +139,6 @@ export function BrowsingHistoryPage() {
                 visibleProducts.length || !desktop ? (
                     <ProductSection
                         className="account-history-products"
-                        title={desktop ? undefined : isZh ? '最近浏览' : 'Recently viewed'}
                         products={desktop ? visibleProducts : historyProducts}
                         market={market}
                         locale={locale}
