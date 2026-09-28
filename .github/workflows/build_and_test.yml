@@ -95,6 +95,7 @@ jobs:
         permissions:
             contents: read
             actions: read
+            pull-requests: read
         outputs:
             plan: ${{ steps.check.outputs.plan }}
             has_packages: ${{ steps.check.outputs.has_packages }}
