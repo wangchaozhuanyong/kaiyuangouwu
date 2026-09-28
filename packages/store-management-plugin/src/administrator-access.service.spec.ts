@@ -392,7 +392,7 @@ describe('AdministratorAccessService hierarchy policy', () => {
         ).rejects.toThrow('不能下放给店铺');
     });
 
-    it('does not extend a legacy role shared with store accounts to a new store', async () => {
+    it('does not extend a legacy role shared with store or unmigrated accounts', async () => {
         const access = service();
         const sharedRole = {
             id: 'shared-role',
@@ -400,29 +400,128 @@ describe('AdministratorAccessService hierarchy policy', () => {
             channels: [{ id: 'default' }, { id: 'store-a' }],
             permissions: [Permission.ReadProduct],
         } as Role;
+        const unmigratedRole = {
+            id: 'unmigrated-role',
+            code: 'legacy-unmigrated-role',
+            channels: [{ id: 'default' }, { id: 'store-a' }],
+            permissions: [Permission.ReadProduct],
+        } as Role;
+        let ownershipLookupCount = 0;
         access.connection = {
             getRepository: (_ctx: unknown, entity: unknown) => {
-                if (entity === AdministratorAccessProfile) {
+                if (entity === Channel)
                     return {
                         find: vi
                             .fn()
-                            .mockImplementation(({ where }: { where: unknown }) =>
-                                'status' in (where as object)
-                                    ? [{ administrator: { user: { roles: [sharedRole] } } }]
-                                    : [{ userId: 'store-user', scope: 'STORE', channelId: 'store-a' }],
-                            ),
+                            .mockResolvedValue([{ id: 'default' }, { id: 'store-a' }, { id: 'store-b' }]),
+                    };
+                if (entity === AdministratorAccessProfile) {
+                    return {
+                        find: vi.fn().mockImplementation(({ where }: { where: unknown }) =>
+                            'status' in (where as object)
+                                ? [
+                                      {
+                                          administrator: {
+                                              user: { roles: [sharedRole, unmigratedRole] },
+                                          },
+                                      },
+                                  ]
+                                : ownershipLookupCount++ === 0
+                                  ? [{ userId: 'store-user', scope: 'STORE', channelId: 'store-a' }]
+                                  : [],
+                        ),
                     };
                 }
-                if (entity === User) return { find: vi.fn().mockResolvedValue([{ id: 'store-user' }]) };
+                if (entity === User)
+                    return {
+                        find: vi
+                            .fn()
+                            .mockResolvedValueOnce([{ id: 'store-user' }])
+                            .mockResolvedValueOnce([{ id: 'unmigrated-user' }]),
+                    };
                 throw new Error('Unexpected repository');
             },
         };
         access.roleService = { assignRoleToChannel: vi.fn() };
 
-        await expect(access.extendPlatformRolesToChannel({} as any, { id: 'store-b' })).rejects.toThrow(
-            '不能作为跨店岗位扩展',
-        );
+        await expect(
+            access.extendPlatformRolesToChannel({} as any, { id: 'store-b' }),
+        ).resolves.toBeUndefined();
         expect(access.roleService.assignRoleToChannel).not.toHaveBeenCalled();
+    });
+
+    it('extends only existing global custom roles and leaves built-in or store-scoped roles alone', async () => {
+        const access = service();
+        const superAdminRole = {
+            id: 'super-admin-role',
+            code: '__super_admin_role__',
+            channels: [{ id: 'default' }],
+            permissions: [Permission.SuperAdmin],
+        } as Role;
+        const customerRole = {
+            id: 'customer-role',
+            code: '__customer_role__',
+            channels: [{ id: 'default' }],
+            permissions: [Permission.Authenticated],
+        } as Role;
+        const globalRole = {
+            id: 'platform-role',
+            code: 'platform-support',
+            channels: [{ id: 'default' }, { id: 'store-a' }],
+            permissions: [Permission.ReadProduct],
+        } as Role;
+        const storeScopedRole = {
+            id: 'scoped-role',
+            code: 'single-store-role',
+            channels: [{ id: 'store-a' }],
+            permissions: [Permission.ReadProduct],
+        } as Role;
+        access.connection = {
+            getRepository: (_ctx: unknown, entity: unknown) => {
+                if (entity === Channel)
+                    return {
+                        find: vi
+                            .fn()
+                            .mockResolvedValue([{ id: 'default' }, { id: 'store-a' }, { id: 'store-b' }]),
+                    };
+                if (entity === AdministratorAccessProfile)
+                    return {
+                        find: vi.fn(({ where }: { where: unknown }) =>
+                            'status' in (where as object)
+                                ? [
+                                      {
+                                          administrator: {
+                                              user: {
+                                                  roles: [
+                                                      superAdminRole,
+                                                      customerRole,
+                                                      globalRole,
+                                                      storeScopedRole,
+                                                  ],
+                                              },
+                                          },
+                                      },
+                                  ]
+                                : [{ userId: 'platform-user', scope: 'PLATFORM' }],
+                        ),
+                    };
+                if (entity === User)
+                    return {
+                        find: vi.fn().mockResolvedValue([{ id: 'platform-user' }]),
+                    };
+                throw new Error('Unexpected repository');
+            },
+        };
+        access.roleService = { assignRoleToChannel: vi.fn().mockResolvedValue(undefined) };
+
+        await access.extendPlatformRolesToChannel({} as any, { id: 'store-b' });
+
+        expect(access.roleService.assignRoleToChannel).toHaveBeenCalledOnce();
+        expect(access.roleService.assignRoleToChannel).toHaveBeenCalledWith(
+            expect.anything(),
+            'platform-role',
+            'store-b',
+        );
     });
 
     it('rejects the technical default channel as a store account scope', async () => {
