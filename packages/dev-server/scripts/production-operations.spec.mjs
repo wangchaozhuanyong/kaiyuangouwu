@@ -380,6 +380,52 @@ void test('deployment cache cleanup is reviewed, source-pinned and limited to pl
     );
 });
 
+void test('APT archive cleanup is source-pinned and refuses an altered or empty plan', t => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-apt-archives-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const directory = realpathSync(root);
+    writeFileSync(path.join(directory, 'test-package.deb'), 'reclaimable package archive');
+    const inspect = () =>
+        operations.inspectAptArchiveCleanup(sourceSha, {
+            cacheDirectory: directory,
+            inspectRepository: () => ({
+                status: 'ok',
+                head: sourceSha,
+                originMainMatchesOperationsSource: true,
+                trackedClean: true,
+            }),
+            inspectRuntime: () => ({
+                markerSha: 'b'.repeat(40),
+                currentRuntime: path.join(directory, '..', 'runtime'),
+            }),
+            assertRepositoryRevision: (observed, expected) => assert.equal(observed, expected),
+            sizeDirectory: () => 24,
+        });
+    const plan = inspect();
+    assert.equal(plan.schema, 'vendure-apt-archive-cleanup');
+    assert.deepEqual(plan.candidates, [{ label: 'apt-package-archives', directory, sizeKib: 24 }]);
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'apply-apt-archive-cleanup-reviewed',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_PLAN_SHA256: operations.planDigest(plan, sourceSha),
+    });
+    const cleaned = [];
+    operations.applyAptArchiveCleanup(request, { inspect, clean: cachePath => cleaned.push(cachePath) });
+    assert.deepEqual(cleaned, [directory]);
+    assert.throws(() =>
+        operations.applyAptArchiveCleanup(
+            { ...request, expectedPlanSha256: 'f'.repeat(64) },
+            { inspect, clean: () => assert.fail('must not clean') },
+        ),
+    );
+    assert.throws(() =>
+        operations.applyAptArchiveCleanup(request, {
+            inspect: () => ({ ...plan, candidates: [], totalKib: 0 }),
+            clean: () => assert.fail('must not clean'),
+        }),
+    );
+});
+
 void test('a failing PM2 command cannot leak its stderr or error message', t => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-pm2-redaction-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
