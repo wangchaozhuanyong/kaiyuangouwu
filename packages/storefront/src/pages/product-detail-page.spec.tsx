@@ -127,7 +127,7 @@ describe('desktop product purchase controls', () => {
         expect(host.querySelector<HTMLButtonElement>('.detail-action-bar button:last-child')?.disabled).toBe(
             true,
         );
-        act(() => button('真实评价')?.click());
+        act(() => button('用户评价')?.click());
         expect(host.textContent).toContain('真实评价内容');
         expect(host.querySelector('.detail-description')).toBeNull();
     });

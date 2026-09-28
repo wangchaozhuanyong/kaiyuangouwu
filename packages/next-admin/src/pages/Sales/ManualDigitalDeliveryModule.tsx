@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@apollo/client/react';
 import { useDeferredValue, useState } from 'react';
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
 import {
     GET_MANUAL_DELIVERIES,
@@ -89,7 +90,10 @@ export function ManualDigitalDeliveryModule() {
             <main className="mx-auto max-w-6xl space-y-5">
                 <header className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                        <h1 className="text-xl font-bold text-slate-900">人工数字交付</h1>
+                        <h1 className="text-xl font-bold text-slate-900">
+                            人工数字交付
+                            <FeatureHelpButton topic="sales.manual-digital-delivery" title="人工数字交付" />
+                        </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             付款后按订单生成交付任务；每件商品对应一个成品包，发布后发送到订单交付邮箱。
                         </p>
@@ -254,7 +258,10 @@ function DeliveryEditor({
         >
             <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
-                    <h2 className="text-sm font-bold text-slate-900">交付任务详情</h2>
+                    <h2 className="text-sm font-bold text-slate-900">
+                        交付任务详情
+                        <FeatureHelpButton topic="sales.manual-digital-delivery" title="交付任务详情" />
+                    </h2>
                     {delivery && (
                         <p className="mt-1 text-xs text-slate-500">
                             订单 {delivery.order.code} · {delivery.productName} ·{' '}
@@ -374,6 +381,7 @@ function DeliveryForm({
                 <section aria-label="交付处理记录" className="rounded-lg border border-slate-200 p-3 text-xs">
                     <h3 className="font-semibold text-slate-800">
                         交付处理记录 · 发送尝试 {delivery.attemptCount} 次
+                        <FeatureHelpButton topic="sales.manual-digital-delivery" title="交付处理记录" />
                     </h3>
                     <ol className="mt-2 space-y-2">
                         {delivery.events.map(event => (
