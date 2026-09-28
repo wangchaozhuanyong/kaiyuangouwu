@@ -1,10 +1,10 @@
 /* Cart layout shared by mobile and desktop. */
 
-.cart-page {
+.page.cart-page {
     --page-bottom-fixed-height: calc(var(--bottom-navigation-height) + var(--cart-checkout-bar-height));
 }
 
-.cart-page.is-empty {
+.page.cart-page.is-empty {
     --page-bottom-fixed-height: var(--bottom-navigation-height);
     background: var(--paper);
 }
