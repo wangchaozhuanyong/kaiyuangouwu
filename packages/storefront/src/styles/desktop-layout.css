@@ -683,12 +683,6 @@
         border-radius: 8px;
     }
 
-    .addresses-page > .empty-state {
-        width: 100%;
-        max-width: none;
-        margin: 24px auto 0;
-    }
-
     .address-list {
         padding-top: 24px;
         display: grid;

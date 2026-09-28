@@ -471,11 +471,13 @@ export function EmptyState({
 }) {
     return (
         <section className={`empty-state ${compact ? 'is-compact' : ''}`}>
-            <span>{icon}</span>
-            <strong>{title}</strong>
-            {detail && <small>{detail}</small>}
+            <span className="empty-state-icon" aria-hidden="true">
+                {icon}
+            </span>
+            <h2 className="empty-state-title">{title}</h2>
+            {detail && <p className="empty-state-detail">{detail}</p>}
             {action && onAction && (
-                <button type="button" onClick={onAction}>
+                <button className="empty-state-action" type="button" onClick={onAction}>
                     {action}
                 </button>
             )}

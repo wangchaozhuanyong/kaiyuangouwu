@@ -636,6 +636,7 @@ export function SearchPage() {
                         <ListSkeleton label={isZh ? '正在搜索商品' : 'Searching products'} />
                     ) : searchError && !results.length ? (
                         <EmptyState
+                            compact
                             icon={<CircleAlert />}
                             title={isZh ? '搜索暂时不可用' : 'Search unavailable'}
                             detail={searchError}
@@ -694,6 +695,7 @@ export function SearchPage() {
                     ) : (
                         <div className="search-empty">
                             <EmptyState
+                                compact
                                 icon={<Search />}
                                 title={isZh ? '暂未找到相关商品' : 'No matching products'}
                                 detail={

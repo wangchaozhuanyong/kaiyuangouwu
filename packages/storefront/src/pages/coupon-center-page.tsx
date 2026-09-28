@@ -1,3 +1,4 @@
+import '../styles/coupon-center.css';
 // organize-imports-ignore
 import type { ShopApi } from '../api';
 import { useQuery } from '@tanstack/react-query';
@@ -461,22 +462,43 @@ export function CouponCenterPage() {
                     </small>
                 ) : null}
             </div>
-            <section className="coupon-center-instructions coupon-center-guide">
+            <section className="coupon-center-guide" aria-label={isZh ? '使用说明' : 'Using your coupons'}>
                 <h2>{isZh ? '使用说明' : 'Using your coupons'}</h2>
-                <p>
-                    {isZh
-                        ? '查看每张优惠券的有效期、适用范围和使用条件。进入购物车后查看可用优惠及折扣明细，最终金额以结算页为准。'
-                        : 'Check each coupon’s validity, scope and conditions. Review discounts in your cart and the final amount at checkout.'}
-                </p>
+                <dl>
+                    <div>
+                        <dt>{isZh ? '使用条件' : 'Conditions'}</dt>
+                        <dd>
+                            {isZh
+                                ? '查看券面标注的有效期、适用范围和使用门槛。'
+                                : 'Check the coupon’s validity, eligible items and minimum spend.'}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>{isZh ? '优惠明细' : 'Discounts'}</dt>
+                        <dd>
+                            {isZh
+                                ? '在购物车查看可用优惠及折扣明细。'
+                                : 'Review available coupons and discount details in your cart.'}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>{isZh ? '结算金额' : 'Final amount'}</dt>
+                        <dd>
+                            {isZh
+                                ? '最终应付金额以结算页为准。'
+                                : 'The checkout page confirms your final amount.'}
+                        </dd>
+                    </div>
+                </dl>
+                <button
+                    className="coupon-center-cart-link"
+                    type="button"
+                    onClick={() => navigateTo({ name: 'cart' })}
+                >
+                    <span>{isZh ? '查看购物车和优惠明细' : 'View cart and discount details'}</span>
+                    <ChevronRight aria-hidden="true" />
+                </button>
             </section>
-            <button
-                className="coupon-center-cart-link coupon-center-cart-link-standalone"
-                type="button"
-                onClick={() => navigateTo({ name: 'cart' })}
-            >
-                {isZh ? '查看购物车和优惠明细' : 'View cart and discount details'}
-                <ChevronRight aria-hidden="true" />
-            </button>
         </Subpage>
     );
 }

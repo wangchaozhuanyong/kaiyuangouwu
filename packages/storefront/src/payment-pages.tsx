@@ -12,7 +12,7 @@ import {
     ShieldCheck,
     WalletCards,
 } from 'lucide-react';
-import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 
 import { orderStateDisplayLabel } from '../../common/src/display-localization';
 
@@ -28,7 +28,7 @@ import { preloadStorefrontRouteComponent } from './route-component-preload';
 import { PageSkeleton } from './route-loading';
 import { storefrontErrorCode, storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
-import { InlineError, SubHeader, Subpage } from './storefront-ui/page-shell';
+import { EmptyState, InlineError, SubHeader, Subpage } from './storefront-ui/page-shell';
 import './styles/checkout-payment-surfaces.css';
 import './styles/order-aftercare.css';
 import { TaxSummaryRows } from './tax-summary';
@@ -1064,32 +1064,6 @@ function shippingEstimate(order: Order, language: StorefrontLanguage): string {
         .join(' · ');
 }
 
-function EmptyState({
-    icon,
-    title,
-    detail,
-    action,
-    onAction,
-}: {
-    icon: ReactNode;
-    title: string;
-    detail?: string;
-    action?: string;
-    onAction?: () => void;
-}) {
-    return (
-        <section className="empty-state">
-            <span>{icon}</span>
-            <h2>{title}</h2>
-            {detail && <p>{detail}</p>}
-            {action && (
-                <button type="button" onClick={onAction}>
-                    {action}
-                </button>
-            )}
-        </section>
-    );
-}
 function formatMoney(value: number, currency: string, locale: string): string {
     return formatDisplayMoney(value, currency, locale);
 }

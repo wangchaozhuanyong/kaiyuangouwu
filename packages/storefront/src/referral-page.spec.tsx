@@ -114,10 +114,10 @@ describe('referral page reward summary', () => {
         expect(markup).not.toContain('退款会按比例扣回');
     });
 
-    it('centers the four summary cards and moves reward guidance into an accessible info control', () => {
+    it('groups four metrics in one panel and moves reward guidance into an accessible info control', () => {
         const markup = renderReferralPage();
 
-        expect(markup.match(/min-h-32 flex-col items-center justify-center/g)).toHaveLength(4);
+        expect(markup.match(/class="referral-stat(?: is-prominent)?"/g)).toHaveLength(4);
         expect(markup).toContain('<details');
         expect(markup).toContain('aria-label="查看奖励说明"');
         expect(markup).toContain('默认 7 天后可用，可用于消费抵扣。');
@@ -125,29 +125,28 @@ describe('referral page reward summary', () => {
         expect(markup).not.toContain('人工提款');
     });
 
-    it('places the invite count on the title row and removes the privacy subtitle', () => {
+    it('places the invite count in the record tab and removes the privacy subtitle', () => {
         const markup = renderReferralPage();
 
-        expect(markup).toMatch(/邀请记录<\/h2><span[^>]*>2<\/span>/);
+        expect(markup).toMatch(/邀请记录 <span>2<\/span>/);
         expect(markup).not.toContain('只展示脱敏信息，保护好友隐私');
     });
 
-    it('places the ledger count on the title row and removes the activity subtitle', () => {
+    it('places the ledger count in the record tab and removes the activity subtitle', () => {
         const markup = renderReferralPage();
 
-        expect(markup).toMatch(/奖励流水<\/h2><span[^>]*>0<\/span>/);
+        expect(markup).toMatch(/奖励流水 <span>0<\/span>/);
         expect(markup).not.toContain('奖励、生效、退款扣回与消费抵扣全程留痕');
     });
 
     it('consumes semantic skin surfaces without fixed light cards or clipped reward totals', () => {
         const markup = renderReferralPage();
         expect(markup).toContain('bg-[var(--surface)]');
-        expect(markup).toContain('rounded-[var(--skin-card-radius)]');
-        expect(markup).toContain('[overflow-wrap:anywhere]');
+        expect(markup).toContain('class="referral-overview"');
         expect(markup).not.toContain('bg-white');
         expect(markup).not.toContain('text-slate-900');
         expect(markup).not.toContain('w-full truncate');
-        expect(markup).toContain('grid-cols-1');
+        expect(markup).toContain('class="desktop-referral-content"');
     });
 
     it('paginates invitees list with previous and next buttons', () => {

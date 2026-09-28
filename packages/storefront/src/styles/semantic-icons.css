@@ -13,10 +13,12 @@
     .security-item-icon,
     .security-privacy-dialog-icon,
     .notification-icon,
+    .referral-stat-icon,
     .auth-hero-benefit-icon,
     .auth-assurance-icon,
     .cart-guest-icon,
     .coupon-empty-icon,
+    .empty-state-icon,
     .order-confirmation-icon,
     .ai-studio-reference-add-icon,
     .ai-confirmation-dialog-icon,
@@ -51,10 +53,12 @@
         .security-item-icon,
         .security-privacy-dialog-icon,
         .notification-icon,
+        .referral-stat-icon,
         .auth-hero-benefit-icon,
         .auth-assurance-icon,
         .cart-guest-icon,
         .coupon-empty-icon,
+        .empty-state-icon,
         .order-confirmation-icon,
         .ai-studio-reference-add-icon,
         .ai-confirmation-dialog-icon,
@@ -76,7 +80,7 @@
     height: 28px;
 }
 
-:is(.coupon-empty-icon, .order-confirmation-icon, .ai-confirmation-dialog-icon) > svg {
+:is(.coupon-empty-icon, .empty-state-icon, .order-confirmation-icon, .ai-confirmation-dialog-icon) > svg {
     width: 32px;
     height: 32px;
 }
@@ -156,4 +160,8 @@
 }
 [data-icon-tone='support'] {
     --semantic-icon-foreground: var(--skin-tool-support-foreground, var(--accent-ink));
+}
+
+.empty-state-icon {
+    color: var(--muted);
 }

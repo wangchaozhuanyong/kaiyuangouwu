@@ -92,25 +92,11 @@
         white-space: nowrap;
     }
 
-    /* Page headings, empty states and dialogs have one desktop treatment. */
+    /* Desktop labels and dialogs; shared states keep their own component treatment. */
     .desktop-control-label {
         display: inline;
         color: var(--accent-ink);
         font-size: 14px;
-    }
-    .desktop-store-layout .page:where(:not(.orders-page)) > .empty-state {
-        min-height: 340px;
-        margin: 0;
-        padding: 48px 24px;
-        background: var(--surface, var(--paper));
-        border: 0;
-        border-radius: var(--skin-card-radius);
-        box-shadow: var(--skin-card-shadow);
-    }
-    .desktop-store-layout .empty-state > p {
-        max-width: 520px;
-        margin-inline: auto;
-        line-height: 1.7;
     }
     body:has(.desktop-store-layout) .sheet-layer {
         display: grid;
@@ -1239,9 +1225,6 @@
         width: 17px;
         height: 17px;
     }
-    .desktop-account-layout .account-history-products:not(.history-date-group) > .section-header {
-        display: none;
-    }
 
     .desktop-store-layout .address-list {
         padding: 0;
@@ -1398,175 +1381,10 @@
         border-radius: var(--skin-control-radius);
         color: var(--danger);
     }
-    .desktop-account-layout .page:where(:not(.orders-page)) > .empty-state {
-        min-height: 240px;
-        padding: 36px 24px;
-    }
-    .desktop-store-layout .coupon-center-workspace {
-        padding: 24px;
-        background: var(--surface);
-        border-radius: var(--skin-card-radius);
-        box-shadow: var(--skin-card-shadow);
-    }
-    .desktop-store-layout .coupon-center-guide h2 {
-        margin: 0 0 12px;
-        font-size: 18px;
-    }
-    .desktop-store-layout .coupon-center-guide p {
-        color: var(--muted);
-        line-height: 1.8;
-    }
-    .desktop-store-layout .coupon-center-tabs {
-        position: static;
-        display: flex;
-        justify-content: flex-start;
-        gap: 8px;
-        margin: 0 0 24px;
-        padding: 0;
-        background: transparent;
-        border: 0;
-        border-radius: var(--skin-card-radius);
-    }
-    .desktop-store-layout .coupon-center-tabs button {
-        width: auto;
-        flex: none;
-        padding: 10px 16px;
-        min-height: 48px;
-        border-radius: var(--skin-control-radius);
-        border-bottom: 0;
-        background: transparent;
-    }
-    .desktop-store-layout .coupon-center-tabs .is-active {
-        border-bottom: 0;
-        background: var(--selection);
-        color: var(--selection-foreground);
-    }
-    .desktop-store-layout .coupon-center-tabs .is-active:hover:not(:disabled) {
-        background: var(--selection-hover);
-        color: var(--selection-foreground);
-    }
-    .desktop-store-layout .coupon-center-panel {
-        margin: 0;
-        padding: 0;
-    }
-    .desktop-store-layout .coupon-center-ticket-list {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 20px;
-        padding: 0;
-    }
-    .desktop-store-layout .coupon-center-ticket-item {
-        min-width: 0;
-        margin: 0;
-        border-radius: var(--skin-card-radius);
-    }
-    .desktop-store-layout .coupon-activity-action {
-        color: var(--coupon-accent);
-        border-color: currentColor;
-        border-radius: var(--skin-control-radius);
-    }
-    .desktop-store-layout .coupon-activity-action.is-claimed {
-        color: var(--muted);
-        border-color: var(--line);
-        background: var(--surface, var(--paper));
-        opacity: 1;
-    }
-    .desktop-store-layout .coupon-activity-card.is-claimed {
-        opacity: 1;
-    }
-    .desktop-store-layout .coupon-center-cart-link-standalone {
-        margin-inline: 0;
-    }
-    .desktop-store-layout .coupon-activity-card {
-        border: 0;
-        border-radius: var(--skin-card-radius);
-        box-shadow: var(--skin-card-shadow);
-        background: var(--surface, var(--paper));
-    }
-    .desktop-store-layout .coupon-center-panel > .coupon-center-ticket-list {
-        margin: 0;
-    }
-    .desktop-store-layout .coupon-activity-value {
-        margin: 12px 0 0;
-        justify-content: flex-start;
-    }
-    .desktop-store-layout .coupon-activity-value strong {
-        font-size: 38px;
-    }
-    .desktop-store-layout .coupon-activity-hero > p {
-        margin: 10px 0 0;
-        color: var(--text);
-    }
-    .desktop-store-layout .coupon-activity-tag {
-        border-color: transparent;
-        border-radius: var(--skin-control-radius);
-    }
-    .desktop-store-layout .coupon-activity-card .coupon-center-instructions {
-        margin: 0;
-        padding-block: 16px;
-    }
-    .desktop-store-layout .coupon-activity-hero {
-        min-height: 0;
-        background: var(--accent-soft);
-        color: var(--coupon-accent);
-        padding: 24px;
-        border-radius: var(--skin-card-radius) var(--skin-card-radius) 0 0;
-        margin: 0;
-    }
-    .desktop-store-layout .coupon-center-instructions {
-        margin-top: 24px;
-        padding: 24px;
-        background: var(--surface, var(--paper));
-        border-radius: var(--skin-card-radius);
-        box-shadow: var(--skin-card-shadow);
-    }
-    .desktop-store-layout :is(.notification-list, .my-review-list, .review-candidate-list) {
+    .desktop-store-layout :is(.my-review-list, .review-candidate-list) {
         margin: 0;
         padding: 0;
         background: transparent;
-    }
-    .desktop-store-layout .notification-list {
-        display: grid;
-        gap: 12px;
-    }
-    .desktop-store-layout .notification-list > button {
-        padding: 24px;
-        min-height: 116px;
-        grid-template-columns: 44px minmax(0, 1fr) 24px;
-        border-radius: var(--skin-card-radius);
-        border: 0;
-        border-bottom: 0;
-        background: var(--surface);
-        box-shadow: var(--skin-card-shadow);
-    }
-    .desktop-account-layout .notification-workbench {
-        margin: 0;
-        padding: 24px;
-        border-radius: var(--skin-card-radius);
-        background: var(--surface);
-        box-shadow: var(--skin-card-shadow);
-    }
-    .desktop-account-layout .notification-toolbar {
-        gap: 12px;
-        margin-bottom: 16px;
-    }
-    .desktop-account-layout .notification-toolbar h2 {
-        display: block;
-        margin-right: auto;
-    }
-    .desktop-account-layout .notification-toolbar .notification-mark-all {
-        margin-left: 0;
-    }
-    .desktop-account-layout .notification-list > button {
-        min-height: 102px;
-        padding: 18px 4px;
-        border-radius: 0;
-        border-bottom: 0;
-        background: transparent;
-        box-shadow: none;
-    }
-    .desktop-account-layout .notification-list > button:last-of-type {
-        border-bottom: 0;
     }
     .desktop-store-layout .review-center-page {
         display: grid;
@@ -2163,18 +1981,6 @@
         margin: 0;
         background: var(--surface, var(--paper));
     }
-    .desktop-store-layout .desktop-referral-content {
-        max-width: none;
-        padding: 0;
-        gap: 24px;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    }
-    .desktop-store-layout .referral-invite {
-        border: 0;
-        border-radius: var(--skin-card-radius);
-        box-shadow: var(--skin-card-shadow);
-        padding: 28px;
-    }
     .desktop-store-layout .desktop-two-factor-content {
         align-items: start;
         max-width: none;
@@ -2252,9 +2058,6 @@
             grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
         }
         .desktop-store-layout .support-channel-list {
-            grid-template-columns: 1fr;
-        }
-        .desktop-store-layout .coupon-center-ticket-list {
             grid-template-columns: 1fr;
         }
     }
