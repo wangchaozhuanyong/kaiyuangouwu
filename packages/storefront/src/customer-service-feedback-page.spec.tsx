@@ -97,6 +97,9 @@ describe('customer service feedback page', () => {
             },
         } as unknown as ShopApi);
 
+        act(() => {
+            host.querySelector<HTMLButtonElement>('.support-star-btn[aria-label="5 star"]')?.click();
+        });
         await act(async () => {
             host.querySelector<HTMLButtonElement>('.support-evaluation-submit-btn')?.click();
             await Promise.resolve();
@@ -118,11 +121,31 @@ describe('customer service feedback page', () => {
             },
         } as unknown as ShopApi);
 
+        act(() => {
+            host.querySelector<HTMLButtonElement>('.support-star-btn[aria-label="5 star"]')?.click();
+        });
         await act(async () => {
             host.querySelector<HTMLButtonElement>('.support-evaluation-submit-btn')?.click();
             await Promise.resolve();
         });
         expect(host.querySelector('[role="alert"]')?.textContent).toContain('提交失败');
         expect(host.textContent).not.toContain('已收到您的服务评价');
+    });
+
+    it('requires a deliberate service rating before submitting', async () => {
+        const submit = vi.fn();
+        await render({
+            contentReviewsApi: {
+                myCustomerServiceFeedback: vi.fn().mockResolvedValue(null),
+                submitCustomerServiceFeedback: submit,
+            },
+        } as unknown as ShopApi);
+
+        await act(async () => {
+            host.querySelector<HTMLButtonElement>('.support-evaluation-submit-btn')?.click();
+            await Promise.resolve();
+        });
+        expect(submit).not.toHaveBeenCalled();
+        expect(host.querySelector('[role="alert"]')?.textContent).toContain('请先选择服务评分');
     });
 });

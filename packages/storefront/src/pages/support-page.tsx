@@ -489,7 +489,7 @@ function CustomerServiceEvaluationSection({
 }) {
     const isZh = language === 'zh';
     const sectionRef = useRef<HTMLElement>(null);
-    const [rating, setRating] = useState(5);
+    const [rating, setRating] = useState(0);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [comment, setComment] = useState('');
     const [submitted, setSubmitted] = useState(false);
@@ -557,6 +557,10 @@ function CustomerServiceEvaluationSection({
             return;
         }
         if (saving || loading) return;
+        if (rating < 1 || rating > 5) {
+            setError(isZh ? '请先选择服务评分。' : 'Choose a service rating before submitting.');
+            return;
+        }
         setSaving(true);
         setError('');
         try {
@@ -656,6 +660,7 @@ function CustomerServiceEvaluationSection({
                                     className={`support-star-btn ${star <= rating ? 'is-active' : ''}`}
                                     onClick={() => setRating(star)}
                                     aria-label={`${star} star`}
+                                    aria-pressed={star === rating}
                                 >
                                     <Star
                                         size={24}
@@ -665,7 +670,9 @@ function CustomerServiceEvaluationSection({
                                 </button>
                             ))}
                         </div>
-                        <span className="support-rating-text">{ratingLabels[rating] || ''}</span>
+                        <span className="support-rating-text">
+                            {ratingLabels[rating] || (isZh ? '请选择评分' : 'Choose a rating')}
+                        </span>
                     </div>
 
                     <div className="support-evaluation-tags">

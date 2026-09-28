@@ -153,7 +153,7 @@ export function ReviewsModule() {
                             <FeatureHelpButton topic="storefront.reviews" title="买家评价" />
                         </h1>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
-                            审核真实购买评价，并维护商家公开回复
+                            审核订单关联评价，并维护商家公开回复
                         </p>
                     </div>
                     <button
@@ -356,7 +356,9 @@ export function ReviewsModule() {
                                                                     : 'text-slate-400'
                                                             }
                                                         >
-                                                            {review.verifiedPurchase ? '真实购买' : '未验证'}
+                                                            {review.verifiedPurchase
+                                                                ? '已关联订单'
+                                                                : '未关联订单'}
                                                         </span>
                                                     </td>
                                                     <td className="h-[52px] max-w-60 px-3 py-0">
