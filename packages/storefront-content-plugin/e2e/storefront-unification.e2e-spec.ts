@@ -909,7 +909,7 @@ describe('unified storefront Admin API to Shop API', () => {
                                         ? `${index === 0 ? 'MOYAO' : '大马通'}主标题`
                                         : `${name} title`,
                                 );
-                                const imageLocator = page.locator('.auth-hero img');
+                                const imageLocator = page.locator('.auth-hero img.safe-image');
                                 if (width >= 1024) {
                                     await browserExpect(imageLocator).toHaveAttribute(
                                         'src',
@@ -992,10 +992,9 @@ describe('unified storefront Admin API to Shop API', () => {
                                     await browserExpect(page.locator('.auth-hero img')).toHaveCount(0);
                                     await browserExpect(page.locator('.auth-hero')).toBeHidden();
                                 } else {
-                                    await browserExpect(page.locator('.auth-hero img')).toHaveAttribute(
-                                        'src',
-                                        new RegExp(`auth-${route}-ai-campaign-v2`),
-                                    );
+                                    await browserExpect(
+                                        page.locator('.auth-hero img.safe-image'),
+                                    ).toHaveAttribute('src', new RegExp(`auth-${route}-ai-campaign-v2`));
                                     await browserExpect(page.locator('.auth-hero')).toBeVisible();
                                 }
                                 await browserExpect(page.locator('.auth-page')).not.toContainText('MOYAO');
@@ -1479,8 +1478,8 @@ describe('unified storefront Admin API to Shop API', () => {
             const pageUrl = `http://127.0.0.1:5300/e2e/unification/index.html?channel=${stores[0].token}&name=MOYAO&page=login`;
             const previewUrl = `http://127.0.0.1:5301/e2e/storefront-visual/index.html?stores=${stores.map(store => store.token).join(',')}&preview=auth`;
             for (const [state, background, accent] of [
-                ['explicit', 'rgb(32, 51, 70)', 'rgb(179, 68, 49)'],
-                ['inherited', 'rgb(255, 255, 255)', 'rgb(179, 68, 49)'],
+                ['explicit', 'rgb(32, 51, 70)', 'rgb(102, 84, 200)'],
+                ['inherited', 'rgb(14, 20, 33)', 'rgb(102, 84, 200)'],
                 ['classic', 'rgb(255, 255, 255)', 'rgb(21, 128, 61)'],
             ]) {
                 if (state === 'inherited')
@@ -1591,13 +1590,10 @@ describe('unified storefront Admin API to Shop API', () => {
                 'data-storefront-preset',
                 'neo-minimalist',
             );
-            await browserExpect(page.locator('.auth-hero')).toHaveCSS(
-                'background-color',
-                'rgb(243, 244, 240)',
-            );
+            await browserExpect(page.locator('.auth-hero')).toHaveCSS('background-color', 'rgb(7, 11, 20)');
             await browserExpect(page.locator('.wide-action')).toHaveCSS(
                 'background-color',
-                'rgb(179, 68, 49)',
+                'rgb(102, 84, 200)',
             );
             await browserExpect(page.locator('.auth-hero-copy h2')).toHaveCount(0);
             await browserExpect(page.locator('.auth-page')).not.toContainText('MOYAO');
