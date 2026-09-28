@@ -21,7 +21,7 @@ test('only a proven infrastructure fault permits one retry', () => {
 });
 const old = 'a'.repeat(40);
 const target = 'b'.repeat(40);
-test('a repeated already-active frontend release does not rebuild or deploy', () => {
+test('an active client still updates the Admin preview when its pointer is older', () => {
     const plan = classifyChanges(['packages/storefront/src/index.css']);
     const route = selectReleaseRoute({
         plan,
@@ -29,8 +29,10 @@ test('a repeated already-active frontend release does not rebuild or deploy', ()
         targetSha: target,
         storefrontSha: target,
         adminSha: old,
+        changedSince: (_source, _target, component) => component === 'next-admin',
     });
-    assert.equal(route.lane, 'none');
+    assert.equal(route.lane, 'frontend');
+    assert.deepEqual(route.components, ['next-admin']);
 });
 test('cumulative backend changes and explicit managed writes cannot use a static release', () => {
     const plan = classifyChanges(['packages/storefront/src/index.css', 'packages/core/src/order.ts']);
