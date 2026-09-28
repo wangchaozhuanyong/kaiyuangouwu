@@ -293,6 +293,8 @@ export interface StorefrontReviewCandidate {
     productName: string;
     variantName: string;
     sku: string;
+    unitPriceWithTax: number;
+    currencyCode: string;
     fulfillmentType: FulfillmentType;
     imageUrl: string | null;
 }

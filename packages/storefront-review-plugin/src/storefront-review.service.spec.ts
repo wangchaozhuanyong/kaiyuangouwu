@@ -35,12 +35,14 @@ function createHarness(
     } as any;
     const order = {
         id: 'order-1',
+        currencyCode: 'MYR',
         state: overrides.orderState ?? 'Delivered',
         customerId: customer.id,
         channels: [{ id: 'channel-1' }],
     } as any;
     const line = {
         id: 'line-1',
+        unitPriceWithTax: 81000,
         order,
         productVariant: variant,
         customFields: { fulfillmentTypeSnapshot: overrides.fulfillmentType ?? 'physical' },
@@ -250,6 +252,8 @@ describe('StorefrontReviewService', () => {
                 orderId: 'order-1',
                 productId: 'product-1',
                 productName: 'Production guide',
+                unitPriceWithTax: 81000,
+                currencyCode: 'MYR',
                 fulfillmentType: 'physical',
                 imageUrl: '/assets/product.webp',
             }),

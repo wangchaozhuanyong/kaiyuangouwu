@@ -34,6 +34,8 @@ export interface StorefrontReviewCandidate {
     productName: string;
     variantName: string;
     sku: string;
+    unitPriceWithTax: number;
+    currencyCode: string;
     fulfillmentType: 'physical' | 'digital';
     imageUrl: string | null;
 }

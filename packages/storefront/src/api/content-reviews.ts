@@ -679,6 +679,8 @@ export class ContentReviewsApi extends BaseDomainApi {
                         productName
                         variantName
                         sku
+                        unitPriceWithTax
+                        currencyCode
                         fulfillmentType
                         imageUrl
                     }

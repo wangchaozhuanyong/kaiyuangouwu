@@ -18,13 +18,13 @@ import { languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
 import {
     PUBLIC_QUERY_GC_TIME,
-    ROUTE_QUERY_STALE_TIME,
     publicQueryMeta,
+    ROUTE_QUERY_STALE_TIME,
     storefrontQueryKeys,
 } from './query-client';
 import { storefrontErrorMessage } from './storefront-errors';
 import { EmptyState, SubHeader } from './storefront-ui/page-shell';
-import { SafeImage } from './storefront-ui/product-display';
+import { formatMoney, SafeImage } from './storefront-ui/product-display';
 import {
     ActiveCustomer,
     MarketConfig,
@@ -201,6 +201,7 @@ export function ReviewCenterPage({
                             formRef={composerRef}
                             candidate={selected}
                             language={language}
+                            locale={market.locale}
                             onCancel={() => setSelected(null)}
                             onSubmit={submit}
                         />
@@ -259,10 +260,22 @@ export function ReviewCenterPage({
                                             <span className="review-candidate-copy">
                                                 <strong>{candidate.productName}</strong>
                                                 {variantLabel && <small>{variantLabel}</small>}
+                                                <small>
+                                                    {isZh ? '含税单价 ' : 'Unit price incl. tax '}
+                                                    {formatMoney(
+                                                        candidate.unitPriceWithTax,
+                                                        candidate.currencyCode,
+                                                        market.locale,
+                                                    )}
+                                                    {candidate.sku ? ` · SKU ${candidate.sku}` : ''}
+                                                </small>
                                                 <small
                                                     className="review-candidate-order"
-                                                    title={candidate.orderCode}
+                                                    title={`${candidate.orderCode} · ${candidate.orderLineId}`}
                                                 >
+                                                    {isZh ? '订单行 ' : 'Line '}
+                                                    {candidate.orderLineId}
+                                                    {' · '}
                                                     {isZh ? '订单 ' : 'Order '}
                                                     {candidate.orderCode}
                                                 </small>
@@ -562,12 +575,14 @@ function ReviewComposer({
     formRef,
     candidate,
     language,
+    locale,
     onCancel,
     onSubmit,
 }: {
     formRef: React.RefObject<HTMLFormElement | null>;
     candidate: StorefrontReviewCandidate;
     language: StorefrontLanguage;
+    locale: string;
     onCancel: () => void;
     onSubmit: (input: SubmitStorefrontReviewInput) => Promise<void>;
 }) {
@@ -627,6 +642,12 @@ function ReviewComposer({
                 <span>
                     <strong>{candidate.productName}</strong>
                     {reviewVariantLabel(candidate) && <small>{reviewVariantLabel(candidate)}</small>}
+                    <small>
+                        {formatMoney(candidate.unitPriceWithTax, candidate.currencyCode, locale)}
+                        {' · '}
+                        {isZh ? '订单行 ' : 'Line '}
+                        {candidate.orderLineId}
+                    </small>
                 </span>
                 <button type="button" onClick={onCancel} disabled={submitting}>
                     {isZh ? '取消' : 'Cancel'}
