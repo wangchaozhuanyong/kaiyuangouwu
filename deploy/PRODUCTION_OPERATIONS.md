@@ -202,6 +202,31 @@ The write revalidates the plan under the deployment lock, removes only the
 reviewed cache files, and refreshes production health. If any cache entry or
 runtime changes, a new plan is required.
 
+If those caches have no reclaimable entries, inspect archived systemd journals
+and numbered, rotated SSM agent logs:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=plan-archived-log-cleanup
+```
+
+The plan lists fixed log paths, sizes, inode metadata, the running runtime, and
+a source-bound hash. It excludes the active journal and current SSM agent log.
+After reviewing the exact candidates and confirming their allocated size covers
+the release shortfall, apply the same plan hash:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=apply-archived-log-cleanup-reviewed \
+    -f expected_plan_sha256=<reviewed-plan-sha256>
+```
+
+The operation revalidates the entire plan under the deployment lock. It asks
+`journalctl` to vacuum archived journals, removes only the numbered rotated SSM
+logs in the plan, and refreshes production health. Current logs, application
+logs, releases, uploaded assets and backups remain untouched. The journal and
+SSM agent retain their current files for ongoing diagnostics.
+
 ## Audit one product before changing store ownership
 
 Use the fixed read-only audit for a specific product and the exact running runtime:

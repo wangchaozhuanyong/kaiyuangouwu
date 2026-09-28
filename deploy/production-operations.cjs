@@ -121,6 +121,8 @@ function validateRequest(environment) {
             'apply-apt-lists-cleanup-reviewed',
             'plan-snap-cache-cleanup',
             'apply-snap-cache-cleanup-reviewed',
+            'plan-archived-log-cleanup',
+            'apply-archived-log-cleanup-reviewed',
             'plan-offsite-file-backup-config',
             'apply-offsite-file-backup-config-reviewed',
             'plan-two-factor-backup',
@@ -156,6 +158,7 @@ function validateRequest(environment) {
             'apply-apt-metadata-cleanup-reviewed',
             'apply-apt-lists-cleanup-reviewed',
             'apply-snap-cache-cleanup-reviewed',
+            'apply-archived-log-cleanup-reviewed',
             'apply-offsite-file-backup-config-reviewed',
             'backup-two-factor-reviewed',
             'apply-order-sales-ownership-backfill-reviewed',
@@ -819,6 +822,84 @@ function inspectFixedLogInventory() {
         },
         ssmFiles,
     };
+}
+
+function inspectArchivedLogCleanup(
+    sourceSha,
+    {
+        journalRoot = '/var/log/journal',
+        ssmRoot = '/var/log/amazon/ssm',
+        inspectScope = revision => inspectDeploymentCacheCleanup(revision, { directories: [] }),
+    } = {},
+) {
+    const scope = inspectScope(sourceSha);
+    assert.equal(scope.repositorySha, sourceSha, 'Operations source changed');
+    const candidates = [];
+    if (existsSync(journalRoot)) {
+        for (const machine of readdirSync(journalRoot, { withFileTypes: true })) {
+            assert.ok(machine.isDirectory() && !machine.isSymbolicLink(), 'Unexpected journal entry');
+            assert.match(machine.name, /^[a-f0-9]{32}$/u, 'Unexpected journal directory');
+            const directory = path.join(journalRoot, machine.name);
+            for (const entry of readdirSync(directory, { withFileTypes: true })) {
+                if (!entry.name.includes('@')) continue;
+                assert.ok(entry.isFile() && !entry.isSymbolicLink(), 'Archived journal must be a file');
+                assert.match(entry.name, /^[^/@]+@[^/@]+\.journal~?$/u, 'Unexpected archived journal');
+                candidates.push({ kind: 'journal', ...archivedLogFile(path.join(directory, entry.name)) });
+            }
+        }
+    }
+    if (existsSync(ssmRoot)) {
+        for (const entry of readdirSync(ssmRoot, { withFileTypes: true })) {
+            if (!/^amazon-ssm-agent\.log\.[1-9][0-9]*$/u.test(entry.name)) continue;
+            assert.ok(entry.isFile() && !entry.isSymbolicLink(), 'Rotated SSM log must be a file');
+            candidates.push({ kind: 'ssm-rotated', ...archivedLogFile(path.join(ssmRoot, entry.name)) });
+        }
+    }
+    candidates.sort((a, b) => a.file.localeCompare(b.file));
+    return {
+        format: 1,
+        schema: 'vendure-archived-log-cleanup',
+        repositorySha: scope.repositorySha,
+        runtimeSha: scope.runtimeSha,
+        candidates,
+        totalKib: candidates.reduce((sum, item) => sum + item.allocatedKib, 0),
+    };
+}
+
+function archivedLogFile(file) {
+    const stat = lstatSync(file);
+    assert.ok(stat.isFile() && !stat.isSymbolicLink(), 'Archived log must be a regular file');
+    assert.equal(realpathSync(file), file, 'Archived log path changed');
+    return {
+        file,
+        allocatedKib: Math.ceil(stat.blocks / 2),
+        sizeBytes: stat.size,
+        modifiedAtMs: stat.mtimeMs,
+        changedAtMs: stat.ctimeMs,
+        device: stat.dev,
+        inode: stat.ino,
+    };
+}
+
+function applyArchivedLogCleanup(
+    request,
+    {
+        inspect = revision => inspectArchivedLogCleanup(revision),
+        vacuum = () => execFileSync('journalctl', ['--vacuum-size=1M'], { stdio: 'ignore', timeout: 120000 }),
+        remove = file => unlinkSync(file),
+    } = {},
+) {
+    assert.equal(request.operation, 'apply-archived-log-cleanup-reviewed');
+    const plan = inspect(request.sourceSha);
+    assert.equal(plan.schema, 'vendure-archived-log-cleanup');
+    assert.ok(plan.candidates.length > 0 && plan.totalKib > 0, 'No archived logs are available');
+    assert.equal(planDigest(plan, request.sourceSha), request.expectedPlanSha256, 'Archived logs changed');
+    assert.deepEqual(inspect(request.sourceSha), plan, 'Archived logs changed before cleanup');
+    // journalctl only vacuums archived journal files. Active journals and the current SSM log are excluded.
+    if (plan.candidates.some(item => item.kind === 'journal')) vacuum();
+    for (const item of plan.candidates.filter(candidate => candidate.kind === 'ssm-rotated'))
+        remove(item.file);
+    return plan;
 }
 
 function readRepositoryGit(arguments_) {
@@ -1992,6 +2073,27 @@ function runLocked(environment = process.env) {
         process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=apply-snap-cache-cleanup-reviewed\n');
         return;
     }
+    if (request.operation === 'plan-archived-log-cleanup') {
+        const plan = inspectArchivedLogCleanup(request.sourceSha);
+        process.stdout.write(
+            `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: planDigest(plan, request.sourceSha), plan })}\n`,
+        );
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=plan-archived-log-cleanup\n');
+        return;
+    }
+    if (request.operation === 'apply-archived-log-cleanup-reviewed') {
+        const plan = applyArchivedLogCleanup(request);
+        const disk = readCommand('df', ['-Pk', '/']);
+        const healthRefresh = readCommand('systemctl', ['start', 'vendure-production-healthcheck.service']);
+        process.stdout.write(
+            `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: request.expectedPlanSha256, reviewedKib: plan.totalKib, reviewedFileCount: plan.candidates.length, disk, healthRefresh })}\n`,
+        );
+        assert.equal(healthRefresh.status, 'ok', 'Archived log cleanup completed, but health refresh failed');
+        process.stdout.write(
+            'PRODUCTION_OPERATIONS_COMPLETE operation=apply-archived-log-cleanup-reviewed\n',
+        );
+        return;
+    }
     if (request.operation === 'backup-database') {
         const result = runDatabaseBackup(request);
         process.stdout.write(
@@ -2276,6 +2378,8 @@ module.exports = {
     inspectAptMetadataCleanup,
     inspectAptListsCleanup,
     inspectSnapCacheCleanup,
+    inspectArchivedLogCleanup,
+    applyArchivedLogCleanup,
     inspectOffsiteFileBackupConfig,
     inspectRepositoryState,
     planDigest,

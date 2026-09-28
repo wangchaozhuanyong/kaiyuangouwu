@@ -854,6 +854,80 @@ void test('offsite file-backup configuration rejects duplicate settings and syml
     );
 });
 
+void test('reviewed archived-log cleanup excludes active logs and rejects a changed plan', t => {
+    const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'vendure-archived-logs-')));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const journalRoot = path.join(root, 'journal');
+    const machine = path.join(journalRoot, 'a'.repeat(32));
+    const ssmRoot = path.join(root, 'ssm');
+    mkdirSync(machine, { recursive: true });
+    mkdirSync(ssmRoot);
+    const archive = path.join(machine, 'system@archive.journal');
+    const activeJournal = path.join(machine, 'system.journal');
+    const rotated = path.join(ssmRoot, 'amazon-ssm-agent.log.1');
+    const activeSsm = path.join(ssmRoot, 'amazon-ssm-agent.log');
+    for (const file of [archive, activeJournal, rotated, activeSsm]) writeFileSync(file, 'log contents');
+    const inspect = () =>
+        operations.inspectArchivedLogCleanup(sourceSha, {
+            journalRoot,
+            ssmRoot,
+            inspectScope: () => ({ repositorySha: sourceSha, runtimeSha: 'b'.repeat(40) }),
+        });
+    const plan = inspect();
+    assert.deepEqual(
+        plan.candidates.map(candidate => candidate.file),
+        [rotated, archive].sort(),
+    );
+    assert.equal(
+        plan.candidates.some(candidate => candidate.file === activeJournal),
+        false,
+    );
+    assert.equal(
+        plan.candidates.some(candidate => candidate.file === activeSsm),
+        false,
+    );
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'apply-archived-log-cleanup-reviewed',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_PLAN_SHA256: operations.planDigest(plan, sourceSha),
+    });
+    assert.throws(
+        () =>
+            operations.applyArchivedLogCleanup(
+                { ...request, expectedPlanSha256: '0'.repeat(64) },
+                { inspect },
+            ),
+        /changed/u,
+    );
+    let vacuumCalls = 0;
+    operations.applyArchivedLogCleanup(request, {
+        inspect,
+        vacuum: () => {
+            vacuumCalls += 1;
+        },
+    });
+    assert.equal(vacuumCalls, 1);
+    assert.equal(existsSync(rotated), false);
+    assert.equal(existsSync(activeSsm), true);
+    assert.equal(existsSync(activeJournal), true);
+});
+
+void test('archived-log plan rejects a symlinked rotated log', t => {
+    const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'vendure-archived-log-link-')));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const ssmRoot = path.join(root, 'ssm');
+    mkdirSync(ssmRoot);
+    writeFileSync(path.join(root, 'source'), 'log contents');
+    symlinkSync(path.join(root, 'source'), path.join(ssmRoot, 'amazon-ssm-agent.log.1'));
+    assert.throws(() =>
+        operations.inspectArchivedLogCleanup(sourceSha, {
+            journalRoot: path.join(root, 'absent'),
+            ssmRoot,
+            inspectScope: () => ({ repositorySha: sourceSha, runtimeSha: 'b'.repeat(40) }),
+        }),
+    );
+});
+
 void test('release preflight and postflight accept only a reviewed Channel scope', () => {
     assert.deepEqual(
         operations.validateRequest({
