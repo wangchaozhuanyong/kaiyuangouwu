@@ -57,6 +57,8 @@ on:
                     - apply-apt-lists-cleanup-reviewed
                     - plan-snap-cache-cleanup
                     - apply-snap-cache-cleanup-reviewed
+                    - plan-archived-log-cleanup
+                    - apply-archived-log-cleanup-reviewed
                     - plan-offsite-file-backup-config
                     - apply-offsite-file-backup-config-reviewed
                     - plan-two-factor-backup
@@ -141,13 +143,13 @@ jobs:
                   }
                   [[ "$OPS_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
                   case "$OPS_OPERATION" in
-                    preflight-release|postflight-release|diagnose|backup-database|plan-deployment-cache-cleanup|plan-apt-archive-cleanup|plan-apt-metadata-cleanup|plan-apt-lists-cleanup|plan-snap-cache-cleanup|plan-offsite-file-backup-config|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|audit-store-isolation-data|audit-administrator-product-readiness|plan-order-sales-ownership-backfill|plan-moyao-default-store-migration|verify-moyao-default-store-migration|plan-asset-webp-migration|verify-asset-webp-migration)
+                    preflight-release|postflight-release|diagnose|backup-database|plan-deployment-cache-cleanup|plan-apt-archive-cleanup|plan-apt-metadata-cleanup|plan-apt-lists-cleanup|plan-snap-cache-cleanup|plan-archived-log-cleanup|plan-offsite-file-backup-config|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|audit-store-isolation-data|audit-administrator-product-readiness|plan-order-sales-ownership-backfill|plan-moyao-default-store-migration|verify-moyao-default-store-migration|plan-asset-webp-migration|verify-asset-webp-migration)
                       [[ -z "$OPS_EXPECTED_PLAN_SHA256" ]] || {
                         echo 'Operations without reviewed data changes must not include an expected plan' >&2
                         exit 1
                       }
                       ;;
-                    retain-reviewed|apply-deployment-cache-cleanup-reviewed|apply-apt-archive-cleanup-reviewed|apply-apt-metadata-cleanup-reviewed|apply-apt-lists-cleanup-reviewed|apply-snap-cache-cleanup-reviewed|apply-offsite-file-backup-config-reviewed|backup-two-factor-reviewed|apply-order-sales-ownership-backfill-reviewed|apply-moyao-default-store-migration-reviewed|apply-asset-webp-migration-reviewed)
+                    retain-reviewed|apply-deployment-cache-cleanup-reviewed|apply-apt-archive-cleanup-reviewed|apply-apt-metadata-cleanup-reviewed|apply-apt-lists-cleanup-reviewed|apply-snap-cache-cleanup-reviewed|apply-archived-log-cleanup-reviewed|apply-offsite-file-backup-config-reviewed|backup-two-factor-reviewed|apply-order-sales-ownership-backfill-reviewed|apply-moyao-default-store-migration-reviewed|apply-asset-webp-migration-reviewed)
                       [[ "$OPS_EXPECTED_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
                         echo 'Reviewed writes require the exact lowercase plan SHA-256' >&2
                         exit 1
