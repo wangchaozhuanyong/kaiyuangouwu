@@ -593,7 +593,7 @@ function OrderDetailSheet({
                     <div className="space-y-6 py-6">
                         <div className="flex flex-wrap items-center gap-2">
                             <OrderStatus order={order} />
-                            <Badge variant="outline">{paymentLabel(order.paymentStatus)}</Badge>
+                            <Badge variant="outline">{paymentLabel(order)}</Badge>
                             {order.overdue && <Badge variant="destructive">逾期未收齐</Badge>}
                         </div>
                         <div className="grid gap-3 rounded-lg border p-4 text-sm sm:grid-cols-4">
@@ -643,11 +643,12 @@ function OrderDetailSheet({
                                         记录付款
                                     </Button>
                                 )}
-                            {!['DRAFT', 'CANCELLED'].includes(order.status) && (
-                                <Button variant="outline" onClick={() => setMode('DISPUTE')}>
-                                    标记付款争议
-                                </Button>
-                            )}
+                            {!['DRAFT', 'CANCELLED'].includes(order.status) &&
+                                (order.outstandingMicrounits > 0 || order.paidMicrounits > 0) && (
+                                    <Button variant="outline" onClick={() => setMode('DISPUTE')}>
+                                        标记付款争议
+                                    </Button>
+                                )}
                             {['DRAFT', 'SUBMITTED'].includes(order.status) && (
                                 <Button variant="destructive" onClick={() => setMode('CANCEL')}>
                                     取消采购单
@@ -1157,8 +1158,17 @@ function dateTime(value: string): string {
         new Date(value),
     );
 }
-function paymentLabel(value: CatalogPurchaseOrderRecord['paymentStatus']): string {
-    return { UNPAID: '未付', PARTIALLY_PAID: '部分已付', PAID: '已付清', DISPUTED: '付款争议' }[value];
+function paymentLabel(order: CatalogPurchaseOrderRecord): string {
+    if (
+        order.outstandingMicrounits === 0 &&
+        order.paidMicrounits === 0 &&
+        order.paymentStatus !== 'DISPUTED'
+    ) {
+        return '无需付款';
+    }
+    return { UNPAID: '未付', PARTIALLY_PAID: '部分已付', PAID: '已付清', DISPUTED: '付款争议' }[
+        order.paymentStatus
+    ];
 }
 function modeTitle(mode: Exclude<ActionMode, null>): string {
     return {

@@ -548,7 +548,7 @@ function OrderDetailDialog({
                 <div className="space-y-5">
                     <div className="flex flex-wrap items-center gap-2">
                         <Status order={order} />
-                        <Badge label={paymentLabel(order.paymentStatus)} />
+                        <Badge label={paymentLabel(order)} />
                         {order.overdue && <Badge label="逾期未收齐" danger />}
                     </div>
                     <div className="grid gap-3 rounded-xl border bg-slate-50 p-4 text-xs sm:grid-cols-4">
@@ -582,9 +582,10 @@ function OrderDetailDialog({
                             order.outstandingMicrounits > 0 && (
                                 <ActionButton label="记录付款" onClick={() => setMode('PAY')} secondary />
                             )}
-                        {!['DRAFT', 'CANCELLED'].includes(order.status) && (
-                            <ActionButton label="付款争议" onClick={() => setMode('DISPUTE')} secondary />
-                        )}
+                        {!['DRAFT', 'CANCELLED'].includes(order.status) &&
+                            (order.outstandingMicrounits > 0 || order.paidMicrounits > 0) && (
+                                <ActionButton label="付款争议" onClick={() => setMode('DISPUTE')} secondary />
+                            )}
                         {['DRAFT', 'SUBMITTED'].includes(order.status) && (
                             <ActionButton label="取消采购单" onClick={() => setMode('CANCEL')} danger />
                         )}
@@ -1132,8 +1133,12 @@ const sum = (values: number[]) => values.reduce((total, value) => total + value,
 const money = (microunits: number, currency: string) => `${currency} ${(microunits / 1_000).toFixed(3)}`;
 const dateOnly = (value: string | null) => (value ? new Date(value).toLocaleDateString('zh-CN') : '—');
 const dateTime = (value: string) => new Date(value).toLocaleString('zh-CN');
-const paymentLabel = (status: CatalogPurchaseOrderRecord['paymentStatus']) =>
-    ({ UNPAID: '未付', PARTIALLY_PAID: '部分已付', PAID: '已付', DISPUTED: '争议中' })[status];
+const paymentLabel = (order: CatalogPurchaseOrderRecord) =>
+    order.outstandingMicrounits === 0 && order.paidMicrounits === 0 && order.paymentStatus !== 'DISPUTED'
+        ? '无需付款'
+        : { UNPAID: '未付', PARTIALLY_PAID: '部分已付', PAID: '已付', DISPUTED: '争议中' }[
+              order.paymentStatus
+          ];
 const modeTitle = (mode: Exclude<ActionMode, null>) =>
     ({
         RECEIVE: '登记收货',
