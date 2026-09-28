@@ -86,7 +86,7 @@ export function PurchaseOrdersModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <ClipboardCheck className="h-5 w-5 text-blue-600" /> 采购与收货
-                            <FeatureHelpButton topic="catalog.suppliers" title="采购与收货" />
+                            <FeatureHelpButton topic="catalog.purchase-orders" title="采购与收货" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             采购、分批收货、退供、应付和差异处理共用一条审计链。
@@ -621,7 +621,7 @@ function OrderDetailDialog({
                     <div className="space-y-2">
                         <h3 className="flex items-center gap-2 text-sm font-bold">
                             审计记录
-                            <FeatureHelpButton topic="catalog.suppliers" title="采购审计记录" />
+                            <FeatureHelpButton topic="catalog.purchase-audit" title="采购审计记录" />
                         </h3>
                         {order.events.map(event => (
                             <div
