@@ -2768,7 +2768,7 @@ export function InventoryLotDialog({
                     <button
                         type="button"
                         onClick={onClose}
-                        disabled={saving || !draft.reason.trim()}
+                        disabled={saving}
                         className="rounded-lg bg-slate-100 px-4 py-2 font-bold text-slate-700"
                     >
                         取消
