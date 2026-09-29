@@ -444,6 +444,7 @@ export const adminApiExtensions = gql`
         categories: [String!]!
         importCategory: String
         fulfillmentType: String!
+        pricingMode: String!
         brand: String
         tags: [String!]!
         productEnabled: Boolean!
@@ -704,6 +705,7 @@ export const adminApiExtensions = gql`
         category: String!
         secondaryCategory: String
         fulfillmentType: String!
+        pricingMode: String
         channelCode: String!
         stockLocationCode: String!
         currencyCode: String!

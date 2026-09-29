@@ -87,6 +87,7 @@ import { PackagingStockLocationStrategy } from './packaging-stock-location-strat
 import { PhysicalOnlyStockAllocationStrategy } from './physical-only-stock-allocation-strategy';
 import { ProductPackagingAdminResolver, ProductPackagingProductResolver } from './product-packaging.resolver';
 import { ProductPackagingService } from './product-packaging.service';
+import { QuoteOnlyOrderInterceptor } from './quote-only-order-interceptor';
 import { StoreNotificationReadResolver } from './store-notification-read.resolver';
 import { StoreNotificationReadService } from './store-notification-read.service';
 import './types';
@@ -209,6 +210,32 @@ import './types';
                 },
             ],
             ui: { dashboard: false },
+        });
+        config.customFields.Product.push({
+            name: 'pricingMode',
+            type: 'string',
+            defaultValue: 'FIXED',
+            public: true,
+            label: [
+                { languageCode: LanguageCode.zh_Hans, value: '销售方式' },
+                { languageCode: LanguageCode.en, value: 'Sales mode' },
+            ],
+            options: [
+                {
+                    value: 'FIXED',
+                    label: [
+                        { languageCode: LanguageCode.zh_Hans, value: '标价销售' },
+                        { languageCode: LanguageCode.en, value: 'Fixed price' },
+                    ],
+                },
+                {
+                    value: 'QUOTE_ONLY',
+                    label: [
+                        { languageCode: LanguageCode.zh_Hans, value: '展示并联系客服询价（不可下单）' },
+                        { languageCode: LanguageCode.en, value: 'Display and request a quote (no checkout)' },
+                    ],
+                },
+            ],
         });
         config.customFields.Product.push({
             name: 'fulfillmentType',
@@ -446,6 +473,7 @@ import './types';
         config.shippingOptions.shippingEligibilityCheckers.push(supportedDestinationEligibilityChecker);
         config.shippingOptions.shippingLineAssignmentStrategy = new CommerceShippingLineAssignmentStrategy();
         config.orderOptions.stockAllocationStrategy = new PhysicalOnlyStockAllocationStrategy();
+        config.orderOptions.orderInterceptors.push(new QuoteOnlyOrderInterceptor());
         config.catalogOptions.stockLocationStrategy = new PackagingStockLocationStrategy();
         config.orderOptions.orderByCodeAccessStrategy = new AuthenticatedOrderByCodeAccessStrategy();
         config.orderOptions.process = [

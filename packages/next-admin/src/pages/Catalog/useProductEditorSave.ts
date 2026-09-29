@@ -174,6 +174,10 @@ export function useProductEditorSave({
         variants,
         dynamicCustomFields: dynamicCustomFieldValues,
     } = draft;
+    const quoteOnly = dynamicCustomFieldValues.pricingMode === 'QUOTE_ONLY';
+    const switchingToQuoteOnly = quoteOnly && baselineDraft?.dynamicCustomFields.pricingMode !== 'QUOTE_ONLY';
+    const switchingFromQuoteOnly =
+        !quoteOnly && baselineDraft?.dynamicCustomFields.pricingMode === 'QUOTE_ONLY';
     const { productData, refetchCollections, refetchProduct } = data;
     const {
         requestConfirmation,
@@ -296,7 +300,7 @@ export function useProductEditorSave({
             return false;
         }
 
-        if (isCreateMode || changes.variants) {
+        if (isCreateMode || changes.variants || switchingFromQuoteOnly) {
             const variantErrors: Record<number, { sku?: string; price?: string; stock?: string }> = {};
             const skuCounts = variants.reduce<Record<string, number>>((counts, variant) => {
                 const sku = variant.sku.trim().toLowerCase();
@@ -310,8 +314,10 @@ export function useProductEditorSave({
                 } else if (skuCounts[v.sku.trim().toLowerCase()] > 1) {
                     rowErr.sku = '同一商品内的 SKU 编码不能重复';
                 }
-                if (v.price === '' || isNaN(parseFloat(v.price)) || parseFloat(v.price) < 0) {
+                if (!quoteOnly && (v.price === '' || isNaN(parseFloat(v.price)) || parseFloat(v.price) < 0)) {
                     rowErr.price = `请输入有效的 ${activeCurrencyCode} 非负金额`;
+                } else if (switchingFromQuoteOnly && parseFloat(v.price) <= 0) {
+                    rowErr.price = `改为标价销售时，请填写大于 0 的 ${activeCurrencyCode} 售价`;
                 }
                 const requiresManualStock =
                     effectiveFulfillmentType === 'physical' ||
@@ -553,7 +559,7 @@ export function useProductEditorSave({
                             productId: newProductId,
                             sku: v.sku.trim(),
                             enabled: v.enabled,
-                            price: Math.round(parseFloat(v.price) * 100),
+                            price: quoteOnly ? 0 : Math.round(parseFloat(v.price) * 100),
                             ...variantFulfillmentInput(v, effectiveFulfillmentType),
                             optionIds: v.optionIds,
                             translations: [
@@ -638,11 +644,13 @@ export function useProductEditorSave({
             } else {
                 const existingVariants = variants.filter(v => v.id && !v.isNew);
                 const newVariants = variants.filter(v => v.isNew);
-                const changedExistingVariants = existingVariants.filter(variant =>
-                    productVariantChanged(
-                        variant,
-                        baselineDraft?.variants.find(original => original.id === variant.id),
-                    ),
+                const changedExistingVariants = existingVariants.filter(
+                    variant =>
+                        switchingToQuoteOnly ||
+                        productVariantChanged(
+                            variant,
+                            baselineDraft?.variants.find(original => original.id === variant.id),
+                        ),
                 );
                 const changesVariantEnabledState = changedExistingVariants.some(
                     variant =>
@@ -713,7 +721,7 @@ export function useProductEditorSave({
                         id: v.id,
                         sku: v.sku.trim(),
                         ...(original?.enabled !== v.enabled ? { enabled: v.enabled } : {}),
-                        price: Math.round(parseFloat(v.price) * 100),
+                        price: quoteOnly ? 0 : Math.round(parseFloat(v.price) * 100),
                         ...variantFulfillmentInput(v, effectiveFulfillmentType),
                         ...(!original ||
                         !sameValue(
@@ -734,7 +742,7 @@ export function useProductEditorSave({
                     productId,
                     sku: v.sku.trim(),
                     enabled: v.enabled,
-                    price: Math.round(parseFloat(v.price) * 100),
+                    price: quoteOnly ? 0 : Math.round(parseFloat(v.price) * 100),
                     ...variantFulfillmentInput(v, effectiveFulfillmentType),
                     optionIds: v.optionIds,
                     translations: [

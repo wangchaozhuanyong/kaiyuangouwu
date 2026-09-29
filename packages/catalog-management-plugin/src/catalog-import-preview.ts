@@ -132,7 +132,10 @@ export class CatalogImportPreview {
                     item.categories.has(category) &&
                     (!row.fulfillmentType ||
                         ((item.product.customFields as unknown as Record<string, unknown>)?.fulfillmentType ??
-                            'digital') === row.fulfillmentType),
+                            'digital') === row.fulfillmentType) &&
+                    (!row.pricingMode ||
+                        ((item.product.customFields as unknown as Record<string, unknown>)?.pricingMode ??
+                            'FIXED') === row.pricingMode),
             );
             if (products.length > 1) return conflictPlan('名称和分类匹配到多个商品');
             targetProduct = products[0]?.product;
@@ -146,6 +149,28 @@ export class CatalogImportPreview {
                     }
                     targetVariant = targetProduct.variants[0];
                 }
+            }
+        }
+
+        if (targetProduct) {
+            const currentPricingMode =
+                (targetProduct.customFields as unknown as Record<string, unknown>)?.pricingMode ?? 'FIXED';
+            if (!row.pricingMode && currentPricingMode === 'QUOTE_ONLY' && row.sellingPrice != null) {
+                return conflictPlan('现有商品为询价展示商品；更新售价时请明确填写销售方式');
+            }
+            if (
+                currentPricingMode === 'QUOTE_ONLY' &&
+                row.pricingMode === 'FIXED' &&
+                (row.sellingPrice == null || row.sellingPrice <= 0)
+            ) {
+                return conflictPlan('询价商品改为标价销售时，必须填写大于 0 的销售价');
+            }
+            if (
+                row.pricingMode &&
+                row.pricingMode !== currentPricingMode &&
+                targetProduct.variants.length > 1
+            ) {
+                return conflictPlan('多规格商品切换销售方式需在商品编辑器中统一处理所有 SKU');
             }
         }
 
@@ -167,8 +192,8 @@ export class CatalogImportPreview {
                 !row.name ? '名称' : null,
                 !row.fulfillmentType ? '商品类型' : null,
                 !row.category ? '分类' : null,
-                row.purchaseCost == null ? '进货价' : null,
-                row.sellingPrice == null ? '销售价' : null,
+                row.pricingMode !== 'QUOTE_ONLY' && row.purchaseCost == null ? '进货价' : null,
+                row.pricingMode !== 'QUOTE_ONLY' && row.sellingPrice == null ? '销售价' : null,
             ].filter((value): value is string => Boolean(value));
             if (missingCreateFields.length > 0) {
                 return {
@@ -205,6 +230,9 @@ export class CatalogImportPreview {
                           productFulfillmentType:
                               (targetProduct.customFields as unknown as Record<string, unknown>)
                                   ?.fulfillmentType ?? 'digital',
+                          productPricingMode:
+                              (targetProduct.customFields as unknown as Record<string, unknown>)
+                                  ?.pricingMode ?? 'FIXED',
                           productDescription:
                               targetProduct.translations.find(
                                   translation => translation.languageCode === ctx.languageCode,
@@ -344,6 +372,7 @@ export class CatalogImportPreview {
             productSlug: productTranslation?.slug ?? '',
             productEnabled: product?.enabled ?? true,
             productFulfillmentType: productCustomFields.fulfillmentType ?? 'digital',
+            productPricingMode: productCustomFields.pricingMode ?? 'FIXED',
             productDescription: productTranslation?.description ?? '',
             productCategories,
             productImportCategory: productImportCategory || null,
@@ -389,6 +418,7 @@ export class CatalogImportPreview {
             snapshot.productImportCategory ?? stringArray(snapshot.productCategories)[0] ?? null,
         );
         changed(changes, 'fulfillmentType', row.fulfillmentType, snapshot.productFulfillmentType);
+        changed(changes, 'pricingMode', row.pricingMode, snapshot.productPricingMode);
         changed(changes, 'productEnabled', row.enabled, snapshot.productEnabled);
         changed(changes, 'variantEnabled', effectiveVariantEnabled(row), snapshot.variantEnabled);
         changedOptional(
@@ -428,8 +458,13 @@ export class CatalogImportPreview {
             snapshot.shelfLifeDays,
             shouldClear(row, 'shelfLifeDays', clearBlankFields),
         );
-        if (row.sellingPrice != null) {
-            changed(changes, 'sellingPrice', money(row.sellingPrice), snapshot.sellingPrice);
+        if (row.sellingPrice != null || row.pricingMode === 'QUOTE_ONLY') {
+            changed(
+                changes,
+                'sellingPrice',
+                row.pricingMode === 'QUOTE_ONLY' ? 0 : money(row.sellingPrice),
+                snapshot.sellingPrice,
+            );
         }
         if (row.purchaseCost != null) {
             changed(

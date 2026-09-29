@@ -648,6 +648,7 @@ export class CatalogOperationsService {
                         description: translation?.description ?? product.description ?? '',
                         fulfillmentType:
                             productFields.fulfillmentType === 'physical' ? 'physical' : 'digital',
+                        pricingMode: productFields.pricingMode === 'QUOTE_ONLY' ? 'QUOTE_ONLY' : 'FIXED',
                         importCategory: importCategory || null,
                         categories: uniqueNames([
                             ...collectionPaths,

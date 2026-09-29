@@ -37,7 +37,13 @@ export interface ProductVariant {
     /** Exact saleable quantity after allocations and the out-of-stock threshold, or null when untracked. */
     saleableStockLevel?: number | null;
     featuredAsset: Asset | null;
-    product: { id: string; name: string; description?: string; featuredAsset: Asset | null };
+    product: {
+        id: string;
+        name: string;
+        description?: string;
+        featuredAsset: Asset | null;
+        customFields?: { pricingMode?: 'FIXED' | 'QUOTE_ONLY' | null };
+    };
     autoCardAvailableStock?: number | null;
     customFields: {
         fulfillmentType: FulfillmentType;
@@ -74,6 +80,7 @@ export interface Product {
     packaging?: ProductPackaging | null;
     customFields?: {
         fulfillmentType: FulfillmentType;
+        pricingMode?: 'FIXED' | 'QUOTE_ONLY' | null;
         refundPolicy: RefundPolicy;
         manualDeliverySlaMinutes: number;
     };

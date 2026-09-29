@@ -1136,7 +1136,9 @@ describe('ShopApi storefront mutations', () => {
         });
         const cart = await new ShopApi(market).cart();
         const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as { query: string };
-        expect(request.query).toContain('product { id name description featuredAsset { id preview } }');
+        expect(request.query).toContain(
+            'product { id name description featuredAsset { id preview } customFields { pricingMode } }',
+        );
         expect(cart.lines[0].productVariant?.product.description).toBe(description);
     });
 

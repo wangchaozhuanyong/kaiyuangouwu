@@ -238,6 +238,7 @@ export class CatalogImportRollback {
                         ...(before.productFulfillmentType
                             ? { fulfillmentType: before.productFulfillmentType }
                             : {}),
+                        ...(before.productPricingMode ? { pricingMode: before.productPricingMode } : {}),
                         sourceCreatedAt: dateValue(before.productSourceCreatedAt),
                     },
                     ...(translation

@@ -7,6 +7,7 @@ export function catalogImportTemplateCsv(channelCode: string): string {
         {
             name: '示例实物商品',
             fulfillmentType: '实物',
+            pricingMode: '标价销售',
             category: '食品饮料',
             secondaryCategory: '饮料',
             sku: 'EXAMPLE-PHYSICAL-001',
@@ -21,6 +22,7 @@ export function catalogImportTemplateCsv(channelCode: string): string {
         {
             name: '示例虚拟货品',
             fulfillmentType: '虚拟货品',
+            pricingMode: '标价销售',
             category: '数字服务',
             secondaryCategory: '',
             sku: 'EXAMPLE-DIGITAL-001',
@@ -28,6 +30,14 @@ export function catalogImportTemplateCsv(channelCode: string): string {
             packageQuantity: 1,
             purchaseCost: 5,
             sellingPrice: 10,
+        },
+        {
+            name: '示例询价商品',
+            fulfillmentType: '实物',
+            pricingMode: '联系客服询价',
+            category: '家具',
+            sku: 'EXAMPLE-QUOTE-001',
+            primaryUnit: '件',
         },
     ];
     const rows = [

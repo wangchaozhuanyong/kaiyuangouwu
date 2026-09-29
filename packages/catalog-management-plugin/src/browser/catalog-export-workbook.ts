@@ -69,6 +69,7 @@ function productSheet(rows: CatalogExportRowRecord[], stockLocationId?: string):
             '商品类型',
             '二级分类',
             '导入商店',
+            '销售方式',
         ],
         ...rows.map(row => {
             const stock = selectedStock(row, stockLocationId);
@@ -80,7 +81,7 @@ function productSheet(rows: CatalogExportRowRecord[], stockLocationId?: string):
                 stock?.stockLocationName ?? '',
                 stock?.stockOnHand ?? null,
                 row.purchaseCostMicrounits == null ? null : row.purchaseCostMicrounits / 1_000,
-                row.sellingPrice / 100,
+                row.pricingMode === 'QUOTE_ONLY' ? null : row.sellingPrice / 100,
                 row.margin,
                 stock?.maximumStock ?? null,
                 stock?.minimumStock ?? null,
@@ -102,6 +103,7 @@ function productSheet(rows: CatalogExportRowRecord[], stockLocationId?: string):
                 row.fulfillmentType === 'physical' ? '实物' : '虚拟货品',
                 splitCatalogCategoryPath(categoryPath).secondaryCategory,
                 safeText(row.channelCode),
+                row.pricingMode === 'QUOTE_ONLY' ? '联系客服询价' : '标价销售',
             ];
         }),
     ];
@@ -170,6 +172,7 @@ function guideSheet(): XLSX.WorkSheet {
     const values = [
         ['工作表', '字段', '规则'],
         ['商品与SKU', '商品类型', '必填：虚拟货品 / 实物；不能留空或自动推断'],
+        ['商品与SKU', '销售方式', '标价销售 / 联系客服询价；询价商品销售价留空，仅展示且不能下单'],
         [
             '商品与SKU',
             '一级分类、二级分类',

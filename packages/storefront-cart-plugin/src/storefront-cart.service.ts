@@ -73,6 +73,10 @@ const NON_PRODUCTION_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|sandbox|tes
 const INTERNAL_BALANCE_PAYMENT_CODES = new Set(['referral-balance', 'referral-balance-payment']);
 const CONTROLLED_TEST_PAYMENT_HANDLER_CODE = 'controlled-test-payment-handler';
 
+function isQuoteOnlyVariant(variant: ProductVariant | null | undefined): boolean {
+    return ((variant?.product?.customFields ?? {}) as { pricingMode?: string }).pricingMode === 'QUOTE_ONLY';
+}
+
 export function testPaymentArguments(method: Pick<PaymentMethod, 'handler'>): Record<string, string> {
     return Object.fromEntries(
         method.handler.args.map(arg => {
@@ -217,7 +221,11 @@ export class StorefrontCartService {
                 lineId: line.id,
                 selected:
                     selected &&
-                    Boolean(line.productVariant?.enabled && line.productVariant.product?.enabled) &&
+                    Boolean(
+                        line.productVariant?.enabled &&
+                        line.productVariant.product?.enabled &&
+                        !isQuoteOnlyVariant(line.productVariant),
+                    ) &&
                     line.quantity <= (await this.saleableStock(ctx, line.productVariant)),
             })),
         );
@@ -256,7 +264,9 @@ export class StorefrontCartService {
             if (change.selected != null) line.selected = change.selected;
             if (
                 (change.selected === true || change.quantity != null) &&
-                (!line.productVariant?.enabled || !line.productVariant.product?.enabled)
+                (!line.productVariant?.enabled ||
+                    !line.productVariant.product?.enabled ||
+                    isQuoteOnlyVariant(line.productVariant))
             ) {
                 return new CartLineUnavailableError(line.productVariantId);
             }
@@ -266,7 +276,7 @@ export class StorefrontCartService {
             const variant =
                 line?.productVariant ??
                 (await this.productVariantService.findOne(ctx, addition.productVariantId));
-            if (!variant?.enabled || !variant.product?.enabled)
+            if (!variant?.enabled || !variant.product?.enabled || isQuoteOnlyVariant(variant))
                 return new CartLineUnavailableError(addition.productVariantId);
             const quantity = (line?.quantity ?? 0) + addition.quantity;
             const error = this.validateQuantity(addition.quantity, quantity);
@@ -895,10 +905,16 @@ export class StorefrontCartService {
         }
         const requestedLines = cart.lines.filter(line => line.selected);
         const selectedLines = requestedLines.filter(
-            line => line.productVariant?.enabled && line.productVariant.product?.enabled,
+            line =>
+                line.productVariant?.enabled &&
+                line.productVariant.product?.enabled &&
+                !isQuoteOnlyVariant(line.productVariant),
         );
         const unavailableLine = requestedLines.find(
-            line => !line.productVariant?.enabled || !line.productVariant.product?.enabled,
+            line =>
+                !line.productVariant?.enabled ||
+                !line.productVariant.product?.enabled ||
+                isQuoteOnlyVariant(line.productVariant),
         );
         if (force && unavailableLine) {
             return new CartLineUnavailableError(unavailableLine.productVariantId);

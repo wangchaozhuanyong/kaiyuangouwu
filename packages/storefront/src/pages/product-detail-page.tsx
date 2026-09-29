@@ -32,12 +32,14 @@ import { formatMoney } from '../storefront-ui/product-display';
 import { ProductGallery } from '../storefront-ui/product-gallery';
 import { ProductSection } from '../storefront-ui/product-section';
 import '../styles/product-detail-surfaces.css';
+import { storefrontSupportChannels } from '../support-content';
 import {
     DigitalDeliveryMode,
     MarketConfig,
     Product,
     ProductVariant,
     StoreCustomerCoupon,
+    StorefrontContentBlock,
     StorefrontCouponCampaign,
     StorefrontFlashSaleItem,
     StorefrontLanguage,
@@ -56,6 +58,7 @@ export interface ProductDetailPageProps {
     reviewEnabled?: boolean;
     storefrontName: string;
     logoUrl: string | null;
+    supportContent?: StorefrontContentBlock;
     initialVariantId?: string;
     flashSaleItems: StorefrontFlashSaleItem[];
     couponCampaigns: StorefrontCouponCampaign[];
@@ -100,6 +103,7 @@ export function ProductDetailPage() {
         reviewEnabled = true,
         storefrontName,
         logoUrl,
+        supportContent,
         flashSaleItems,
         couponCampaigns,
         customerCoupons,
@@ -132,6 +136,41 @@ export function ProductDetailPage() {
         if (!reviewEnabled && activeSection === 'reviews') setActiveSection('description');
     }, [activeSection, reviewEnabled]);
     const variant = product.variants.find(item => item.id === variantId) ?? initialVariant;
+    const quoteOnly = product.customFields?.pricingMode === 'QUOTE_ONLY';
+    const quoteLabel = isZh ? '联系客服询价' : 'Contact support for a quote';
+    const requestQuote = () => {
+        const whatsapp =
+            supportContent &&
+            storefrontSupportChannels(supportContent).find(channel => channel.key === 'WHATSAPP');
+        const target = whatsapp?.item.targetValue;
+        if (target) {
+            try {
+                const url = new URL(target);
+                if (
+                    url.protocol === 'https:' &&
+                    (url.hostname === 'wa.me' || url.hostname === 'api.whatsapp.com')
+                ) {
+                    url.searchParams.set(
+                        'text',
+                        [
+                            isZh ? '您好，我想咨询以下商品：' : 'Hello, I would like a quote for:',
+                            product.name,
+                            variant?.name,
+                            variant?.sku && `SKU: ${variant.sku}`,
+                            window.location.href,
+                        ]
+                            .filter(Boolean)
+                            .join('\n'),
+                    );
+                    window.open(url.toString(), '_blank', 'noopener,noreferrer');
+                    return;
+                }
+            } catch {
+                // An invalid support URL falls back to the configured support page.
+            }
+        }
+        navigateTo({ name: 'support' });
+    };
     const availability = productAvailability(variant);
     const purchaseQuantity = Math.min(quantity, Math.max(1, availability.stock ?? quantity));
     const activeFlashItem = flashSaleItems.find(item => item.productVariantId === variant?.id);
@@ -139,7 +178,7 @@ export function ProductDetailPage() {
     const displayedCurrencyCode =
         activeFlashItem?.currencyCode ?? variant?.currencyCode ?? market.currencyCode;
     const couponPrice =
-        variant && displayedPrice != null
+        !quoteOnly && variant && displayedPrice != null
             ? bestProductCouponPrice({
                   campaigns: couponCampaigns,
                   customerCoupons,
@@ -216,11 +255,13 @@ export function ProductDetailPage() {
                 <div className="detail-price-stack">
                     <p className={`detail-price${activeFlashItem ? ' is-flash-sale' : ''}`}>
                         <strong>
-                            {displayedPrice != null
-                                ? formatMoney(displayedPrice, displayedCurrencyCode, locale)
-                                : '--'}
+                            {quoteOnly
+                                ? quoteLabel
+                                : displayedPrice != null
+                                  ? formatMoney(displayedPrice, displayedCurrencyCode, locale)
+                                  : '--'}
                         </strong>
-                        {activeFlashItem ? (
+                        {!quoteOnly && activeFlashItem ? (
                             <del>
                                 {formatMoney(
                                     activeFlashItem.originalPrice,
@@ -260,42 +301,56 @@ export function ProductDetailPage() {
                         </small>
                     )}
                 </div>
-                <span>{stockLabel}</span>
+                <span>
+                    {quoteOnly
+                        ? isZh
+                            ? '展示商品 · 不可直接下单'
+                            : 'Display only · no checkout'
+                        : stockLabel}
+                </span>
             </div>
             <div className="detail-tags">
                 <span>
-                    {isAutoCard
+                    {quoteOnly
                         ? isZh
-                            ? '虚拟商品 · 自动发卡'
-                            : 'Digital · automatic credentials'
-                        : isFileDownload
+                            ? '预购商品 · 按需求报价'
+                            : 'Pre-order · quoted on request'
+                        : isAutoCard
                           ? isZh
-                              ? '数字商品 · 文件下载'
-                              : 'Digital · file download'
-                          : isDigital
+                              ? '虚拟商品 · 自动发卡'
+                              : 'Digital · automatic credentials'
+                          : isFileDownload
                             ? isZh
-                                ? '数字商品 · 人工服务'
-                                : 'Digital · manual service'
-                            : isZh
-                              ? '现货商品'
-                              : 'Physical'}
+                                ? '数字商品 · 文件下载'
+                                : 'Digital · file download'
+                            : isDigital
+                              ? isZh
+                                  ? '数字商品 · 人工服务'
+                                  : 'Digital · manual service'
+                              : isZh
+                                ? '现货商品'
+                                : 'Physical'}
                 </span>
                 <span>
-                    {isAutoCard
+                    {quoteOnly
                         ? isZh
-                            ? '付款成功后发送到下单邮箱'
-                            : 'Emailed automatically after payment'
-                        : isFileDownload
+                            ? '请联系客服确认规格、价格和交期'
+                            : 'Contact support for options, price and lead time'
+                        : isAutoCard
                           ? isZh
-                              ? '付款后可在订单中下载'
-                              : 'Download from your order after payment'
-                          : isDigital
+                              ? '付款成功后发送到下单邮箱'
+                              : 'Emailed automatically after payment'
+                          : isFileDownload
                             ? isZh
-                                ? `付款后由商家处理，预计${manualSlaText}内发送至邮箱`
-                                : `Merchant processed and emailed within ${manualSlaText}`
-                            : isZh
-                              ? '运费结算页计算'
-                              : 'Shipping at checkout'}
+                                ? '付款后可在订单中下载'
+                                : 'Download from your order after payment'
+                            : isDigital
+                              ? isZh
+                                  ? `付款后由商家处理，预计${manualSlaText}内发送至邮箱`
+                                  : `Merchant processed and emailed within ${manualSlaText}`
+                              : isZh
+                                ? '运费结算页计算'
+                                : 'Shipping at checkout'}
                 </span>
             </div>
         </section>
@@ -329,13 +384,17 @@ export function ProductDetailPage() {
                             <span className="detail-variant-name">{item.name}</span>
                             <span className="detail-variant-bottom">
                                 <strong className="detail-variant-price">
-                                    {formatMoney(
-                                        sale?.salePrice ?? item.priceWithTax,
-                                        sale?.currencyCode ?? item.currencyCode,
-                                        locale,
-                                    )}
+                                    {quoteOnly
+                                        ? quoteLabel
+                                        : formatMoney(
+                                              sale?.salePrice ?? item.priceWithTax,
+                                              sale?.currencyCode ?? item.currencyCode,
+                                              locale,
+                                          )}
                                 </strong>
-                                <small>{productAvailabilityLabel(itemAvailability, language)}</small>
+                                {!quoteOnly && (
+                                    <small>{productAvailabilityLabel(itemAvailability, language)}</small>
+                                )}
                             </span>
                             {selected && (
                                 <CircleCheck className="detail-variant-selected" aria-hidden="true" />
@@ -449,7 +508,7 @@ export function ProductDetailPage() {
         </section>
     );
     const actions = (
-        <div className="detail-action-bar page-action-bar">
+        <div className={`detail-action-bar page-action-bar${quoteOnly ? ' is-quote-only' : ''}`}>
             <button
                 className={`detail-favorite-action${favorite ? ' is-active' : ''}`}
                 type="button"
@@ -486,48 +545,58 @@ export function ProductDetailPage() {
                 <Heart fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" />
                 <span>{favorite ? (isZh ? '已收藏' : 'Saved') : isZh ? '收藏' : 'Save'}</span>
             </button>
-            <button type="button" onClick={() => navigateTo({ name: 'cart' })}>
-                <ShoppingCart />
-                <span>{isZh ? '购物车' : 'Cart'}</span>
-                {cartQuantity > 0 && <b>{cartQuantity}</b>}
-            </button>
-            <button
-                type="button"
-                disabled={unavailable || addingVariantId !== null}
-                onClick={() => variant && onAdd(variant, purchaseQuantity)}
-            >
-                {unavailable
-                    ? isZh
-                        ? '已售罄'
-                        : 'Sold out'
-                    : addingVariantId === variant?.id
-                      ? isZh
-                          ? '添加中'
-                          : 'Adding'
-                      : isZh
-                        ? '加入购物车'
-                        : 'Add to cart'}
-            </button>
-            <button
-                type="button"
-                disabled={unavailable || addingVariantId !== null}
-                onPointerEnter={() => void preloadStorefrontRouteComponent('purchase')}
-                onFocus={() => void preloadStorefrontRouteComponent('purchase')}
-                onTouchStart={() => void preloadStorefrontRouteComponent('purchase')}
-                onClick={() => variant && onBuyNow(variant, purchaseQuantity)}
-            >
-                {unavailable
-                    ? isZh
-                        ? '已售罄'
-                        : 'Sold out'
-                    : addingVariantId === variant?.id
-                      ? isZh
-                          ? '正在进入结算'
-                          : 'Opening checkout'
-                      : isZh
-                        ? '立即购买'
-                        : 'Buy now'}
-            </button>
+            {!quoteOnly && (
+                <button type="button" onClick={() => navigateTo({ name: 'cart' })}>
+                    <ShoppingCart />
+                    <span>{isZh ? '购物车' : 'Cart'}</span>
+                    {cartQuantity > 0 && <b>{cartQuantity}</b>}
+                </button>
+            )}
+            {quoteOnly ? (
+                <button type="button" onClick={requestQuote}>
+                    {quoteLabel}
+                </button>
+            ) : (
+                <>
+                    <button
+                        type="button"
+                        disabled={unavailable || addingVariantId !== null}
+                        onClick={() => variant && onAdd(variant, purchaseQuantity)}
+                    >
+                        {unavailable
+                            ? isZh
+                                ? '已售罄'
+                                : 'Sold out'
+                            : addingVariantId === variant?.id
+                              ? isZh
+                                  ? '添加中'
+                                  : 'Adding'
+                              : isZh
+                                ? '加入购物车'
+                                : 'Add to cart'}
+                    </button>
+                    <button
+                        type="button"
+                        disabled={unavailable || addingVariantId !== null}
+                        onPointerEnter={() => void preloadStorefrontRouteComponent('purchase')}
+                        onFocus={() => void preloadStorefrontRouteComponent('purchase')}
+                        onTouchStart={() => void preloadStorefrontRouteComponent('purchase')}
+                        onClick={() => variant && onBuyNow(variant, purchaseQuantity)}
+                    >
+                        {unavailable
+                            ? isZh
+                                ? '已售罄'
+                                : 'Sold out'
+                            : addingVariantId === variant?.id
+                              ? isZh
+                                  ? '正在进入结算'
+                                  : 'Opening checkout'
+                              : isZh
+                                ? '立即购买'
+                                : 'Buy now'}
+                    </button>
+                </>
+            )}
         </div>
     );
 
@@ -581,8 +650,8 @@ export function ProductDetailPage() {
                     <div className="desktop-product-buying">
                         {summary}
                         {options}
-                        {quantityControl}
-                        {services}
+                        {!quoteOnly && quantityControl}
+                        {!quoteOnly && services}
                         {actions}
                     </div>
                 </div>
@@ -591,8 +660,8 @@ export function ProductDetailPage() {
                     <ProductGallery product={product} language={language} />
                     {summary}
                     {options}
-                    {quantityControl}
-                    {services}
+                    {!quoteOnly && quantityControl}
+                    {!quoteOnly && services}
                 </>
             )}
             {desktop && (
@@ -654,26 +723,30 @@ export function ProductDetailPage() {
                         </div>
                         <div>
                             <dt>{isZh ? '库存' : 'Stock'}</dt>
-                            <dd>{stockLabel}</dd>
+                            <dd>{quoteOnly ? (isZh ? '按需确认' : 'Confirm on request') : stockLabel}</dd>
                         </div>
                         <div>
                             <dt>{isZh ? '交付' : 'Delivery'}</dt>
                             <dd>
-                                {isAutoCard
+                                {quoteOnly
                                     ? isZh
-                                        ? '付款后邮箱发卡'
-                                        : 'Email after payment'
-                                    : isFileDownload
+                                        ? '按需求确认'
+                                        : 'Confirm on request'
+                                    : isAutoCard
                                       ? isZh
-                                          ? '付款后文件下载'
-                                          : 'File download after payment'
-                                      : isDigital
+                                          ? '付款后邮箱发卡'
+                                          : 'Email after payment'
+                                      : isFileDownload
                                         ? isZh
-                                            ? '商家处理后通知'
-                                            : 'Merchant processed with updates'
-                                        : isZh
-                                          ? '快递配送'
-                                          : 'Shipping'}
+                                            ? '付款后文件下载'
+                                            : 'File download after payment'
+                                        : isDigital
+                                          ? isZh
+                                              ? '商家处理后通知'
+                                              : 'Merchant processed with updates'
+                                          : isZh
+                                            ? '快递配送'
+                                            : 'Shipping'}
                             </dd>
                         </div>
                     </dl>
@@ -700,35 +773,41 @@ export function ProductDetailPage() {
                 <section className="detail-block detail-after-sales">
                     <h2>{isZh ? '配送与售后说明' : 'Delivery and returns'}</h2>
                     <p>
-                        {isDigital
-                            ? isAutoCard
-                                ? isZh
-                                    ? '付款成功后自动发送到下单邮箱。'
-                                    : 'Sent to your order email after payment.'
-                                : isFileDownload
-                                  ? isZh
-                                      ? '付款成功后可在订单中下载。'
-                                      : 'Download from your order after payment.'
-                                  : isZh
-                                    ? `付款后由商家处理，预计${manualSlaText}内发送至邮箱。`
-                                    : `Merchant processed and emailed within ${manualSlaText}.`
-                            : isZh
-                              ? '配送方式与运费在结算页按收货地址确认。'
-                              : 'Shipping method and fee are confirmed at checkout.'}
-                    </p>
-                    <p>
-                        {refundPolicy === 'NON_REFUNDABLE'
+                        {quoteOnly
                             ? isZh
-                                ? '该商品不支持退款。'
-                                : 'This product is non-refundable.'
-                            : refundPolicy === 'SEVEN_DAY_NO_REASON'
-                              ? isZh
-                                  ? '该商品支持 7 天无理由退货，具体条件以订单售后规则为准。'
-                                  : 'Seven-day returns apply subject to the order policy.'
+                                ? '此商品仅供展示。请联系客服确认报价、交期及售后条件。'
+                                : 'Display only. Contact support to confirm price, lead time and after-sales terms.'
+                            : isDigital
+                              ? isAutoCard
+                                  ? isZh
+                                      ? '付款成功后自动发送到下单邮箱。'
+                                      : 'Sent to your order email after payment.'
+                                  : isFileDownload
+                                    ? isZh
+                                        ? '付款成功后可在订单中下载。'
+                                        : 'Download from your order after payment.'
+                                    : isZh
+                                      ? `付款后由商家处理，预计${manualSlaText}内发送至邮箱。`
+                                      : `Merchant processed and emailed within ${manualSlaText}.`
                               : isZh
-                                ? '退款申请由商家审核，具体结果以售后处理为准。'
-                                : 'Refund requests are reviewed by the merchant.'}
+                                ? '配送方式与运费在结算页按收货地址确认。'
+                                : 'Shipping method and fee are confirmed at checkout.'}
                     </p>
+                    {!quoteOnly && (
+                        <p>
+                            {refundPolicy === 'NON_REFUNDABLE'
+                                ? isZh
+                                    ? '该商品不支持退款。'
+                                    : 'This product is non-refundable.'
+                                : refundPolicy === 'SEVEN_DAY_NO_REASON'
+                                  ? isZh
+                                      ? '该商品支持 7 天无理由退货，具体条件以订单售后规则为准。'
+                                      : 'Seven-day returns apply subject to the order policy.'
+                                  : isZh
+                                    ? '退款申请由商家审核，具体结果以售后处理为准。'
+                                    : 'Refund requests are reviewed by the merchant.'}
+                        </p>
+                    )}
                     <button type="button" onClick={() => navigateTo({ name: 'support' })}>
                         {isZh ? '咨询客服' : 'Contact support'}
                         <ChevronRight aria-hidden="true" />
@@ -763,11 +842,17 @@ export function ProductDetailPage() {
                         logoUrl={logoUrl}
                         language={language}
                         formattedPrice={
-                            activeFlashItem
-                                ? formatMoney(activeFlashItem.salePrice, activeFlashItem.currencyCode, locale)
-                                : variant
-                                  ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
-                                  : '--'
+                            quoteOnly
+                                ? quoteLabel
+                                : activeFlashItem
+                                  ? formatMoney(
+                                        activeFlashItem.salePrice,
+                                        activeFlashItem.currencyCode,
+                                        locale,
+                                    )
+                                  : variant
+                                    ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
+                                    : '--'
                         }
                         onClose={() => setPosterOpen(false)}
                         onNotify={onNotify}

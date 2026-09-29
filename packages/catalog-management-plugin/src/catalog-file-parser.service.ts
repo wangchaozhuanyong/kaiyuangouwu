@@ -11,6 +11,7 @@ import {
 import {
     catalogCategoryPath,
     parseCatalogFulfillmentType,
+    parseCatalogPricingMode,
     validateCatalogCategories,
 } from './catalog-import-classification';
 import { parseCatalogImportStore } from './catalog-import-store';
@@ -211,6 +212,7 @@ function normalizeRow(
     const fulfillmentType = textValue(values.get('fulfillmentType'))
         ? parseCatalogFulfillmentType(values.get('fulfillmentType'), rowNumber)
         : undefined;
+    const pricingMode = parseCatalogPricingMode(values.get('pricingMode'), rowNumber);
     validateCatalogCategories(category, secondaryCategory, rowNumber);
     const sku = importSafeTextValue(values.get('sku'));
     const barcode = importSafeTextValue(values.get('barcode'));
@@ -220,6 +222,9 @@ function normalizeRow(
 
     const purchaseCost = decimalValue(values.get('purchaseCost'), rowNumber, '进货价');
     const sellingPrice = decimalValue(values.get('sellingPrice'), rowNumber, '销售价');
+    if (pricingMode === 'QUOTE_ONLY' && sellingPrice != null) {
+        throw new UserInputError(`第 ${rowNumber} 行：询价商品请留空销售价`);
+    }
     const stockOnHand = integerValue(values.get('stockOnHand'), rowNumber, '库存量');
     const maximumStock = integerValue(values.get('maximumStock'), rowNumber, '库存上限');
     const minimumStock = integerValue(values.get('minimumStock'), rowNumber, '库存下限');
@@ -253,6 +258,7 @@ function normalizeRow(
         category,
         secondaryCategory,
         fulfillmentType,
+        pricingMode,
         channelCode: parseCatalogImportStore(importSafeTextValue(values.get('channelCode')), rowNumber),
         stockLocationCode: textValue(values.get('stockLocationCode')),
         currencyCode: textValue(values.get('currencyCode')).toUpperCase(),

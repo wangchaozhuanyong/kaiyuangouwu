@@ -163,6 +163,7 @@ export function validateImportSource(input: BeginCatalogImportInput): void {
         'category',
         'secondaryCategory',
         'fulfillmentType',
+        'pricingMode',
         'channelCode',
         'stockLocationCode',
         'currencyCode',
@@ -204,6 +205,14 @@ export function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: numb
     const category = safeImportText(row.category, 255);
     const secondaryCategory = safeImportText(row.secondaryCategory ?? '', 255);
     let fulfillmentType: NormalizedCatalogRow['fulfillmentType'];
+    const pricingMode =
+        row.pricingMode == null
+            ? undefined
+            : row.pricingMode === 'FIXED' || row.pricingMode === 'QUOTE_ONLY'
+              ? row.pricingMode
+              : null;
+    if (pricingMode === null)
+        throw new UserInputError(`第 ${row.rowNumber} 行：销售方式只能是标价销售或联系客服询价`);
     try {
         fulfillmentType = row.fulfillmentType
             ? parseCatalogFulfillmentType(row.fulfillmentType, row.rowNumber)
@@ -220,6 +229,9 @@ export function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: numb
     }
     const purchaseCost = finiteRowNumber(row.purchaseCost, row.rowNumber, '进货价', false);
     const sellingPrice = finiteRowNumber(row.sellingPrice, row.rowNumber, '销售价', false);
+    if (pricingMode === 'QUOTE_ONLY' && sellingPrice != null) {
+        throw new UserInputError(`第 ${row.rowNumber} 行：询价商品请留空销售价`);
+    }
     if (purchaseCost != null && purchaseCost < 0) {
         throw new UserInputError(`第 ${row.rowNumber} 行：进货价不能为负数`);
     }
@@ -258,6 +270,7 @@ export function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: numb
         'category',
         'secondaryCategory',
         'fulfillmentType',
+        'pricingMode',
         'channelCode',
         'stockLocationCode',
         'currencyCode',
@@ -293,6 +306,7 @@ export function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: numb
         category,
         secondaryCategory,
         fulfillmentType,
+        pricingMode: pricingMode ?? undefined,
         channelCode: parseCatalogImportStore(row.channelCode, row.rowNumber),
         stockLocationCode: safeImportText(row.stockLocationCode, 255),
         currencyCode: safeImportText(row.currencyCode, 3).toUpperCase(),

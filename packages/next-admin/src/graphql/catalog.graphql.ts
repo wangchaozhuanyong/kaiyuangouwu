@@ -13,6 +13,7 @@ export const GET_PRODUCTS = gql`
                 description
                 customFields {
                     fulfillmentType
+                    pricingMode
                     refundPolicy
                     manualDeliverySlaMinutes
                 }

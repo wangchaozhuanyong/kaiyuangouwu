@@ -97,11 +97,17 @@ export function catalogVariants(product: Product, input: StorefrontCatalogInput)
 }
 
 export function minimumCatalogPrice(product: Product, input: StorefrontCatalogInput): number {
+    if (product.customFields?.pricingMode === 'QUOTE_ONLY') return Number.POSITIVE_INFINITY;
     const prices = catalogVariants(product, input).map(variant => variant.priceWithTax);
     return prices.length ? Math.min(...prices) : Number.POSITIVE_INFINITY;
 }
 
 export function matchesCatalogFilters(product: Product, input: StorefrontCatalogInput): boolean {
+    if (
+        product.customFields?.pricingMode === 'QUOTE_ONLY' &&
+        (input.minPriceWithTax != null || input.maxPriceWithTax != null)
+    )
+        return false;
     const variants = catalogVariants(product, input);
     if (!variants.length) return false;
     if (input.inStockOnly && !variants.some(variant => !productAvailability(variant).soldOut)) {
@@ -125,10 +131,13 @@ export function sortNativeCatalogProducts(
     }
     if (input.sort === 'price-asc' || input.sort === 'price-desc') {
         const direction = input.sort === 'price-asc' ? 1 : -1;
-        return sorted.sort(
-            (left, right) =>
-                (minimumCatalogPrice(left, input) - minimumCatalogPrice(right, input)) * direction,
-        );
+        return sorted.sort((left, right) => {
+            const quoteDifference =
+                Number(left.customFields?.pricingMode === 'QUOTE_ONLY') -
+                Number(right.customFields?.pricingMode === 'QUOTE_ONLY');
+            if (quoteDifference) return quoteDifference;
+            return (minimumCatalogPrice(left, input) - minimumCatalogPrice(right, input)) * direction;
+        });
     }
     return sorted.sort((left, right) => left.name.localeCompare(right.name, locale));
 }

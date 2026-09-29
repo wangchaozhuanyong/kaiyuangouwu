@@ -222,7 +222,12 @@ export class StorefrontCartEntityResolver {
 export class StorefrontCartLineEntityResolver {
     @ResolveField()
     available(@Parent() line: StorefrontCartLine): boolean {
-        return !!line.productVariant?.enabled && !!line.productVariant.product?.enabled;
+        return (
+            !!line.productVariant?.enabled &&
+            !!line.productVariant.product?.enabled &&
+            ((line.productVariant.product.customFields ?? {}) as { pricingMode?: string }).pricingMode !==
+                'QUOTE_ONLY'
+        );
     }
 
     @ResolveField()

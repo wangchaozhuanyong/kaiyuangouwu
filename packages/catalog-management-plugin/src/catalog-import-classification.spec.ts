@@ -36,9 +36,10 @@ describe('catalog import type and hierarchy', () => {
         expect(local.rows.map(fields)).toEqual([
             ['physical', '食品饮料', '饮料'],
             ['digital', '数字服务', ''],
+            ['physical', '家具', ''],
         ]);
         expect(server.rows.map(fields)).toEqual(local.rows.map(fields));
-        for (const row of local.rows) expect(fields(sanitizeCatalogRow(row, 2))).toEqual(fields(row));
+        for (const row of local.rows) expect(fields(sanitizeCatalogRow(row, 3))).toEqual(fields(row));
         expect(() =>
             validateImportSource({
                 source: {
@@ -49,7 +50,7 @@ describe('catalog import type and hierarchy', () => {
                     detectedHeaders: local.headers,
                     fieldMapping: local.fieldMapping,
                 },
-                totalRows: 2,
+                totalRows: 3,
             } as BeginCatalogImportInput),
         ).not.toThrow();
     });

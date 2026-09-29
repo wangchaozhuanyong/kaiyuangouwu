@@ -184,6 +184,8 @@ export function CategoryPage() {
                 product.variants.some(variant => variant.customFields.fulfillmentType === type);
             const stockMatch =
                 !stockOnly || product.variants.some(variant => !productAvailability(variant).soldOut);
+            if (product.customFields?.pricingMode === 'QUOTE_ONLY' && (minimum !== '' || maximum !== ''))
+                return false;
             const price = minimumProductPrice(product) / 100;
             const minimumMatch = minimum === '' || price >= Number(minimum);
             const maximumMatch = maximum === '' || price <= Number(maximum);

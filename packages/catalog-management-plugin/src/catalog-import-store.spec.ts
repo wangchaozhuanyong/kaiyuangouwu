@@ -24,7 +24,7 @@ describe('explicit import store', () => {
             for (const row of [...local.rows, ...server.rows]) {
                 expect(row.channelCode).toBe('store-a');
                 expect(catalogImportStoreError(row, context)).toBeNull();
-                expect(sanitizeCatalogRow(row, 2).channelCode).toBe('store-a');
+                expect(sanitizeCatalogRow(row, 3).channelCode).toBe('store-a');
             }
         }
     });
@@ -38,10 +38,10 @@ describe('explicit import store', () => {
         const empty = catalogImportTemplateCsv('');
         const local = await parseCatalogArrayBuffer(encode(empty), 'empty.csv');
         expect(local.rows).toHaveLength(0);
-        expect(local.errors).toHaveLength(2);
+        expect(local.errors).toHaveLength(3);
         const server = new CatalogFileParserService().parseBuffer(Buffer.from(empty), 'empty.csv');
         expect(server.rows).toHaveLength(0);
-        expect(server.errors).toHaveLength(2);
+        expect(server.errors).toHaveLength(3);
     });
 
     it('uses exact store identifiers and cannot bypass the scope with a warning confirmation', async () => {

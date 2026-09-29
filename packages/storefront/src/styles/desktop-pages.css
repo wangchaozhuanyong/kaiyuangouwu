@@ -378,6 +378,9 @@
         background: transparent;
         box-shadow: none;
     }
+    .desktop-product-buying .detail-action-bar.is-quote-only {
+        grid-template-columns: 52px minmax(0, 1fr);
+    }
     .desktop-product-buying .detail-action-bar > button {
         height: 48px;
         min-width: 0;

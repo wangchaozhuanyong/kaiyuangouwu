@@ -69,7 +69,9 @@ export function ProductCard({
 
                     <footer>
                         <div className="product-card-price">
-                            {variant ? (
+                            {product.customFields?.pricingMode === 'QUOTE_ONLY' ? (
+                                <span>{isZh ? '联系客服询价' : 'Request a quote'}</span>
+                            ) : variant ? (
                                 <PriceDisplay
                                     value={variant.priceWithTax}
                                     currency={variant.currencyCode}
@@ -79,9 +81,13 @@ export function ProductCard({
                                 '--'
                             )}
                         </div>
-                        <small className={`product-card-stock${availability.soldOut ? ' is-sold-out' : ''}`}>
-                            {stockLabel}
-                        </small>
+                        {product.customFields?.pricingMode !== 'QUOTE_ONLY' && (
+                            <small
+                                className={`product-card-stock${availability.soldOut ? ' is-sold-out' : ''}`}
+                            >
+                                {stockLabel}
+                            </small>
+                        )}
                     </footer>
                 </div>
             </ProductDetailLink>

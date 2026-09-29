@@ -7,7 +7,7 @@ export const productFields = `
     featuredAsset { id preview }
     assets { id preview }
     collections { id name slug parentId }
-    customFields { fulfillmentType refundPolicy manualDeliverySlaMinutes }
+    customFields { fulfillmentType pricingMode refundPolicy manualDeliverySlaMinutes }
     variants {
         id
         name
@@ -368,7 +368,7 @@ export const cartFields = `
             saleableStockLevel
             autoCardAvailableStock
             featuredAsset { id preview }
-            product { id name description featuredAsset { id preview } }
+            product { id name description featuredAsset { id preview } customFields { pricingMode } }
             customFields { fulfillmentType digitalDeliveryMode }
         }
     }

@@ -114,6 +114,19 @@ export class StorefrontCatalogService {
             .andWhere('catalog_product.deletedAt IS NULL')
             .groupBy('si.productId')
             .addGroupBy('catalog_product.createdAt');
+        const pricingColumn = this.connection.rawConnection
+            .getMetadata(Product)
+            .columns.find(column => column.propertyPath === 'customFields.pricingMode');
+        if (pricingColumn) {
+            const escaped = this.connection.rawConnection.driver.escape(pricingColumn.databaseName);
+            qb.addSelect(
+                `MAX(CASE WHEN catalog_product.${escaped} = :catalogQuoteOnlyMode THEN 1 ELSE 0 END)`,
+                'catalogQuoteOnly',
+            ).setParameters({ catalogQuoteOnlyMode: 'QUOTE_ONLY' });
+            if (input.minPriceWithTax != null || input.maxPriceWithTax != null) {
+                qb.andWhere(`COALESCE(catalog_product.${escaped}, 'FIXED') != :catalogQuoteOnlyMode`);
+            }
+        }
 
         if (input.term) {
             qb.andWhere(
@@ -200,7 +213,7 @@ export class StorefrontCatalogService {
         if (input.sort === 'SALES') {
             this.addSalesSort(qb, ctx);
         } else {
-            this.addStandardSort(qb, input.sort);
+            this.addStandardSort(qb, input.sort, Boolean(pricingColumn));
         }
         qb.addOrderBy('si.productId', 'ASC');
         return qb;
@@ -231,7 +244,14 @@ export class StorefrontCatalogService {
             .addOrderBy('catalog_product.createdAt', 'DESC');
     }
 
-    private addStandardSort(qb: SelectQueryBuilder<SearchIndexItem>, sort: StorefrontCatalogSort): void {
+    private addStandardSort(
+        qb: SelectQueryBuilder<SearchIndexItem>,
+        sort: StorefrontCatalogSort,
+        hasPricingMode: boolean,
+    ): void {
+        if (hasPricingMode && (sort === 'PRICE_ASC' || sort === 'PRICE_DESC')) {
+            qb.addOrderBy('catalogQuoteOnly', 'ASC');
+        }
         if (sort === 'NEWEST') {
             qb.addOrderBy('catalog_product.createdAt', 'DESC');
         } else if (sort === 'PRICE_ASC') {
