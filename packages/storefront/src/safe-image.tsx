@@ -294,6 +294,7 @@ function SafeImageSource({
         <span
             className={frame}
             data-safe-image={state}
+            data-safe-image-recovered={failed && errorFallback != null ? 'true' : undefined}
             style={{ minHeight: failed ? fallbackHeight : undefined }}
         >
             {!failed ? (
