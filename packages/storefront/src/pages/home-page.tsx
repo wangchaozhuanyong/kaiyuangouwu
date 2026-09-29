@@ -5,7 +5,6 @@ import {
     ChevronLeft,
     ChevronRight,
     CircleCheck,
-    ClipboardList,
     Download,
     ExternalLink,
     Headphones,
@@ -17,7 +16,6 @@ import {
     Sparkles,
     Tag,
     Truck,
-    UserRound,
     WifiOff,
     Zap,
 } from 'lucide-react';
@@ -829,65 +827,30 @@ export function HomePage() {
             ? [visibleQuickLinks.slice(0, 2), visibleQuickLinks.slice(2)]
             : [visibleQuickLinks];
     const trustIcons = [ShieldCheck, Zap, Lock, Headphones];
-    // A missing merchant guarantee block must not remove the shared desktop service row.
-    // Keep mobile publication behavior and explicitly configured blocks unchanged.
-    const desktopServiceFallback =
-        desktop &&
-        !trustBlock &&
-        !configuredBlockTypes.includes('TRUST_BAR') &&
-        heroCount > 0 &&
-        quickLinks.length > 0;
-    const trustItems = desktopServiceFallback
-        ? [
-              {
-                  label: isZh ? '商品信息' : 'Products',
-                  description: isZh ? '查看规格、价格与库存' : 'View specifications, prices and stock',
-                  icon: ShoppingBag,
-              },
-              {
-                  label: isZh ? '订单可查' : 'Orders',
-                  description: isZh ? '查看订单与交付状态' : 'Check order and delivery status',
-                  icon: ClipboardList,
-              },
-              {
-                  label: isZh ? '帮助中心' : 'Help center',
-                  description: isZh ? '查看帮助与服务信息' : 'View help and service information',
-                  icon: Headphones,
-              },
-              {
-                  label: isZh ? '账户服务' : 'Account',
-                  description: isZh ? '管理个人资料与账户信息' : 'Manage your profile and account',
-                  icon: UserRound,
-              },
-          ]
-        : (trustBlock?.items ?? [])
-              .filter(item => item.enabled && (item.label.trim() || item.description.trim()))
-              .sort((first, second) => first.position - second.position)
-              .map((item, index) => ({
-                  imageUrl: item.imageUrl,
-                  label: item.label,
-                  description: item.description,
-                  icon: trustIcons[index % trustIcons.length],
-              }));
+    const trustItems = (trustBlock?.items ?? [])
+        .filter(item => item.enabled && (item.label.trim() || item.description.trim()))
+        .sort((first, second) => first.position - second.position)
+        .map((item, index) => ({
+            imageUrl: item.imageUrl,
+            label: item.label,
+            description: item.description,
+            icon: trustIcons[index % trustIcons.length],
+        }));
     const trustBarHasLongCopy = trustItems.some(
         ({ label }) => Array.from(label.trim()).length > (isZh ? 4 : 10),
     );
     const colorfulTrustBar = isColorfulHomepageStyle(trustBlock?.settings?.visualStyle);
     const colorfulQuickLinks = isColorfulHomepageStyle(quickBlock?.settings?.visualStyle);
     const trustBar =
-        (hasHomepageModule('TRUST_BAR') || desktopServiceFallback) && trustItems.length > 0 ? (
+        hasHomepageModule('TRUST_BAR') && trustItems.length > 0 ? (
             <div
                 className={`home-trust-bar${trustBarHasLongCopy ? ' has-long-copy' : ''}${colorfulTrustBar ? ' is-color-marketplace' : ''}`}
-                style={{
-                    order: desktopServiceFallback
-                        ? Math.max(...introOrders) + 1
-                        : homepageModuleOrder('TRUST_BAR'),
-                }}
+                style={{ order: homepageModuleOrder('TRUST_BAR') }}
                 aria-label={isZh ? '服务信息' : 'Service information'}
             >
                 {trustItems.map((item, index) => {
                     const { label, description, icon: TrustIcon } = item;
-                    const imageUrl = 'imageUrl' in item ? item.imageUrl : null;
+                    const imageUrl = item.imageUrl;
                     return (
                         <div className="home-trust-item" key={`${label}-${index}`}>
                             {imageUrl ? (

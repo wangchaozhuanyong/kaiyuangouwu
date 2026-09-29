@@ -15,18 +15,6 @@ export interface ManagedLegalDocument {
 
 const legalProfileTokenPattern =
     /\{\{\s*(legalEntityName|legalRegistrationCountry|supportEmail|privacyEmail)\s*\}\}/gu;
-const knownStorefrontHostnames = ['damatong.net', 'moyaoai.com'] as const;
-
-export function legalScopeHostname(storefrontName: string, browserHostname?: string): string {
-    const activeHost = normalizeHostname(browserHostname);
-    if (knownStorefrontHostnames.includes(activeHost as (typeof knownStorefrontHostnames)[number])) {
-        return activeHost;
-    }
-    const normalizedName = storefrontName.trim().toLowerCase();
-    if (normalizedName.includes('moyao')) return 'moyaoai.com';
-    if (normalizedName.includes('damatong') || normalizedName.includes('大马通')) return 'damatong.net';
-    return activeHost;
-}
 
 export function interpolateLegalProfileTokens(
     value: string,
@@ -44,7 +32,6 @@ export function resolveManagedLegalDocument(
     blocks: StorefrontContentBlock[],
     kind: LegalDocumentKind,
     fallbackTitle: string,
-    activeHostname?: string,
 ): ManagedLegalDocument | null {
     const legalBlocks = blocks.filter(block => block.type === 'LEGAL');
     const matchedBlock =
@@ -56,42 +43,11 @@ export function resolveManagedLegalDocument(
     const body = matchedItem?.description.trim() || matchedBlock.body.trim();
     if (!body) return null;
 
-    const document = {
+    return {
         title: matchedItem?.label.trim() || matchedBlock.title.trim() || fallbackTitle,
         subtitle: matchedBlock.subtitle.trim(),
         body,
     };
-    return referencesAnotherStorefront(document, activeHostname) ? null : document;
-}
-
-export function resolveManagedLegalIdentity(
-    identity: StorefrontLegalIdentity | undefined,
-    activeHostname?: string,
-): StorefrontLegalIdentity | undefined {
-    if (!identity) return undefined;
-    return referencesAnotherStorefront(identity, activeHostname) ? undefined : identity;
-}
-
-function referencesAnotherStorefront(
-    content: ManagedLegalDocument | StorefrontLegalIdentity,
-    activeHostname: string | undefined,
-): boolean {
-    const activeHost = normalizeHostname(activeHostname);
-    if (!knownStorefrontHostnames.includes(activeHost as (typeof knownStorefrontHostnames)[number])) {
-        return false;
-    }
-    const searchableContent = Object.values(content).join('\n').toLowerCase();
-    return knownStorefrontHostnames.some(
-        hostname => hostname !== activeHost && searchableContent.includes(hostname),
-    );
-}
-
-function normalizeHostname(value: string | undefined): string {
-    return (value ?? '')
-        .trim()
-        .toLowerCase()
-        .replace(/^www\./u, '')
-        .replace(/\.$/u, '');
 }
 
 function blockCodeMatches(code: string, kind: LegalDocumentKind): boolean {

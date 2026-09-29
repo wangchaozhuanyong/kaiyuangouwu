@@ -1,5 +1,5 @@
 import { OrderAddress } from '@vendure/common/lib/generated-types';
-import { Order, OrderLine, RequestContext } from '@vendure/core';
+import { Order, OrderLine } from '@vendure/core';
 
 import { FulfillmentType } from './types';
 
@@ -39,7 +39,7 @@ export function summarizeOrderFulfillment(order: Pick<Order, 'lines'>): Checkout
     };
 }
 
-export function hasCompleteShippingAddress(ctx: RequestContext, address?: OrderAddress): boolean {
+export function hasCompleteShippingAddress(address?: OrderAddress): boolean {
     if (!address) {
         return false;
     }
@@ -52,20 +52,5 @@ export function hasCompleteShippingAddress(ctx: RequestContext, address?: OrderA
         address.countryCode,
         address.phoneNumber,
     ];
-    if (requiredValues.some(value => !value?.trim())) {
-        return false;
-    }
-
-    const expectedCountryCode = getExpectedCountryCode(ctx.channel.code);
-    const countryCode = address.countryCode;
-    return expectedCountryCode && countryCode ? countryCode.toUpperCase() === expectedCountryCode : true;
-}
-
-function getExpectedCountryCode(channelCode: string): 'CN' | 'MY' | undefined {
-    if (channelCode === 'cn-mainland') {
-        return 'CN';
-    }
-    if (channelCode === 'my-malaysia') {
-        return 'MY';
-    }
+    return requiredValues.every(value => Boolean(value?.trim()));
 }

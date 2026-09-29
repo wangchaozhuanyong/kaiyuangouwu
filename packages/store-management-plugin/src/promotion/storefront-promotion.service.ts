@@ -30,6 +30,8 @@ const DEFAULT_PROMOTION_BRAND = {
     en: 'Store',
     logoUrl: '/storefront/neutral-store.png',
 } as const;
+const SHARED_PROMOTION_SOURCE = '# {{store.name}}\n\n{{store.description}}';
+const SHARED_PROMOTION_VERSION = 28;
 
 @Injectable()
 export class StorefrontPromotionService {
@@ -61,7 +63,7 @@ export class StorefrontPromotionService {
                 publishedContentType: 'HTML',
                 publishedSource: null,
                 isCustomized: true,
-                defaultTemplateVersion: this.htmlService.defaultTemplateVersion,
+                defaultTemplateVersion: SHARED_PROMOTION_VERSION,
                 publishedVersion: 0,
                 publishedAt: null,
             });
@@ -106,22 +108,22 @@ export class StorefrontPromotionService {
             page = new StorefrontPromotionPage({
                 channel: ctx.channel,
                 channelId: ctx.channelId,
-                contentType: 'HTML',
+                contentType: 'MARKDOWN',
                 draftSource: null,
-                publishedContentType: 'HTML',
+                publishedContentType: 'MARKDOWN',
                 publishedSource: null,
                 isCustomized: false,
-                defaultTemplateVersion: this.htmlService.defaultTemplateVersion,
+                defaultTemplateVersion: SHARED_PROMOTION_VERSION,
                 publishedVersion: 1,
                 publishedAt: new Date(),
             });
         } else {
-            page.contentType = 'HTML';
+            page.contentType = 'MARKDOWN';
             page.draftSource = null;
-            page.publishedContentType = 'HTML';
+            page.publishedContentType = 'MARKDOWN';
             page.publishedSource = null;
             page.isCustomized = false;
-            page.defaultTemplateVersion = this.htmlService.defaultTemplateVersion;
+            page.defaultTemplateVersion = SHARED_PROMOTION_VERSION;
             page.publishedVersion += 1;
             page.publishedAt = new Date();
         }
@@ -144,8 +146,8 @@ export class StorefrontPromotionService {
         const page = await this.findPage(ctx);
         const customSource = page?.isCustomized ? page.publishedSource : null;
         const contentType: StorefrontPromotionContentType =
-            customSource && page ? page.publishedContentType : 'HTML';
-        const source = customSource ?? this.htmlService.defaultTemplate;
+            customSource && page ? page.publishedContentType : 'MARKDOWN';
+        const source = customSource ?? SHARED_PROMOTION_SOURCE;
         return this.htmlService.render({
             contentType,
             source,
@@ -175,11 +177,11 @@ export class StorefrontPromotionService {
     ): Promise<StorefrontPromotionPageView> {
         return {
             id: page?.id ?? null,
-            contentType: page?.contentType ?? 'HTML',
-            draftSource: page?.draftSource ?? this.htmlService.defaultTemplate,
+            contentType: page?.draftSource ? page.contentType : 'MARKDOWN',
+            draftSource: page?.draftSource ?? SHARED_PROMOTION_SOURCE,
             publishedSource: page?.publishedSource ?? null,
             isCustomized: Boolean(page?.draftSource),
-            defaultTemplateVersion: this.htmlService.defaultTemplateVersion,
+            defaultTemplateVersion: SHARED_PROMOTION_VERSION,
             publishedVersion: page?.publishedVersion ?? 0,
             publishedAt: page?.publishedAt ?? null,
             publicUrl: await this.getPublicUrl(ctx),

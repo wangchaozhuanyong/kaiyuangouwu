@@ -115,6 +115,21 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(html).toContain('测试商店 &lt;b&gt;');
     });
 
+    it('renders the shared unconfigured page without a store-specific campaign', () => {
+        const html = service.render({
+            contentType: 'MARKDOWN',
+            source: '# {{store.name}}\n\n{{store.description}}',
+            bindings,
+            entryTicket: 'signed-ticket',
+        });
+
+        expect(html).toContain('测试商店 &lt;b&gt;');
+        expect(html).toContain('店铺简介');
+        expect(html).toContain('data-store-entry');
+        expect(html).not.toContain('MOYAO AI');
+        expect(html).not.toContain('moyao-ai-network-stage');
+    });
+
     it('provides a responsive default page with semantic store bindings', () => {
         expect(service.defaultTemplate).toContain('min-height:100dvh');
         expect(service.defaultTemplate).toContain('data-bind-src="store.logoUrl"');

@@ -37,10 +37,10 @@ export const commerceOrderProcess: OrderProcess<string> = {
         }
 
         const isChinese = ctx.languageCode === LanguageCode.zh_Hans;
-        if (!hasCompleteShippingAddress(ctx, order.shippingAddress)) {
+        if (!hasCompleteShippingAddress(order.shippingAddress)) {
             return isChinese
-                ? '订单包含实物商品，请填写完整收货地址、邮编和联系电话，并确认国家与当前销售渠道一致'
-                : 'This order contains physical products. Enter a complete shipping address, postcode and phone number for the active sales channel';
+                ? '订单包含实物商品，请填写完整收货地址、邮编和联系电话'
+                : 'This order contains physical products. Enter a complete shipping address, postcode and phone number';
         }
         if (!order.shippingLines?.length) {
             return isChinese

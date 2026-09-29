@@ -96,7 +96,7 @@ export function MailQueryPage({
     initialCode,
 }: Readonly<MailQueryPageProps>) {
     const isZh = language === 'zh';
-    const storeName = brandingName?.trim() || '大马通';
+    const storeName = brandingName?.trim() || '店铺';
     const storageKey = storageKeyForIdentity(marketCode, customerId);
 
     const [inputCode, setInputCode] = useState('');
