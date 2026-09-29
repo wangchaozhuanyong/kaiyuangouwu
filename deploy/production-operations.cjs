@@ -35,6 +35,8 @@ const APT_METADATA_FILENAMES = Object.freeze(['pkgcache.bin', 'srcpkgcache.bin']
 const APT_LISTS_DIRECTORY = '/var/lib/apt/lists';
 const SNAP_DOWNLOAD_CACHE_DIRECTORY = '/var/lib/snapd/cache';
 const BACKUP_DIRECTORY = '/var/backups/vendure-mysql';
+const FILE_BACKUP_DIRECTORY = '/var/backups/vendure-files';
+const FILE_BACKUP_KEEP_COUNT = 3;
 const PRODUCTION_ENVIRONMENT_FILE = '/var/www/kaiyuangouwu/packages/dev-server/.env';
 const OFFSITE_FILE_BACKUP_URI = 's3://yunqiao-vendure-prod-backup-079740175286-apne1/files';
 const OFFSITE_FILE_BACKUP_RETENTION_DAYS = 30;
@@ -123,6 +125,8 @@ function validateRequest(environment) {
             'apply-snap-cache-cleanup-reviewed',
             'plan-archived-log-cleanup',
             'apply-archived-log-cleanup-reviewed',
+            'plan-file-backup-cleanup',
+            'apply-file-backup-cleanup-reviewed',
             'plan-offsite-file-backup-config',
             'apply-offsite-file-backup-config-reviewed',
             'plan-two-factor-backup',
@@ -159,6 +163,7 @@ function validateRequest(environment) {
             'apply-apt-lists-cleanup-reviewed',
             'apply-snap-cache-cleanup-reviewed',
             'apply-archived-log-cleanup-reviewed',
+            'apply-file-backup-cleanup-reviewed',
             'apply-offsite-file-backup-config-reviewed',
             'backup-two-factor-reviewed',
             'apply-order-sales-ownership-backfill-reviewed',
@@ -900,6 +905,189 @@ function applyArchivedLogCleanup(
     if (plan.candidates.some(item => item.kind === 'journal')) vacuum();
     for (const item of plan.candidates.filter(candidate => candidate.kind === 'ssm-rotated'))
         remove(item.file);
+    return plan;
+}
+
+function withFileBackupLock(callback, lockFile = path.join(FILE_BACKUP_DIRECTORY, '.backup.lock')) {
+    const descriptor = openSync(lockFile, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+        assert.ok(fstatSync(descriptor).isFile(), 'File backup lock must be a regular file');
+        const acquired = spawnSync('flock', ['--exclusive', '--wait', '300', '3'], {
+            stdio: ['ignore', 'pipe', 'pipe', descriptor],
+            timeout: 310000,
+        });
+        assert.equal(acquired.status, 0, 'Could not acquire the file backup lock');
+        return callback();
+    } finally {
+        closeSync(descriptor);
+    }
+}
+
+function fileBackupMetadata(file) {
+    const stat = lstatSync(file);
+    assert.ok(stat.isFile() && !stat.isSymbolicLink() && stat.nlink === 1, 'Backup must be a regular file');
+    assert.equal(realpathSync(file), file, 'Backup path changed');
+    return {
+        file,
+        sizeBytes: stat.size,
+        allocatedKib: Math.ceil(stat.blocks / 2),
+        modifiedAtMs: stat.mtimeMs,
+        changedAtMs: stat.ctimeMs,
+        device: stat.dev,
+        inode: stat.ino,
+    };
+}
+
+function fileBackupHash(file) {
+    const output = execFileSync('sha256sum', [file], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 300000,
+        maxBuffer: 1024,
+    });
+    const match = /^([a-f0-9]{64})  /u.exec(output);
+    assert.ok(match, 'Could not verify local backup checksum');
+    return match[1];
+}
+
+function fileBackupRemoteObject(
+    file,
+    {
+        head = (bucket, key) => {
+            const output = execFileSync(
+                'aws',
+                ['s3api', 'head-object', '--bucket', bucket, '--key', key, '--output', 'json'],
+                {
+                    encoding: 'utf8',
+                    stdio: ['ignore', 'pipe', 'ignore'],
+                    timeout: 30000,
+                    maxBuffer: 8192,
+                },
+            );
+            return JSON.parse(output);
+        },
+    } = {},
+) {
+    const bucket = 'yunqiao-vendure-prod-backup-079740175286-apne1';
+    const key = `files/${path.basename(file.file)}`;
+    const metadata = head(bucket, key);
+    assert.equal(metadata.ContentLength, file.sizeBytes, 'Offsite backup size differs');
+    assert.equal(metadata.ServerSideEncryption, 'AES256', 'Offsite backup encryption differs');
+    assert.ok(
+        typeof metadata.VersionId === 'string' && metadata.VersionId,
+        'Offsite backup version is missing',
+    );
+    return { versionId: metadata.VersionId, sizeBytes: metadata.ContentLength };
+}
+
+function inspectFileBackupCleanup(
+    sourceSha,
+    {
+        directory = FILE_BACKUP_DIRECTORY,
+        environmentFile = PRODUCTION_ENVIRONMENT_FILE,
+        keepCount = FILE_BACKUP_KEEP_COUNT,
+        inspectScope = revision => inspectDeploymentCacheCleanup(revision, { directories: [] }),
+        verifyPolicy = verifyOffsiteFileBackupPolicy,
+        hash = fileBackupHash,
+        remote = fileBackupRemoteObject,
+        readRemoteChecksum = name =>
+            execFileSync(
+                'aws',
+                ['s3', 'cp', `${OFFSITE_FILE_BACKUP_URI}/${name}`, '-', '--only-show-errors'],
+                {
+                    stdio: ['ignore', 'pipe', 'ignore'],
+                    timeout: 30000,
+                    maxBuffer: 8192,
+                },
+            ),
+    } = {},
+) {
+    assert.ok(Number.isInteger(keepCount) && keepCount >= 3, 'At least three local backups are required');
+    const scope = inspectScope(sourceSha);
+    const root = realpathSync(directory);
+    assert.equal(root, directory, 'File backup directory changed');
+    assert.ok(lstatSync(root).isDirectory(), 'File backup directory must be real');
+    const settings = readOffsiteFileBackupSettings(readProtectedEnvironmentFile(environmentFile).contents);
+    assert.equal(settings.VENDURE_REQUIRE_OFFSITE_FILE_BACKUP, 'true', 'Offsite backup is not required');
+    assert.equal(settings.VENDURE_FILE_BACKUP_S3_URI, OFFSITE_FILE_BACKUP_URI, 'Offsite destination changed');
+    assert.equal(verifyPolicy(OFFSITE_FILE_BACKUP_URI, OFFSITE_FILE_BACKUP_RETENTION_DAYS), true);
+    const archiveNames = readdirSync(root)
+        .filter(name => /^vendure-files-[0-9]{8}T[0-9]{6}Z\.tar\.gz$/u.test(name))
+        .sort()
+        .reverse();
+    const protectedNames = archiveNames.slice(0, keepCount);
+    const candidates = [];
+    const blocked = [];
+    for (const name of archiveNames.slice(keepCount)) {
+        const paths = [name, `${name}.manifest.json`, `${name}.sha256`].map(filename =>
+            path.join(root, filename),
+        );
+        if (paths.some(file => !existsSync(file))) {
+            blocked.push({ name, reason: 'incomplete-local-set' });
+            continue;
+        }
+        const files = paths.map(fileBackupMetadata);
+        const checksum = readFileSync(paths[2], 'utf8');
+        assert.ok(Buffer.byteLength(checksum) < 8192, 'Backup checksum is too large');
+        const checksumLines = checksum.trimEnd().split('\n');
+        assert.equal(checksumLines.length, 2, 'Backup checksum must have exactly two entries');
+        const expected = new Map(
+            checksumLines.map(line => {
+                const match =
+                    /^([a-f0-9]{64})  (vendure-files-[0-9]{8}T[0-9]{6}Z\.tar\.gz(?:\.manifest\.json)?)$/u.exec(
+                        line,
+                    );
+                assert.ok(match, 'Backup checksum has an unexpected entry');
+                return [match[2], match[1]];
+            }),
+        );
+        assert.equal(expected.size, 2, 'Backup checksum must cover archive and manifest');
+        assert.equal(hash(paths[0]), expected.get(name), 'Local backup archive checksum differs');
+        assert.equal(
+            hash(paths[1]),
+            expected.get(`${name}.manifest.json`),
+            'Local backup manifest checksum differs',
+        );
+        try {
+            const offsite = files.map(file => remote(file));
+            const remoteChecksum = readRemoteChecksum(`${name}.sha256`);
+            assert.ok(Buffer.from(checksum).equals(Buffer.from(remoteChecksum)), 'Offsite checksum differs');
+            candidates.push({ name, files, offsite });
+        } catch {
+            blocked.push({ name, reason: 'offsite-verification-failed' });
+        }
+    }
+    return {
+        format: 1,
+        schema: 'vendure-file-backup-cleanup',
+        repositorySha: scope.repositorySha,
+        runtimeSha: scope.runtimeSha,
+        keepCount,
+        protectedNames,
+        candidates,
+        blocked,
+        totalKib: candidates.reduce(
+            (sum, item) => sum + item.files.reduce((bytes, file) => bytes + file.allocatedKib, 0),
+            0,
+        ),
+    };
+}
+
+function applyFileBackupCleanup(
+    request,
+    { inspect = revision => inspectFileBackupCleanup(revision), remove = unlinkSync } = {},
+) {
+    assert.equal(request.operation, 'apply-file-backup-cleanup-reviewed');
+    const plan = inspect(request.sourceSha);
+    assert.equal(plan.schema, 'vendure-file-backup-cleanup');
+    assert.ok(plan.candidates.length > 0 && plan.totalKib > 0, 'No verified file backups are available');
+    assert.equal(planDigest(plan, request.sourceSha), request.expectedPlanSha256, 'File backup plan changed');
+    for (const candidate of plan.candidates) {
+        for (const file of candidate.files) {
+            assert.deepEqual(fileBackupMetadata(file.file), file, 'Backup file changed before cleanup');
+            remove(file.file);
+        }
+    }
     return plan;
 }
 
@@ -2095,6 +2283,25 @@ function runLocked(environment = process.env) {
         );
         return;
     }
+    if (request.operation === 'plan-file-backup-cleanup') {
+        const plan = withFileBackupLock(() => inspectFileBackupCleanup(request.sourceSha));
+        process.stdout.write(
+            `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: planDigest(plan, request.sourceSha), plan })}\n`,
+        );
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=plan-file-backup-cleanup\n');
+        return;
+    }
+    if (request.operation === 'apply-file-backup-cleanup-reviewed') {
+        const plan = withFileBackupLock(() => applyFileBackupCleanup(request));
+        const disk = readCommand('df', ['-Pk', '/']);
+        const healthRefresh = readCommand('systemctl', ['start', 'vendure-production-healthcheck.service']);
+        process.stdout.write(
+            `${JSON.stringify({ sourceSha: request.sourceSha, planSha256: request.expectedPlanSha256, removedSetCount: plan.candidates.length, reviewedKib: plan.totalKib, disk, healthRefresh })}\n`,
+        );
+        assert.equal(healthRefresh.status, 'ok', 'File backup cleanup completed, but health refresh failed');
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=apply-file-backup-cleanup-reviewed\n');
+        return;
+    }
     if (request.operation === 'backup-database') {
         const result = runDatabaseBackup(request);
         process.stdout.write(
@@ -2381,6 +2588,8 @@ module.exports = {
     inspectSnapCacheCleanup,
     inspectArchivedLogCleanup,
     applyArchivedLogCleanup,
+    inspectFileBackupCleanup,
+    applyFileBackupCleanup,
     inspectOffsiteFileBackupConfig,
     inspectRepositoryState,
     planDigest,

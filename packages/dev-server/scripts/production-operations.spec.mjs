@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
     chmodSync,
     chownSync,
@@ -927,6 +928,67 @@ void test('archived-log plan rejects a symlinked rotated log', t => {
             inspectScope: () => ({ repositorySha: sourceSha, runtimeSha: 'b'.repeat(40) }),
         }),
     );
+});
+
+void test('reviewed file-backup cleanup keeps three local sets and requires verified offsite copies', t => {
+    const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'vendure-file-backup-cleanup-')));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const environmentFile = path.join(root, '.env');
+    writeFileSync(
+        environmentFile,
+        [
+            'VENDURE_REQUIRE_OFFSITE_FILE_BACKUP=true',
+            'VENDURE_FILE_BACKUP_S3_URI=s3://yunqiao-vendure-prod-backup-079740175286-apne1/files',
+            'VENDURE_FILE_BACKUP_S3_RETENTION_DAYS=30',
+            '',
+        ].join('\n'),
+        { mode: 0o600 },
+    );
+    const hash = file => createHash('sha256').update(readFileSync(file)).digest('hex');
+    const archives = [];
+    for (let day = 1; day <= 5; day++) {
+        const name = `vendure-files-202609${String(day).padStart(2, '0')}T000000Z.tar.gz`;
+        archives.push(name);
+        writeFileSync(path.join(root, name), `archive-${day}`);
+        writeFileSync(path.join(root, `${name}.manifest.json`), `{"day":${day}}\n`);
+        writeFileSync(
+            path.join(root, `${name}.sha256`),
+            `${hash(path.join(root, name))}  ${name}\n${hash(path.join(root, `${name}.manifest.json`))}  ${name}.manifest.json\n`,
+        );
+    }
+    const inspect = () =>
+        operations.inspectFileBackupCleanup(sourceSha, {
+            directory: root,
+            environmentFile,
+            inspectScope: () => ({ repositorySha: 'b'.repeat(40), runtimeSha: 'c'.repeat(40) }),
+            verifyPolicy: () => true,
+            hash,
+            remote: file => ({ versionId: 'verified-version', sizeBytes: file.sizeBytes }),
+            readRemoteChecksum: name => readFileSync(path.join(root, name)),
+        });
+    const plan = inspect();
+    assert.deepEqual(plan.protectedNames, archives.slice(-3).reverse());
+    assert.deepEqual(
+        plan.candidates.map(candidate => candidate.name),
+        archives.slice(0, 2).reverse(),
+    );
+    assert.equal(plan.blocked.length, 0);
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'apply-file-backup-cleanup-reviewed',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_PLAN_SHA256: operations.planDigest(plan, sourceSha),
+    });
+    assert.throws(
+        () =>
+            operations.applyFileBackupCleanup(
+                { ...request, expectedPlanSha256: '0'.repeat(64) },
+                { inspect },
+            ),
+        /changed/u,
+    );
+    operations.applyFileBackupCleanup(request, { inspect });
+    for (const name of archives.slice(0, 2)) assert.equal(existsSync(path.join(root, name)), false);
+    for (const name of archives.slice(-3)) assert.equal(existsSync(path.join(root, name)), true);
 });
 
 void test('release preflight and postflight accept only a reviewed Channel scope', () => {

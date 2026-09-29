@@ -227,6 +227,34 @@ logs in the plan, and refreshes production health. Current logs, application
 logs, releases, uploaded assets and backups remain untouched. The journal and
 SSM agent retain their current files for ongoing diagnostics.
 
+## Remove redundant local persistent-file backups
+
+Use this only after the owner authorizes local backup cleanup. The read-only
+plan keeps the newest three archive sets on the server and checks each older
+complete archive against its local SHA-256 sidecar and the versioned, encrypted
+offsite archive, manifest and checksum objects:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=plan-file-backup-cleanup
+```
+
+Review every candidate, blocked set, retained set and the total allocated size.
+The plan includes the source and running runtime revisions and an exact digest.
+Only the reviewed candidates can be removed:
+
+```bash
+gh workflow run production_operations.yml --ref main \
+    -f operation=apply-file-backup-cleanup-reviewed \
+    -f expected_plan_sha256=<reviewed-plan-sha256>
+```
+
+The apply operation takes both deployment and file-backup locks, repeats the
+local checksum and offsite-object checks, and refuses a changed plan. It only
+unlinks the three local files in each verified older set. S3 versions, the
+latest three local sets, database backups, uploads and incomplete sets remain.
+Production health is refreshed after cleanup.
+
 ## Audit one product before changing store ownership
 
 Use the fixed read-only audit for a specific product and the exact running runtime:
