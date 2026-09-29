@@ -323,6 +323,7 @@ export function CategoryPage() {
                                                     loading={index < 6 ? 'eager' : 'lazy'}
                                                     fetchPriority={index < 2 ? 'high' : 'auto'}
                                                     showFallbackIcon={false}
+                                                    errorFallback={<LayoutGrid aria-hidden="true" />}
                                                 />
                                             ) : (
                                                 <span className="primary-category-placeholder">
@@ -387,6 +388,7 @@ export function CategoryPage() {
                                                         imageKind="thumbnail"
                                                         loading="lazy"
                                                         showFallbackIcon={false}
+                                                        errorFallback={<LayoutGrid aria-hidden="true" />}
                                                     />
                                                 ) : (
                                                     <span className="primary-category-placeholder">

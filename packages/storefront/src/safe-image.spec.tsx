@@ -67,6 +67,30 @@ describe('SafeImage', () => {
         expect(markup).not.toContain('image-status-label');
     });
 
+    it('shows the supplied category icon when its managed image is unavailable', () => {
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() =>
+                root.render(
+                    <SafeImage
+                        src="/missing-category.png"
+                        alt=""
+                        errorFallback={<span data-category-fallback>分类</span>}
+                    />,
+                ),
+            );
+            act(() => {
+                requiredImage(host).dispatchEvent(new Event('error'));
+            });
+            expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+            expect(host.querySelector('[data-category-fallback]')?.textContent).toBe('分类');
+            expect(host.querySelector('[data-image-state=error]')).toBeNull();
+        } finally {
+            act(() => root.unmount());
+        }
+    });
+
     it('keeps order thumbnails compact when neither variant nor product has an image', () => {
         const variant = {
             id: 'variant-1',

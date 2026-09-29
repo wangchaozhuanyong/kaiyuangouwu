@@ -2575,6 +2575,11 @@ html[lang='en'] .quick-grid b {
     width: 20px;
     height: 20px;
 }
+.primary-category-image .safe-image-fallback > svg,
+.all-primary-category-image .safe-image-fallback > svg {
+    width: 20px;
+    height: 20px;
+}
 
 .primary-category-label {
     width: 100%;

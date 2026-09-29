@@ -1,5 +1,5 @@
 import { ImageOff, Package } from 'lucide-react';
-import { ImgHTMLAttributes, useContext, useLayoutEffect, useRef, useState } from 'react';
+import { ImgHTMLAttributes, ReactNode, useContext, useLayoutEffect, useRef, useState } from 'react';
 
 import {
     cancelPendingImage,
@@ -57,6 +57,7 @@ export function ImagePlaceholder({
 export type SafeImageProps = {
     src: string;
     fallbackSrc?: string;
+    errorFallback?: ReactNode;
     placeholderSrc?: string;
     showFallbackIcon?: boolean;
     fallbackLabel?: string;
@@ -118,6 +119,7 @@ export function clearDecodedImageCache(): void {
 function SafeImageSource({
     src,
     fallbackSrc,
+    errorFallback,
     placeholderSrc,
     showFallbackIcon = true,
     fallbackLabel,
@@ -344,6 +346,8 @@ function SafeImageSource({
                             onLoad={() => setPreviewReady(true)}
                         />
                     </>
+                ) : failed && errorFallback != null ? (
+                    errorFallback
                 ) : failed && fallbackLabel ? (
                     <span className="product-image-placeholder-copy">
                         {showFallbackIcon && <Package />}
