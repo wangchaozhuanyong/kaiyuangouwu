@@ -7,11 +7,16 @@ const TABLE_NAME = 'referral_poster_template';
 export class NeutralReferralPosterDefaults1790640000000 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
         const databaseType = queryRunner.connection.options.type;
-        for (const [name, value] of Object.entries(referralPosterCopy)) {
-            const table = await queryRunner.getTable(TABLE_NAME);
-            if (!table) return;
+        const table = await queryRunner.getTable(TABLE_NAME);
+        if (!table) throw new Error(`${TABLE_NAME} is missing; poster defaults were not changed`);
+        const copyColumns = Object.entries(referralPosterCopy).map(([name, value]) => {
             const column = table.findColumnByName(name);
-            if (!column) continue;
+            if (!column)
+                throw new Error(`${TABLE_NAME}.${name} is missing; poster defaults were not changed`);
+            return { name, value, column };
+        });
+
+        for (const { name, value, column } of copyColumns) {
             const quoted = `'${value.replace(/'/g, "''")}'`;
             const existing = String(column.default ?? '')
                 .replace(/^['"]|['"]$/g, '')

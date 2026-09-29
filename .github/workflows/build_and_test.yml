@@ -64,6 +64,7 @@ jobs:
               run: |
                   node --test scripts/check-storefront-unification.spec.mjs
                   node scripts/check-storefront-unification.mjs
+                  node --test deploy/audit-referral-poster-defaults.spec.mjs
             - name: Check managed publishing policy
               if: needs.detect-changes.outputs.publishing == 'true'
               run: bun run check:storefront-publishing

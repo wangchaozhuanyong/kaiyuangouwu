@@ -30,6 +30,27 @@ describe('neutral referral poster column defaults', () => {
         expect(statements.some(sql => /\bUPDATE\b|\bDELETE\b/iu.test(sql))).toBe(false);
     });
 
+    it('rejects a missing copy column before altering any default', async () => {
+        const statements: string[] = [];
+        const queryRunner = {
+            connection: { options: { type: 'mysql' } },
+            getTable: () =>
+                Promise.resolve({
+                    findColumnByName: (name: string) =>
+                        name === 'footerTextEn' ? undefined : { default: "'legacy'" },
+                }),
+            query: (sql: string) => {
+                statements.push(sql);
+                return Promise.resolve();
+            },
+        } as unknown as QueryRunner;
+
+        await expect(new NeutralReferralPosterDefaults1790640000000().up(queryRunner)).rejects.toThrow(
+            'referral_poster_template.footerTextEn is missing',
+        );
+        expect(statements).toEqual([]);
+    });
+
     it('changes only defaults and preserves existing merchant poster copy', async () => {
         const dataSource = new DataSource({ type: 'sqljs', entities: [], synchronize: false });
         await dataSource.initialize();
