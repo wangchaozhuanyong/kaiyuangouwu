@@ -39,6 +39,7 @@ function fixture() {
             const collection = {
                 ...input,
                 id: `c-${collections.length}`,
+                channels: [{ id: ctx.channelId }],
                 parentId: input.parentId ?? 'root',
                 parent: input.parentId
                     ? collections.find(item => item.id === input.parentId)
