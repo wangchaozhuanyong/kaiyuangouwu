@@ -1,5 +1,6 @@
 import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
+
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -8,6 +9,7 @@ import {
     type StoreProfileRecord,
 } from '../../graphql/management.graphql';
 import { toUserFacingError } from '../../utils/user-facing-error';
+
 import { FieldArea, FieldInput } from './MyStoreFields';
 import { primaryButton, secondaryButton } from './settings-ui';
 export function MyStoreProfileEditor({
@@ -135,7 +137,10 @@ export function MyStoreProfileEditor({
                 <div className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                            <h3 className="text-sm font-bold text-slate-900">公开预览</h3>
+                            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                公开预览
+                                <FeatureHelpButton topic="settings.store-profile" title="公开预览" />
+                            </h3>
                             <p className="mt-1 text-xs leading-5 text-slate-700">
                                 开放后所有访客均可浏览；模拟下单需单独启用测试支付。正式营业上线检查保持独立。
                             </p>
