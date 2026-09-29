@@ -1279,7 +1279,7 @@ function assertStorefrontInspectionRevision(
 
 function storefrontInspectionFailure(result) {
     const safeFailure = result.stderr?.match(
-        /^STOREFRONT_CONFIGURATION_QUERY_FAILED operation=ConfigurationGuard(?:Login|Profiles|Content|Published) reason=(?:TIMEOUT|REQUEST_FAILED|HTTP_ERROR|INVALID_JSON|API_ERROR)$/mu,
+        /^STOREFRONT_CONFIGURATION_QUERY_FAILED operation=ConfigurationGuard(?:Login|Profiles|Content|Published) reason=(?:TIMEOUT|REQUEST_FAILED|HTTP_ERROR|INVALID_JSON|API_ERROR)(?: host=[a-z0-9.-]{1,100} locale=(?:zh_Hans|en|unknown) code=[A-Z_]{1,40} path=[A-Za-z0-9_.]{1,200})?$/mu,
     )?.[0];
     return safeFailure || 'Read-only storefront configuration inspection failed';
 }

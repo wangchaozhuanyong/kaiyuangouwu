@@ -257,6 +257,14 @@ void test('inspection forwards only fixed query failure codes and never raw stde
     const failure =
         'STOREFRONT_CONFIGURATION_QUERY_FAILED operation=ConfigurationGuardContent reason=TIMEOUT';
     assert.equal(operations.storefrontInspectionFailure({ stderr: `PRIVATE_ERROR\n${failure}\n` }), failure);
+    const publishedFailure = [
+        'STOREFRONT_CONFIGURATION_QUERY_FAILED operation=ConfigurationGuardPublished reason=API_ERROR',
+        'host=moyaoai.com locale=zh_Hans code=INTERNAL_SERVER_ERROR path=storefrontContent.0.imageUrl',
+    ].join(' ');
+    assert.equal(
+        operations.storefrontInspectionFailure({ stderr: `PRIVATE_ERROR\n${publishedFailure}\n` }),
+        publishedFailure,
+    );
     for (const stderr of [
         'PRIVATE_ERROR',
         `${failure} PRIVATE_SECRET`,

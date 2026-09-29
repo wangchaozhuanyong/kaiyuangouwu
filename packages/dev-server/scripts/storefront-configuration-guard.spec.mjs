@@ -549,6 +549,65 @@ void test('configuration failures identify the operation without leaking transpo
     );
 });
 
+void test('published query errors report only validated host, locale, code and field path', async () => {
+    const store = storeFixture();
+    await assert.rejects(
+        captureStorefrontConfiguration({
+            username: 'fixture',
+            password: 'PRIVATE_PASSWORD',
+            request: async (url, options) => {
+                const { query } = JSON.parse(options.body);
+                let data;
+                if (query.includes('ConfigurationGuardLogin'))
+                    data = {
+                        login: {
+                            id: 'admin',
+                            channels: [
+                                { id: store.channelId, code: store.channelCode, token: 'PRIVATE_TOKEN' },
+                            ],
+                        },
+                    };
+                else if (query.includes('ConfigurationGuardProfiles'))
+                    data = { storeProfiles: [{ ...store.profile, channel: { id: store.channelId } }] };
+                else if (query.includes('ConfigurationGuardPublished')) {
+                    assert.equal(new URL(url).searchParams.get('languageCode'), 'zh_Hans');
+                    return new Response(
+                        JSON.stringify({
+                            errors: [
+                                {
+                                    message: 'PRIVATE_DATABASE_MESSAGE',
+                                    extensions: { code: 'INTERNAL_SERVER_ERROR', private: 'PRIVATE_SECRET' },
+                                    path: ['storefrontContent', 0, 'imageUrl'],
+                                },
+                            ],
+                        }),
+                    );
+                } else
+                    data = {
+                        activeChannel: { id: store.channelId },
+                        storefrontContentBlocks: store.blocks,
+                        storefrontContentSettings: store.settings,
+                        referralProgram: store.sharing,
+                    };
+                return new Response(JSON.stringify({ data }), {
+                    headers: { 'vendure-auth-token': 'PRIVATE_ADMIN_SESSION' },
+                });
+            },
+        }),
+        error => {
+            assert.equal(
+                error.message,
+                [
+                    'STOREFRONT_CONFIGURATION_QUERY_FAILED operation=ConfigurationGuardPublished reason=API_ERROR',
+                    `host=${store.profile.primaryDomain} locale=zh_Hans code=INTERNAL_SERVER_ERROR path=storefrontContent.0.imageUrl`,
+                ].join(' '),
+            );
+            assert.equal(error.message.includes('PRIVATE_'), false);
+            return true;
+        },
+    );
+});
+
 void test('release plan, bootstrap and fixed inspection wire the new review and preservation checks', () => {
     const deploy = readFileSync(
         new URL('../../../deploy/deploy-production-from-s3.sh', import.meta.url),
