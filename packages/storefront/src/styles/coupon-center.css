@@ -5,32 +5,80 @@
     margin: 12px var(--page-section-inset, var(--experience-page-gutter-mobile)) 0;
 }
 .coupon-center-guide {
+    container: coupon-guide / inline-size;
     margin: 20px var(--page-section-inset, var(--experience-page-gutter-mobile)) 24px;
-    padding: 16px;
+    overflow: hidden;
     border-radius: var(--skin-card-radius);
     background: var(--surface);
     color: var(--text);
 }
-.coupon-center-guide h2 {
-    margin: 0 0 16px;
-    font-size: 15px;
-    font-weight: var(--font-weight-semibold);
-    line-height: var(--line-height-body);
+.coupon-guide-layout {
+    display: grid;
+    min-width: 0;
+}
+.coupon-guide-intro {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 24px;
+    background: linear-gradient(
+        120deg,
+        var(--skin-tool-security-background, var(--selection-soft)),
+        var(--surface)
+    );
+}
+.coupon-guide-intro h2 {
+    position: relative;
+    z-index: 1;
+    margin: 0 0 10px;
+    font-size: 24px;
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
+}
+.coupon-guide-intro p {
+    position: relative;
+    z-index: 1;
+    max-width: 25em;
+    margin: 0;
+    color: var(--text-soft);
+    font-size: 13px;
+    line-height: var(--line-height-relaxed);
+}
+.coupon-guide-art {
+    position: absolute;
+    right: -12px;
+    bottom: -28px;
+    width: 132px;
+    height: 132px;
+    color: var(--skin-tool-security-foreground, var(--selection));
+    opacity: 0.1;
+    transform: rotate(-18deg);
+    pointer-events: none;
+}
+.coupon-guide-content {
+    display: grid;
+    gap: 24px;
+    min-width: 0;
+    padding: 24px 20px;
 }
 .coupon-center-guide dl {
     display: grid;
-    gap: 12px;
+    gap: 24px;
     margin: 0;
 }
 .coupon-center-guide dl > div {
-    display: grid;
-    grid-template-columns: 5.5em minmax(0, 1fr);
-    align-items: start;
-    gap: 12px;
+    position: relative;
+    min-width: 0;
+    min-height: 44px;
+    padding-inline-start: 56px;
     font-size: 13px;
     line-height: var(--line-height-relaxed);
 }
 .coupon-center-guide dt {
+    margin-bottom: 5px;
     color: var(--text);
     font-weight: var(--font-weight-semibold);
 }
@@ -38,6 +86,66 @@
     margin: 0;
     color: var(--text-soft);
     overflow-wrap: anywhere;
+}
+/* The approved split guide uses three tonal symbols, scoped to this module. */
+.coupon-guide-symbol {
+    position: absolute;
+    inset-inline-start: 0;
+    top: 0;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+}
+.coupon-guide-symbol svg {
+    width: 22px;
+    height: 22px;
+}
+.coupon-guide-symbol.is-conditions {
+    color: var(--skin-tool-security-foreground, var(--accent-ink));
+    background: var(--skin-tool-security-background, var(--accent-soft));
+}
+.coupon-guide-symbol.is-discounts {
+    color: var(--skin-tool-mail-foreground, var(--success));
+    background: var(--skin-tool-mail-background, var(--soft));
+}
+.coupon-guide-symbol.is-amount {
+    color: var(--skin-tool-coupon-foreground, var(--warning));
+    background: var(--skin-tool-coupon-background, var(--warning-bg));
+}
+@container coupon-guide (min-width: 600px) {
+    .coupon-center-guide dl {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+    }
+    .coupon-center-guide dl > div + div {
+        border-inline-start: 1px solid var(--line-subtle);
+        padding-inline-start: 72px;
+    }
+    .coupon-center-guide dl > div + div .coupon-guide-symbol {
+        inset-inline-start: 16px;
+    }
+}
+@container coupon-guide (min-width: 880px) {
+    .coupon-guide-layout {
+        grid-template-columns: minmax(0, 28fr) minmax(0, 72fr);
+    }
+    .coupon-guide-intro {
+        padding: 28px;
+    }
+    .coupon-guide-intro h2 {
+        font-size: 28px;
+    }
+    .coupon-guide-art {
+        right: -20px;
+        bottom: -20px;
+        width: 156px;
+        height: 156px;
+    }
+    .coupon-guide-content {
+        padding: 24px;
+    }
 }
 .coupon-center-tabs {
     margin: 0;
@@ -398,28 +506,33 @@
 
 .coupon-center-cart-link {
     width: 100%;
-    min-height: 46px;
-    margin-top: 16px;
-    padding: 12px;
+    min-height: 48px;
+    padding: 12px 16px;
     border: 0;
     border-radius: var(--skin-control-radius);
-    background: var(--control-surface);
-    color: var(--accent-ink);
-    display: flex;
+    background: var(--accent);
+    color: var(--accent-foreground);
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) 20px;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    gap: 8px;
+    font: inherit;
     font-size: 13px;
     font-weight: var(--font-weight-semibold);
-    text-align: left;
+    line-height: var(--line-height-body);
+    text-align: center;
+    cursor: pointer;
 }
-
+.coupon-center-cart-link span {
+    grid-column: 2;
+}
 .coupon-center-cart-link svg {
-    width: 17px;
-    flex-shrink: 0;
+    grid-column: 3;
+    width: 20px;
+    height: 20px;
 }
 .coupon-center-cart-link:hover {
-    background: var(--control-surface-hover);
+    background: var(--accent-hover);
 }
 .coupon-center-cart-link:focus-visible {
     outline: 2px solid var(--focus);
@@ -440,15 +553,6 @@
     }
     .coupon-center-guide {
         margin-top: 24px;
-        padding: 20px;
-    }
-    .coupon-center-guide dl {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 24px;
-    }
-    .coupon-center-guide dl > div {
-        grid-template-columns: minmax(0, 1fr);
-        gap: 6px;
     }
 }
 
