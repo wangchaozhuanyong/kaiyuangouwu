@@ -122,7 +122,7 @@ describe('category navigation responsive spacing', () => {
         expect(presetStylesheet).not.toContain('.sort-bar.is-scroll-hidden');
     });
 
-    it('uses a compact vertical All entry to expand categories without a duplicate all-products item', () => {
+    it('uses a compact All entry to expand categories without a duplicate all-products item', () => {
         expect(categoryPageSource).not.toContain('primary-categories-all-icon');
         expect(categoryPageSource).not.toContain("onCollectionChange('all', 'all')");
         expect(categoryPageSource).toContain('aria-controls="all-primary-categories"');
@@ -131,7 +131,7 @@ describe('category navigation responsive spacing', () => {
             /\.category-page \.primary-categories-all\s*\{[^}]*width:\s*36px;[^}]*position:\s*absolute;[^}]*right:\s*calc\(-1 \* var\(--page-section-inset, 8px\)\);/,
         );
         expect(stylesheet).toMatch(
-            /\.category-page \.primary-categories-all-label\s*\{[^}]*writing-mode:\s*vertical-rl;/,
+            /\.category-page \.primary-categories-all-label\s*\{[^}]*min-height:\s*36px;[^}]*white-space:\s*normal;/,
         );
     });
 
