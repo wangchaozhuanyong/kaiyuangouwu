@@ -121,6 +121,52 @@ describe('SVG asset responses', () => {
         }
     });
 
+    it('checks image access once per request while generating and serving a cached transform', async () => {
+        await storage.writeFileFromBuffer('source/public.svg', source);
+        const checkAccess = vi.fn(
+            (input: Parameters<ImageTransformStrategy['getImageTransformParameters']>[0]['input']) => input,
+        );
+        const origin = await start([
+            { getImageTransformParameters: ({ input }) => checkAccess(input) },
+            new PresetOnlyStrategy({ defaultPreset: 'bounded' }),
+        ]);
+        const url = `${origin}/source/public.svg`;
+
+        const cold = await fetch(url);
+        expect(cold.status).toBe(200);
+        await cold.arrayBuffer();
+        expect(checkAccess).toHaveBeenCalledTimes(1);
+
+        const cached = await fetch(url);
+        expect(cached.status).toBe(200);
+        await cached.arrayBuffer();
+        expect(checkAccess).toHaveBeenCalledTimes(2);
+    });
+
+    it('rejects a later request when access is revoked even if its transform is cached', async () => {
+        await storage.writeFileFromBuffer('source/public.svg', source);
+        let allowed = true;
+        const origin = await start([
+            {
+                getImageTransformParameters: ({ input }) => {
+                    if (!allowed) throw new Error('Access denied');
+                    return input;
+                },
+            },
+            new PresetOnlyStrategy({ defaultPreset: 'bounded' }),
+        ]);
+        const url = `${origin}/source/public.svg`;
+        const first = await fetch(url);
+        expect(first.status).toBe(200);
+        await first.arrayBuffer();
+
+        allowed = false;
+        const cached = await fetch(url);
+        expect(cached.status).toBe(400);
+        expect(cached.headers.get('cache-control')).toBe('private, no-store');
+        expect(await cached.text()).toBe('Invalid parameters');
+    });
+
     it('does not reuse a legacy raster cache entry with an SVG extension', async () => {
         await storage.writeFileFromBuffer('source/icon.svg', source);
         const legacySuffix = createHash('md5').update('_transform_w96_h96_mresize').digest('hex');
