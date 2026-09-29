@@ -34,6 +34,7 @@ import {
     publicQueryMeta,
     storefrontQueryKeys,
 } from '../query-client';
+import { SafeImage } from '../safe-image';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { SearchPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
@@ -310,8 +311,9 @@ export function SearchPage() {
                         onClick={() => navigateTo({ name: 'category', collectionId: collection.id })}
                     >
                         {collection.featuredAsset?.preview ? (
-                            <img
+                            <SafeImage
                                 src={collection.featuredAsset.preview}
+                                imageKind="icon"
                                 width={28}
                                 height={28}
                                 alt=""

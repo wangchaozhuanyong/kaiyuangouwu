@@ -109,7 +109,6 @@ export function SupportContent({
     onSignIn?: () => void;
 }>) {
     const [qrChannel, setQrChannel] = useState<StorefrontSupportChannel | null>(null);
-    const [qrImageFailed, setQrImageFailed] = useState(false);
     const [qrImageRetryKey, setQrImageRetryKey] = useState(0);
     const [faqSearch, setFaqSearch] = useState('');
     const [faqPage, setFaqPage] = useState(0);
@@ -126,7 +125,6 @@ export function SupportContent({
     const openChannel = (channel: StorefrontSupportChannel) => {
         if (channel.key === 'WECHAT') {
             if (channel.item.imageUrl) {
-                setQrImageFailed(false);
                 setQrImageRetryKey(0);
                 setQrChannel(channel);
             }
@@ -134,10 +132,8 @@ export function SupportContent({
     };
     const closeQrSheet = () => {
         setQrChannel(null);
-        setQrImageFailed(false);
     };
     const retryQrImage = () => {
-        setQrImageFailed(false);
         setQrImageRetryKey(value => value + 1);
     };
 
@@ -406,52 +402,44 @@ export function SupportContent({
                 >
                     <div className="support-qr-sheet">
                         <div className="support-qr-frame">
-                            {qrImageFailed ? (
-                                <div className="support-qr-error" role="status" aria-live="polite">
-                                    <QrCode aria-hidden="true" />
-                                    <strong>
-                                        {isZh ? '二维码暂时无法加载' : 'The QR code could not be loaded'}
-                                    </strong>
-                                    <span>
-                                        {isZh
-                                            ? '请检查网络后重新加载'
-                                            : 'Check your connection and try again'}
-                                    </span>
-                                    <button type="button" onClick={retryQrImage}>
-                                        {isZh ? '重新加载' : 'Try again'}
-                                    </button>
-                                </div>
-                            ) : (
-                                <img
-                                    key={qrImageRetryKey}
-                                    src={qrChannel.item.imageUrl}
-                                    alt={isZh ? '微信客服二维码' : 'WeChat support QR code'}
-                                    onError={() => setQrImageFailed(true)}
-                                />
-                            )}
+                            <SafeImage
+                                key={qrImageRetryKey}
+                                src={qrChannel.item.imageUrl}
+                                alt={isZh ? '微信客服二维码' : 'WeChat support QR code'}
+                                errorFallback={
+                                    <div className="support-qr-error" role="status" aria-live="polite">
+                                        <QrCode aria-hidden="true" />
+                                        <strong>
+                                            {isZh ? '二维码暂时无法加载' : 'The QR code could not be loaded'}
+                                        </strong>
+                                        <span>
+                                            {isZh
+                                                ? '请检查网络后重新加载'
+                                                : 'Check your connection and try again'}
+                                        </span>
+                                        <button type="button" onClick={retryQrImage}>
+                                            {isZh ? '重新加载' : 'Try again'}
+                                        </button>
+                                    </div>
+                                }
+                            />
                         </div>
-                        {!qrImageFailed ? (
-                            <p>
-                                {isZh ? '长按保存或使用微信扫一扫' : 'Save the code or scan it with WeChat'}
-                            </p>
-                        ) : null}
+                        <p>{isZh ? '长按保存或使用微信扫一扫' : 'Save the code or scan it with WeChat'}</p>
                         {typeof qrChannel.item.settings?.supportAccount === 'string' &&
                         qrChannel.item.settings.supportAccount.trim() ? (
                             <small>
                                 {isZh ? '微信号' : 'WeChat ID'}：{qrChannel.item.settings.supportAccount}
                             </small>
                         ) : null}
-                        {!qrImageFailed ? (
-                            <a
-                                className="support-qr-save"
-                                href={qrChannel.item.imageUrl}
-                                download
-                                target="_blank"
-                                rel="noreferrer"
-                            >
-                                {isZh ? '保存二维码' : 'Save QR code'}
-                            </a>
-                        ) : null}
+                        <a
+                            className="support-qr-save"
+                            href={qrChannel.item.imageUrl}
+                            download
+                            target="_blank"
+                            rel="noreferrer"
+                        >
+                            {isZh ? '保存二维码' : 'Save QR code'}
+                        </a>
                     </div>
                 </Sheet>
             ) : null}
