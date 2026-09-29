@@ -13,7 +13,7 @@ const BLOCK = `id code internalName type layoutVariant enabled position startsAt
 const POSTER = `id name enabled position posterBackgroundAsset { ${ASSET} } shareBackgroundAsset { ${ASSET} }`;
 const PUBLIC_BLOCK = `id code type enabled position imageUrl title subtitle body ctaLabel
     items { id enabled position imageUrl label description }`;
-const PROFILE = `id status primaryDomain channel { id code customFields { storefrontNameZh storefrontNameEn } }
+const PROFILE = `id status isOperational primaryDomain channel { id code customFields { storefrontNameZh storefrontNameEn } }
     descriptionZh descriptionEn taglineZh taglineEn brandBackgroundColor brandPrimaryColor brandAccentColor
     brandHighlightColor logoAsset { id } logoOnLightAsset { id } logoOnDarkAsset { id }`;
 
@@ -328,10 +328,11 @@ export async function captureStorefrontConfiguration({
     const stores = [];
     for (const channel of [...login.channels].sort((a, b) => String(a.id).localeCompare(String(b.id)))) {
         const profile = storeProfiles.find(candidate => candidate.channel.id === channel.id) ?? null;
-        // Draft Channels without a domain are not public storefronts. Active Channels without a
-        // domain still fail below, and required release Channels are checked in preflight scope.
         if (!profile) continue;
-        if (profile.status === 'DRAFT' && !profile.primaryDomain) continue;
+        // The same server-side activation rule protects Shop API requests. A verified domain alone
+        // does not make a merchant draft operational; required release Channels remain checked below.
+        assert.equal(typeof profile.isOperational, 'boolean', 'Storefront operational state is missing');
+        if (!profile.isOperational) continue;
         const host = profile?.primaryDomain;
         assert.ok(
             host && new URL(`https://${host}`).hostname === host,
