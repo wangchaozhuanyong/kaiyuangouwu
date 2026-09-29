@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
@@ -9,6 +12,12 @@ import {
     supportServiceDetails,
 } from './support-content';
 import { StorefrontContentBlock } from './types';
+
+(
+    globalThis as typeof globalThis & {
+        IS_REACT_ACT_ENVIRONMENT: boolean;
+    }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const supportBlock: StorefrontContentBlock = {
     id: 'support-1',
@@ -117,6 +126,37 @@ describe('support content', () => {
         expect(markup).not.toContain('support-hours-card');
         expect(markup).not.toContain('support-evaluation-card');
         expect(markup).not.toContain('客服配置');
+    });
+
+    it('uses the shared loading and retry states for the configured QR image', () => {
+        const container = document.createElement('div');
+        document.body.append(container);
+        const root = createRoot(container);
+        try {
+            void act(() => root.render(<SupportContent content={supportBlock} language="zh" />));
+            const openQr = container.querySelector<HTMLButtonElement>(
+                '.support-channel-row[data-channel="wechat"]',
+            );
+            if (!openQr) throw new Error('Expected the configured WeChat channel');
+            void act(() => openQr.click());
+
+            const image = document.querySelector<HTMLImageElement>('.support-qr-frame img');
+            expect(image).not.toBeNull();
+            expect(document.querySelector('.support-qr-frame [data-safe-image="loading"]')).not.toBeNull();
+
+            void act(() => image?.dispatchEvent(new Event('error')));
+            expect(document.querySelector('.support-qr-error')?.textContent).toContain('二维码暂时无法加载');
+
+            const retry = document.querySelector<HTMLButtonElement>('.support-qr-error button');
+            if (!retry) throw new Error('Expected the QR retry action');
+            void act(() => retry.click());
+            expect(document.querySelector('.support-qr-error')).toBeNull();
+            expect(document.querySelector('.support-qr-frame [data-safe-image="loading"]')).not.toBeNull();
+        } finally {
+            void act(() => root.unmount());
+            container.remove();
+            document.querySelector('.support-qr-sheet')?.remove();
+        }
     });
 
     it('renders the selected brand two-tone service strip and contact actions', () => {

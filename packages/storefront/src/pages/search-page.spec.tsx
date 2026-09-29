@@ -111,6 +111,30 @@ describe('search result and product-detail cache separation', () => {
             await new Promise(resolve => setTimeout(resolve, 0));
         });
     }
+    it('renders managed category thumbnails through the shared decoded-image component', () => {
+        renderDiscovery({
+            collections: [
+                {
+                    id: 'category-root',
+                    name: 'Category',
+                    slug: 'category',
+                    description: '',
+                    position: 0,
+                    parentId: '',
+                    featuredAsset: { id: 'category-image', preview: '/assets/preview/category.png' },
+                },
+            ],
+        });
+
+        const frame = required(container.querySelector('.search-category-links .safe-image-frame'));
+        const image = required(frame.querySelector('img'));
+        expect(frame.getAttribute('data-safe-image')).toBe('loading');
+        expect(image.getAttribute('loading')).toBe('lazy');
+        expect(image.getAttribute('src')).toContain('preset=storefront-icon-96');
+        expect(image.getAttribute('src')).toContain('format=webp');
+        expect(image.getAttribute('srcset')).toContain('storefront-icon-64');
+    });
+
     it('debounces suggestions, keeps result caches separate, and supports keyboard selection', async () => {
         const suggested = { ...product, name: 'Coffee beans' };
         const catalog = vi.fn().mockResolvedValue({ items: [suggested], totalItems: 1 });
