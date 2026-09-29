@@ -79,7 +79,12 @@ void test('a reviewed batch converts source and preview, updates references, and
     const plan = await makePlan(connection, root);
     assert.equal(plan.remaining, 1);
     assert.equal(plan.selected, 1);
-    await applyPlan(connection, sharp, root, plan);
+    const previousUmask = process.umask(0o077);
+    try {
+        await applyPlan(connection, sharp, root, plan);
+    } finally {
+        process.umask(previousUmask);
+    }
     assert.match(row.source, /\.webp$/u);
     assert.match(row.preview, /\.webp$/u);
     assert.ok(imageUrl.includes(row.preview));
@@ -88,6 +93,23 @@ void test('a reviewed batch converts source and preview, updates references, and
     assert.equal((await sharp(await fs.readFile(path.join(root, row.preview))).metadata()).format, 'webp');
     assert.deepEqual(await fs.readFile(path.join(root, source)), original);
     assert.deepEqual(await fs.readFile(path.join(root, preview)), thumbnail);
+    assert.equal((await makePlan(connection, root)).remaining, 0);
+
+    for (const identifier of [row.source, row.preview]) {
+        // eslint-disable-next-line no-bitwise -- POSIX permission bits are a bit mask.
+        assert.equal((await fs.stat(path.join(root, identifier))).mode & 0o777, 0o644);
+        await fs.chmod(path.join(root, identifier), 0o600);
+    }
+    const permissionsPlan = await makePlan(connection, root);
+    assert.equal(permissionsPlan.phase, 'permissions');
+    assert.equal(permissionsPlan.remaining, 1);
+    assert.equal(permissionsPlan.selected, 1);
+    await applyPlan(connection, sharp, root, permissionsPlan);
+    assert.deepEqual(transactionCalls, ['begin', 'commit']);
+    for (const identifier of [row.source, row.preview]) {
+        // eslint-disable-next-line no-bitwise -- POSIX permission bits are a bit mask.
+        assert.equal((await fs.stat(path.join(root, identifier))).mode & 0o777, 0o644);
+    }
     assert.equal((await makePlan(connection, root)).remaining, 0);
 });
 
