@@ -136,10 +136,6 @@
         background: var(--accent);
         color: var(--accent-foreground);
     }
-    .desktop-brand-mark.is-brand-image,
-    .desktop-brand-mark.is-brand-image > .safe-image-frame {
-        background: transparent;
-    }
     .desktop-brand-mark.is-brand-image > .safe-image-frame > .safe-image {
         width: 100%;
         height: 100%;

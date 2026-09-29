@@ -26,6 +26,13 @@
     font-weight: 700;
 }
 
+/* Keep transparent brand artwork clear of the shared product-image placeholder surface. */
+:is(.brand-mark, .desktop-brand-mark, .proto-brand-badge).is-brand-image,
+.is-brand-image > .safe-image-frame,
+.is-brand-image > .safe-image-frame > .safe-image-fallback {
+    background: transparent;
+}
+
 img.auth-brand-mark,
 img.fatal-error-mark {
     width: auto;

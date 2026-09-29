@@ -721,7 +721,6 @@
     .proto-brand-badge.is-brand-image {
         overflow: hidden;
         padding: 0;
-        background: var(--paper);
     }
     .proto-brand-badge img,
     .proto-brand-badge .safe-image-frame {
