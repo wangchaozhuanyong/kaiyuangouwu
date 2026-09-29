@@ -166,6 +166,22 @@ describe('progressive page readiness', () => {
         expect(phase()).toBe('ready');
     });
 
+    it('does not downgrade a ready page for a failed decorative category icon', async () => {
+        const icon = (
+            <span aria-hidden="true">
+                <SafeImage src="/missing-category.png" alt="" />
+            </span>
+        );
+        render(icon, true);
+        act(() => {
+            requiredImage(host).dispatchEvent(new Event('error'));
+        });
+        render(icon);
+        await advance();
+        expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+        expect(phase()).toBe('ready');
+    });
+
     it('waits for the declared route query even when its skeleton is below a large header', async () => {
         render(<div data-page-pending="query" data-offscreen="true" />);
         await advance(300);

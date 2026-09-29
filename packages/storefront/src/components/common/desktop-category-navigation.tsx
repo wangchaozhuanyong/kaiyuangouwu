@@ -92,6 +92,7 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
                                                 imageKind="icon"
                                                 sizes="28px"
                                                 loading="eager"
+                                                errorFallback={<LayoutGrid aria-hidden="true" />}
                                             />
                                         ) : (
                                             <LayoutGrid />
