@@ -198,6 +198,18 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
+                        // The confirmed mobile detail design separates quantity controls and service facts.
+                        if (
+                            file === path.join(__dirname, 'styles/product-detail-surfaces.css') &&
+                            [
+                                '.detail-quantity .quantity-control > button + output, .detail-quantity .quantity-control > output + button',
+                                '.product-detail-page .detail-service-bar span + span',
+                            ].includes(selector.trim().replace(/\s+/g, ' ')) &&
+                            border[1] === 'left' &&
+                            border[2].trim() === '1px solid var(--skin-divider)'
+                        ) {
+                            continue;
+                        }
                         // Category directory, nesting and rows use subtle seams to clarify navigation.
                         if (
                             file === path.join(__dirname, 'styles/desktop-commerce.css') &&
