@@ -258,7 +258,7 @@ export async function captureStorefrontConfiguration({
         const operation = document.match(/(?:query|mutation)\s+(ConfigurationGuard\w+)/u)?.[1];
         assert.ok(operation, 'Configuration query must have a fixed operation name');
         let failure = 'REQUEST_FAILED';
-        let publishedErrorDetails = '';
+        let safeApiErrorDetails = '';
         try {
             const response = await request(
                 `${origin.origin}/${shop ? 'shop-api' : 'admin-api'}?languageCode=${locale}`,
@@ -280,7 +280,10 @@ export async function captureStorefrontConfiguration({
             failure = 'INVALID_JSON';
             const result = await response.json();
             failure = 'API_ERROR';
-            if (operation === 'ConfigurationGuardPublished' && result.errors?.length) {
+            if (
+                ['ConfigurationGuardLogin', 'ConfigurationGuardPublished'].includes(operation) &&
+                result.errors?.length
+            ) {
                 const first = result.errors[0];
                 const code = first?.extensions?.code;
                 const parts = first?.path;
@@ -297,7 +300,12 @@ export async function captureStorefrontConfiguration({
                         : 'unknown';
                 const safeHost = /^[a-z0-9.-]{1,100}$/u.test(host) ? host : 'unknown';
                 const safeLocale = ['zh_Hans', 'en'].includes(locale) ? locale : 'unknown';
-                publishedErrorDetails = ` host=${safeHost} locale=${safeLocale} code=${safeCode} path=${safePath || 'unknown'}`;
+                safeApiErrorDetails =
+                    operation === 'ConfigurationGuardLogin'
+                        ? safeCode === 'UNKNOWN'
+                            ? ''
+                            : ` code=${safeCode} path=${safePath || 'unknown'}`
+                        : ` host=${safeHost} locale=${safeLocale} code=${safeCode} path=${safePath || 'unknown'}`;
             }
             assert.ok(
                 !result.errors?.length && result.data,
@@ -309,7 +317,7 @@ export async function captureStorefrontConfiguration({
             const reason = error?.name === 'TimeoutError' ? 'TIMEOUT' : failure;
             // Operation names and fixed reason codes are safe; API/transport messages may contain secrets.
             throw new Error(
-                `STOREFRONT_CONFIGURATION_QUERY_FAILED operation=${operation} reason=${reason}${reason === 'API_ERROR' ? publishedErrorDetails : ''}`,
+                `STOREFRONT_CONFIGURATION_QUERY_FAILED operation=${operation} reason=${reason}${reason === 'API_ERROR' ? safeApiErrorDetails : ''}`,
             );
         }
     }
