@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { responsiveImageSources, storefrontWebpUrl } from './responsive-image';
+import {
+    imageSources,
+    normalizeStorefrontAssetUrl,
+    responsiveImageSources,
+    storefrontWebpUrl,
+} from './responsive-image';
 import { HERO_TOKEN_TOPUP_IMAGE } from './storefront-images';
 
 describe('responsiveImageSources', () => {
@@ -25,6 +30,19 @@ describe('responsiveImageSources', () => {
         expect(sources?.placeholderSrc).toContain('q=75');
         expect(JSON.stringify(sources)).not.toContain('format=avif');
         expect(JSON.stringify(sources)).not.toContain('format=jpg');
+    });
+
+    it('refreshes cached failures only for restored migrated assets', () => {
+        const migrated = '/assets/preview/09/category__preview__webp_migrated_536.webp?token=public';
+        const normalized = normalizeStorefrontAssetUrl(migrated);
+        expect(normalized).toContain('token=public&v=webp-readable-1');
+        expect(normalizeStorefrontAssetUrl(normalized)).toBe(normalized);
+        expect(responsiveImageSources(migrated, 'icon')?.fallbackSrc).toContain('v=webp-readable-1');
+        expect(responsiveImageSources(migrated, 'icon')?.webpSrcSet).toContain('v=webp-readable-1');
+        expect(imageSources(migrated).src).toBe(normalized);
+        expect(normalizeStorefrontAssetUrl('/assets/preview/product.webp')).toBe(
+            '/assets/preview/product.webp',
+        );
     });
 
     it('uses compact derivatives for managed interface icons', () => {

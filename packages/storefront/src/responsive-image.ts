@@ -1,13 +1,30 @@
 import {
     responsiveImageSources as assetImageSources,
-    normalizeStorefrontAssetUrl,
+    normalizeStorefrontAssetUrl as normalizeAssetUrl,
     type ResponsiveImageSources,
     type StorefrontImageKind,
 } from '../../storefront-content-plugin/src/shared/responsive-image';
 
 import { DEFAULT_HERO_IMAGE, staticStorefrontImageSource } from './storefront-images';
 
-export { normalizeStorefrontAssetUrl, type ResponsiveImageSources, type StorefrontImageKind };
+export { type ResponsiveImageSources, type StorefrontImageKind };
+
+/** Refresh browser-cached 404s from the recovered WebP migration without changing other media URLs. */
+export function normalizeStorefrontAssetUrl(source: string): string {
+    const normalized = normalizeAssetUrl(source);
+    if (!/\/assets\/(?:preview|source)\/[^?#]*__webp_migrated_\d+\.webp(?:[?#]|$)/iu.test(normalized)) {
+        return normalized;
+    }
+    try {
+        const url = new URL(normalized, 'https://storefront.invalid');
+        url.searchParams.set('v', 'webp-readable-1');
+        return /^[a-z][a-z\d+.-]*:/iu.test(normalized) || normalized.startsWith('//')
+            ? url.toString()
+            : `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+        return normalized;
+    }
+}
 
 export function responsiveImageSources(
     source: string,
