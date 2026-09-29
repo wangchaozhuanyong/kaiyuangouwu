@@ -63,6 +63,7 @@ export class CatalogImportCategoryService {
             .leftJoinAndSelect('collection.translations', 'translation')
             .leftJoinAndSelect('collection.parent', 'parent')
             .leftJoinAndSelect('parent.translations', 'parentTranslation')
+            .leftJoinAndSelect('collection.channels', 'assignedChannel')
             .innerJoin('collection.channels', 'channel', 'channel.id = :channelId', {
                 channelId: ctx.channelId,
             })
@@ -79,6 +80,7 @@ export class CatalogImportCategoryService {
                 ? this.findCategory(collections, secondaryCategory, parent.id)
                 : parent;
         if (!collection) return;
+        this.assertChannelExclusive(collection);
         const filters = collection.filters.map(filter => ({
             code: filter.code,
             arguments: filter.args.map(filterArgument => ({
@@ -223,6 +225,7 @@ export class CatalogImportCategoryService {
                 ],
             });
         }
+        this.assertChannelExclusive(collection);
         const filters = collection.filters.map(item => ({
             code: item.code,
             arguments: item.args.map(argument => ({ name: argument.name, value: argument.value })),
@@ -245,6 +248,14 @@ export class CatalogImportCategoryService {
         // Existing manual and other rules are preserved; only this import rule is added once per category.
         if (configured) return collection;
         return this.collectionService.update(ctx, { id: collection.id, filters: [...filters, filter] });
+    }
+
+    private assertChannelExclusive(collection: Collection): void {
+        if (collection.channels.length > 1) {
+            throw new UserInputError(
+                `分类“${collection.name}”已被多个店铺共用，导入不能修改；请先为当前店铺创建独立分类`,
+            );
+        }
     }
 
     private async uniqueCollectionSlug(ctx: RequestContext, name: string): Promise<string> {
