@@ -104,8 +104,8 @@ describe('desktop catalog category navigation', () => {
         },
     );
 
-    it('selects all products on home and the selected parent and child on category pages', () => {
-        expect(renderCategories({ name: 'home' }).match(/aria-pressed="true"/g)).toHaveLength(1);
+    it('selects only managed parent and child categories, with no selection on home', () => {
+        expect(renderCategories({ name: 'home' })).not.toContain('aria-pressed="true"');
         const category = renderCategories({ name: 'category', collectionId: 'parent', childId: 'child' });
         const subcategories = renderSubcategories({
             name: 'category',
@@ -184,10 +184,10 @@ describe('desktop catalog category navigation', () => {
         expect(html).not.toContain('后台子分类');
     });
 
-    it('keeps navigation available while categories load or need a retry', () => {
+    it('shows loading and retry without an orphan all-products shortcut', () => {
         const loading = renderCategories({ name: 'category' }, { loading: true, collections: [] });
         expect(loading).toContain('正在加载分类');
-        expect(loading).toContain('全部商品');
+        expect(loading).not.toContain('全部商品');
         expect(renderCategories({ name: 'category' }, { error: 'offline' })).toContain('重新加载分类');
     });
 

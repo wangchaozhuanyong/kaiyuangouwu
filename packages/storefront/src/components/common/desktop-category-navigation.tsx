@@ -1,8 +1,7 @@
 import { Check, LayoutGrid } from 'lucide-react';
 
 import allCategoriesIcon from '../../assets/icons/catalog-directory-color.webp';
-import allProductsIcon from '../../assets/icons/catalog-products-color.webp';
-import { catalogInputFromRoute, catalogRouteWithChanges } from '../../catalog-route-query';
+import { catalogRouteWithChanges } from '../../catalog-route-query';
 import { RouteState } from '../../storefront-router';
 import { collectionImage, SafeImage } from '../../storefront-ui/product-display';
 import { useStorefront } from '../../StorefrontContext';
@@ -26,12 +25,10 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
     const isZh = language === 'zh';
     const isCatalogPage = route.name === 'home' || route.name === 'category' || route.name === 'search';
     const catalogRoute: RouteState = isCatalogPage ? route : { name: 'home' };
-    const input = catalogInputFromRoute(catalogRoute);
     const activeCollection = isCatalogPage
         ? collections.find(collection => collection.id === route.collectionId)
         : undefined;
     const update = (changes: Partial<RouteState>) => navigate(catalogRouteWithChanges(catalogRoute, changes));
-    const clearFilters = () => navigate(catalogRouteWithChanges({ name: 'home' }));
 
     if (!isCatalogPage) return null;
     return (
@@ -52,19 +49,6 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
                     className="desktop-local-navigation"
                     aria-label={isZh ? '选择商品分类' : 'Choose a category'}
                 >
-                    <button
-                        type="button"
-                        className={
-                            isCatalogPage && !input.collectionId && !input.term ? 'is-active' : undefined
-                        }
-                        aria-pressed={isCatalogPage && !input.collectionId && !input.term}
-                        onClick={clearFilters}
-                    >
-                        <span className="desktop-category-icon" aria-hidden="true">
-                            <img src={allProductsIcon} width={28} height={28} alt="" decoding="async" />
-                        </span>
-                        <span>{isZh ? '全部商品' : 'All products'}</span>
-                    </button>
                     {collections.map(collection => {
                         const image = collectionImage(collection, products);
                         return (
