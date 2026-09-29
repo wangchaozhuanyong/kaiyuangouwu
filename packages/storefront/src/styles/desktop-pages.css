@@ -1797,16 +1797,26 @@
         box-shadow: var(--skin-card-shadow);
     }
     .desktop-store-layout .legal-document-navigation h2 {
+        display: block;
         padding: 0 0 12px;
         border-bottom: 0;
     }
     .desktop-store-layout .legal-document-navigation nav {
         grid-template-columns: 1fr;
         gap: 4px;
+        border: 0;
     }
     .desktop-store-layout .legal-document-navigation button {
-        min-height: 36px;
+        min-height: 44px;
+        justify-content: space-between;
+        border-radius: var(--skin-control-radius);
         background: transparent;
+    }
+    .desktop-store-layout .legal-document-navigation button.is-active > span:first-child {
+        text-decoration: none;
+    }
+    .desktop-store-layout .legal-document-navigation-dot {
+        display: block;
     }
     .desktop-store-layout .legal-document-navigation button:hover {
         background: var(--interaction-hover);
@@ -1825,7 +1835,7 @@
         width: 100%;
         max-width: none;
         margin: 0 auto;
-        padding: 36px 48px;
+        padding: 28px 36px;
         border: 0;
         border-radius: var(--skin-card-radius);
         box-shadow: var(--skin-card-shadow);
@@ -1840,10 +1850,7 @@
         line-height: 1.9;
     }
     .desktop-store-layout .legal-identity-card {
-        padding: 20px;
-        border: 0;
-        border-radius: var(--skin-control-radius);
-        background: var(--soft);
+        padding: 0 0 20px;
     }
     .desktop-store-layout .desktop-announcements-content {
         display: grid;

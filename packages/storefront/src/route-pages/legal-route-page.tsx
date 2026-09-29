@@ -14,7 +14,7 @@ export function LegalRoutePage() {
             contentBlocks={runtime.contentBlocks}
             legalIdentity={runtime.legalIdentity}
             onBack={runtime.goBack}
-            onSelectDocument={kind => runtime.navigate({ name: 'legal', id: kind })}
+            onSelectDocument={kind => runtime.navigate({ name: 'legal', id: kind }, true)}
         />
     );
 }
