@@ -1791,7 +1791,7 @@ html[lang='en'] .quick-grid b {
 
 .content-story-visual {
     width: 100%;
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 16 / 9;
     padding: 0;
     position: relative;
     overflow: hidden;
@@ -1813,7 +1813,7 @@ html[lang='en'] .quick-grid b {
 
 .content-story-visual img,
 .content-story-visual > .responsive-picture > img {
-    object-fit: contain;
+    object-fit: cover;
 }
 
 .content-story-visual:hover:not(:disabled) img {
