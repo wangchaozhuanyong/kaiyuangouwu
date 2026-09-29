@@ -6,6 +6,7 @@ import {
     storefrontSkinCssVariables,
 } from '../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import { type StorefrontVisualPresetId } from '../../../storefront-content-plugin/src/visual-presets';
+import { normalizeStorefrontAssetUrl } from '../responsive-image';
 import { productDescriptionText } from '../rich-text';
 import { NEUTRAL_STOREFRONT_IMAGE, NEUTRAL_STOREFRONT_SOCIAL_IMAGE } from '../storefront-images';
 import { storefrontDocumentUrl } from '../storefront-preview-parameters';
@@ -172,10 +173,11 @@ export function useStorefrontMetadata({
 
     useEffect(() => {
         cacheLogoUrl(logoUrl);
+        const iconUrl = logoUrl ? normalizeStorefrontAssetUrl(logoUrl) : NEUTRAL_STOREFRONT_IMAGE;
         for (const rel of ['icon', 'apple-touch-icon']) {
             const link = document.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
             if (link) {
-                link.href = logoUrl || NEUTRAL_STOREFRONT_IMAGE;
+                link.href = iconUrl;
                 link.type = '';
             }
         }
