@@ -178,6 +178,14 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
+                        // The approved split coupon guide separates its three explanatory columns.
+                        if (
+                            file === path.join(__dirname, 'styles/coupon-center.css') &&
+                            selector.trim() === '.coupon-center-guide dl > div + div' &&
+                            border[1] === 'inline' &&
+                            border[2].trim() === '1px solid var(--line-subtle)'
+                        )
+                            continue;
                         // Approved compact cart rows need one shallow reading separator.
                         if (
                             file === path.join(__dirname, 'styles/desktop-pages.css') &&
