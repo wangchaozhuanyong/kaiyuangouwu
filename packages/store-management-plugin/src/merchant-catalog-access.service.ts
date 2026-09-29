@@ -39,6 +39,8 @@ const merchantScopeExemptions = new Set([
     'Query.me',
     'Query.merchantInitialPasswordStatus',
     'Mutation.completeInitialPasswordChange',
+    'Mutation.adminBeginLogin',
+    'Mutation.adminCompleteTwoFactorLogin',
     'Mutation.login',
     'Mutation.logout',
 ]);
