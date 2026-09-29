@@ -70,34 +70,47 @@ async function targetWrite(file, bytes) {
         const existing = await fs.readFile(file);
         assert.ok(existing.equals(bytes), `Existing migrated file differs: ${path.basename(file)}`);
     }
+    // The SSM process can have a restrictive umask. Public Asset files must
+    // remain readable by the separate Vendure server process.
+    await fs.chmod(file, 0o644);
 }
 
-async function hasWebpSignature(root, identifier) {
+async function inspectWebpFile(root, identifier) {
     try {
         const file = await checkedInput(root, identifier);
+        const stat = await fs.stat(file);
         const handle = await fs.open(file, 'r');
         try {
             const header = Buffer.alloc(12);
             const { bytesRead } = await handle.read(header, 0, header.length, 0);
-            return (
-                bytesRead === 12 &&
-                header.toString('ascii', 0, 4) === 'RIFF' &&
-                header.toString('ascii', 8, 12) === 'WEBP'
-            );
+            return {
+                valid:
+                    bytesRead === 12 &&
+                    header.toString('ascii', 0, 4) === 'RIFF' &&
+                    header.toString('ascii', 8, 12) === 'WEBP',
+                // eslint-disable-next-line no-bitwise -- POSIX permission bits are a bit mask.
+                publicReadable: Boolean(stat.mode & 0o004),
+            };
         } finally {
             await handle.close();
         }
     } catch {
-        return false;
+        return { valid: false, publicReadable: false };
     }
+}
+
+function isMigratedIdentifier(identifier, id) {
+    return identifier.endsWith(`__webp_migrated_${id}.webp`);
 }
 
 async function verifyAllImages(connection, root) {
     let inspected = 0;
     let mismatched = 0;
+    let permissionMismatchCount = 0;
     let trustedPrivateAvatars = 0;
     const sampleIds = [];
     const rowsToMigrate = [];
+    const rowsToRepairPermissions = [];
     for (let offset = 0; ; offset += 500) {
         const [rows] = await connection.execute(
             `SELECT id, source, preview, mimeType, fileSize FROM asset WHERE type = 'IMAGE' ORDER BY id LIMIT 500 OFFSET ${offset}`,
@@ -107,7 +120,7 @@ async function verifyAllImages(connection, root) {
             const group = rows.slice(index, index + 50);
             const results = await Promise.all(
                 group.map(async row => {
-                    if (row.mimeType !== 'image/webp') return false;
+                    if (row.mimeType !== 'image/webp') return { valid: false, restricted: false };
                     if (
                         row.source.startsWith('avatars/v2/source/') &&
                         row.preview.startsWith('avatars/v2/preview/') &&
@@ -115,25 +128,43 @@ async function verifyAllImages(connection, root) {
                         row.preview.endsWith('.webp')
                     ) {
                         trustedPrivateAvatars += 1;
-                        return true;
+                        return { valid: true, restricted: false };
                     }
-                    return (
-                        (await hasWebpSignature(root, row.source)) &&
-                        (await hasWebpSignature(root, row.preview))
-                    );
+                    const [source, preview] = await Promise.all([
+                        inspectWebpFile(root, row.source),
+                        inspectWebpFile(root, row.preview),
+                    ]);
+                    return {
+                        valid: source.valid && preview.valid,
+                        restricted:
+                            (isMigratedIdentifier(row.source, row.id) && !source.publicReadable) ||
+                            (isMigratedIdentifier(row.preview, row.id) && !preview.publicReadable),
+                    };
                 }),
             );
-            results.forEach((valid, resultIndex) => {
+            results.forEach(({ valid, restricted }, resultIndex) => {
                 inspected += 1;
                 if (!valid) {
                     mismatched += 1;
                     if (sampleIds.length < 20) sampleIds.push(String(group[resultIndex].id));
                     if (rowsToMigrate.length < BATCH_SIZE) rowsToMigrate.push(group[resultIndex]);
+                } else if (restricted) {
+                    permissionMismatchCount += 1;
+                    if (rowsToRepairPermissions.length < BATCH_SIZE)
+                        rowsToRepairPermissions.push(group[resultIndex]);
                 }
             });
         }
     }
-    return { inspected, physicalMismatchCount: mismatched, trustedPrivateAvatars, sampleIds, rowsToMigrate };
+    return {
+        inspected,
+        physicalMismatchCount: mismatched,
+        permissionMismatchCount,
+        trustedPrivateAvatars,
+        sampleIds,
+        rowsToMigrate,
+        rowsToRepairPermissions,
+    };
 }
 
 async function existingUrlColumns(connection) {
@@ -163,19 +194,28 @@ async function candidates(connection, root) {
         return { rows, remaining: metadataRemaining, metadataRemaining, phase: 'metadata' };
     }
     const physical = await verifyAllImages(connection, root);
+    const phase = physical.physicalMismatchCount > 0 ? 'physical' : 'permissions';
     return {
-        rows: physical.rowsToMigrate,
-        remaining: physical.physicalMismatchCount,
+        rows: phase === 'physical' ? physical.rowsToMigrate : physical.rowsToRepairPermissions,
+        remaining: phase === 'physical' ? physical.physicalMismatchCount : physical.permissionMismatchCount,
         metadataRemaining: 0,
-        phase: 'physical',
+        phase,
         physicalInspected: physical.inspected,
+        permissionMismatchCount: physical.permissionMismatchCount,
         trustedPrivateAvatars: physical.trustedPrivateAvatars,
     };
 }
 
 export async function makePlan(connection, root) {
-    const { rows, remaining, metadataRemaining, phase, physicalInspected, trustedPrivateAvatars } =
-        await candidates(connection, root);
+    const {
+        rows,
+        remaining,
+        metadataRemaining,
+        phase,
+        physicalInspected,
+        permissionMismatchCount,
+        trustedPrivateAvatars,
+    } = await candidates(connection, root);
     const files = [];
     for (const row of rows) {
         const source = await checkedInput(root, row.source);
@@ -202,6 +242,7 @@ export async function makePlan(connection, root) {
         metadataRemaining,
         phase,
         ...(physicalInspected === undefined ? {} : { physicalInspected }),
+        ...(permissionMismatchCount === undefined ? {} : { permissionMismatchCount }),
         ...(trustedPrivateAvatars === undefined ? {} : { trustedPrivateAvatars }),
         selected: files.length,
         inputBytes: files.reduce((total, file) => total + file.sourceBytes + file.previewBytes, 0),
@@ -223,6 +264,13 @@ export async function applyPlan(connection, sharp, root, plan) {
         assert.equal(previewBytes.length, row.previewBytes, `Asset ${row.id} preview changed`);
         assert.equal(hashBytes(sourceBytes), row.sourceSha256, `Asset ${row.id} source changed`);
         assert.equal(hashBytes(previewBytes), row.previewSha256, `Asset ${row.id} preview changed`);
+        if (plan.phase === 'permissions') {
+            assert.ok(isMigratedIdentifier(row.source, row.id));
+            assert.ok(isMigratedIdentifier(row.preview, row.id));
+            await fs.chmod(sourcePath, 0o644);
+            await fs.chmod(previewPath, 0o644);
+            continue;
+        }
         const sourceWebp = await sharp(sourceBytes, { animated: true, failOn: 'truncated' })
             .rotate()
             .webp({ quality: 95, effort: 4 })
@@ -298,6 +346,9 @@ export async function run(operation, expectedDigest, environment = process.env) 
                 ...(plan.physicalInspected === undefined
                     ? {}
                     : { physicalInspected: plan.physicalInspected }),
+                ...(plan.permissionMismatchCount === undefined
+                    ? {}
+                    : { permissionMismatchCount: plan.permissionMismatchCount }),
                 ...(plan.trustedPrivateAvatars === undefined
                     ? {}
                     : { trustedPrivateAvatars: plan.trustedPrivateAvatars }),
