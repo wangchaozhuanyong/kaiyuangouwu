@@ -20,6 +20,7 @@ describe('commerceOrderProcess digital fulfillment', () => {
     const connection = {
         getEntityOrThrow: vi.fn(),
         getRepository: vi.fn().mockReturnValue({
+            find: vi.fn().mockResolvedValue([{ product: { customFields: { pricingMode: 'FIXED' } } }]),
             createQueryBuilder: vi.fn().mockReturnValue(stockQueryBuilder),
         }),
     };
