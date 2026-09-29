@@ -711,7 +711,7 @@ function toDraft(configuration: StoreCommerceConfigurationRecord): CommerceDraft
 
 function validDraft(draft: CommerceDraft): boolean {
     return (
-        /^[A-Z]{2}$/u.test(draft.countryCode) &&
+        /^(?:[A-Z]{2}|[0-9]{3})$/u.test(draft.countryCode) &&
         draft.shippingMethodNameZh.trim().length > 0 &&
         inRange(draft.taxRate, 0, 100) &&
         inRange(draft.shippingTaxRate, 0, 100) &&

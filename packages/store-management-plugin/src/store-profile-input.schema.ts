@@ -33,6 +33,7 @@ export const storeProfileInputSchema = gql`
 
     input UpdateMyStoreProfileInput {
         expectedUpdatedAt: DateTime!
+        isPublished: Boolean
         storefrontNameZh: String
         storefrontNameEn: String
         storefrontNameEnLocked: Boolean

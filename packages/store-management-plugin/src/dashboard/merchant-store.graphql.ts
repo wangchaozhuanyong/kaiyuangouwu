@@ -48,6 +48,7 @@ const myStoreProfileFields = gql`
         id
         updatedAt
         status
+        isPublished
         isOperational
         descriptionZh
         descriptionEn
@@ -151,6 +152,7 @@ export interface MyStoreProfileRecord {
     id: string;
     updatedAt: string;
     status: 'DRAFT' | 'ACTIVE' | 'SUSPENDED';
+    isPublished: boolean;
     isOperational: boolean;
     descriptionZh: string;
     descriptionEn: string;

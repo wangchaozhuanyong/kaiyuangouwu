@@ -54,6 +54,13 @@ describe('store commerce configuration helpers', () => {
         expect(() => normalizeStoreCommerceInput({ ...input, baseRate: -1 })).toThrow('基础运费');
     });
 
+    it('accepts an existing three-digit country code and rejects malformed codes', () => {
+        expect(normalizeStoreCommerceInput({ ...input, countryCode: ' 001 ' }).countryCode).toBe('001');
+        expect(() => normalizeStoreCommerceInput({ ...input, countryCode: 'M1' })).toThrow(
+            '配送国家代码无效',
+        );
+    });
+
     it('maps the saved values to the registered shipping operations', () => {
         const normalized = normalizeStoreCommerceInput(input);
         expect(shippingCheckerInput(normalized.countryCode, normalized.blockedPostalPrefixes)).toEqual({

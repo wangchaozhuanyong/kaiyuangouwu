@@ -147,7 +147,7 @@ export class StoreProfileService {
         }
 
         profile.status = status;
-        profile.isPublished = false;
+        profile.isPublished = status === 'DRAFT' && profile.isPublished;
         profile.sortOrder = input.sortOrder ?? profile.sortOrder;
         const prepared = await this.prepareProfileTranslations(input, profile);
         const localized = new Map(prepared.map(field => [field.path, field.translatedText]));
@@ -210,6 +210,18 @@ export class StoreProfileService {
         const repository = this.connection.getRepository(ctx, StoreProfile);
         const profile = await this.lockProfileByChannel(ctx, ctx.channelId);
         this.assertExpectedUpdatedAt(profile.updatedAt, input.expectedUpdatedAt);
+        if (input.isPublished === true && !profile.isPublished) {
+            if (profile.status !== 'DRAFT') {
+                throw new UserInputError('仅草稿店铺可开启公开预览');
+            }
+            const hasVerifiedPrimaryDomain = await this.connection.getRepository(ctx, StoreDomain).exists({
+                where: { channelId: profile.channelId, isPrimary: true, status: 'ACTIVE' },
+            });
+            if (!hasVerifiedPrimaryDomain) {
+                throw new UserInputError('开启公开预览前，请先验证并设置主域名');
+            }
+        }
+        if (input.isPublished != null) profile.isPublished = input.isPublished;
         const prepared = await this.prepareProfileTranslations(input, profile);
         const localized = new Map(prepared.map(field => [field.path, field.translatedText]));
         profile.descriptionZh = this.normalizeDescription(
@@ -338,6 +350,7 @@ export class StoreProfileService {
                 isPlatformOwned:
                     Boolean(profile.channel.sellerId) &&
                     idsAreEqual(profile.channel.sellerId, defaultChannel.sellerId),
+                isPublished: profile.isPublished,
                 hasVerifiedPrimaryDomain: Boolean(profile.primaryDomain),
             });
         }

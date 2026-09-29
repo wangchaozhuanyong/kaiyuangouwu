@@ -397,7 +397,7 @@ export function normalizeStoreCommerceInput(
     input: UpdateMyStoreCommerceConfigurationInput,
 ): UpdateMyStoreCommerceConfigurationInput {
     const countryCode = input.countryCode.trim().toUpperCase();
-    if (!/^[A-Z]{2}$/u.test(countryCode)) {
+    if (!/^(?:[A-Z]{2}|[0-9]{3})$/u.test(countryCode)) {
         throw new UserInputError('配送国家代码无效');
     }
     const shippingMethodNameZh = requiredText(input.shippingMethodNameZh, '中文配送名称', 80);

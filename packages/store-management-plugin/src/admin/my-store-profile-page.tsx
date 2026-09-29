@@ -52,6 +52,7 @@ import {
 
 interface ProfileDraft {
     expectedUpdatedAt: string;
+    isPublished: boolean;
     storefrontNameZh: string;
     storefrontNameEn: string;
     originalStorefrontNameZh: string;
@@ -115,6 +116,11 @@ const zhCopy = {
     selectLogo: '选择 Logo',
     clearLogo: '移除 Logo',
     operation: '运营状态',
+    publicPreview: '公开预览',
+    previewOn: '已开放',
+    previewOff: '未开放',
+    previewHelp: '开放后所有访客都能浏览店铺；测试下单仍须使用已配置的测试支付方式。正式上线检查保持独立。',
+    previewDomainRequired: '请先验证并设置主域名。',
     merchant: '商家主体',
     code: '店铺编码',
     domain: '当前主域名',
@@ -172,6 +178,12 @@ const enCopy: typeof zhCopy = {
     selectLogo: 'Select logo',
     clearLogo: 'Remove logo',
     operation: 'Operational status',
+    publicPreview: 'Public preview',
+    previewOn: 'Open',
+    previewOff: 'Closed',
+    previewHelp:
+        'Visitors can browse the store. Test checkout requires a configured test payment method. Full launch checks remain separate.',
+    previewDomainRequired: 'Verify and select a primary domain first.',
     merchant: 'Merchant',
     code: 'Store code',
     domain: 'Primary domain',
@@ -252,6 +264,9 @@ function MyStoreProfilePage() {
                 logoOnLightAssetId: input.logoOnLightAsset?.id ?? null,
                 logoOnDarkAssetId: input.logoOnDarkAsset?.id ?? null,
             };
+            if (input.isPublished !== profile?.isPublished) {
+                updateInput.isPublished = input.isPublished;
+            }
             if (input.storefrontNameZh !== input.originalStorefrontNameZh) {
                 updateInput.storefrontNameZh = input.storefrontNameZh;
             }
@@ -669,7 +684,31 @@ function MyStoreProfilePage() {
                 </PageBlock>
                 <PageBlock column="side" blockId="merchant-store-operation" title={text.operation}>
                     {profile ? (
-                        <StoreOperation profile={profile} text={text} isZh={isZh} />
+                        <>
+                            {draft && profile.status === 'DRAFT' ? (
+                                <div className="space-y-2 border-b pb-4">
+                                    <Label htmlFor="my-store-public-preview">{text.publicPreview}</Label>
+                                    <Button
+                                        id="my-store-public-preview"
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={draft.isPublished}
+                                        variant={draft.isPublished ? 'secondary' : 'outline'}
+                                        disabled={!profile.primaryDomain && !draft.isPublished}
+                                        onClick={() => update('isPublished', !draft.isPublished)}
+                                    >
+                                        {draft.isPublished ? text.previewOn : text.previewOff}
+                                    </Button>
+                                    <p className="text-xs text-muted-foreground">{text.previewHelp}</p>
+                                    {!profile.primaryDomain ? (
+                                        <p className="text-xs text-destructive">
+                                            {text.previewDomainRequired}
+                                        </p>
+                                    ) : null}
+                                </div>
+                            ) : null}
+                            <StoreOperation profile={profile} text={text} isZh={isZh} />
+                        </>
                     ) : (
                         <ProfileSkeleton />
                     )}
@@ -795,6 +834,7 @@ function ProfileSkeleton() {
 function toDraft(profile: MyStoreProfileRecord): ProfileDraft {
     return {
         expectedUpdatedAt: profile.updatedAt,
+        isPublished: profile.isPublished,
         storefrontNameZh: profile.channel.customFields.storefrontNameZh,
         storefrontNameEn: profile.channel.customFields.storefrontNameEn,
         originalStorefrontNameZh: profile.channel.customFields.storefrontNameZh,

@@ -14,6 +14,7 @@ export interface OperationalStorefrontInput {
     isDefaultChannel: boolean;
     status: StoreProfile['status'] | null;
     isPlatformOwned: boolean;
+    isPublished: boolean;
     hasVerifiedPrimaryDomain: boolean;
 }
 
@@ -21,7 +22,9 @@ export function isOperationalStorefront(input: OperationalStorefrontInput): bool
     return (
         input.isDefaultChannel ||
         input.status === 'ACTIVE' ||
-        (input.status === 'DRAFT' && input.isPlatformOwned && input.hasVerifiedPrimaryDomain)
+        (input.status === 'DRAFT' &&
+            (input.isPlatformOwned || input.isPublished) &&
+            input.hasVerifiedPrimaryDomain)
     );
 }
 
@@ -44,7 +47,7 @@ export class StorefrontActivationService {
         }
         const profile = await this.connection.getRepository(ctx, StoreProfile).findOne({
             where: { channelId: ctx.channelId },
-            select: { id: true, status: true },
+            select: { id: true, status: true, isPublished: true },
         });
         if (profile?.status === 'ACTIVE') {
             return;
@@ -55,7 +58,8 @@ export class StorefrontActivationService {
             Boolean(channel?.sellerId) &&
             idsAreEqual(channel?.sellerId, defaultChannel.sellerId);
         const hasVerifiedPrimaryDomain =
-            isPlatformOwnedDraft &&
+            profile?.status === 'DRAFT' &&
+            (isPlatformOwnedDraft || profile.isPublished) &&
             (await this.connection.getRepository(ctx, StoreDomain).exists({
                 where: {
                     channelId: ctx.channelId,
@@ -68,15 +72,15 @@ export class StorefrontActivationService {
                 isDefaultChannel,
                 status: profile?.status ?? null,
                 isPlatformOwned: isPlatformOwnedDraft,
+                isPublished: profile?.isPublished ?? false,
                 hasVerifiedPrimaryDomain,
             })
         ) {
             return;
         }
 
-        // Merchant, suspended, unverified, and partially provisioned Channels
-        // remain fail-closed. The narrow draft exception only preserves public
-        // regional storefronts that are platform-owned and domain-verified.
+        // Merchant drafts require an explicit public-preview setting and a verified
+        // primary domain. Suspended and partially provisioned Channels stay closed.
         throw new ForbiddenError();
     }
 }
