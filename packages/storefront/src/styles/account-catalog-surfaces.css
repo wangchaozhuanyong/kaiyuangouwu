@@ -417,8 +417,8 @@
         align-items: center;
         justify-content: space-between;
         gap: 8px;
-        margin: 0 0 7px;
-        padding: 0 10px 8px;
+        margin: 0 0 4px;
+        padding: 0 10px;
         border-bottom: 0;
     }
     .account-orders .section-header h2 {
@@ -436,32 +436,29 @@
         white-space: nowrap;
     }
     .account-page .account-order-shortcuts {
-        display: grid;
-        grid-template-columns: none;
-        grid-auto-flow: column;
-        grid-auto-columns: clamp(72px, calc((100% - 32px) / 4.5), 88px);
-        gap: 8px;
+        display: flex;
+        gap: 2px;
         margin-top: 0;
-        padding: 8px 10px;
+        padding: 6px 4px 2px;
         overflow-x: auto;
         overscroll-behavior-x: contain;
         scroll-snap-type: x proximity;
-        scroll-padding-inline: 10px;
+        scroll-padding-inline: 4px;
         scrollbar-width: none;
     }
     .account-page .account-order-shortcuts::-webkit-scrollbar {
         display: none;
     }
     .account-page .account-order-shortcuts > button {
-        display: flex;
-        min-width: 0;
-        min-height: 80px;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        grid-column: auto;
-        padding: 8px;
+        display: grid;
+        flex: 1 0 44px;
+        min-width: 44px;
+        min-height: 60px;
+        grid-template-rows: 28px minmax(16px, auto);
+        align-content: center;
+        justify-items: center;
+        gap: 4px;
+        padding: 6px 2px;
         border: 0;
         border-radius: var(--skin-control-radius);
         background: transparent;
@@ -504,7 +501,10 @@
         max-width: 100%;
         font-size: 11px;
         font-weight: 500;
-        white-space: nowrap;
+        line-height: 1.2;
+        text-align: center;
+        overflow-wrap: anywhere;
+        white-space: normal;
     }
     .account-page .account-section {
         margin: 10px var(--page-section-inset, 20px) 0;
