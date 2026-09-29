@@ -909,7 +909,7 @@ describe('unified storefront Admin API to Shop API', () => {
                                         ? `${index === 0 ? 'MOYAO' : '大马通'}主标题`
                                         : `${name} title`,
                                 );
-                                const imageLocator = page.locator('.auth-hero img');
+                                const imageLocator = page.locator('.auth-hero img.safe-image');
                                 if (width >= 1024) {
                                     await browserExpect(imageLocator).toHaveAttribute(
                                         'src',
@@ -992,10 +992,9 @@ describe('unified storefront Admin API to Shop API', () => {
                                     await browserExpect(page.locator('.auth-hero img')).toHaveCount(0);
                                     await browserExpect(page.locator('.auth-hero')).toBeHidden();
                                 } else {
-                                    await browserExpect(page.locator('.auth-hero img')).toHaveAttribute(
-                                        'src',
-                                        new RegExp(`auth-${route}-ai-campaign-v2`),
-                                    );
+                                    await browserExpect(
+                                        page.locator('.auth-hero img.safe-image'),
+                                    ).toHaveAttribute('src', new RegExp(`auth-${route}-ai-campaign-v2`));
                                     await browserExpect(page.locator('.auth-hero')).toBeVisible();
                                 }
                                 await browserExpect(page.locator('.auth-page')).not.toContainText('MOYAO');
@@ -1054,7 +1053,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 await adminClient.query(SAVE_VISUAL, {
                     input: {
                         channelId: store.id,
-                        presetId: 'modern-oriental',
+                        presetId: 'neo-minimalist',
                         expectedRevision: initial.revision,
                     },
                 })
@@ -1064,7 +1063,7 @@ describe('unified storefront Admin API to Shop API', () => {
                     input: { channelId: store.id, desktopLayout: 'catalog', expectedRevision: skin.revision },
                 })
             ).updateStorefrontVisualPreset;
-            expect(layout).toMatchObject({ presetId: 'modern-oriental', desktopLayout: 'catalog' });
+            expect(layout).toMatchObject({ presetId: 'neo-minimalist', desktopLayout: 'catalog' });
             expect((await shopClient.query(READ_VISUAL)).storefrontVisualPreset).toEqual(layout);
             expect(await adminClient.query(READ)).toEqual(before);
             await expect(
@@ -1119,7 +1118,7 @@ describe('unified storefront Admin API to Shop API', () => {
                     );
                     await browserExpect(page.locator('html')).toHaveAttribute(
                         'data-storefront-preset',
-                        'modern-oriental',
+                        'neo-minimalist',
                     );
                     for (const language of ['zh', 'en']) {
                         if (language === 'en') {
@@ -1193,7 +1192,7 @@ describe('unified storefront Admin API to Shop API', () => {
             const stale = await context.newPage();
             await first.goto(uri);
             await stale.goto(uri);
-            await browserExpect(first.locator('input[name="presetId"][value="modern-oriental"]'))
+            await browserExpect(first.locator('input[name="presetId"][value="neo-minimalist"]'))
                 .toBeChecked()
                 .catch(async () => {
                     throw new Error(await first.locator('body').innerText());
@@ -1207,7 +1206,7 @@ describe('unified storefront Admin API to Shop API', () => {
             await browserExpect(stale.getByRole('alert')).toContainText('其他管理员');
             await stale.getByRole('button', { name: '重新读取' }).click();
             await browserExpect(stale.locator('input[name="presetId"][value="classic"]')).toBeChecked();
-            await stale.locator('input[name="presetId"][value="modern-oriental"]').check();
+            await stale.locator('input[name="presetId"][value="neo-minimalist"]').check();
             await stale.route('**/admin-api', async route => {
                 if (route.request().postData()?.includes('NextAdminUpdateStorefrontVisualPreset'))
                     await route.fulfill({
@@ -1220,7 +1219,7 @@ describe('unified storefront Admin API to Shop API', () => {
             await stale.getByRole('button', { name: '保存到当前店铺' }).click();
             await browserExpect(stale.getByRole('alert')).toBeVisible();
             await browserExpect(
-                stale.locator('input[name="presetId"][value="modern-oriental"]'),
+                stale.locator('input[name="presetId"][value="neo-minimalist"]'),
             ).toBeChecked();
             await stale.unroute('**/admin-api');
             let releaseResponse = () => undefined;
@@ -1243,7 +1242,7 @@ describe('unified storefront Admin API to Shop API', () => {
             await requested;
             await stale.getByRole('combobox', { name: '测试店铺' }).selectOption(stores[1].token);
             await browserExpect(
-                stale.locator('input[name="presetId"][value="modern-oriental"]'),
+                stale.locator('input[name="presetId"][value="neo-minimalist"]'),
             ).toBeChecked();
             releaseResponse();
             await browserExpect(stale.getByRole('button', { name: '保存到当前店铺' })).toBeDisabled();
@@ -1253,7 +1252,7 @@ describe('unified storefront Admin API to Shop API', () => {
             ).toHaveCount(0);
             shopClient.setChannelToken(stores[1].token);
             expect((await shopClient.query(READ_VISUAL)).storefrontVisualPreset).toMatchObject({
-                presetId: 'modern-oriental',
+                presetId: 'neo-minimalist',
                 desktopLayout: 'catalog',
             });
             for (const [index, store] of stores.entries()) {
@@ -1415,7 +1414,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 input: {
                     channelId: store.id,
                     expectedRevision: current.revision,
-                    presetId: 'modern-oriental',
+                    presetId: 'neo-minimalist',
                 },
             });
         }
@@ -1479,8 +1478,8 @@ describe('unified storefront Admin API to Shop API', () => {
             const pageUrl = `http://127.0.0.1:5300/e2e/unification/index.html?channel=${stores[0].token}&name=MOYAO&page=login`;
             const previewUrl = `http://127.0.0.1:5301/e2e/storefront-visual/index.html?stores=${stores.map(store => store.token).join(',')}&preview=auth`;
             for (const [state, background, accent] of [
-                ['explicit', 'rgb(32, 51, 70)', 'rgb(179, 68, 49)'],
-                ['inherited', 'rgb(255, 255, 255)', 'rgb(179, 68, 49)'],
+                ['explicit', 'rgb(32, 51, 70)', 'rgb(102, 84, 200)'],
+                ['inherited', 'rgb(14, 20, 33)', 'rgb(102, 84, 200)'],
                 ['classic', 'rgb(255, 255, 255)', 'rgb(21, 128, 61)'],
             ]) {
                 if (state === 'inherited')
@@ -1520,7 +1519,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 );
                 await browserExpect(page.locator('html')).toHaveAttribute(
                     'data-storefront-preset',
-                    state === 'classic' ? 'classic' : 'modern-oriental',
+                    state === 'classic' ? 'classic' : 'neo-minimalist',
                 );
                 await browserExpect(page.locator('.auth-hero')).toHaveCSS('background-color', background);
                 await browserExpect(page.locator('.wide-action')).toHaveCSS('background-color', accent);
@@ -1572,7 +1571,7 @@ describe('unified storefront Admin API to Shop API', () => {
                         .toBe(true);
                     await browserExpect(clientFrame.locator('html')).toHaveAttribute(
                         'data-storefront-preset',
-                        state === 'classic' ? 'classic' : 'modern-oriental',
+                        state === 'classic' ? 'classic' : 'neo-minimalist',
                     );
                     await preview.screenshot({
                         path: join(
@@ -1589,15 +1588,12 @@ describe('unified storefront Admin API to Shop API', () => {
             );
             await browserExpect(page.locator('html')).toHaveAttribute(
                 'data-storefront-preset',
-                'modern-oriental',
+                'neo-minimalist',
             );
-            await browserExpect(page.locator('.auth-hero')).toHaveCSS(
-                'background-color',
-                'rgb(243, 244, 240)',
-            );
+            await browserExpect(page.locator('.auth-hero')).toHaveCSS('background-color', 'rgb(7, 11, 20)');
             await browserExpect(page.locator('.wide-action')).toHaveCSS(
                 'background-color',
-                'rgb(179, 68, 49)',
+                'rgb(102, 84, 200)',
             );
             await browserExpect(page.locator('.auth-hero-copy h2')).toHaveCount(0);
             await browserExpect(page.locator('.auth-page')).not.toContainText('MOYAO');

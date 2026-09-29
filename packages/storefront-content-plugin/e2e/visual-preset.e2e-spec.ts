@@ -108,12 +108,12 @@ describe('visual preset Admin API to Shop API persistence', () => {
             await adminClient.query<{ updateStorefrontVisualPreset: StorefrontVisualPresetConfig }>(write, {
                 input: {
                     channelId: original.channelId,
-                    presetId: 'modern-oriental',
+                    presetId: 'neo-minimalist',
                     expectedRevision: original.revision,
                 },
             })
         ).updateStorefrontVisualPreset;
-        expect(saved.presetId).toBe('modern-oriental');
+        expect(saved.presetId).toBe('neo-minimalist');
         const published = (
             await shopClient.query<{ storefrontVisualPreset: StorefrontVisualPresetConfig }>(read)
         ).storefrontVisualPreset;

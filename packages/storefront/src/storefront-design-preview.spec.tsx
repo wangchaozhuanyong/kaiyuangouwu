@@ -49,7 +49,6 @@ describe('storefront design preview', () => {
         const markup = renderToStaticMarkup(<StorefrontDesignPreview />);
         for (const route of storefrontRouteNames) expect(markup).toContain(`value="${route}"`);
         expect(markup).toContain('value="classic"');
-        expect(markup).toContain('value="modern-oriental"');
         expect(markup).toContain('value="neo-minimalist"');
         expect(markup).toContain('value="1023"');
         expect(markup).toContain('value="1024"');
@@ -184,13 +183,13 @@ describe('storefront design preview', () => {
         const initialSource = frame.getAttribute('src');
 
         await act(async () => {
-            skinSelect.value = 'modern-oriental';
+            skinSelect.value = 'classic';
             skinSelect.dispatchEvent(new Event('change', { bubbles: true }));
             await Promise.resolve();
         });
 
         expect(frame.getAttribute('src')).not.toBe(initialSource);
-        expect(frame.getAttribute('src')).toContain('storefrontPreviewPreset=modern-oriental');
+        expect(frame.getAttribute('src')).toContain('storefrontPreviewPreset=classic');
         await act(async () => {
             root.unmount();
             await Promise.resolve();
@@ -248,7 +247,7 @@ describe('storefront design preview', () => {
         window.history.replaceState(
             {},
             '',
-            '/__storefront-preview?preset=modern-oriental&route=services&viewport=1440&scenario=disabled&auth=authenticated&language=en',
+            '/__storefront-preview?preset=neo-minimalist&route=services&viewport=1440&scenario=disabled&auth=authenticated&language=en',
         );
         const host = document.createElement('div');
         document.body.append(host);
@@ -259,12 +258,12 @@ describe('storefront design preview', () => {
         });
 
         const selects = host.querySelectorAll('select');
-        expect(selects[0].value).toBe('modern-oriental');
+        expect(selects[0].value).toBe('neo-minimalist');
         expect(selects[1].value).toBe('services');
         expect(selects[2].value).toBe('disabled');
         expect(selects[3].value).toBe('authenticated');
         expect(selects[4].value).toBe('1440');
-        expect(host.querySelector('iframe')?.title).toBe('modern-oriental services 1440');
+        expect(host.querySelector('iframe')?.title).toBe('neo-minimalist services 1440');
 
         await act(async () => {
             selects[0].value = 'neo-minimalist';

@@ -72,31 +72,31 @@ describe('runtime channel branding', () => {
             expect(color('--accent')).toBe('#234567');
             expect(color('--skin-tool-security-foreground')).toBe('#1d4ed8');
 
-            act(() => root.render(<Fixture logo={null} background="#F5F7FB" presetId="modern-oriental" />));
+            act(() => root.render(<Fixture logo={null} background="#F5F7FB" presetId="neo-minimalist" />));
             // Read actual CSS without Vite's CSS transform so this also checks the palette contract.
             const style = document.createElement('style');
             style.textContent = presetStyles;
             document.head.append(style);
-            expect(color('--bg')).toBe('#f3f4f0');
-            expect(color('--accent')).toBe('#b34431');
-            expect(color('--accent-hover')).toBe('#923526');
-            expect(color('--accent-ink')).toBe('#a33b2b');
+            expect(color('--bg')).toBe('#070b14');
+            expect(color('--accent')).toBe('#6654c8');
+            expect(color('--accent-hover')).toBe('#5745b6');
+            expect(color('--accent-ink')).toBe('#c4b5fd');
             expect(color('--accent-foreground')).toBe('#ffffff');
-            expect(color('--store-primary')).toBe('#9f3b30');
-            expect(color('--store-background')).toBe('#f3f4f0');
-            expect(color('--auth-store-background')).toBe('#f3f4f0');
-            expect(color('--brand-primary')).toBe('#9f3b30');
-            expect(color('--brand-background')).toBe('#f3f4f0');
-            expect(color('color-scheme')).toBe('light');
+            expect(color('--store-primary')).toBe('#8b5cf6');
+            expect(color('--store-background')).toBe('#070b14');
+            expect(color('--auth-store-background')).toBe('#070b14');
+            expect(color('--brand-primary')).toBe('#8b5cf6');
+            expect(color('--brand-background')).toBe('#070b14');
+            expect(color('color-scheme')).toBe('dark');
             expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe(
-                '#f3f4f0',
+                '#070b14',
             );
 
             // A late branding response or another store must not cover the active skin.
-            act(() => root.render(<Fixture logo={null} background="#070B14" presetId="modern-oriental" />));
-            expect(color('--bg')).toBe('#f3f4f0');
-            expect(color('--accent')).toBe('#b34431');
-            expect(color('--brand-background')).toBe('#f3f4f0');
+            act(() => root.render(<Fixture logo={null} background="#070B14" presetId="neo-minimalist" />));
+            expect(color('--bg')).toBe('#070b14');
+            expect(color('--accent')).toBe('#6654c8');
+            expect(color('--brand-background')).toBe('#070b14');
 
             act(() => root.render(<Fixture logo={null} background="#070B14" />));
             expect(color('--bg')).toBe('#f1f5f9');

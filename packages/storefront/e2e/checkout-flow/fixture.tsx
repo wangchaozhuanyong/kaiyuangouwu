@@ -50,7 +50,7 @@ const market: MarketConfig = {
 const api = new ShopApi(market);
 const controller = new CartController(`checkout-fixture:${market.code}`);
 api.enableCartCommands(controller);
-applyStorefrontVisualPreset(document.documentElement, 'modern-oriental');
+applyStorefrontVisualPreset(document.documentElement, 'neo-minimalist');
 
 async function initialize() {
     // Synthetic customer credentials created by the test, not a production account.

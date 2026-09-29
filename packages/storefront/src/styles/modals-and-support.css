@@ -34,9 +34,10 @@
     position: relative;
     width: 100%;
     max-width: 360px;
-    background: #ffffff;
-    border-radius: 20px;
-    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.3);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: var(--skin-hero-radius);
+    box-shadow: var(--skin-hero-shadow);
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -52,8 +53,8 @@
     height: 32px;
     border-radius: 50%;
     border: 0;
-    background: #f1f5f9;
-    color: #64748b;
+    background: var(--control-surface);
+    color: var(--text);
     display: grid;
     place-items: center;
     cursor: pointer;
@@ -62,8 +63,14 @@
 }
 
 .poster-close-btn:hover {
-    background: #e2e8f0;
-    color: #0f172a;
+    background: var(--control-surface-hover);
+    color: var(--text);
+}
+
+.poster-close-btn:focus-visible,
+.poster-action-btn:focus-visible {
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
 }
 
 .poster-preview-wrapper {
@@ -194,7 +201,7 @@
 .poster-action-btn {
     flex: 1;
     min-height: 42px;
-    border-radius: 10px;
+    border-radius: var(--skin-control-radius);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -211,24 +218,23 @@
 }
 
 .poster-action-btn.primary {
-    background: #d33c30;
-    color: #ffffff;
+    background: var(--accent);
+    color: var(--accent-foreground);
     border: 0;
-    box-shadow: 0 2px 8px rgba(211, 60, 48, 0.25);
 }
 
 .poster-action-btn.primary:hover {
-    background: #b82f24;
+    background: var(--accent-hover);
 }
 
 .poster-action-btn.secondary {
-    background: #f8fafc;
-    color: #334155;
-    border: 1px solid #cbd5e1;
+    background: var(--control-surface);
+    color: var(--text);
+    border: 1px solid var(--line-subtle);
 }
 
 .poster-action-btn.secondary:hover {
-    background: #f1f5f9;
+    background: var(--control-surface-hover);
 }
 
 .poster-templates-scroll {
@@ -427,7 +433,7 @@
     padding: 12px 14px;
     border-radius: 10px;
     background: var(--module-action-surface);
-    color: #475569;
+    color: var(--muted);
     display: flex;
     align-items: flex-start;
     gap: 10px;
@@ -592,7 +598,7 @@
     height: 100%;
     padding: 22px 14px;
     border-radius: 8px;
-    background: #f8fafc;
+    background: var(--surface);
     color: var(--text);
     display: flex;
     flex-direction: column;
@@ -658,7 +664,7 @@
     margin-top: 18px;
     border-radius: 10px;
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-foreground);
     font-size: 14px;
     font-weight: var(--font-weight-bold);
     display: flex;
@@ -682,8 +688,7 @@
     padding: 14px 16px;
     margin-bottom: 14px;
     border-radius: 14px;
-    background: linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%);
-    box-shadow: 0 4px 14px rgba(13, 148, 136, 0.05);
+    background: var(--surface);
 }
 
 .support-order-banner-main {
@@ -696,8 +701,8 @@
     padding: 2px 8px;
     font-size: 11px;
     font-weight: 600;
-    color: #0d9488;
-    background: rgba(13, 148, 136, 0.1);
+    color: var(--accent-ink);
+    background: var(--accent-soft);
     border-radius: 6px;
     margin-bottom: 4px;
 }
@@ -706,7 +711,7 @@
     display: block;
     font-size: 15px;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--text);
     font-family: var(--font-mono, monospace);
     letter-spacing: 0.5px;
 }
@@ -714,7 +719,7 @@
 .support-order-banner-tip {
     margin: 4px 0 0;
     font-size: 12px;
-    color: #64748b;
+    color: var(--muted);
     line-height: 1.4;
 }
 
@@ -835,8 +840,8 @@
     margin: 0 0 14px;
     padding: 10px 12px;
     border-radius: 10px;
-    background: #fef2f2;
-    color: #991b1b;
+    background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+    color: var(--danger);
     font-size: 13px;
 }
 
@@ -881,9 +886,9 @@
 
 .support-evaluation-order-badge {
     font-size: 12px;
-    color: #475569;
+    color: var(--muted);
     padding: 6px 10px;
-    background: #f8fafc;
+    background: var(--soft);
     border-radius: 8px;
     display: inline-flex;
     align-items: center;
@@ -892,7 +897,7 @@
 
 .support-evaluation-order-badge b {
     font-family: var(--font-mono, monospace);
-    color: #0f172a;
+    color: var(--text);
 }
 
 .support-rating-row {
@@ -996,7 +1001,7 @@
     border: none;
     border-radius: 10px;
     background: var(--accent, #0d9488);
-    color: #ffffff;
+    color: var(--accent-foreground);
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;

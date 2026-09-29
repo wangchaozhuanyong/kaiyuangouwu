@@ -1,5 +1,8 @@
 import { RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
+// Prettier organizes this type import before value imports.
+// eslint-disable-next-line import/order
+import type { RouteName } from './storefront-router';
 
 import {
     STOREFRONT_VERSION_CHECK_INTERVAL_MS,
@@ -20,20 +23,66 @@ const storefrontUpdateCopy = {
         title: '发现新版本',
         description: '刷新即可使用最新内容',
         action: '立即刷新',
+        later: '稍后',
     },
     en: {
         title: 'Update available',
         description: 'Refresh to use the latest version',
         action: 'Refresh now',
+        later: 'Later',
     },
-} satisfies Record<StorefrontLanguage, { title: string; description: string; action: string }>;
+} satisfies Record<StorefrontLanguage, { title: string; description: string; action: string; later: string }>;
+
+const REMIND_LATER_MS = 30 * 60 * 1000;
+const deferredRoutes = new Set<RouteName>([
+    'purchase',
+    'checkout',
+    'payment',
+    'addresses',
+    'account-security',
+    'reviews',
+    'support',
+    'image-studio',
+    'two-factor',
+    'mail-query',
+    'login',
+    'register',
+    'verify-account',
+    'forgot-password',
+    'reset-password',
+]);
+
+export function shouldShowStorefrontUpdatePrompt(route: RouteName): boolean {
+    return !deferredRoutes.has(route);
+}
+
+function reminderKey(fingerprint: string): string {
+    return `storefront-update-remind-at:${fingerprint}`;
+}
+
+function savedReminderTime(fingerprint: string): number {
+    try {
+        return Number(window.sessionStorage.getItem(reminderKey(fingerprint))) || 0;
+    } catch {
+        return 0;
+    }
+}
 
 export function getStorefrontUpdateCopy(language: StorefrontLanguage) {
     return storefrontUpdateCopy[language];
 }
 
-export function StorefrontUpdatePrompt({ language }: { language: StorefrontLanguage }) {
+export function StorefrontUpdatePrompt({
+    language,
+    route,
+}: {
+    language: StorefrontLanguage;
+    route: RouteName;
+}) {
     const [updateAvailable, setUpdateAvailable] = useState(false);
+    const [latestFingerprint, setLatestFingerprint] = useState('');
+    const [remindAt, setRemindAt] = useState(0);
+    const [now, setNow] = useState(() => Date.now());
 
     useEffect(() => {
         if (!import.meta.env.PROD) return;
@@ -57,11 +106,13 @@ export function StorefrontUpdatePrompt({ language }: { language: StorefrontLangu
             checking = true;
             activeCheck = new AbortController();
             try {
-                const latestFingerprint = await fetchStorefrontAssetFingerprint({
+                const fetchedFingerprint = await fetchStorefrontAssetFingerprint({
                     signal: activeCheck.signal,
                 });
-                if (!disposed && latestFingerprint && latestFingerprint !== currentFingerprint) {
+                if (!disposed && fetchedFingerprint && fetchedFingerprint !== currentFingerprint) {
                     updateFound = true;
+                    setLatestFingerprint(fetchedFingerprint);
+                    setRemindAt(savedReminderTime(fetchedFingerprint));
                     setUpdateAvailable(true);
                 }
             } catch {
@@ -93,8 +144,32 @@ export function StorefrontUpdatePrompt({ language }: { language: StorefrontLangu
         };
     }, []);
 
-    if (!updateAvailable) return null;
+    useEffect(() => {
+        if (!updateAvailable || remindAt <= now) return;
+        const timeout = window.setTimeout(() => setNow(Date.now()), Math.max(0, remindAt - now));
+        return () => window.clearTimeout(timeout);
+    }, [updateAvailable, remindAt, now]);
+
+    if (
+        !updateAvailable ||
+        !latestFingerprint ||
+        remindAt > now ||
+        !shouldShowStorefrontUpdatePrompt(route)
+    ) {
+        return null;
+    }
     const copy = getStorefrontUpdateCopy(language);
+
+    const remindLater = () => {
+        const nextReminder = Date.now() + REMIND_LATER_MS;
+        setRemindAt(nextReminder);
+        setNow(Date.now());
+        try {
+            window.sessionStorage.setItem(reminderKey(latestFingerprint), String(nextReminder));
+        } catch {
+            // Storage may be unavailable; the in-memory reminder still works.
+        }
+    };
 
     return (
         <aside
@@ -108,10 +183,15 @@ export function StorefrontUpdatePrompt({ language }: { language: StorefrontLangu
                 <strong id="storefront-update-title">{copy.title}</strong>
                 <span id="storefront-update-description">{copy.description}</span>
             </div>
-            <button type="button" onClick={() => window.location.reload()}>
-                <RefreshCw aria-hidden="true" />
-                {copy.action}
-            </button>
+            <div className="storefront-update-actions">
+                <button className="storefront-update-later" type="button" onClick={remindLater}>
+                    {copy.later}
+                </button>
+                <button type="button" onClick={() => window.location.reload()}>
+                    <RefreshCw aria-hidden="true" />
+                    {copy.action}
+                </button>
+            </div>
         </aside>
     );
 }

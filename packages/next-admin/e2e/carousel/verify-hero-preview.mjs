@@ -61,12 +61,12 @@ const compare = (client, preview) => {
     }
 };
 try {
-    await page.goto(`${base}/e2e/carousel/index.html?parity&persist&preset=modern-oriental`);
+    await page.goto(`${base}/e2e/carousel/index.html?parity&persist&preset=neo-minimalist`);
     await openEditor();
     await editor().getByRole('button', { name: '电脑', exact: true }).click();
     await editor().getByRole('textbox', { name: '中文标题 *', exact: true }).fill('装修即时预览验证');
     await expect(frame().locator('.hero-rich-title')).toHaveText('装修即时预览验证');
-    await expect(frame().locator('html')).toHaveAttribute('data-storefront-preset', 'modern-oriental');
+    await expect(frame().locator('html')).toHaveAttribute('data-storefront-preset', 'neo-minimalist');
     await editor().getByRole('button', { name: '从素材库选择', exact: true }).click();
     await page
         .getByRole('dialog', { name: '选择图片素材' })
@@ -76,9 +76,9 @@ try {
     await expect(frame().locator('.hero img')).toHaveJSProperty('naturalWidth', 1600);
 
     const client = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: 'zh-CN' });
-    await client.goto(`${base}/?parityClient&preset=modern-oriental`);
+    await client.goto(`${base}/?parityClient&preset=neo-minimalist`);
     await expect(client.locator('.hero-rich-title')).toHaveText('装修即时预览验证');
-    await expect(client.locator('html')).toHaveAttribute('data-storefront-preset', 'modern-oriental');
+    await expect(client.locator('html')).toHaveAttribute('data-storefront-preset', 'neo-minimalist');
     const desktop = {
         client: await client.locator('body').evaluate(measure),
         preview: await frame().locator('body').evaluate(measure),

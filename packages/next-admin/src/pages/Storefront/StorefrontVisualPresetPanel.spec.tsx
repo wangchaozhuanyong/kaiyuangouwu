@@ -32,7 +32,7 @@ let host: HTMLDivElement;
 let root: Root;
 const source = {
     channelId: 'local-store',
-    presetId: 'modern-oriental',
+    presetId: 'neo-minimalist',
     desktopLayout: 'catalog',
     revision: 'revision-1',
 };

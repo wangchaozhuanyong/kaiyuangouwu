@@ -27,7 +27,7 @@ test('private evidence upload survives reopening and submits the visible attachm
         const body = route.request().postData() ?? '';
         const multipart = route.request().headers()['content-type']?.includes('multipart/form-data');
         const request = multipart ? { query: body, variables: {} } : JSON.parse(body || '{}');
-        const data = fixtureData('modern-oriental', true, 'aftercare');
+        const data = fixtureData('neo-minimalist', true, 'aftercare');
         if (request.query.includes('UploadAfterSalesEvidence')) {
             const item = {
                 id: `evidence-${++uploads}`,

@@ -44,7 +44,7 @@ const nativeFetch = window.fetch.bind(window);
 window.fetch = async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input), location.href);
     if (url.pathname.endsWith('/shop-api')) {
-        const data = fixtureData(params.get('preset') ?? 'modern-oriental', false);
+        const data = fixtureData(params.get('preset') ?? 'neo-minimalist', false);
         data.activeChannel.id = 'fixture';
         data.activeChannel.code = '轮播测试店铺';
         data.storefrontVisualPreset.channelId = 'fixture';

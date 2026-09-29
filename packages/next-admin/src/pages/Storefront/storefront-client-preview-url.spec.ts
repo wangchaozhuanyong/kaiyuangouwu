@@ -4,8 +4,8 @@ import { storefrontClientPreviewUrl, storefrontPreviewShopApiUrl } from './store
 
 describe('real storefront draft preview URL', () => {
     it('opens the selected unsaved skin in the storefront preview without changing the saved config', () => {
-        expect(storefrontClientPreviewUrl('https://shop.example.test/', 'modern-oriental', 1440)).toBe(
-            'https://shop.example.test/__storefront-preview?preset=modern-oriental&viewport=1440',
+        expect(storefrontClientPreviewUrl('https://shop.example.test/', 'neo-minimalist', 1440)).toBe(
+            'https://shop.example.test/__storefront-preview?preset=neo-minimalist&viewport=1440',
         );
         expect(storefrontClientPreviewUrl('https://shop.example.test/', 'classic', 390, true)).toBe(
             'https://shop.example.test/?storefrontPreviewEmbedded=1&storefrontPreviewPreset=classic&storefrontPreviewAuth=guest&storefrontPreviewLanguage=zh',

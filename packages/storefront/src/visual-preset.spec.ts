@@ -8,8 +8,8 @@ import { applyStorefrontVisualPreset, readStorefrontPreviewPreset } from './use-
 describe('storefront visual preset lifecycle', () => {
     it('removes the previous skin when switching back to classic or unmounting', () => {
         const root = { dataset: {} } as HTMLElement;
-        const dispose = applyStorefrontVisualPreset(root, 'modern-oriental');
-        expect(root.dataset.storefrontPreset).toBe('modern-oriental');
+        const dispose = applyStorefrontVisualPreset(root, 'neo-minimalist');
+        expect(root.dataset.storefrontPreset).toBe('neo-minimalist');
         dispose();
         expect(root.dataset.storefrontPreset).toBeUndefined();
         applyStorefrontVisualPreset(root, 'classic');

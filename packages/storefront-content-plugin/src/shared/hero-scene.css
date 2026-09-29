@@ -1,11 +1,3 @@
-html[data-storefront-preset='modern-oriental'] {
-    --skin-hero-background: #1c302d;
-    --skin-hero-foreground: #fffdf8;
-    --skin-hero-body: #e8dfd0;
-    --skin-hero-accent: #9f3b30;
-    --skin-hero-secondary: #b08a4a;
-}
-
 .hero {
     --hero-copy-background: var(--surface);
     --hero-copy-foreground: var(--text);

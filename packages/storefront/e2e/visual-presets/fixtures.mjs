@@ -688,7 +688,7 @@ function catalogScrollFixture() {
     };
 }
 
-export function fixtureData(presetId = 'modern-oriental', signedIn = true, content = 'normal') {
+export function fixtureData(presetId = 'neo-minimalist', signedIn = true, content = 'normal') {
     const notificationOrders =
         content === 'notifications'
             ? ['Shipped', 'PaymentSettled', 'Delivered'].map((state, index) => ({

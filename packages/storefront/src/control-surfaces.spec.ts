@@ -41,7 +41,7 @@ describe('shared control surfaces', () => {
         expect(stylesheet).toMatch(/--proto-tool-item-bg:\s*var\(--module-action-surface\);/);
         expect(stylesheet).toMatch(/--proto-tool-item-hover-bg:\s*var\(--module-action-surface-hover\);/);
         expect(stylesheet).not.toMatch(
-            /html\[data-storefront-preset='modern-oriental'\][^{]*(?:\.quick-grid\s+button|\.proto-tool-item)(?:\s*:\s*hover)?\s*\{/,
+            /html\[data-storefront-preset='neo-minimalist'\][^{]*(?:\.quick-grid\s+button|\.proto-tool-item)(?:\s*:\s*hover)?\s*\{/,
         );
     });
 

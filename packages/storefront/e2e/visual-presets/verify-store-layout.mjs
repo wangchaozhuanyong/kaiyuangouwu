@@ -14,7 +14,7 @@ const assetMap = process.env.STOREFRONT_LAYOUT_ASSET_MAP
     : null;
 const stores = [
     { name: 'moyao', origin: 'https://moyaoai.com', preset: 'neo-minimalist', width: 1600, height: 800 },
-    { name: 'damatong', origin: 'https://damatong.net', preset: 'modern-oriental', width: 2200, height: 715 },
+    { name: 'damatong', origin: 'https://damatong.net', preset: 'neo-minimalist', width: 2200, height: 715 },
 ];
 const widths = process.env.STOREFRONT_LAYOUT_WIDTHS
     ? process.env.STOREFRONT_LAYOUT_WIDTHS.split(',').map(Number)

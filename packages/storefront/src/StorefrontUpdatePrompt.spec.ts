@@ -4,7 +4,11 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getStorefrontUpdateCopy, StorefrontUpdatePrompt } from './StorefrontUpdatePrompt';
+import {
+    getStorefrontUpdateCopy,
+    shouldShowStorefrontUpdatePrompt,
+    StorefrontUpdatePrompt,
+} from './StorefrontUpdatePrompt';
 import { readStorefrontStylesheet } from './test-stylesheet';
 
 const stylesheet = readStorefrontStylesheet();
@@ -36,7 +40,7 @@ async function mountUpdatePrompt() {
     document.body.append(host);
     root = createRoot(host);
     await act(async () => {
-        root?.render(createElement(StorefrontUpdatePrompt, { language: 'zh' }));
+        root?.render(createElement(StorefrontUpdatePrompt, { language: 'zh', route: 'home' }));
         await Promise.resolve();
     });
 }
@@ -47,12 +51,29 @@ describe('StorefrontUpdatePrompt', () => {
             title: '发现新版本',
             description: '刷新即可使用最新内容',
             action: '立即刷新',
+            later: '稍后',
         });
         expect(getStorefrontUpdateCopy('en')).toEqual({
             title: 'Update available',
             description: 'Refresh to use the latest version',
             action: 'Refresh now',
+            later: 'Later',
         });
+    });
+
+    it('defers the notice while a customer is paying or filling a form', () => {
+        expect(shouldShowStorefrontUpdatePrompt('product')).toBe(true);
+        expect(shouldShowStorefrontUpdatePrompt('account')).toBe(true);
+        for (const route of [
+            'purchase',
+            'checkout',
+            'payment',
+            'addresses',
+            'account-security',
+            'reviews',
+        ] as const) {
+            expect(shouldShowStorefrontUpdatePrompt(route)).toBe(false);
+        }
     });
 
     it('sets explicit readable colors for update notice text', () => {

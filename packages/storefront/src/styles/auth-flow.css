@@ -530,41 +530,29 @@
 }
 
 .storefront-update-prompt {
-    position: fixed;
-    left: 50%;
-    bottom: calc(var(--bottom-navigation-height) + 20px + var(--safe-bottom));
-    z-index: calc(var(--layer-toast) + 1);
-    width: min(calc(100% - 24px), 420px);
-    min-height: 72px;
-    transform: translateX(-50%);
-    border: 0;
-    border-radius: var(--skin-card-radius);
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-md);
+    width: min(calc(100% - 2 * var(--experience-page-gutter-mobile)), var(--experience-content-max));
+    min-height: 56px;
+    margin: 12px auto 0;
+    border: 1px solid var(--line-subtle);
+    border-radius: var(--skin-control-radius);
+    background: var(--surface);
     color: var(--text);
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 12px;
-    overflow: hidden;
-    animation: toast-in 180ms ease-out;
-}
-
-.storefront-update-prompt::before {
-    content: none;
+    padding: 8px 12px;
 }
 
 .storefront-update-copy {
     min-width: 0;
     display: grid;
     gap: 3px;
-    padding-left: 4px;
 }
 
 .storefront-update-prompt strong {
     color: var(--text);
-    font-size: 15px;
+    font-size: 14px;
     font-weight: var(--font-weight-bold);
     line-height: var(--line-height-tight);
     letter-spacing: -0.01em;
@@ -578,9 +566,16 @@
     text-wrap: pretty;
 }
 
+.storefront-update-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+}
+
 .storefront-update-prompt button {
-    min-width: 100px;
-    min-height: 44px;
+    min-width: 92px;
+    min-height: var(--experience-control-min);
     flex: 0 0 auto;
     border: 0;
     border-radius: var(--skin-control-radius);
@@ -596,6 +591,17 @@
     font-weight: var(--font-weight-bold);
     line-height: 1;
     cursor: pointer;
+}
+
+.storefront-update-prompt .storefront-update-later {
+    min-width: 60px;
+    background: transparent;
+    color: var(--text);
+}
+
+.storefront-update-prompt .storefront-update-later:hover {
+    background: var(--control-surface-hover);
+    transform: none;
 }
 
 .storefront-update-prompt button:hover {
@@ -616,6 +622,12 @@
     width: 16px;
     height: 16px;
     stroke-width: 2.25;
+}
+
+@media (max-width: 520px) {
+    .storefront-update-prompt span {
+        display: none;
+    }
 }
 
 .sheet-layer {

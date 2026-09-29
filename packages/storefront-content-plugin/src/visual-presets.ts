@@ -8,12 +8,7 @@ export const storefrontVisualPresets = [
         description: '明亮表面与克制阴影，保留店铺品牌色作为可读的强调色。',
         colors: ['#f1f5f9', '#ffffff', '#d33c30', '#0f172a'],
     },
-    {
-        id: 'modern-oriental',
-        name: '新中式',
-        description: '宣纸暖白、墨黛文字、朱砂主操作与克制鎏金，呈现沉静而有层次的东方质感。',
-        colors: ['#f1ece2', '#fffaf1', '#9f3b30', '#1c302d'],
-    },
+
     {
         id: 'neo-minimalist',
         name: '新锐科技极简',
@@ -32,7 +27,7 @@ export interface StorefrontVisualPresetConfig {
 }
 
 export function isStorefrontVisualPresetId(value: unknown): value is StorefrontVisualPresetId {
-    return value === 'classic' || value === 'modern-oriental' || value === 'neo-minimalist';
+    return value === 'classic' || value === 'neo-minimalist';
 }
 
 export function normalizeStorefrontVisualPreset(value: unknown): StorefrontVisualPresetId {

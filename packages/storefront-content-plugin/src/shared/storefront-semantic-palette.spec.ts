@@ -11,7 +11,7 @@ import {
 } from './storefront-semantic-palette';
 
 describe('storefront semantic palette', () => {
-    it.each(['classic', 'modern-oriental', 'neo-minimalist'] as const)(
+    it.each(['classic', 'neo-minimalist'] as const)(
         'separates navigation from primary actions with readable %s interaction states',
         presetId => {
             const palette = resolveStorefrontSemanticPalette(presetId);
@@ -32,7 +32,7 @@ describe('storefront semantic palette', () => {
             expect(semanticPaletteCssVariables(palette)['--selection-foreground']).toBe(palette.onSelection);
         },
     );
-    it.each(['classic', 'modern-oriental', 'neo-minimalist'] as const)(
+    it.each(['classic', 'neo-minimalist'] as const)(
         'keeps the %s standard palette inside the contrast contract',
         presetId => {
             expect(auditStorefrontSemanticPalette(resolveStorefrontSemanticPalette(presetId)).passes).toBe(
@@ -87,12 +87,11 @@ describe('storefront semantic palette', () => {
     });
 
     it('keeps skin surfaces distinct while preserving strong accessible control borders', () => {
-        const treatments = (['classic', 'modern-oriental', 'neo-minimalist'] as const).map(presetId =>
+        const treatments = (['classic', 'neo-minimalist'] as const).map(presetId =>
             resolveStorefrontSkinTreatment(presetId),
         );
-        expect(new Set(treatments.map(treatment => treatment.divider)).size).toBe(3);
-        expect(resolveStorefrontSkinTreatment('modern-oriental').displayFont).toContain('Songti SC');
-        for (const presetId of ['classic', 'modern-oriental', 'neo-minimalist'] as const) {
+        expect(new Set(treatments.map(treatment => treatment.divider)).size).toBe(2);
+        for (const presetId of ['classic', 'neo-minimalist'] as const) {
             const palette = resolveStorefrontSemanticPalette(presetId);
             const paletteVariables = semanticPaletteCssVariables(palette);
             const skinVariables = storefrontSkinCssVariables(presetId);
@@ -108,8 +107,8 @@ describe('storefront semantic palette', () => {
     });
 
     it('keeps five service colors distinct and readable on every current skin surface', () => {
-        for (const presetId of ['classic', 'modern-oriental', 'neo-minimalist'] as const) {
-            for (const surfacePreset of ['classic', 'modern-oriental', 'neo-minimalist'] as const) {
+        for (const presetId of ['classic', 'neo-minimalist'] as const) {
+            for (const surfacePreset of ['classic', 'neo-minimalist'] as const) {
                 for (const brandColor of ['#ffffff', '#000000', '#777777', '#ffff00']) {
                     const palette = resolveStorefrontSemanticPalette(surfacePreset, {
                         primaryColor: brandColor,
@@ -139,7 +138,7 @@ describe('storefront semantic palette', () => {
     });
 
     it('keeps all five service icon tones readable in every skin', () => {
-        for (const presetId of ['classic', 'modern-oriental', 'neo-minimalist'] as const) {
+        for (const presetId of ['classic', 'neo-minimalist'] as const) {
             const variables = storefrontSkinCssVariables(presetId);
             for (const tone of ['security', 'mail', 'studio', 'coupon', 'support']) {
                 expect(
@@ -152,12 +151,12 @@ describe('storefront semantic palette', () => {
         }
     });
 
-    it.each(['classic', 'modern-oriental', 'neo-minimalist'] as const)(
+    it.each(['classic', 'neo-minimalist'] as const)(
         'adapts transparent %s icons to the resolved surfaces rather than the preset name',
         presetId => {
             // Cross the two sets of identity hues with light and dark surfaces. This
             // exercises actual adjustment instead of only checking default colors.
-            for (const surfacePreset of ['classic', 'modern-oriental', 'neo-minimalist'] as const) {
+            for (const surfacePreset of ['classic', 'neo-minimalist'] as const) {
                 for (const brandColor of ['#ffffff', '#000000', '#777777', '#ffff00']) {
                     const palette = resolveStorefrontSemanticPalette(surfacePreset, {
                         primaryColor: brandColor,

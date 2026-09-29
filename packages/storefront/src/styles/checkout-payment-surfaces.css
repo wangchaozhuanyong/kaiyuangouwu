@@ -37,6 +37,19 @@
     border-color: var(--line-strong);
 }
 
+.form-grid input:focus,
+.form-grid input:focus-visible,
+.address-form input:focus,
+.address-form input:focus-visible,
+.form-grid select:focus,
+.form-grid select:focus-visible,
+.address-form select:focus,
+.address-form select:focus-visible {
+    outline: 0 !important;
+    border-color: var(--focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent);
+}
+
 .field-wide {
     grid-column: 1 / -1;
 }
@@ -231,21 +244,20 @@
 }
 
 .payment-test-notice {
-    color: #7a4b0e;
+    color: var(--warning);
     display: grid;
     grid-template-columns: 22px minmax(0, 1fr);
     align-items: start;
     gap: 10px;
-    background: #fffaf0;
+    background: var(--surface);
 }
 
 .payment-test-notice.is-production {
-    color: #285d48;
-    background: #f2fbf7;
+    color: var(--success);
 }
 
 .payment-test-notice.is-production span {
-    color: #3f6f5c;
+    color: var(--muted);
 }
 
 .payment-test-notice > svg {
@@ -264,7 +276,7 @@
 
 .payment-test-notice span {
     margin-top: 3px;
-    color: #805a26;
+    color: var(--muted);
     font-size: 13px;
     line-height: 1.5;
 }
@@ -447,6 +459,7 @@
     width: 56px;
     height: 56px;
     margin: 0 auto 12px;
+    color: var(--success);
     display: grid;
     place-items: center;
 }
@@ -516,6 +529,16 @@
 .order-confirmation-actions button.primary-action {
     color: var(--accent-foreground);
     background: var(--accent);
+}
+
+.icon-data-export {
+    color: var(--accent-ink);
+    background: var(--accent-soft);
+}
+
+.icon-account-closure {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 12%, var(--surface));
 }
 
 .checkout-address-loading {
