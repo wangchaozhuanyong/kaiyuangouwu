@@ -121,7 +121,7 @@
         "@tiptap/extension-bubble-menu": "3.30.5",
         "axios": "1.18.0",
         "engine.io": "6.6.9",
-        "fast-uri": "3.1.6",
+        "fast-uri": "3.1.7",
         "fast-xml-parser": "5.7.0",
         "file-type": "21.3.4",
         "flatted": "3.4.4",
