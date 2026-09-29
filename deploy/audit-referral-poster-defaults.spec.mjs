@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { analyzePosterDefaults } from './audit-referral-poster-defaults.mjs';
+import { analyzePosterDefaults, auditProduction } from './audit-referral-poster-defaults.mjs';
 
 const expected = { headlineZh: '商品\n服务', titleEn: 'A store' };
 const row = (name, value) => `${name}\t${Buffer.from(value).toString('hex').toUpperCase()}`;
@@ -31,5 +31,30 @@ test('read-only audit fails when a column is absent or cannot be decoded', () =>
 test('read-only audit preserves an empty existing default', () => {
     const result = analyzePosterDefaults('headlineZh\t\ntitleEn\t412073746F7265\n', expected);
     assert.equal(result.columns[0].current, '');
+    assert.equal(result.changedDefaults, 1);
+});
+
+test('command audit passes the loaded shared preset into the default comparison', async () => {
+    const output = [row('titleEn', 'A store'), row('headlineZh', '旧版\n文案')].join('\n');
+    let queryWasReadOnly = false;
+    const result = await auditProduction(
+        {
+            DB: 'mysql',
+            DB_HOST: 'localhost',
+            DB_PORT: '3306',
+            DB_NAME: 'shop',
+            DB_USERNAME: 'reader',
+            DB_PASSWORD: 'test-only',
+        },
+        {
+            loadExpected: async () => expected,
+            runQuery: (_command, args) => {
+                queryWasReadOnly = args.some(arg => arg.startsWith('--execute=SELECT COLUMN_NAME'));
+                return { status: 0, stdout: output };
+            },
+        },
+    );
+    assert.equal(queryWasReadOnly, true);
+    assert.equal(result.inspectedColumns, 2);
     assert.equal(result.changedDefaults, 1);
 });

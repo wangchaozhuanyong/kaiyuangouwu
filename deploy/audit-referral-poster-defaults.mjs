@@ -40,9 +40,16 @@ export function analyzePosterDefaults(output, expected) {
     };
 }
 
-async function auditProduction(environment = process.env) {
-    const { referralPosterCopy } =
-        await import('../packages/store-management-plugin/dist/referral/referral-poster-presets.js');
+export async function auditProduction(
+    environment = process.env,
+    {
+        loadExpected = async () =>
+            (await import('../packages/store-management-plugin/dist/referral/referral-poster-presets.js'))
+                .referralPosterCopy,
+        runQuery = spawnSync,
+    } = {},
+) {
+    const referralPosterCopy = await loadExpected();
     const fields = Object.keys(referralPosterCopy);
     const query = [
         'SELECT COLUMN_NAME, HEX(COLUMN_DEFAULT)',
@@ -64,7 +71,7 @@ async function auditProduction(environment = process.env) {
     ) {
         throw new Error('Database connection settings are incomplete');
     }
-    const result = spawnSync(
+    const result = runQuery(
         'mysql',
         [
             `--host=${environment.DB_HOST}`,
@@ -83,7 +90,7 @@ async function auditProduction(environment = process.env) {
         },
     );
     if (result.error || result.status !== 0) throw new Error('Read-only MySQL poster default audit failed');
-    return analyzePosterDefaults(result.stdout);
+    return analyzePosterDefaults(result.stdout, referralPosterCopy);
 }
 
 if (process.argv[1]?.endsWith('/audit-referral-poster-defaults.mjs')) {
