@@ -144,6 +144,14 @@ describe('runtime channel branding', () => {
         expect(document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href')).toBe(
             '/store-b.png',
         );
+        const migratedLogo = '/assets/preview/6e/store-icon__preview__webp_migrated_502.webp';
+        act(() => root.render(<Fixture logo={migratedLogo} />));
+        expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toBe(
+            `${migratedLogo}?v=webp-readable-1`,
+        );
+        expect(document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href')).toBe(
+            `${migratedLogo}?v=webp-readable-1`,
+        );
         act(() => root.render(<Fixture logo={null} />));
         expect(document.querySelector('meta[property="og:image"]')?.getAttribute('content')).toContain(
             '/storefront/neutral-social.png',

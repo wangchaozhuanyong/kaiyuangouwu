@@ -3,7 +3,18 @@ import '../styles/coupon-center.css';
 import type { ShopApi } from '../api';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useRouter } from '@tanstack/react-router';
-import { Badge, CalendarDays, Check, ChevronRight, MapPin, TicketPercent } from 'lucide-react';
+import {
+    ArrowRight,
+    Badge,
+    CalendarDays,
+    Check,
+    ChevronRight,
+    FileText,
+    MapPin,
+    ReceiptText,
+    Tag,
+    TicketPercent,
+} from 'lucide-react';
 import { ReactNode, useState } from 'react';
 
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
@@ -463,41 +474,68 @@ export function CouponCenterPage() {
                 ) : null}
             </div>
             <section className="coupon-center-guide" aria-label={isZh ? '使用说明' : 'Using your coupons'}>
-                <h2>{isZh ? '使用说明' : 'Using your coupons'}</h2>
-                <dl>
-                    <div>
-                        <dt>{isZh ? '使用条件' : 'Conditions'}</dt>
-                        <dd>
+                <div className="coupon-guide-layout">
+                    <header className="coupon-guide-intro">
+                        <h2>{isZh ? '使用说明' : 'Using your coupons'}</h2>
+                        <p>
                             {isZh
-                                ? '查看券面标注的有效期、适用范围和使用门槛。'
-                                : 'Check the coupon’s validity, eligible items and minimum spend.'}
-                        </dd>
+                                ? '了解优惠券的使用规则，更好地享受购物优惠。'
+                                : 'Understand how your coupons work and make the most of your savings.'}
+                        </p>
+                        <TicketPercent className="coupon-guide-art" aria-hidden="true" />
+                    </header>
+                    <div className="coupon-guide-content">
+                        <dl>
+                            <div>
+                                <dt>
+                                    <span className="coupon-guide-symbol is-conditions" aria-hidden="true">
+                                        <FileText />
+                                    </span>
+                                    {isZh ? '使用条件' : 'Conditions'}
+                                </dt>
+                                <dd>
+                                    {isZh
+                                        ? '查看券面标注的有效期、适用范围和使用门槛。'
+                                        : 'Check the coupon’s validity, eligible items and minimum spend.'}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>
+                                    <span className="coupon-guide-symbol is-discounts" aria-hidden="true">
+                                        <Tag />
+                                    </span>
+                                    {isZh ? '优惠明细' : 'Discounts'}
+                                </dt>
+                                <dd>
+                                    {isZh
+                                        ? '在购物车查看可用优惠及折扣明细。'
+                                        : 'Review available coupons and discount details in your cart.'}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>
+                                    <span className="coupon-guide-symbol is-amount" aria-hidden="true">
+                                        <ReceiptText />
+                                    </span>
+                                    {isZh ? '结算金额' : 'Final amount'}
+                                </dt>
+                                <dd>
+                                    {isZh
+                                        ? '最终应付金额以结算页为准。'
+                                        : 'The checkout page confirms your final amount.'}
+                                </dd>
+                            </div>
+                        </dl>
+                        <button
+                            className="coupon-center-cart-link"
+                            type="button"
+                            onClick={() => navigateTo({ name: 'cart' })}
+                        >
+                            <span>{isZh ? '查看购物车和优惠明细' : 'View cart and discount details'}</span>
+                            <ArrowRight aria-hidden="true" />
+                        </button>
                     </div>
-                    <div>
-                        <dt>{isZh ? '优惠明细' : 'Discounts'}</dt>
-                        <dd>
-                            {isZh
-                                ? '在购物车查看可用优惠及折扣明细。'
-                                : 'Review available coupons and discount details in your cart.'}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt>{isZh ? '结算金额' : 'Final amount'}</dt>
-                        <dd>
-                            {isZh
-                                ? '最终应付金额以结算页为准。'
-                                : 'The checkout page confirms your final amount.'}
-                        </dd>
-                    </div>
-                </dl>
-                <button
-                    className="coupon-center-cart-link"
-                    type="button"
-                    onClick={() => navigateTo({ name: 'cart' })}
-                >
-                    <span>{isZh ? '查看购物车和优惠明细' : 'View cart and discount details'}</span>
-                    <ChevronRight aria-hidden="true" />
-                </button>
+                </div>
             </section>
         </Subpage>
     );

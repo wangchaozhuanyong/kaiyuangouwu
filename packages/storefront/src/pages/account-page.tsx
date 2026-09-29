@@ -270,7 +270,7 @@ export function AccountPage() {
                         inlineCount={desktop}
                         icon={<Package />}
                         tone="shipping"
-                        label={compactCopy.orders.processing}
+                        label={desktop || isZh ? compactCopy.orders.processing : 'To ship'}
                         count={desktop ? countsQuery.data?.shipping : counts.shipping}
                         onClick={() => navigateTo({ name: 'orders', tab: 'shipping' })}
                     />
@@ -278,7 +278,7 @@ export function AccountPage() {
                         inlineCount={desktop}
                         icon={<Truck />}
                         tone="receiving"
-                        label={compactCopy.orders.shipped}
+                        label={desktop || isZh ? compactCopy.orders.shipped : 'Transit'}
                         count={desktop ? countsQuery.data?.receiving : counts.receiving}
                         onClick={() => navigateTo({ name: 'orders', tab: 'receiving' })}
                     />
@@ -286,7 +286,7 @@ export function AccountPage() {
                         inlineCount={desktop}
                         icon={<CircleCheck />}
                         tone="completed"
-                        label={compactCopy.orders.completed}
+                        label={desktop || isZh ? compactCopy.orders.completed : 'Done'}
                         count={desktop ? countsQuery.data?.completed : counts.completed}
                         onClick={() => navigateTo({ name: 'orders', tab: 'completed' })}
                     />
@@ -295,7 +295,7 @@ export function AccountPage() {
                             inlineCount={desktop}
                             icon={<CircleCheck />}
                             tone="reviews"
-                            label={isZh ? '评价' : 'Reviews'}
+                            label={isZh ? '评价' : desktop ? 'Reviews' : 'Review'}
                             count={undefined}
                             onClick={() => navigateTo({ name: 'reviews' })}
                         />
@@ -304,7 +304,7 @@ export function AccountPage() {
                         inlineCount={desktop}
                         icon={<RotateCcw />}
                         tone="service"
-                        label={isZh ? '退换/售后' : 'Returns'}
+                        label={isZh ? (desktop ? '退换/售后' : '售后') : desktop ? 'Returns' : 'Return'}
                         count={desktop && !afterSalesQuery.data ? undefined : activeAfterSalesCount}
                         onClick={() => navigateTo({ name: 'orders', tab: 'service' })}
                     />

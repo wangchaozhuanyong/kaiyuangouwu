@@ -2296,6 +2296,26 @@ html[lang='en'] .quick-grid b {
     font-weight: var(--font-weight-semibold);
 }
 
+.legal-footer-entry {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.legal-footer-entry:hover:not(:disabled) {
+    color: var(--accent-ink);
+}
+
+.legal-footer-entry:disabled {
+    cursor: default;
+}
+
 .legal-footer p {
     max-width: 680px;
     margin: 7px auto 0;
@@ -3221,7 +3241,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         gap: 4px;
         border: 0;
         border-radius: 0;
-        background: var(--category-results-surface);
+        background: var(--control-surface);
         box-shadow: none;
     }
 
@@ -3693,6 +3713,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 }
 
 .category-page .primary-category-strip {
+    --primary-category-toggle-width: 36px;
     margin: 0 var(--page-section-inset, 16px);
     padding-inline: 0;
     border-radius: 0;
@@ -3703,8 +3724,9 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 .category-page .primary-categories {
     flex: 1 1 auto;
     min-width: 0;
-    padding-inline: 0;
-    scroll-padding-inline: 0;
+    /* Let the final category scroll clear of the fixed All control. */
+    padding-inline: 0 var(--primary-category-toggle-width);
+    scroll-padding-inline: 0 var(--primary-category-toggle-width);
     justify-content: flex-start;
 }
 
@@ -3717,8 +3739,8 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
 }
 
 .category-page .primary-categories-all {
-    width: 36px;
-    min-width: 36px;
+    width: var(--primary-category-toggle-width);
+    min-width: var(--primary-category-toggle-width);
     position: absolute;
     inset-block: 0;
     right: calc(-1 * var(--page-section-inset, 8px));

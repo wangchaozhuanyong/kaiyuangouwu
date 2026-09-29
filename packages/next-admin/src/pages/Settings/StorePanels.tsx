@@ -175,11 +175,17 @@ export function CommerceModePanel({
 
 export function StoresPanel({
     profiles,
+    activeChannelId,
+    publicPreviewBusy,
+    onTogglePublicPreview,
     onEdit,
     onDeprovision,
     allowPermanentDeprovision,
 }: {
     profiles: StoreProfileRecord[];
+    activeChannelId: string;
+    publicPreviewBusy: boolean;
+    onTogglePublicPreview: (profile: StoreProfileRecord) => void | Promise<void>;
     onEdit: (profile: StoreProfileRecord) => void;
     onDeprovision: (profile: StoreProfileRecord) => void;
     allowPermanentDeprovision: boolean;
@@ -247,6 +253,29 @@ export function StoresPanel({
                                     .filter(item => !item.ready)
                                     .map(item => item.message)
                                     .join('；')}
+                            </div>
+                        )}
+                        {profile.status === 'DRAFT' && profile.channel.id === activeChannelId && (
+                            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                                <div>
+                                    <p className="text-xs font-bold text-slate-900">公开预览</p>
+                                    <p className="mt-1 text-[10px] leading-4 text-slate-700">
+                                        所有访客可浏览；模拟下单需单独启用测试支付。
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={profile.isPublished}
+                                    aria-label={`${storeName(profile)}公开预览`}
+                                    onClick={() => void onTogglePublicPreview(profile)}
+                                    disabled={
+                                        publicPreviewBusy || (!profile.primaryDomain && !profile.isPublished)
+                                    }
+                                    className={profile.isPublished ? secondaryButton : primaryButton}
+                                >
+                                    {profile.isPublished ? '关闭预览' : '开放预览'}
+                                </button>
                             </div>
                         )}
                         <div className="mt-4 flex justify-between">

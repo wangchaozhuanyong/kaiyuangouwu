@@ -1,5 +1,7 @@
 import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
+
+import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     SUBMIT_STORE_GOVERNANCE_CHANGE_MUTATION,
@@ -7,6 +9,7 @@ import {
     type StoreProfileRecord,
 } from '../../graphql/management.graphql';
 import { toUserFacingError } from '../../utils/user-facing-error';
+
 import { FieldArea, FieldInput } from './MyStoreFields';
 import { primaryButton, secondaryButton } from './settings-ui';
 export function MyStoreProfileEditor({
@@ -20,6 +23,7 @@ export function MyStoreProfileEditor({
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
+    const requestConfirmation = useConfirmDialog();
     const [updateProfile, updateState] = useMutation(UPDATE_MY_STORE_PROFILE_MUTATION);
     const [submitGovernance, submitState] = useMutation(SUBMIT_STORE_GOVERNANCE_CHANGE_MUTATION);
     const [draft, setDraft] = useState({
@@ -40,6 +44,31 @@ export function MyStoreProfileEditor({
     });
     const change = (field: keyof typeof draft, value: string) =>
         setDraft(current => ({ ...current, [field]: value }));
+    const togglePublicPreview = async () => {
+        if (!profile.isPublished) {
+            const confirmed = await requestConfirmation({
+                title: '开放店铺公开预览？',
+                description:
+                    '所有访客都能浏览店铺；如启用测试支付，访客也能生成模拟订单。正式上线检查保持独立。',
+                confirmLabel: '开放预览',
+                tone: 'warning',
+            });
+            if (!confirmed) return;
+        }
+        try {
+            await updateProfile({
+                variables: {
+                    input: {
+                        expectedUpdatedAt: profile.updatedAt,
+                        isPublished: !profile.isPublished,
+                    },
+                },
+            });
+            await onCompleted(profile.isPublished ? '公开预览已关闭' : '公开预览已开放');
+        } catch (error) {
+            onError(toUserFacingError(error, '更新公开预览失败'));
+        }
+    };
     const save = async () => {
         if (!draft.storefrontNameZh.trim()) return onError('店铺名称不能为空');
         if (
@@ -104,6 +133,35 @@ export function MyStoreProfileEditor({
                     品牌与联系信息直接保存；法律主体单独提交平台审批。
                 </p>
             </div>
+            {profile.status === 'DRAFT' && (
+                <div className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                公开预览
+                                <FeatureHelpButton topic="settings.store-profile" title="公开预览" />
+                            </h3>
+                            <p className="mt-1 text-xs leading-5 text-slate-700">
+                                开放后所有访客均可浏览；模拟下单需单独启用测试支付。正式营业上线检查保持独立。
+                            </p>
+                            {!profile.primaryDomain && (
+                                <p className="mt-1 text-xs text-rose-700">请先验证并设置主域名。</p>
+                            )}
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={profile.isPublished}
+                            aria-label="公开预览"
+                            onClick={() => void togglePublicPreview()}
+                            disabled={updateState.loading || (!profile.primaryDomain && !profile.isPublished)}
+                            className={profile.isPublished ? secondaryButton : primaryButton}
+                        >
+                            {profile.isPublished ? '关闭预览' : '开放预览'}
+                        </button>
+                    </div>
+                </div>
+            )}
             <div className="grid gap-4 md:grid-cols-2">
                 <FieldInput
                     label="店铺名称"

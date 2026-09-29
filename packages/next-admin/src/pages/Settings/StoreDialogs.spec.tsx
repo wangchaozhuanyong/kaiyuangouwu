@@ -35,6 +35,7 @@ describe('StoreEditor seller binding', () => {
         id: 'profile-1',
         updatedAt: '2026-09-12T00:00:00.000Z',
         status: 'ACTIVE',
+        isPublished: false,
         sortOrder: 0,
         descriptionZh: '简介',
         descriptionEn: 'Description',

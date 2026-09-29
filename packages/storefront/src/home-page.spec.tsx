@@ -1226,6 +1226,40 @@ describe('HomePage desktop intro layout', () => {
         expect(markup).not.toContain('class="home-intro-grid is-desktop-grouped"');
     });
 
+    it('keeps adjacent desktop shortcuts beside the hero when the service block is saved after other floors', () => {
+        const shortcuts: StorefrontContentBlock = {
+            ...quickLinksBlock,
+            position: 2,
+            items: ['卧室', '餐厅', '客厅', '书房'].map((label, position) => ({
+                id: `shortcut-${position}`,
+                enabled: true,
+                position,
+                imageUrl: null,
+                targetType: 'PAGE',
+                targetValue: 'category',
+                label,
+                description: '',
+            })),
+        };
+        const markup = renderHome(
+            {
+                contentBlocks: [
+                    positionedHeroBlock,
+                    shortcuts,
+                    coreCategoriesBlock,
+                    { ...heroBlock, id: 'story-1', type: 'STORY', position: 4 },
+                    { ...positionedTrustBlock, position: 5 },
+                ],
+            },
+            true,
+        );
+
+        expect(markup).toContain('class="home-intro-grid is-grouped-intro"');
+        expect(markup).toContain('class="hero-service-overlay"');
+        expect(markup).toContain('class="quick-grid quick-grid-4');
+        for (const label of ['卧室', '餐厅', '客厅', '书房']) expect(markup).toContain(`<b>${label}</b>`);
+    });
+
     it('renders all six managed Damatong category shortcuts in a balanced grid', () => {
         const labels = ['正品香烟', '正品白酒', '正品槟榔', '坦克咖啡', '商业服务', '软件订阅'];
         const managedQuickLinksBlock: StorefrontContentBlock = {

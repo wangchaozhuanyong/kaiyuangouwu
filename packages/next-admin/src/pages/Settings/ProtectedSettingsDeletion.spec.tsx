@@ -148,6 +148,7 @@ describe('protected settings deletion', () => {
                 primaryDomain: null,
                 storefrontUrl: null,
                 isOperational: true,
+                isPublished: false,
                 activationReadiness: { ready: true, checks: [] },
                 logoAsset: null,
                 logoOnLightAsset: null,

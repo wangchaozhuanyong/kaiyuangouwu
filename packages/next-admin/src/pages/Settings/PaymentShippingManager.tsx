@@ -90,7 +90,7 @@ function TestPaymentAvailabilityNotice({
             </p>
             <p className="mt-1">
                 {available
-                    ? '只对指定 SKU 且订单备注完全一致的订单开放。按订单应付金额模拟付款成功，订单进入正常已付款、库存与交付流程；无需真实转账。'
+                    ? '可选择向本店所有订单开放，或只允许指定测试商品。模拟付款不会真实扣款，但订单会进入正常已付款、库存与交付流程。'
                     : '当前服务器未开放测试支付，请联系平台管理员开启测试支付开关。'}
             </p>
             {available && onConfigure && (
@@ -739,8 +739,13 @@ function MethodEditorDialog({
                     return onError('USDT 支付方式由下方专用收款配置自动管理，不能在这里创建或修改');
                 }
                 if (!handlerCode) return onError('请选择支付处理器');
-                if (isControlledTest && (!handlerArgs.qaSku?.trim() || !handlerArgs.qaMarker?.trim())) {
-                    return onError('请填写测试商品 SKU 和完整订单备注，仅允许这笔测试商品使用模拟支付');
+                const allowAllOrders = isControlledTest && handlerArgs.allowAllOrders === 'true';
+                if (
+                    isControlledTest &&
+                    !allowAllOrders &&
+                    (!handlerArgs.qaSku?.trim() || !handlerArgs.qaMarker?.trim())
+                ) {
+                    return onError('请选择全店开放，或填写测试商品 SKU 和完整订单备注');
                 }
                 const input = {
                     ...(item?.id ? { id: item.id } : {}),
@@ -752,9 +757,10 @@ function MethodEditorDialog({
                         isControlledTest
                             ? {
                                   channelId: data.activeChannel.id,
-                                  qaSku: handlerArgs.qaSku.trim(),
-                                  qaMarker: handlerArgs.qaMarker.trim(),
-                                  orderCode: handlerArgs.orderCode?.trim() ?? '',
+                                  allowAllOrders: allowAllOrders ? 'true' : 'false',
+                                  qaSku: allowAllOrders ? '' : (handlerArgs.qaSku?.trim() ?? ''),
+                                  qaMarker: allowAllOrders ? '' : (handlerArgs.qaMarker?.trim() ?? ''),
+                                  orderCode: allowAllOrders ? '' : (handlerArgs.orderCode?.trim() ?? ''),
                               }
                             : handlerArgs,
                         mainDefinitions,
@@ -878,8 +884,7 @@ function MethodEditorDialog({
                     )}
                     {isControlledTest ? (
                         <p className="text-xs leading-5 text-slate-700">
-                            填写测试商品 SKU
-                            和完整订单备注后启用，再用同样备注建立测试订单。取得订单号后可进一步锁定；支付成功后请关闭此方式。
+                            选择全店开放后，所有访客都可对本店商品使用模拟支付。不会真实扣款，但会生成正常已付款订单并影响库存与履约。
                         </p>
                     ) : (
                         <OperationEditor

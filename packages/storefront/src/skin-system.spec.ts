@@ -178,6 +178,14 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
+                        // The approved split coupon guide separates its three explanatory columns.
+                        if (
+                            file === path.join(__dirname, 'styles/coupon-center.css') &&
+                            selector.trim() === '.coupon-center-guide dl > div + div' &&
+                            border[1] === 'inline' &&
+                            border[2].trim() === '1px solid var(--line-subtle)'
+                        )
+                            continue;
                         // Approved compact cart rows need one shallow reading separator.
                         if (
                             file === path.join(__dirname, 'styles/desktop-pages.css') &&
@@ -194,6 +202,31 @@ describe('storefront skin system', () => {
                                 '.desktop-product-buying .detail-price-line|bottom',
                                 '.desktop-product-buying .detail-service-bar|top',
                             ].includes(`${selector.trim()}|${border[1]}`) &&
+                            border[2].trim() === '1px solid var(--line-subtle)'
+                        ) {
+                            continue;
+                        }
+                        // The confirmed mobile detail design separates quantity controls and service facts.
+                        if (
+                            file === path.join(__dirname, 'styles/product-detail-surfaces.css') &&
+                            [
+                                '.detail-quantity .quantity-control > button + output, .detail-quantity .quantity-control > output + button',
+                                '.product-detail-page .detail-service-bar span + span',
+                            ].includes(selector.trim().replace(/\s+/g, ' ')) &&
+                            border[1] === 'left' &&
+                            border[2].trim() === '1px solid var(--skin-divider)'
+                        ) {
+                            continue;
+                        }
+                        // Category directory, nesting and rows use subtle seams to clarify navigation.
+                        if (
+                            file === path.join(__dirname, 'styles/desktop-commerce.css') &&
+                            [
+                                '.desktop-category-directory-title|bottom',
+                                '.desktop-catalog-sidebar .desktop-subcategory-sidebar|left',
+                                '.desktop-category-navigation .desktop-local-navigation > button, .desktop-category-navigation .desktop-category-entry|bottom',
+                                '.desktop-subcategory-sidebar nav > button|bottom',
+                            ].includes(`${selector.trim().replace(/\s+/g, ' ')}|${border[1]}`) &&
                             border[2].trim() === '1px solid var(--line-subtle)'
                         ) {
                             continue;

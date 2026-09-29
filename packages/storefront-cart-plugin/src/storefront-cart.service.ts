@@ -97,6 +97,7 @@ export function controlledTestPaymentScopeMatchesOrder(
     args: Record<string, string>,
     order: Pick<Order, 'code' | 'lines' | 'customFields'>,
 ): boolean {
+    if (args.allowAllOrders === 'true') return true;
     if (!args.orderCode && !(args.qaSku && args.qaMarker)) return false;
     if (args.orderCode && args.orderCode !== order.code) return false;
     if (args.qaSku || args.qaMarker) {

@@ -70,6 +70,16 @@
         box-shadow: none;
         margin: 0;
     }
+    .desktop-store-layout .homepage-modules .home-intro-grid:not(.is-grouped-intro) .quick-grid {
+        grid-column: auto;
+        grid-row: auto;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        width: 100%;
+        align-self: stretch;
+    }
+    .desktop-store-layout .home-intro-grid:not(.is-grouped-intro) .desktop-quick-row {
+        display: contents;
+    }
     .desktop-quick-row {
         display: grid;
         gap: 4px;
@@ -721,7 +731,6 @@
     .proto-brand-badge.is-brand-image {
         overflow: hidden;
         padding: 0;
-        background: var(--paper);
     }
     .proto-brand-badge img,
     .proto-brand-badge .safe-image-frame {

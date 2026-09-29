@@ -5,6 +5,7 @@ import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     REVIEW_STORE_GOVERNANCE_CHANGE_MUTATION,
+    UPDATE_MY_STORE_PROFILE_MUTATION,
     type StoreManagementResult,
     type StoreProfileRecord,
 } from '../../graphql/management.graphql';
@@ -50,6 +51,7 @@ export function PlatformGovernanceCenter({
 }) {
     const requestConfirmation = useConfirmDialog();
     const [reviewGovernance, reviewGovernanceState] = useMutation(REVIEW_STORE_GOVERNANCE_CHANGE_MUTATION);
+    const [updatePublicPreview, publicPreviewState] = useMutation(UPDATE_MY_STORE_PROFILE_MUTATION);
     const { hasAnyPermission } = useAdminPermissions();
     const { document, paymentMethodCustomFields, sellerCustomFields, shippingMethodCustomFields } =
         useStoreManagementDocument();
@@ -150,6 +152,36 @@ export function PlatformGovernanceCenter({
         setStoreEditor(null);
         setSellerOpen(false);
         await query.refetch();
+    };
+
+    const togglePublicPreview = async (profile: StoreProfileRecord) => {
+        if (profile.channel.id !== query.data?.activeChannel.id) {
+            setActionError('请先将当前店铺切换到要开放预览的店铺');
+            return;
+        }
+        if (!profile.isPublished) {
+            const confirmed = await requestConfirmation({
+                title: `开放 ${getChannelDisplayName(profile.channel)} 的公开预览？`,
+                description:
+                    '所有访客都能浏览店铺；如启用测试支付，访客也能生成模拟订单。正式营业上线检查保持独立。',
+                confirmLabel: '开放预览',
+                tone: 'warning',
+            });
+            if (!confirmed) return;
+        }
+        try {
+            await updatePublicPreview({
+                variables: {
+                    input: {
+                        expectedUpdatedAt: profile.updatedAt,
+                        isPublished: !profile.isPublished,
+                    },
+                },
+            });
+            await completed(profile.isPublished ? '公开预览已关闭' : '公开预览已开放');
+        } catch (error) {
+            setActionError(toUserFacingError(error, '更新公开预览失败'));
+        }
     };
 
     const reviewRequest = async (id: string, decision: 'APPROVED' | 'REJECTED') => {
@@ -363,6 +395,9 @@ export function PlatformGovernanceCenter({
                                 <CommerceModePanel onChanged={completed} onError={setActionError} />
                                 <StoresPanel
                                     profiles={profiles}
+                                    activeChannelId={query.data?.activeChannel.id ?? ''}
+                                    publicPreviewBusy={publicPreviewState.loading}
+                                    onTogglePublicPreview={togglePublicPreview}
                                     onEdit={setStoreEditor}
                                     onDeprovision={setDeprovisionProfile}
                                     allowPermanentDeprovision={allowPermanentDeprovision}

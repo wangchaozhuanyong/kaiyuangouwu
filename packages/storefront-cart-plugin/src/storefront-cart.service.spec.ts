@@ -252,6 +252,19 @@ describe('production payment readiness', () => {
         order.lines[0].productVariant.sku = 'QA-CHECKOUT';
         expect(controlledTestPaymentScopeMatchesOrder({ ...args, orderCode: 'ORDER-2' }, order)).toBe(false);
     });
+
+    it('admits any order when the store explicitly enables all-order simulation', () => {
+        const order = {
+            code: 'REGULAR-ORDER',
+            customFields: { customerNote: '' },
+            lines: [
+                { quantity: 2, productVariant: { sku: 'SOFA' } },
+                { quantity: 1, productVariant: { sku: 'TABLE' } },
+            ],
+        } as any;
+        expect(controlledTestPaymentScopeMatchesOrder({ allowAllOrders: 'true' }, order)).toBe(true);
+        expect(controlledTestPaymentScopeMatchesOrder({ allowAllOrders: 'false' }, order)).toBe(false);
+    });
 });
 
 describe('StorefrontCartService Channel isolation', () => {
