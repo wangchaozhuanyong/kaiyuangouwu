@@ -125,6 +125,25 @@ describe('test payments use the normal checkout workflow', () => {
         await expect(pay()).rejects.toThrow('测试支付未开启');
     });
 
+    it('allows all products for every visitor only when explicitly configured for this Channel', async () => {
+        method.handler.args = [
+            { name: 'channelId', value: 'T_2' },
+            { name: 'allowAllOrders', value: 'true' },
+        ];
+        order.lines = [
+            { quantity: 2, productVariant: { sku: 'SOFA' } },
+            { quantity: 1, productVariant: { sku: 'TABLE' } },
+        ];
+        order.customFields.customerNote = '';
+        ctx.activeUserId = undefined;
+        expect(await registered.checker.check(ctx, order, [], method)).toBe(true);
+        expect(await pay()).toMatchObject({ amount: 1000, state: 'Settled' });
+        expect(await transition()).toBeUndefined();
+
+        method.handler.args[0].value = 'T_3';
+        expect(await registered.checker.check(ctx, order, [], method)).toBe(false);
+    });
+
     it('exposes a configured QA method only to its specified order', async () => {
         method.handler.args.push({ name: 'orderCode', value: 'QA-ORDER-1' });
         expect(await registered.checker.check(ctx, order, [], method)).toBe(true);
