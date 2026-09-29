@@ -103,6 +103,8 @@ export function routePageIdentity(route: RouteState): string {
 export interface RouteState {
     name: RouteName;
     returnTo?: CheckoutRouteName;
+    source?: 'logistics' | 'logistics-detail';
+    deliveryStatus?: 'all' | 'preparing' | 'transit' | 'delivered' | 'cancelled';
     addressId?: string;
     checkoutOrderId?: string;
     editAddress?: boolean;
@@ -236,6 +238,13 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
     const focus = stringValue('focus');
     return {
         returnTo: returnTo && isCheckoutRoute(returnTo) ? returnTo : undefined,
+        source:
+            search.source === 'logistics' || search.source === 'logistics-detail' ? search.source : undefined,
+        deliveryStatus: ['all', 'preparing', 'transit', 'delivered', 'cancelled'].includes(
+            String(search.deliveryStatus),
+        )
+            ? (search.deliveryStatus as RouteState['deliveryStatus'])
+            : undefined,
         addressId: stringValue('addressId'),
         checkoutOrderId: stringValue('checkoutOrderId'),
         editAddress: search.editAddress === true || search.editAddress === 'true' || undefined,
@@ -289,6 +298,8 @@ export function routeHref(route: RouteState): string {
     const params = new URLSearchParams();
     const search = routeSearch(route);
     if (search.returnTo) params.set('returnTo', search.returnTo);
+    if (search.source) params.set('source', search.source);
+    if (search.deliveryStatus) params.set('deliveryStatus', search.deliveryStatus);
     if (search.addressId) params.set('addressId', search.addressId);
     if (search.checkoutOrderId) params.set('checkoutOrderId', search.checkoutOrderId);
     if (search.editAddress) params.set('editAddress', 'true');

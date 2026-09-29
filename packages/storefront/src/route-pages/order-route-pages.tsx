@@ -43,14 +43,18 @@ export function LogisticsRoutePage() {
     const runtime = useRuntime();
     return (
         <RouteGate name="logistics">
-            <AuthPageBoundary language={runtime.language} onBack={runtime.goBack}>
+            <AuthPageBoundary
+                language={runtime.language}
+                onBack={() => runtime.navigate({ name: 'account' })}
+            >
                 <LazyLogisticsPage
+                    route={runtime.route}
                     api={runtime.api}
                     customer={runtime.customer}
                     market={runtime.market}
                     locale={runtime.locale}
                     language={runtime.language}
-                    onBack={runtime.goBack}
+                    onBack={() => runtime.navigate({ name: 'account' })}
                 />
             </AuthPageBoundary>
         </RouteGate>
@@ -60,13 +64,21 @@ export function LogisticsRoutePage() {
 export function OrderDetailRoutePage() {
     const runtime = useRuntime();
     const isZh = runtime.language === 'zh';
+    const back = () =>
+        runtime.route.source?.startsWith('logistics')
+            ? runtime.navigate(
+                  {
+                      name: 'logistics',
+                      id: runtime.route.source === 'logistics-detail' ? runtime.route.id : undefined,
+                      deliveryStatus: runtime.route.deliveryStatus,
+                      term: runtime.route.term,
+                  },
+                  true,
+              )
+            : runtime.goBack();
     if (!runtime.customer) {
         return (
-            <Subpage
-                title={isZh ? '订单详情' : 'Order details'}
-                language={runtime.language}
-                onBack={runtime.goBack}
-            >
+            <Subpage title={isZh ? '订单详情' : 'Order details'} language={runtime.language} onBack={back}>
                 <EmptyState
                     icon={<UserRound />}
                     title={isZh ? '登录后查看订单' : 'Sign in to view orders'}
@@ -84,22 +96,14 @@ export function OrderDetailRoutePage() {
         (runtime.routeOrderLoading || (runtime.route.id && !runtime.routeOrderError))
     ) {
         return (
-            <Subpage
-                title={isZh ? '订单详情' : 'Order details'}
-                language={runtime.language}
-                onBack={runtime.goBack}
-            >
+            <Subpage title={isZh ? '订单详情' : 'Order details'} language={runtime.language} onBack={back}>
                 <PageSkeleton label={isZh ? '正在加载订单详情' : 'Loading order details'} />
             </Subpage>
         );
     }
     if (!runtime.selectedOrder) {
         return (
-            <Subpage
-                title={isZh ? '订单详情' : 'Order details'}
-                language={runtime.language}
-                onBack={runtime.goBack}
-            >
+            <Subpage title={isZh ? '订单详情' : 'Order details'} language={runtime.language} onBack={back}>
                 <EmptyState
                     icon={<Package />}
                     title={isZh ? '没有找到订单' : 'Order not found'}
@@ -112,7 +116,7 @@ export function OrderDetailRoutePage() {
     }
     return (
         <RouteGate name="order-detail">
-            <AuthPageBoundary language={runtime.language} onBack={runtime.goBack}>
+            <AuthPageBoundary language={runtime.language} onBack={back}>
                 <LazyOrderDetailPage
                     api={runtime.api}
                     order={runtime.selectedOrder}
@@ -121,7 +125,18 @@ export function OrderDetailRoutePage() {
                     language={runtime.language}
                     reviewEnabled={runtime.reviewSettingsStatus === 'enabled'}
                     storefrontName={runtime.storefrontName}
-                    onBack={runtime.goBack}
+                    onBack={back}
+                    backLabel={
+                        runtime.route.source === 'logistics-detail'
+                            ? isZh
+                                ? '返回物流详情'
+                                : 'Back to delivery'
+                            : runtime.route.source === 'logistics'
+                              ? isZh
+                                  ? '返回物流列表'
+                                  : 'Back to deliveries'
+                              : undefined
+                    }
                     onBuyAgain={runtime.addOrderToCart}
                     onReopen={runtime.reopenPendingOrder}
                     onCancelOrder={runtime.cancelAuthorizedOrder}

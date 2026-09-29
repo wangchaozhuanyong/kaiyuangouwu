@@ -1,6 +1,4 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -10,6 +8,7 @@ import { DesktopLayoutContext } from './desktop-layout';
 import { languageCodeFor } from './i18n';
 import { LogisticsPage, LogisticsTrackingSheet, OrderDetailPage, OrdersPage } from './order-pages';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
+import { DeliveryDetails, deliveryStatus } from './storefront-ui/delivery-details';
 import { orderNotification, orderStateLabel, orderStatesForTab } from './storefront-ui/order-ui';
 import { orderPageStyles } from './tailwind/order-page-styles';
 import { ActiveCustomer, MarketConfig, Order, StorefrontLanguage } from './types';
@@ -256,13 +255,13 @@ describe('OrdersPage route query', () => {
 });
 
 describe('LogisticsPage delivery overview', () => {
-    const logisticsCss = readFileSync(path.join(__dirname, 'styles/logistics.css'), 'utf8');
-    it('keeps the four delivery filters in one aligned icon-label row', () => {
-        expect(logisticsCss).toContain('grid-template-columns: repeat(4, minmax(0, 1fr))');
-        expect(logisticsCss).toMatch(/\.logistics-stat-card \{[^}]*display: flex;/);
-        expect(logisticsCss).toMatch(/\.stat-card-top \{[^}]*position: relative;/);
-        expect(logisticsCss).toMatch(/\.stat-card-count \{[^}]*position: absolute;/);
-        expect(logisticsCss).toMatch(/\.stat-card-label \{[^}]*overflow-wrap: anywhere;/);
+    it('keeps cancelled deliveries discoverable and states that counts cover loaded orders', () => {
+        const markup = renderLogistics([{ ...order, state: 'Cancelled' }]);
+        expect(markup).toContain('已取消');
+        expect(markup).toContain('已加载 1 个配送订单');
+        expect(markup).toContain('筛选和搜索作用于已加载订单');
+        expect(markup).toContain('<table');
+        expect(markup).toContain('scope="col"');
     });
 
     it('renders product, carrier and tracking details from cached physical orders', () => {
@@ -283,23 +282,40 @@ describe('LogisticsPage delivery overview', () => {
         ]);
 
         expect(markup).toContain('物流动态');
-        expect(markup).toContain('logistics-card-header');
-        expect(markup).toContain('logistics-status-text');
+        expect(markup).toContain('订单 / 商品');
+        expect(markup).toContain('配送方式 / 运单');
         expect(markup).toContain('运输中');
         expect(markup).toContain('订单测试商品');
         expect(markup).toContain('标准配送');
         expect(markup).toContain('TRACK-20841');
-        expect(markup).toContain('查看订单详情');
+        expect(markup).toContain('订单详情');
         expect(markup).not.toContain('TEST-1');
     });
 
-    it('ensures logistics-card and its header maintain proper grid alignment and surface frame', () => {
-        expect(orderPageStyles['logistics-card']).toBeUndefined();
-        expect(logisticsCss).toMatch(/\.logistics-card \{[^}]*background: var\(--surface\);/);
-        expect(logisticsCss).toMatch(/\.logistics-card \{[^}]*border-radius: var\(--skin-card-radius\);/);
-        expect(logisticsCss).toContain('grid-template-columns: 34px minmax(0, 1fr)');
-        expect(logisticsCss).toMatch(/\.logistics-status-text \{[^}]*min-width: 0;/);
-        expect(logisticsCss).toMatch(/\.waybill-copy-btn,[^}]*min-height: 44px;/);
+    it('does not mark a multi-package order delivered while another package is in transit', () => {
+        expect(
+            deliveryStatus({
+                ...order,
+                fulfillments: [
+                    { state: 'Shipped', method: 'standard', updatedAt: '2026-09-27T00:00:00Z' },
+                    { state: 'Delivered', method: 'standard', updatedAt: '2026-09-28T00:00:00Z' },
+                ],
+            }),
+        ).toBe('transit');
+    });
+
+    it('never invents in-transit or delivered events for an order awaiting dispatch', () => {
+        const markup = renderToStaticMarkup(
+            createElement(DeliveryDetails, {
+                order: { ...order, fulfillments: [] },
+                locale: 'zh-CN',
+                language: 'zh',
+            }),
+        );
+        expect(markup).toContain('商家尚未创建配送包裹');
+        expect(markup).toContain('暂无详细配送轨迹');
+        expect(markup).not.toContain('运输派送中');
+        expect(markup).not.toContain('已送达');
     });
 });
 
@@ -438,7 +454,8 @@ describe('OrderDetailPage fulfillment actions', () => {
         expect(markup).toContain('SF1234567890');
         expect(markup).toContain('运单号');
         expect(markup).toContain('复制');
-        expect(markup).toContain('运输派送中');
+        expect(markup).toContain('运输中');
+        expect(markup).toContain('8月18日 11:42');
         expect(markup).toContain('遇到物流问题？联系客服处理');
     });
 

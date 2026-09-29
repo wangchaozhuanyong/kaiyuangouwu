@@ -1,19 +1,14 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
-    Boxes,
-    Check,
+    ArrowLeft,
     ChevronRight,
     CircleAlert,
     CircleCheck,
     Clock3,
-    Copy,
     Download,
     Headphones,
-    Navigation,
     Package,
-    PackageCheck,
-    Radio,
     RotateCcw,
     Search,
     ShieldCheck,
@@ -24,7 +19,7 @@ import {
     WifiOff,
     X,
 } from 'lucide-react';
-import { FormEvent, MouseEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
 import { fulfillmentStateDisplayLabel } from '../../common/src/display-localization';
 
@@ -45,6 +40,7 @@ import { PageSkeleton } from './route-loading';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
+import { DeliveryDetails, physicalDeliveryLines, TrackingCode } from './storefront-ui/delivery-details';
 import { orderStateLabel, orderStatesForTab } from './storefront-ui/order-ui';
 import { EmptyState, SubHeader, Subpage } from './storefront-ui/page-shell';
 import {
@@ -76,8 +72,6 @@ const orderPageClassName = (className?: string | false | null) => pageClassName(
 
 export type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'completed' | 'service';
 type OrderRoute = { name: 'login' | 'order-detail'; id?: string };
-type LogisticsFilter = 'all' | 'transit' | 'preparing' | 'delivered';
-type LogisticsStatus = Exclude<LogisticsFilter, 'all'> | 'cancelled';
 
 export function OrdersPage({
     api,
@@ -446,407 +440,7 @@ export function OrdersPage({
     );
 }
 
-export function LogisticsPage({
-    api,
-    customer,
-    market,
-    locale,
-    language,
-    onBack,
-}: {
-    api: ShopApi;
-    customer: ActiveCustomer | null;
-    market: MarketConfig;
-    locale: string;
-    language: StorefrontLanguage;
-    onBack: () => void;
-}) {
-    const navigate = useNavigate();
-    const navigateTo = (route: OrderRoute) => void navigate(routeNavigateOptions(route) as never);
-    const isZh = language === 'zh';
-    const [filter, setFilter] = useState<LogisticsFilter>('all');
-    const pageSize = 10;
-    const logisticsQuery = useInfiniteQuery({
-        queryKey: storefrontQueryKeys.customerOrders(
-            storefrontQueryKeys.market(market),
-            languageCodeFor(language),
-            customer?.id ?? '',
-            { view: 'logistics' },
-        ),
-        queryFn: ({ pageParam, signal }) =>
-            api.customerOrders(pageParam, pageSize, undefined, undefined, signal),
-        initialPageParam: 0,
-        getNextPageParam: (lastPage, pages) => {
-            const loaded = pages.reduce((total, page) => total + page.items.length, 0);
-            return loaded < lastPage.totalItems ? loaded : undefined;
-        },
-        enabled: Boolean(customer),
-        staleTime: 0,
-        refetchOnMount: 'always',
-        refetchInterval: query =>
-            query.state.data?.pages.some(page =>
-                page.items.some(order => orderNeedsStatusRefresh(order.state)),
-            )
-                ? ORDER_STATUS_REFRESH_INTERVAL
-                : false,
-        gcTime: PUBLIC_QUERY_GC_TIME,
-    });
-    const orders = Array.from(
-        new Map(
-            (logisticsQuery.data?.pages.flatMap(page => page.items) ?? []).map(order => [order.id, order]),
-        ).values(),
-    );
-    const logisticsOrders = orders.filter(order => {
-        const physical = order.lines.some(
-            line =>
-                line.customFields.fulfillmentTypeSnapshot !== 'digital' &&
-                line.productVariant.customFields.fulfillmentType !== 'digital',
-        );
-        const paidOrShipped = !['AddingItems', 'ArrangingPayment'].includes(order.state);
-        return physical && (paidOrShipped || Boolean(order.fulfillments?.length));
-    });
-    const visibleOrders = logisticsOrders.filter(
-        order => filter === 'all' || logisticsStatusForOrder(order) === filter,
-    );
-    const loading = logisticsQuery.isLoading;
-    const loadingMore = logisticsQuery.isFetchingNextPage;
-    const listError =
-        logisticsQuery.isPaused && logisticsQuery.data === undefined
-            ? offlineLoadError(language)
-            : logisticsQuery.error instanceof Error
-              ? storefrontErrorMessage(logisticsQuery.error, language)
-              : logisticsQuery.error
-                ? isZh
-                    ? '物流信息加载失败'
-                    : 'Could not load delivery updates'
-                : '';
-    const counts = {
-        all: logisticsOrders.length,
-        transit: logisticsOrders.filter(o => logisticsStatusForOrder(o) === 'transit').length,
-        preparing: logisticsOrders.filter(o => logisticsStatusForOrder(o) === 'preparing').length,
-        delivered: logisticsOrders.filter(o => logisticsStatusForOrder(o) === 'delivered').length,
-    };
-
-    return (
-        <main className={orderPageClassName('page subpage logistics-page')}>
-            <SubHeader title={isZh ? '物流动态' : 'Delivery updates'} language={language} onBack={onBack} />
-
-            {/* 1. 模块化物流状态仪表盘 */}
-            <div className={orderPageClassName('logistics-modular-hub')}>
-                <nav
-                    className={orderPageClassName('logistics-stats-grid')}
-                    aria-label={isZh ? '物流状态筛选' : 'Filter delivery status'}
-                >
-                    <button
-                        type="button"
-                        className={orderPageClassName(
-                            `logistics-stat-card ${filter === 'all' ? 'is-active' : ''}`,
-                        )}
-                        aria-pressed={filter === 'all'}
-                        onClick={() => setFilter('all')}
-                    >
-                        <div className={orderPageClassName('stat-card-top')}>
-                            <span className={orderPageClassName('stat-card-icon icon-all')}>
-                                <Boxes size={18} />
-                            </span>
-                            <span className={orderPageClassName('stat-card-count')}>{counts.all}</span>
-                        </div>
-                        <span className={orderPageClassName('stat-card-label')}>
-                            {isZh ? '全部包裹' : 'All'}
-                        </span>
-                    </button>
-
-                    <button
-                        type="button"
-                        className={orderPageClassName(
-                            `logistics-stat-card ${filter === 'transit' ? 'is-active' : ''}`,
-                        )}
-                        aria-pressed={filter === 'transit'}
-                        onClick={() => setFilter('transit')}
-                    >
-                        <div className={orderPageClassName('stat-card-top')}>
-                            <span className={orderPageClassName('stat-card-icon icon-transit')}>
-                                <Truck size={18} />
-                            </span>
-                            <span className={orderPageClassName('stat-card-count')}>{counts.transit}</span>
-                        </div>
-                        <span className={orderPageClassName('stat-card-label')}>
-                            {isZh ? '运输中' : 'In transit'}
-                        </span>
-                    </button>
-
-                    <button
-                        type="button"
-                        className={orderPageClassName(
-                            `logistics-stat-card ${filter === 'preparing' ? 'is-active' : ''}`,
-                        )}
-                        aria-pressed={filter === 'preparing'}
-                        onClick={() => setFilter('preparing')}
-                    >
-                        <div className={orderPageClassName('stat-card-top')}>
-                            <span className={orderPageClassName('stat-card-icon icon-preparing')}>
-                                <Clock3 size={18} />
-                            </span>
-                            <span className={orderPageClassName('stat-card-count')}>{counts.preparing}</span>
-                        </div>
-                        <span className={orderPageClassName('stat-card-label')}>
-                            {isZh ? '待发货' : 'Preparing'}
-                        </span>
-                    </button>
-
-                    <button
-                        type="button"
-                        className={orderPageClassName(
-                            `logistics-stat-card ${filter === 'delivered' ? 'is-active' : ''}`,
-                        )}
-                        aria-pressed={filter === 'delivered'}
-                        onClick={() => setFilter('delivered')}
-                    >
-                        <div className={orderPageClassName('stat-card-top')}>
-                            <span className={orderPageClassName('stat-card-icon icon-delivered')}>
-                                <PackageCheck size={18} />
-                            </span>
-                            <span className={orderPageClassName('stat-card-count')}>{counts.delivered}</span>
-                        </div>
-                        <span className={orderPageClassName('stat-card-label')}>
-                            {isZh ? '已签收' : 'Delivered'}
-                        </span>
-                    </button>
-                </nav>
-
-                {/* 2. 物流状态信息微条 */}
-                <div className={orderPageClassName('logistics-service-strip')} aria-hidden="true">
-                    <div className={orderPageClassName('service-strip-item')}>
-                        <ShieldCheck size={13} />
-                        <span>{isZh ? '配送状态可查' : 'Delivery Status'}</span>
-                    </div>
-                    <div className={orderPageClassName('service-strip-item')}>
-                        <Radio size={13} />
-                        <span>{isZh ? '实时路由追踪' : 'Live Tracking'}</span>
-                    </div>
-                    <div className={orderPageClassName('service-strip-item')}>
-                        <Sparkles size={13} />
-                        <span>{isZh ? '售后入口可查' : 'Returns available'}</span>
-                    </div>
-                </div>
-            </div>
-            {!customer ? (
-                <EmptyState
-                    icon={<UserRound />}
-                    title={isZh ? '登录后查看物流' : 'Sign in to view deliveries'}
-                    detail={
-                        isZh
-                            ? '全部实物订单的配送进度会集中显示在这里'
-                            : 'Delivery progress for physical orders appears here'
-                    }
-                    action={isZh ? '去登录' : 'Sign in'}
-                    onAction={() => navigateTo({ name: 'login' })}
-                />
-            ) : loading && !orders.length ? (
-                <PageSkeleton label={isZh ? '正在加载物流信息' : 'Loading delivery updates'} />
-            ) : listError && !orders.length ? (
-                <EmptyState
-                    icon={<WifiOff />}
-                    title={isZh ? '物流信息加载失败' : 'Could not load delivery updates'}
-                    detail={listError}
-                    action={isZh ? '重试' : 'Retry'}
-                    onAction={() => void logisticsQuery.refetch()}
-                />
-            ) : logisticsOrders.length ? (
-                <div className={orderPageClassName('logistics-list')}>
-                    {visibleOrders.length ? (
-                        visibleOrders.map(order => (
-                            <LogisticsCard
-                                key={order.id}
-                                order={order}
-                                locale={locale}
-                                language={language}
-                                onOpen={() => navigateTo({ name: 'order-detail', id: order.id })}
-                            />
-                        ))
-                    ) : (
-                        <EmptyState
-                            icon={<Navigation />}
-                            title={isZh ? '当前状态暂无物流' : 'No deliveries in this status'}
-                            detail={
-                                isZh ? '切换到其他状态继续查看' : 'Choose another status to keep browsing'
-                            }
-                        />
-                    )}
-                    {listError && (
-                        <InlineError
-                            message={listError}
-                            action={isZh ? '重试' : 'Retry'}
-                            onAction={() => void logisticsQuery.fetchNextPage()}
-                        />
-                    )}
-                    {logisticsQuery.hasNextPage && (
-                        <button
-                            type="button"
-                            className={orderPageClassName('load-more-button logistics-load-more')}
-                            disabled={loadingMore}
-                            onClick={() => void logisticsQuery.fetchNextPage()}
-                        >
-                            {loadingMore ? (isZh ? '加载中' : 'Loading') : isZh ? '加载更多' : 'Load more'}
-                        </button>
-                    )}
-                </div>
-            ) : (
-                <EmptyState
-                    icon={<Package />}
-                    title={isZh ? '暂无物流动态' : 'No delivery updates'}
-                    detail={
-                        isZh
-                            ? '购买实物商品并完成付款后，配送进度会显示在这里'
-                            : 'Delivery progress appears after a physical order is paid'
-                    }
-                />
-            )}
-        </main>
-    );
-}
-
-function LogisticsCard({
-    order,
-    locale,
-    language,
-    onOpen,
-}: {
-    order: OrderSummary;
-    locale: string;
-    language: StorefrontLanguage;
-    onOpen: () => void;
-}) {
-    const isZh = language === 'zh';
-    const fulfillment = latestOrderFulfillment(order);
-    const status = logisticsStatusForOrder(order);
-    const physicalLines = order.lines.filter(
-        line =>
-            line.customFields.fulfillmentTypeSnapshot !== 'digital' &&
-            line.productVariant.customFields.fulfillmentType !== 'digital',
-    );
-    const updatedAt = fulfillment?.updatedAt ?? order.orderPlacedAt;
-    const method = fulfillment?.method ?? order.checkoutShipping?.methodName;
-    const trackingCode = fulfillment?.trackingCode;
-    const [copied, setCopied] = useState(false);
-
-    const handleCopy = (e: MouseEvent<HTMLButtonElement>) => {
-        e.stopPropagation();
-        if (!trackingCode) return;
-        void navigator.clipboard?.writeText(trackingCode);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
-
-    return (
-        <article className={orderPageClassName(`logistics-card is-${status}`)}>
-            <header className={orderPageClassName('logistics-card-header')}>
-                <span className={orderPageClassName('logistics-status-icon')}>
-                    {logisticsStatusIcon(status)}
-                </span>
-                <span className={orderPageClassName('logistics-status-text')}>
-                    <strong>{logisticsStatusLabel(status, language)}</strong>
-                    <small>{logisticsStatusHint(status, language)}</small>
-                </span>
-                <time dateTime={updatedAt ?? undefined}>
-                    {updatedAt ? formatOrderDate(updatedAt, locale) : isZh ? '时间待更新' : 'Time pending'}
-                </time>
-            </header>
-            <div className={orderPageClassName('logistics-products')}>
-                {physicalLines.map(line => (
-                    <div className={orderPageClassName('logistics-product')} key={line.id}>
-                        <ProductVariantImage
-                            language={language}
-                            variant={line.productVariant}
-                            alt={line.productVariant.name}
-                        />
-                        <span>
-                            <strong>{line.productVariant.name}</strong>
-                        </span>
-                        <b>×{line.quantity}</b>
-                    </div>
-                ))}
-            </div>
-            <div className={orderPageClassName('logistics-waybill-row')}>
-                <div className={orderPageClassName('waybill-field')}>
-                    <span className={orderPageClassName('waybill-label')}>
-                        {isZh ? '配送方式' : 'Delivery method'}
-                    </span>
-                    <strong className={orderPageClassName('waybill-value')}>
-                        {method ?? (isZh ? '承运商待分配' : 'Carrier pending')}
-                    </strong>
-                </div>
-                <div className={orderPageClassName('waybill-field')}>
-                    <span className={orderPageClassName('waybill-label')}>
-                        {isZh ? '运单号' : 'Tracking number'}
-                    </span>
-                    <div className={orderPageClassName('waybill-code-wrap')}>
-                        <span className={orderPageClassName('waybill-code')}>
-                            {trackingCode ??
-                                (isZh ? '承运商尚未提供运单号' : 'Tracking number is not available yet')}
-                        </span>
-                        {trackingCode && (
-                            <button
-                                type="button"
-                                className={orderPageClassName('waybill-copy-btn')}
-                                onClick={handleCopy}
-                                aria-label={isZh ? '复制运单号' : 'Copy tracking number'}
-                            >
-                                {copied ? <Check size={12} /> : <Copy size={12} />}
-                                <span>{copied ? (isZh ? '已复制' : 'Copied') : isZh ? '复制' : 'Copy'}</span>
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </div>
-            <details className={orderPageClassName('logistics-detail')} open={status === 'transit'}>
-                <summary>
-                    <span>{isZh ? '物流轨迹明细' : 'View delivery details'}</span>
-                    <ChevronRight aria-hidden="true" />
-                </summary>
-                <div className={orderPageClassName('logistics-detail-body')}>
-                    <ol className={orderPageClassName('logistics-timeline')}>
-                        <li className={orderPageClassName('is-current')}>
-                            <span />
-                            <div>
-                                <strong>{logisticsStatusLabel(status, language)}</strong>
-                                <small>
-                                    {updatedAt
-                                        ? formatOrderDate(updatedAt, locale)
-                                        : isZh
-                                          ? '时间待更新'
-                                          : 'Time pending'}
-                                </small>
-                            </div>
-                        </li>
-                        <li>
-                            <span />
-                            <div>
-                                <strong>{isZh ? '订单已创建' : 'Order created'}</strong>
-                                <small>
-                                    {order.orderPlacedAt
-                                        ? formatOrderDate(order.orderPlacedAt, locale)
-                                        : isZh
-                                          ? '时间待更新'
-                                          : 'Time pending'}
-                                </small>
-                            </div>
-                        </li>
-                    </ol>
-                </div>
-            </details>
-            <footer className={orderPageClassName('logistics-card-footer')}>
-                <span className={orderPageClassName('logistics-order-code')}>
-                    {isZh ? `订单 ${order.code}` : `Order ${order.code}`}
-                </span>
-                <button type="button" className={orderPageClassName('logistics-order-link')} onClick={onOpen}>
-                    <span>{isZh ? '查看订单详情' : 'View order'}</span>
-                    <ChevronRight aria-hidden="true" />
-                </button>
-            </footer>
-        </article>
-    );
-}
+export { LogisticsPage } from './pages/logistics-page';
 
 function AfterSalesList({
     requests,
@@ -1130,6 +724,7 @@ export function OrderDetailPage({
     reviewEnabled = true,
     storefrontName,
     onBack,
+    backLabel,
     onBuyAgain,
     onReopen,
     onCancelOrder,
@@ -1146,6 +741,7 @@ export function OrderDetailPage({
     reviewEnabled?: boolean;
     storefrontName: string;
     onBack: () => void;
+    backLabel?: string;
     onBuyAgain: (order: Order) => Promise<void>;
     onReopen: (order: Order) => Promise<void>;
     onCancelOrder: (order: Order, reason: string) => Promise<void>;
@@ -1311,118 +907,128 @@ export function OrderDetailPage({
     return (
         <main className={orderPageClassName('page subpage order-detail-page')}>
             <SubHeader title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack} />
+            <header className="delivery-linked-order-heading">
+                <h1>{isZh ? '订单详情' : 'Order details'}</h1>
+                <button className="delivery-back-link" type="button" onClick={onBack}>
+                    <ArrowLeft aria-hidden="true" />
+                    {backLabel ?? (isZh ? '返回' : 'Back')}
+                </button>
+            </header>
             <section className={orderPageClassName('order-status')}>
                 <strong>{orderStateLabel(order.state, language)}</strong>
                 <span>{statusHint}</span>
                 <small>{isZh ? `订单号 ${order.code}` : `Order ${order.code}`}</small>
             </section>
-            {(inTransit || fulfillments.length > 0) && (
-                <section className={orderPageClassName('order-logistics')} id="order-logistics">
-                    <Navigation />
-                    <div className={orderPageClassName('order-logistics-content')}>
-                        <div
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                marginBottom: 4,
-                            }}
-                        >
-                            <strong>{isZh ? '物流信息' : 'Delivery details'}</strong>
-                            <button
-                                type="button"
-                                style={{
-                                    border: 'none',
-                                    background: 'transparent',
-                                    color: 'var(--accent, #0d9488)',
-                                    fontSize: '13px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    padding: '2px 4px',
-                                }}
-                                onClick={() => setLogisticsSheetOpen(true)}
-                            >
-                                {isZh ? '查看轨迹详情 >' : 'View tracking >'}
-                            </button>
-                        </div>
-                        {fulfillments.length ? (
-                            fulfillments.map((fulfillment, index) => (
-                                <div
-                                    className={orderPageClassName('order-logistics-item')}
-                                    key={fulfillment.id}
-                                    style={{ cursor: 'pointer' }}
-                                    onClick={() => setLogisticsSheetOpen(true)}
-                                >
-                                    <span>
-                                        {fulfillments.length > 1
-                                            ? isZh
-                                                ? `包裹 ${index + 1}`
-                                                : `Shipment ${index + 1}`
-                                            : isZh
-                                              ? '配送包裹'
-                                              : 'Shipment'}
-                                    </span>
-                                    <small>{fulfillmentMethodLabel(fulfillment.method, language)}</small>
-                                    <b>
-                                        {fulfillment.trackingCode
-                                            ? isZh
-                                                ? `运单号 ${fulfillment.trackingCode}`
-                                                : `Tracking ${fulfillment.trackingCode}`
-                                            : isZh
-                                              ? '承运商尚未提供运单号'
-                                              : 'Tracking number is not available yet'}
-                                    </b>
-                                    <em>
-                                        {fulfillment.deliveryEvidence?.status === 'EXCEPTION'
-                                            ? isZh
-                                                ? '配送异常待处理'
-                                                : 'Delivery exception'
-                                            : fulfillmentStateLabel(fulfillment.state, language)}{' '}
-                                        · {formatOrderDate(fulfillment.updatedAt, locale)}
-                                    </em>
-                                    {fulfillment.deliveryEvidence?.exceptionReason && (
-                                        <small>
-                                            {isZh ? '异常说明：' : 'Exception: '}
-                                            {fulfillment.deliveryEvidence.exceptionReason}
-                                        </small>
-                                    )}
-                                    {fulfillment.state === 'Shipped' &&
-                                        fulfillment.deliveryEvidence?.status !== 'DELIVERED' && (
-                                            <button
-                                                type="button"
-                                                disabled={confirmingDeliveryId === fulfillment.id}
-                                                onClick={event => {
-                                                    event.stopPropagation();
-                                                    setConfirmingDeliveryId(fulfillment.id);
-                                                    void onConfirmDelivery(fulfillment.id)
-                                                        .catch(error =>
-                                                            onNotify?.(
-                                                                storefrontErrorMessage(error, language),
-                                                            ),
-                                                        )
-                                                        .finally(() => setConfirmingDeliveryId(''));
-                                                }}
-                                            >
-                                                <PackageCheck aria-hidden="true" />
-                                                {confirmingDeliveryId === fulfillment.id
-                                                    ? isZh
-                                                        ? '正在确认'
-                                                        : 'Confirming'
-                                                    : isZh
-                                                      ? '确认已收货'
-                                                      : 'Confirm delivery'}
-                                            </button>
-                                        )}
-                                </div>
-                            ))
-                        ) : (
-                            <small>
+            {(physicalDeliveryLines(order).length > 0 || fulfillments.length > 0) && (
+                <section className="order-delivery-panel" id="order-logistics">
+                    <header>
+                        <div>
+                            <h2>{isZh ? '配送与交付' : 'Delivery & fulfillment'}</h2>
+                            <p>
                                 {isZh
-                                    ? '物流详情将在承运商更新后显示'
-                                    : 'Updates appear when provided by the carrier'}
-                            </small>
-                        )}
-                    </div>
+                                    ? '包裹信息、配送状态和收货操作'
+                                    : 'Shipment details, status and delivery confirmation'}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            className="delivery-text-button"
+                            onClick={() => setLogisticsSheetOpen(true)}
+                        >
+                            {isZh ? '查看配送记录' : 'View delivery history'}
+                            <ChevronRight aria-hidden="true" />
+                        </button>
+                    </header>
+                    {fulfillments.length ? (
+                        <div className="delivery-table-scroll">
+                            <table className="delivery-summary-table">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">{isZh ? '包裹 / 配送方式' : 'Package / method'}</th>
+                                        <th scope="col">{isZh ? '运单号' : 'Tracking number'}</th>
+                                        <th scope="col">{isZh ? '配送状态' : 'Status'}</th>
+                                        <th scope="col">{isZh ? '操作' : 'Action'}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {fulfillments.map((fulfillment, index) => (
+                                        <tr key={fulfillment.id}>
+                                            <td>
+                                                <strong>
+                                                    {isZh ? `包裹 ${index + 1}` : `Package ${index + 1}`}
+                                                </strong>
+                                                <small>
+                                                    {fulfillmentMethodLabel(fulfillment.method, language)}
+                                                </small>
+                                            </td>
+                                            <td>
+                                                <TrackingCode
+                                                    code={fulfillment.trackingCode}
+                                                    language={language}
+                                                />
+                                            </td>
+                                            <td>
+                                                <strong>
+                                                    {fulfillment.deliveryEvidence?.status === 'EXCEPTION'
+                                                        ? isZh
+                                                            ? '配送异常待处理'
+                                                            : 'Delivery exception'
+                                                        : fulfillmentStateLabel(fulfillment.state, language)}
+                                                </strong>
+                                                <small>
+                                                    {formatOrderDate(fulfillment.updatedAt, locale)}
+                                                </small>
+                                                {fulfillment.deliveryEvidence?.exceptionReason && (
+                                                    <p className="delivery-exception">
+                                                        {fulfillment.deliveryEvidence.exceptionReason}
+                                                    </p>
+                                                )}
+                                            </td>
+                                            <td>
+                                                {fulfillment.state === 'Shipped' &&
+                                                    fulfillment.deliveryEvidence?.status !== 'DELIVERED' && (
+                                                        <button
+                                                            type="button"
+                                                            className="delivery-text-button"
+                                                            disabled={confirmingDeliveryId === fulfillment.id}
+                                                            onClick={() => {
+                                                                setConfirmingDeliveryId(fulfillment.id);
+                                                                void onConfirmDelivery(fulfillment.id)
+                                                                    .catch(error =>
+                                                                        onNotify?.(
+                                                                            storefrontErrorMessage(
+                                                                                error,
+                                                                                language,
+                                                                            ),
+                                                                        ),
+                                                                    )
+                                                                    .finally(() =>
+                                                                        setConfirmingDeliveryId(''),
+                                                                    );
+                                                            }}
+                                                        >
+                                                            {confirmingDeliveryId === fulfillment.id
+                                                                ? isZh
+                                                                    ? '正在确认'
+                                                                    : 'Confirming'
+                                                                : isZh
+                                                                  ? '确认已收货'
+                                                                  : 'Confirm delivery'}
+                                                        </button>
+                                                    )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <p className="delivery-pending-note">
+                            {isZh
+                                ? '商家尚未创建配送包裹。发货后，配送方式和运单信息会显示在这里。'
+                                : 'No shipment has been created yet. Delivery and tracking details will appear after dispatch.'}
+                        </p>
+                    )}
                 </section>
             )}
             <section className={orderPageClassName('order-detail-products')}>
@@ -1608,10 +1214,8 @@ export function LogisticsTrackingSheet({
     order,
     locale,
     language,
-    reviewEnabled = true,
     onClose,
     onContactSupport,
-    onNotify,
 }: {
     order: Order;
     locale: string;
@@ -1626,12 +1230,6 @@ export function LogisticsTrackingSheet({
     const closeRef = useRef(onClose);
     const previousFocus = useRef<HTMLElement | null>(null);
     const titleId = useId();
-    const [copied, setCopied] = useState(false);
-    const [selectedFulfillmentIndex, setSelectedFulfillmentIndex] = useState(0);
-
-    const fulfillments = order.fulfillments ?? [];
-    const currentFulfillment = fulfillments[selectedFulfillmentIndex] ?? fulfillments[0];
-
     useEffect(() => {
         closeRef.current = onClose;
     }, [onClose]);
@@ -1679,26 +1277,6 @@ export function LogisticsTrackingSheet({
         };
     }, []);
 
-    const handleCopyTracking = (code: string) => {
-        try {
-            if (navigator?.clipboard?.writeText) {
-                void navigator.clipboard.writeText(code);
-            }
-        } catch {
-            // Ignore clipboard errors
-        }
-        setCopied(true);
-        onNotify?.(isZh ? '运单号已复制到剪贴板' : 'Tracking number copied');
-        setTimeout(() => setCopied(false), 2000);
-    };
-
-    const isShipped =
-        ['Shipped', 'PartiallyShipped'].includes(order.state) ||
-        Boolean(currentFulfillment && currentFulfillment.state === 'Shipped');
-    const isDelivered =
-        order.state === 'Delivered' ||
-        Boolean(currentFulfillment && currentFulfillment.state === 'Delivered');
-
     return (
         <div className={orderPageClassName('sheet-layer')} role="presentation">
             <button
@@ -1723,196 +1301,18 @@ export function LogisticsTrackingSheet({
                 </header>
 
                 <div className="logistics-sheet-content">
-                    {fulfillments.length > 1 && (
-                        <div className="logistics-sheet-tabs" role="tablist">
-                            {fulfillments.map((_, idx) => (
-                                <button
-                                    key={idx}
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={idx === selectedFulfillmentIndex}
-                                    className={`logistics-tab-btn ${idx === selectedFulfillmentIndex ? 'is-active' : ''}`}
-                                    onClick={() => setSelectedFulfillmentIndex(idx)}
-                                >
-                                    {isZh ? `包裹 ${idx + 1}` : `Package ${idx + 1}`}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-
-                    {currentFulfillment ? (
-                        <>
-                            <div className="logistics-info-card">
-                                <div className="logistics-carrier-row">
-                                    <Truck className="logistics-carrier-icon" size={24} aria-hidden="true" />
-                                    <div className="logistics-carrier-text">
-                                        <strong>
-                                            {fulfillmentMethodLabel(currentFulfillment.method, language)}
-                                        </strong>
-                                        <span>
-                                            {fulfillmentStateLabel(currentFulfillment.state, language)}
-                                        </span>
-                                    </div>
-                                </div>
-                                {currentFulfillment.trackingCode ? (
-                                    <div className="logistics-tracking-row">
-                                        <span className="tracking-code-label">
-                                            {isZh ? '运单号' : 'Tracking No.'}:
-                                        </span>
-                                        <code className="tracking-code-val">
-                                            {currentFulfillment.trackingCode}
-                                        </code>
-                                        <button
-                                            type="button"
-                                            className="tracking-copy-btn"
-                                            onClick={() =>
-                                                handleCopyTracking(currentFulfillment.trackingCode || '')
-                                            }
-                                            aria-label={isZh ? '复制运单号' : 'Copy tracking number'}
-                                        >
-                                            {copied ? (
-                                                <Check size={13} aria-hidden="true" />
-                                            ) : (
-                                                <Copy size={13} aria-hidden="true" />
-                                            )}
-                                            <span>
-                                                {copied
-                                                    ? isZh
-                                                        ? '已复制'
-                                                        : 'Copied'
-                                                    : isZh
-                                                      ? '复制'
-                                                      : 'Copy'}
-                                            </span>
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <p className="logistics-no-code">
-                                        {isZh
-                                            ? '承运商正在处理运单，单号稍后同步'
-                                            : 'Carrier is processing the tracking number'}
-                                    </p>
-                                )}
-                            </div>
-
-                            <div className="logistics-timeline">
-                                {currentFulfillment.deliveryEvidence?.events
-                                    .slice()
-                                    .reverse()
-                                    .map(event => (
-                                        <div className="timeline-step is-active" key={event.id}>
-                                            <div className="timeline-dot" />
-                                            <div className="timeline-body">
-                                                <strong>
-                                                    {event.status === 'EXCEPTION'
-                                                        ? isZh
-                                                            ? '配送异常'
-                                                            : 'Delivery exception'
-                                                        : event.status === 'DELIVERED'
-                                                          ? isZh
-                                                              ? '包裹已签收'
-                                                              : 'Package delivered'
-                                                          : isZh
-                                                            ? '运输信息已更新'
-                                                            : 'Delivery updated'}
-                                                </strong>
-                                                <p>{event.note}</p>
-                                                <time>{formatOrderDate(event.createdAt, locale)}</time>
-                                            </div>
-                                        </div>
-                                    ))}
-                                {isDelivered && (
-                                    <div className="timeline-step is-active">
-                                        <div className="timeline-dot" />
-                                        <div className="timeline-body">
-                                            <strong>{isZh ? '包裹已签收' : 'Package delivered'}</strong>
-                                            <p>
-                                                {isZh
-                                                    ? reviewEnabled
-                                                        ? '您的商品已成功送达，感谢您的信任与支持，欢迎参与商品评价！'
-                                                        : '您的商品已成功送达，感谢您的信任与支持！'
-                                                    : 'Package has been delivered successfully. Thank you for your support!'}
-                                            </p>
-                                            <time>
-                                                {formatOrderDate(currentFulfillment.updatedAt, locale)}
-                                            </time>
-                                        </div>
-                                    </div>
-                                )}
-                                <div
-                                    className={`timeline-step ${!isDelivered && isShipped ? 'is-active' : ''}`}
-                                >
-                                    <div className="timeline-dot" />
-                                    <div className="timeline-body">
-                                        <strong>{isZh ? '运输派送中' : 'In transit'}</strong>
-                                        <p>
-                                            {isZh
-                                                ? '包裹正在飞速送达您的收货地址，请保持电话畅通'
-                                                : 'Package is moving towards your destination'}
-                                        </p>
-                                        <time>{formatOrderDate(currentFulfillment.updatedAt, locale)}</time>
-                                    </div>
-                                </div>
-                                <div className="timeline-step">
-                                    <div className="timeline-dot" />
-                                    <div className="timeline-body">
-                                        <strong>{isZh ? '包裹已发出' : 'Dispatched'}</strong>
-                                        <p>
-                                            {currentFulfillment.trackingCode
-                                                ? isZh
-                                                    ? `已交由承运商 ${fulfillmentMethodLabel(currentFulfillment.method, language)} 揽收发运`
-                                                    : `Collected by carrier ${fulfillmentMethodLabel(currentFulfillment.method, language)}`
-                                                : isZh
-                                                  ? '包裹已揽收并安排运输'
-                                                  : 'Package dispatched'}
-                                        </p>
-                                        <time>{formatOrderDate(currentFulfillment.updatedAt, locale)}</time>
-                                    </div>
-                                </div>
-                                <div className="timeline-step">
-                                    <div className="timeline-dot" />
-                                    <div className="timeline-body">
-                                        <strong>
-                                            {isZh ? '订单已支付 / 待发货' : 'Order paid / preparing'}
-                                        </strong>
-                                        <p>
-                                            {isZh
-                                                ? '仓库收到订单并打包完成'
-                                                : 'Order verified and packed by merchant'}
-                                        </p>
-                                        <time>{formatOrderDate(order.orderPlacedAt, locale)}</time>
-                                    </div>
-                                </div>
-                            </div>
-                        </>
-                    ) : (
-                        <div className="logistics-empty">
-                            <Truck size={40} />
-                            <p>
-                                {isZh
-                                    ? '商家正在为您积极打包配货中，运单号生成后将在此实时更新。'
-                                    : 'Preparing shipment. Tracking updates will appear here soon.'}
-                            </p>
-                        </div>
-                    )}
-
-                    <div className="logistics-sheet-support">
-                        <button
-                            type="button"
-                            className="logistics-support-btn"
-                            onClick={() => {
-                                onClose();
-                                onContactSupport();
-                            }}
-                        >
-                            <Headphones size={16} aria-hidden="true" />
-                            <span>
-                                {isZh
-                                    ? '遇到物流问题？联系客服处理'
-                                    : 'Need help with delivery? Contact support'}
-                            </span>
-                        </button>
-                    </div>
+                    <DeliveryDetails order={order} locale={locale} language={language} />
+                    <button
+                        type="button"
+                        className="delivery-text-button"
+                        onClick={() => {
+                            onClose();
+                            onContactSupport();
+                        }}
+                    >
+                        <Headphones aria-hidden="true" />
+                        {isZh ? '遇到物流问题？联系客服处理' : 'Need help with delivery? Contact support'}
+                    </button>
                 </div>
             </section>
         </div>
@@ -2909,53 +2309,6 @@ function afterSalesReasonLabel(reason: AfterSalesReason, language: StorefrontLan
 }
 
 const fulfillmentStateLabel = fulfillmentStateDisplayLabel;
-
-function latestOrderFulfillment(
-    order: OrderSummary,
-): NonNullable<OrderSummary['fulfillments']>[number] | null {
-    return (
-        [...(order.fulfillments ?? [])].sort(
-            (first, second) => Date.parse(second.updatedAt) - Date.parse(first.updatedAt),
-        )[0] ?? null
-    );
-}
-
-function logisticsStatusForOrder(order: OrderSummary): LogisticsStatus {
-    const fulfillmentState = latestOrderFulfillment(order)?.state;
-    if (fulfillmentState === 'Delivered' || order.state === 'Delivered') return 'delivered';
-    if (fulfillmentState === 'Shipped' || order.state === 'Shipped' || order.state === 'PartiallyShipped') {
-        return 'transit';
-    }
-    if (fulfillmentState === 'Cancelled' || order.state === 'Cancelled') return 'cancelled';
-    return 'preparing';
-}
-
-function logisticsStatusLabel(status: LogisticsStatus, language: StorefrontLanguage): string {
-    const labels: Record<LogisticsStatus, { zh: string; en: string }> = {
-        preparing: { zh: '待发货', en: 'Preparing' },
-        transit: { zh: '运输中', en: 'In transit' },
-        delivered: { zh: '已签收', en: 'Delivered' },
-        cancelled: { zh: '配送已取消', en: 'Delivery cancelled' },
-    };
-    return labels[status][language];
-}
-
-function logisticsStatusHint(status: LogisticsStatus, language: StorefrontLanguage): string {
-    const labels: Record<LogisticsStatus, { zh: string; en: string }> = {
-        preparing: { zh: '商家正在准备商品', en: 'The merchant is preparing your items' },
-        transit: { zh: '商品正在由承运商配送', en: 'Your items are with the carrier' },
-        delivered: { zh: '商品已完成配送', en: 'Your items have been delivered' },
-        cancelled: { zh: '本次配送已停止', en: 'This delivery has stopped' },
-    };
-    return labels[status][language];
-}
-
-function logisticsStatusIcon(status: LogisticsStatus): ReactNode {
-    if (status === 'transit') return <Truck aria-hidden="true" />;
-    if (status === 'delivered') return <CircleCheck aria-hidden="true" />;
-    if (status === 'cancelled') return <CircleAlert aria-hidden="true" />;
-    return <PackageCheck aria-hidden="true" />;
-}
 
 function isAutoCardLine(line: Order['lines'][number]): boolean {
     const fulfillmentType =

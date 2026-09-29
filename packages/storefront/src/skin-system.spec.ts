@@ -178,6 +178,14 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
+                        // User-requested delivery data tables need row separators for column comparison.
+                        if (
+                            file === path.join(__dirname, 'styles/logistics.css') &&
+                            selector.trim() === '.delivery-table td' &&
+                            border[1] === 'bottom' &&
+                            border[2].trim() === '1px solid var(--line-subtle)'
+                        )
+                            continue;
                         // Approved compact cart rows need one shallow reading separator.
                         if (
                             file === path.join(__dirname, 'styles/desktop-pages.css') &&
