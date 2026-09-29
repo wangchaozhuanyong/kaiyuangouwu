@@ -564,6 +564,35 @@ void test('configuration failures identify the operation without leaking transpo
     );
 });
 
+void test('login API errors report only a validated code and field path', async () => {
+    await assert.rejects(
+        captureStorefrontConfiguration({
+            username: 'fixture',
+            password: 'PRIVATE_PASSWORD',
+            request: async () =>
+                new Response(
+                    JSON.stringify({
+                        errors: [
+                            {
+                                message: 'PRIVATE_DATABASE_MESSAGE',
+                                extensions: { code: 'INTERNAL_SERVER_ERROR', private: 'PRIVATE_SECRET' },
+                                path: ['login', 'channels', 0, 'code'],
+                            },
+                        ],
+                    }),
+                ),
+        }),
+        error => {
+            assert.equal(
+                error.message,
+                'STOREFRONT_CONFIGURATION_QUERY_FAILED operation=ConfigurationGuardLogin reason=API_ERROR code=INTERNAL_SERVER_ERROR path=login.channels.0.code',
+            );
+            assert.equal(error.message.includes('PRIVATE_'), false);
+            return true;
+        },
+    );
+});
+
 void test('published query errors report only validated host, locale, code and field path', async () => {
     const store = storeFixture();
     await assert.rejects(
