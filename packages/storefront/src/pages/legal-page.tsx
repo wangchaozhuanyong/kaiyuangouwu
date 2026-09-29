@@ -84,7 +84,9 @@ export function ManagedLegalPage({
                                 type="button"
                                 className={documentKind === kind ? 'is-active' : undefined}
                                 aria-current={documentKind === kind ? 'page' : undefined}
-                                onClick={() => onSelectDocument(documentKind)}
+                                onClick={() => {
+                                    if (documentKind !== kind) onSelectDocument(documentKind);
+                                }}
                             >
                                 <span>
                                     {documentKind === 'privacy'
@@ -100,7 +102,7 @@ export function ManagedLegalPage({
                         ))}
                     </nav>
                 </aside>
-                <article className="legal-managed-content">
+                <article className="legal-managed-content" aria-label={title}>
                     {document?.subtitle && (
                         <header className="legal-managed-intro">
                             <p>{interpolateLegalProfileTokens(document.subtitle, legalIdentity, language)}</p>
@@ -144,10 +146,7 @@ export function ManagedLegalPage({
                             </div>
                         </div>
                     )}
-                    <footer>
-                        <strong>{storefrontName}</strong>
-                        <span>{title}</span>
-                    </footer>
+                    <footer>{storefrontName}</footer>
                 </article>
             </div>
         </main>

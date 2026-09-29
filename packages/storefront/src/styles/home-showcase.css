@@ -2296,6 +2296,26 @@ html[lang='en'] .quick-grid b {
     font-weight: var(--font-weight-semibold);
 }
 
+.legal-footer-entry {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.legal-footer-entry:hover:not(:disabled) {
+    color: var(--accent-ink);
+}
+
+.legal-footer-entry:disabled {
+    cursor: default;
+}
+
 .legal-footer p {
     max-width: 680px;
     margin: 7px auto 0;
