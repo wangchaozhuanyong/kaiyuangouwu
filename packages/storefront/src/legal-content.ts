@@ -15,6 +15,8 @@ export interface ManagedLegalDocument {
 
 const legalProfileTokenPattern =
     /\{\{\s*(legalEntityName|legalRegistrationCountry|supportEmail|privacyEmail)\s*\}\}/gu;
+const declaredScopePattern =
+    /(?:适用于|applies?\s+to)[\s\S]{0,100}?(?:https?:\/\/)?((?:www\.)?[a-z\d-]+(?:\.[a-z\d-]+)+)/iu;
 
 export function interpolateLegalProfileTokens(
     value: string,
@@ -32,6 +34,7 @@ export function resolveManagedLegalDocument(
     blocks: StorefrontContentBlock[],
     kind: LegalDocumentKind,
     fallbackTitle: string,
+    activeHostname?: string,
 ): ManagedLegalDocument | null {
     const legalBlocks = blocks.filter(block => block.type === 'LEGAL');
     const matchedBlock =
@@ -42,12 +45,23 @@ export function resolveManagedLegalDocument(
     const matchedItem = matchedBlock.items.find(item => itemMatchesKind(item, kind));
     const body = matchedItem?.description.trim() || matchedBlock.body.trim();
     if (!body) return null;
+    const activeHost = normalizeHostname(activeHostname);
+    const declaredHost = normalizeHostname(body.slice(0, 1_500).match(declaredScopePattern)?.[1]);
+    if (activeHost && declaredHost && activeHost !== declaredHost) return null;
 
     return {
         title: matchedItem?.label.trim() || matchedBlock.title.trim() || fallbackTitle,
         subtitle: matchedBlock.subtitle.trim(),
         body,
     };
+}
+
+function normalizeHostname(value: string | undefined): string {
+    return (value ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/^www\./u, '')
+        .replace(/\.$/u, '');
 }
 
 function blockCodeMatches(code: string, kind: LegalDocumentKind): boolean {

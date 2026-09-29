@@ -126,6 +126,33 @@ describe('resolveManagedLegalDocument', () => {
         });
         expect(resolveManagedLegalDocument([], 'terms', 'Terms')).toBeNull();
     });
+
+    it('hides a policy that declares a different storefront domain without a store-specific list', () => {
+        const policy = legalBlock({
+            code: 'privacy',
+            body: '本隐私政策适用于您访问 damatong.net 及其对应店铺。',
+        });
+
+        expect(resolveManagedLegalDocument([policy], 'privacy', '隐私政策', 'moyaoai.com')).toBeNull();
+        expect(
+            resolveManagedLegalDocument([policy], 'privacy', '隐私政策', 'www.damatong.net'),
+        ).toMatchObject({
+            body: policy.body,
+        });
+    });
+
+    it('keeps policy references to outside services when no other storefront scope is declared', () => {
+        const policy = legalBlock({
+            code: 'privacy',
+            body: 'We may use payments.example.com as a service provider. This policy applies to shop.example.com.',
+        });
+
+        expect(resolveManagedLegalDocument([policy], 'privacy', 'Privacy', 'shop.example.com')).toMatchObject(
+            {
+                body: policy.body,
+            },
+        );
+    });
 });
 
 describe('interpolateLegalProfileTokens', () => {

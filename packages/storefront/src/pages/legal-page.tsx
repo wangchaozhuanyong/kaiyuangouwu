@@ -10,6 +10,7 @@ export interface ManagedLegalPageProps {
     storefrontName: string;
     contentBlocks: StorefrontContentBlock[];
     legalIdentity?: StorefrontLegalIdentity;
+    storefrontHostname?: string;
     onBack: () => void;
     onSelectDocument: (kind: 'privacy' | 'terms') => void;
 }
@@ -20,6 +21,7 @@ export function ManagedLegalPage({
     storefrontName,
     contentBlocks,
     legalIdentity,
+    storefrontHostname,
     onBack,
     onSelectDocument,
 }: ManagedLegalPageProps) {
@@ -32,7 +34,9 @@ export function ManagedLegalPage({
         : isZh
           ? '使用条款'
           : 'Terms of use';
-    const document = resolveManagedLegalDocument(contentBlocks, kind, fallbackTitle);
+    const activeHostname =
+        storefrontHostname ?? (typeof window === 'undefined' ? undefined : window.location.hostname);
+    const document = resolveManagedLegalDocument(contentBlocks, kind, fallbackTitle, activeHostname);
     const title = interpolateLegalProfileTokens(document?.title ?? fallbackTitle, legalIdentity, language);
     const legalDetails = [
         {

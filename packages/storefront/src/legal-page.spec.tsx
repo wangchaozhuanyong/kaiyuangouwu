@@ -99,23 +99,24 @@ describe('ManagedLegalPage', () => {
         expect(markup).not.toContain('{{privacyEmail}}');
     });
 
-    it('仅展示当前渠道传入的法律正文', () => {
+    it('隐藏适用域名与当前店铺不符的法律正文', () => {
         const legalBlock = createLegalBlock('privacy');
-        legalBlock.body = '本店隐私政策。';
+        legalBlock.body = '本隐私政策适用于您访问 damatong.net。';
 
         const markup = renderToStaticMarkup(
             <ManagedLegalPage
                 kind="privacy"
                 language="zh"
-                storefrontName="大马通"
+                storefrontName="MOYAO AI"
+                storefrontHostname="moyaoai.com"
                 contentBlocks={[legalBlock]}
                 onBack={vi.fn()}
                 onSelectDocument={vi.fn()}
             />,
         );
 
-        expect(markup).toContain('本店隐私政策。');
-        expect(markup).not.toContain('法律文件暂未发布');
+        expect(markup).not.toContain('本隐私政策适用于您访问 damatong.net。');
+        expect(markup).toContain('法律文件暂未发布');
     });
 
     it('法律导航展示两份文件并标记当前页面', () => {

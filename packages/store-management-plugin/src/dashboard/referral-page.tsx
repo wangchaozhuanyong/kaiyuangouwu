@@ -435,38 +435,38 @@ function TodayMetrics({ query }: { query: ReturnType<typeof useQuery<ReferralTod
 export const SYSTEM_POSTER_TEMPLATES = [
     {
         id: 'BRAND_MINIMAL',
-        nameZh: '模钥简约',
-        nameEn: 'MOYAO AI minimal',
-        desc: '经典白蓝极简科技版式，通用度最高，适合各类数字化产品。',
-        gradient: 'linear-gradient(135deg, #635BFF, #22D3EE)',
+        nameZh: '清透蓝白',
+        nameEn: 'Clear blue',
+        desc: '清爽蓝白版式，适合展示各类商品与服务。',
+        gradient: 'linear-gradient(135deg, #152c49, #2565ae)',
     },
     {
         id: 'BENEFIT_RED_GOLD',
-        nameZh: '冰川蓝光',
-        nameEn: 'Glacier blue',
-        desc: '冰蓝光感与晶体层次，沿用统一的六区块高信息密度排版。',
-        gradient: 'linear-gradient(135deg, #02131f, #064a66 58%, #67e8f9)',
+        nameZh: '暖砂纸艺',
+        nameEn: 'Warm paper',
+        desc: '温暖纸艺风格，沿用统一的六区块版式。',
+        gradient: 'linear-gradient(135deg, #47362b, #a05238)',
     },
     {
         id: 'PRODUCT_STORY',
-        nameZh: '青空流线',
-        nameEn: 'Skyline flow',
-        desc: '深青绿流光线路，用于创作、效率与工具类服务，区块位置保持一致。',
-        gradient: 'linear-gradient(135deg, #011813, #075548 58%, #34d399)',
+        nameZh: '青绿自然',
+        nameEn: 'Jade forms',
+        desc: '自然青绿风格，适合展示商品与服务信息。',
+        gradient: 'linear-gradient(135deg, #203e35, #326c54)',
     },
     {
         id: 'PREMIUM_DARK',
-        nameZh: '深海科技',
-        nameEn: 'Deep-sea tech',
-        desc: '钴蓝暗面与网格科技感，强化高级 AI 产品的专业与安全感。',
-        gradient: 'linear-gradient(135deg, #020b1d, #0f2b5c 58%, #38bdf8)',
+        nameZh: '墨色香槟',
+        nameEn: 'Champagne noir',
+        desc: '深色与香槟色搭配，突出重点信息。',
+        gradient: 'linear-gradient(135deg, #14161b, #48463f)',
     },
     {
         id: 'CLOUD_BRIDGE_ORBIT',
-        nameZh: '模钥轨道',
-        nameEn: 'MOYAO AI orbit',
-        desc: '紫蓝科技轨道渐变，未来感与营销冲击力强。',
-        gradient: 'linear-gradient(135deg, #635BFF, #8B5CF6)',
+        nameZh: '雾紫几何',
+        nameEn: 'Lilac geometry',
+        desc: '雾紫几何层次，适合展示营销活动。',
+        gradient: 'linear-gradient(135deg, #34314c, #7761a7)',
     },
 ] as const;
 
@@ -813,7 +813,7 @@ function PosterTemplateManager({
                                         className="size-full object-cover"
                                     />
                                 ) : (
-                                    <div className="grid size-full place-items-center bg-[linear-gradient(145deg,#070B14,#635BFF,#22D3EE)] text-sm font-semibold text-white/80">
+                                    <div className="grid size-full place-items-center bg-slate-900 text-sm font-semibold text-white/80">
                                         待上传竖版背景
                                     </div>
                                 )}
@@ -927,8 +927,8 @@ function PosterTemplateManager({
                     <DialogHeader>
                         <DialogTitle>{draft?.id ? '编辑邀请海报模板' : '新建邀请海报模板'}</DialogTitle>
                         <DialogDescription>
-                            参照 MOYAO AI 模钥移动端分享图规范：推荐 1080×1920，左右安全边距 64px。中文和
-                            English 使用同一版式，前台根据用户语言自动切换。
+                            移动端分享图推荐 1080×1920，左右安全边距 64px。中文和 English
+                            使用同一版式，前台根据用户语言自动切换。
                         </DialogDescription>
                     </DialogHeader>
                     {draft && (
@@ -2536,11 +2536,11 @@ function posterLabel(value: string): string {
     return getSystemLabel(
         value,
         {
-            BRAND_MINIMAL: '模钥简约',
-            BENEFIT_RED_GOLD: '冰川蓝光',
-            PRODUCT_STORY: '青空流线',
-            PREMIUM_DARK: '深海科技',
-            CLOUD_BRIDGE_ORBIT: '模钥轨道',
+            BRAND_MINIMAL: '清透蓝白',
+            BENEFIT_RED_GOLD: '暖砂纸艺',
+            PRODUCT_STORY: '青绿自然',
+            PREMIUM_DARK: '墨色香槟',
+            CLOUD_BRIDGE_ORBIT: '雾紫几何',
         } as Record<string, string>,
         'zh',
         'status',
