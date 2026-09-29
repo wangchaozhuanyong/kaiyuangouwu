@@ -4,6 +4,7 @@ import {
     ChevronRight,
     CircleCheck,
     Heart,
+    Package,
     RotateCcw,
     Share2,
     ShoppingCart,
@@ -300,7 +301,9 @@ export function ProductDetailPage() {
                         </small>
                     )}
                 </div>
-                <span>
+                <span className={`detail-stock${quoteOnly || availability.soldOut ? ' is-unavailable' : ''}`}>
+                    {!quoteOnly &&
+                        (isDigital ? <CircleCheck aria-hidden="true" /> : <Package aria-hidden="true" />)}
                     {quoteOnly
                         ? isZh
                             ? '展示商品 · 不可直接下单'
@@ -446,7 +449,6 @@ export function ProductDetailPage() {
                 }
                 onIncrease={() => setQuantity(purchaseQuantity + 1)}
             />
-            <span className="detail-quantity-stock">{stockLabel}</span>
         </section>
     );
     const services = (
