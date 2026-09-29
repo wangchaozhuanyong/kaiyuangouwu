@@ -3221,7 +3221,7 @@ html[lang='en'] .all-primary-category-grid button > span:last-child {
         gap: 4px;
         border: 0;
         border-radius: 0;
-        background: var(--category-results-surface);
+        background: var(--control-surface);
         box-shadow: none;
     }
 
