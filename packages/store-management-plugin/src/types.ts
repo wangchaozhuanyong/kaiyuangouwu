@@ -431,6 +431,7 @@ export interface DeprovisionStoreResult {
 
 export interface UpdateMyStoreProfileInput {
     expectedUpdatedAt: Date;
+    isPublished?: boolean | null;
     storefrontNameZh?: string | null;
     storefrontNameEn?: string | null;
     storefrontNameEnLocked?: boolean | null;

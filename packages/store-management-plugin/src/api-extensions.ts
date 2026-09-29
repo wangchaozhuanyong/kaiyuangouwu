@@ -255,6 +255,7 @@ export const adminApiExtensions = gql`
         updatedAt: DateTime!
         channel: Channel!
         status: StoreProfileStatus!
+        isPublished: Boolean!
         sortOrder: Int!
         descriptionZh: String!
         descriptionEn: String!

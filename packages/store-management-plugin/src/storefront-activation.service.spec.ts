@@ -7,9 +7,10 @@ function createService(
     sellerId = 'merchant-seller',
     channelId = 'channel-1',
     hasActivePrimaryDomain = false,
+    isPublished = false,
 ) {
     const profileRepository = {
-        findOne: vi.fn().mockResolvedValue(status ? { id: 'profile-1', status } : null),
+        findOne: vi.fn().mockResolvedValue(status ? { id: 'profile-1', status, isPublished } : null),
     };
     const domainRepository = {
         exists: vi.fn().mockResolvedValue(hasActivePrimaryDomain),
@@ -65,6 +66,27 @@ describe('StorefrontActivationService', () => {
                 channelId: 'channel-1',
             } as any),
         ).resolves.toBeUndefined();
+    });
+
+    it('opens a merchant draft only when public preview and its primary domain are active', async () => {
+        await expect(
+            createService('DRAFT', 'merchant-seller', 'channel-1', true, true).assertActive({
+                apiType: 'shop',
+                channelId: 'channel-1',
+            } as any),
+        ).resolves.toBeUndefined();
+        await expect(
+            createService('DRAFT', 'merchant-seller', 'channel-1', false, true).assertActive({
+                apiType: 'shop',
+                channelId: 'channel-1',
+            } as any),
+        ).rejects.toThrow();
+        await expect(
+            createService('SUSPENDED', 'merchant-seller', 'channel-1', true, true).assertActive({
+                apiType: 'shop',
+                channelId: 'channel-1',
+            } as any),
+        ).rejects.toThrow();
     });
 
     it('blocks platform-owned regional drafts without an active primary domain', async () => {

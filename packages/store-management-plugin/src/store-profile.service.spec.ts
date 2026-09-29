@@ -450,6 +450,48 @@ describe('StoreProfileService', () => {
         expect(updated).toMatchObject({ status: 'ACTIVE', isPublished: false, isOperational: true });
     });
 
+    it('allows a merchant to publish a draft preview only with a verified primary domain', async () => {
+        const current = profile({ channel: { ...channel(), sellerId: 'merchant-seller' } });
+        const repository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(value => Promise.resolve(value)),
+        };
+        const domainRepository = {
+            exists: vi.fn().mockResolvedValue(true),
+            find: vi.fn().mockResolvedValue([
+                {
+                    channelId: current.channelId,
+                    domain: 'shop.example.com',
+                    isPrimary: true,
+                    status: 'ACTIVE',
+                },
+            ]),
+        };
+        const { service } = createService(repository, domainRepository);
+        const updated = await service.updateForMerchant({ channelId: current.channelId } as any, {
+            expectedUpdatedAt: current.updatedAt,
+            isPublished: true,
+        });
+        expect(domainRepository.exists).toHaveBeenCalledWith({
+            where: { channelId: current.channelId, isPrimary: true, status: 'ACTIVE' },
+        });
+        expect(updated.isPublished).toBe(true);
+        expect(updated.isOperational).toBe(true);
+    });
+
+    it('refuses merchant public preview without a verified primary domain', async () => {
+        const current = profile();
+        const repository = { findOne: vi.fn().mockResolvedValue(current), save: vi.fn() };
+        const { service } = createService(repository, { exists: vi.fn().mockResolvedValue(false) });
+        await expect(
+            service.updateForMerchant({ channelId: current.channelId } as any, {
+                expectedUpdatedAt: current.updatedAt,
+                isPublished: true,
+            }),
+        ).rejects.toThrow('主域名');
+        expect(repository.save).not.toHaveBeenCalled();
+    });
+
     it('rejects activation until every launch check passes', async () => {
         const current = profile({ status: 'DRAFT' });
         const profileRepository = {
