@@ -707,10 +707,7 @@ describe('StoreProfileService', () => {
     });
 
     it('accepts the actual Damatong publisher names through the API service', async () => {
-        const configPath = path.resolve(
-            process.cwd(),
-            '../dev-server/scripts/damatong-storefront-config.mjs',
-        );
+        const configPath = path.resolve(__dirname, '../../dev-server/scripts/damatong-storefront-config.mjs');
         const { damatongStorefront } = await import(configPath);
         const current = profile();
         const profileRepository = {
