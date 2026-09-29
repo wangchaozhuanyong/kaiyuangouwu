@@ -17,10 +17,20 @@
 
 - 大马通：线上配置返回 `classic`；首页有后台保障条；推广页为自定义源码，未见旧 `promo.*` 占位符。
 - MOYAO：线上配置返回 `neo-minimalist`；首页无保障条；后台推广页为平台默认状态。当前线上 `/promo` 仍展示旧活动页，是代码尚未发布的表现。
-- 闪铸商城：已登录后台的推广页显示“平台默认模板”、发布版本 0；旧 `promo.*` 源码只保存在未发布草稿。公开推广页返回 403，客户端访问与皮肤验收仍标记为**未验证**。
+- 闪铸商城：后台店铺实例仍为“草稿”，上线检查有 7 项待处理；`shop.flashcast.com.my` 已验证为主域名。推广页显示“平台默认模板”、发布版本 0；旧 `promo.*` 源码只保存在未发布草稿。公开首页入口返回 200，但 Shop API `activeChannel` 返回 `FORBIDDEN`，浏览器首页加载超时，`/promo` 返回 403。当前客户端与皮肤验收仍为**未验证**；不能把已验证域名误认为已上线店铺。
 
 ## 发布前边界
 
-1. 从生产库只读查询 `referral_poster_template` 的 42 个文案列默认值，留存列名、旧默认值、目标默认值与摘要；只有确认需要时才按数据库迁移门禁审批执行。迁移不改写现有海报记录。
+1. 从生产库只读查询 `referral_poster_template` 的 42 个文案列默认值，留存列名、旧默认值、目标默认值与摘要；只有确认需要时才按数据库迁移门禁审批执行。迁移不改写现有海报记录。只读 SQL：
+
+   ```sql
+   SELECT COLUMN_NAME, COLUMN_DEFAULT
+   FROM information_schema.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = 'referral_poster_template'
+   ORDER BY ORDINAL_POSITION;
+   ```
+
+   将其中与 `referralPosterCopy` 同名的 42 列和候选值逐项比较。2026-09-29 本机没有 AWS 凭据；文档记录的旧 EC2 IP 的 SSH 端口超时，无法取得生产列默认值，故此项未验收。不得以实体声明或本地 SQL.js 测试代替生产只读结果。
 2. 本候选未推送、未跑远端 CI、未合并、未部署。生产运行 SHA 和真实浏览器验收仍需在获准发布后单独核对。
 3. 规则在仓库 `AGENTS.md`，自动扫描在 `scripts/check-storefront-unification.mjs`，CI `quality-gates` 会执行。平台后台标题、历史迁移、域名路由和受审核的后台数据发布器是有原因的例外，不能复制到商城运行代码。
