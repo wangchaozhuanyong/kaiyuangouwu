@@ -26,6 +26,7 @@ import {
     isTrustedRun,
     requestGitHubApi,
     validateExecutedChecks,
+    waitForCompleteInputCoverage,
 } from './release-evidence.mjs';
 
 test('release evidence readers can verify merged PR CI with read-only GitHub token access', () => {
@@ -761,6 +762,37 @@ test('a later deployment failure preserves v2 successful CI-stage evidence, neve
         const result = await findInputCoverage(fixture);
         assert.equal(result.missing.length === 0, conclusion === 'success');
     }
+});
+
+test('verification refreshes temporarily incomplete proof lists and still rejects persistent gaps', async () => {
+    const missing = { anchor: { runId: 7 }, missing: [{ id: 'backend:dev-server' }] };
+    const complete = { anchor: { runId: 7 }, missing: [] };
+    const events = [];
+    let reads = 0;
+    const recovered = await waitForCompleteInputCoverage(
+        () => {
+            events.push('read');
+            return ++reads === 1 ? missing : complete;
+        },
+        {
+            delays: [1],
+            pause: async delay => events.push(`pause:${delay}`),
+            refresh: () => events.push('refresh'),
+        },
+    );
+    assert.equal(recovered, complete);
+    assert.deepEqual(events, ['read', 'pause:1', 'refresh', 'read']);
+
+    let persistentReads = 0;
+    const persistent = await waitForCompleteInputCoverage(
+        () => {
+            persistentReads++;
+            return missing;
+        },
+        { delays: [1, 2], pause: async () => undefined, refresh: () => undefined },
+    );
+    assert.equal(persistent, missing);
+    assert.equal(persistentReads, 3);
 });
 
 test('client styles invalidate both client and Admin preview input fingerprints', () => {
